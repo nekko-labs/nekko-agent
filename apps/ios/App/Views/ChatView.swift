@@ -1334,7 +1334,8 @@ struct Composer: View {
                     HStack(spacing: 0) {
                         if parts.model || parts.effort { ModelEffortButton(chat: chat) }
                         // Expert keeps it beside the model with its name, as the desktop's details row does.
-                        if !chat.isImageChat && prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
+                        // It gives way first on a narrow phone, so the context gauge keeps its width.
+                        if !chat.isImageChat && prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat).layoutPriority(-1) }
                         Spacer(minLength: 8)
                         if prefs.shows("context") { ContextGauge(chat: chat) }
                     }

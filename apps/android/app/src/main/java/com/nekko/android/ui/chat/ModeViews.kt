@@ -317,7 +317,8 @@ fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit
     ) {
         if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort && (simple.expert || !model))
         plainAsks?.let { mode ->
-            TextButton(onClick = onOpenAsks, enabled = enabled, modifier = Modifier.testTag("chat.asksFirst")) {
+            // It gives way first on a narrow phone, so the context ring keeps its width (#2448).
+            TextButton(onClick = onOpenAsks, enabled = enabled, modifier = Modifier.weight(1f, fill = false).testTag("chat.asksFirst")) {
                 PermissionIcon(mode)
                 Spacer(Modifier.size(4.dp))
                 Text(stringResource(asksTitleRes(mode)), style = MaterialTheme.typography.labelMedium, color = Nekko.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
