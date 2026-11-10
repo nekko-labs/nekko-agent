@@ -24,13 +24,16 @@ not treated as an empty account. Existing workflows retain the normal list and
 filters; a filtered-to-empty list never shows onboarding.
 
 The guide has three stages: choose an idea, personalize its target, and review
-and create in the existing workflow editor. Expandable categories cover Shopping
+and create in the existing workflow editor. Ideas are listed under four groups, Shopping
 & web browsing, Developer, Research, and Email & productivity. Starter ideas
 include stock checks, web-page updates, new GitHub PR reviews, project health,
 research briefings, and email summaries. Each explains the services or tools it
-needs. A back action preserves the selected category; templates and blank setup
-remain available without completing the guide. Desktop and narrow widths use the
-same wizard and stack cards into one column on phones.
+needs. A back action returns to the ideas; templates and blank setup remain
+available without completing the guide. Desktop and narrow widths use the same
+wizard. Since 2026-11-10 (#2507) the page follows the quiet design system: one
+page surface, each group a heading with one line of description and its ideas as
+rows (no cards, nested tiles or tinted notices), a one-line step indicator, one
+primary button per stage and the secondary actions as neutral buttons.
 
 The introduction plays a 42-second, mascot-led Remotion walkthrough in the reserved
 "See what you can automate" slot. It follows one web-page summary from choosing
@@ -39,8 +42,9 @@ schedule. It uses the app's theme, synthetic illustrative data, visible captions
 standard play/pause/seek/fullscreen controls and an expandable text transcript.
 Playback is opt-in (no autoplay or loop), makes no external requests, changes no
 settings and never creates or executes a task. The Remotion source is also
-renderable to MP4. Category and selected-example videos remain clearly labeled
-placeholders tracked in #1171; this overview does not imply they are complete.
+renderable to MP4. Category and selected-example videos are tracked in #1171 and
+are not shown until they exist (the coming-soon placeholders were removed on
+2026-11-10).
 
 Selecting an example or continuing only prepares an editable draft. Targets stay
 local until the user explicitly creates the workflow. Every starter initially has

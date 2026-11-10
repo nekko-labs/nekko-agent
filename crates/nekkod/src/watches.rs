@@ -776,7 +776,8 @@ impl Watches {
                 } else if before != Some(fingerprint.as_str()) {
                     // Progress only: remember it (the chip reads it) and keep polling, no turn.
                     let next = (self.now)() + num(w, "intervalMs");
-                    let patch = json!({ "fingerprint": fingerprint, "nextPollAt": next, "failures": 0, "lastError": null });
+                    let patch =
+                        json!({ "fingerprint": fingerprint, "nextPollAt": next, "failures": 0, "lastError": null });
                     self.patch(id, patch).await;
                     return Ok(());
                 }
@@ -1167,7 +1168,8 @@ mod tests {
 
     #[test]
     fn only_actionable_pr_changes_are_worth_a_turn() {
-        let s = |checks: &str, updated: &str| format!(r#"{{"state":"open","checks":"{checks}","updatedAt":"{updated}"}}"#);
+        let s =
+            |checks: &str, updated: &str| format!(r#"{{"state":"open","checks":"{checks}","updatedAt":"{updated}"}}"#);
         let quiet = [
             (s("failing", "1"), s("none", "2")),    // the agent pushed a fix
             (s("none", "2"), s("pending", "2")),    // CI started
@@ -1182,7 +1184,10 @@ mod tests {
             (s("pending", "1"), s("failing", "1")),
             (s("pending", "1"), s("pending", "2")), // a comment or review while CI runs
             (s("passing", "1"), r#"{"state":"merged","checks":"passing","updatedAt":"2"}"#.to_string()),
-            (s("passing", "1"), r#"{"state":"open","checks":"passing","updatedAt":"1","reviewDecision":"APPROVED"}"#.into()),
+            (
+                s("passing", "1"),
+                r#"{"state":"open","checks":"passing","updatedAt":"1","reviewDecision":"APPROVED"}"#.into(),
+            ),
         ];
         for (a, b) in &wake {
             assert!(actionable_change(Some(a), b), "{a} -> {b}");
@@ -1200,14 +1205,20 @@ mod tests {
         assert_eq!(r.w.watch_opened_prs("s", std::slice::from_ref(&url)).await.len(), 1);
         assert_eq!(r.w.views("s")[0]["checks"], json!("failing"));
         // The agent pushes a fix and CI starts: recorded, shown, no turn.
-        for snap in [r#"{"state":"open","checks":"none","updatedAt":"2"}"#, r#"{"state":"open","checks":"pending","updatedAt":"2"}"#] {
+        for snap in [
+            r#"{"state":"open","checks":"none","updatedAt":"2"}"#,
+            r#"{"state":"open","checks":"pending","updatedAt":"2"}"#,
+        ] {
             r.snapshot(Ok(snap));
             r.advance(61_000);
             r.w.tick(None).await;
         }
         assert!(r.resumes().is_empty());
         let view = &r.w.views("s")[0];
-        assert_eq!((view["status"].clone(), view["checks"].clone(), view["prState"].clone()), (json!("active"), json!("pending"), json!("open")));
+        assert_eq!(
+            (view["status"].clone(), view["checks"].clone(), view["prState"].clone()),
+            (json!("active"), json!("pending"), json!("open"))
+        );
         // The checks finish: now the chat wakes.
         r.snapshot(Ok(r#"{"state":"open","checks":"passing","updatedAt":"2"}"#));
         r.advance(61_000);
