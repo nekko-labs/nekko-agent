@@ -57,3 +57,18 @@ names. Existing label-gate acceptance is unchanged. See the
 [landing runbook](../../docs/runbooks/landing-a-pr.md#native-ios-suite-shards-2035)
 for diagnostics and the remaining hosted verification. This is a CI scheduling
 repair, not an iOS app behavior change or a measured speed claim.
+
+## Workflow-changing PRs sit out of the Native iOS batch (#2030)
+
+`[implemented 2026-11-10; unit-tested and dry-run against live PRs (#2480 left out, #2513 batched); a hosted compose with such a PR is not yet observed]`
+The batch composer pushes with the workflow's own token, which may not create or
+update files under `.github/workflows/`. One candidate changing a workflow (#2480's
+`native-mode-evidence.yml`, and #1971/#1993/#2004 before it) made GitHub refuse the
+whole push, so no PR in that batch got a `Native iOS (batch)` status. The composer
+now leaves out a PR whose merge onto main changes such a file, starts
+`ios-native.yml` on that PR's branch once per head (unless a run is already there),
+then marks the head red with a status naming `gh workflow run ios-native.yml --ref
+<branch>`. `gate` waits while that run goes and follows its result, as for any
+PR-level Native iOS run. The rest of the batch (conflict handling, statuses, the
+manifest) is unchanged. No token is broadened: giving the batch a GitHub App token
+with Workflows write, so such PRs can batch too, stays Philip's settings call.

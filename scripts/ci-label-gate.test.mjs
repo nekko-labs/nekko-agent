@@ -75,6 +75,15 @@ test('Native iOS passes on a green batch status, a green run, or neither when th
   assert.deepEqual(labelRuns([], { iosRequired: false }), { pending: [], failed: [], passed: [] });
 });
 
+test('a PR the batch leaves out for changing a workflow is decided by its own Native iOS run (#2030)', () => {
+  // ios-batch.mjs starts the run on the branch, then marks the head red: the run decides.
+  const held = { iosRequired: true, batch: { state: 'failure', target_url: 'https://example/held' } };
+  assert.equal(labelRuns([run(4, ios, 'in_progress')], held).pending[0].name, 'Native iOS');
+  assert.deepEqual(labelRuns([run(4, ios, 'in_progress')], held).failed, []);
+  assert.deepEqual(labelRuns([run(4, ios, 'completed', 'success')], held).passed.map(r => r.id), [4]);
+  assert.equal(labelRuns([run(4, ios, 'completed', 'failure')], held).failed.length, 1);
+});
+
 test('Automatic evidence dispatch still runs the full required Native iOS suite', () => {
   const workflow = readFileSync(new URL('../.github/workflows/ios-native.yml', import.meta.url), 'utf8');
   const protocolJob = workflow.split('  protocol-and-build:')[1];
