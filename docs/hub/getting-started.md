@@ -309,7 +309,9 @@ Claude Code can also set watches of its own. The agent wakes when checks
 finish, a review arrives or a few hours pass, fixes what it can, and lands the
 PR if you or the repository allow it; otherwise it tells you the PR is
 merge-ready or what is blocking it. The chip reads **Watching until
-merge-ready**. Nekko keeps re-arming it until the PR is merged or closed.
+merge-ready**. While checks run, the chip says so (**checks running**) without
+waking the agent, so waiting costs no tokens. Nekko keeps re-arming it until
+the PR is merged or closed.
 Cancelling the chip stops it for that PR. To turn it off for every PR, go to
 Settings › Tools, click **Show advanced settings** if it's there, then turn off
 **Watch each PR until it is merge-ready** under Pull requests.
