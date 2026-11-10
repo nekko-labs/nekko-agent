@@ -241,8 +241,15 @@ final class LiveRelayTests: XCTestCase {
         // Settings → Notify me about (IO-30) and Dictation (IO-28).
         app.navigationBars.buttons.element(boundBy: 0).tap()
         let finished = app.switches["settings.notify.finished"]
-        XCTAssertTrue(reveal(finished, in: app), "Settings → Notify me about")
-        settle()
+        guard revealNotificationControl(finished, in: app) else {
+            XCTFail("Settings → Notify me about is fully below the navigation bar")
+            return
+        }
+        attach(app, "\(theme)-7d-notification-controls")
+        let controlsTree = XCTAttachment(string: app.debugDescription)
+        controlsTree.name = "\(theme)-notification-controls-AX"
+        controlsTree.lifetime = .keepAlways
+        add(controlsTree)
         XCTAssertEqual(finished.value as? String, "1")
         // iOS 17's SwiftUI toggle is a row-wide switch holding the real one; tapping the row does nothing.
         let knob = finished.switches.firstMatch
@@ -251,8 +258,10 @@ final class LiveRelayTests: XCTestCase {
         // Through the computer and the test stack's relay, which has no Apple push key:
         // the app shows it, and says so.
         let test = app.buttons["settings.notify.test"]
-        XCTAssertTrue(reveal(test, in: app))
-        settle()
+        guard revealNotificationControl(test, in: app) else {
+            XCTFail("Send a test notification is fully below the navigation bar")
+            return
+        }
         // The button is disabled while the phone isn't online, and a tap on it then does nothing.
         let enabled = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: test)
         XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: busyWait), .completed, "Send a test notification is enabled")
@@ -260,11 +269,10 @@ final class LiveRelayTests: XCTestCase {
         let result = app.staticTexts["settings.notify.testResult"]
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         // A slow simulator can drop the first-run prompt, and then iOS asks here instead.
-        // The result comes back from the computer, so it gets as long as any other round trip
-        // here (20 s was too short: runs 42592729091, 42617821734). Polled, not a fixed wait:
-        // the banner checked below is only up for a few seconds. The pause keeps the poll from
-        // flooding the simulator with springboard queries while the app works.
-        let deadline = Date().addingTimeInterval(computerWait)
+        // Keep the notification's original 20-second result contract. The button is online
+        // before the tap; pausing the poll avoids flooding the simulator with queries.
+        // A slower result is a failure to diagnose, not a reason to lengthen this deadline.
+        let deadline = Date().addingTimeInterval(20)
         while !result.exists, Date() < deadline {
             if springboard.buttons["Allow"].exists { springboard.buttons["Allow"].tap() }
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
@@ -989,6 +997,45 @@ final class LiveRelayTests: XCTestCase {
             for _ in 0..<8 {
                 if up { app.swipeUp() } else { app.swipeDown() }
                 if e.exists, e.isHittable { return true }
+            }
+        }
+        return false
+    }
+
+    /// A lazy Settings row can be hittable underneath the navigation bar. In native
+    /// run 42779029268 its switch tap scrolled to the top instead of changing value.
+    /// Require the whole row inside the viewport and recheck after deceleration.
+    private func revealNotificationControl(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        func insideContent() -> Bool {
+            guard element.exists else { return false }
+            let frame = element.frame
+            let navigation = app.navigationBars.firstMatch
+            let top = navigation.exists ? navigation.frame.maxY : app.frame.minY
+            let viewport = CGRect(x: app.frame.minX + 8, y: top + 8,
+                                  width: app.frame.width - 16, height: app.frame.maxY - top - 16)
+            return !frame.isEmpty && viewport.contains(frame) && element.isHittable
+        }
+        for upward in [true, false] {
+            for _ in 0..<8 {
+                if insideContent() {
+                    let frame = element.frame
+                    settle()
+                    if insideContent(), element.frame == frame { return true }
+                    continue
+                }
+                if element.exists {
+                    // Short content-only drags avoid overshooting the clipped row.
+                    let navigation = app.navigationBars.firstMatch
+                    let top = navigation.exists ? navigation.frame.maxY : app.frame.minY
+                    let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
+                    let delta: CGFloat = element.frame.minY < top + 8 ? 120 : -120
+                    start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: delta)))
+                } else if upward {
+                    app.swipeUp()
+                } else {
+                    app.swipeDown()
+                }
+                settle()
             }
         }
         return false

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Usage by place (UsageScreen, #2114), the iPhone's Usage and limits by computer and by this phone. -->
+<resources>
+    <string name="usage_all_places">所有位置</string>
+    <string name="usage_subscription_tokens">订阅内</string>
+    <string name="usage_api_tokens">API（按词元计费）</string>
+    <string name="usage_api_spend">预计 API 费用</string>
+    <string name="usage_offline_counted" formatted="true">%1$d 台离线：已计入它们最后的数据。</string>
+    <string name="usage_this_phone">这部手机</string>
+    <string name="usage_offline_heading" formatted="true">%1$s · 离线</string>
+    <string name="usage_offline_last">离线。这是它最后提供的数据。</string>
+    <string name="usage_offline_never">离线。重新连接后会显示用量。</string>
+    <string name="usage_error_last" formatted="true">现在无法读取（%1$s）。这是它最后提供的数据。</string>
+    <string name="usage_subscriptions">订阅</string>
+    <string name="usage_api">API</string>
+    <string name="usage_tokens_only">这部手机没有价格表：只显示词元。</string>
+</resources>

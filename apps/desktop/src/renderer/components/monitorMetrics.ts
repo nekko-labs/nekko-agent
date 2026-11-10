@@ -59,7 +59,32 @@ export function budgetRange(usage: import('@nekko-agent/shared').UsageSummary | 
     localTokens: daily.every(d => d.localTokens != null) ? daily.reduce((sum, d) => sum + d.localTokens!, 0) : null,
     avoidedCosts: daily.every(d => d.avoidedCosts != null) ? avoided : null,
     modelIds: [...new Set(daily.flatMap(d => d.modelIds ?? []))],
+    attribution: attributionRange(daily),
   };
+}
+
+const SLICE_KEYS = ['input', 'cacheRead', 'cacheWrite', 'output', 'cost', 'listCost'] as const;
+
+/**
+ * The range's attributed usage (#2494), summed over the days that have it,
+ * and the first such day, so the panel can say when the split starts. Null
+ * when no day in the range has any.
+ */
+export function attributionRange(daily: import('@nekko-agent/shared').UsageSummary['daily']) {
+  const zero = (): import('@nekko-agent/shared').UsageSlice => ({ input: 0, cacheRead: 0, cacheWrite: 0, output: 0, cost: 0, listCost: 0 });
+  const sum = { user: zero(), background: zero(), parent: zero(), subagent: zero() };
+  let since: string | null = null;
+  for (const d of daily) {
+    if (!d.attribution) continue;
+    since ??= d.date;
+    for (const part of ['user', 'background', 'parent', 'subagent'] as const) {
+      for (const k of SLICE_KEYS) sum[part][k] += d.attribution[part]?.[k] ?? 0;
+    }
+  }
+  if (!since) return null;
+  // The whole range is covered when its first day with usage is attributed.
+  const covered = daily.find(d => d.input + d.output > 0)?.date === since;
+  return { ...sum, since, covered };
 }
 
 /** How a range reads in the Budget panel's labels. */

@@ -57,9 +57,32 @@ export interface ProviderConfig {
    * `isClaudeAccountName`). Absent: the user's default Claude Code login.
    */
   claudeCode?: { authSource?: string; account?: string };
+  /**
+   * Claude Agent only, filled by `providers:list` and never saved: who the
+   * Claude Code login is, from `claude auth status`. Absent until nekkod
+   * has read it.
+   */
+  account?: ProviderAccount;
   /** Host-only assertion for a trusted managed llama.cpp endpoint. Never trust persisted input. */
   managedCachePrompt?: boolean;
   enabled: boolean;
+}
+
+/**
+ * Who a Claude subscription login is. One email can have a personal plan and
+ * an organization seat: each is its own login (its own Claude Code folder),
+ * and `scope` says which this one is.
+ */
+export interface ProviderAccount {
+  signedIn: boolean;
+  email?: string;
+  /** `personal`: the person's own plan (Pro, Max). `organization`: a Team or Enterprise seat. */
+  scope?: 'personal' | 'organization';
+  /** `Personal`, or the organization's name. */
+  name?: string;
+  /** `pro`, `max`, `team`, `enterprise`, or what a newer Claude Code prints. */
+  plan?: string;
+  orgId?: string;
 }
 
 /** Native effort options reported by this model's live provider catalog. */

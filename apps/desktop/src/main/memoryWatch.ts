@@ -12,6 +12,8 @@ export type MemoryState = {
   commitAvailableBytes?: number | null;
   topApp?: TopApp | null;
   nekkoBytes?: number | null;
+  /** Windows: what WSL's VM holds (Docker and Linux tools). Never `topApp`. */
+  wslBytes?: number | null;
 };
 /** `pids` tells one run of the app from the next; an older daemon leaves it out. */
 export type TopApp = { name: string; bytes: number; processes: number; pids?: number[] };
@@ -91,7 +93,18 @@ export function leftLine(state: MemoryState): string {
     : `${gb(state.availableBytes)} of ${gb(state.totalBytes)} free`;
 }
 
-const STYLE = `*{box-sizing:border-box}html,body{height:100%;overflow:hidden}body{position:relative;margin:0;padding:14px 16px;background:#16161c;color:#ece9f5;font:13px system-ui;border:2px solid #e2b36b;border-radius:14px}header{display:flex;gap:8px;align-items:center;margin:0 22px 6px 0}header svg{flex:none;width:32px;height:37px;margin:-9px 0 -2px}h1{font-size:15px;margin:0}p{margin:0 0 10px;line-height:1.45;color:#c9c3dc}form{display:flex;flex-direction:column;gap:6px}button{font:inherit;text-align:left;padding:6px 10px;border:1px solid #c99bb3;border-radius:7px;background:transparent;color:#ece9f5;cursor:pointer}button:hover{background:#ffffff14}button.primary{background:#190019;color:#fff;border-color:#854f6c}button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid white;outline-offset:2px}small{color:#a7a1bb}button small{display:block;margin-top:1px;font-size:12px}.primary small{color:#e6d0dc}input{accent-color:#c99bb3}label{display:flex;gap:6px;align-items:center;margin-top:4px;color:#c9c3dc;font-size:12px}.x{position:absolute;top:6px;right:6px;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;color:#c9c3dc;font-size:16px;text-decoration:none}.x:hover{background:#ffffff1a}`;
+/**
+ * When WSL's VM holds the most (at least 1 GiB, and more than the app the card
+ * can close), say so: it is never offered as an app to close. Information
+ * only: `wsl --shutdown` force-stops containers, and the card never forces.
+ */
+export function wslLine(state: MemoryState): string | null {
+  const wsl = state.wslBytes ?? 0;
+  if (wsl < 2 ** 30 || wsl <= (state.topApp?.bytes ?? 0)) return null;
+  return `Most of it is WSL (Docker and Linux tools): about ${gb(wsl)}. Quitting Docker Desktop or running wsl --shutdown frees it.`;
+}
+
+const STYLE =`*{box-sizing:border-box}html,body{height:100%;overflow:hidden}body{position:relative;margin:0;padding:14px 16px;background:#16161c;color:#ece9f5;font:13px system-ui;border:2px solid #e2b36b;border-radius:14px}header{display:flex;gap:8px;align-items:center;margin:0 22px 6px 0}header svg{flex:none;width:32px;height:37px;margin:-9px 0 -2px}h1{font-size:15px;margin:0}p{margin:0 0 10px;line-height:1.45;color:#c9c3dc}form{display:flex;flex-direction:column;gap:6px}button{font:inherit;text-align:left;padding:6px 10px;border:1px solid #c99bb3;border-radius:7px;background:transparent;color:#ece9f5;cursor:pointer}button:hover{background:#ffffff14}button.primary{background:#190019;color:#fff;border-color:#854f6c}button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid white;outline-offset:2px}small{color:#a7a1bb}button small{display:block;margin-top:1px;font-size:12px}.primary small{color:#e6d0dc}input{accent-color:#c99bb3}label{display:flex;gap:6px;align-items:center;margin-top:4px;color:#c9c3dc;font-size:12px}.x{position:absolute;top:6px;right:6px;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;color:#c9c3dc;font-size:16px;text-decoration:none}.x:hover{background:#ffffff1a}.nw{white-space:nowrap}`;
 const page = (title: string, body: string) => `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; form-action https://nekko.invalid"><title>${title}</title><style>${STYLE}</style></head><body>${body}</body></html>`;
 
 /**
@@ -124,11 +137,15 @@ export function memoryPromptHtml(state: MemoryState, models: LocalModels | null 
   const app = state.topApp;
   const critical = state.level === 'critical';
   const release = models?.models !== 0;
+  const wsl = wslLine(state);
+  // The amount and the command each stay on one line.
+  const wslHtml = wsl && esc(wsl).replace(`about ${gb(state.wslBytes ?? 0)}`, m => `<span class="nw">${m}</span>`).replace('wsl --shutdown', m => `<span class="nw">${m}</span>`);
   const releaseLine = models
     ? `Shut down ${models.models === 1 ? "Nekko's local model" : `Nekko's ${models.models} local models`}<small>Frees about ${gb(models.bytes)}. ${modelsCost(models)}</small>`
     : "Shut down Nekko's local models<small>Agents using them stop.</small>";
   return page('Nekko memory check', `<main><header>${ALERT_MASCOT}<h1>${critical ? 'Memory is almost gone' : 'Memory is running low'}</h1></header>
 <p>${esc(leftLine(state))}. Apps may crash when it runs out.</p>
+${wslHtml ? `<p>${wslHtml}</p>` : ''}
 <form action="https://nekko.invalid/choose" method="get">
 ${app ? `<button class="primary" name="choice" value="close">Close ${esc(app.name)}<small>Frees about ${gb(app.bytes)}. It can still ask you to save first.</small></button><input type="hidden" name="app" value="${esc(app.name)}">` : ''}
 ${release ? `<button${app ? '' : ' class="primary"'} name="choice" value="release">${releaseLine}</button>` : ''}

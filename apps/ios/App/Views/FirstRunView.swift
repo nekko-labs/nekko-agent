@@ -54,7 +54,7 @@ struct FirstRunIntroView: View {
 
     private func point(_ icon: String, _ title: String, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon).font(.title3).foregroundStyle(palette.accent).frame(width: 28)
+            Image(systemName: icon).font(.title3).foregroundStyle(palette.inkSoft).frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.headline).foregroundStyle(palette.ink)

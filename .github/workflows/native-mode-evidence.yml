@@ -120,6 +120,7 @@ jobs:
             ${{ inputs.ios_test_file }}
             apps/ios/App/Views/SecurityEvidenceFixture.swift
             apps/ios/App/Views/ChatStatusFixture.swift
+            apps/ios/App/Views/ReplyVoicesFixture.swift
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -160,6 +161,9 @@ jobs:
           p.write_text(s)
           PYFIX
           fi
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" ]]; then
+            cp .evidence-harness/apps/ios/App/Views/ReplyVoicesFixture.swift apps/ios/App/Views/
+          fi
       - name: Test native protocol and phone request payloads
         working-directory: apps/ios/Protocol
         run: swift test
@@ -181,6 +185,8 @@ jobs:
         working-directory: apps/ios
         env:
           ONLY_TESTING: ${{ inputs.ios_only_testing }}
+          IOS_TEST_FILE: ${{ inputs.ios_test_file }}
+          TEST_RUNNER_NEKKO_EVIDENCE_BASELINE: ${{ matrix.revision == 'before' && '1' || '0' }}
         run: |
           set -euo pipefail
           xcrun simctl boot "$DEVICE"
@@ -189,6 +195,11 @@ jobs:
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO)
           xcodebuild "${COMMON[@]}" build-for-testing
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" ]]; then
+            xcrun simctl io "$DEVICE" recordVideo --codec=h264 evidence/quiet-transcript.mp4 &
+            VIDEO_PID=$!
+            trap 'kill -INT "$VIDEO_PID" 2>/dev/null || true; wait "$VIDEO_PID" || true' EXIT
+          fi
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
             "-only-testing:$ONLY_TESTING"
       - name: Record Winter motion on the owned simulator

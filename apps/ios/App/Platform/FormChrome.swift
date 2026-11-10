@@ -16,6 +16,8 @@ extension View {
 }
 
 /// A separate trailing control above the software keyboard, outside composer actions.
+/// The message box's own keyboard bar carries Hide keyboard (#2450), so this one
+/// stands aside while a composer has the keyboard.
 private struct FloatingKeyboardDismiss: ViewModifier {
     @Environment(\.palette) private var palette
     @State private var visible = false
@@ -23,7 +25,7 @@ private struct FloatingKeyboardDismiss: ViewModifier {
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if visible {
+                if visible && ComposerKeyboard.shared.editing == nil {
                     HStack {
                         Spacer()
                         Button(action: hideKeyboard) {
@@ -64,6 +66,27 @@ struct SectionHeader: View {
     var body: some View {
         Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).textCase(nil)
     }
+}
+
+/// A row's leading symbol at rest, in `inkSoft` rather than the accent a List gives a
+/// Label's icon (docs/design-system.md, Icons: the accent only when a control is on).
+/// For navigation and information rows; menus and swipe actions keep the system's look.
+struct QuietLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View { QuietLabel(configuration: configuration) }
+
+    private struct QuietLabel: View {
+        let configuration: LabelStyleConfiguration
+        @Environment(\.palette) private var palette
+
+        var body: some View {
+            Label { configuration.title } icon: { configuration.icon.foregroundStyle(palette.inkSoft) }
+                .labelStyle(.titleAndIcon)
+        }
+    }
+}
+
+extension LabelStyle where Self == QuietLabelStyle {
+    static var quietRow: QuietLabelStyle { QuietLabelStyle() }
 }
 
 /// Put the keyboard away, wherever the focus is.

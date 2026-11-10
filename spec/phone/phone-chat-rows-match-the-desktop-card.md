@@ -19,7 +19,7 @@ The desktop's card is the reference ([agent panel view options](../agents/agent-
 - **Context window, while in progress.** `45k/1M`: the computer's own figures for a Claude Agent chat, else the transcript estimate against the model's window (the computer's figure, else the desktop's `guessContextWindow`). Green below 60%, amber from 60%, red from 85% (`fillTone`). Shown only while the chat is in progress: working, waiting on you, stopped on an error (iPhone), or idle with a watch armed. A finished or completed chat leaves it off, as the desktop's Done cards do. Screen readers hear "Context window 45 percent full".
 - **PR chip, bottom right.** One chip for all the chat's PRs: the one that matters most (open, then draft, then merged, then closed; then the newest in the same repository), with GitHub's glyph for its state (Gentleface, as the desktop's chip) in its hue (open green, draft faint, merged in the accent, closed in danger), `#123`, and `+N` in faint ink for the others. The row opens the chat, whose PR chip opens each PR; screen readers hear every PR and its state.
 
-**View → Card details** still turns Model, Context window and Pull requests off independently.
+**View → Card details** turns Model, Context window, Pull requests and Last updated off independently. On iOS it expands inline inside the View-options popover, just like Show: native switches stay in the same Form instead of opening a nested popup. Changing one field leaves the others unchanged; all four choices persist across relaunch. [Implemented in source for #2380; native all-switch/persistence acceptance remains unverified. Older matched screenshots were inspected and show the nested-menu defect versus the inline switches, not a full interaction pass. Automatic run42578121066 on PR merge ref33669d3e compiled the corrected spoken-label and bounded-Form driver, but every switch remained on after the parent-row center tap. Its AX tree records each wide labeled Switch row containing the actual smaller switch. The driver now targets that native child with existence, frame-containment and hittability preconditions, preserving all field-independence, hidden-field and relaunch assertions. This driver correction still requires fresh native execution; previous failing runs remain failures.]
 
 ## PR state on Android
 
@@ -40,3 +40,9 @@ Provider marks: the desktop's Lobe Icons (MIT) as iOS template SVGs (`ProviderMa
 
 - Native screenshots of the new rows on both phones.
 - The desktop also uses the model catalog's own context length; the phones use the computer's reported window or the desktop's guess.
+
+## Lazy Show disclosure driver (2026-11-09)
+
+The native Form can expose the first Show row (Previews) while lower rows, including Always show groups, are not yet in its accessibility tree. The PhoneParity driver recognizes that expanded content before scrolling the same Form to Always show groups; it does not mistake an unmaterialized inline row for the baseline menu. It still asserts reachability, the enabled switch value and visibility of the empty Building group. No timeout or product behavior changes.
+
+Evidence: older full-native run `42578046165`, app/harness `577f35db1f40545e7aa92feea2442660c9539b9d`, iPhone 18 Pro/iOS 27.2, exported Show screenshot and AX tree. Local source-contract checks cover the driver sequence; Swift compilation and native execution of this repair remain **unverified**. This is not matched current-head all-switch or persistence acceptance.

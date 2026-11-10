@@ -62,6 +62,11 @@ final class MarkdownTests: XCTestCase {
             box.tap()
             let bullet = app.buttons["composer.bullet"]
             XCTAssertTrue(bullet.waitForExistence(timeout: 5), "the toolbar shows while the box is focused")
+            // #2450: the toolbar rides on the keyboard, below the message box rather than inside it.
+            let keyboard = app.keyboards.firstMatch
+            XCTAssertTrue(keyboard.waitForExistence(timeout: 10))
+            XCTAssertGreaterThanOrEqual(bullet.frame.minY, box.frame.maxY, "the toolbar sits below the message box")
+            XCTAssertLessThan(abs(bullet.frame.midY - keyboard.frame.minY), 60, "the toolbar sits on the keyboard's top edge")
             attach(app, "composer-\(theme)-1-toolbar")
 
             bullet.tap()
@@ -228,6 +233,7 @@ final class MarkdownTests: XCTestCase {
             XCTAssertEqual(app.buttons["composer.bold"].exists, expanded)
             let hide = app.buttons["composer.hideKeyboard"]
             XCTAssertTrue(hide.isHittable)
+            XCTAssertEqual(app.buttons.matching(identifier: "composer.hideKeyboard").count, 1, "one Hide keyboard, on the keyboard bar")
             XCTAssertEqual(hide.label, "Hide keyboard")
             XCTAssertGreaterThanOrEqual(hide.frame.width, 44)
             XCTAssertGreaterThanOrEqual(hide.frame.height, 44)
@@ -248,6 +254,32 @@ final class MarkdownTests: XCTestCase {
         XCTAssertTrue(resumed.contains(" safely"))
         XCTAssertEqual(resumed.replacingOccurrences(of: " safely", with: ""), "Keep this draft")
         app.buttons["composer.formatting"].tap() // Leave formatting expanded for the other lab tests.
+        app.terminate()
+    }
+
+    /// Evidence for #2450 (also runs on the base revision, so it asserts nothing about
+    /// placement): frames while the keyboard opens with the toolbar and closes again.
+    func testKeyboardBarOpenCloseFrames() {
+        let app = launchLab(theme: "light")
+        let box = app.input("chat.message")
+        XCTAssertTrue(box.waitForExistence(timeout: 15))
+        attach(app, "kbbar-0-closed")
+        box.tap()
+        for i in 1...4 { attach(app, "kbbar-1-opening-\(i)") }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["composer.bullet"].waitForExistence(timeout: 5))
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        attach(app, "kbbar-2-open")
+        box.typeText("Ship **today**")
+        attach(app, "kbbar-3-typed")
+        let hide = app.buttons["composer.hideKeyboard"]
+        XCTAssertTrue(hide.waitForExistence(timeout: 5))
+        hide.tap()
+        for i in 1...4 { attach(app, "kbbar-4-closing-\(i)") }
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 10)
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        attach(app, "kbbar-5-closed")
         app.terminate()
     }
 
