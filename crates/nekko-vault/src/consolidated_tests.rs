@@ -158,6 +158,29 @@ fn deletion_tombstone_prevents_legacy_resurrection_after_restart() {
     assert_eq!(fake.old_reads.load(Ordering::SeqCst), 0);
 }
 
+/// Each Keychain call can be one more dialog for a process answered with a
+/// one-time "Allow", so a change outside a migration is never read back.
+#[test]
+fn changes_are_not_read_back_but_a_migration_is() {
+    let (fake, shared) = fixture();
+    let v = vault(&shared, "settings");
+    v.set("key", "one").unwrap();
+    v.set("key", "two").unwrap();
+    v.delete("key");
+    assert_eq!(fake.reads.load(Ordering::SeqCst), 1, "only the startup read");
+    assert_eq!(fake.writes.load(Ordering::SeqCst), 3);
+
+    fake.old.lock().unwrap().insert(("settings".into(), "old".into()), "original".into());
+    assert_eq!(v.get("old").as_deref(), Some("original"));
+    assert_eq!(fake.reads.load(Ordering::SeqCst), 2, "the migration reads its copy back");
+    assert!(fake.old.lock().unwrap().is_empty());
+
+    let restarted = Arc::new(Shared::new(Box::new(fake.clone())));
+    let again = vault(&restarted, "settings");
+    assert_eq!(again.get("key"), None);
+    assert_eq!(again.get("old").as_deref(), Some("original"));
+}
+
 #[test]
 fn unchanged_saves_do_not_touch_keychain_and_profiles_do_not_share() {
     let (fake, shared) = fixture();

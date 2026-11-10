@@ -196,7 +196,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         }
       },
       "saved": {
@@ -348,7 +348,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         }
       },
       "saved": {
@@ -499,7 +499,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         }
       },
       "saved": {
@@ -651,7 +651,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         }
       },
       "saved": {
@@ -807,7 +807,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultExecutionMode": "unified",
         "gitManagement": {
@@ -964,7 +964,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultExecutionMode": "sandbox"
       },
@@ -1118,7 +1118,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "gitManagement": {
           "mode": "isolated"
@@ -1272,7 +1272,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": "fusion"
       },
@@ -1434,7 +1434,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": "risky-business"
       },
@@ -1593,7 +1593,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": "local",
         "defaultExecutionMode": "unified"
@@ -1754,7 +1754,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": "missing"
       },
@@ -1907,7 +1907,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": ""
       },
@@ -2060,7 +2060,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": "mine",
         "savedModes": [
@@ -2248,7 +2248,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": "partial",
         "defaultExecutionMode": "unified",
@@ -2423,7 +2423,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": "fusion",
         "savedModes": []
@@ -2577,7 +2577,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": "fusion"
       },
@@ -2738,7 +2738,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         }
       },
       "saved": {
@@ -2901,7 +2901,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultExecutionMode": "sandbox"
       },
@@ -3056,7 +3056,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         }
       },
       "saved": {
@@ -3210,7 +3210,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         }
       },
       "saved": {
@@ -3364,7 +3364,7 @@
         "orchestration": {
           "strategy": "balanced",
           "maxDepth": 2,
-          "maxParallel": 4
+          "maxParallel": 2
         },
         "defaultSavedModeId": "cloud"
       },

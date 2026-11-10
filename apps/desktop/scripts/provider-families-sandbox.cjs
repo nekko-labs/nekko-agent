@@ -42,7 +42,9 @@ app.whenReady().then(async () => {
       check('secret never rendered', await run('!document.body.innerHTML.includes("synthetic-secret-never-render")'));
       check('Claude family lists three accounts', await run('document.querySelectorAll("[data-provider-family=\\"claude\\"] [data-account-row]").length === 3'));
       check('organization and personal named', await run('document.querySelector("[data-provider-family=\\"claude\\"]").innerText.includes("Acme Inc") && document.querySelector("[data-provider-family=\\"claude\\"]").innerText.includes("Personal")'));
-      check('shared email once in the family summary', await run('document.querySelector("[data-provider-family=\\"claude\\"] [data-family-summary]").textContent.includes("alex@example.test")'));
+      check('one login row for the shared email', await run('document.querySelectorAll("[data-provider-family=\\"claude\\"] [data-login-row]").length === 1 && document.querySelector("[data-login=\\"alex@example.test\\"]").querySelectorAll("[data-account-row]").length === 2'));
+      check('each account says which it is', await run('document.querySelector("[data-login]").innerText.includes("Personal plan · Max") && document.querySelector("[data-login]").innerText.includes("Organization · Team")'));
+      check('family summary leaves the email to the login row', await run('!document.querySelector("[data-provider-family=\\"claude\\"] [data-family-summary]").textContent.includes("alex@example.test")'));
       check('Opus lists both subscription accounts', await run('document.querySelector("[data-family-model=\\"opus\\"]").innerText.includes("Personal · Acme Inc")'));
       check('no card inside the family', await run('!document.querySelector("[data-provider-families] .card")'));
       await run('document.querySelector("[data-account-row=\\"acme\\"] button[aria-expanded]").click()');
@@ -50,6 +52,11 @@ app.whenReady().then(async () => {
       check('account details open under its row', await run('!!document.querySelector("[data-account-row=\\"acme\\"] [data-account-details]")'));
       await sleep(800);
       await shot('models-acme-open-dark');
+      await run('document.querySelector("[data-account-row=\\"acme\\"] button[aria-expanded]").click()');
+      await run('document.querySelector("[data-add-login-account]").click()');
+      await sleep(1500);
+      check('another account on the login signs in and is checked', await run('document.querySelector("[data-add-login-verdict=\\"ok\\"]")?.innerText.includes("Globex · Enterprise")'));
+      await shot('models-add-account-dark');
     }
   } catch (e) {
     report.errors.push(String((e && e.stack) || e));

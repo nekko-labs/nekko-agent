@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Usage by place (UsageScreen, #2114), the iPhone's Usage and limits by computer and by this phone. -->
+<resources>
+    <string name="usage_all_places">All places</string>
+    <string name="usage_subscription_tokens">On a subscription</string>
+    <string name="usage_api_tokens">API (pay per token)</string>
+    <string name="usage_api_spend">Estimated API spend</string>
+    <string name="usage_offline_counted" formatted="true">%1$d offline: their last numbers are counted.</string>
+    <string name="usage_this_phone">This phone</string>
+    <string name="usage_offline_heading" formatted="true">%1$s · Offline</string>
+    <string name="usage_offline_last">Offline. These are the last numbers it gave.</string>
+    <string name="usage_offline_never">Offline. Its usage shows when it reconnects.</string>
+    <string name="usage_error_last" formatted="true">Couldn’t read it now (%1$s). These are the last numbers it gave.</string>
+    <string name="usage_subscriptions">Subscriptions</string>
+    <string name="usage_api">API</string>
+    <string name="usage_tokens_only">This phone has no prices: tokens only.</string>
+</resources>

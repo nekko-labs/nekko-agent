@@ -717,6 +717,8 @@ function makeWebClient(): NekkoApi {
     connectConnector: (kind, t, settings) => call(IpcChannels.connectorConnect, kind, t, settings),
     disconnectConnector: (kind) => call(IpcChannels.connectorDisconnect, kind),
     fetchConnector: (kind, query) => call(IpcChannels.connectorFetch, kind, query),
+    detectConnectors: () => call(IpcChannels.connectorsDetect),
+    importConnectorCli: (kind) => call(IpcChannels.connectorImportCli, kind),
 
     detectAgentTools: () => call(IpcChannels.integrationsDetect),
     installSubagent: (tool, target) => call(IpcChannels.integrationsInstall, tool, target),

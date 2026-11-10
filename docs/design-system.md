@@ -38,7 +38,7 @@ Reach for these in order and stop at the first that works:
 | 20 | `--q-pad`, `--q-group` | Panel padding, page gutter, group to group |
 | 40 | `--q-section` | Section to section |
 
-Sizes: rows 40 tall on a page (`--q-row`), 32 in a popover or menu (`--q-row-dense`); buttons and fields 32, small buttons 28; popovers 400 wide; the content column about 720. In Tailwind: `gap-1` 4, `gap-2` 8, `gap-4` 16, `gap-5` 20, `gap-6` 24, `gap-10` 40.
+Sizes: rows 40 tall on a page (`--q-row`), 32 in a popover or menu (`--q-row-dense`); buttons 28 with a mouse or trackpad and 44 under a finger (`.btn` does both: [decision 0079](decisions/0079-buttons-are-slim-for-a-pointer-and-44px-for-a-finger.md)), fields 32; popovers 400 wide; the content column about 720. In Tailwind: `gap-1` 4, `gap-2` 8, `gap-4` 16, `gap-5` 20, `gap-6` 24, `gap-10` 40.
 
 ## Type
 
@@ -106,7 +106,7 @@ Move 8px at most. Animate `opacity` and `transform`, never blur, bounce or overs
 - **Row**: no border, no resting background. Leading glyph, title, one line of detail, metadata pushed right, trailing actions. Hover is a neutral wash (`--q-wash`) under `@media (hover: hover)`. Row actions are faint until hover or focus, always visible on touch.
 - **Disabled or blocked**: title in `--ink-faint` and the reason as the detail, in words.
 - **Group**: a 12/500 `--ink-soft` label and its rows, `--q-group` above it. No divider between groups of the same kind.
-- **Buttons**: one primary per view. Secondary is a neutral wash (`.btn` / `.btn-ghost`), not an outline. Destructive is words in `--danger-text` until the confirmation.
+- **Buttons**: slim. 28 tall, 12 of padding each side, 14/500 label, 8 radius. Never pad a `.btn` taller. One primary per view. Secondary is a neutral wash (`.btn` / `.btn-ghost`), not an outline. Destructive is words in `--danger-text` until the confirmation.
 - **Tabs** (`QuietTabs`): the label in `--ink-soft`, the selected one in `--ink` on a wash pill that slides.
 - **Fields** (`quiet-field`): no border at rest, a faint wash, the `--ring` halo and an accent edge on focus.
 - **Removal**: anything that removes or reverts offers Undo in a toast instead of a confirm dialog, unless it cannot be undone.

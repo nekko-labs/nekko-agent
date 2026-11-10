@@ -1,7 +1,6 @@
 package com.nekko.android
 
 import com.nekko.android.beyond.AutomationsController
-import com.nekko.android.beyond.UsageController
 import com.nekko.protocol.Channels
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RelayException
@@ -18,7 +17,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** AN-29: automations with Run now only, and usage and limits by provider id, with the iPhone's BeyondTests data. */
+/** AN-29: automations with Run now only, with the iPhone's BeyondTests data. Usage is UsageByPlaceTest. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AutomationsUsageTest {
     private fun computer() = FakeCaller { c ->
@@ -60,23 +59,5 @@ class AutomationsUsageTest {
         val e = runCatching { a.runTask("t1") }.exceptionOrNull()
         assertEquals(AutomationsController.RUN_OFFLINE, e?.message)
         assertEquals(1, c.calls.count { it.channel == Channels.TASK_RUN_NOW })
-    }
-
-    @Test fun `usage and limits by provider id`() = runTest {
-        val c = computer()
-        val providers = listOf(
-            PublicProvider("p", "openai", "P", true),
-            PublicProvider("claude", "anthropic", "Claude", true),
-            PublicProvider("broken", "anthropic", "Broken", true),
-            PublicProvider("off", "openai", "Off", false),
-        )
-        val u = UsageController(c) { providers }
-        u.load()
-        val s = u.state.value
-        assertNull(s.error)
-        assertEquals(1500L, s.summary?.totalTokens)
-        assertEquals("only providers that reported limits get a card; a failed read leaves none", listOf("claude"), s.limited.map { it.first.id })
-        assertEquals(100.0, s.limited.single().second.windows.single().usedPercent, 0.0)
-        assertTrue("limits are asked by provider id, never for a disabled one", c.calls.none { it.channel == Channels.LIMITS_GET && it.args.first().jsonPrimitive.content == "off" })
     }
 }

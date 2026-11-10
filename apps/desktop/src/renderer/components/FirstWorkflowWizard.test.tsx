@@ -11,7 +11,11 @@ describe('first workflow wizard', () => {
       expect(html).toContain(`data-workflow-category="${category.id}"`);
       for (const example of category.examples) expect(html).toContain(example.name);
     }
-    expect(html).toContain('Video coming soon. Travis');
+    // Quiet surfaces: ideas are rows in groups, with no cards, tiles or coming-soon placeholders.
+    expect(html).not.toContain('Video coming soon');
+    expect(html).not.toMatch(/class="[^"]*card/);
+    expect(html).not.toContain('<details data-workflow-category');
+    expect(html).toContain('Step 1 of 3: Choose an idea');
     expect(html).toContain('data-scheduled-tasks-demo');
     expect(html).toContain('Read the walkthrough transcript');
     expect(html).toContain('42 seconds');

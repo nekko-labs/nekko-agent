@@ -137,7 +137,7 @@
     "orchestration": {
       "strategy": "balanced",
       "maxDepth": 2,
-      "maxParallel": 4
+      "maxParallel": 2
     }
   },
   "defaultAccent": "#5a2352",

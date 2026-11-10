@@ -1316,7 +1316,7 @@ impl Turns {
         let forwarder = tokio::spawn(forward(
             rx,
             Forward {
-                account: (self.accounts.clone(), account.clone(), opts.clone()),
+                account: (self.accounts.clone(), account.clone(), usage_attribution(opts, &lock(&session))),
                 hub: hub.clone(),
                 store: store.clone(),
                 session: session.clone(),
@@ -1641,6 +1641,15 @@ impl Turns {
             effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
             config_dir,
+            subagent_model: {
+                let settings = self.settings.shared();
+                let providers = settings.get("providers").and_then(Value::as_array).cloned().unwrap_or_default();
+                crate::subagent_model::claude_code_env(
+                    settings.get("orchestration").filter(|o| !o.is_null()),
+                    &providers,
+                    str_at(opts, "modelId"),
+                )
+            },
         };
         let same_account = |s: &Value| str_at(s, "claudeCodeAccount") == account.as_deref();
         let set_account = |obj: &mut serde_json::Map<String, Value>| match &account {
@@ -3413,6 +3422,44 @@ impl TurnTools {
             return if unattended { c.ask_unattended.clone() } else { c.ask_cancelled.clone() };
         }
         turn::format_ask_answers(&request, &answers)
+    }
+}
+
+/// The turn's options as its usage lines record them (#2494): plus `origin`
+/// (`background` for a turn nobody sent: a watch's wake-up, an automation,
+/// an automatic continue after compaction; else `user`) and, for a
+/// sub-agent's turn, its `parentSessionId`.
+fn usage_attribution(opts: &Value, session: &Value) -> Value {
+    let mut out = opts.clone();
+    if let Some(o) = out.as_object_mut() {
+        let background = js::truthy(opts.get("unattended"))
+            || js::truthy(session.get("unattended"))
+            || js::truthy(opts.get("autoContinue"));
+        o.insert("origin".into(), json!(if background { "background" } else { "user" }));
+        if let Some(p) = session.get("parentSessionId").filter(|p| js::truthy(Some(p))) {
+            o.insert("parentSessionId".into(), p.clone());
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod usage_attribution_tests {
+    use super::*;
+
+    #[test]
+    fn tags_who_started_the_turn_and_its_parent() {
+        let user = usage_attribution(&json!({ "sessionId": "s" }), &json!({}));
+        assert_eq!((user["origin"].clone(), user.get("parentSessionId")), (json!("user"), None));
+        for (opts, session) in [
+            (json!({ "unattended": true }), json!({})),
+            (json!({ "autoContinue": true }), json!({})),
+            (json!({}), json!({ "unattended": true })),
+        ] {
+            assert_eq!(usage_attribution(&opts, &session)["origin"], "background");
+        }
+        let child = usage_attribution(&json!({}), &json!({ "parentSessionId": "p" }));
+        assert_eq!((child["origin"].clone(), child["parentSessionId"].clone()), (json!("user"), json!("p")));
     }
 }
 
