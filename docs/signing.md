@@ -559,11 +559,19 @@ xcrun stapler validate /Applications/Nekko Agent.app
 
 ## Development builds: keeping Keychain answers across rebuilds
 
-nekkod keeps API keys and sign-ins in the macOS Keychain, and the Keychain
-remembers an "Always Allow" for a program by its signature. A development
-nekkod is ad-hoc signed by the linker, and an ad-hoc signature is the binary's
-own hash: every rebuild is a new program to the Keychain, so it asks again for
-every item.
+nekkod keeps API keys and sign-ins in the macOS Keychain. The login keychain
+checks two things before nekkod may read its item, and asks for your password
+for each one it does not recognise:
+
+1. **The item's access list**, which names programs by their signature. A
+   development nekkod is ad-hoc signed by the linker, and an ad-hoc signature
+   is the binary's own hash, so every rebuild is a new program to it.
+2. **The item's partition list**, which names programs by team ID or, without
+   one, by binary hash. A self-signed certificate has no team ID, so every
+   rebuild is new here too.
+
+"Allow" answers once and asks again on the next start. "Always Allow" adds the
+running nekkod to the list, so restarts of the same build stay silent.
 
 Run this once per Mac:
 
@@ -574,19 +582,23 @@ apps/desktop/scripts/dev-signing-identity.sh
 It creates **Nekko Agent Development**, a self-signed code-signing certificate
 in your login keychain that only your Mac trusts, and asks for your password
 once to trust it. From then on `npm run dev` (`stage-daemon.mjs --dev`) signs
-`target/dev-daemon/nekkod` with it under the identifier `dev.nekkolabs.nekkod`,
-and a local `npm run dist` without `CSC_LINK` signs the app with it instead of
-ad-hoc (`after-pack.cjs`). Answer the Keychain once more with **Always Allow**;
-later rebuilds keep it. The first signing may also ask to let `codesign` use
-the key: Always Allow.
+`target/dev-daemon/nekkod`, and `npm run local` (or `npm run build:nekkod`)
+signs `target/release/nekkod`, with it under the identifier
+`dev.nekkolabs.nekkod`. A local `npm run dist` without `CSC_LINK` signs the
+app with it instead of ad-hoc (`after-pack.cjs`). Answer the Keychain once more
+with **Always Allow** on both prompts. After that the access list keeps
+matching, and each rebuild asks once (the partition list): Always Allow again.
+The first signing may also ask to let `codesign` use the key: Always Allow.
 
 - `NEKKO_DEV_SIGN_IDENTITY="Apple Development: ..."` signs with an identity you
-  already have; `NEKKO_DEV_SIGN_IDENTITY=-` keeps ad-hoc.
+  already have. That one has a team ID, which the partition list can name, so
+  rebuilds may not ask at all (not verified here).
+  `NEKKO_DEV_SIGN_IDENTITY=-` keeps ad-hoc.
 - Without the identity nothing breaks: the build stays ad-hoc, says so, and the
-  Keychain asks after every rebuild as before.
+  Keychain asks twice after every rebuild.
 - A `cargo build -p nekkod` run by hand is not re-signed. The app runs the
   newest of `target/release`, `target/dev-daemon` and `target/debug`, so that
-  build asks again.
+  build asks twice.
 - Undo: delete "Nekko Agent Development" (certificate and key) in Keychain
   Access.
 
