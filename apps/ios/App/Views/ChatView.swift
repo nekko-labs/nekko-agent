@@ -1163,6 +1163,7 @@ struct Composer: View {
                     Button(action: hideKeyboard) {
                         Image(systemName: "keyboard.chevron.compact.down")
                             .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Hide keyboard")

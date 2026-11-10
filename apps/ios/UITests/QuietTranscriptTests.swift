@@ -44,6 +44,7 @@ final class QuietTranscriptTests: XCTestCase {
             let dismiss = app.buttons["composer.hideKeyboard"]
             XCTAssertTrue(dismiss.waitForExistence(timeout: 3))
             XCTAssertTrue(dismiss.isHittable)
+            XCTAssertGreaterThanOrEqual(dismiss.frame.width, 44 - 0.001)
             XCTAssertGreaterThanOrEqual(dismiss.frame.height, 44 - 0.001)
             dismiss.tap()
             XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
