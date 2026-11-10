@@ -136,7 +136,7 @@ struct MascotHat: View {
                 context.stroke(crown, with: .color(palette.ink.opacity(0.7)), lineWidth: 0.6)
                 context.fill(Path(roundedRect: CGRect(x: 3, y: 9, width: 26, height: 4), cornerRadius: 1), with: .color(palette.ink))
                 for x in stride(from: 5, through: 27, by: 2) {
-                    context.fill(Path(CGRect(x: x, y: 10, width: 0.5, height: 2)), with: .color(palette.paper.opacity(0.25)))
+                    context.fill(Path(CGRect(x: CGFloat(x), y: 10, width: 0.5, height: 2)), with: .color(palette.paper.opacity(0.25)))
                 }
                 context.translateBy(x: 16, y: 7)
                 context.scaleBy(x: 2, y: 2)
