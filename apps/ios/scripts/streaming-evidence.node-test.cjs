@@ -31,7 +31,10 @@ test('native journey has measured regression and follow-intent assertions', () =
   const tests = read('ios/UITests/StreamingStabilityTests.swift');
   assert.match(tests, /XCTAssertNotNil\(regression/);
   assert.match(tests, /XCTAssertLessThanOrEqual\(regression, 1/);
-  assert.match(tests, /transcript.swipeDown\(\)/);
+  assert.match(tests, /dy: 0\.3/);
+  assert.match(tests, /thenDragTo: transcript.coordinate/);
+  assert.match(tests, /dy: 0\.7/);
+  assert.match(tests, /reader-follow-intent-trace/);
   assert.match(tests, /jump.tap\(\)/);
   assert.match(tests, /XCTAssertEqual\(note.frame.height/);
 });

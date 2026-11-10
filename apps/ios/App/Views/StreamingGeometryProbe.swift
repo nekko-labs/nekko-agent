@@ -2,6 +2,14 @@
 import SwiftUI
 import UIKit
 
+@MainActor enum StreamingFollowTrace {
+    static var events: [String] = []
+    static func record(_ event: String) {
+        events.append(String(format: "%.3f ", ProcessInfo.processInfo.systemUptime) + event)
+        if events.count > 200 { events.removeFirst(events.count - 200) }
+    }
+}
+
 /// Fixture-only sampling, outside the transcript's layout. Records backward jumps
 /// during append-only output before the UI test deliberately scrolls into history.
 struct StreamingGeometryProbe: UIViewRepresentable {
@@ -28,6 +36,7 @@ struct StreamingGeometryProbe: UIViewRepresentable {
                 var largest: CGFloat = 0
                 var count = 0
                 var trace: [String] = []
+                StreamingFollowTrace.events = []
                 for _ in 0..<300 {
                     guard !Task.isCancelled, let view else { return }
                     if let window = view.window, let scroll = Self.scrolls(window).max(by: {
@@ -45,6 +54,12 @@ struct StreamingGeometryProbe: UIViewRepresentable {
                 }
                 view?.accessibilityLabel = trace.joined(separator: "; ")
                 view?.accessibilityValue = count > 250 ? String(format: "%.3f", Double(largest)) : "missing samples"
+                // Expose follow intent after measurement, during reader gestures.
+                for _ in 0..<600 {
+                    guard !Task.isCancelled, let view else { return }
+                    view.accessibilityLabel = trace.joined(separator: "; ") + " FOLLOW_EVENTS " + StreamingFollowTrace.events.joined(separator: "; ")
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
             }
         }
         private static func scrolls(_ view: UIView) -> [UIScrollView] {

@@ -30,7 +30,7 @@ struct TranscriptFollow: ViewModifier {
                 .onScrollPhaseChange { oldPhase, phase in
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("-refreshStream") {
-                        print("STREAM_PHASE old=\(oldPhase) new=\(phase) atBottom=\(atBottom)")
+                        StreamingFollowTrace.record("STREAM_PHASE old=\(oldPhase) new=\(phase) atBottom=\(atBottom)")
                     }
                     #endif
                     readerMoving = phase == .tracking || phase == .interacting || phase == .decelerating
@@ -43,7 +43,7 @@ struct TranscriptFollow: ViewModifier {
                 } action: { old, new in
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("-refreshStream") {
-                        print("STREAM_FOLLOW height=\(new.height) distance=\(new.distance) readerMoving=\(readerMoving) atBottom=\(atBottom)")
+                        StreamingFollowTrace.record("STREAM_FOLLOW height=\(new.height) distance=\(new.distance) readerMoving=\(readerMoving) atBottom=\(atBottom)")
                     }
                     #endif
                     if readerMoving {

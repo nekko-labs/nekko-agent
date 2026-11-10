@@ -21,7 +21,7 @@ final class StreamingStabilityTests: XCTestCase {
 
     func testStreamingFollowsGrowthAndLetsTheReaderScrollBack() {
         let app = launch(["-refreshLongChat", "-refreshStream"])
-        XCTAssertTrue(app.staticTexts["You are at the latest message."].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.scrollViews["chat.transcript"].waitForExistence(timeout: 15))
         Thread.sleep(forTimeInterval: 8)
         let metric = app.descendants(matching: .any)["stream.maxBackward"].firstMatch
         let sampled = NSPredicate { _, _ in
@@ -45,11 +45,18 @@ final class StreamingStabilityTests: XCTestCase {
         // The stream is still growing. Scroll into history and make sure incoming tokens
         // do not force the reader back to the end.
         let transcript = app.scrollViews["chat.transcript"]
-        transcript.swipeDown()
+        // Stay clear of navigation and bottom overlays on iPad's full-height scroll frame.
+        transcript.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+            .press(forDuration: 0.1, thenDragTo: transcript.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)))
         Thread.sleep(forTimeInterval: 1)
         attach(app, "streaming-history")
         let jump = app.buttons["Jump to latest"]
         if !baseline { XCTAssertTrue(jump.waitForExistence(timeout: 5), "the reader can leave the end while streaming") }
+        let intent = XCTAttachment(string: metric.label)
+        intent.name = "reader-follow-intent-trace"
+        intent.lifetime = .keepAlways
+        add(intent)
+        print("READER_FOLLOW_TRACE \(metric.label)")
         if jump.exists { jump.tap() }
         Thread.sleep(forTimeInterval: 2)
         attach(app, "streaming-resumed")
