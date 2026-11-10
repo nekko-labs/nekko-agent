@@ -608,7 +608,7 @@ struct ChatsView: View {
 ///    mark and the model, how full the context is while the chat is in
 ///    progress, prompts waiting on the phone. The PR chip rides the end of the
 ///    last line, its bottom right, as on the desktop: on the title line when
-///    there is no second line, in place of the time.
+///    there is no second line, just before the time.
 ///
 /// No preview of the transcript: the title says what the chat is, and the reply
 /// is one tap away. No "Working" / "Needs you" chip either: the glyph says it once.
@@ -645,7 +645,8 @@ struct ChatRow: View {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.inkSoft).accessibilityLabel("Pinned") }
                     Text(title).font(.body.weight(.medium)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
                     Spacer(minLength: 6)
-                    if prsOnTitleLine { RowPrChip(prs: prs) } else if showUpdated { updated }
+                    if prsOnTitleLine { RowPrChip(prs: prs) }
+                    if showUpdated { updated }
                 }
                 .frame(minHeight: 22)
                 if factsLine {
@@ -698,7 +699,8 @@ struct ChatRow: View {
         place != nil || summary.chatType == "image" || modelShown || contextShown != nil || waiting > 0
     }
 
-    /// A row cut down to its title still shows its PR, where the time would be.
+    /// A row cut down to its title still shows its PR, before the time: hiding
+    /// one card detail never hides another (GroupEvidenceTests).
     private var prsOnTitleLine: Bool { !factsLine && !prs.isEmpty }
 }
 
