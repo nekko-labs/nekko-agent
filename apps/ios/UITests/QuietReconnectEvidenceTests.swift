@@ -36,4 +36,19 @@ final class QuietReconnectEvidenceTests: XCTestCase {
             app.terminate()
         }
     }
+    /// Candidate-only assertions; the comparison method above also runs unchanged on base.
+    func testQuietReconnectCopy() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestQuietReconnectEvidence", "-quietReconnectCount", "1",
+                               "-splash", "NO", "-appLock", "NO", "-theme", "light",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Reconnecting to Gomi..."].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["1 prompt will send when reconnected."].exists)
+        let note = app.descendants(matching: .any)["chat.offlineNote"].firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 10))
+        XCTAssertEqual(note.label, "Gomi is reconnecting.\nYour draft will be saved here and sent when reconnected")
+        XCTAssertTrue(app.descendants(matching: .any)["chat.savedCopy"].firstMatch.label.hasPrefix("Updated last on "))
+    }
+
 }

@@ -13,7 +13,7 @@ struct QuietReconnectEvidenceFixture: View {
     @State private var store = ComputersStore(
         store: QuietReconnectSecrets(), makeConnection: { _ in QuietReconnectConnection() },
         deviceName: { "Test iPhone" }, deriveKey: { _, _ in Data(repeating: 0, count: 32) },
-        now: { savedAt }, offlineFiles: nil)
+        now: { 1793800000000 }, offlineFiles: nil)
     @State private var cache = QuietReconnectCache()
     @State private var ready = false
 
@@ -37,6 +37,7 @@ struct QuietReconnectEvidenceFixture: View {
                 relayUrl: "ws://localhost:1440", room: "a1b2c3d4e5f60718",
                 key: "00112233445566778899aabbccddeeff",
                 hostKey: "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE=", pair: "ABCD2345"))
+            if let id = store.activeId { store.rename(id, to: "Gomi") }
             store.transcriptCache = cache
             let session: JSONValue = [
                 "id": .string(Self.chatId), "title": "Release plan", "modelId": "fixture-model",

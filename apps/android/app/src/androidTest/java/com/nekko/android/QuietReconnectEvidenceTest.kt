@@ -100,7 +100,7 @@ class QuietReconnectEvidenceTest {
         val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
         val revision = InstrumentationRegistry.getArguments().getString("nekkoRevision") ?: error("Missing nekkoRevision")
         require(revision == "before" || revision == "after")
-        val recording = File(dir, "android-$revision-pulse-v2.mp4")
+        val recording = File(dir, "android-$revision-pulse-v3.mp4")
         recording.delete()
         // Block only the instrumentation thread. The main thread keeps native animation
         // frames running, with an extra steady second before and half-second after capture.

@@ -214,6 +214,14 @@ jobs:
           fi
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
             "-only-testing:$ONLY_TESTING"
+          if [[ "$ONLY_TESTING" == *QuietReconnectEvidenceTests* ]]; then
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/saved-note.xcresult test-without-building \
+              -only-testing:NekkoNativeTests/SavedListNoteTests
+            if [[ "${{ matrix.revision }}" == "after" ]]; then
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/reconnect-copy.xcresult test-without-building \
+                -only-testing:NekkoNativeUITests/QuietReconnectEvidenceTests/testQuietReconnectCopy
+            fi
+          fi
       - name: Record reconnect pulse on the same native surface
         if: inputs.ios_test_file == 'apps/ios/UITests/QuietReconnectEvidenceTests.swift'
         working-directory: apps/ios
