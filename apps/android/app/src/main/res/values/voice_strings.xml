@@ -19,6 +19,4 @@
     <string name="voice_reply">Reply</string>
     <string name="voice_hold">Hold to talk</string>
     <string name="voice_hold_accessibility">Start or finish held dictation</string>
-    <string name="voice_commands">Listen for “Nekko” commands</string>
-    <string name="voice_finish">Finish listening</string>
 </resources>

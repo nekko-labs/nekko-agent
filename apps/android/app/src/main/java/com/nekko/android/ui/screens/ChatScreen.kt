@@ -286,7 +286,9 @@ private fun ChatScreenContent(
     val focused by rememberUpdatedState(pane?.focused != false && !showMenu && !showRename && !showMode &&
         !showChanges && !showAudit && !showPrs && !showModelEffort && !showImageSettings && modeStepUp == null)
     val voiceComputer = remember(vm) { vm.repo.state.value.activeId }
-    val mic = rememberMic(vm.dictation.takeIf { dictationOn }, vm.computers) {
+    // The mic's words go through the chat's voice commands (installed by ChatVoiceControls).
+    val dictationCommands = remember(vm) { com.nekko.android.voice.DictationCommands() }
+    val mic = rememberMic(vm.dictation.takeIf { dictationOn }, vm.computers, dictationCommands) {
         vm.voiceEnabled && focused && voiceComputer != null && vm.repo.state.value.activeId == voiceComputer &&
             vm.repo.state.value.conn == com.nekko.protocol.RelayState.ONLINE && vm.completedAt.value == null && vm.repo.overlays.value[vm.sessionId] == null
     }
@@ -774,6 +776,7 @@ private fun ChatScreenContent(
                             com.nekko.android.voice.ChatVoiceControls(
                                 vm, dictationOn, focused, composer,
                                 showVoiceConversation, { showVoiceConversation = false }, onOpenChat, onNewChat, onSettings,
+                                dictation = dictationCommands,
                             )
                         },
                         footer = {
@@ -881,7 +884,13 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
  * tapped (Android shows its own prompt), then starts or stops dictation.
  */
 @Composable
-private fun rememberMic(d: DictationController?, updates: kotlinx.coroutines.flow.Flow<*>? = null, authorized: () -> Boolean = { true }): MicUi? {
+private fun rememberMic(
+    d: DictationController?,
+    updates: kotlinx.coroutines.flow.Flow<*>? = null,
+    /** Routes the words through the chat's voice commands ("Nekko, send"); else they are typed. */
+    commands: com.nekko.android.voice.DictationCommands? = null,
+    authorized: () -> Boolean = { true },
+): MicUi? {
     if (d == null) return null
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -911,9 +920,23 @@ private fun rememberMic(d: DictationController?, updates: kotlinx.coroutines.flo
         if (allowed()) {
             val has = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             if (has) {
-                com.nekko.android.voice.VoiceAudioOwner.claim(token) { d.cancel() }
-                // Tap mode (the iPhone's): listens until Stop, typing each pause's words as they come.
-                d.toggle(continuous = true) { words -> if (allowed() && com.nekko.android.voice.VoiceAudioOwner.owns(token)) onText(words) }
+                // Tap mode (the iPhone's): listens until Stop, each pause's words as they come. Starting,
+                // the chat's voice controls take the microphone so "Nekko, …" commands in the words run;
+                // without them the words are typed. Stopping needs neither.
+                if (d.state.value !is com.nekko.android.voice.MicState.Idle) {
+                    // Stop: keep whoever holds the microphone, or taking it back would cancel and restart.
+                    d.toggle(continuous = true) { }
+                    return@MicUi
+                }
+                val sink = commands?.start()
+                if (sink == null) com.nekko.android.voice.VoiceAudioOwner.claim(token) { d.cancel() }
+                d.toggle(continuous = true) { words ->
+                    when {
+                        !allowed() -> Unit
+                        sink != null -> sink(words)
+                        com.nekko.android.voice.VoiceAudioOwner.owns(token) -> onText(words)
+                    }
+                }
             } else ask.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
