@@ -61,7 +61,7 @@ class ImageChatEvidenceTest {
         compose.setContent { NekkoTheme(dark = false) { NewChatScreen(repo, onBack = {}, onPair = {}, onCreated = { created = it }) } }
         settle()
         if (!before) {
-            compose.onNodeWithText("Image", useUnmergedTree = true).performClick()
+            compose.onNodeWithTag("newChat.kind.image").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("image.model.flux").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("image.model.flux").performClick()
             shot("image-new-chat")

@@ -1,0 +1,11 @@
+<!-- Nekko Agent's own line icon, copied from apps/desktop/src/renderer/icons.tsx PhotoIcon (the desktop image composer's photo button). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <group android:rotation="-8" android:pivotX="12" android:pivotY="12">
+        <path android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M6.5 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+        <path android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M8 5.5h8a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z" />
+        <path android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M7 13.5l3.2-3 2.3 2 1.5-1.2 3 2.5" />
+        <path android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M13.2 8.4a1 1 0 1 0 2 0a1 1 0 1 0-2 0z" />
+    </group>
+</vector>
