@@ -136,7 +136,8 @@ class WinterThemeTest {
         val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
         val revision = args.getString("nekkoRevision") ?: "local"
         val device = args.getString("nekkoDevice") ?: "phone"
-        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: error("No screenshot: $name")
+        // Synchronizes the native render; UIAutomation can capture the launch window.
+        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         File(dir, "$revision-$device-$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }
