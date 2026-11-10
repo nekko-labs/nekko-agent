@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { SECURITY_KEY_UNTESTED_NOTE, WEBAUTHN_CEREMONY_TIMEOUT_MS, type WebAuthnCeremonyRequest, type WebAuthnCeremonyResult } from '@nekko-agent/shared';
+import { SECURITY_KEY_UNTESTED_NOTE, WEBAUTHN_CANCELLED, WEBAUTHN_CEREMONY_TIMEOUT_MS, type WebAuthnCeremonyRequest, type WebAuthnCeremonyResult } from '@nekko-agent/shared';
 import { CEREMONY_PAGE_CSP, ceremonyPage, runWebAuthnCeremony, validCeremonyRequest } from '../webauthnCeremony.js';
 
 /**
@@ -84,7 +84,7 @@ export async function runCeremonyWindow(request: unknown, deps: CeremonyDeps): P
     w.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
     w.webContents.on('will-navigate', (e) => e.preventDefault());
     w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    const closed = new Promise<WebAuthnCeremonyResult>((resolve) => w.once('closed', () => resolve({ ok: false, error: 'Cancelled.', cancelled: true })));
+    const closed = new Promise<WebAuthnCeremonyResult>((resolve) => w.once('closed', () => resolve({ ok: false, error: WEBAUTHN_CANCELLED, cancelled: true })));
     const timedOut = new Promise<WebAuthnCeremonyResult>((resolve) => {
       timer = setTimeout(() => resolve({ ok: false, error: 'The security key didn’t answer in time.', cancelled: true }), deps.timeoutMs ?? WEBAUTHN_CEREMONY_TIMEOUT_MS);
     });

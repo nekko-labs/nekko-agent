@@ -194,6 +194,13 @@ export type WebAuthnCeremonyResult =
   | { ok: true; mode: 'get'; rpId: string; credentialId: string; authenticatorData: string; clientDataJSON: string; signature: string }
   | { ok: false; error: string; cancelled?: boolean };
 
+/**
+ * The one ceremony failure worth no message: the owner closed the window
+ * themselves, so they know. Every other `cancelled` result (no key answered,
+ * the key didn't answer in time) says something the owner has not seen.
+ */
+export const WEBAUTHN_CANCELLED = 'Cancelled.';
+
 /** The step-up sheet answers a ceremony this long at most (the challenge's life). */
 export const WEBAUTHN_CEREMONY_TIMEOUT_MS = 2 * 60 * 1000;
 
