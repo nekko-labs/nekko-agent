@@ -1,18 +1,29 @@
 package com.nekko.android
 
+import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -44,6 +55,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -54,6 +66,73 @@ class QuietReconnectEvidenceTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val computer = FakeComputer()
     private val device = InstrumentationRegistry.getArguments().getString("nekkoDevice") ?: Build.MODEL.replace(' ', '_')
+
+    /** Record only a settled real reconnect banner, never HOME or fixture transitions. */
+    @Test fun steadyReconnectMotion() {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
+            automation.executeShellCommand(command),
+        ).bufferedReader().use { it.readText().trim() }
+        assertTrue("Motion evidence requires system animations", ValueAnimator.areAnimatorsEnabled())
+        assertEquals("1", shell("settings get global animator_duration_scale"))
+        val repo = repo()
+        var motionFrame by mutableStateOf(0)
+        // Disable auto-advance before composition: its InfiniteAnimationPolicy otherwise
+        // cancels infinite transitions before a later manual-clock hold can drive them.
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                Box(Modifier.fillMaxSize()) {
+                    ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {})
+                    // A static base emits just one screenrecord frame without this test-only
+                    // counter. It keeps both native recordings continuous, below the banner.
+                    Text("Motion sample $motionFrame", modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp), fontSize = 9.sp)
+                }
+            }
+        }
+        compose.runOnIdle { computer.online = false; computer.goConnecting() }
+        compose.mainClock.advanceTimeBy(200)
+        compose.waitUntil(10_000) { repo.state.value.conn == RelayState.CONNECTING }
+        settle()
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasText("Studio Mac", substring = true)).fetchSemanticsNodes().isNotEmpty()
+        }
+        val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
+        val revision = InstrumentationRegistry.getArguments().getString("nekkoRevision") ?: error("Missing nekkoRevision")
+        require(revision == "before" || revision == "after")
+        val recording = File(dir, "android-$revision-pulse-v2.mp4")
+        recording.delete()
+        // Block only the instrumentation thread. The main thread keeps native animation
+        // frames running, with an extra steady second before and half-second after capture.
+        Thread.sleep(1_000)
+        assertEquals(RelayState.CONNECTING, repo.state.value.conn)
+        var output = ""
+        val recorder = Thread {
+            output = shell("screenrecord --time-limit 6 --bit-rate 8000000 ${recording.absolutePath}")
+        }
+        recorder.start()
+        try {
+            // Compose tests own the animation clock. Drive it at wall-clock speed rather
+            // than freezing it during a sleep or fast-forwarding six seconds in one frame.
+            val start = android.os.SystemClock.elapsedRealtime()
+            val clockStart = compose.mainClock.currentTime
+            while (recorder.isAlive && android.os.SystemClock.elapsedRealtime() - start < 15_000) {
+                compose.runOnUiThread { motionFrame++ }
+                val elapsed = android.os.SystemClock.elapsedRealtime() - start
+                val advance = elapsed - (compose.mainClock.currentTime - clockStart)
+                if (advance > 0) compose.mainClock.advanceTimeBy(advance, ignoreFrameDuration = true)
+                Thread.sleep(16)
+            }
+            recorder.join(1_000)
+            assertTrue("screenrecord did not finish", !recorder.isAlive)
+            assertTrue("screenrecord failed: $output", recording.length() > 0)
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+        assertEquals(RelayState.CONNECTING, repo.state.value.conn)
+        Thread.sleep(500)
+        assertEquals(0, computer.sends)
+    }
 
     @Test fun quietReconnectSurfaces() {
         val repo = repo()
@@ -92,6 +171,7 @@ class QuietReconnectEvidenceTest {
     private fun repo(): ComputersRepository {
         val repo = ComputersRepository(
             store = MemoryStore(),
+            now = { 1_800_000_000_000L },
             remotes = { config, _ -> computer.remote(config) },
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
             deviceName = { "Pixel" },
