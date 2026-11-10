@@ -160,6 +160,7 @@
    "changes:acceptAll",
    "connector:connect",
    "connector:disconnect",
+   "connector:importCli",
    "data:wipe",
    "dir:list",
    "file:read",

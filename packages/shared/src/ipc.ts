@@ -25,7 +25,7 @@ import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
 import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, JobAction, LinuxImageView, RunnerSettings, RunnerView } from './runners.js';
-import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
+import type { ConnectorConfig, ConnectorKind, ConnectorResource, DetectedConnectors } from './connectors.js';
 import type {
   AgentToolId,
   AgentToolStatus,
@@ -374,6 +374,8 @@ export const IpcChannels = {
   connectorConnect: 'connector:connect',
   connectorDisconnect: 'connector:disconnect',
   connectorFetch: 'connector:fetch',
+  connectorsDetect: 'connectors:detect',
+  connectorImportCli: 'connector:importCli',
 
   integrationsDetect: 'integrations:detect',
   integrationsInstall: 'integrations:install',
@@ -1221,6 +1223,10 @@ export interface NekkoApi {
   connectConnector(kind: ConnectorKind, token: string, settings?: Record<string, string>): Promise<ConnectorConfig[]>;
   disconnectConnector(kind: ConnectorKind): Promise<ConnectorConfig[]>;
   fetchConnector(kind: ConnectorKind, query?: string): Promise<ConnectorResource[]>;
+  /** Sign-ins already on this computer a connector can use in one click (account names only). */
+  detectConnectors(): Promise<DetectedConnectors>;
+  /** Connect GitHub with the GitHub CLI's sign-in; the daemon reads the token itself. */
+  importConnectorCli(kind: ConnectorKind): Promise<ConnectorConfig[]>;
 
   /** Which agent CLIs are present and whether Nekko is installed as an MCP subagent. */
   detectAgentTools(): Promise<AgentToolStatus[]>;
