@@ -508,6 +508,12 @@
         "contextLength": 1000000
       },
       {
+        "id": "claude-fable-5-2",
+        "providerId": "anthropic-sub",
+        "name": "Claude Fable 5.2",
+        "contextLength": 1000000
+      },
+      {
         "id": "claude-fable-5-1",
         "providerId": "anthropic-sub",
         "name": "Claude Fable 5.1",
@@ -575,6 +581,12 @@
         "id": "claude-sonnet-4-6",
         "providerId": "anthropic",
         "name": "Claude Sonnet 4.6",
+        "contextLength": 1000000
+      },
+      {
+        "id": "claude-fable-5-2",
+        "providerId": "anthropic",
+        "name": "Claude Fable 5.2",
         "contextLength": 1000000
       },
       {
@@ -648,6 +660,12 @@
         "contextLength": 1000000
       },
       {
+        "id": "claude-fable-5-2",
+        "providerId": "anthropic",
+        "name": "Claude Fable 5.2",
+        "contextLength": 1000000
+      },
+      {
         "id": "claude-fable-5-1",
         "providerId": "anthropic",
         "name": "Claude Fable 5.1",
@@ -718,6 +736,12 @@
         "contextLength": 1000000
       },
       {
+        "id": "claude-fable-5-2",
+        "providerId": "anthropic",
+        "name": "Claude Fable 5.2",
+        "contextLength": 1000000
+      },
+      {
         "id": "claude-fable-5-1",
         "providerId": "anthropic",
         "name": "Claude Fable 5.1",
@@ -785,6 +809,12 @@
         "id": "claude-sonnet-4-6",
         "providerId": "anthropic",
         "name": "Claude Sonnet 4.6",
+        "contextLength": 1000000
+      },
+      {
+        "id": "claude-fable-5-2",
+        "providerId": "anthropic",
+        "name": "Claude Fable 5.2",
         "contextLength": 1000000
       },
       {
