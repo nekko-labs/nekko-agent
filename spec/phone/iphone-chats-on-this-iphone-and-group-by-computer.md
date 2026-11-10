@@ -64,7 +64,7 @@ Philip asked (2026-11-04):
 
 ### Verification contract
 
-Focused package suites: PhoneChatsTests, PhoneCloudBoundaryTests, PhoneCloudLifecycleTests, UsageByPlaceTests. Native tests: PhoneHTTPBoundaryTests (request and redirect policy), PhoneDirectCloudTests (matched empty-picker/new-chat screenshots and no-computer fixture reply). Baseline app ref: a45e083f2 (full SHA recorded in CI). Native CI/evidence is pending; Windows has no Swift on PATH and Docker's Linux daemon is unavailable. Neither source tests nor captured media establish visual inspection or live provider authentication. See apps/ios/docs/direct-cloud-chat.md and the draft PR for current run IDs and limitations.
+Focused package suites: PhoneChatsTests, PhoneCloudBoundaryTests, PhoneCloudLifecycleTests, PhoneCloudDiscoveryTests, UsageByPlaceTests. Native tests: PhoneHTTPBoundaryTests (request and redirect policy), PhoneDirectCloudTests (matched empty-picker/new-chat screenshots and no-computer fixture reply). Baseline app ref: a45e083f2 (full SHA recorded in CI). Native CI/evidence is pending; Windows has no Swift on PATH and Docker's Linux daemon is unavailable. Neither source tests nor captured media establish visual inspection or live provider authentication. See apps/ios/docs/direct-cloud-chat.md and the draft PR for current run IDs and limitations.
 
 ### Official request references
 

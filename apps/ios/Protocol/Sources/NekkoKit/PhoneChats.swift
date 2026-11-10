@@ -237,7 +237,7 @@ public final class PhoneChats {
     }
 
     private func testProvider(_ providerId: String) async -> String? {
-        guard let p = provider(providerId), let kind = PhoneProviders.kind(p.kind) else { return String(localized: "Unknown provider.") }
+        guard let p = provider(providerId), p.enabled, let kind = PhoneProviders.kind(p.kind) else { return String(localized: "Unknown provider.") }
         if kind.listsModels {
             let list = await loadModels(providerId)
             return modelErrors[providerId] ?? (list.isEmpty ? String(localized: "The provider listed no models.") : nil)
