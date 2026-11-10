@@ -36,13 +36,13 @@
     <string name="chats_skip">跳过</string>
     <string name="chats_continue">继续</string>
     <string name="chats_intro_title">你的智能体，随身携带</string>
-    <string name="chats_intro_body">Nekko Agent 在你的电脑上运行。这个 App 让你随时随地操控它。</string>
+    <string name="chats_intro_body">直接在这部手机上与云 API 聊天，或配对电脑以使用智能体和工具。</string>
     <string name="chats_intro_follow_title">实时跟进聊天</string>
     <string name="chats_intro_follow_text">看着你的电脑工作，并从这里开始新的聊天。</string>
     <string name="chats_intro_approve_title">批准工具并回答问题</string>
     <string name="chats_intro_approve_text">当智能体需要你时，由你来决定。</string>
     <string name="chats_intro_private_title">隐私优先的设计</string>
-    <string name="chats_intro_private_text">这部手机与你的电脑之间的一切内容都经过端到端加密。</string>
+    <string name="chats_intro_private_text">与电脑的聊天采用端到端加密。手机聊天通过 HTTPS 直接连接你选择的服务商。</string>
     <string name="chats_allow_notifications">允许通知</string>
     <string name="chats_not_now">暂不</string>
     <string name="chats_notify_title">随时知道电脑何时需要你</string>

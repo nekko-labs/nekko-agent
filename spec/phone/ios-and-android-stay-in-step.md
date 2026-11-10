@@ -47,6 +47,21 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Chat environment: repositories and question actions (desktop since #2404) | Actioned `ask_user` options show as plain answers; no repository list | Same | [#2415](https://github.com/nekko-labs/nekko-agent/issues/2415) |
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Being built | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | iPhone: [#2423](https://github.com/nekko-labs/nekko-agent/issues/2423). Both: the native store rating request once on the App Store and Google Play (planned). |
 
+## Direct cloud text chats (#2414, not shipped)
+
+[#2414](https://github.com/nekko-labs/nekko-agent/issues/2414) tracks both platform PRs and stays open until both land. Android is implemented on `feat/android-phone-cloud-2414`; the iPhone counterpart is separate [draft PR #2462](https://github.com/nekko-labs/nekko-agent/pull/2462), not shipped. Branch implementation is not release or visual approval.
+
+| Capability | iPhone branch | Android branch | Verification / gap |
+| --- | --- | --- | --- |
+| No-computer entry | This iPhone in place/filter and Run on; empty model picker links to setup | This phone from Chats and first run, even without provider/computer | iPhone remains separate PR #2462; Android latest 91c5e4c1e synthetic matrix 18 pass / 2 expected skips plus 36 focused passes |
+| Direct text providers | Claude API, OpenAI, OpenRouter, Mantle Messages, Foundry, Vertex, HTTPS compatible | Same seven kinds | No live paid authentication/entitlement checks; Foundry custom deployment names unsupported; Vertex tokens manually renewed |
+| Provider lifecycle and streaming | Setup, Test, rekey, disable/remove; Stop/Retry; stale callback fencing | Same behaviors | Android JVM regression tests plus native synthetic transport checks; not live provider proof |
+| Privacy and retention | Device-held Keychain keys and local transcripts | Keystore-sealed separate credential slots and local transcripts | Direct HTTPS, no relay/computer/Nekko Cloud; provider may retain text; Forget is local only; storage is not transactional |
+| Reply recovery | Persists partial text per delta with interrupted marker | Persists at attempt start/cleanup; process death can lose partial text | Durability differs; do not promise identical process-kill recovery |
+| Layout and evidence | Native iPhone/iPad evidence pending | Narrow/folded, expanded, synthetic book/tabletop/unfolded captures | Parent inspected matched current-main a45e083f2 / after694cf532e first-run pairs and latest 91c5e4c1e light posture content/provider fields; 1 fps motion contact sheets inspected, not continuous playback or physical hardware; new provider/chat surfaces have no before |
+
+Tools, attachments, local models, subscription harnesses and cross-device sync are outside direct-chat scope, not parity claims. New Android forms remain English-only. Physical folding/posture transitions and OEM keyboards remain untested. See [Android direct-chat specification](android-direct-cloud-chats.md) and [continuation disclosure](../../apps/android/docs/phone-cloud-2414-continuation.md), including the historical reset of an existing emulator AVD and the isolated continuation AVD.
+
 ## Android is behind the iPhone today
 
 Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([report](../../reports/android-ios-parity-2026-11-07.md)), and again on 2026-11-09 against the changes since, by reading the code, not on a device.

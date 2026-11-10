@@ -36,13 +36,13 @@
     <string name="chats_skip">Passer</string>
     <string name="chats_continue">Continuer</string>
     <string name="chats_intro_title">Votre agent, dans votre poche</string>
-    <string name="chats_intro_body">Nekko Agent s’exécute sur votre ordinateur. Cette app vous permet de le piloter de n’importe où.</string>
+    <string name="chats_intro_body">Discutez avec une API cloud sur ce téléphone, ou associez un ordinateur pour utiliser les agents et les outils.</string>
     <string name="chats_intro_follow_title">Suivez les discussions en direct</string>
     <string name="chats_intro_follow_text">Regardez votre ordinateur travailler et lancez de nouvelles discussions d’ici.</string>
     <string name="chats_intro_approve_title">Approuvez les outils et répondez aux questions</string>
     <string name="chats_intro_approve_text">Quand l’agent a besoin de vous, c’est vous qui décidez.</string>
     <string name="chats_intro_private_title">Privé par conception</string>
-    <string name="chats_intro_private_text">Tout est chiffré de bout en bout entre ce téléphone et votre ordinateur.</string>
+    <string name="chats_intro_private_text">Les chats avec votre ordinateur sont chiffrés de bout en bout. Les chats du téléphone utilisent HTTPS directement avec votre fournisseur.</string>
     <string name="chats_allow_notifications">Autoriser les notifications</string>
     <string name="chats_not_now">Pas maintenant</string>
     <string name="chats_notify_title">Sachez quand votre ordinateur a besoin de vous</string>
