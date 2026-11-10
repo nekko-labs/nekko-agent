@@ -89,7 +89,19 @@ assertion that the call still waits; a container's presence alone is not authori
 The separate live notification journey retains its original **20-second** result deadline,
 online-button precondition, yielding poll, actual result label and visible banner assertions.
 Source-contract checks do not prove Swift compilation, delivery timing, or native accessibility
-labels. Native execution of these strengthened checks remains **unverified**.
+labels. Exact-head native run 42779029268 compiled and passed the seven journeys,
+including pill tuck/restore. Pairing retained two light-mode failures to turn off
+finished replies and one missing banner; dark passed, and the 20-second result
+checks did not fail. This is not whole-suite acceptance.
+
+The follow-up notification driver requires each control's full frame below the
+navigation bar and inside the app viewport, then rechecks the settled frame before
+the actual switch/button interaction. The recording of the failed light2 tap shows
+the row clipped under navigation followed by a scroll-to-top. The bounded driver
+keeps two bounded eight-step reveal passes, all switch/result/banner assertions,
+and the original five-/20-/10-second deadlines; it does not set preferences or
+permissions directly. Source contracts reject the old hittability-only path.
+Native compilation and execution of this new driver remain **unverified**.
 
 ## Verification still pending
 
