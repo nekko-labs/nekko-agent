@@ -24,6 +24,15 @@ final class StreamingStabilityTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["You are at the latest message."].waitForExistence(timeout: 15))
         Thread.sleep(forTimeInterval: 8)
         let metric = app.descendants(matching: .any)["stream.maxBackward"].firstMatch
+        let sampled = NSPredicate { _, _ in
+            Double(metric.value as? String ?? "") != nil
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: sampled, object: nil)], timeout: 30), .completed)
+        let heights = metric.label.components(separatedBy: "; ").compactMap { sample -> Double? in
+            guard let field = sample.components(separatedBy: " ").first(where: { $0.hasPrefix("height=") }) else { return nil }
+            return Double(field.dropFirst(7))
+        }
+        XCTAssertGreaterThan((heights.max() ?? 0) - (heights.min() ?? 0), 100, "sampling must cover real streaming content growth")
         let trace = XCTAttachment(string: metric.label)
         trace.name = "stream-offset-and-content-size-trace"
         trace.lifetime = .keepAlways

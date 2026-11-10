@@ -28,7 +28,7 @@ struct StreamingGeometryProbe: UIViewRepresentable {
                 var largest: CGFloat = 0
                 var count = 0
                 var trace: [String] = []
-                for _ in 0..<75 {
+                for _ in 0..<300 {
                     guard !Task.isCancelled, let view else { return }
                     if let window = view.window, let scroll = Self.scrolls(window).max(by: {
                         $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height
@@ -44,7 +44,7 @@ struct StreamingGeometryProbe: UIViewRepresentable {
                     try? await Task.sleep(for: .milliseconds(30))
                 }
                 view?.accessibilityLabel = trace.joined(separator: "; ")
-                view?.accessibilityValue = count > 50 ? String(format: "%.3f", Double(largest)) : "missing samples"
+                view?.accessibilityValue = count > 250 ? String(format: "%.3f", Double(largest)) : "missing samples"
             }
         }
         private static func scrolls(_ view: UIView) -> [UIScrollView] {

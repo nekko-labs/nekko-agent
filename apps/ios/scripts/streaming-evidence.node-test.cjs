@@ -53,3 +53,10 @@ test('measured growth targets the content edge, not a lazy sentinel', () => {
   const tests = read('ios/UITests/StreamingStabilityTests.swift');
   assert.match(tests, /XCTAssertEqual\(title\.label, "Gomi is reconnecting\.\.\."\)/);
 });
+
+test('iOS 18 structural growth does not race content-edge following with sentinel settling', () => {
+  const chat = read('ios/App/Views/ChatView.swift');
+  const handler = chat.split('.onChange(of: chat.blocksRevision)')[1].split('.onAppear')[0];
+  assert.match(handler, /if #unavailable\(iOS 18\.0\)/);
+  assert.doesNotMatch(handler, /if #available/);
+});

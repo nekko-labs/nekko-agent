@@ -244,9 +244,7 @@ struct ChatView: View {
                 followedLayout = chat.blocksLayout
                 guard atBottom else { return }
                 // iOS 18+ follows laid-out height, not every token. New lazy rows still settle.
-                if #available(iOS 18.0, *) {
-                    if layoutChanged { settleAtEnd(proxy) }
-                } else {
+                if #unavailable(iOS 18.0) {
                     proxy.scrollTo("bottom", anchor: .bottom)
                     if layoutChanged { settleAtEnd(proxy) }
                 }
