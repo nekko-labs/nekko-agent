@@ -5,6 +5,7 @@ import com.nekko.android.data.ModelGroup
 import com.nekko.android.data.ModelPick
 import com.nekko.protocol.AUTO_MODEL_ID
 import com.nekko.protocol.ModelInfo
+import com.nekko.protocol.ProviderAccount
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.SessionSummary
@@ -62,6 +63,29 @@ class ModelChoiceTest {
         assertEquals(listOf("nekko-engine"), ModelChoice.filter(groups, "engine").map { it.provider.id })
         assertTrue(ModelChoice.filter(groups, "nothing").isEmpty())
         assertEquals(groups, ModelChoice.filter(groups, "  "))
+    }
+
+    @Test
+    fun `filter matches a Claude account's email and name, so each login on one email is findable`() {
+        val personal = PublicProvider(
+            "p1", "claude-code", "Claude subscription", true,
+            ProviderAccount(true, "philip@example.test", "personal", "Personal", "max"),
+        )
+        val org = PublicProvider(
+            "p2", "claude-code", "Claude subscription · account-2", true,
+            ProviderAccount(true, "philip@example.test", "organization", "Nekko Labs", "team"),
+        )
+        val accounts = listOf(
+            ModelGroup(personal, listOf(ModelInfo("opus", "p1", "Claude Opus 5.5", false))),
+            ModelGroup(org, listOf(ModelInfo("opus", "p2", "Claude Opus 5.5", false))),
+        ) + groups
+        assertEquals(listOf("p1", "p2"), ModelChoice.filter(accounts, "PHILIP@example").map { it.provider.id })
+        assertEquals(listOf("p2"), ModelChoice.filter(accounts, "nekko labs").map { it.provider.id })
+        assertEquals(listOf("p1"), ModelChoice.filter(accounts, "personal").map { it.provider.id })
+        // The whole group, not just the models whose names match.
+        assertEquals(1, ModelChoice.filter(accounts, "nekko labs").single().models?.size)
+        // Still matches the label and the model names as before.
+        assertEquals(listOf("p2"), ModelChoice.filter(accounts, "account-2").map { it.provider.id })
     }
 
     @Test

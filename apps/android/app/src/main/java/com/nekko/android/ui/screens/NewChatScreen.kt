@@ -91,6 +91,8 @@ import com.nekko.protocol.Effort
 import com.nekko.protocol.LocalProviders
 import com.nekko.protocol.MachinePick
 import com.nekko.protocol.ModelInfo
+import com.nekko.protocol.ProviderAccounts
+import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.Session
 import kotlinx.coroutines.CancellationException
@@ -546,11 +548,11 @@ internal fun ModelList(
             GroupTitle(stringResource(R.string.chats_starred))
             starred.forEach { (pr, m) ->
                 val k = ModelPick(pr.id, m.id)
-                ModelRow(m, detail = pr.label, selected = k == selected) { onPick(k) }
+                ModelRow(m, detail = ProviderAccounts.shortName(pr), selected = k == selected) { onPick(k) }
             }
         }
         shown.forEach { g ->
-            GroupTitle(g.provider.label)
+            ProviderGroupTitle(g.provider)
             val list = g.models
             when {
                 g.error != null -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -619,6 +621,34 @@ private fun ModelScopeTabs(scope: ModelScope, onScope: (ModelScope) -> Unit) {
                 )
             }
         }
+    }
+}
+
+/** The caption words for [ProviderAccounts], in the phone's language. */
+@Composable
+internal fun accountWords(): ProviderAccounts.Words = ProviderAccounts.Words(
+    signedOut = stringResource(R.string.chats_account_signed_out),
+    personalPlan = stringResource(R.string.chats_account_personal_plan),
+    organization = stringResource(R.string.chats_account_organization),
+)
+
+/**
+ * A provider's group in a model list: its title ("Personal · Max" for a Claude
+ * plan login) and, for a Claude login, the email and which account it is under it.
+ */
+@Composable
+internal fun ProviderGroupTitle(provider: PublicProvider) {
+    val caption = ProviderAccounts.caption(provider, accountWords())
+    GroupTitle(ProviderAccounts.title(provider))
+    if (caption != null) {
+        Text(
+            caption,
+            style = MaterialTheme.typography.bodySmall,
+            color = Nekko.palette.inkFaint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 8.dp, bottom = 2.dp).testTag("modelPicker.account.${provider.id}"),
+        )
     }
 }
 

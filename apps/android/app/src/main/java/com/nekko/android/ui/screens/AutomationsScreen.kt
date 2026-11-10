@@ -61,6 +61,7 @@ import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.AutomationTask
 import com.nekko.protocol.AutomationWorkflow
+import com.nekko.protocol.ProviderAccounts
 import com.nekko.protocol.ProviderLimits
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.CancellationException
@@ -265,7 +266,7 @@ fun UsageScreen(repo: ComputersRepository, onBack: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize().testTag("usage.view"), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             s.error?.let { item { Notice(it, Tone.DANGER) } }
             items(s.limited, key = { "l:${it.first.id}" }) { (provider, limits) ->
-                Label(listOfNotNull(provider.label, limits.planType?.replaceFirstChar { it.uppercase() }).joinToString(" · "))
+                Label(listOfNotNull(ProviderAccounts.shortName(provider), limits.planType?.replaceFirstChar { it.uppercase() }).joinToString(" · "))
                 Card {
                     if (limits.windows.isEmpty()) Text(stringResource(R.string.settings_no_limits), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
                     limits.windows.forEach { LimitBar(it) }

@@ -3,6 +3,7 @@ package com.nekko.android.data
 import com.nekko.protocol.AUTO_MODEL_ID
 import com.nekko.protocol.LocalProviders
 import com.nekko.protocol.ModelInfo
+import com.nekko.protocol.ProviderAccounts
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.SessionSummary
@@ -98,12 +99,15 @@ object ModelChoice {
             g.models?.firstOrNull { it.id == pick.modelId }?.let { g.provider to it }
         }
 
-    /** Case-insensitive match on model name, model id or provider label. */
+    /**
+     * Case-insensitive match on model name, model id, provider label, or the
+     * Claude account behind the provider (its email and name, [ProviderAccounts]).
+     */
     fun filter(groups: List<ModelGroup>, query: String): List<ModelGroup> {
         val q = query.trim().lowercase()
         if (q.isEmpty()) return groups
         return groups.mapNotNull { g ->
-            if (g.provider.label.lowercase().contains(q)) return@mapNotNull g
+            if (ProviderAccounts.searchable(g.provider).any { it.lowercase().contains(q) }) return@mapNotNull g
             val hits = g.models?.filter { it.name.lowercase().contains(q) || it.id.lowercase().contains(q) }
             if (hits.isNullOrEmpty()) null else g.copy(models = hits)
         }

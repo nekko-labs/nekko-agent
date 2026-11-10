@@ -63,6 +63,30 @@ class WireTest {
         assertFalse(list.toString().contains("sk-"))
     }
 
+    @Test fun `providers carry the Claude account behind a subscription provider`() {
+        val list = PublicProvider.list(json("""[
+          {"id":"p1","kind":"claude-code","label":"Claude subscription · account-2","enabled":true,
+           "account":{"signedIn":true,"email":"philip@example.test","scope":"organization","name":"Nekko Labs","plan":"team"}},
+          {"id":"p2","kind":"claude-code","label":"Claude subscription","enabled":true,
+           "account":{"signedIn":true,"email":"philip@example.test","scope":"personal","name":"Personal"}},
+          {"id":"p3","kind":"claude-code","label":"Signed out","enabled":true,"account":{"signedIn":false}},
+          {"id":"p4","kind":"claude-code","label":"API login","enabled":true,"account":{"signedIn":true,"email":"  "}},
+          {"id":"p5","kind":"anthropic","label":"Claude API","enabled":true},
+          {"id":"p6","kind":"claude-code","label":"Odd","enabled":true,"account":"nope"}
+        ]"""))
+        assertEquals(ProviderAccount(true, "philip@example.test", "organization", "Nekko Labs", "team"), list[0].account)
+        assertTrue(list[0].account!!.organization)
+        assertEquals(ProviderAccount(true, "philip@example.test", "personal", "Personal", null), list[1].account)
+        assertFalse(list[1].account!!.organization)
+        assertEquals(ProviderAccount(false), list[2].account)
+        // A blank email is no email: an API-key login.
+        assertEquals(ProviderAccount(true), list[3].account)
+        assertNull(list[4].account)
+        assertNull(list[5].account)
+        // Older call sites still build a provider without an account.
+        assertEquals(PublicProvider("p5", "anthropic", "Claude API", true), list[4])
+    }
+
     @Test fun `summaries keep real top-level chats, completed ones too, newest first`() {
         val list = SessionSummary.visible(json("""[
           {"id":"a","title":"A","updatedAt":1},

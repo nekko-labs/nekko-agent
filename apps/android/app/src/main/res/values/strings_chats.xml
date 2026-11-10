@@ -214,6 +214,9 @@
     <string name="chats_no_providers">No model providers are switched on in Nekko Agent on your computer. Add or enable one in its Models settings.</string>
     <string name="chats_search_models">Search models</string>
     <string name="chats_starred">Starred</string>
+    <string name="chats_account_signed_out">Signed out</string>
+    <string name="chats_account_personal_plan">Personal plan</string>
+    <string name="chats_account_organization">Organization</string>
     <string name="chats_model_source">Model source</string>
     <string name="chats_scope_all">All</string>
     <string name="chats_scope_cloud">Cloud</string>

@@ -96,6 +96,7 @@ import com.nekko.protocol.COMPUTER_ICONS
 import com.nekko.protocol.MachineSummary
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.Pairing
+import com.nekko.protocol.ProviderAccounts
 import com.nekko.protocol.RelayRoute
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.CancellationException
@@ -216,7 +217,7 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                 if (models.isNotEmpty()) {
                     SectionHeader(stringResource(R.string.settings_models))
                     NCard(Modifier.padding(horizontal = 16.dp)) {
-                        models.forEach { info -> ModelRow(info, info.loaded || info.id in m.loadedIds, s.providers.firstOrNull { it.id == info.providerId }?.label, s.defaults.defaultModelId == info.id) }
+                        models.forEach { info -> ModelRow(info, info.loaded || info.id in m.loadedIds, s.providers.firstOrNull { it.id == info.providerId }?.let(ProviderAccounts::shortName), s.defaults.defaultModelId == info.id) }
                     }
                 }
                 if (s.providers.isNotEmpty()) {

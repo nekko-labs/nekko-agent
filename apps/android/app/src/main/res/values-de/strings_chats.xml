@@ -200,6 +200,9 @@
     <string name="chats_no_providers">In Nekko Agent auf deinem Computer ist kein Modellanbieter eingeschaltet. Füge einen in den Modell-Einstellungen hinzu oder aktiviere ihn.</string>
     <string name="chats_search_models">Modelle suchen</string>
     <string name="chats_starred">Markiert</string>
+    <string name="chats_account_signed_out">Abgemeldet</string>
+    <string name="chats_account_personal_plan">Persönlicher Plan</string>
+    <string name="chats_account_organization">Organisation</string>
     <string name="chats_model_source">Modellquelle</string>
     <string name="chats_scope_all">Alle</string>
     <string name="chats_scope_cloud">Cloud</string>
