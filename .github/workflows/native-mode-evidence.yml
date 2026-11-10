@@ -140,8 +140,8 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
-          # Identical debug timing on both revisions keeps the real refresh observable
-          # after XCTest's post-gesture idle wait. No seasonal implementation is copied.
+          # Identical debug transition history on both revisions observes the real
+          # refresh across XCTest's idle wait. No seasonal implementation is copied.
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/WinterThemeTests.swift" ]]; then
             cp .evidence-harness/apps/ios/App/Views/ChatStatusFixture.swift apps/ios/App/Views/
           fi

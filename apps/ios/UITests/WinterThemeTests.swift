@@ -19,9 +19,13 @@ final class WinterThemeTests: XCTestCase {
             let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.28))
             let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.80))
             from.press(forDuration: 0.1, thenDragTo: to)
-            XCTAssertTrue(waitValue(mascot, "Refreshing", timeout: 2), "snow does not consume the refresh gesture")
+            // Drag waits for app quiescence, so assert the recorded real transitions,
+            // not a transient 1.2s state that can end before XCTest returns.
+            let history = app.staticTexts["seasonal.refreshHistory"]
+            XCTAssertTrue(history.waitForExistence(timeout: 2))
+            XCTAssertEqual(history.label, "Refreshing → Working", "the gesture must enter and leave refresh exactly once")
             attach(app, "seasonal-\(theme)-refresh")
-            XCTAssertTrue(waitValue(mascot, "Working", timeout: 12))
+            XCTAssertTrue(waitValue(mascot, "Working", timeout: 8))
             app.terminate()
         }
 
@@ -42,7 +46,7 @@ final class WinterThemeTests: XCTestCase {
     private func launch(theme: String, reduced: Bool) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTestChatStatus", "-splash", "NO", "-appLock", "NO", "-onboarded", "YES",
-                               "-uiTestReset", "YES", "-uiTestSlowRefresh", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-theme", theme]
+                               "-uiTestReset", "YES", "-uiTestRefreshHistory", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-theme", theme]
         if reduced { app.launchArguments.append("-uiTestReduceMotion") }
         app.launch()
         return app
