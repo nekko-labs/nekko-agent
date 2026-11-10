@@ -37,3 +37,21 @@ Connection and alerts come first: notifications (approvals, questions, replies a
 Implemented in the task branch: permission reader/request coordinator, reusable checklist, onboarding replacement and Settings entry point. Native unit and onboarding UI tests cover the inventory and status rules. The real system Settings microphone recovery test taps the trailing switch (the label area is inert on iOS 26) and waits for both the OS toggle and the checklist to report access. Build, test and inspected simulator evidence results are recorded in the linked PR; physical hardware, real local-network authorization, authentication hardware and APNs delivery must not be claimed from simulator-only checks. English source strings use the native localization APIs; new translations have not been supplied.
 
 Android parity is planned in [#2251](https://github.com/nekko-labs/nekko-agent/issues/2251), with the gap recorded in [phone parity](ios-and-android-stay-in-step.md).
+
+## Strict Settings-return evidence (implemented harness, native result pending)
+
+The opt-in `PermissionReturnTimingTests` comparison drives the baseline inline card
+and current accordion by their actual AX capability. Both perform a real microphone
+denial and public Settings switch change from 0 to 1. Both then call `app.activate()`
+without a process-state-dependent launch branch. A monotonic ten-second budget
+starts before activation and includes activation/session setup and the first AX
+predicate that requires both the status element and Allowed. Screenshots, full AX
+and timing attachments are collected only after the timed assertion. The manual
+mode-evidence workflow retains a recording for this test on each disposable phone.
+
+Source regressions cannot certify native timing. A completed comparison must be
+inspected for exact app/harness/device/runtime identities, actual return actions,
+process state and timing on both revisions. Different observed process paths do not
+prove symmetric foreground refresh, even with the same requested action. A timeout
+or return-process failure remains a failure; no deadline, permission or startup
+waiver is implied. Existing native suites and their assertions remain unchanged.
