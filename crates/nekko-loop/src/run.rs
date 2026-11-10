@@ -3,6 +3,8 @@
 //! stops calling tools, then report the events a chat draws from. There is no
 //! tool-step limit: a reply ends when the model answers, a safeguard (loop
 //! detector, runaway stream) trips, a stream fails, or the run is cancelled.
+//! A long reply gets a checkpoint note every few dozen steps, and a large
+//! output it already has is not sent twice (budget.rs).
 //!
 //! The loop is generic over the model client and the tool runner, so it runs
 //! against the real providers (`nekko-agent`) and tools (`nekko-tools`) and,
@@ -10,6 +12,7 @@
 //! responses the TS test replays. Events and the transcript it appends are the
 //! TS shapes (`AgentEvent`, `ChatMessage`), as JSON.
 
+use crate::budget::{CHECKPOINT_EVERY, Repeats, checkpoint_note};
 use crate::fit::{
     ELIDE_ALL, FIT_TARGET, apply_elision, elidable, elision_for, is_context_overflow, overflow_message, prompt_units,
     reported_window,
@@ -686,6 +689,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         let mut nudged = false;
         let mut steps: usize = 0;
         let mut first_pass = true;
+        let mut repeats = Repeats::default();
 
         let loop_reason = loop {
             if self.opts.cancel.is_cancelled() {
@@ -783,11 +787,13 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                         json!({ "toolCallId": call.get("id").cloned().unwrap_or(Value::Null), "output": format!("Error: {e}"), "isError": true })
                     }
                 };
-                self.opts.history.push(json!({ "id": id("msg"), "role": "tool", "content": "", "toolResult": result, "createdAt": nekko_js::now_ms() }));
-                self.event("tool_result", json!({ "result": result }));
+                // The loop detector judges what the tool really returned.
                 if tripped.is_none() {
                     tripped = loops.push(call, &result);
                 }
+                let result = repeats.result(call, steps, result);
+                self.opts.history.push(json!({ "id": id("msg"), "role": "tool", "content": "", "toolResult": result, "createdAt": nekko_js::now_ms() }));
+                self.event("tool_result", json!({ "result": result }));
             }
 
             if let Some(reason) = tripped {
@@ -797,6 +803,8 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                 nudged = true;
                 loops.reset();
                 loop_extra = vec![user_nudge(&loop_nudge(&reason))];
+            } else if steps > 0 && steps % CHECKPOINT_EVERY == 0 && !turn.calls.is_empty() {
+                loop_extra = vec![user_nudge(&checkpoint_note(steps))];
             }
         };
 
