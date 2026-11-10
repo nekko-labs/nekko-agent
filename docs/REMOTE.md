@@ -486,7 +486,8 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >   **This iPhone** for chats that run on the phone. Within each, **Subscriptions** (each plan with
 >   its limit bars, and the models that bill to it) come before **API** (pay-per-token models with
 >   their estimated spend). This iPhone counts tokens only, from each provider's replies, and keeps
->   that count on the phone.
+>   that count on the phone. Android shows the same, with **This phone** for its own chats; recent
+>   days are folded under each place until you tap them.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
