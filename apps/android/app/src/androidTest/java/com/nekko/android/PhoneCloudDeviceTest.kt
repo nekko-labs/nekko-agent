@@ -99,7 +99,7 @@ class PhoneCloudDeviceTest {
         compose.onNodeWithTag("phone.retry").performClick()
         compose.waitUntil(5000) { http.requests.count { it.body != null } == 2 && phone.state.value.running.isEmpty() }
         compose.onNodeWithText("A reply directly on this phone.", substring = true).assertExists()
-        shot("standalone-chat")
+        shot("standalone-chat", "phone.transcript", "phone.message")
         val restored = PhoneChats(memory, http, scope)
         runBlocking { restored.load() }
         assertEquals(phone.state.value.chats, restored.state.value.chats)
@@ -135,24 +135,58 @@ class PhoneCloudDeviceTest {
         val http = HTTP(); val phone = PhoneChats(Memory(), http, scope)
         val id = runBlocking { phone.load(); val p = phone.add("openai", "Personal API", null, "synthetic"); phone.models(p); phone.newChat(p, "test-chat-model") }
         compose.setContent { NekkoTheme(dark = dark) { PhoneScreen(phone) {} } }
+        phone.send(id, "Fold transition content")
         compose.onNodeWithTag("phone.open.$id").performClick()
+        fun contentVisible(expanded: Boolean) {
+            var failure: Throwable? = null
+            try {
+                compose.waitUntil(5000) {
+                    runCatching {
+                        compose.onNodeWithTag("phone.conversation").assertIsDisplayed()
+                        compose.onNodeWithTag("phone.message").assertIsDisplayed()
+                        compose.onNodeWithTag("phone.send").assertIsDisplayed()
+                        compose.onAllNodes(hasText("Fold transition content") and hasAnyAncestor(hasTestTag("phone.conversation"))).onLast().assertIsDisplayed()
+                        compose.onNodeWithText("A reply directly on this phone.").assertIsDisplayed()
+                        if (expanded) {
+                            compose.onNodeWithTag("phone.chatList").assertIsDisplayed()
+                            compose.onNodeWithTag("phone.new").assertIsDisplayed()
+                        }
+                    }.onFailure { failure = it }.isSuccess
+                }
+            } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
+                throw AssertionError("Visible content missing (expanded=$expanded): ${compose.onRoot(useUnmergedTree = true).printToString()}", failure ?: e)
+            }
+        }
+        contentVisible(expanded = true)
+        shot("fold-before", "phone.chatList", "phone.transcript", "phone.message")
+        fun stableShot(name: String, expanded: Boolean) {
+            contentVisible(expanded)
+            shot(name, *if (expanded) arrayOf("phone.chatList", "phone.transcript", "phone.message") else arrayOf("phone.transcript", "phone.message"))
+        }
         val book = androidx.window.testing.layout.FoldingFeature(compose.activity, state = androidx.window.layout.FoldingFeature.State.HALF_OPENED, orientation = androidx.window.layout.FoldingFeature.Orientation.VERTICAL, size = (24 * density).toInt())
         compose.runOnUiThread { publisher.overrideWindowLayoutInfo(androidx.window.testing.layout.TestWindowLayoutInfo(listOf(book))) }
         compose.waitForIdle()
         val message = compose.onNodeWithTag("phone.message").fetchSemanticsNode().boundsInWindow
         assertTrue("composer after vertical gap", message.left >= book.bounds.right)
-        shot("book")
+        stableShot("book", expanded = true)
         val tabletop = androidx.window.testing.layout.FoldingFeature(compose.activity, state = androidx.window.layout.FoldingFeature.State.HALF_OPENED, orientation = androidx.window.layout.FoldingFeature.Orientation.HORIZONTAL)
         compose.runOnUiThread { publisher.overrideWindowLayoutInfo(androidx.window.testing.layout.TestWindowLayoutInfo(listOf(tabletop))) }
         compose.waitForIdle()
         val box = compose.onNodeWithTag("phone.message").fetchSemanticsNode().boundsInWindow
         assertTrue("composer below horizontal hinge", box.top >= tabletop.bounds.bottom)
-        shot("tabletop")
+        stableShot("tabletop", expanded = false)
         val flat = androidx.window.testing.layout.FoldingFeature(compose.activity, state = androidx.window.layout.FoldingFeature.State.FLAT, orientation = androidx.window.layout.FoldingFeature.Orientation.HORIZONTAL)
         compose.runOnUiThread { publisher.overrideWindowLayoutInfo(androidx.window.testing.layout.TestWindowLayoutInfo(listOf(flat))) }
         compose.waitForIdle()
         compose.onNodeWithTag("phone.expanded").assertIsDisplayed()
-        shot("unfolded")
+        stableShot("unfolded", expanded = true)
+        val verticalFlat = androidx.window.testing.layout.FoldingFeature(compose.activity, state = androidx.window.layout.FoldingFeature.State.FLAT, orientation = androidx.window.layout.FoldingFeature.Orientation.VERTICAL)
+        compose.runOnUiThread { publisher.overrideWindowLayoutInfo(androidx.window.testing.layout.TestWindowLayoutInfo(listOf(verticalFlat))) }
+        compose.waitForIdle()
+        stableShot("vertical-flat", expanded = true)
+        compose.runOnUiThread { publisher.overrideWindowLayoutInfo(androidx.window.testing.layout.TestWindowLayoutInfo(emptyList())) }
+        compose.waitForIdle()
+        stableShot("no-hinge", expanded = true)
         scope.cancel()
     }
     @Test fun keystoreSealsCredentialAndDeletionSurvivesReopen() = runBlocking {
@@ -169,13 +203,31 @@ class PhoneCloudDeviceTest {
             assertNull(AndroidSecureStore(context).get(name))
         } finally { store.set(name, null) }
     }
-    private fun shot(name: String) {
+    private fun shot(name: String, vararg visibleTags: String) {
+        compose.waitForIdle()
+        visibleTags.forEach { compose.onNodeWithTag(it).assertIsDisplayed() }
+        // Semantics may settle before the system screenshot presents the new frame.
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        Thread.sleep(300)
         compose.waitForIdle()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val device = InstrumentationRegistry.getArguments().getString("nekkoDevice") ?: "phone"
         val file = File(compose.activity.getExternalFilesDir(null), "evidence/cloud-2414/$device-$name.png")
         file.parentFile!!.mkdirs()
         instrumentation.uiAutomation.takeScreenshot().use { bitmap ->
+            visibleTags.forEach { tag ->
+                val bounds = compose.onNodeWithTag(tag).assertIsDisplayed().fetchSemanticsNode().boundsInWindow
+                val left = bounds.left.toInt().coerceIn(0, bitmap.width - 1)
+                val top = bounds.top.toInt().coerceIn(0, bitmap.height - 1)
+                val right = bounds.right.toInt().coerceIn(left + 1, bitmap.width)
+                val bottom = bounds.bottom.toInt().coerceIn(top + 1, bitmap.height)
+                val background = bitmap.getPixel(left, top)
+                var ink = 0
+                for (y in top until bottom) for (x in left until right) {
+                    if (bitmap.getPixel(x, y) != background) ink++
+                }
+                assertTrue("$name: $tag screenshot region must contain rendered content, not blank pixels", ink > 100)
+            }
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
     }

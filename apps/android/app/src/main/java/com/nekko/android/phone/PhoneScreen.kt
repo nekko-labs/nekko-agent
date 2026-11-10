@@ -106,7 +106,11 @@ fun PhoneScreen(phone: PhoneChats, onBack: () -> Unit) {
                         }
                     }
                     if (wide) Row(Modifier.fillMaxSize().testTag("phone.expanded")) {
-                        val hinge = window.hinge?.bounds
+                        // Only a separating vertical feature consumes space between side-by-side panes.
+                        val hinge = window.hinge?.takeIf {
+                            it.orientation == com.nekko.protocol.Hinge.Orientation.VERTICAL &&
+                                (it.isSeparating || it.state == com.nekko.protocol.Hinge.State.HALF_OPENED)
+                        }?.bounds
                         val listWidth = hinge?.x?.dp ?: (availableWidth * .35f)
                         list(Modifier.width(listWidth).fillMaxHeight())
                         if (hinge != null) Spacer(Modifier.width(hinge.width.dp))
@@ -187,7 +191,7 @@ private fun PhoneConversation(phone: PhoneChats, chat: PhoneChat, running: Boole
             Text(chat.title, Modifier.weight(1f), color = p.ink, style = MaterialTheme.typography.titleMedium)
             TextButton(onClick = onForget) { Text("Forget") }
         }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp), state = list, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp).testTag("phone.transcript"), state = list, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             item { Text("${chat.modelId} · No tools or computer access", color = p.inkSoft, style = MaterialTheme.typography.bodySmall) }
             items(chat.messages, key = { it.id }) { m -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (m.role == "user") "You" else "Nekko", color = p.inkSoft, style = MaterialTheme.typography.labelMedium)
