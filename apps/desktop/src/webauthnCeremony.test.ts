@@ -42,6 +42,17 @@ describe('the WebAuthn ceremony', () => {
     expect([...new Uint8Array(pk.excludeCredentials[0].id)]).toEqual([8, 8, 8]);
   });
 
+  it('requires the owner be verified for a passkey, and only asks for it on a security key', async () => {
+    const answer = { rawId: bytes(1), response: { clientDataJSON: bytes(2), attestationObject: bytes(3) } };
+    const passkey = fake(answer);
+    await runWebAuthnCeremony({ ...create, attachment: 'platform' }, passkey.creds);
+    expect(passkey.asked[0].publicKey.authenticatorSelection).toMatchObject({ authenticatorAttachment: 'platform', userVerification: 'required' });
+
+    const key = fake(answer);
+    await runWebAuthnCeremony(create, key.creds);
+    expect(key.asked[0].publicKey.authenticatorSelection.userVerification).toBe('preferred');
+  });
+
   it('answers a step-up with the assertion’s four fields', async () => {
     const f = fake({ rawId: bytes(1), response: { authenticatorData: bytes(2), clientDataJSON: bytes(3), signature: bytes(4) } });
     const r = await runWebAuthnCeremony(get, f.creds);
