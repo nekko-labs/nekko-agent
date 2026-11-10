@@ -91,6 +91,28 @@ final class PreviewLoaderTests: XCTestCase {
         XCTAssertNotNil(loader.cached(artifact: "s", "/b.txt"))
     }
 
+    func testThumbnailSlotKeepsNonSendableResultOnMainActor() async {
+        let loader = PreviewLoader(read: { _ in .null }, thumbnailSlots: 1)
+        let value = Gauge()
+        let result = await loader.withThumbnailSlot {
+            MainActor.assertIsolated()
+            await Task.yield()
+            return value
+        }
+        XCTAssertTrue(result === value)
+    }
+
+    func testThumbnailSlotIsReleasedAfterThrowing() async {
+        let loader = PreviewLoader(read: { _ in .null }, thumbnailSlots: 1)
+        do {
+            try await loader.withThumbnailSlot { throw RelayError("read failed") }
+            XCTFail("expected the read error")
+        } catch {
+            let result = await loader.withThumbnailSlot { 42 }
+            XCTAssertEqual(result, 42)
+        }
+    }
+
     func testThumbnailSlotsLimitConcurrentLoads() async {
         let loader = PreviewLoader(read: { _ in .null }, thumbnailSlots: 2)
         let gauge = Gauge()

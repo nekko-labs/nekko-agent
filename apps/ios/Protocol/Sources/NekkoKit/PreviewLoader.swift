@@ -89,7 +89,7 @@ public final class PreviewLoader {
     }
 
     /// Run `work` while holding a thumbnail slot; waits for one to free up.
-    public func withThumbnailSlot<T>(_ work: () async throws -> T) async rethrows -> T {
+    public func withThumbnailSlot<T>(_ work: @MainActor () async throws -> T) async rethrows -> T {
         if slotsFree > 0 {
             slotsFree -= 1
         } else {
