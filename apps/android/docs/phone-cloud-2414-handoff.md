@@ -1,5 +1,7 @@
 # Android #2414 handoff
 
+> Historical checkpoint. See the [continuation checkpoint](phone-cloud-2414-continuation.md) for corrected Mantle authentication, current-main integration, cancellation/security fixes, and refreshed isolated native verification.
+
 ## Ownership and integration
 
 - Branch: `feat/android-phone-cloud-2414`.

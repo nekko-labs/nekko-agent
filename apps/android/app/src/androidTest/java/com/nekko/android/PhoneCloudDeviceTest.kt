@@ -91,8 +91,9 @@ class PhoneCloudDeviceTest {
         compose.onNodeWithTag("phone.message").performTextInput("Hello from an unpaired phone")
         compose.onNodeWithTag("phone.send").performClick()
         compose.waitUntil(5000) { phone.state.value.running.isNotEmpty() }
-        // Sending disables the editor and may animate the IME; accessibility targets the native action without stale touch coordinates.
-        compose.onNodeWithTag("phone.stop").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        // Exercise native touch dispatch, not an accessibility-only shortcut.
+        compose.waitForIdle()
+        compose.onNodeWithTag("phone.stop").assertIsDisplayed().performClick()
         compose.waitUntil(5000) { phone.state.value.running.isEmpty() }
         http.hold = false
         compose.onNodeWithTag("phone.retry").performClick()

@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,8 +28,9 @@ class DirectPhoneHTTP : PhoneHTTP {
         .callTimeout(5, TimeUnit.MINUTES).build()
 
     override suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)?): String = suspendCancellableCoroutine { cont ->
-        require(request.url.startsWith("https://")) { "Phone providers require HTTPS." }
-        val builder = Request.Builder().url(request.url)
+        val url = request.url.toHttpUrl()
+        require(url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.fragment == null) { "Phone providers require HTTPS without credentials or fragments." }
+        val builder = Request.Builder().url(url)
         request.headers.forEach { (k, v) -> builder.header(k, v) }
         builder.method(request.method, request.body?.toString()?.toRequestBody("application/json".toMediaType()))
         val call = client.newCall(builder.build())
@@ -48,11 +50,20 @@ class DirectPhoneHTTP : PhoneHTTP {
                             if (bytes.size > 2_000_000) throw IOException("The provider's model list is too large.")
                             if (cont.isActive) cont.resume(bytes.toString(Charsets.UTF_8))
                         } else {
+                            val media = r.body?.contentType()
+                            if (media?.type != "text" || media.subtype != "event-stream") throw IOException("The provider did not return an event stream.")
+                            var remaining = 8_000_000L
                             while (cont.isActive && !source.exhausted()) {
+                                // Bound the search by both the line limit and remaining stream budget.
+                                val newline = source.indexOf('\n'.code.toByte(), 0, minOf(1_000_002L, remaining + 1))
+                                if (newline < 0) throw IOException("The provider sent an incomplete or oversized stream line.")
+                                val consumed = newline + 1
+                                if (consumed > remaining || newline > 1_000_000L) throw IOException("The provider's stream is too large.")
                                 val text = source.readUtf8LineStrict(1_000_000)
-                                if (!line(text)) break
+                                remaining -= consumed
+                                if (!cont.isActive || !line(text)) break
                             }
-                            line("")
+                            // EOF is not an SSE frame delimiter. Do not fabricate completion.
                             if (cont.isActive) cont.resume("")
                         }
                     }
