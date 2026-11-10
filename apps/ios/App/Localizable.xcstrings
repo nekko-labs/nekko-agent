@@ -8139,6 +8139,46 @@
         }
       }
     },
+    "Couldn’t open GitHub. Visit %@ in your browser.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub konnte nicht geöffnet werden. Öffne %@ in deinem Browser."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo abrir GitHub. Visita %@ en tu navegador."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’ouvrir GitHub. Rendez-vous sur %@ dans votre navigateur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub を開けませんでした。ブラウザで %@ を開いてください。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível abrir o GitHub. Acesse %@ no seu navegador."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开 GitHub。请在浏览器中访问 %@。"
+          }
+        }
+      }
+    },
     "Disconnect": {
       "localizations": {
         "de": {
@@ -8215,6 +8255,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "断开 %@？"
+          }
+        }
+      }
+    },
+    "Don’t ask again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht mehr fragen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No volver a preguntar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne plus demander"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今後は表示しない"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não perguntar de novo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不再询问"
           }
         }
       }
@@ -8542,6 +8622,86 @@
     "Ask when it matters is the recommended mode.": {
       "comment": "Permission wording updated for #2095. English fallback until retranslated.",
       "localizations": {}
+    },
+    "GitHub opened in your browser. Starring there takes one click.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub wurde in deinem Browser geöffnet. Dort ist der Stern einen Klick entfernt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub se abrió en tu navegador. Allí dar una estrella es un clic."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub s’est ouvert dans votre navigateur. Y mettre une étoile prend un clic."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブラウザで GitHub を開きました。スターはワンクリックで付けられます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O GitHub abriu no seu navegador. Lá, dar uma estrela leva um clique."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在浏览器中打开 GitHub。在那里点星只需一次点击。"
+          }
+        }
+      }
+    },
+    "If it helps you, a star on GitHub helps more people find it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn er dir hilft, hilft ein Stern auf GitHub anderen, ihn zu finden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si te ayuda, una estrella en GitHub ayuda a que más gente lo encuentre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S’il vous aide, une étoile sur GitHub aide d’autres personnes à le trouver."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お役に立っているなら、GitHub のスターがより多くの人に届くきっかけになります。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ele ajuda você, uma estrela no GitHub ajuda mais pessoas a encontrá-lo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果它对你有帮助，在 GitHub 上点个星能让更多人发现它。"
+          }
+        }
+      }
     },
     "In Projects": {
       "localizations": {
@@ -9019,6 +9179,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "保持加载的模型数"
+          }
+        }
+      }
+    },
+    "Nekko Agent is open source": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Agent ist Open Source"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Agent es de código abierto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Agent est open source"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Agent はオープンソースです"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Nekko Agent é de código aberto"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Agent 是开源的"
           }
         }
       }
@@ -31743,6 +31943,86 @@
         }
       }
     },
+    "Star Nekko Agent on GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Agent auf GitHub einen Stern geben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dar una estrella a Nekko Agent en GitHub"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre une étoile à Nekko Agent sur GitHub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub で Nekko Agent にスターを付ける"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dar uma estrela ao Nekko Agent no GitHub"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 GitHub 上为 Nekko Agent 点星"
+          }
+        }
+      }
+    },
+    "Star on GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf GitHub einen Stern geben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dar una estrella en GitHub"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre une étoile sur GitHub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub でスターを付ける"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dar uma estrela no GitHub"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 GitHub 上点星"
+          }
+        }
+      }
+    },
     "Starred on your computer": {
       "localizations": {
         "de": {
@@ -33499,6 +33779,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "测试"
+          }
+        }
+      }
+    },
+    "Thank you! Nekko is happy you’re here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danke! Nekko freut sich, dass du da bist."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¡Gracias! A Nekko le alegra que estés aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merci ! Nekko est ravi que vous soyez là."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ありがとうございます！Nekko はあなたがいてくれてうれしいです。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obrigado! O Nekko fica feliz por você estar aqui."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "谢谢！Nekko 很高兴有你在。"
           }
         }
       }
