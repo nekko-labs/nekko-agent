@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A finished reply's metrics and its details (TurnDetailsRow.kt, #2112), the iPhone's TurnDetailsView. -->
+<resources>
+    <string name="turn_done">完了</string>
+    <string name="turn_effort" formatted="true">エフォート %1$s</string>
+    <string name="turn_in" formatted="true">入力 %1$s</string>
+    <string name="turn_out" formatted="true">出力 %1$s</string>
+    <string name="turn_rate" formatted="true">%1$s トークン/秒</string>
+    <string name="turn_detail_model">モデル</string>
+    <string name="turn_detail_effort">エフォート</string>
+    <string name="turn_detail_input">入力トークン</string>
+    <string name="turn_detail_cache_read">キャッシュから読み込み</string>
+    <string name="turn_detail_cache_write">キャッシュに書き込み</string>
+    <string name="turn_detail_output">出力トークン</string>
+    <string name="turn_detail_speed">速度</string>
+    <string name="turn_detail_writing">書き込み時間</string>
+    <string name="turn_detail_total">合計時間</string>
+    <string name="turn_detail_calls">モデル呼び出し</string>
+    <string name="turn_detail_ended">終了の仕方</string>
+    <string name="turn_stop_complete">完了</string>
+    <string name="turn_stop_loop">停止: 同じことを繰り返していました</string>
+    <string name="turn_stop_runaway">停止: 時間がかかりすぎました</string>
+    <string name="turn_stop_interrupted">中断</string>
+    <string name="turn_stop_unknown">記録なし</string>
+    <string name="turn_show_details">詳細を表示</string>
+    <string name="turn_hide_details">詳細を隠す</string>
+</resources>

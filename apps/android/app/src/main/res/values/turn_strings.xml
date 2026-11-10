@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A finished reply's metrics and its details (TurnDetailsRow.kt, #2112), the iPhone's TurnDetailsView. -->
+<resources>
+    <string name="turn_done">Done</string>
+    <string name="turn_effort" formatted="true">%1$s effort</string>
+    <string name="turn_in" formatted="true">%1$s in</string>
+    <string name="turn_out" formatted="true">%1$s out</string>
+    <string name="turn_rate" formatted="true">%1$s tok/s</string>
+    <string name="turn_detail_model">Model</string>
+    <string name="turn_detail_effort">Effort</string>
+    <string name="turn_detail_input">Input tokens</string>
+    <string name="turn_detail_cache_read">Read from cache</string>
+    <string name="turn_detail_cache_write">Written to cache</string>
+    <string name="turn_detail_output">Output tokens</string>
+    <string name="turn_detail_speed">Speed</string>
+    <string name="turn_detail_writing">Writing time</string>
+    <string name="turn_detail_total">Total time</string>
+    <string name="turn_detail_calls">Model calls</string>
+    <string name="turn_detail_ended">How it ended</string>
+    <string name="turn_stop_complete">Finished</string>
+    <string name="turn_stop_loop">Stopped: it was going in circles</string>
+    <string name="turn_stop_runaway">Stopped: it ran too long</string>
+    <string name="turn_stop_interrupted">Interrupted</string>
+    <string name="turn_stop_unknown">Not recorded</string>
+    <string name="turn_show_details">Show details</string>
+    <string name="turn_hide_details">Hide details</string>
+</resources>

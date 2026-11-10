@@ -495,6 +495,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use
 > only the computer, only the phone, or turn the microphone off.
 >
+> **Reply details** (iPhone and Android): under each finished reply a small line shows the model, the
+> effort, the tokens read and written, the speed and how long the turn took, with a green check and
+> **Done** when it ran to the end. On Android, tap the line for the breakdown (cache, writing time,
+> model calls, how it ended); tap again to close it.
+>
 > **Skills** (Android): type `/` in a chat's message box, at the start or after a space at the end
 > of what you've written, to see the skills on your computer: the built-in ones, those you
 > installed from the Marketplace for Nekko Agent, and the ones Nekko Agent found in your Claude
