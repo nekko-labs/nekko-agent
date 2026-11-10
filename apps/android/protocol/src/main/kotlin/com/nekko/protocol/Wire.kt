@@ -40,6 +40,9 @@ object Channels {
     const val VOICE_STATUS = "voice:status"
     /** A mono 16 kHz 16-bit PCM WAV as a JSON array of byte values → the text. */
     const val VOICE_TRANSCRIBE = "voice:transcribe"
+    const val ENGINE_MODELS = "engine:models"
+    const val CHAT_GENERATE_IMAGE = "chat:generateImage"
+    const val SESSION_PHOTO = "session:photo"
     const val CHAT_SEND = "chat:send"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
@@ -140,10 +143,10 @@ object Channels {
     val GIT_CHANGE = setOf(GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT, PR_CREATE, PR_ACTION)
 
     /** Every Change channel this phone calls ([ChangeProof]). */
-    val CHANGE = GIT_CHANGE + TerminalChannels.CHANGE + setOf(FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, PROVIDERS_SAVE_SEALED, PROVIDERS_SET_ENABLED)
+    val CHANGE = GIT_CHANGE + TerminalChannels.CHANGE + setOf(CHAT_GENERATE_IMAGE, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, PROVIDERS_SAVE_SEALED, PROVIDERS_SET_ENABLED)
 
     val ALL = listOf(
-        SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
+        ENGINE_MODELS, CHAT_GENERATE_IMAGE, SESSION_PHOTO, SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, ACTIVITY_STATE, MACHINE_SUMMARY, SKILLS_RUNNABLE, TOOLS_LIST, CHANGES_LIST, AUDIT_READ, MONITOR_SUMMARY,
         SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, SESSION_WATCHES, MODEL_UNLOAD,
@@ -236,6 +239,8 @@ data class ChatMessage(
     val toolCalls: List<ToolCall> = emptyList(),
     val toolResult: ToolResult? = null,
     val interrupted: Boolean = false,
+    /** The computer's persisted measurements for the turn this reply ended; null when it recorded none. */
+    val turnStats: TurnStats? = null,
 ) {
     val imageCount: Int get() = images.size
 
@@ -256,6 +261,7 @@ data class ChatMessage(
                 toolCalls = o["toolCalls"].arr()?.mapNotNull { ToolCall.from(it) } ?: emptyList(),
                 toolResult = ToolResult.from(o["toolResult"]),
                 interrupted = o.bool("interrupted"),
+                turnStats = TurnStats.from(o["turnStats"]),
             )
         }
     }
@@ -288,6 +294,7 @@ data class Session(
     val parentSessionId: String? = null,
     /** `image` for an image chat; null for an ordinary one. */
     val chatType: String? = null,
+    val imageParams: ImageChatParams? = null,
     val executionMode: String? = null,
     val disabledTools: List<String> = emptyList(),
     /** MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in this chat (decision 0054). */
@@ -328,6 +335,7 @@ data class Session(
                 runOptions = RunOption.values(o),
                 parentSessionId = o.str("parentSessionId"),
                 chatType = o.str("chatType"),
+                imageParams = ImageChatParams.from(o["imageParams"]),
                 executionMode = o.str("executionMode"),
                 disabledTools = o["disabledTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 allowedMcpTools = o["allowedMcpTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
@@ -361,6 +369,10 @@ data class SessionSummary(
     val transcriptTokens: Long? = null,
     val contextUsed: Long? = null,
     val contextWindow: Long? = null,
+    val chatType: String? = null,
+    val imageParams: ImageChatParams? = null,
+    /** Prompts sent in the chat; null when the computer doesn't say (an older one). The first-chat intro reads it. */
+    val exchangeCount: Long? = null,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -386,8 +398,11 @@ data class SessionSummary(
                 order = o.dbl("order"),
                 activeWatchCount = o.long("activeWatchCount") ?: 0,
                 pinned = o.bool("pinned"),
+                chatType = o.str("chatType"),
+                imageParams = ImageChatParams.from(o["imageParams"]),
                 prUrls = o["prUrls"].arr()?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList(),
                 transcriptTokens = o.long("transcriptTokens")?.takeIf { it > 0 },
+                exchangeCount = o.long("exchangeCount")?.takeIf { it >= 0 },
                 contextUsed = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
                 contextWindow = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )
@@ -730,10 +745,11 @@ data class AppInfo(
     val machineIcon: String? = null,
     val hostname: String? = null,
     val computerName: String? = null,
+    val imageGeneration: Boolean = false,
 ) {
     companion object {
         fun from(e: JsonElement?): AppInfo = e.obj().let {
-            AppInfo(it?.str("version"), it?.str("platform"), it?.bool("quitFromPhone") == true, it?.str("machineIcon")?.takeIf { i -> i in COMPUTER_ICONS }, it?.str("hostname"), it?.str("computerName"))
+            AppInfo(it?.str("version"), it?.str("platform"), it?.bool("quitFromPhone") == true, it?.str("machineIcon")?.takeIf { i -> i in COMPUTER_ICONS }, it?.str("hostname"), it?.str("computerName"), it?.get("capabilities").obj()?.bool("imageGeneration") == true)
         }
     }
 }

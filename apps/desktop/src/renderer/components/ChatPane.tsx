@@ -1,4 +1,5 @@
 import { ContextChangeNotice, showContextChangeNotice } from './ContextChangeNotice.js';
+import { useClaudePlan } from '../providerAccounts.js';
 import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
 import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { computerBlock, useComputerOf } from './ComputerChip.js';
@@ -14,7 +15,7 @@ import { MarkdownSession } from './Markdown.js';
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
 import { chatPaneSettings, initialChatBrain } from './ChatPane.settings.js';
-import { ChevronDownIcon, ChevronUpIcon, CopyIcon, ControlPanelIcon, PhotoIcon, FileIcon, FolderIcon, WandIcon } from '../icons.js';
+import { BranchIcon, ChevronDownIcon, ChevronUpIcon, CopyIcon, ControlPanelIcon, PhotoIcon, FileIcon, FolderIcon, WandIcon } from '../icons.js';
 import { attachmentName, pastedFileName, planAttachment, unreadableNote } from '../composerAttachments.js';
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
@@ -25,7 +26,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -66,6 +67,7 @@ import { VirtualTranscript, type VirtualTranscriptHandle } from './agent-console
 import { ChatSearchBar } from './agent-console/ChatSearchBar.js';
 
 import { SHORTCUTS } from '../shortcuts.js';
+import { seasonalHat } from '../seasonal.js';
 import { MarkdownEditor, type MarkdownEditorElement } from './agent-console/MarkdownEditor.js';
 import { MarkdownSandbox, safeHref } from './Markdown.js';
 import { PhotoViewer } from './PhotoViewer.js';
@@ -98,11 +100,14 @@ import { NekkoAvatar } from './Mascot.js';
 import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { WorktreeChip } from './WorktreeChip.js';
-import { FolderPicker } from './FolderPicker.js';
+import { FolderPicker, openRepoBrowser } from './FolderPicker.js';
+import { environmentActions } from '../environmentActions.js';
 import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
 import { AuditTrail } from './AuditTrail.js';
+import { GitHubStarAsk } from './GitHubStarAsk.js';
+import { starAskAfterReply } from '../starAsk.js';
 import { ShieldCheckIcon } from '../icons.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
@@ -742,6 +747,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Pinned to the reply it was written for (forId) so
   // a newer turn can't inherit stale suggestions.
   const [suggestions, setSuggestions] = useState<{ forId: string; next: string | null; options: string[] } | null>(null);
+  // The in-chat GitHub star ask (spec/platform/github-star-ask.md), only in the
+  // pane whose prompt reached the count, until the next send or a choice.
+  const userPromptRef = useRef(false);
+  const [starAsk, setStarAsk] = useState(false);
+  const closeStarAsk = useCallback(() => setStarAsk(false), []);
   // A failed reply stays in the transcript with a retry, instead of vanishing
   // with the toast.
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -1191,6 +1201,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           refreshCtxThrottled();
           break;
         case 'error':
+          userPromptRef.current = false;
           if (e.message !== 'Stopped') {
             useStore.getState().pushToast('error', describeInterruption(e.message || 'Something went wrong.', false).reason);
           }
@@ -1198,6 +1209,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           endTurn();
           break;
         case 'done':
+          // A prompt sent from this pane got its reply: it counts, and the 10th
+          // and 50th carry the GitHub star ask under them.
+          if (userPromptRef.current) { userPromptRef.current = false; if (starAskAfterReply()) setStarAsk(true); }
           endTurn();
           refreshCtx();
           void requestSuggestions();
@@ -1552,7 +1566,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // from something else you're already typing in. The provider count is a
   // dependency because the textarea is disabled until providers have loaded.
 
-  const beginTurn = () => {
+  // `prompted`: someone sent this from here, so a finished reply counts toward the GitHub star ask.
+  const beginTurn = (prompted = false) => {
+    userPromptRef.current = prompted;
+    setStarAsk(false);
     reportAgentWorking(sessionId, true);
     streamingRef.current = true;
     setStreaming(true);
@@ -1689,7 +1706,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
     if (fromDraft) { setDraft(''); clearDraft(sessionId); if (images.length) setPendingImages([]); }
     setEditOffer(false);
-    beginTurn();
+    beginTurn(true);
     setSession((prev) => prev ? { ...prev, messages: [...prev.messages, { id: 'tmp', role: 'user', content: prompt, createdAt: Date.now(), ...(images.length ? { images } : {}) }] } : prev);
     admitted?.();
     await window.nekko.generateImageTurn({ sessionId, prompt, params: { ...params, modelId: params.modelId }, ...(images.length ? { images, size } : {}) });
@@ -1765,7 +1782,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
     if (override === undefined) { setDraft(''); setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); clearDraft(sessionId); }
     setActiveSkill(null);
-    beginTurn();
+    beginTurn(true);
     setSession((prev) =>
       prev ? {
         ...prev,
@@ -1886,7 +1903,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const brain = requireBrain(newText);
     if (!brain) return;
     await window.nekko.truncateSession(sessionId, messageId);
-    beginTurn();
+    beginTurn(true);
     setSession((prev) => {
       if (!prev) return prev;
       const idx = prev.messages.findIndex((m) => m.id === messageId);
@@ -1981,6 +1998,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     await window.nekko.answerQuestion(sessionId, pending.callId, answers);
     setQuestion((current) => current?.callId === pending.callId ? null : current);
   };
+  const sessionNow = useRef(session);
+  sessionNow.current = session;
+  // A chat on another computer has no folders here to add.
+  const questionActions = useMemo(() => computer ? undefined : environmentActions(
+    sessionId,
+    () => useStore.getState().sessions.find((x) => x.id === sessionId) ?? sessionNow.current,
+    setSession,
+  ), [computer, sessionId]);
 
 
   const hasProvider = !!computer || !needsProviderSetup(providers, modelId ?? models[0]?.id);
@@ -2364,6 +2389,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   };
   // This provider's live usage windows, and the models they still leave usable.
   const providerLimits = useProviderLimits(activeProvider);
+  // A Claude Agent chat on Fable says how the plan pays for it: close to its
+  // weekly cap, or on usage credits from here (Claude Code's own windows first,
+  // the dated plan catalog when they say nothing). Informs; never blocks.
+  const claudePlan = useClaudePlan(activeProvider);
+  const planUsageNotice = claudePlan && modelId && modelId !== AUTO_MODEL_ID
+    ? claudePlanUsageNotice({ modelId, subscriptionType: claudePlan, limits: providerLimits, now: Date.now() })
+    : null;
   const runnableModels = models.filter(
     (m) => resolveModelAvailability({ model: m, provider: activeProvider, limits: providerLimits }).status === 'ready',
   );
@@ -2860,9 +2892,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
                 {remoteBlock && <div role="status" data-computer-block className="mx-auto mb-1 w-full max-w-3xl rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>{remoteBlock}</div>}
                 {question && <div className="conversation-question" data-agent-question>
-                  <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" />
+                  <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" actions={questionActions} />
                 </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
+                {starAsk && !streaming && !question && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
@@ -3000,7 +3033,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               enabled={settings?.mascotEnabled ?? true}
               away={!!approval}
               working={streaming || hasLive}
-              wizardHat={settings?.themePreset === 'autumn'}
+              hat={seasonalHat(settings?.themePreset)}
             />}
             {compact && !wallWindow && stripShown && (
               <div className="composer-summary">
@@ -3404,6 +3437,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           <FolderIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="flex-1">Folder</span>
                         </button>
+                        <button
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
+                          onClick={() => { closeAttachMenu(); openRepoBrowser(sessionId); }}
+                          onMouseEnter={closeSkillsFly}
+                        >
+                          <BranchIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="flex-1">Repository</span>
+                        </button>
                         {/* Simple has no strip above the box: its two switches live here. */}
                         {plusCarries && session && <>
                           <div className="my-1 border-t border-line" />
@@ -3542,9 +3584,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
                     controls Settings > Simple mode keeps for Expert. */}
-                {!cleanStart && !imageMode && surface !== 'composer' && (!wallWindow || modelHint) && (
+                {!cleanStart && !imageMode && surface !== 'composer' && (!wallWindow || modelHint || planUsageNotice) && (
                   <div className={`composer-details ${detailsShown ? 'is-open' : ''}`} data-composer-details aria-label="Chat details">
                     {modelHint && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
+                    {!modelHint && planUsageNotice && <p role="status" data-plan-usage-note={planUsageNotice.kind} className="mb-1 flex items-center gap-2 text-xs" style={{ color: planUsageNotice.kind === 'near-limit' ? 'var(--warning)' : 'var(--ink-soft)' }}><span aria-hidden>●</span>{planUsageNotice.text}</p>}
                     {!wallWindow && <>
                       <div className="flex min-w-0 flex-wrap items-center gap-2" data-composer-primary-row>
                         <div className="min-w-0 max-w-full shrink-0">{modelControls}</div>

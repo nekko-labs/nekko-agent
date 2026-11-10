@@ -28,7 +28,8 @@ exports.default = async function afterPack(context) {
   const appName = `${context.packager.appInfo.productFilename}.app`;
   const appPath = join(context.appOutDir, appName);
   // The development identity when this Mac has one (dev-signing.cjs): the
-  // Keychain then keeps its answers from one local build to the next.
+  // Keychain then keeps its access-list answer from one local build to the
+  // next (each rebuild still asks once for the partition list: dev-signing.cjs).
   const identity = devSigningIdentity() ?? '-';
   try {
     execFileSync('codesign', ['--deep', '--force', '--sign', identity, appPath], { stdio: 'inherit' });

@@ -66,6 +66,112 @@
   .autumn-leaf { animation: none; top: 18%; opacity: 0.06; }
 }
 
+/* Winter: faint drifting snow, a drift along the bottom that piles up over the
+   first hour, and (late at night) an aurora. Same rules as autumn: never
+   intercepts input; everything pauses while the window is hidden. */
+.winter-background {
+  position: fixed;
+  inset: 44px 0 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  color: var(--accent);
+}
+.winter-background.is-paused * { animation-play-state: paused; }
+.winter-flake {
+  position: absolute;
+  top: -24px;
+  opacity: 0;
+  animation: winter-snowfall 36s linear infinite;
+}
+.winter-snow-cat { animation-name: winter-snowfall-cat; }
+@keyframes winter-snowfall {
+  0% { transform: translate3d(0, -24px, 0) rotate(0deg); opacity: 0; }
+  8%, 88% { opacity: 0.2; }
+  30% { transform: translate3d(14px, 30vh, 0) rotate(70deg); }
+  60% { transform: translate3d(-10px, 62vh, 0) rotate(150deg); }
+  100% { transform: translate3d(8px, 104vh, 0) rotate(240deg); opacity: 0; }
+}
+/* The snow cat stays upright so the face reads, and only sways. */
+@keyframes winter-snowfall-cat {
+  0% { transform: translate3d(0, -24px, 0); opacity: 0; }
+  8%, 88% { opacity: 0.22; }
+  30% { transform: translate3d(-12px, 30vh, 0) rotate(-8deg); }
+  60% { transform: translate3d(10px, 62vh, 0) rotate(8deg); }
+  100% { transform: translate3d(-6px, 104vh, 0) rotate(0deg); opacity: 0; }
+}
+.winter-drift {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 56px;
+  opacity: 0.06;
+  transform-origin: bottom;
+  transform: scaleY(0.3);
+  animation: winter-pile-up 3600s linear forwards;
+}
+@keyframes winter-pile-up { to { transform: scaleY(1); } }
+.winter-aurora {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 140px;
+  opacity: 0.08;
+  background: linear-gradient(100deg, transparent 5%, var(--accent-2) 25%, var(--accent) 45%, var(--accent-2) 65%, transparent 90%);
+  background-size: 200% 100%;
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent);
+  mask-image: linear-gradient(to bottom, #000, transparent);
+  animation: winter-aurora 48s ease-in-out infinite alternate;
+}
+@keyframes winter-aurora {
+  from { background-position: 0% 0; opacity: 0.05; }
+  to { background-position: 100% 0; opacity: 0.1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .winter-flake { animation: none; top: 22%; opacity: 0.08; }
+  .winter-flake:nth-child(odd) { top: 58%; }
+  .winter-drift { animation: none; transform: scaleY(0.6); }
+  .winter-aurora { animation: none; }
+}
+
+/* Winter's hidden snowball (GreetingNekko): it arcs up and right from the
+   greeting cat, then bursts into six flakes. */
+.winter-snowball {
+  position: absolute;
+  z-index: 4;
+  left: 40px;
+  top: 10px;
+  pointer-events: none;
+  animation: winter-snowball-arc 620ms cubic-bezier(0.25, 0.6, 0.4, 1) forwards;
+}
+.winter-snowball > svg { display: block; animation: winter-snowball-hide 1100ms steps(1, end) forwards; }
+.winter-snowball-puff { position: absolute; left: 6px; top: 6px; }
+.winter-snowball-puff > i {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: #f8fafc;
+  box-shadow: 0 0 0 0.5px #94a3b8;
+  opacity: 0;
+  --angle: calc(var(--i) * 60deg);
+  animation: winter-snowball-puff 480ms ease-out 600ms forwards;
+}
+@keyframes winter-snowball-arc {
+  0% { transform: translate(0, 0) scale(0.6); }
+  55% { transform: translate(90px, -46px) scale(1); }
+  100% { transform: translate(170px, -10px) scale(1); }
+}
+@keyframes winter-snowball-hide { 0% { opacity: 1; } 55% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes winter-snowball-puff {
+  0% { opacity: 1; transform: rotate(var(--angle)) translateX(0); }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateX(16px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No flight or burst: the ball just appears where it would land, then goes. */
+  .winter-snowball { animation: none; transform: translate(150px, -10px); }
+  .winter-snowball-puff > i { animation: none; }
+}
+
 
 @custom-variant dark (&:is([data-theme="dark"] *));
 /* A device with no hover (a phone or tablet running the Local Web UI): row
@@ -115,6 +221,13 @@
   --color-neutral-soft: var(--neutral-soft);
   --color-running: var(--running);
   --color-highlight: var(--highlight);
+  --color-attention: var(--attention);
+  --color-attention-soft: var(--attention-soft);
+  --color-success-text: var(--success-text);
+  --color-danger-text: var(--danger-text);
+  --color-warning-text: var(--warning-text);
+  --color-attention-text: var(--attention-text);
+  --color-info-text: var(--info-text);
 
   /* Shadows come from the theme tokens (--shadow-sm, -md, -float, -lift), never
      Tailwind's untinted black scale: shadow-(--shadow-float). */
@@ -138,9 +251,9 @@
      4px grid: 4 / 8 / 12 / 16 / 24 / 32, never 6, 7, 10, 14 or 18. */
   --pane-gap: 8px;
 
-  /* The website's two fonts, bundled (main.tsx). Settings > Style overrides them on :root. */
-  --font-sans: 'Inter Tight Variable', 'Inter Tight', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  /* Geist and Geist Mono (docs/design-system.md), bundled in main.tsx. Settings > Style overrides them on :root. */
+  --font-sans: 'Geist Variable', 'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, monospace;
 }
 
 /*
@@ -370,6 +483,15 @@
 }
 /* Groups stack with the group gap; the first in a container takes none. */
 .quiet-group + .quiet-group { margin-top: var(--q-group); }
+/* A row's own actions (remove, revert, load): hidden until the row is hovered
+   or focused, always shown on touch. The row carries data-quiet-row. */
+.quiet-row-action { transition: opacity var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+@media (hover: hover) {
+  .quiet-row-action { opacity: 0; }
+  [data-quiet-row]:hover .quiet-row-action,
+  [data-quiet-row]:focus-within .quiet-row-action,
+  .quiet-row-action:focus-visible { opacity: 1; }
+}
 
 @utility quiet-group-label {
   @apply text-xs font-medium text-ink-soft;
@@ -1237,13 +1359,17 @@
     --dur-fast: 0.12s;
     --dur-med: 0.2s;
     --dur-slow: 0.26s;
-    /* Quiet surfaces rhythm (docs/design-system.md): the gaps that replace
-     borders and card tiles. Name to meta on a row, heading to its rows,
-     group to group, section to section. */
+    /* Quiet surfaces rhythm (docs/design-system.md): 8px steps inside
+     components, 20px steps for layout, 4px only for tightly coupled pairs.
+     These gaps replace borders and card tiles. */
+    --q-tight: 4px;
     --q-inline: 8px;
-    --q-heading: 4px;
-    --q-group: 24px;
-    --q-section: 32px;
+    --q-heading: 8px;
+    --q-pad: 20px;
+    --q-group: 20px;
+    --q-section: 40px;
+    --q-row: 40px;
+    --q-row-dense: 32px;
     --q-wash: color-mix(in srgb, currentColor 6%, transparent);
     --q-wash-strong: color-mix(in srgb, currentColor 9%, transparent);
     /* Semantic status colors. Every screen reads state through these (never a
@@ -1253,13 +1379,23 @@
     --warning: #c9871f;
     /* An agent waiting on you: orange, louder than a warning chip. */
     --attention: #e8701a;
-    --info: #3f7fb8;
+    /* Petrol, the third colour: information, "New", chart series three. */
+    --info: #1f6680;
     --neutral: #8a8f98;
-    --running: #3b82f6;
-    --highlight: #d99b12;
+    /* Working is the green rocket; best-so-far marks are a warning amber. */
+    --running: var(--success);
+    --highlight: var(--warning);
+    /* Words in a state colour. The base values above are for glyphs, dots and
+     meter fills; as text they fall under 4.5:1 on light surfaces. */
+    --success-text: #226f49;
+    --danger-text: #b23a2d;
+    --warning-text: #8a5a0c;
+    --attention-text: #a84c0a;
+    --info-text: #1f6680;
     --success-soft: color-mix(in srgb, var(--success) 14%, transparent);
     --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
     --warning-soft: color-mix(in srgb, var(--warning) 14%, transparent);
+    --attention-soft: color-mix(in srgb, var(--attention) 14%, transparent);
     --info-soft: color-mix(in srgb, var(--info) 14%, transparent);
     --neutral-soft: color-mix(in srgb, var(--neutral) 14%, transparent);
     /* Context/provenance categories, shared by the metrics bar, the context
@@ -1288,15 +1424,17 @@
     color-scheme: light;
   }
 
+  /* Dusk: the dark neutrals (decision 0075), halfway between the old ink
+     black and a blue midnight. The blue shows in panels and lines. */
   [data-theme='dark'] {
-    --paper: #0c0c11;
-  --win: #17171e;
-    --surface: #16161c;
-    --surface-2: #20202a;
-    --ink: #eceaf3;
-    --ink-soft: #a3a1b0;
-    --ink-faint: #898894;
-    --line: #26262f;
+    --paper: #0b0c14;
+    --win: #181a25;
+    --surface: #14151f;
+    --surface-2: #1d1f2c;
+    --ink: #eaeaf4;
+    --ink-soft: #a3a4b6;
+    --ink-faint: #87899b;
+    --line: #252735;
     --accent: #c084b5;
     --accent-2: #c99bb3;
     --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -1317,13 +1455,17 @@
     --danger: #e0574a;
     --warning: #e0a44a;
     --attention: #f58a3a;
-    --info: #5b9dd9;
+    --info: #6bb8d4;
     --neutral: #8a8f98;
-    --running: #60a5fa;
-    --highlight: #fbbf24;
+    --success-text: #4ec98a;
+    --danger-text: #ef6a5d;
+    --warning-text: #e0a44a;
+    --attention-text: #f58a3a;
+    --info-text: #6bb8d4;
     --success-soft: color-mix(in srgb, var(--success) 18%, transparent);
     --danger-soft: color-mix(in srgb, var(--danger) 18%, transparent);
     --warning-soft: color-mix(in srgb, var(--warning) 18%, transparent);
+    --attention-soft: color-mix(in srgb, var(--attention) 18%, transparent);
     --info-soft: color-mix(in srgb, var(--info) 18%, transparent);
     --neutral-soft: color-mix(in srgb, var(--neutral) 18%, transparent);
     --cat-guideline: #c08adb;
@@ -1375,6 +1517,21 @@
     --ink-soft: #9ca6b6;
     --ink-faint: #969fab;
     --line: #3b4252;
+  }
+
+  /* Winter (seasonal): a snowy night. Midnight-blue surfaces kept low in
+     saturation, ice-blue accent; primary buttons take midnight text because
+     white on the pale accent would not read. */
+  [data-theme='dark'][data-preset='winter'] {
+    --paper: #0a111d;
+    --win: #0f1828;
+    --surface: #111b2b;
+    --surface-2: #1a2638;
+    --ink: #eaf2fb;
+    --ink-soft: #a8bbd0;
+    --ink-faint: #8a9db4;
+    --line: #233249;
+    --on-accent: #0a111d;
   }
 
   [data-theme='light'][data-preset='solar'] {
@@ -1919,8 +2076,8 @@
     --merged-chip: rgba(43, 18, 76, 0.1);
   }
   [data-theme='dark'][data-preset='x-plum-dark'] {
-    --paper: #0c0c11;
-    --win: #17171e;
+    --paper: #0b0c14;
+    --win: #181a25;
     --ink: #ffffff;
     --on-accent: #190019;
     --accent-soft: color-mix(in srgb, #5a2352 55%, var(--surface));
@@ -1930,8 +2087,8 @@
     --merged-chip: rgba(133, 79, 108, 0.16);
   }
   [data-theme='dark'][data-preset='x-indigo-dark'] {
-    --paper: #0c0c11;
-    --win: #17171e;
+    --paper: #0b0c14;
+    --win: #181a25;
     --ink: #ffffff;
     --on-accent: #2b124c;
     --accent-soft: color-mix(in srgb, #4a2a7a 55%, var(--surface));

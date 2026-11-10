@@ -8,7 +8,7 @@ type Settings = Pick<Partial<AppSettings>, 'theme' | 'themePreset' | 'accent' | 
 const LIGHT_ACCENTS: Record<string, readonly [string, string]> = {
   nebula: ['#6652a3', '#a13d76'], terminal: ['#23713d', '#526b1b'],
   nord: ['#326878', '#486581'], ember: ['#b34a05', '#be3030'],
-  autumn: ['#a14b09', '#806000'],
+  autumn: ['#a14b09', '#806000'], winter: ['#0a6694', '#13795b'],
 };
 
 function variant(id: string | undefined, mode: Mode): string | undefined {

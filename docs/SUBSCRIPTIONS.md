@@ -17,6 +17,19 @@ In a chat that runs on Claude Code, each finished reply starts with a left-align
 
 When you pick Claude, Nekko first checks whether Claude Code is installed (it runs `claude --version` and `claude auth status`). If it isn't, **Install Claude Code** opens a terminal inside Nekko and runs Anthropic's own installer (`curl -fsSL https://claude.ai/install.sh | bash`, or `irm https://claude.ai/install.ps1 | iex` on Windows). If it isn't signed in, **Connect** opens Claude Code in that terminal so you can type `/login`. Once it's connected, the panel says so in green, with the account and plan it uses.
 
+### Fable on a Claude plan
+
+Anthropic doesn't sell Fable like the other models: what you get depends on your plan. The model picker says which case is yours beside each Fable model, using the plan Claude Code reports (`claude auth status`). Hover the row for one more sentence.
+
+- **Pro**: Fable runs on usage credits, not on the plan's included usage ("Uses usage credits"). During a launch offer the row says until when it is included instead. The Fable 5.2 offer ends 16 November 2026 at 23:59 Pacific time, and the label changes by itself when it ends.
+- **Max and Ultra**: included for up to 50% of your weekly usage, then usage credits ("Up to 50% of weekly usage").
+- **Team and Enterprise**: depends on your seat. Premium seats work like Max, standard seats like Pro. Claude Code doesn't say which seat you have.
+- **Free**: not included.
+
+In a chat on Fable, a line above the message box tells you when Claude Code reports that you are **close to your Fable limit** for the week, and when **from here Fable uses your usage credits**. On Pro the second line is there from the start. What Claude Code reports always wins over the picker's label.
+
+Nekko only tells you: it never stops you from picking Fable and never moves a chat to another account or model to get around a limit. Claude Code decides what runs. Anthropic changes these terms from time to time, so a label not checked in 60 days says **Check your plan** instead. The plan pages are [Claude Fable models on your plan](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan) and [Claude Fable 5.2 launch offers](https://support.claude.com/en/articles/17506494-claude-fable-5-2-launch-offers).
+
 ### Automatic chat titles with Claude Code
 
 Claude Code does not automatically name a chat through its print-mode integration ([session naming in Claude Code](https://code.claude.com/docs/en/sessions#name-your-sessions)). By default, a Claude subscription chat keeps Nekko's prompt-prefix title unless you rename it yourself.

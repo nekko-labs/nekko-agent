@@ -929,8 +929,8 @@ export const useStore = create<UiState>((set, get) => ({
     // Settings > Style. A chosen family falls back to the bundled one.
     const family = (name: string | undefined, fallback: string) =>
       !name ? '' : name === 'system-ui' || name === 'ui-monospace' ? `${name}, ${fallback}` : `"${name.replace(/["\\]/g, '')}", ${fallback}`;
-    const sans = family(settings?.fontSans, "'Inter Tight Variable', system-ui, sans-serif");
-    const mono = family(settings?.fontMono, "'JetBrains Mono Variable', ui-monospace, monospace");
+    const sans = family(settings?.fontSans, "'Geist Variable', system-ui, sans-serif");
+    const mono = family(settings?.fontMono, "'Geist Mono Variable', ui-monospace, monospace");
     if (sans) root.style.setProperty('--font-sans', sans);
     else root.style.removeProperty('--font-sans');
     if (mono) root.style.setProperty('--font-mono', mono);

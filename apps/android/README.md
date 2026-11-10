@@ -179,6 +179,78 @@ npm ci && npm run build:core \
 cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegrationTest*'
 ```
 
+## Native image chats (#2162)
+
+Implemented Android source contract (native execution still unverified in this Windows handoff):
+
+- **New chat → Image** uses only the explicitly advertised
+  `app:info.capabilities.imageGeneration: true` capability and the phone-safe
+  `engine:models` array, retaining only image model `id/name/kind/format/state`.
+  There is no install, removal, file/path import or cloud fallback.
+- Create with existing `session:create`, then `session:setOptions(id,
+  {chatType:"image", imageParams})`. A failed second operation reports failure;
+  creation is not atomic and may leave an empty session on the host. No automatic
+  delete or repeated create is attempted.
+- Generation is `chat:generateImage({sessionId,prompt,params})` via the existing
+  signed Change authorization (`ChangeCalls` / registered device key), never an
+  unsigned fallback. No image prompt enters the text outbox. Ambiguous disconnects
+  are not retried automatically; check the transcript before manually retrying.
+- New defaults are 1024×1024, 28 steps, **CFG 4**, random seed -1. Width/height are
+  256–2048 in multiples of 64; steps 1–100, CFG 0–30, seed -1–2147483647. The
+  existing proof format supports integers only: fractional saved settings remain
+  visible but are explicitly rejected, **never rounded**. A saved session missing
+  CFG retains the desktop's fractional 4.5 default and must be edited explicitly.
+- Image settings edit the same options. Skills/photos are rejected for generation;
+  restored photo trays remain removable. Offline/older-host creation and generation
+  are explicitly blocked. Text-outbox replay refuses chats converted to image and
+  returns the prompt to its draft rather than delivering it as text.
+- Session and offline transcript metadata preserve image kind/settings; list copies
+  preserve the Image badge. Attachment-only assistant replies survive projection.
+  Full-size images are read only through existing authorized
+  `session:photo(sessionId,messageId,index)`; no path or file permission is added.
+- Fields use a scrollable, width-adaptive layout, including folded/unfolded phone
+  widths. Actual fold/posture behavior and localization beyond English fallback
+  still need native verification; no device behavior is inferred from JVM tests.
+
+### Focused verification / parent handoff
+
+`powershell -NoProfile -ExecutionPolicy Bypass -File apps/android/scripts/image-core-check.ps1`
+(from repository root) compiles all protocol sources plus the image/controller/
+repository/outbox/Change logic using cached JVM dependencies pinned to the version
+catalog. It makes temporary JVM-only projections of existing storage declarations
+and text helpers, excluding Android-backed storage and Compose helpers. It does
+**not** compile the APK, ViewModel or Compose UI. Final result here: **65 tests
+passed**, including existing controller/outbox/Change regressions and the image
+payload's actual ECDSA proof verification. Compiler deprecation/baseline warnings
+remain; no budget or check was weakened.
+
+For the parent's `.github/workflows/native-mode-evidence.yml` dispatch, use:
+
+| Input | Value |
+| --- | --- |
+| `beforeRef` | `defd6001524a0419dbc404cec909f7cf95aa121a` |
+| `afterRef` | Parent's pushed implementation ref |
+| `targetIos` / `targetAndroid` | `false` / `true` |
+| `androidEvidenceSource` | `apps/android/app/src/androidTest/java/com/nekko/android/ImageChatEvidenceTest.kt` |
+| `instrumentationClass` | `com.nekko.android.ImageChatEvidenceTest` |
+| `expectedScreenshot` | `image-new-chat` |
+
+The one-source test uses existing APIs on both revisions and raw synthetic host
+responses; baseline branches intentionally show the old same-route surfaces (there
+is no implemented before-state image editor/viewer). It checks creation/options,
+summary badge, attachment-only reply + authorized photo read, UI-driven signed send,
+and offline refusal with an empty outbox. Screenshots are saved to the workflow's
+existing external `files/evidence` location. No screenshot has been captured or
+inspected here, and the instrumentation source has not yet been natively compiled.
+
+**Remaining parent work:** expose the host capability and safe image-model
+projection, project generated attachments into message `images` + authorized
+`session:photo`, complete Rust/voice integration, run native Gradle and evidence CI,
+inspect matching screenshots (plus foldable/posture coverage), and update canonical
+`spec/phone/native-android-app.md` within the parent's broader ownership. This
+Android-only handoff deliberately does not edit that out-of-scope specification.
+No commits, branches, workflow dispatches or PRs were created by this task.
+
 ## Trying it on an emulator or phone
 
 1. Start a local relay and agent from the repo root (the agent prints a pairing
@@ -192,3 +264,9 @@ cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegra
 3. For a local relay on a USB phone run `adb reverse tcp:4400 tcp:4400` and pair
    with `ws://localhost:4400`; on the emulator use `ws://10.0.2.2:4400`. Paste the
    pairing link (`nekko-agent-pair:?relay=…&room=…&key=…&host=…&pair=…`) on the Pair screen.
+
+## Direct cloud chats on this phone (#2414)
+
+The native **This phone** destination works without a paired computer. Add an HTTPS cloud-provider API, keep its key sealed on this device, select a model and start a standalone streamed text chat. Setup/test, key replacement, disable/remove, stop/retry and local history/forget are supported. No tools, photos or sync; Claude/ChatGPT subscriptions and local model servers still need a computer.
+
+See [Android direct-cloud specification](../../spec/phone/android-direct-cloud-chats.md) and the [verification handoff](docs/phone-cloud-2414-handoff.md) for the implementation boundary, SDK paths, exact checks and evidence limitations. No new dependencies were added.

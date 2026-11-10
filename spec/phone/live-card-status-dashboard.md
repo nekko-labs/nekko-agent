@@ -39,6 +39,7 @@ The goals are retained, not all proven met: no-app voice has an implemented but 
 - Building, Need input and Done count columns, including zero. Building includes non-code work, not just compilation.
 - Secondary Watching and Failed counts when nonzero; failures are not Done. Stale status takes precedence over optional detail. Legacy clipped payloads show a partial-count warning, not guessed totals.
 - Primary accent-filled **Talk to Nekko** on iOS 18+, secondary **Open app** to the chat list. On iOS 17 the primary label is **Open app for voice**, also opening the list without automatic capture.
+- **Nekko plum palette** `[2026-11-08; contrast computed; native render pending in the deploy:ios batch]`: user intent: the card should match the app's new design, not the old grey and violet. On the Lock Screen and in the Settings preview the card sits on the brand plum ground `#190019` (the app icon's tile and launch screen), washed with the accent from the top (16% to 4%, as the app's coloured ground does in dark). The header carries the pixel Nekko mark instead of a dot. Talk to Nekko is the Dark Nekko accent `#C084B5` with ink `#0C0C11` (6.7:1); secondary buttons are the plum of the app's message bubbles `#3A1438`. Soft text `#A3A1B0` reads 6.4:1 and the attention amber 9.4:1 on the wash's brightest part. The expanded Dynamic Island keeps iOS's black. The widget extension can't see the user's chosen theme, so the card always uses the default Dark Nekko palette.
 - No default chat rows, elapsed timers, Allow/Deny/Stop strip or close celebration. Those actions remain in the app, not in the voice dispatcher. Main's notification “Always allow this tool” deep link and authenticated in-app approval handler remain available; this does not add an approval strip to the dashboard.
 - Android adapts counts to its ongoing notification/Live Update, with Talk to Nekko first and Open app second. Android owns action styling; notification actions are not an iOS-style custom card.
 
@@ -78,6 +79,39 @@ Missing, ambiguous, changed or expired targets/confirmations are refused with an
 None disables the card. All enabled iOS levels draw counts and voice, with an inert Settings preview of the same view. Minimal removes chat text from pushed state. Standard/Detailed still permit their existing chat detail payloads through the relay and Apple's push service even though the dashboard does not draw those details. Choose Minimal for counts without chat text; a counts-only view is not a new transport privacy guarantee.
 
 Dashboard and Settings catalog labels have the existing seven-language coverage. Command parsing and dispatcher replies remain initially English; adding catalog entries does not localize dynamically returned English replies. Android notification action labels are localized, not the entire foreground voice sheet.
+
+## Strict native acceptance follow-up (2026-11-09)
+
+Test-only follow-up, not a new product capability: the security evidence checks the fixture's actual
+**0 Building / 1 Need input / 0 Done** totals, the Open app handoff and absence of a dashboard
+approval strip. It retains the authenticated notification-link execution and the refused-save
+assertion that the call still waits; a container's presence alone is not authorization evidence.
+The separate live notification journey retains its original **20-second** result deadline,
+online-button precondition, yielding poll, actual result label and visible banner assertions.
+Source-contract checks do not prove Swift compilation, delivery timing, or native accessibility
+labels. Exact-head native run 42779029268 compiled and passed the seven journeys,
+including pill tuck/restore. Pairing retained two light-mode failures to turn off
+finished replies and one missing banner; dark passed, and the 20-second result
+checks did not fail. This is not whole-suite acceptance.
+
+The follow-up notification driver requires each control's full frame below the
+navigation bar and inside the app viewport, then rechecks the settled frame before
+the actual switch/button interaction. The recording of the failed light2 tap shows
+the row clipped under navigation followed by a scroll-to-top. The bounded driver
+keeps two bounded eight-step reveal passes, all switch/result/banner assertions,
+and the original five-/20-/10-second deadlines; it does not set preferences or
+permissions directly. Source contracts reject the old hittability-only path.
+Native compilation and execution of this new driver remain **unverified**.
+
+The completed 5c933 fixture shard failed only the dashboard count/handoff queries
+on both attempts (eight assertions). Both exported screenshots were inspected and
+show all three required totals and Open app, above the refused in-app approval.
+This supports a query-scoping diagnosis, not missing dashboard rendering; the old
+export has no security hierarchy attachment to prove the exact accessibility cause.
+The DEBUG fixture now explicitly contains its real accessibility children, and the
+test targets that Other container and records the app hierarchy before retaining
+all count, handoff, no-strip, signed-link and refused-save assertions. This fixture
+and query repair has **not yet been compiled or executed natively**.
 
 ## Verification still pending
 

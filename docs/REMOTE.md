@@ -128,9 +128,31 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 ## The phone app
 
 > **Native apps.** The phone apps are moving to platform-native code: Kotlin / Jetpack Compose in
-> `apps/android` (pairing, chats, live replies, approvals and questions; no phone models yet) and
+> `apps/android` (pairing, chats, live replies, approvals and questions; direct cloud text chats in progress for #2414, not released) and
 > SwiftUI in `apps/ios`. The Expo app described below stays as the reference until they reach parity.
 >
+> **Chats on this phone (Android, in progress for [#2414](https://github.com/nekko-labs/nekko-agent/issues/2414)).**
+> From Chats, choose **This phone**, even with no paired computer or provider. Add a provider there:
+> Claude API, OpenAI, OpenRouter, Claude in Amazon Bedrock (Mantle Messages), Claude in Microsoft
+> Foundry, Claude on Vertex AI, or an HTTPS OpenAI-compatible API. Supply your own API key or access
+> token (optional for compatible APIs), choose a model and start a streamed text conversation.
+> Test, replace the key, disable/re-enable or remove a provider; Stop cancels a reply and Retry
+> replaces its last attempt. Fixed-catalog Test requests can incur a small provider charge.
+> Keys and local transcripts are sealed with Android Keystore-backed encryption. Requests go
+> directly over HTTPS to the configured provider, never through a computer, Relay or Nekko Cloud.
+> This is not the end-to-end encrypted computer-chat path: the provider sees the conversation and
+> may retain it. Forget deletes only the local transcript. Removing a provider deletes its key but
+> keeps read-only transcripts. Failed storage writes can prevent durable deletion; partial streamed
+> text can be lost on process death. No tools, attachments, local models, subscriptions or sync.
+> Expanded/book layouts show list and chat around a reported hinge; tabletop separates transcript
+> and composer. Physical posture transitions and OEM keyboards remain untested. Forms are English-only.
+> Foundry requires a deployment matching an offered model ID; Vertex tokens need manual renewal.
+> Android implementation and synthetic tests do not establish live provider entitlement or visual
+> approval. Captured screenshots/video await inspection. The iPhone counterpart is separate,
+> unshipped [draft PR #2462](https://github.com/nekko-labs/nekko-agent/pull/2462); #2414 stays open
+> until both platform PRs land. See the [Android specification](../spec/phone/android-direct-cloud-chats.md).
+>
+
 > The Android app looks like your desktop by default: **Settings → Appearance → Same as computer**
 > uses the computer's light or dark theme and its accent color, and follows a change on the
 > computer right away. Pick **Phone setting**, **Light** or **Dark** to choose on the phone instead;
@@ -359,7 +381,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Always allow this tool** beside Allow and Deny: it allows this call and stops asking for that one
 > tool in that chat, after your fingerprint, face or screen lock (and your security key or code
 > when the computer asks for one). Other tools keep asking, a new chat starts with none allowed, and
-> the chat never switches to No restrictions. Monitors and notifications still offer Allow and Deny only.
+> the chat never switches to No restrictions. The approval notification of an MCP tool offers it too:
+> after you unlock the phone it opens the chat, and the card does the same, with the same confirmation.
+> If you cancel the confirmation, nothing is allowed. Monitors still offer Allow and Deny only.
 >
 > **Write offline** (iPhone and Android): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
@@ -466,7 +490,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
-> first, then one group per project folder. Tap a group's name to fold it. Each group lists its
+> first, then one group per project folder. Tap a group's name to fold it, and again to open it:
+> the phone remembers each group's choice, also after you leave the list or restart the app (it
+> isn't synced to your computer). Search shows every match whatever is folded. Each group lists its
 > active chats, then **Show completed (N)**, which opens the chats completed there (struck through,
 > newest first). Tap a completed chat to read it; its message box is replaced by **Restore**, and a
 > long-press on it offers Restore or Delete. Completing or restoring a chat on the computer shows up
@@ -483,13 +509,20 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
 >
-> **Dictation** (Android): tap **+ → Dictate**, speak, and tap ■ (or stop
-> at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
-> itself. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
+> **Dictation** (Android): tap **+ → Dictate** and speak as long as you like; tap ■ when you're done.
+> At each pause the words said so far are turned into text and typed into the message box while you
+> keep talking, and ■ adds the last ones. The words are for you to check and send. Say "Nekko, …" for a
+> command instead of words: "Nekko, send", "Nekko, erase that", "Nekko, clear", "Nekko, open the docs
+> chat" (the same commands as on the iPhone and the computer). Nothing is sent unless you say so. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
 > end-to-end encrypted, the audio never reaches anyone else); install and switch it on there under
 > **Settings → Nekko Voice**. When the computer can't, the phone's own speech recognizer is used,
 > which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use
 > only the computer, only the phone, or turn the microphone off.
+>
+> **Reply details** (iPhone and Android): under each finished reply a small line shows the model, the
+> effort, the tokens read and written, the speed and how long the turn took, with a green check and
+> **Done** when it ran to the end. On Android, tap the line for the breakdown (cache, writing time,
+> model calls, how it ended); tap again to close it.
 >
 > **Skills** (Android): type `/` in a chat's message box, at the start or after a space at the end
 > of what you've written, to see the skills on your computer: the built-in ones, those you

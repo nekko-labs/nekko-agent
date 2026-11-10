@@ -50,6 +50,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.CircularProgressIndicator
@@ -83,7 +87,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.DropdownMenu
@@ -101,8 +106,10 @@ import kotlinx.coroutines.launch
  * queues the prompt on the computer and an empty box turns Send into Stop.
  * Typing `/` offers the computer's skills; a picked skill shows as a chip and
  * the box becomes its input. Photos show as thumbnails above the box.
- * Nothing goes below the box: a [footer] row is its last row, inside it.
+ * Nothing goes below the box: a [footer] row is its last row, inside it. Only the
+ * formatting toolbar does, while the box is in use: it rides on the keyboard (#2450).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun Composer(
     running: Boolean,
@@ -145,8 +152,12 @@ fun Composer(
     sendsLater: String? = null,
     /** This chat can hand a typed follow-up to a sub-agent (`ChatUi.offersSubagent`). */
     offerSubagent: Boolean = false,
+    /** After **+** in the row under the text, as on the desktop (#2448): the chat's folder, then Simple's asks-first icon. */
+    leading: (@Composable RowScope.() -> Unit)? = null,
     /** The box's bottom row (the chat's model and context), inside the box. */
     footer: (@Composable () -> Unit)? = null,
+    onVoiceConversation: (() -> Unit)? = null,
+    voiceControls: (@Composable (com.nekko.android.voice.VoiceComposer) -> Unit)? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -295,8 +306,6 @@ fun Composer(
                 if (attach != null && (photos.isNotEmpty() || addingPhotos)) {
                     Box(Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp)) { PhotoStrip(photos, attach.state.adding, attach.onRemove) }
                 }
-                // The toolbar sits inside the card, above the text, while the box is in use.
-                if (focused && toolbarOn) MarkdownToolbar(draft, text, setText)
                 PastedChip(draft, text, setText)
                 val fieldValue = draft.valueFor(text)
                 val messageLabel = stringResource(R.string.chat_message)
@@ -364,6 +373,7 @@ fun Composer(
                             )
                         }
                     }
+                    leading?.invoke(this)
                     // *Aa*: show or hide the formatting toolbar, remembered.
                     IconButton(
                         onClick = {
@@ -379,6 +389,12 @@ fun Composer(
                         )
                     }
                     Spacer(Modifier.weight(1f))
+                    // The desktop composer's mic beside Send (#2448): the voice conversation, not in the + menu any more.
+                    onVoiceConversation?.let { go ->
+                        IconButton(onClick = go, modifier = Modifier.testTag("composer.voiceConversation")) {
+                            Icon(painterResource(R.drawable.composer_mic), contentDescription = stringResource(R.string.voice_conversation), tint = p.inkSoft, modifier = Modifier.size(20.dp))
+                        }
+                    }
                     FilledIconButton(
                         onClick = { if (showStop) onStop() else send() },
                         enabled = showStop || canSend,
@@ -402,7 +418,24 @@ fun Composer(
                         }
                     }
                 }
+                voiceControls?.invoke(com.nekko.android.voice.VoiceComposer(
+                    read = { com.nekko.android.voice.VoiceTurn.Draft(text, skillName != null || promptId != null, photos.isNotEmpty(), sending || addingPhotos) },
+                    replace = { expected, replacement ->
+                        if (text != expected || sending) false else { setText(replacement); true }
+                    },
+                ))
                 footer?.invoke()
+            }
+        }
+        // On the keyboard (#2450): the composer's last row, so the chat's IME padding puts it on the
+        // keyboard's top edge and it comes and goes with the keyboard. With a hardware keyboard (no IME)
+        // it stays at the bottom of the box while the box is focused.
+        val config = LocalConfiguration.current
+        val hardwareKeyboard = config.keyboard != Configuration.KEYBOARD_NOKEYS && config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
+        if (focused && toolbarOn && (WindowInsets.isImeVisible || hardwareKeyboard)) {
+            HorizontalDivider(color = p.line)
+            Box(Modifier.fillMaxWidth().testTag("composer.keyboardBar").background(p.surface).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                MarkdownToolbar(draft, text, setText)
             }
         }
     }
@@ -578,16 +611,9 @@ class AttachUi(
 @Composable
 private fun PlusButton(open: Boolean, onClick: () -> Unit) {
     val p = Nekko.palette
-    FilledIconButton(
-        onClick = onClick,
-        shape = CircleShape,
-        colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = if (open) p.accentSoft else p.surface2,
-            contentColor = if (open) p.accent else p.inkSoft,
-        ),
-        modifier = Modifier.size(48.dp),
-    ) {
-        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.chat_add))
+    // The desktop composer's plain + (#2448): soft ink at rest, the accent while its menu is open.
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+        Icon(painterResource(R.drawable.composer_plus), contentDescription = stringResource(R.string.chat_add), tint = if (open) p.accent else p.inkSoft, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -757,7 +783,12 @@ private fun RecordingBar(st: MicState.Recording) {
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(p.danger))
         Text(
-            if (st.engine == Engine.COMPUTER) stringResource(R.string.chat_listening_clock, Dictation.clock(st.samples)) else stringResource(R.string.chat_listening),
+            when {
+                st.engine != Engine.COMPUTER -> stringResource(R.string.chat_listening)
+                // Tap mode has no cap: just the time listened.
+                st.continuous -> stringResource(R.string.chat_listening_clock, Dictation.elapsed(st.samples))
+                else -> stringResource(R.string.chat_listening_clock, Dictation.clock(st.samples))
+            },
             style = MaterialTheme.typography.bodySmall,
             color = p.ink,
         )
@@ -767,6 +798,12 @@ private fun RecordingBar(st: MicState.Recording) {
             trackColor = p.surface2,
             modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)),
         )
-        Text(stringResource(R.string.chat_tap_when_done), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        // Earlier pauses' words on their way while listening goes on.
+        Text(
+            stringResource(if (st.transcribing > 0) R.string.chat_transcribing else R.string.chat_tap_when_done),
+            style = MaterialTheme.typography.bodySmall,
+            color = p.inkFaint,
+            modifier = Modifier.testTag("chat.dictation.hint"),
+        )
     }
 }

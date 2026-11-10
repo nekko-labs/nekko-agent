@@ -71,6 +71,8 @@ data class ComputersState(
     val denied: DenyReason? = null,
     val summaries: List<SessionSummary> = emptyList(),
     val summariesLoading: Boolean = false,
+    /** The active computer's own list has been read since it became active (not the phone's saved copy). */
+    val summariesLoaded: Boolean = false,
     val providers: List<PublicProvider> = emptyList(),
     val defaults: RemoteDefaults = RemoteDefaults(),
     /** The computer's phone-settable settings (Settings → On <computer>); defaults until it answers. */
@@ -90,6 +92,8 @@ data class ComputersState(
     val savedListAt: Long? = null,
     /** The computer lets a phone quit Nekko Agent there (`app:info` `quitFromPhone`, SK-3); false until it says. */
     val quitFromPhone: Boolean = false,
+    /** Explicit app:info capability; absent/older hosts never infer support. */
+    val imageGeneration: Boolean = false,
     /** When this phone stopped remote access on the active computer (SK-8); null otherwise. */
     val remoteStoppedAt: Long? = null,
     /** The active computer's phone protocol from its welcome (IO-32); null until it has welcomed this phone. */

@@ -158,9 +158,9 @@ export function DesignBoardView() {
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-auto p-5" style={{ background: 'var(--surface-2)' }}>
           {genError && (
-            <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-400/40 bg-red-400/10 px-3 py-2 text-xs text-red-300">
+            <div className="mb-4 flex items-start justify-between gap-3 rounded-xl bg-danger-soft px-3 py-2 text-xs text-danger-text">
               <span>{genError}</span>
-              <button className="shrink-0 text-red-300 hover:text-red-200" onClick={() => setGenError(null)}>✕</button>
+              <button className="shrink-0 text-danger-text opacity-80 hover:opacity-100" onClick={() => setGenError(null)}>✕</button>
             </div>
           )}
           {mode === 'live' && <AddPageForm onAdd={addPage} onCancel={() => setMode(null)} />}
@@ -616,7 +616,7 @@ function PageSheet({
         {!concept && (
           <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Open in browser pane" onClick={onOpenBrowser}><ExternalIcon className="h-3.5 w-3.5" /></button>
         )}
-        <button className="rounded-sm p-1 text-ink-faint hover:text-red-400" title="Remove page" onClick={onRemove}><TrashIcon className="h-3.5 w-3.5" /></button>
+        <button className="rounded-sm p-1 text-ink-faint hover:text-danger-text" title="Remove page" onClick={onRemove}><TrashIcon className="h-3.5 w-3.5" /></button>
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Close" onClick={onClose}><CloseIcon className="h-3.5 w-3.5" /></button>
       </div>
 

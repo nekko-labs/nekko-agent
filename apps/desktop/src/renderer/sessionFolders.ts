@@ -1,4 +1,4 @@
-import { sameFolderPath, type Session, type SessionMeta } from '@nekko-agent/shared';
+import { REPO_PROVIDERS, sameFolderPath, type ConnectorConfig, type RemoteRepo, type Session, type SessionMeta, type WorkspaceFolder } from '@nekko-agent/shared';
 import { LAST_FOLDER_KEY, useStore } from './store.js';
 
 /**
@@ -92,4 +92,33 @@ export async function addFolderToChat(
   await useStore.getState().refreshSettings();
 
   return applyFolderSelection(sessionId, mode === 'primary' ? withPrimary(session, folder.id) : withIncluded(session, folder.id));
+}
+
+/** Wire an already-known folder path (one the agent found) into the chat. */
+export async function addFolderPathToChat(sessionId: string, session: ChatFolders, path: string): Promise<{ session: Session | null; folder: WorkspaceFolder | null }> {
+  const folders = await window.nekko.addWorkspaceByPath(path);
+  const folder = folders.find((w) => sameFolderPath(w.path, path)) ?? null;
+  if (!folder) return { session: null, folder: null };
+  await useStore.getState().refreshSettings();
+  return { session: await applyFolderSelection(sessionId, withIncluded(session, folder.id)), folder };
+}
+
+/** Whether a GitHub or GitLab connector is connected, so repositories can be listed. */
+export function hasRepoProvider(connectors: ConnectorConfig[] | undefined): boolean {
+  return (connectors ?? []).some((c) => c.connected && (REPO_PROVIDERS as string[]).includes(c.kind));
+}
+
+/**
+ * Clone a repository (or reuse its existing clone) and wire it into the chat:
+ * primary when the chat has none, otherwise supporting.
+ */
+export async function addRepoToChat(
+  sessionId: string,
+  session: ChatFolders,
+  repo: Pick<RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>,
+): Promise<{ session: Session | null; path: string }> {
+  const result = await window.nekko.cloneRepo({ provider: repo.provider, fullName: repo.fullName, cloneUrl: repo.cloneUrl, webUrl: repo.webUrl });
+  await useStore.getState().refreshSettings();
+  if (!result.folderId) return { session: null, path: result.path };
+  return { session: await applyFolderSelection(sessionId, withIncluded(session, result.folderId)), path: result.path };
 }

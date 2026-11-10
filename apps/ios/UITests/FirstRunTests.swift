@@ -110,11 +110,16 @@ final class FirstRunTests: XCTestCase {
             let allow = app.buttons["permissions.continue"]
             XCTAssertTrue(allow.waitForExistence(timeout: 10), "step 3")
             XCTAssertTrue(app.staticTexts["Step 3 of 3"].exists)
-            XCTAssertTrue(app.buttons["permissions.action.notifications"].exists)
-            XCTAssertTrue(app.buttons["permissions.action.network"].exists)
+            // OS notification grants survive the app-data reset. Explicitly open
+            // the row rather than assuming it is the first unfinished permission.
+            let notifications = app.buttons["permissions.row.notifications"]
+            XCTAssertTrue(notifications.exists)
+            if !app.buttons["permissions.action.notifications"].exists { notifications.tap() }
+            XCTAssertTrue(app.buttons["permissions.action.notifications"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["permissions.row.network"].exists)
             attach(app, "(theme)-firstrun-3")
             auditAccessibility(app, "(theme)-firstrun-3", covered: bar(app, above: allow))
-            // Continuing without a row tap never prompts for optional access.
+            // Continuing without requesting a permission never prompts for optional access.
             allow.tap()
             XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 2))
             XCTAssertTrue(waitGone(allow, 5))

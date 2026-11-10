@@ -24,7 +24,7 @@ const bridge: any = {
   updateSettings: async () => ({}), getSettings: async () => ({}),
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get: (t, k: string) => k in t ? t[k] : k.startsWith('on') ? () => () => {} : () => Promise.resolve(null) }) });
-Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/components/agent-console/ModelPicker'), import('../src/renderer/components/AsksFirstMenu'), import('../src/renderer/store'), import('@fontsource-variable/inter-tight'), import('../src/renderer/styles.css')]).then(([React, { createRoot }, { ModelPicker }, { AsksFirstMenu }, { useStore }]) => {
+Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/components/agent-console/ModelPicker'), import('../src/renderer/components/AsksFirstMenu'), import('../src/renderer/store'), import('@fontsource-variable/geist'), import('../src/renderer/styles.css')]).then(([React, { createRoot }, { ModelPicker }, { AsksFirstMenu }, { useStore }]) => {
   useStore.setState({ providers, settings: { favoriteModels: [] }, sessions: [] } as any);
   function Fixture() {
     const [open, setOpen] = React.useState(true);

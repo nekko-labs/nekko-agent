@@ -109,6 +109,19 @@ pub(crate) fn run(
     input: Option<&[u8]>,
     limit: Duration,
 ) -> Result<(i32, Vec<u8>, Vec<u8>), String> {
+    run_with_env(program, args, cwd, input, limit, &[])
+}
+
+/// `run` with extra environment variables, for secrets that must never
+/// reach the command line (where any process listing shows them).
+pub(crate) fn run_with_env(
+    program: &str,
+    args: &[&str],
+    cwd: &str,
+    input: Option<&[u8]>,
+    limit: Duration,
+    env: &[(String, String)],
+) -> Result<(i32, Vec<u8>, Vec<u8>), String> {
     let mut cmd = Command::new(program);
     cmd.args(args)
         .current_dir(cwd)
@@ -117,6 +130,9 @@ pub(crate) fn run(
         .stderr(Stdio::piped());
     if program == "git" {
         cmd.env("GIT_TERMINAL_PROMPT", "0");
+    }
+    for (k, v) in env {
+        cmd.env(k, v);
     }
     // Its own process group, so a timeout also ends what it started (a
     // fetch's `git remote-https`), which would otherwise hold the pipes open.

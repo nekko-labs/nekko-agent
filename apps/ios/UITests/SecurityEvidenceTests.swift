@@ -44,9 +44,10 @@ final class SecurityEvidenceTests: XCTestCase {
         XCTAssertEqual(picker.value as? String, "Ask when it matters")
     }
 
-    /// "Always allow this tool" from outside the chat: the Lock Screen card offers it
-    /// for an MCP approval, and its link (also the notification action's) opens the
-    /// chat, whose card runs its own "Always allow" for that call. This fixture phone
+    /// "Always allow this tool" from outside the chat: the notification action's link
+    /// opens the chat, whose card runs its own "Always allow" for that call. (The
+    /// Lock Screen card is a totals dashboard since #2047 and no longer carries an
+    /// approval strip; it stays in the shot for context.) This fixture phone
     /// has no Change key, so the save is refused, as a cancelled Face ID would be:
     /// the card shows why, and the call still waits, approved by nobody.
     func testAlwaysAllowFromTheLockScreenOrANotificationEvidence() {
@@ -65,7 +66,24 @@ final class SecurityEvidenceTests: XCTestCase {
         // Photographed before the checks, so the revision without the feature is captured too.
         attach(app, "always-allow-from-outside")
 
-        XCTAssertTrue(app.staticTexts["Always allow"].exists, "the Lock Screen card offers Always allow for an MCP approval")
+        // The DEBUG fixture contains the real dashboard; target its container,
+        // not an inherited identifier on a leaf with no descendants.
+        let card = app.otherElements["securityEvidence.card"]
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "always-allow-from-outside-ax"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+        XCTAssertTrue(card.exists, "the Lock Screen card is shown")
+        // Decision 0070 replaced the approval strip with totals. Check the actual fixture's
+        // counts, not just a container, while the in-app signed action is still refused below.
+        for (count, title) in [(0, "Building"), (1, "Need input"), (0, "Done")] {
+            let metric = card.descendants(matching: .any).matching(NSPredicate(
+                format: "label CONTAINS %@ AND label MATCHES %@", title, "(?s).*\\b\(count)\\b.*")).firstMatch
+            XCTAssertTrue(metric.exists, "the dashboard shows \(count) \(title)")
+        }
+        XCTAssertTrue(card.staticTexts["Open app"].exists, "the dashboard hands approvals back to the app")
+        XCTAssertFalse(card.staticTexts["Always allow"].exists, "the dashboard does not offer an approval strip")
+        XCTAssertFalse(card.buttons["approval.alwaysAllow"].exists, "an approval cannot run from the dashboard")
         XCTAssertTrue(ran, "the link ran the card's own Always allow")
         XCTAssertTrue(waiting.exists, "a refused save approves nothing: the call still waits")
     }

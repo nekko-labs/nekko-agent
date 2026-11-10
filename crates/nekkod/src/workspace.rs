@@ -484,14 +484,26 @@ pub async fn index_snippets(ctx: &Ctx, workspace_ids: &[String], text: &str) -> 
 /// is reused; a new one is saved through the settings and indexed shortly
 /// after. Returns the list as the host did (its own copy, not the saved one).
 pub async fn add_folder(ctx: &Ctx, path: Option<&Value>) -> Result<Value, String> {
+    add_folder_with(ctx, path, None).await
+}
+
+/// `add_folder`, tagging the saved folder with `repo` (the git repository it
+/// was cloned from, #2404). A folder already saved gets the tag too.
+pub async fn add_folder_with(ctx: &Ctx, path: Option<&Value>, repo: Option<Value>) -> Result<Value, String> {
     let Some(Value::String(path)) = path else {
         return Err("The \"path\" argument must be of type string.".into());
     };
     let current = folders(ctx).await;
     let key = nekko_settings::folder_path_key(path);
     let shown = |w: &Value| w.get("path").map(nekko_js::display).unwrap_or_default();
-    if current.iter().any(|w| nekko_settings::folder_path_key(&shown(w)) == key) {
-        return Ok(Value::Array(current));
+    if let Some(i) = current.iter().position(|w| nekko_settings::folder_path_key(&shown(w)) == key) {
+        let Some(repo) = repo.filter(|r| current[i].get("repo") != Some(r)) else {
+            return Ok(Value::Array(current));
+        };
+        let mut workspaces = current;
+        workspaces[i]["repo"] = repo;
+        let saved = crate::settings::update(ctx, json!({ "workspaces": workspaces })).await?;
+        return Ok(saved.get("workspaces").cloned().unwrap_or(json!([])));
     }
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
     // Two folders added in the same millisecond must not share an id.
@@ -503,7 +515,11 @@ pub async fn add_folder(ctx: &Ctx, path: Option<&Value>) -> Result<Value, String
         id = format!("{stamp}_{n}");
         n += 1;
     }
-    let folder = json!({ "id": id, "name": nekko_tools::path::native::basename(path), "path": path, "addedAt": now });
+    let mut folder =
+        json!({ "id": id, "name": nekko_tools::path::native::basename(path), "path": path, "addedAt": now });
+    if let Some(repo) = repo {
+        folder["repo"] = repo;
+    }
     let mut workspaces = current;
     workspaces.push(folder);
     crate::settings::update(ctx, json!({ "workspaces": workspaces })).await?;

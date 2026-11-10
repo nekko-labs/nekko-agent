@@ -1,6 +1,6 @@
 // Isolated model-picker fixture: no credentials, provider requests, or user data.
 (window as any).nekko = new Proxy({}, { get: () => () => Promise.resolve(null) });
-import('@fontsource-variable/inter-tight');
+import('@fontsource-variable/geist');
 import('../src/renderer/styles.css');
 Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/components/agent-console/ModelPicker')]).then(([React, { createRoot }, { ModelPicker }]) => {
   const providers = [

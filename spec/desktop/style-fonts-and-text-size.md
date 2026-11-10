@@ -5,11 +5,11 @@ area: desktop
 
 # Style: universal fonts, text size and your own fonts (desktop)
 
-User intent: the app should read like the website, in the same two fonts everywhere, and anyone should be able to make text bigger or switch to a font they like, including one they add themselves, without editing files by hand.
+User intent: the app reads in the same two fonts everywhere, and anyone should be able to make text bigger or switch to a font they like, including one they add themselves, without editing files by hand.
 
 ## Universal fonts
 
-- The website's two fonts are the app's fonts: **Inter Tight** for the interface (`--font-sans`) and **JetBrains Mono** for code, paths and other fixed-width text (`--font-mono`). They are bundled with the renderer (Fontsource variable fonts, OFL), so the desktop app and the Local Web UI show them with no network fetch.
+- The app's fonts are **Geist** for the interface (`--font-sans`) and **Geist Mono** for code, paths and other fixed-width text (`--font-mono`), chosen with the design system ([decision 0075](../../docs/decisions/0075-quiet-design-system.md); they replaced the website's Inter Tight and JetBrains Mono on 2026-11-09, and the website keeps those for now). They are bundled with the renderer (Fontsource variable fonts, OFL-1.1), so the desktop app and the Local Web UI show them with no network fetch. A saved choice of another font is unchanged.
 - Every surface reads the two tokens; nothing names a font family directly. The terminal is the exception: it keeps its own installed-font list so Nerd Font prompt glyphs still draw.
 
 ## Settings > Style
@@ -17,7 +17,7 @@ User intent: the app should read like the website, in the same two fonts everywh
 A **Style** group sits third in Settings, after Phone pairing, with one card, **Fonts and text**:
 
 - **Text size**: 80%, 90%, 100% (default), 110%, 125%, 150%. It scales the whole interface, since most sizes in the app are fixed pixels. The desktop app uses page zoom, the same as a browser's own zoom, so measured positions, clicks, the window size and scrolling all stay in one coordinate space, and a window at a large size lays out as a narrower one would. The Local Web UI cannot set page zoom and uses CSS `zoom` on the root, where menus placed from a measured position can land away from their button at sizes other than 100%. See [decision 0060](../../docs/decisions/0060-text-size-is-page-zoom-on-the-desktop.md). Saved as `textScale`; anything out of range reads as the nearest bound, anything not a number as 100.
-- **Interface font** and **Code font**: the default (Inter Tight / JetBrains Mono), **System**, and every font in the fonts folder. Saved as `fontSans` / `fontMono`; an empty string means the default. A chosen font always falls back to the bundled one, so a missing file never leaves the app unstyled, and the list shows it as "(missing)".
+- **Interface font** and **Code font**: the default (Geist / Geist Mono), **System**, and every font in the fonts folder. Saved as `fontSans` / `fontMono`; an empty string means the default. A chosen font always falls back to the bundled one, so a missing file never leaves the app unstyled, and the list shows it as "(missing)".
 - Each font row previews its font.
 - Right after **Code font**, a preview shows sample text (a title, a line, a faint line and code) in both fonts at the current size. A size or font change applies at once and the preview follows it; there is no Apply step.
 - Text size lives only here. The card that held a second text size stepper is now **Animations**, with just Agent activity animation.

@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -55,7 +55,7 @@ fun NearbyCard() {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Icon(Icons.Filled.Computer, contentDescription = null, tint = p.accent, modifier = Modifier.size(20.dp))
+                Icon(Icons.Outlined.Computer, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(20.dp))
                 Column {
                     Text(c.name, style = MaterialTheme.typography.bodyLarge, color = p.ink)
                     Text(

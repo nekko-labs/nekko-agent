@@ -283,4 +283,10 @@
     <string name="chat_audit_by_mode">par le mode du chat</string>
     <string name="chat_audit_by_rule">par une règle de garde-fou</string>
     <string name="chat_audit_by_other">via %1$s</string>
+    <string name="chat_star_title">Nekko Agent est open source</string>
+    <string name="chat_star_detail">S’il vous est utile, une étoile sur GitHub aide d’autres personnes à le trouver.</string>
+    <string name="chat_star_on_github">Mettre une étoile sur GitHub</string>
+    <string name="chat_star_never">Ne plus demander</string>
+    <string name="chat_star_thanks">Merci ! Nekko est ravi que vous soyez là.</string>
+    <string name="chat_star_thanks_detail">GitHub s’est ouvert dans votre navigateur. L’étoile y est à un geste.</string>
 </resources>

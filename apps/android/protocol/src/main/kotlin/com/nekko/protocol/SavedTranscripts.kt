@@ -31,6 +31,16 @@ data class SavedTranscript(val savedAt: Long, val session: Session) {
         s.workspaceId?.let { put("workspaceId", it) }
         s.mode?.let { put("mode", it.wire) }
         s.effort?.let { put("effort", it) }
+        s.chatType?.let { put("chatType", it) }
+        // Preserve even unsignable saved params verbatim; never turn an offline image chat into text.
+        s.imageParams?.let { params ->
+            put("imageParams", buildJsonObject {
+                params.modelId?.let { put("modelId", it) }
+                fun number(key: String, n: Double) { if (n.isFinite()) put(key, n) else put(key, kotlinx.serialization.json.JsonNull) }
+                number("width", params.width); number("height", params.height); number("steps", params.steps)
+                number("cfgScale", params.cfgScale); number("seed", params.seed)
+            })
+        }
         if (omitted > 0) put("omittedMessages", omitted)
         put("messages", JsonArray(messages.map { it.savedJson() }))
     }
@@ -70,6 +80,8 @@ fun ChatMessage.savedJson(): JsonObject = buildJsonObject {
         })
     }
     if (interrupted) put("interrupted", true)
+    // The narrow projection only: counts and identifiers, never the provider's raw payload.
+    turnStats?.let { put("turnStats", it.json()) }
 }
 
 /**

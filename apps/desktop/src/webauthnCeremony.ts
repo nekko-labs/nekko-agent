@@ -54,7 +54,11 @@ export async function runWebAuthnCeremony(req: WebAuthnCeremonyRequest, credenti
           // A key holds few resident credentials; the computer keeps the id itself.
           residentKey: 'discouraged',
           requireResidentKey: false,
-          userVerification: 'preferred',
+          // A platform authenticator always verifies the owner (Touch ID, Windows
+          // Hello), so ask for it outright and let the browser leave out anything
+          // that would not; a security key keeps 'preferred' so one without a PIN
+          // can still be registered. The verifiers record the UV flag either way.
+          userVerification: req.attachment === 'platform' ? 'required' : 'preferred',
         },
       };
       const cred = (await credentials.create({ publicKey: options })) as {

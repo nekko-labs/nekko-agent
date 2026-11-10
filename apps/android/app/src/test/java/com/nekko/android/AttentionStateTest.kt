@@ -28,6 +28,18 @@ class AttentionStateTest {
         assertTrue(AttentionNotices.of(state.copy(summaries = emptyList()), true, false).isEmpty())
     }
 
+    @Test fun `a waiting MCP tool's notice offers always allow, a built-in tool's does not`() {
+        val mcp = approval.copy(call = approval.call.copy(id = "tool-9", name = "mcp__github__create_issue"))
+        val state = ComputersState(
+            attention = AttentionState().next(AgentEvent.ApprovalRequired("a", mcp)).next(AgentEvent.ApprovalRequired("b", approval)),
+            summaries = listOf(summary("a"), summary("b")),
+        )
+        val notices = AttentionNotices.of(state, true, false).associateBy { it.sessionId }
+        assertTrue(notices.getValue("a").canAlwaysAllow)
+        assertEquals("tool-9", notices.getValue("a").callId)
+        assertFalse(notices.getValue("b").canAlwaysAllow)
+    }
+
     @Test fun `viewing and streaming never resolve attention`() {
         val waiting = waiting()
         assertSame(waiting, waiting.next(AgentEvent.Text("a", "still working")))

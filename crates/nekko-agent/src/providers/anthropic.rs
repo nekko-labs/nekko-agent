@@ -32,6 +32,7 @@ pub(crate) const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
     ("claude-sonnet-5", "Claude Sonnet 5"),
     ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
+    ("claude-fable-5-2", "Claude Fable 5.2"),
     ("claude-fable-5-1", "Claude Fable 5.1"),
     ("claude-haiku-5-5", "Claude Haiku 5.5"),
     ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
@@ -297,6 +298,11 @@ impl AnthropicProvider {
                 let id = m.get("id").and_then(Value::as_str).filter(|id| !id.is_empty())?;
                 let name = m.get("display_name").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or(id);
                 let api_window = m.get("max_input_tokens").and_then(Value::as_u64).filter(|n| *n > 0);
+                // The output ceiling the API lists wins over the shipped table,
+                // so a new model's `max_tokens` is right without a table edit.
+                if let Some(out) = m.get("max_tokens").and_then(Value::as_u64) {
+                    self.sampling.note_reported_output_limit(id, out);
+                }
                 Some(ModelInfo {
                     id: id.to_string(),
                     provider_id: self.config.id.clone(),

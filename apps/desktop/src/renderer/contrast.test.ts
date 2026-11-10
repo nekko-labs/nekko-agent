@@ -36,6 +36,7 @@ const THEMES: Record<string, Record<string, string>> = {
   'dark/terminal': { ...dark, ...block("[data-theme='dark'][data-preset='terminal']") },
   'dark/nord': { ...dark, ...block("[data-theme='dark'][data-preset='nord']") },
   'dark/nekko-dark': { ...dark, ...block("[data-theme='dark'][data-preset='nekko-dark']") },
+  'dark/winter': { ...dark, ...block("[data-theme='dark'][data-preset='winter']") },
 };
 // Every Experimental preset, on top of its base mode.
 const EXPERIMENTAL = THEME_PRESETS.filter((p) => p.group === 'experimental');
@@ -49,7 +50,7 @@ describe('tinted dark presets', () => {
   // Chat windows, the wall composer and the dock paint --win. A tinted preset
   // that leaves it at the neutral dark value shows grey windows on a purple or
   // green field, which is the mismatch this guards against.
-  it.each(['nebula', 'terminal', 'nord', 'nekko-dark'])('%s sets its own window surface', (preset) => {
+  it.each(['nebula', 'terminal', 'nord', 'nekko-dark', 'winter'])('%s sets its own window surface', (preset) => {
     const vars = block(`[data-theme='dark'][data-preset='${preset}']`);
     expect(vars['--win']).toBeDefined();
     expect(vars['--win']).not.toBe(dark['--win']);
@@ -142,7 +143,7 @@ const toHex = (c: { r: number; g: number; b: number }) => '#' + [c.r, c.g, c.b].
 /** Each theme with the accent its preset applies (store.applyTheme). */
 const ACCENTS: Record<string, string> = {
   light: '#5a2352', 'light/solar': '#b45309', 'light/lilac': '#5b4ea7', 'light/lavender': '#3b2f86', dark: '#c084b5',
-  'dark/nebula': '#9d8ce6', 'dark/terminal': '#3fb96a', 'dark/nord': '#88c0d0', 'dark/nekko-dark': '#c4b9ff',
+  'dark/nebula': '#9d8ce6', 'dark/terminal': '#3fb96a', 'dark/nord': '#88c0d0', 'dark/nekko-dark': '#c4b9ff', 'dark/winter': '#8fd3fe',
   ...Object.fromEntries(EXPERIMENTAL.map((p) => [`${p.mode}/${p.id}`, p.accent])),
 };
 
@@ -166,6 +167,24 @@ describe('Nekko Dark', () => {
     const fields: string[] = [];
     css.walkDecls(/^--(field|titlebar-bg|titlebar-overlay)$/, (d) => { fields.push((d.parent as { selector: string }).selector); });
     expect(new Set(fields)).toEqual(new Set(["[data-theme='dark'][data-preset='nekko-dark']"]));
+  });
+});
+
+describe('Winter', () => {
+  const vars = THEMES['dark/winter'];
+  const preset = THEME_PRESETS.find((p) => p.id === 'winter')!;
+  it('keeps CSS surfaces and shared picker tokens in sync', () => {
+    for (const [token, value] of Object.entries({ '--paper': preset.paper, '--surface': preset.surface, '--surface-2': preset.surface2, '--ink': preset.ink, '--ink-soft': preset.inkSoft, '--ink-faint': preset.inkFaint, '--line': preset.line })) {
+      expect(vars[token], token).toBe(value);
+    }
+  });
+  it('primary-button text and both accents are readable', () => {
+    expect(contrastRatio(parseColor(vars['--on-accent']), parseColor(preset.accent))).toBeGreaterThanOrEqual(AA);
+    for (const accent of [preset.accent, preset.accent2]) {
+      for (const bg of ['--paper', '--win', '--surface', '--surface-2']) {
+        expect(contrastRatio(parseColor(accent), parseColor(vars[bg])), `${accent} on ${bg}`).toBeGreaterThanOrEqual(AA);
+      }
+    }
   });
 });
 

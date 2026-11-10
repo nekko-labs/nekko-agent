@@ -726,6 +726,27 @@
            "description": {
             "type": "string",
             "description": "What picking it means, one line."
+           },
+           "action": {
+            "type": "object",
+            "description": "Optional. Something the app does when the user answers with this option, before you read the answer: \"pickFolder\" lets the user choose a folder on this computer and adds it to the chat's environment; \"addFolder\" adds `path` (a folder you found) to the environment; \"connectRepo\" lets the user pick a repository from their connected GitHub or GitLab (or connect one) and clones it into the environment. The answer tells you what was added.",
+            "properties": {
+             "kind": {
+              "type": "string",
+              "enum": [
+               "pickFolder",
+               "addFolder",
+               "connectRepo"
+              ]
+             },
+             "path": {
+              "type": "string",
+              "description": "For \"addFolder\": the absolute folder path."
+             }
+            },
+            "required": [
+             "kind"
+            ]
            }
           },
           "required": [

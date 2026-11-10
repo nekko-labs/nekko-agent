@@ -17,6 +17,7 @@
     <string name="chats_banner_online">%1$s はオンラインです</string>
     <string name="chats_banner_offline">%1$s はオフラインです。そちらで Nekko Agent を開いてください。</string>
     <string name="chats_banner_connecting">%1$s に接続中…</string>
+    <string name="chats_banner_host_not_found">このスマートフォンをペアリングしたアドレス %1$s が見つかりません。%2$s の 設定 → リモートアクセス でスマートフォンの接続方法を変更してから、もう一度ペアリングしてください。</string>
     <string name="chats_reconnect">再接続</string>
     <string name="chats_pair_again">もう一度ペアリング</string>
     <string name="chats_manage_computers">コンピュータを管理</string>
@@ -35,13 +36,13 @@
     <string name="chats_skip">スキップ</string>
     <string name="chats_continue">続ける</string>
     <string name="chats_intro_title">ポケットの中のエージェント</string>
-    <string name="chats_intro_body">Nekko Agent はコンピュータで動作します。このアプリでどこからでも操作できます。</string>
+    <string name="chats_intro_body">このスマートフォンからクラウド API と直接チャットできます。エージェントやツールを使うにはコンピュータとペアリングします。</string>
     <string name="chats_intro_follow_title">チャットをリアルタイムで追う</string>
     <string name="chats_intro_follow_text">コンピュータの作業を見守り、ここから新しいチャットを始められます。</string>
     <string name="chats_intro_approve_title">ツールを承認し、質問に答える</string>
     <string name="chats_intro_approve_text">エージェントがあなたを必要とするとき、決めるのはあなたです。</string>
     <string name="chats_intro_private_title">プライバシー重視の設計</string>
-    <string name="chats_intro_private_text">このスマートフォンとコンピュータの間はすべてエンドツーエンドで暗号化されます。</string>
+    <string name="chats_intro_private_text">コンピュータとのチャットはエンドツーエンドで暗号化されます。スマートフォンのチャットは選択したプロバイダーと HTTPS で直接通信します。</string>
     <string name="chats_allow_notifications">通知を許可</string>
     <string name="chats_not_now">今はしない</string>
     <string name="chats_notify_title">コンピュータが呼んでいるときに通知</string>

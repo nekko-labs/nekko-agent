@@ -55,17 +55,17 @@ export function DiffPane({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-xs">
-        <span className="font-semibold">Changes</span>
-        <span className="chip text-2xs">{changes.length} file{changes.length === 1 ? '' : 's'}</span>
+      <div className="flex min-h-(--q-row) items-center gap-2 px-(--q-pad) py-(--q-inline) text-xs">
+        <span className="text-sm font-semibold">Changes</span>
+        <span className="text-ink-faint tabular-nums">{changes.length} file{changes.length === 1 ? '' : 's'}</span>
         {changes.length > 0 && (
           <span className="ml-auto flex items-center gap-1">
-            <button className="btn btn-ghost px-2 py-0.5 text-2xs" onClick={keepAll} title="Keep every change">Keep all</button>
-            <button className="btn btn-ghost px-2 py-0.5 text-2xs text-red-400" onClick={revertAll} title="Revert every file to its original">Revert all</button>
+            <button className="btn btn-ghost min-h-8! px-3 py-1 text-xs text-danger-text touch:min-h-11!" onClick={revertAll} title="Revert every file to its original">Revert all</button>
+            <button className="btn btn-primary min-h-8! px-3 py-1 text-xs touch:min-h-11!" onClick={keepAll} title="Keep every change">Keep all</button>
           </span>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto pb-(--q-pad)">
         {!loaded ? (
           <p className="p-4 text-xs text-ink-faint">Loading…</p>
         ) : changes.length === 0 ? (
@@ -123,15 +123,15 @@ function FileDiff({ sessionId, change, onChanged }: { sessionId: string; change:
   };
 
   return (
-    <div className="border-b border-line">
-      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1 text-xs" style={{ background: 'var(--surface-2)' }}>
-        <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setOpen((o) => !o)}>
-          <span className="w-2 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
+    <div className="mt-(--q-inline) first:mt-0">
+      <div className="sticky top-0 z-10 flex min-h-(--q-row) items-center gap-2 px-(--q-pad) text-xs" style={{ background: 'var(--paper)' }} data-quiet-row>
+        <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span className={`w-2 text-2xs text-ink-faint transition-transform duration-(--dur-med) ease-(--ease-out) ${open ? 'rotate-90' : ''}`}>▸</span>
           <FileTypeIcon name={name} size={14} />
           <span className="truncate font-medium">{name}</span>
-          {change.original === '' && <span className="chip text-2xs uppercase">new</span>}
-          <span className="ml-1 shrink-0 text-2xs">
-            <span className="text-green-500">+{adds}</span> <span className="text-red-400">-{dels}</span>
+          {change.original === '' && <span className="text-2xs font-medium text-info-text">New</span>}
+          <span className="ml-1 shrink-0 font-mono text-2xs tabular-nums">
+            <span className="text-success-text">+{adds}</span> <span className="text-danger-text">−{dels}</span>
           </span>
         </button>
         <span className="flex shrink-0 items-center gap-1">
@@ -140,16 +140,16 @@ function FileDiff({ sessionId, change, onChanged }: { sessionId: string; change:
               Revert {revert.size} line{revert.size === 1 ? '' : 's'}
             </button>
           )}
-          <button className="btn btn-ghost px-2 py-0.5 text-2xs" onClick={keepFile} title="Keep this file's changes">Keep</button>
-          <button className="btn btn-ghost px-2 py-0.5 text-2xs text-red-400" onClick={revertFile} title="Revert this file to its original">Revert file</button>
+          <button className="btn btn-ghost quiet-row-action px-2 py-0.5 text-2xs" onClick={keepFile} title="Keep this file's changes">Keep</button>
+          <button className="btn btn-ghost quiet-row-action px-2 py-0.5 text-2xs text-danger-text" onClick={revertFile} title="Revert this file to its original">Revert file</button>
         </span>
       </div>
 
       {open && (
         ops === null ? (
-          <p className="px-3 py-2 text-2xs text-ink-faint">File too large to diff inline. Use Keep or Revert file.</p>
+          <p className="px-(--q-pad) py-(--q-inline) text-2xs text-ink-faint">File too large to diff inline. Use Keep or Revert file.</p>
         ) : (
-          <div className="font-mono text-xs leading-relaxed">
+          <div className="mx-(--q-inline) overflow-hidden rounded-lg font-mono text-xs leading-relaxed" style={{ background: 'var(--surface)' }}>
             {ops.map((op, i) => {
               if (op.type === 'eq') {
                 return (
@@ -165,14 +165,14 @@ function FileDiff({ sessionId, change, onChanged }: { sessionId: string; change:
                 <div
                   key={i}
                   onClick={() => toggle(i)}
-                  className={`flex cursor-pointer ${reverted ? 'opacity-50' : ''}`}
+                  className={`flex cursor-pointer transition-opacity duration-(--dur-fast) ${reverted ? 'opacity-50' : ''}`}
                   style={{ background: add ? 'var(--success-soft)' : 'var(--danger-soft)' }}
                   title={reverted ? 'Will be reverted, click to keep' : 'Click to revert this line'}
                 >
-                  <span className="w-5 shrink-0 select-none text-center" style={{ color: add ? 'var(--success)' : 'var(--danger)' }}>
-                    {add ? '+' : '-'}
+                  <span className="w-5 shrink-0 select-none text-center" style={{ color: add ? 'var(--success-text)' : 'var(--danger-text)' }}>
+                    {add ? '+' : '−'}
                   </span>
-                  <span className={`whitespace-pre-wrap wrap-break-word ${reverted ? 'line-through' : ''}`} style={{ color: add ? 'var(--success)' : 'var(--danger)' }}>
+                  <span className={`whitespace-pre-wrap wrap-break-word ${reverted ? 'line-through' : ''}`} style={{ color: add ? 'var(--success-text)' : 'var(--danger-text)' }}>
                     {op.text || ' '}
                   </span>
                 </div>

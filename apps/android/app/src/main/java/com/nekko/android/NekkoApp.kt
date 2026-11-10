@@ -37,6 +37,8 @@ import kotlinx.coroutines.launch
 class NekkoApp : Application() {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    lateinit var phoneChats: com.nekko.android.phone.PhoneChats
+        private set
     lateinit var computers: ComputersRepository
         private set
     lateinit var themePrefs: ThemePrefs
@@ -51,6 +53,8 @@ class NekkoApp : Application() {
         private set
     /** Text shared from other apps on its way to a chat's composer; memory only. */
     val shareInbox = ShareInbox()
+    /** The approval notification's **Always allow this tool**, waiting for that chat's card; memory only. */
+    val alwaysAllow = com.nekko.android.chat.AlwaysAllowLink()
     lateinit var connection: ConnectionKeeper
         private set
     lateinit var haptics: AndroidHaptics
@@ -74,6 +78,7 @@ class NekkoApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        phoneChats = com.nekko.android.phone.PhoneChats(AndroidSecureStore(this), com.nekko.android.phone.DirectPhoneHTTP(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
         // Notify me about: each kind starts as the old single switch was.
@@ -107,6 +112,7 @@ class NekkoApp : Application() {
         appScope.launch {
             appLock.status.first { !it.locked }
             // The phone's default computer (Settings → New chats), else the one used last.
+            phoneChats.load()
             computers.load(preferredId = newChatDefaults.computerId())
         }
         haptics = AndroidHaptics(this, EventHaptics(phonePrefs), computers)
@@ -138,6 +144,8 @@ class NekkoApp : Application() {
             override fun onStop(owner: LifecycleOwner) {
                 // What is typed is on disk before Android may end the app.
                 computers.drafts.flush()
+                // An Always allow left untaken never runs later by itself.
+                alwaysAllow.clear()
                 appLock.onBackground()
                 connection.onForeground(false)
             }

@@ -1826,7 +1826,7 @@
         },
         "body": {
           "model": "claude-opus-5",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "messages": [
             {
@@ -2038,7 +2038,7 @@
         },
         "body": {
           "model": "claude-sonnet-4-6",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "temperature": 1,
           "messages": [
@@ -2059,7 +2059,7 @@
         },
         "body": {
           "model": "claude-sonnet-4-6",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "output_config": {
             "effort": "high"
@@ -2082,7 +2082,7 @@
         },
         "body": {
           "model": "claude-sonnet-4-6",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "output_config": {
             "effort": "high"
@@ -2127,7 +2127,7 @@
         },
         "body": {
           "model": "claude-opus-5",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "output_config": {
             "effort": "xhigh"
@@ -2150,7 +2150,7 @@
         },
         "body": {
           "model": "claude-opus-5",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "temperature": 1,
           "messages": [
@@ -2185,7 +2185,7 @@
         },
         "body": {
           "model": "claude-opus-5",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "messages": [
             {
@@ -2205,7 +2205,7 @@
         },
         "body": {
           "model": "claude-opus-5",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "temperature": 0.7,
           "messages": [
@@ -2226,7 +2226,7 @@
         },
         "body": {
           "model": "claude-opus-5",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "messages": [
             {
@@ -2246,7 +2246,7 @@
         },
         "body": {
           "model": "claude-opus-5",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "messages": [
             {
@@ -2286,7 +2286,7 @@
         },
         "body": {
           "model": "claude-sonnet-4-6",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "temperature": 1,
           "messages": [
@@ -2307,7 +2307,7 @@
         },
         "body": {
           "model": "claude-sonnet-4-6",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "output_config": {
             "effort": "high"
@@ -2330,7 +2330,7 @@
         },
         "body": {
           "model": "claude-sonnet-4-6",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "messages": [
             {
@@ -2363,7 +2363,7 @@
         },
         "body": {
           "model": "claude-opus-5",
-          "max_tokens": 64000,
+          "max_tokens": 128000,
           "stream": true,
           "messages": [
             {

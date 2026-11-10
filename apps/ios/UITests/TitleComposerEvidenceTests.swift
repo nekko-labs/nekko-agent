@@ -4,7 +4,16 @@ import XCTest
 /// No pairing, network requests, credentials or user-owned application data.
 @MainActor
 final class TitleComposerEvidenceTests: XCTestCase {
+    private var theme = "light"
+
     func testTitleAndComposerEvidence() {
+        for appearance in ["light", "dark"] {
+            theme = appearance
+            captureTitleAndComposer()
+        }
+    }
+
+    private func captureTitleAndComposer() {
         var app = launch("-uiTestChatStatus", extra: ["-uiTestLongTitles"])
         XCTAssertTrue(app.buttons["chats.mascot"].waitForExistence(timeout: 10))
         let title = app.descendants(matching: .any).matching(NSPredicate(
@@ -19,7 +28,10 @@ final class TitleComposerEvidenceTests: XCTestCase {
         for id in ["newChat.model", "newChat.effort", "newChat.folder", "newChat.tools"] {
             let control = app.buttons[id]
             XCTAssertTrue(control.exists, id)
-            XCTAssertGreaterThanOrEqual(control.frame.height, 44, id)
+            // CGRect subtraction can report a nominal 44 pt as 43.99999999999994.
+            // Allow only floating-point roundoff, never a smaller touch target.
+            let height = control.frame.height
+            XCTAssertGreaterThanOrEqual(height + height.ulp * 16, 44, id)
             XCTAssertTrue(control.isHittable, id)
         }
         attach(app, "new-chat-options")
@@ -36,12 +48,13 @@ final class TitleComposerEvidenceTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["You are at the latest message."].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["chat.modelEffort"].exists)
         attach(app, "active-chat-composer")
+        app.terminate()
     }
 
     private func launch(_ fixture: String, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [fixture, "-splash", "NO", "-appLock", "NO", "-onboarded", "YES",
-                               "-uiTestReset", "YES", "-theme", "computer", "-expertMode", "YES",
+                               "-uiTestReset", "YES", "-theme", theme, "-expertMode", "YES",
                                "-AppleLanguages", "(en)"] + extra
         app.launch()
         return app
@@ -49,7 +62,7 @@ final class TitleComposerEvidenceTests: XCTestCase {
 
     private func attach(_ app: XCUIApplication, _ name: String) {
         let shot = XCTAttachment(screenshot: app.screenshot())
-        shot.name = name
+        shot.name = "\(theme)-\(name)"
         shot.lifetime = .keepAlways
         add(shot)
     }

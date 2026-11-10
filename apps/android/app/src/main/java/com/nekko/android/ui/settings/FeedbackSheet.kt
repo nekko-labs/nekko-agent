@@ -20,9 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -136,7 +136,7 @@ private fun CopyForAgent(info: Feedback.AppInfo) {
         },
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
-        Icon(if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+        Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.size(8.dp))
         Text(if (copied) stringResource(R.string.settings_copied) else stringResource(R.string.settings_copy_prompt))
     }
@@ -232,7 +232,7 @@ private fun GitHubIssues() {
         onClick = { runCatching { uriHandler.openUri(Feedback.NEW_ISSUE_URL) } },
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
-        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.size(8.dp))
         Text(stringResource(R.string.settings_github_issues))
     }

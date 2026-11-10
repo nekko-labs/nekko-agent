@@ -101,7 +101,10 @@ pub fn preview(
     let workspaces = crate::worktrees::chat_workspaces(session, settings);
     let folders: Vec<nekko_context::Workspace> = workspaces
         .iter()
-        .map(|w| nekko_context::Workspace { name: s(w, "name").to_string(), path: s(w, "path").to_string() })
+        .map(|w| nekko_context::Workspace {
+            name: format!("{}{}", s(w, "name"), nekko_turn::repo_suffix(w)),
+            path: s(w, "path").to_string(),
+        })
         .collect();
     let catalog = nekko_turn::catalog::catalog();
     let turn_wrapper = match settings.get("turnWrapper") {

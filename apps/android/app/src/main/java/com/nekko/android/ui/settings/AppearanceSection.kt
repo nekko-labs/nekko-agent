@@ -23,8 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -147,7 +147,7 @@ private fun LinkRow(title: String, value: String, swatch: ThemePreset? = null, a
         Text(title, style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.weight(1f))
         if (swatch != null || accent != null) Swatch(swatch, accent)
         Text(value, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
+        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
     }
 }
 
@@ -242,7 +242,7 @@ private fun ChoiceRow(
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
         }
         Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
-            if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = p.accent, modifier = Modifier.size(20.dp))
+            if (selected) Icon(Icons.Outlined.Check, contentDescription = null, tint = p.accent, modifier = Modifier.size(20.dp))
         }
     }
 }

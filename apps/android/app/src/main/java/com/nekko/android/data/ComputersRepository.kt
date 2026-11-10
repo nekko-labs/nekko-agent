@@ -349,12 +349,15 @@ class ComputersRepository(
      * minutes), the key registered on first use. A refusal is thrown with
      * words for the owner, e.g. "Changes from this phone are turned off on Studio".
      */
-    suspend fun callChange(channel: String, args: List<JsonElement>, stepUp: StepUpProof? = null, timeoutMs: Long? = null): JsonElement {
+    suspend fun callChange(channel: String, args: List<JsonElement>, stepUp: StepUpProof? = null, timeoutMs: Long? = null, authorize: () -> Unit = {}, retryKeyMissing: Boolean = true): JsonElement {
         val r = remote()
         val signer = changeSigner ?: throw RelayException("This phone can’t confirm changes with a fingerprint or screen lock.")
         val calls = changeCalls?.takeIf { it.first === r }?.second
             ?: ChangeCalls(r, signer, deviceId(), _state.value.active?.name ?: "your computer").also { changeCalls = r to it }
-        return calls.call(channel, args, stepUp, timeoutMs)
+        return calls.call(channel, args, stepUp, timeoutMs, authorize = {
+            check(client === r) { "The computer connection changed. Start the action again." }
+            authorize()
+        }, retryKeyMissing = retryKeyMissing)
     }
 
     /**
@@ -480,10 +483,11 @@ class ComputersRepository(
         _state.update {
             it.copy(
                 activeId = id, conn = RelayState.CONNECTING, denied = null, connDetail = null,
-                summaries = emptyList(), providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(), attention = AttentionState(),
+                summaries = emptyList(), summariesLoaded = false, providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(), attention = AttentionState(),
                 // Another computer, or the same one later: its settings are unknown until it answers.
                 pcSettings = PcSettings(),
                 quitFromPhone = false,
+                imageGeneration = false,
                 remoteStoppedAt = null,
                 lastError = null,
                 savedListAt = null,
@@ -1106,7 +1110,8 @@ class ComputersRepository(
             _state.update { s ->
                 s.copy(
                     summaries = r.summaries, providers = r.providers, defaults = r.defaults, appearance = r.appearance, pcSettings = r.pcSettings,
-                    workspaces = r.workspaces, summariesLoading = false, savedListAt = null,
+                    workspaces = r.workspaces, summariesLoading = false, summariesLoaded = true, savedListAt = null,
+                    imageGeneration = r.info?.imageGeneration == true,
                 )
             }
             _state.update { it.copy(quitFromPhone = r.info?.quitFromPhone == true) }
@@ -1122,6 +1127,27 @@ class ComputersRepository(
         } catch (e: Exception) {
             if (client === c) _state.update { it.copy(summariesLoading = false, lastError = e.message ?: "Could not refresh.") }
         }
+    }
+
+    /** No model installation, file import, removal or cloud fallback from the phone. */
+    suspend fun imageModels(): List<com.nekko.protocol.ImageChatModel> {
+        requireImageOnline()
+        return com.nekko.protocol.ImageChatModel.list(caller.call(Channels.ENGINE_MODELS))
+    }
+
+    private fun requireImageOnline() {
+        if (_state.value.conn != RelayState.ONLINE) throw RelayException("Reconnect to create or send an image chat. Image prompts are never queued as text.")
+        if (!_state.value.imageGeneration) throw RelayException("This computer does not advertise image generation. Update Nekko Agent on the computer.")
+    }
+
+    suspend fun createImageChat(params: com.nekko.protocol.ImageChatParams, workspaceId: String? = null): String {
+        requireImageOnline()
+        val options = params.sessionOptions() // Validate before creating anything.
+        val c = remote()
+        val session = com.nekko.protocol.Session.from(c.call(Channels.SESSION_CREATE, *listOfNotNull(workspaceId?.let(::JsonPrimitive)).toTypedArray()))
+            ?: throw RelayException("Your computer didn’t create the chat.")
+        c.call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(session.id), options)
+        return session.id
     }
 
     suspend fun loadModels(providerId: String): List<ModelInfo> {

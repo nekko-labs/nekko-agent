@@ -16,9 +16,9 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -76,7 +76,7 @@ fun NewChatsSection(deps: SettingsDeps) {
             SettingsRow(
                 title = stringResource(R.string.settings_fact_computer),
                 detail = computerDetail(c, computerPref.ifEmpty { null }),
-                icon = Icons.Filled.Computer,
+                icon = Icons.Outlined.Computer,
                 onClick = if (c.computers.size > 1) ({ dialog = "computer" }) else null,
             )
             if (active != null) {
@@ -84,7 +84,7 @@ fun NewChatsSection(deps: SettingsDeps) {
                 SettingsRow(
                     title = stringResource(R.string.settings_model_on, active.name),
                     detail = modelDetail(c, phonePick),
-                    icon = Icons.Filled.Memory,
+                    icon = Icons.Outlined.Memory,
                     onClick = { dialog = "model" },
                 )
             }
@@ -218,6 +218,6 @@ private fun Choice(title: String, detail: String?, selected: Boolean, icon: Stri
             Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
         }
-        if (selected) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.settings_selected), tint = p.accent, modifier = Modifier.size(18.dp))
+        if (selected) Icon(Icons.Outlined.Check, contentDescription = stringResource(R.string.settings_selected), tint = p.accent, modifier = Modifier.size(18.dp))
     }
 }

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="image_kind_text">聊天</string>
+    <string name="image_kind_image">图像</string>
+    <string name="image_model">本地图像模型</string>
+    <string name="image_models_loading">正在从电脑读取图像模型…</string>
+    <string name="image_no_models">没有可用的图像模型。请在电脑上添加图像模型，然后在此重试。</string>
+    <string name="image_retry_models">重新读取模型</string>
+    <string name="image_model_missing">已保存的模型 %1$s 不可用。请选择此电脑上的图像模型。</string>
+    <string name="image_width">宽度（256–2048，64的倍数）</string>
+    <string name="image_height">高度（256–2048，64的倍数）</string>
+    <string name="image_steps">步数（1–100）</string>
+    <string name="image_cfg">CFG（整数，0–30）</string>
+    <string name="image_seed">种子（-1为随机，最大2147483647）</string>
+    <string name="image_integer_settings">无法为这些设置签名。请明确选择整数；已保存的小数值绝不会被自动取整。</string>
+    <string name="image_working">正在处理…</string>
+    <string name="image_settings">图像设置</string>
+    <string name="image_save_settings">保存图像设置</string>
+    <string name="image_create">开始图像聊天</string>
+    <string name="image_offline">请重新连接以创建或发送图像聊天。图像生成指令绝不会作为文本排队发送。</string>
+    <string name="image_unsupported">此电脑未声明支持图像生成。请更新电脑上的 Nekko Agent。</string>
+    <string name="image_prompt_only">请仅用文本描述图像。不支持附件和技能。生成使用现有的已签名 Change 授权。</string>
+    <string name="image_reply_n">生成的图像 %1$d</string>
+    <string name="image_open">打开图像</string>
+    <string name="image_close">关闭</string>
+    <string name="image_unavailable">无法加载此图像。请重新连接并重试。</string>
+</resources>

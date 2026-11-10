@@ -734,7 +734,7 @@ function SegTabs<T extends string>({
           disabled={o.disabled}
           title={o.title}
           aria-pressed={value === o.id}
-          style={value === o.id ? { background: 'var(--accent)', color: 'var(--on-accent, #fff)' } : { color: 'var(--ink-faint)' }}
+          style={value === o.id ? { background: 'var(--accent)', color: 'var(--on-accent)' } : { color: 'var(--ink-faint)' }}
           onClick={() => onChange(o.id)}
           {...(data ? { [`data-${data}`]: o.id } : {})}
         >

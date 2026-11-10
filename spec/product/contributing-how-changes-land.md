@@ -40,3 +40,20 @@ signal to clear before retrying failed jobs, at most twice per head. Conflicts,
 concurrent pushes and denied updates require human resolution; no token scopes,
 required checks, performance budgets or ruleset settings are weakened. See the
 [failing-checks runbook](../../docs/runbooks/failing-checks.md).
+
+## Native iOS batch completion (#2035)
+
+Implemented in source with local selector, reporting and workflow regression tests;
+hosted macOS/Xcode execution and timeout reduction are not yet verified. Native iOS
+splits the broad fixture suite, themed pairing retries and remaining live journeys
+into three isolated required jobs. Every job keeps its 85-minute budget, existing
+assertions/retries, theme scope, build/bundle audits and screenshot diagnostics.
+The fixture selection remains open-ended for newly added non-live suites.
+
+A failure does not cancel the other shards. Only the aggregate reporter may mark
+`Native iOS (batch)` successful, after every shard passes; skipped, cancelled,
+missing and unknown results cannot pass. Per-shard evidence artifacts have distinct
+names. Existing label-gate acceptance is unchanged. See the
+[landing runbook](../../docs/runbooks/landing-a-pr.md#native-ios-suite-shards-2035)
+for diagnostics and the remaining hosted verification. This is a CI scheduling
+repair, not an iOS app behavior change or a measured speed claim.

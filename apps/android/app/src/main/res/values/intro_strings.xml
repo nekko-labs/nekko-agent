@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Send your first prompt" (FirstPromptIntro.kt): the iPhone's words; step 3 says Send, as Android's chat does (#2234). -->
+<resources>
+    <string name="intro_title">Send your first prompt</string>
+    <string name="intro_start_title">Start with a question</string>
+    <string name="intro_start_body">Type what you want done, the way you’d ask a colleague. You can also tap the mic and say it.</string>
+    <string name="intro_add_title">Add photos and a folder</string>
+    <string name="intro_add_body">Tap + to add photos or paste an image. Pick a folder so Nekko works in the right place on your computer.</string>
+    <string name="intro_send_title">Tap Send, and Nekko gets to work</string>
+    <string name="intro_send_body">Nekko works on your computer and replies here. Before it runs a command or changes anything, it asks you first.</string>
+    <string name="intro_skip">Skip</string>
+    <string name="intro_next">Next</string>
+    <string name="intro_back">Back</string>
+    <string name="intro_done">Get started</string>
+    <string name="intro_step" formatted="true">Step %1$d: %2$s</string>
+</resources>

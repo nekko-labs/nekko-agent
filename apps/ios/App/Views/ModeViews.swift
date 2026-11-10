@@ -166,6 +166,8 @@ func effortLabel(_ e: Effort) -> String {
 /// values and behaviour as More > Tool policy in Expert.
 struct AsksFirstMenu: View {
     let chat: ChatModel
+    /// Simple puts it in the composer's bottom row as just its icon, as the desktop does (#2448).
+    var iconOnly = false
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -178,7 +180,7 @@ struct AsksFirstMenu: View {
     var body: some View {
         ToolPolicyPicker(selection: Binding(get: { mode }, set: { m in
             Task { do { try await chat.setOptions(mode: m) } catch { failed = error.localizedDescription } }
-        }))
+        }), iconOnly: iconOnly)
         .disabled(chat.savedAt != nil)
         .accessibilityIdentifier("chat.asksFirst")
         .alert("Couldn’t change it", isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } })) {
@@ -199,7 +201,7 @@ struct ModelEffortButton: View {
 
     /// Simple mode may hide either half; a chat with no model yet still offers the picker.
     static func parts(_ prefs: Prefs, _ chat: ChatModel) -> (model: Bool, effort: Bool) {
-        (prefs.shows("model") || chat.modelId == nil, prefs.shows("effort"))
+        (chat.isImageChat || prefs.shows("model") || chat.modelId == nil, !chat.isImageChat && prefs.shows("effort"))
     }
 
     var body: some View {
@@ -220,11 +222,12 @@ struct ModelEffortButton: View {
         }
         .buttonStyle(.plain)
         .disabled(chat.savedAt != nil)
-        .accessibilityLabel("Model and effort")
-        .accessibilityValue("\(name), \(chat.effort.map(effortLabel) ?? String(localized: "Computer default"))")
+        .accessibilityLabel(chat.isImageChat ? "Image settings" : "Model and effort")
+        .accessibilityValue(chat.isImageChat ? name : "\(name), \(chat.effort.map(effortLabel) ?? String(localized: "Computer default"))")
         .accessibilityIdentifier("chat.modelEffort")
         .popover(isPresented: $open, arrowEdge: .bottom) {
-            ModelEffortPanel(chat: chat).presentationCompactAdaptation(.popover)
+            if chat.isImageChat { ImageChatSettingsSheet(chat: chat) }
+            else { ModelEffortPanel(chat: chat).presentationCompactAdaptation(.popover) }
         }
     }
 }

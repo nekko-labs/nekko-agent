@@ -20,8 +20,8 @@ const selected: string[] = [];
   onAgentEvent: () => () => {}, openPath: async (url: string) => { opened.push(url); },
 } as any, { get(t, k: string) { if (k in t) return t[k]; throw new Error(`Unexpected fixture API: ${k}`); } });
 Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/store'), import('../src/renderer/views/WorkspacesView')]).then(async ([React, { createRoot }, { useStore }, { AgentSidebar }]) => {
-  await import('@fontsource-variable/inter-tight');
-  await import('@fontsource-variable/jetbrains-mono');
+  await import('@fontsource-variable/geist');
+  await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
   localStorage.removeItem('nekko.agentPanelView');
   localStorage.setItem('nekko.wsSidebarWidth', '440');

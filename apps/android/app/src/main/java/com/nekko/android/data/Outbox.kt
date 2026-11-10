@@ -405,6 +405,8 @@ class Outbox(
                 }
             }
             val session = Session.from(c.call(Channels.SESSION_GET, JsonPrimitive(id))) ?: return Outcome.Refused(DELETED)
+            // Never deliver a stale text-outbox prompt into an image chat (including a chat converted elsewhere).
+            if (session.chatType == "image") return Outcome.Refused("Image prompts cannot use the text outbox. Reconnect and send from the image chat.")
             // Sent before (the answer was lost): delivered.
             if (item.id in session.clientMessageIds) return Outcome.Delivered(id)
             if (session.running) {

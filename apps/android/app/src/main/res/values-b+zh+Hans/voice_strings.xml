@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_conversation">语音对话</string>
+    <string name="voice_explanation">轻点“开始”后说话。每次发言都会发送到此文本聊天。手机会朗读新完成的回复，然后继续聆听。停止、离开、锁屏或断开连接会结束语音，但不会停止智能体的工作。语音指令绝不会排队或重试发送。请保持消息框为空。</string>
+    <string name="voice_start">开始</string>
+    <string name="voice_stop">停止语音</string>
+    <string name="voice_close">关闭</string>
+    <string name="voice_cancel">取消</string>
+    <string name="voice_settings">打开麦克风设置</string>
+    <string name="voice_permission_granted">已允许使用麦克风。请轻点“开始”或再次长按以开始。</string>
+    <string name="voice_permission_denied">请在设置 → 应用 → Nekko Agent → 权限中允许访问麦克风，然后重新开始。</string>
+    <string name="voice_unavailable">此手机需要安装设备端语音识别功能（Android 12或更高版本）。不会回退到云端语音识别。</string>
+    <string name="voice_ready">就绪</string>
+    <string name="voice_listening">正在聆听</string>
+    <string name="voice_waiting">正在思考</string>
+    <string name="voice_speaking">正在朗读</string>
+    <string name="voice_stopped">已停止</string>
+    <string name="voice_heard">你说的内容</string>
+    <string name="voice_reply">回复</string>
+    <string name="voice_hold">按住说话</string>
+    <string name="voice_hold_accessibility">开始或结束长按听写</string>
+</resources>

@@ -2,6 +2,10 @@ package com.nekko.android
 
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -57,6 +61,8 @@ class ChatListViewTest {
         override fun getString(name: String) = store[name]
         override fun putString(name: String, value: String?) { if (value == null) store.remove(name) else store[name] = value }
     })
+    /** The prefs the list reads; a new instance over the same [store] is a cold launch. */
+    private var screenPrefs by mutableStateOf(prefs)
 
     private fun summaries(): String {
         val app = (0 until 10).joinToString(",") { i ->
@@ -106,7 +112,9 @@ class ChatListViewTest {
         }
         compose.setContent {
             NekkoTheme(dark = false) {
-                ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {}, phonePrefs = prefs)
+                key(screenPrefs) {
+                    ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {}, phonePrefs = screenPrefs)
+                }
             }
         }
         compose.waitUntil(10_000) { repo.state.value.summaries.isNotEmpty() && repo.state.value.workspaces.isNotEmpty() }
@@ -162,6 +170,34 @@ class ChatListViewTest {
         compose.onNodeWithText("Reset to defaults").performClick()
         settle()
         assertEquals(ChatListView.STANDARD, prefs.get(ChatListPrefs.VIEW))
+    }
+
+    /** #2133: a closed group stays closed after the list is rebuilt from the saved preferences, as on a cold launch. */
+    @Test fun closedGroupsSurviveARelaunch() {
+        show()
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("APP", useUnmergedTree = true).performClick()
+        settle()
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
+        assertEquals(setOf("w1"), prefs.get(ChatListPrefs.COLLAPSED_GROUPS))
+        shot("6-app-closed")
+
+        // Cold launch: a fresh read of the same preferences file and a new list.
+        screenPrefs = PhonePrefs(object : PrefStore {
+            override fun getString(name: String) = store[name]
+            override fun putString(name: String, value: String?) { if (value == null) store.remove(name) else store[name] = value }
+        })
+        settle()
+        compose.onNodeWithText("APP", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Plan the week", useUnmergedTree = true).assertExists()
+        shot("7-app-closed-after-relaunch")
+
+        // Opening it again is saved too.
+        compose.onNodeWithText("APP", useUnmergedTree = true).performClick()
+        settle()
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
+        assertEquals(emptySet<String>(), screenPrefs.get(ChatListPrefs.COLLAPSED_GROUPS))
     }
 
     private fun settle() {

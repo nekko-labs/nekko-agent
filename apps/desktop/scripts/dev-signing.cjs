@@ -4,7 +4,12 @@
 // requirement. An ad-hoc signature's requirement is the binary's own hash, so
 // every rebuild of nekkod is a new program to the Keychain and asks again for
 // each item. A certificate's requirement names the certificate instead, so a
-// build signed with the same one keeps the user's answers.
+// build signed with the same one keeps that answer.
+//
+// The item's partition list is a second check: it names a team ID, or without
+// one the binary's hash. A self-signed certificate has no team ID (codesign
+// ignores its OU), so each rebuild still asks once there. Checked on macOS 27
+// with a probe in a throwaway keychain (#2471).
 //
 // `scripts/dev-signing-identity.sh` creates that certificate once per Mac
 // ("Nekko Agent Development", self-signed, in the login keychain).
@@ -28,14 +33,14 @@ function devSigningIdentity(env = process.env) {
 /**
  * Sign a development nekkod with the stable identity, if there is one. False
  * (with the reason printed) when it stays ad-hoc: it still runs, but macOS
- * asks again for Keychain access after each rebuild.
+ * asks twice for Keychain access after each rebuild.
  */
 function signDevDaemon(path, env = process.env) {
   if (process.platform !== 'darwin') return true;
   const identity = devSigningIdentity(env);
   if (!identity) {
-    console.warn('nekkod is ad-hoc signed, so macOS asks again for Keychain access after every rebuild. '
-      + 'Run apps/desktop/scripts/dev-signing-identity.sh once to keep your answers (docs/signing.md, "Development builds").');
+    console.warn('nekkod is ad-hoc signed, so macOS asks twice for Keychain access after every rebuild. '
+      + 'Run apps/desktop/scripts/dev-signing-identity.sh once to be asked once per rebuild instead (docs/signing.md, "Development builds").');
     return false;
   }
   const signed = spawnSync('/usr/bin/codesign', ['--force', '--sign', identity, '--identifier', DAEMON_IDENTIFIER, path], { stdio: 'inherit' });

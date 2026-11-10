@@ -1,8 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { SECURITY_KEY_UNTESTED_NOTE, type SecurityStatus } from '@nekko-agent/shared';
-import { SecuritySettingsView } from './SecuritySettings.js';
+import { SECURITY_KEY_UNTESTED_NOTE, WEBAUTHN_CANCELLED, type SecurityStatus } from '@nekko-agent/shared';
+import { SecuritySettingsView, registerKey } from './SecuritySettings.js';
 import { StepUpSheetView, usableKeys } from './StepUpSheet.js';
 
 vi.mock('../../store.js', () => ({ useStore: Object.assign(() => undefined, { getState: () => ({ pushToast: vi.fn() }) }) }));
@@ -32,7 +32,7 @@ const html = (o: Partial<Parameters<typeof SecuritySettingsView>[0]> = {}) =>
       passkeys
       rpId="localhost"
       now={NOW}
-      onAddKey={vi.fn()}
+      onAddKey={vi.fn().mockReturnValue(false)}
       onTotpBegin={vi.fn()}
       onTotpConfirm={vi.fn()}
       onTotpCancel={vi.fn()}
@@ -113,6 +113,50 @@ describe('Settings → Security', () => {
 
   it('says a damaged security.json refuses every guarded action', () => {
     expect(html({ status: status({ enabled: true, damaged: true }) })).toContain('security.json can’t be read');
+  });
+});
+
+describe('registering a key (#2390)', () => {
+  const begin = {
+    rpName: 'This computer',
+    rpId: 'localhost',
+    userId: 'u',
+    userName: 'owner',
+    userDisplayName: 'Owner',
+    challenge: 'c',
+    timeoutMs: 120_000,
+    excludeCredentials: [],
+  };
+  const ceremony = (r: unknown) => vi.fn().mockResolvedValue(r);
+  const api = (webAuthnCeremony: ReturnType<typeof ceremony>, registerKeyImpl = vi.fn().mockResolvedValue({ status: status() })) =>
+    ({
+      securityRegisterBegin: vi.fn().mockResolvedValue(begin),
+      webAuthnCeremony,
+      securityRegisterKey: registerKeyImpl,
+    }) as unknown as Parameters<typeof registerKey>[0];
+
+  it('passes the typed name through and reports what was added', async () => {
+    const register = vi.fn().mockResolvedValue({ status: status(), recoveryCodes: ['a'] });
+    const a = api(ceremony({ ok: true, mode: 'create', rpId: 'localhost', id: 'k1', clientDataJSON: 'cd', attestationObject: 'at' }), register);
+    await expect(registerKey(a, 'security-key', 'YubiKey 5C')).resolves.toMatchObject({ recoveryCodes: ['a'] });
+    expect(register).toHaveBeenCalledWith(expect.objectContaining({ name: 'YubiKey 5C', kind: 'security-key', id: 'k1' }));
+  });
+
+  it('registers nothing and says nothing when the owner closes the window', async () => {
+    const register = vi.fn();
+    const a = api(ceremony({ ok: false, cancelled: true, error: WEBAUTHN_CANCELLED }), register);
+    await expect(registerKey(a, 'passkey', 'Touch ID')).resolves.toBeNull();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('still says what happened when the key never answered, though nothing was registered', async () => {
+    const a = api(ceremony({ ok: false, cancelled: true, error: 'The security key didn’t answer in time.' }));
+    await expect(registerKey(a, 'security-key', 'YubiKey')).rejects.toThrow('didn’t answer in time');
+  });
+
+  it('throws what the key said when the ceremony fails', async () => {
+    const a = api(ceremony({ ok: false, cancelled: false, error: 'The key was not recognised.' }));
+    await expect(registerKey(a, 'security-key', 'Titan')).rejects.toThrow('The key was not recognised.');
   });
 });
 

@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +43,7 @@ import com.nekko.android.connection.TailnetStatus
 import androidx.compose.runtime.remember
 import com.nekko.android.BuildConfig
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.RelayStatus
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import com.nekko.android.R
@@ -109,6 +110,8 @@ fun ConnectionBanner(
     val tailnetHint = remember(s.conn, route) {
         if (s.conn == RelayState.ONLINE) null else Tailnet.hint(route, TailnetStatus.phoneOnTailnet(), active.name)
     }
+    // The relay's name doesn't resolve: the paired address is gone, so say so instead of "Connecting…" forever.
+    val hostGone = s.conn == RelayState.CONNECTING && s.connDetail == RelayStatus.HOST_NOT_FOUND
     val (tone, line) = when {
         stopped && s.conn != RelayState.ONLINE ->
             Tone.WARNING to stringResource(R.string.chats_banner_stopped, active.name)
@@ -117,6 +120,7 @@ fun ConnectionBanner(
         s.conn == RelayState.ONLINE -> Tone.SUCCESS to stringResource(R.string.chats_banner_online, active.name)
         hint != null -> Tone.DANGER to RelayHint.message(hint, active.name)
         tailnetHint != null -> Tone.WARNING to tailnetHint
+        hostGone -> Tone.DANGER to stringResource(R.string.chats_banner_host_not_found, Pairing.relayHost(route), active.name)
         s.conn == RelayState.OFFLINE -> Tone.WARNING to stringResource(R.string.chats_banner_offline, active.name)
         else -> Tone.WARNING to stringResource(R.string.chats_banner_connecting, active.name)
     }
@@ -151,7 +155,7 @@ fun ConnectionBanner(
         ) {
             Dot(tone)
             Column(Modifier.weight(1f)) {
-                Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied || badKey) 5 else 2, overflow = TextOverflow.Ellipsis)
+                Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied || badKey || hostGone) 5 else 2, overflow = TextOverflow.Ellipsis)
                 if (s.conn == RelayState.ONLINE && !denied) {
                     Text(
                         stringResource(R.string.chats_encrypted_via, Pairing.relayHost(route)),
@@ -161,7 +165,7 @@ fun ConnectionBanner(
                 }
             }
             Icon(
-                if (repair) Icons.Filled.QrCode2 else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                if (repair) Icons.Outlined.QrCode2 else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null,
                 tint = p.inkFaint,
                 modifier = Modifier.size(18.dp),
@@ -169,7 +173,7 @@ fun ConnectionBanner(
             if (exits != null) {
                 Box {
                     IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chats_safety_options, active.name), tint = p.inkSoft)
+                        Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.chats_safety_options, active.name), tint = p.inkSoft)
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         SafetyExitMenuItems(s, exits, onPicked = { menu = false })

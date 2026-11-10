@@ -109,6 +109,42 @@ On a PR, Native iOS checks dark mode only when the change touches colours
 (`scripts/ios-theme-scope.mjs`); add `ci:theme` to force light and dark for theme work
 the script cannot see. The nightly run always checks both.
 
+### Native iOS suite shards (#2035)
+
+Implemented in source, locally regression-tested; hosted Xcode execution and
+per-shard duration remain unverified. The required `protocol-and-build` matrix
+has three isolated jobs, each keeping the existing 85-minute timeout:
+
+- **fixtures:** every unit/fixture UI suite except `LiveRelayTests`, selected by
+  the same broad exclusion so future non-live suites are included automatically.
+- **pairing:** the pair/stream/approval journey for every scoped appearance, with
+  both fresh-stack attempts preserved.
+- **journeys:** the remaining seven live journeys, serial against fresh stacks.
+
+All legs retain the protocol/relay checks, build and bundle audits. Repeating setup
+costs more runner time but avoids transferring simulator builds between hosts.
+`fail-fast: false` lets the other legs finish and retain their diagnostics if
+one fails. Screenshot export remains unconditional, with distinct artifacts:
+`native-ios-evidence-fixtures`, `native-ios-evidence-pairing` and
+`native-ios-evidence-journeys`. Failed live stacks still print their logs.
+
+Only the dependent `report-batch` job reports `Native iOS (batch)` after the
+whole matrix finishes, never an individual leg. Only aggregate success passes;
+failure, cancellation, skipped, missing or unknown results block. A superseded
+cancelled batch leaves the newer batch's statuses alone. If reporting itself
+cannot run or the status API fails, no fallback success is posted. A green fixture
+or pairing leg alone is not a passing batch. The label gate and theme scope are
+unchanged.
+
+Before calling the timeout repair hosted-verified, inspect a full macOS run:
+all three legs and their durations under 85 minutes, the scoped appearances,
+all screenshot artifacts, and the aggregate status on the batch's PR heads.
+Local regression command (Node built-ins only, no workspace build required):
+
+```
+node --test scripts/ios-suite-shards.test.mjs scripts/ios-batch.test.mjs scripts/ios-theme-scope.test.mjs scripts/ci-label-gate.test.mjs
+```
+
 ### Ready, not draft
 
 Open the PR **ready** once your own verification passes (focused tests, and for UI

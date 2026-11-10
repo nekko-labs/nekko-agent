@@ -38,6 +38,7 @@ public enum PhoneProviders {
     static let claude: [PhoneModel] = [
         PhoneModel(id: "claude-opus-5-5", name: "Claude Opus 5.5"),
         PhoneModel(id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5"),
+        PhoneModel(id: "claude-fable-5-2", name: "Claude Fable 5.2"),
         PhoneModel(id: "claude-fable-5-1", name: "Claude Fable 5.1"),
         PhoneModel(id: "claude-haiku-5-5", name: "Claude Haiku 5.5"),
         PhoneModel(id: "claude-opus-4-8", name: "Claude Opus 4.8"),

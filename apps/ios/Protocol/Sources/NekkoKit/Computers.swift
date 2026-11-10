@@ -224,6 +224,8 @@ public final class ComputersStore {
     /// The active computer lets a phone quit Nekko Agent on it (`app:info`
     /// `quitFromPhone`, SK-3): only then does the phone offer *Quit*.
     public private(set) var quitFromPhone = false
+    public private(set) var imageGeneration = false
+    public private(set) var imageModels: [ImageChatModel] = []
     /// A safety exit this phone used (SK-8): why the connection ended, for the banner.
     public private(set) var safetyExit: SafetyExit?
     /// Computers this phone signed out of that haven't heard yet (SK-8), by name.
@@ -1211,6 +1213,7 @@ public final class ComputersStore {
             let appInfo = AppInfo.from(r.4)
             hostVersion = appInfo.version
             quitFromPhone = appInfo.quitFromPhone
+            imageGeneration = appInfo.imageGeneration
             learnPlatform(appInfo.platform, for: activeId, name: appInfo.computerName ?? appInfo.hostname)
             // A failed read says nothing about the icon; an answer without one clears it.
             if r.4 != nil, let id = activeId { learnIcon(appInfo.machineIcon, for: id) }
@@ -1427,6 +1430,38 @@ public final class ComputersStore {
         return session.id
     }
 
+    /// Read-only eligible model discovery. No downloads, installs, paths or cloud calls.
+    @discardableResult
+    public func loadImageModels() async throws -> [ImageChatModel] {
+        guard conn == .online, imageGeneration else {
+            imageModels = []
+            throw RelayError("Connect to a computer that supports image chats. Older hosts need an update.")
+        }
+        let r = try remote()
+        let raw = try await call(read: Channels.engineModels)
+        guard client === r else { throw RelayError("The selected computer changed. Choose an image model again.") }
+        imageModels = ImageChatModel.list(raw)
+        return imageModels
+    }
+
+    public func createImageChat(params: ImageChatParams, workspaceId: String?) async throws -> String {
+        let r = try remote()
+        let models = try await loadImageModels()
+        guard params.valid, models.contains(where: { $0.id == params.modelId }) else {
+            throw RelayError("Choose an available local image model and valid image settings.")
+        }
+        guard client === r else { throw RelayError("The selected computer changed. Start again.") }
+        let created = try await r.call(Channels.sessionCreate, workspaceId.map { [.string($0)] } ?? [])
+        guard let s = Session.from(created) else { throw RelayError("Your computer didn’t create the image chat.") }
+        defer { scheduleSummaries() }
+        guard client === r else { throw RelayError("The selected computer changed. Open the chat on its original computer.") }
+        let saved = try await r.call(Channels.sessionSetOptions, [.string(s.id), params.sessionOptions])
+        guard let configured = Session.from(saved), configured.chatType == "image", configured.imageParams == params else {
+            throw RelayError("The host did not save image-chat settings. Nothing was sent; update Nekko Agent on the computer.")
+        }
+        return s.id
+    }
+
     /// Re-read the chat list soon (a chat was made or changed from here).
     public func reloadList() { scheduleSummaries() }
 
@@ -1474,6 +1509,8 @@ public final class ComputersStore {
         hostProtocol = nil
         relayDelivers = nil
         quitFromPhone = false
+        imageGeneration = false
+        imageModels = []
         lastError = nil
     }
 
