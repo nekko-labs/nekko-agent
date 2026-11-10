@@ -58,3 +58,13 @@ Local ignored evidence: `.shots/android-cloud-2414/continued/`:
 6. SecureStore writes across slots are not transactional. Failed writes can leave partial persistence; a failed Forget write cannot guarantee durable deletion. Partial streamed text can be lost on process death because writes occur at attempt start/cleanup, not each token.
 
 Parent must not treat these captured files as visually reviewed evidence. This branch is a committed implementation checkpoint, not authorization to publish or merge a PR.
+
+## Authorized publication continuation
+
+The parent subsequently authorized push and a **draft** Android PR, not merge. This supersedes the publication prohibition above, not its evidence limitations. The iPhone counterpart remains separate, unshipped draft PR #2462. Both PRs use `Refs #2414`; the issue stays open until both land. No iOS files or parent worktree were edited.
+
+Latest `origin/main` merged cleanly as `694cf532e`. On this integrated result, `:protocol:test` (455 declared, 454 passed, one opt-in skip), `:app:testDebugUnitTest` (576 passed), `:app:assembleDebug`, `:app:assembleDebugAndroidTest` and `:app:lintDebug` passed. Spec-index and whitespace checks passed. Logs remain ignored under `.shots/android-cloud-2414/`.
+
+Selected existing captures are published as **captured, inspection pending**, not visual approval. Parent is inspecting the local evidence served at `localhost:18414`. Published continuation captures are associated with `ad7039c52`, not the latest integration; upstream icon changes may affect the integrated appearance. The first-run before APK is the older saved base `5f886f7a4`, not rebuilt current main. Both facts must remain visible in the PR. New provider/chat surfaces have no before state. Required visual inspection and integrated-result evidence remain release blockers until confirmed; no merge is authorized by this checkpoint.
+
+Historical incident, not corrected away: the original session launched the existing `Medium_Phone_API_36.1` AVD with `-wipe-data`, possibly clearing pre-existing emulator-only data. No restoration is claimed. The physical phone was untouched. The continuation used only the separate `PhoneCloud2414` isolated AVD; this does not undo the original incident.
