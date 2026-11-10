@@ -343,7 +343,7 @@ struct PanesView: View {
 
     private func tipRow(_ tip: PaneLayout) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "rectangle.split.2x1").foregroundStyle(palette.accent).accessibilityHidden(true)
+            Image(systemName: "rectangle.split.2x1").foregroundStyle(palette.inkSoft).accessibilityHidden(true)
             Text("Watch both? Show the two chats side by side.").font(.footnote).foregroundStyle(palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)

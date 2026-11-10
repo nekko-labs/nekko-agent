@@ -115,7 +115,7 @@ struct PairLinkIllustration: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 24, weight: .bold))
                                 .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, palette.success)
+                                .foregroundStyle(palette.paper, palette.success)
                                 .background(Circle().fill(palette.paper).padding(-2))
                                 .offset(x: 6, y: 4)
                                 .scaleEffect(cheering ? 1 : 0.01)

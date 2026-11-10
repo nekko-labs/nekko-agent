@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
     if (!before) {
       check('secret never rendered', await run('!document.body.innerHTML.includes("synthetic-secret-never-render")'));
       check('personal and organization named', await run('document.body.innerText.includes("Personal") && document.body.innerText.includes("Acme Inc")'));
-      check('shared login email shown once in the Claude group', await run('[...document.querySelectorAll("[data-provider-group=\\"claude\\"] [data-account-email]")].length === 1'));
+      check('the shown account says its email and which account it is', await run('document.querySelector("[data-provider-group=\\"claude\\"] [data-account-who]")?.textContent === "alex@example.test · Personal plan"'));
       check('chip names the account', await run('document.querySelector("[data-model-chip-account]")?.textContent === "Personal"'));
       // One click on the organization tab moves the chat to the same model there.
       await run('[...document.querySelectorAll("[role=radio]")].find((b) => b.textContent.includes("Acme Inc")).click()');

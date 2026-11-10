@@ -170,6 +170,26 @@ fn redact_urls(value: &str) -> String {
     out
 }
 
+/// The sub-agent model preference (`orchestration.subagentModel`), unset
+/// being `auto`. Mirrors `SubagentModelChoice` in packages/shared.
+pub fn subagent_preference(orchestration: Option<&Value>) -> &'static str {
+    match orchestration.and_then(|o| o.get("subagentModel")).and_then(Value::as_str) {
+        Some("auto-same-provider") => "auto-same-provider",
+        Some("auto-local") => "auto-local",
+        Some("inherit") => "inherit",
+        _ => "auto",
+    }
+}
+
+fn subagent_preference_text(orchestration: Option<&Value>) -> &'static str {
+    match subagent_preference(orchestration) {
+        "auto-same-provider" => "a lighter model than this chat's, on this chat's provider",
+        "auto-local" => "a local model when one is set up, else a lighter model on this chat's provider",
+        "inherit" => "this chat's own provider and model",
+        _ => "a lighter model than this chat's, chosen by Nekko",
+    }
+}
+
 /// `routingPrompt(providers, orchestration)`: ids and labels only, secrets and URLs redacted.
 pub fn routing_prompt(providers: &[Value], orchestration: Option<&Value>) -> String {
     let secrets: Vec<&str> = providers
@@ -195,7 +215,10 @@ pub fn routing_prompt(providers: &[Value], orchestration: Option<&Value>) -> Str
     [
         "Sub-agent routing: enabled configured providers (IDs and labels only):".to_string(),
         js::stringify(&Value::Array(enabled)),
-        "Omit provider_id and model_id to inherit this chat's provider and model. An explicit provider change requires an explicit exact model ID for that provider.".into(),
+        format!(
+            "Omit provider_id and model_id to use the user's sub-agent model preference: {}. An explicit provider change requires an explicit exact model ID for that provider.",
+            subagent_preference_text(orchestration)
+        ),
         "Use delegation_targets to discover exact chat-model IDs on the intended provider before explicit delegation; never guess. If discovery fails, report the blocker or ask the user, not a different provider. Explicit and user-configured default routes are validated before creating a child.".into(),
         format!(
             "User-selected delegation default: {}. When set, omitted routing arguments use this route, not the parent. Explicit arguments override it.",

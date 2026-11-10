@@ -807,6 +807,16 @@ private fun ChatScreenContent(
                                 dictation = dictationCommands,
                             )
                         },
+                        // The desktop composer's order after + (#2448): the chat's folder, then Simple's asks-first icon.
+                        leading = {
+                            chat.workspaceId?.let { id ->
+                                val name = computers.workspaces.firstOrNull { it.id == id }?.name ?: stringResource(R.string.chats_folder)
+                                com.nekko.android.ui.chat.ComposerFolderChip(name, enabled = chat.savedAt == null, onOpenFiles = vm::openFiles)
+                            }
+                            if (chat.chatType != "image" && !simple.expert && simple.shown("asks")) {
+                                com.nekko.android.ui.chat.ComposerAsksIcon(chat.mode ?: vm.defaultMode, enabled = online) { showMode = true }
+                            }
+                        },
                         footer = {
                             if (chat.chatType == "image") {
                                 TextButton(onClick = { showImageSettings = true }, modifier = Modifier.testTag("image.settings")) {

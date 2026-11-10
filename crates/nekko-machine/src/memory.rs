@@ -15,7 +15,9 @@
 //! Nekko's own processes, the system's and anything under 1 GiB are never
 //! named. Closing an app asks it the way a person would (Windows: `taskkill`
 //! without `/F`, which sends a close to its windows; macOS: AppleScript `quit`;
-//! Linux: `SIGTERM`), so it can still ask to save.
+//! Linux: `SIGTERM`), so it can still ask to save. WSL's VM (`vmmem`) is never
+//! an app to close, but what it holds is answered on its own (`wsl_bytes`), so
+//! the card can say when Docker or Linux tools hold the memory.
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -64,6 +66,11 @@ pub struct MemoryState {
     pub top_app: Option<App>,
     /// What Nekko's own processes hold (the daemon and its model servers).
     pub nekko_bytes: Option<u64>,
+    /// Windows only, read with the process list: what WSL's VM holds (Docker
+    /// and Linux tools run there). Never `top_app`, since quitting it is not an
+    /// app close, but the card says so when it holds the most. None when
+    /// nothing of WSL's is running.
+    pub wsl_bytes: Option<u64>,
 }
 
 /// One process as the judge sees it.
@@ -207,6 +214,91 @@ pub fn top_app(procs: &[Proc], own: &HashSet<u32>) -> Option<App> {
     Some(top)
 }
 
+/// WSL's VM: `vmmem`, or `vmmemWSL` on newer Windows.
+fn is_wsl(process: &str) -> bool {
+    matches!(app_name(process).to_ascii_lowercase().as_str(), "vmmem" | "vmmemwsl")
+}
+
+/// What WSL's VM holds: its `vmmem` / `vmmemWSL` processes, summed. None when
+/// there is none, or it holds nothing.
+pub fn wsl_bytes(procs: &[Proc]) -> Option<u64> {
+    let bytes: u64 = procs.iter().filter(|p| is_wsl(&p.name)).map(|p| p.bytes).sum();
+    (bytes > 0).then_some(bytes)
+}
+
+/// What WSL's VM holds now, given the process list just read. sysinfo opens a
+/// process to read its memory, and a person's account cannot open `vmmemWSL`,
+/// so sysinfo reads it as 0 bytes: when the VM is running, its private commit
+/// comes from the kernel's process snapshot instead, which needs no handle.
+#[cfg(windows)]
+fn wsl_now(procs: &[Proc]) -> Option<u64> {
+    if !procs.iter().any(|p| is_wsl(&p.name)) {
+        return None;
+    }
+    wsl_bytes(procs).max(wsl_bytes(&snapshot()))
+}
+
+#[cfg(not(windows))]
+fn wsl_now(_procs: &[Proc]) -> Option<u64> {
+    None
+}
+
+/// Every process with its private commit, from `NtQuerySystemInformation`
+/// (what Task Manager and `Get-Process` read). No parents: only names and bytes.
+#[cfg(windows)]
+fn snapshot() -> Vec<Proc> {
+    use windows_sys::Wdk::System::SystemInformation::{NtQuerySystemInformation, SystemProcessInformation};
+    use windows_sys::Win32::System::WindowsProgramming::SYSTEM_PROCESS_INFORMATION;
+    const STATUS_INFO_LENGTH_MISMATCH: i32 = 0xC000_0004_u32 as i32;
+    let entry = std::mem::size_of::<SYSTEM_PROCESS_INFORMATION>();
+    let mut len = 1usize << 20;
+    // The list can grow between asking its size and reading it: a few tries.
+    for _ in 0..4 {
+        // u64s, so every entry the kernel writes is aligned.
+        let mut buf = vec![0u64; len.div_ceil(8)];
+        let bytes = buf.len() * 8;
+        let mut needed = 0u32;
+        // SAFETY: the buffer is `bytes` long, writable and 8-aligned.
+        let status = unsafe {
+            NtQuerySystemInformation(SystemProcessInformation, buf.as_mut_ptr().cast(), bytes as u32, &mut needed)
+        };
+        if status == STATUS_INFO_LENGTH_MISMATCH {
+            len = (needed as usize).max(len) + (64 << 10);
+            continue;
+        }
+        if status < 0 {
+            return Vec::new();
+        }
+        let base = buf.as_ptr().cast::<u8>();
+        let mut procs = Vec::new();
+        let mut offset = 0usize;
+        while offset + entry <= bytes {
+            // SAFETY: an entry the kernel wrote, inside the buffer (checked
+            // above); its name points into the same buffer, which is alive.
+            let info = unsafe { &*base.add(offset).cast::<SYSTEM_PROCESS_INFORMATION>() };
+            let name = if info.ImageName.Buffer.is_null() {
+                String::new()
+            } else {
+                String::from_utf16_lossy(unsafe {
+                    std::slice::from_raw_parts(info.ImageName.Buffer, info.ImageName.Length as usize / 2)
+                })
+            };
+            procs.push(Proc {
+                pid: info.UniqueProcessId as usize as u32,
+                parent: None,
+                name,
+                bytes: info.PrivatePageCount as u64,
+            });
+            if info.NextEntryOffset == 0 {
+                break;
+            }
+            offset += info.NextEntryOffset as usize;
+        }
+        return procs;
+    }
+    Vec::new()
+}
+
 /// What each process holds. On Windows that is its private commit (what
 /// counts against the limit); elsewhere its resident memory, since the
 /// virtual size there includes every mapping.
@@ -253,13 +345,13 @@ pub fn state(detail: bool) -> MemoryState {
     let (total, available) = (sys.total_memory(), sys.available_memory());
     let commit = commit();
     let level = level(total, available, commit);
-    let (top_app, nekko_bytes) = if detail || level != Level::Ok {
+    let (top_app, nekko_bytes, wsl_bytes) = if detail || level != Level::Ok {
         let procs = processes();
         let own = own_pids(&procs, std::process::id());
         let nekko = procs.iter().filter(|p| own.contains(&p.pid)).map(|p| p.bytes).sum();
-        (top_app(&procs, &own), Some(nekko))
+        (top_app(&procs, &own), Some(nekko), wsl_now(&procs))
     } else {
-        (None, None)
+        (None, None, None)
     };
     MemoryState {
         level,
@@ -269,6 +361,7 @@ pub fn state(detail: bool) -> MemoryState {
         commit_available_bytes: commit.map(|c| c.1),
         top_app,
         nekko_bytes,
+        wsl_bytes,
     }
 }
 
@@ -340,9 +433,42 @@ fn terminate(name: &str, pids: &[u32]) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    const GB: u64 = 1 << 30;
+
+    fn proc(pid: u32, name: &str, bytes: u64) -> Proc {
+        Proc { pid, parent: None, name: name.into(), bytes }
+    }
+
+    #[test]
+    fn wsl_is_its_vm_summed_and_never_the_top_app() {
+        let procs = [
+            proc(1, "vmmemWSL", 23 * GB),
+            proc(2, "vmmem", GB),
+            proc(3, "VMMEM.EXE", GB / 2),
+            proc(4, "claude.exe", 6 * GB),
+            proc(5, "vmmemwslhelper", 4 * GB),
+        ];
+        assert_eq!(wsl_bytes(&procs), Some(23 * GB + GB + GB / 2));
+        // The VM is not an app to close: the card names it another way.
+        assert_eq!(top_app(&procs, &HashSet::new()).map(|a| a.name), Some("claude".into()));
+    }
+
+    #[test]
+    fn no_wsl_is_none() {
+        assert_eq!(wsl_bytes(&[proc(1, "chrome.exe", 3 * GB)]), None);
+        assert_eq!(wsl_bytes(&[proc(1, "vmmemWSL", 0)]), None);
+        assert_eq!(wsl_bytes(&[]), None);
+    }
+
     #[test]
     fn reads_this_machine() {
         let s = super::state(true);
+        // WSL's VM, when it runs, is read: it always holds something.
+        if cfg!(windows) && super::processes().iter().any(|p| super::is_wsl(&p.name)) {
+            assert!(s.wsl_bytes.is_some_and(|b| b > 0), "vmmem is running but read as nothing");
+        }
         assert!(s.total_bytes > 0 && s.available_bytes <= s.total_bytes);
         assert!(s.nekko_bytes.is_some_and(|b| b > 0), "the test process itself counts as Nekko");
         assert_eq!(s.commit_limit_bytes.is_some(), cfg!(windows));

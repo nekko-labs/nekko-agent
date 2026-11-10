@@ -11,7 +11,8 @@ struct VoiceConversationButton: View {
 
     var body: some View {
         Button { open = true } label: {
-            Image(systemName: "mic.fill").font(.title3)
+            // The desktop composer's mic (#2448).
+            ComposerGlyph(name: "mic")
                 .foregroundStyle(palette.inkSoft).frame(width: 44, height: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -22,11 +22,13 @@ struct LiveStatusGlyph: View {
 extension LiveChatState {
     var tint: Color {
         switch self {
-        case .needsYou: return Color(red: 1, green: 0.62, blue: 0.04)
-        case .working: return Color(red: 0.30, green: 0.76, blue: 0.54)
-        case .watching: return Color(red: 0.04, green: 0.52, blue: 1)
-        case .done: return Color(red: 0.19, green: 0.82, blue: 0.35)
-        case .failed: return Color(red: 1, green: 0.27, blue: 0.23)
+        // Dark Nekko's state tokens (docs/design-system.md, Agent status); the card keeps a
+        // finished chat's check in success, its one "it worked" cue on the Lock Screen.
+        case .needsYou: return BrandColor.attentionOnDark
+        case .working: return BrandColor.successOnDark
+        case .watching: return BrandColor.inkFaintOnDark
+        case .done: return BrandColor.successOnDark
+        case .failed: return BrandColor.dangerOnDark
         }
     }
 
@@ -110,6 +112,20 @@ struct CrossGlyph: Shape {
         var path = Path()
         path.move(to: CGPoint(x: 4.5, y: 4.5)); path.addLine(to: CGPoint(x: 13.5, y: 13.5))
         path.move(to: CGPoint(x: 13.5, y: 4.5)); path.addLine(to: CGPoint(x: 4.5, y: 13.5))
+        return scaled(path, rect)
+    }
+}
+
+/// A warning triangle: the list's "stopped on an error", as desktop's `StatusIcon`.
+struct WarningGlyph: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 9, y: 2.5))
+        path.addLine(to: CGPoint(x: 16.5, y: 15.5))
+        path.addLine(to: CGPoint(x: 1.5, y: 15.5))
+        path.closeSubpath()
+        path.move(to: CGPoint(x: 9, y: 7)); path.addLine(to: CGPoint(x: 9, y: 10.5))
+        path.addEllipse(in: CGRect(x: 8.4, y: 12.6, width: 1.2, height: 1.2))
         return scaled(path, rect)
     }
 }

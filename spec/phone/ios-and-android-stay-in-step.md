@@ -11,7 +11,7 @@ Philip asked (2026-11-02) that the two phone apps do the same things, for what e
 
 1. **Same features.** A feature on one app belongs on the other, existing or new. Someone who changes phones should lose nothing.
 2. **Only a true OS exclusive stays on one app.** If the other OS has an equivalent, build that, the way Apple Pay on iPhone maps to Samsung Pay or Google Pay on Android. A feature stays one-sided only when the other OS has nothing that can do the job, and this file says so.
-3. **Native manners, one look.** Each app follows its own platform's design guidance (Apple's Human Interface Guidelines, Material on Android) for navigation, controls, sheets, type and motion. The Nekko themes, mascot, wording and the order of what a screen shows stay the same, so the two read as one product.
+3. **Native manners, one look.** Each app follows its own platform's design guidance (Apple's Human Interface Guidelines, Material on Android) for navigation, controls, sheets, type and motion. The Nekko themes, mascot, wording and the order of what a screen shows stay the same, so the two read as one product. Icons follow the design system's colours and styles on both (#2451, `[implemented 2026-11-10; Android compiled and unit-tested locally, iOS checked on macOS CI]`): platform line symbols for controls in `inkSoft` at rest, the accent only for a selection, a link or the main action, our own status glyphs for agent status, and the theme's accent as the app-wide tint, so nothing shows the system blue.
 4. **A gap is written down.** When one app gets a feature first, the same PR files a GitHub issue for the other app and adds a row to the gaps table below. Removing the row is part of closing the gap.
 
 ## Acceptance
@@ -45,7 +45,7 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
 | Native proof | No new native test/evidence pass or physical-device proof claimed | No new native test/evidence pass or physical-device proof claimed | Run native builds/tests, inspect matched evidence and verify device auth/microphone/lifecycle before closing the verification gap. |
 | Chat environment: repositories and question actions (desktop since #2404) | Actioned `ask_user` options show as plain answers; no repository list | Same | [#2415](https://github.com/nekko-labs/nekko-agent/issues/2415) |
-| GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Being built | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | iPhone: [#2423](https://github.com/nekko-labs/nekko-agent/issues/2423). Both: the native store rating request once on the App Store and Google Play (planned). |
+| GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Built 2026-11-09 ([#2423](https://github.com/nekko-labs/nekko-agent/issues/2423)): inline card, link to the repository only, verified in Native iOS CI, not on a device | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | Both: the native store rating request once on the App Store and Google Play (planned). |
 
 ## Pending response messages (#2476, not shipped)
 
@@ -79,7 +79,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Connectors page (with the brand logos the iPhone has had since 2026-11-09) | Missing | [#2109](https://github.com/nekko-labs/nekko-agent/issues/2109) |
 | Full-screen photos, previews before and after sending | No photo viewer | [#2111](https://github.com/nekko-labs/nekko-agent/issues/2111) |
 | Edit photos in image chats: attach photos to a prompt, Edit under a made picture | Not implemented on Android | [#2230](https://github.com/nekko-labs/nekko-agent/issues/2230) |
-| Usage by computer and by this phone | One computer's totals | [#2114](https://github.com/nekko-labs/nekko-agent/issues/2114) |
 | Plan sheet on the composer | Missing (the iPhone's `PlanSheet.swift`) | [#2115](https://github.com/nekko-labs/nekko-agent/issues/2115) |
 | Live card: chats as chips that open the chat | Focused chat and its actions only | [#2116](https://github.com/nekko-labs/nekko-agent/issues/2116) |
 | Dark launcher icon and Spooky seasonal icon | Neither; Android can swap launcher icons with an activity alias | [#2118](https://github.com/nekko-labs/nekko-agent/issues/2118) |
@@ -88,7 +87,14 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Customize page: view, this phone's tone, skills | Missing; Simple/Detailed is in the pill | [#2426](https://github.com/nekko-labs/nekko-agent/issues/2426) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
+| New chat as a composer (the desktop's bottom row: +, folder, asks-first, mic, Start) | A form; only its Chat / Image toggle matches the iPhone's (#2448) | [#2459](https://github.com/nekko-labs/nekko-agent/issues/2459) |
 
 Android features the iPhone lacks have not been audited yet.
 
 Nothing is recorded as a true OS exclusive yet.
+
+## Quiet transcript follow-up
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Planned | [#2453](https://github.com/nekko-labs/nekko-agent/issues/2453) |

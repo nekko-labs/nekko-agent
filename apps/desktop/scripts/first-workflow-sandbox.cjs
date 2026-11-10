@@ -39,7 +39,6 @@ app.whenReady().then(async () => {
       if (process.env.NEKKO_TEST_LABEL !== 'before') {
         if (label === 'desktop') await record();
         await check(label + ': no horizontal overflow', 'document.documentElement.scrollWidth <= innerWidth');
-        await run("document.querySelector('[data-workflow-category=shopping] summary').click()"); await sleep(200);
         await capture(label + '-shopping');
         if (label === 'phone') {
           await run("document.querySelector('[data-workflow-category=shopping]').scrollIntoView({block:'start'})"); await sleep(100);
@@ -58,7 +57,7 @@ app.whenReady().then(async () => {
         await run("document.querySelector('[data-workflow-continue]').click()"); await sleep(400);
         await capture(label + '-editor');
         if (label === 'desktop') await record();
-        await check(label + ': editable prompt carries URL', "document.body.innerText.includes('Create workflow') && [...document.querySelectorAll('textarea')].some(e=>e.value.includes('https://example.com/product'))");
+        await check(label + ': editable prompt carries URL', "document.body.innerText.includes('Create scheduled task') && [...document.querySelectorAll('textarea')].some(e=>e.value.includes('https://example.com/product'))");
         await check(label + ': nothing created or run', 'window.workflowEvidence.calls.length === 0');
       }
     }
@@ -66,26 +65,25 @@ app.whenReady().then(async () => {
       for (const scene of ['loading', 'error', 'existing']) {
         await win.loadFile(path.join(out, 'index.html'), { query: { scene } }); await sleep(300);
         await check(scene + ': no wizard', '!document.querySelector("[data-first-workflow-wizard]")');
-        await check(scene + ': correct state', scene === 'existing' ? "!!document.querySelector('[data-workflow-row=existing]')" : `document.body.innerText.includes('${scene === 'loading' ? 'Loading workflows' : 'Could not load workflows'}')`);
+        await check(scene + ': correct state', scene === 'existing' ? "!!document.querySelector('[data-workflow-row=existing]')" : `document.body.innerText.includes('${scene === 'loading' ? 'Loading scheduled tasks' : 'Could not load scheduled tasks'}')`);
         if (scene === 'existing') {
           await run("(()=>{const el=document.querySelector('input[placeholder]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'No match');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
           await sleep(150);
           await check('filtered empty: no wizard', "!document.querySelector('[data-first-workflow-wizard]') && document.body.innerText.includes('Nothing matches those filters')");
         }
       }
-      // Keyboard-accessible disclosure and Back keep the chosen category.
+      // Every idea is a keyboard-reachable row, and Back returns to the ideas.
       await win.loadFile(path.join(out, 'index.html')); await sleep(300);
-      await run("document.querySelector('[data-workflow-category=developer] summary').focus()");
-      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Space' });
-      win.webContents.sendInputEvent({ type: 'char', keyCode: ' ' });
-      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Space' }); await sleep(200);
-      await check('keyboard opens category', "document.querySelector('[data-workflow-category=developer]').open");
-      await run("document.querySelector('[data-workflow-example=prs]').click()"); await sleep(200);
+      await run("document.querySelector('[data-workflow-example=prs]').focus()");
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+      win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' }); await sleep(200);
+      await check('keyboard picks an idea', "!!document.querySelector('[data-workflow-personalize]')");
       await check('review explains connection requirement', "document.body.innerText.includes('GitHub access and a project folder')");
       await run("document.querySelector('[data-workflow-personalize] button').click()"); await sleep(200);
-      await check('Back preserves category', "document.querySelector('[data-workflow-category=developer]').open");
+      await check('Back returns to every idea', "document.querySelectorAll('[data-workflow-example]').length === 6");
       await run("[...document.querySelectorAll('button')].find(e=>e.textContent.includes('Browse all templates')).click()"); await sleep(200);
-      await check('template escape hatch', "document.body.innerText.includes('Ready to use') && document.body.innerText.includes('Blank workflow')");
+      await check('template escape hatch', "document.body.innerText.includes('Ready to use') && document.body.innerText.includes('Blank scheduled task')");
       await check('all navigation remains local', 'window.workflowEvidence.calls.length === 0');
       encodeRecording(frames, path.join(out, 'desktop-wizard-walkthrough.gif'));
     }

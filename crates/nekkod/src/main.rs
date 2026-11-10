@@ -89,6 +89,7 @@ mod skill_sources;
 mod small_services;
 mod spawn;
 mod speeds;
+mod subagent_model;
 mod subagents;
 mod taint;
 mod telemetry;

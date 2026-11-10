@@ -394,6 +394,8 @@ const api: NekkoApi = {
   connectConnector: (kind: ConnectorKind, token, settings) => inv(IpcChannels.connectorConnect, kind, token, settings),
   disconnectConnector: (kind: ConnectorKind) => inv(IpcChannels.connectorDisconnect, kind),
   fetchConnector: (kind: ConnectorKind, query) => inv(IpcChannels.connectorFetch, kind, query),
+  detectConnectors: () => inv(IpcChannels.connectorsDetect),
+  importConnectorCli: (kind: ConnectorKind) => inv(IpcChannels.connectorImportCli, kind),
 
   detectAgentTools: () => inv(IpcChannels.integrationsDetect),
   installSubagent: (tool, target) => inv(IpcChannels.integrationsInstall, tool, target),
