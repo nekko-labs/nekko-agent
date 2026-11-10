@@ -24,7 +24,7 @@ This is not the existing "data profile" (the `~/.nekko-agent` folder, [legacy co
 
 ## What the user sees
 
-- **Switcher.** The profile's mark (a coloured square with its initial) and name sit at the top of the navigation panel. It opens a menu of profiles, each with one line of agent status in words ("1 needs you · 2 working"), then New profile and Manage profiles. `Ctrl/Cmd+1..9` switches. The whole window crossfades (200ms); nothing from the old profile stays on screen.
+- **Switcher.** The profile's mark (a coloured square with its initial) sits at the bottom of the left rail, under Send feedback; its name shows beside it when the rail expands (Philip, 2026-11-10: at the bottom of the navbar, not the top). It opens a menu upward with two jobs. Quick switch: the profiles as dense rows, each with its agent status in words ("1 needs you · 2 working"). Then Profile details, which opens Settings > Profiles on the current profile, and New profile. `Ctrl/Cmd+1..9` switches. The whole window crossfades (200ms); nothing from the old profile stays on screen.
 - **Agents keep working.** Switching away does not stop a profile's agents, scheduled runs or workflows. Their approvals wait in that profile; the switcher row and the OS notification say which profile needs you. A notification names the profile and the chat title only when that profile's own notification setting allows it.
 - **A chat belongs to one profile for life.** New chats, sub-agents, scheduled agents and workflow runs take the profile they were made in.
 - **New profile.** Name and colour. It starts empty. Optional one-time copies from the current profile: look and shortcuts, permission rules, skills and prompts. Chats, saved notes, folders, connectors and sign-ins are never copied.
