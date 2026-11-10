@@ -9,10 +9,19 @@ struct ChatRefreshFixture: View {
         store: RefreshFixtureSecrets(), makeConnection: { _ in RefreshFixtureConnection() },
         deviceName: { "Test iPhone" }, deriveKey: { _, _ in Data(repeating: 0, count: 32) })
     @State private var ready = false
+    @State private var path: [Route] = []
 
     var body: some View {
         NavigationStack {
-            if ready { ChatView(sessionId: "refresh-fixture") }
+            if ready {
+                if ProcessInfo.processInfo.arguments.contains("-refreshReconnect") { NewChatView(path: $path) }
+                else { ChatView(sessionId: "refresh-fixture") }
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if ProcessInfo.processInfo.arguments.contains("-refreshStream") {
+                StreamingGeometryProbe().frame(width: 1, height: 1).allowsHitTesting(false)
+            }
         }
         .environment(store)
         .task {
@@ -20,6 +29,7 @@ struct ChatRefreshFixture: View {
             _ = try? await store.pair(PairingLink(relayUrl: "ws://localhost:1440", room: "a1b2c3d4e5f60718",
                                                 key: "00112233445566778899aabbccddeeff",
                                                 hostKey: "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE=", pair: "ABCD2345"))
+            if let id = store.activeId { store.rename(id, to: "Gomi") }
             ready = true
         }
     }
@@ -35,8 +45,9 @@ private final class RefreshFixtureSecrets: SecureStore, @unchecked Sendable {
 private final class RefreshFixtureConnection: RemoteConnection, @unchecked Sendable {
     private let lock = NSLock()
     private var reads = 0
+    private var event: (@Sendable (String, JSONValue) -> Void)?
     func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?,
-                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {}
+                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) { lock.withLock { event = onEvent } }
     func connect() {}
     func close() {}
     func nudge() {}
@@ -49,6 +60,17 @@ private final class RefreshFixtureConnection: RemoteConnection, @unchecked Senda
         if read > 1 { try await Task.sleep(for: .seconds(3)) }
         // The transcript arrives after the empty chat is on screen, as from a computer far away.
         else if ProcessInfo.processInfo.arguments.contains("-refreshSlowFirstRead") { try await Task.sleep(for: .seconds(1)) }
+        if read == 1 && ProcessInfo.processInfo.arguments.contains("-refreshStream") {
+            let handler = lock.withLock { event }
+            Task {
+                try? await Task.sleep(for: .seconds(4))
+                let words = (1...30).map { "Streaming line \($0): the incoming answer should stay steady while words arrive.\n\n" }.joined().split(separator: " ", omittingEmptySubsequences: false)
+                for word in words {
+                    handler?(Events.agentEvent, ["type": "text", "sessionId": "refresh-fixture", "delta": .string(String(word) + " ")])
+                    try? await Task.sleep(for: .milliseconds(70))
+                }
+            }
+        }
         let count = ProcessInfo.processInfo.arguments.contains("-refreshLongChat") ? 30 : 2
         let messages: [JSONValue] = (1...count).map { i in
             ["id": .string("m-\(i)"), "role": .string(i % 2 == 0 ? "assistant" : "user"),

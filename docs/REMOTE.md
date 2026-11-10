@@ -20,6 +20,12 @@ Photos added with **+ → Photos** or **Paste image** appear inside the message 
 
 The primary Home Screen icon follows iOS icon appearance: the light version keeps the white Nekko outline on plum, and the dark version uses the brand-plum outline on charcoal. Choose **Dark** or **Automatic** in the Home Screen customization controls. The seasonal alternate icon is unchanged.
 
+## Reconnecting and reading replies on iPhone and iPad
+
+When a paired computer is unavailable, New chat separates its reconnecting status from the drafting hint. You can write your message and choose Send while waiting; the queued text stays on this device until the computer reconnects. Drafting without choosing Send does not queue a message. Image chats and supporting folders that require confirmation retain their specific reconnect instructions.
+
+On iOS 18 and later, an open computer chat follows the measured growth of the reply while you are at the end. Scroll into history to stop following, then tap **Jump to latest** to resume. iOS 17 retains the previous scrolling implementation. The reconnect ellipsis stays still with Reduce Motion enabled.
+
 ## Groups on iPhone
 
 New chat-list groups start folded. Tap a heading to reveal its chats or fold it again. Your last choice for each group is remembered on this iPhone or iPad, including after leaving the list or restarting the app; it does not sync to your computer. Its activity icon stays visible while folded, showing attention, working, watching or done. Search temporarily reveals matching chats without changing your saved group choices. General and ungrouped chats stay visible, as does the separate Needs you section.

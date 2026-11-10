@@ -194,8 +194,8 @@ struct ChatView: View {
                         Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
                     }
                     Color.clear.frame(height: 1).id("bottom")
-                        .onAppear { atBottom = true }
-                        .onDisappear { atBottom = false }
+                        .onAppear { if #unavailable(iOS 18.0) { atBottom = true } }
+                        .onDisappear { if #unavailable(iOS 18.0) { atBottom = false } }
                 }
                 // A vertical ScrollView must propose the viewport's exact column
                 // width. Text's pixel-rounded ideal width can otherwise grow it
@@ -219,6 +219,9 @@ struct ChatView: View {
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
+             .modifier(TranscriptFollow(atBottom: $atBottom,
+                 follow: { proxy.scrollTo("bottom", anchor: .bottom) },
+                 readerScrolled: { settling?.cancel() }))
             .contentMargins(.top, pillRoom, for: .scrollContent)
             .hidesPillOnScroll($pillHidden)
           }
@@ -234,8 +237,13 @@ struct ChatView: View {
                 let layoutChanged = chat.blocksLayout != followedLayout
                 followedLayout = chat.blocksLayout
                 guard atBottom else { return }
-                proxy.scrollTo("bottom", anchor: .bottom)
-                if layoutChanged { settleAtEnd(proxy) }
+                // iOS 18+ follows laid-out height, not every token. New lazy rows still settle.
+                if #available(iOS 18.0, *) {
+                    if layoutChanged { settleAtEnd(proxy) }
+                } else {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                    if layoutChanged { settleAtEnd(proxy) }
+                }
             }
             // A chat that opens with its transcript already there (the saved copy) settles too.
             .onAppear {
@@ -465,6 +473,7 @@ struct ChatView: View {
     }
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        atBottom = true
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
     }
 
