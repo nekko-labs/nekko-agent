@@ -34,7 +34,7 @@ final class PhoneCloudDiscoveryTests: XCTestCase {
 
     func testOldModelLoadCannotOverwriteNewerLoad() async throws {
         let http = DelayedPhoneModels()
-        let s = PhoneChats(secrets: MemoryStore(), http: http)
+        let s = PhoneChats(secrets: MemoryStore(), files: MemoryOfflineFiles(), http: http)
         let p = try s.add(kind: "openai", label: "OpenAI", baseUrl: nil, key: "k")
         let old = Task { await s.loadModels(p.id) }
         try await wait(http, count: 1)
@@ -72,11 +72,12 @@ final class PhoneCloudDiscoveryTests: XCTestCase {
 
     func testFailedTestDoesNotPassBecauseModelsWereCached() async throws {
         let http = FakePhoneHTTP()
-        let s = PhoneChats(secrets: MemoryStore(), http: http)
+        http.answers = [(200, [#"{"data":[{"id":"gpt-cached"}]}"#])]
+        let s = PhoneChats(secrets: MemoryStore(), files: MemoryOfflineFiles(), http: http)
         let p = try s.add(kind: "openai", label: "OpenAI", baseUrl: nil, key: "k")
         _ = await s.loadModels(p.id)
         XCTAssertFalse(s.models[p.id]?.isEmpty ?? true)
-        http.responses = [(401, Data("secret".utf8))]
+        http.answers = [(401, ["secret"])]
         let error = await s.test(p.id)
         XCTAssertNotNil(error)
         XCTAssertFalse(error?.contains("secret") ?? true)
