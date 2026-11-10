@@ -47,7 +47,19 @@ impl Shared {
             .map_err(|e| e.clone())
     }
 
-    fn save(&self, state: &mut State, service: &str, name: &str, value: Option<String>) -> Result<(), String> {
+    /// Write the profile's item with `name` changed. `verify` reads it back
+    /// first, for a migration only: there the old item about to be removed is
+    /// the value's only other copy. Every Keychain call can be a dialog of its
+    /// own (an "Allow" answers one call, not the process), so a plain change
+    /// trusts the write rather than asking again to read it back (#2527).
+    fn save(
+        &self,
+        state: &mut State,
+        service: &str,
+        name: &str,
+        value: Option<String>,
+        verify: bool,
+    ) -> Result<(), String> {
         if let Some(error) = &state.write_error {
             return Err(error.clone());
         }
@@ -59,7 +71,7 @@ impl Shared {
         let raw = serde_json::to_string(&next).map_err(|e| e.to_string())?;
         let saved = self.store.write(&raw).and_then(|()| {
             // Never remove an old item until the replacement really reads back.
-            if self.store.read()?.as_deref() == Some(raw.as_str()) {
+            if !verify || self.store.read()?.as_deref() == Some(raw.as_str()) {
                 Ok(())
             } else {
                 Err("could not verify Nekko Agent's saved credentials; restart to retry".into())
@@ -107,7 +119,7 @@ impl Vault for ConsolidatedVault {
         };
         state.legacy.insert(key, value.clone());
         let value = value?;
-        if self.shared.save(&mut state, &self.service, name, Some(value.clone())).is_ok() {
+        if self.shared.save(&mut state, &self.service, name, Some(value.clone()), true).is_ok() {
             self.shared.store.remove_legacy(&self.service, name);
         }
         Some(value)
@@ -116,7 +128,8 @@ impl Vault for ConsolidatedVault {
     fn set(&self, name: &str, value: &str) -> Result<(), String> {
         let _call = super::waits::begin();
         let mut state = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
-        self.shared.save(&mut state, &self.service, name, Some(value.into()))?;
+        // Unverified: an old copy of `name` removed below is one this value replaces.
+        self.shared.save(&mut state, &self.service, name, Some(value.into()), false)?;
         state.legacy.remove(&(self.service.clone(), name.into()));
         if !state.legacy_denied {
             self.shared.store.remove_legacy(&self.service, name);
@@ -129,7 +142,7 @@ impl Vault for ConsolidatedVault {
         let mut state = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
         // Persist a tombstone: an old item that cannot be removed must not return
         // after a restart. A denied or corrupt vault is never overwritten.
-        if self.shared.save(&mut state, &self.service, name, None).is_ok() {
+        if self.shared.save(&mut state, &self.service, name, None, false).is_ok() {
             state.legacy.remove(&(self.service.clone(), name.into()));
             if !state.legacy_denied {
                 self.shared.store.remove_legacy(&self.service, name);
