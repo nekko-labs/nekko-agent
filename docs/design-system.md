@@ -82,6 +82,7 @@ Everything else (connected, expiring, offline) is a dot and a word: `StatusDot` 
 - Each plays its motion **once** on the control's hover, focus or press, then rests. Never loop. Decorative and disabled icons stay still. Reduced motion stops playback.
 - `--ink-soft` at rest, `--ink` on hover, `--accent` only when the control is on.
 - Status glyphs and the Nekko mascot are ours; provider logos keep their own marks.
+- **Phones** keep their platform's symbol set for controls (SF Symbols on iOS, Material Symbols Outlined on Android, line weight; the Gentleface PR and permission marks where both apps bundle them), coloured by the same rule: `inkSoft` at rest, the accent only for a selected check, a link or the screen's main action. Agent status is always our glyphs (`ChatStatusIcon`, `LiveStatusGlyph` on iOS, `StatusGlyph` on Android). The theme's accent is also UIKit's window tint on iOS, so popovers, menus and alerts never fall back to system blue.
 
 ## Motion
 

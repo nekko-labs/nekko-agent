@@ -217,7 +217,7 @@ struct ChatsView: View {
             withAnimation { flip(&prefs.openedChatGroups, g.key) }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.accent)
+                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.inkSoft)
                     .rotationEffect(.degrees(open ? 90 : 0))
                 // By computer: the place's mark in its colour, as on its rows.
                 if let id = sourceId(g), let place = ChatPlace.of(id, store: store) {

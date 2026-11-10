@@ -53,7 +53,7 @@ struct ToolPolicyPicker: View {
                         open = false
                     } label: {
                         HStack(spacing: 10) {
-                            Self.image(mode).frame(width: 22).foregroundStyle(palette.accent)
+                            Self.image(mode).frame(width: 22).foregroundStyle(palette.inkSoft)
                             Text(SimpleMode.asksName(mode)).lineLimit(1).minimumScaleFactor(0.75)
                             Spacer(minLength: 4)
                             Image(systemName: "checkmark").opacity(selection == mode ? 1 : 0)
