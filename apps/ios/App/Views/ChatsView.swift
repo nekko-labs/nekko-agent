@@ -283,9 +283,9 @@ struct ChatsView: View {
             // subtitle); its choices open in the system's submenu.
             Section {
                 Menu {
-                    Picker("Group by", selection: bind(.groupBy)) {
+                    Picker("Group by", selection: bind(\.groupBy)) {
                         // By computer, as the desktop offers it, once chats come from more than one place.
-                        ForEach(ChatListView.GroupBy.allCases.filter { $0 != .computer || places.count > 1 }, id: .self) {
+                        ForEach(ChatListView.GroupBy.allCases.filter { $0 != .computer || places.count > 1 }, id: \.self) {
                             Text(Self.groupName($0)).tag($0)
                         }
                     }
