@@ -23,13 +23,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -159,7 +156,7 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?, showReas
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Icon(Icons.Filled.Psychology, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
+                Icon(Icons.Outlined.Psychology, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
                 Text(
                     when {
                         thinkingOnly && !open -> stringResource(R.string.chat_thinking)
@@ -225,7 +222,7 @@ fun StepsLine(steps: Int, running: Boolean, durationMs: Long?, open: Boolean, on
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (running) CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-        else Icon(Icons.Filled.Check, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
+        else Icon(Icons.Outlined.Check, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
         val words = TurnSteps.Words(stringResource(R.string.simple_steps_one), stringResource(R.string.simple_steps_other), stringResource(R.string.simple_steps_working), stringResource(R.string.simple_steps_took))
         Text(TurnSteps.label(steps, running, durationMs, words), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f))
         TextButton(onClick = onToggle) { Text(stringResource(if (open) R.string.simple_steps_hide else R.string.simple_steps_show), style = MaterialTheme.typography.labelLarge, color = p.accent) }
@@ -246,7 +243,7 @@ private fun Voiced(voice: Voice?, content: @Composable () -> Unit) {
         null -> content()
         Voice.WORKING -> Box {
             content()
-            Icon(Icons.Filled.Psychology, contentDescription = null, tint = p.inkFaint, modifier = Modifier.offset(x = (-15).dp, y = 4.dp).size(13.dp))
+            Icon(Icons.Outlined.Psychology, contentDescription = null, tint = p.inkFaint, modifier = Modifier.offset(x = (-15).dp, y = 4.dp).size(13.dp))
         }
         Voice.REPLY, Voice.ATTENTION -> {
             val tone = if (voice == Voice.REPLY) p.accent else p.warning
@@ -325,7 +322,7 @@ fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<Purp
             }
             RowChip("${calls.size}", tone = AgentRows.Tone.QUIET)
             Icon(
-                if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                 contentDescription = null,
                 tint = p.inkFaint,
                 modifier = Modifier.size(18.dp),

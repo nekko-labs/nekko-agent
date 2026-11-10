@@ -3,8 +3,8 @@ package com.nekko.android.ui.screens
 import androidx.annotation.StringRes
 import com.nekko.android.R
 import androidx.compose.ui.res.stringResource
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.clickable
@@ -24,12 +24,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.QrCode2
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -89,7 +89,7 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
                 title = { Text(stringResource(R.string.settings_computers)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back)) }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.settings_back)) }
                 },
             )
         },
@@ -115,7 +115,7 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
                     )
                 }
                 Button(onClick = onPair, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 4.dp)) {
-                    Icon(Icons.Filled.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
                     Text(if (s.computers.isEmpty()) stringResource(R.string.settings_pair_computer) else stringResource(R.string.settings_pair_another))
                 }
@@ -232,7 +232,7 @@ private fun ComputerCard(
                 }
             }
             if (active) Pill(stringResource(R.string.settings_active), Tone.ACCENT)
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
         }
         if (active && s.lastError != null && state == CardState.ONLINE) {
             Text(s.lastError, style = MaterialTheme.typography.bodySmall, color = p.danger)
@@ -240,12 +240,12 @@ private fun ComputerCard(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             when {
                 active && state == CardState.DENIED -> Button(onClick = onPair, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Icon(Icons.Filled.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
                     Text(stringResource(R.string.settings_pair_again))
                 }
                 active -> OutlinedButton(onClick = onUse, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
                     Text(stringResource(R.string.settings_reconnect))
                 }
@@ -258,22 +258,22 @@ private fun ComputerCard(
                     onClick = { menu = true },
                     modifier = Modifier.size(48.dp).clip(CircleShape).background(p.surface2),
                 ) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.settings_more_options_for, c.name), tint = p.inkSoft)
+                    Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.settings_more_options_for, c.name), tint = p.inkSoft)
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.settings_details)) },
-                        leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
                         onClick = { menu = false; onOpen() },
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.settings_rename)) },
-                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
                         onClick = { menu = false; onRename() },
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.settings_forget_this_computer), color = p.danger) },
-                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = p.danger) },
+                        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = p.danger) },
                         onClick = { menu = false; onForget() },
                     )
                 }

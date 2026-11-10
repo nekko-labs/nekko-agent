@@ -25,13 +25,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FrontHand
-import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FrontHand
+import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
@@ -150,9 +150,9 @@ fun StepMark(status: ToolStatus) {
     val p = Nekko.palette
     when (status) {
         ToolStatus.RUNNING -> RunningDots()
-        ToolStatus.WAITING -> Mark(Icons.Filled.FrontHand, p.warning)
-        ToolStatus.OK -> Mark(Icons.Filled.Check, p.success)
-        ToolStatus.ERROR -> Mark(Icons.Filled.Close, p.danger)
+        ToolStatus.WAITING -> Mark(Icons.Outlined.FrontHand, p.warning)
+        ToolStatus.OK -> Mark(Icons.Outlined.Check, p.success)
+        ToolStatus.ERROR -> Mark(Icons.Outlined.Close, p.danger)
     }
 }
 
@@ -218,7 +218,7 @@ private fun RowHead(
 
 @Composable
 private fun Chevron(open: Boolean) {
-    Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = Nekko.palette.inkFaint, modifier = Modifier.size(18.dp))
+    Icon(if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, contentDescription = null, tint = Nekko.palette.inkFaint, modifier = Modifier.size(18.dp))
 }
 
 /** One tool call: its mark, its label and, when it has output, a chevron that opens the code well. */
@@ -323,7 +323,7 @@ fun WatchWakeRow(wake: AgentRows.Wake, content: String, at: Long?) {
             onClick = { open = !open },
             description = stringResource(R.string.chat_watch_triggered_description, wake.trigger, wake.detail),
             state = if (open) stringResource(R.string.chat_wake_text_shown) else stringResource(R.string.chat_wake_text_hidden),
-            mark = { Mark(Icons.Filled.Bolt, p.accent) },
+            mark = { Mark(Icons.Outlined.Bolt, p.accent) },
             trailing = {
                 if (at != null && at > 0) {
                     Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at)), style = MaterialTheme.typography.labelSmall, color = p.inkFaint)
@@ -378,10 +378,10 @@ fun SubagentRow(b: Block.Tool, ctx: AgentContext) {
             mark = {
                 when (state) {
                     AgentRows.SubagentStatus.WORKING -> RunningDots()
-                    AgentRows.SubagentStatus.WAITING -> Mark(Icons.Filled.FrontHand, p.warning)
-                    AgentRows.SubagentStatus.COMPLETED -> Mark(Icons.Filled.Check, p.success)
-                    AgentRows.SubagentStatus.FAILED -> Mark(Icons.Filled.Close, p.danger)
-                    AgentRows.SubagentStatus.STOPPED -> Mark(Icons.Filled.Pause, p.inkFaint)
+                    AgentRows.SubagentStatus.WAITING -> Mark(Icons.Outlined.FrontHand, p.warning)
+                    AgentRows.SubagentStatus.COMPLETED -> Mark(Icons.Outlined.Check, p.success)
+                    AgentRows.SubagentStatus.FAILED -> Mark(Icons.Outlined.Close, p.danger)
+                    AgentRows.SubagentStatus.STOPPED -> Mark(Icons.Outlined.Pause, p.inkFaint)
                 }
             },
             trailing = { model?.let { RowChip(AgentRows.shortModelName(it.first), tone = AgentRows.Tone.QUIET) } },

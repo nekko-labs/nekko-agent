@@ -4,7 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
@@ -86,5 +86,5 @@ fun ComputerIcon(name: String?, modifier: Modifier = Modifier, size: Dp = 16.dp,
 @Composable
 fun ComputerTileIcon(name: String?, size: Dp, tint: Color) {
     if (computerIconRes(name) != null) ComputerIcon(name, size = size, tint = tint)
-    else Icon(Icons.Filled.Computer, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+    else Icon(Icons.Outlined.Computer, contentDescription = null, tint = tint, modifier = Modifier.size(size))
 }

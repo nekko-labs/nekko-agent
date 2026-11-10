@@ -28,26 +28,26 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.CompareArrows
-import androidx.compose.material.icons.automirrored.filled.MergeType
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.CompareArrows
+import androidx.compose.material.icons.automirrored.outlined.MergeType
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Difference
-import androidx.compose.material.icons.filled.RemoveCircleOutline
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Difference
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.AccountTree
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Upload
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -201,8 +201,8 @@ private fun Page(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        if (close) Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_close))
-                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.tools_back))
+                        if (close) Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.tools_close))
+                        else Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.tools_back))
                     }
                 },
                 actions = { actions() },
@@ -223,7 +223,7 @@ private fun StatusPage(git: GitController, onClose: () -> Unit, open: (GitPage) 
         "Git", onClose, close = true,
         actions = {
             IconButton(onClick = { scope.launch { git.load(refresh = true) } }, enabled = s.busy == null) {
-                Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh))
+                Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.tools_refresh))
             }
         },
     ) { padding ->
@@ -267,7 +267,7 @@ private fun StatusList(git: GitController, s: GitState, open: (GitPage) -> Unit,
                 val st = s.status
                 if (st != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("git.branch")) {
-                        Icon(Icons.Filled.AccountTree, contentDescription = null, tint = p.accent, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Outlined.AccountTree, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(18.dp))
                         Column(Modifier.weight(1f)) {
                             Text(st.position, style = MaterialTheme.typography.titleMedium, color = p.ink, fontFamily = FontFamily.Monospace)
                             Text(
@@ -278,11 +278,11 @@ private fun StatusList(git: GitController, s: GitState, open: (GitPage) -> Unit,
                     }
                 }
                 st?.pr?.let { pr ->
-                    Link(Icons.AutoMirrored.Filled.MergeType, pr.summary) { open(GitPage.Pr(pr)) }
+                    Link(Icons.AutoMirrored.Outlined.MergeType, pr.summary) { open(GitPage.Pr(pr)) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { scope.launch { git.push() } }, enabled = enabled, modifier = Modifier.testTag("git.push")) {
-                        Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Outlined.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.tools_git_push))
                     }
@@ -305,13 +305,13 @@ private fun StatusList(git: GitController, s: GitState, open: (GitPage) -> Unit,
         item(key = "commit") { CommitBox(git, s) }
         item(key = "links") {
             Card {
-                Link(Icons.Filled.History, stringResource(R.string.tools_git_history)) { open(GitPage.History) }
+                Link(Icons.Outlined.History, stringResource(R.string.tools_git_history)) { open(GitPage.History) }
                 HorizontalDivider(color = p.line)
-                Link(Icons.Filled.AccountTree, stringResource(R.string.tools_git_branches)) { open(GitPage.Branches) }
+                Link(Icons.Outlined.AccountTree, stringResource(R.string.tools_git_branches)) { open(GitPage.Branches) }
                 HorizontalDivider(color = p.line)
-                Link(Icons.AutoMirrored.Filled.CompareArrows, stringResource(R.string.tools_git_compare)) { open(GitPage.Compare) }
+                Link(Icons.AutoMirrored.Outlined.CompareArrows, stringResource(R.string.tools_git_compare)) { open(GitPage.Compare) }
                 HorizontalDivider(color = p.line)
-                Link(Icons.AutoMirrored.Filled.MergeType, stringResource(R.string.tools_git_open_pr), Modifier.testTag("git.openPr")) { open(GitPage.CreatePr) }
+                Link(Icons.AutoMirrored.Outlined.MergeType, stringResource(R.string.tools_git_open_pr), Modifier.testTag("git.openPr")) { open(GitPage.CreatePr) }
             }
             Text(
                 stringResource(R.string.tools_git_phone_changes),
@@ -397,13 +397,13 @@ private fun CommitBox(git: GitController, s: GitState) {
                 enabled = s.busy == null && s.staged.files.isNotEmpty(),
                 modifier = Modifier.testTag("git.writeMessage"),
             ) {
-                Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.tools_git_write_message))
             }
             Spacer(Modifier.weight(1f))
             Button(onClick = { scope.launch { git.commit() } }, enabled = s.canCommit, modifier = Modifier.testTag("git.commit")) {
-                Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.tools_git_commit))
             }
@@ -438,7 +438,7 @@ private fun FileRow(file: GitFile, modifier: Modifier = Modifier) {
             file.oldPath?.let { Text(stringResource(R.string.tools_git_from, it), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = p.inkFaint) }
         }
         when {
-            file.hidden -> Icon(Icons.Filled.VisibilityOff, contentDescription = stringResource(R.string.tools_git_not_shown), tint = p.inkFaint, modifier = Modifier.size(18.dp))
+            file.hidden -> Icon(Icons.Outlined.VisibilityOff, contentDescription = stringResource(R.string.tools_git_not_shown), tint = p.inkFaint, modifier = Modifier.size(18.dp))
             !file.binary -> {
                 Text("+${file.additions}", style = MaterialTheme.typography.labelMedium, color = p.success)
                 Text("−${file.deletions}", style = MaterialTheme.typography.labelMedium, color = p.danger)
@@ -537,7 +537,7 @@ private fun CommitRow(commit: GitCommit, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall, color = p.inkSoft,
             )
         }
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = p.inkFaint)
+        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = p.inkFaint)
     }
 }
 
@@ -613,7 +613,7 @@ private fun BranchesPage(git: GitController, onBack: () -> Unit) {
         stringResource(R.string.tools_git_branches), onBack,
         actions = {
             IconButton(onClick = { newName = ""; naming = true }, enabled = s.busy == null, modifier = Modifier.testTag("git.newBranch")) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.tools_git_new_branch))
+                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.tools_git_new_branch))
             }
         },
     ) { padding ->
@@ -686,7 +686,7 @@ private fun BranchRow(br: GitBranch, enabled: Boolean, onSwitch: () -> Unit) {
             ).joinToString(" · ")
             if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (br.current) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.tools_git_current), tint = p.accent)
+        if (br.current) Icon(Icons.Outlined.Check, contentDescription = stringResource(R.string.tools_git_current), tint = p.accent)
     }
 }
 
@@ -790,7 +790,7 @@ private fun CreatePrPage(git: GitController, onBack: () -> Unit) {
             val url = opened
             if (url != null) {
                 item { Notice(stringResource(R.string.tools_git_pr_opened), Tone.SUCCESS) }
-                item { Card { Link(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.tools_git_open_github)) { uri.openUri(url) } } }
+                item { Card { Link(Icons.AutoMirrored.Outlined.OpenInNew, stringResource(R.string.tools_git_open_github)) { uri.openUri(url) } } }
             } else {
                 item {
                     Card {
@@ -839,14 +839,14 @@ private fun PrPage(git: GitController, pr: PullRequest, onBack: () -> Unit, clos
                 Card {
                     Text(current.title, style = MaterialTheme.typography.titleMedium, color = p.ink)
                     Text(current.summary, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
-                    Link(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.tools_git_open_github)) { uri.openUri(current.url) }
+                    Link(Icons.AutoMirrored.Outlined.OpenInNew, stringResource(R.string.tools_git_open_github)) { uri.openUri(current.url) }
                 }
             }
             item {
                 Card {
-                    Link(Icons.Filled.Checklist, stringResource(R.string.tools_git_checks), Modifier.testTag("pr.checks")) { open(GitPage.PrChecks(current.url)) }
+                    Link(Icons.Outlined.Checklist, stringResource(R.string.tools_git_checks), Modifier.testTag("pr.checks")) { open(GitPage.PrChecks(current.url)) }
                     HorizontalDivider(color = p.line)
-                    Link(Icons.Filled.Difference, stringResource(R.string.tools_git_files_changed), Modifier.testTag("pr.files")) { open(GitPage.PrFiles(current.url)) }
+                    Link(Icons.Outlined.Difference, stringResource(R.string.tools_git_files_changed), Modifier.testTag("pr.files")) { open(GitPage.PrFiles(current.url)) }
                 }
             }
             if (current.actions.isNotEmpty()) {
@@ -899,7 +899,7 @@ private fun PrChecksPage(git: GitController, url: String, onBack: () -> Unit) {
     LaunchedEffect(url) { load() }
     Page(
         stringResource(R.string.tools_git_checks), onBack,
-        actions = { IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh)) } },
+        actions = { IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.tools_refresh)) } },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val l = list
@@ -910,8 +910,8 @@ private fun PrChecksPage(git: GitController, url: String, onBack: () -> Unit) {
                         val (icon, tint) = when (c.state) {
                             PrCheck.State.PASS -> Icons.Filled.CheckCircle to p.success
                             PrCheck.State.FAIL -> Icons.Filled.Cancel to p.danger
-                            PrCheck.State.PENDING -> Icons.Filled.Schedule to p.running
-                            else -> Icons.Filled.RemoveCircleOutline to p.inkFaint
+                            PrCheck.State.PENDING -> Icons.Outlined.Schedule to p.running
+                            else -> Icons.Outlined.RemoveCircleOutline to p.inkFaint
                         }
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.surface).border(1.dp, p.line, RoundedCornerShape(12.dp))
@@ -924,7 +924,7 @@ private fun PrChecksPage(git: GitController, url: String, onBack: () -> Unit) {
                                 Text(listOfNotNull(c.state.label, c.workflow, c.description).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            if (c.link != null) Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = stringResource(R.string.tools_git_open_named, c.name), tint = p.inkFaint, modifier = Modifier.size(18.dp))
+                            if (c.link != null) Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = stringResource(R.string.tools_git_open_named, c.name), tint = p.inkFaint, modifier = Modifier.size(18.dp))
                         }
                     }
                     if (l.omitted > 0) item { Text(stringResource(R.string.tools_git_more_checks, l.omitted), style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
@@ -975,9 +975,9 @@ private fun Link(icon: androidx.compose.ui.graphics.vector.ImageVector, title: S
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = p.accent)
+        Icon(icon, contentDescription = null, tint = p.inkSoft)
         Text(title, style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.weight(1f))
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = p.inkFaint)
+        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = p.inkFaint)
     }
 }
 

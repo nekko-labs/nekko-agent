@@ -28,8 +28,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Laptop
-import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.outlined.Laptop
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -171,7 +171,7 @@ private fun PairLinkIllustration(linked: Float, cheer: Float, reduceMotion: Bool
     }
     val hop = if (reduceMotion) 0f else -abs(sin(t * Math.PI.toFloat() * 2)) * 6f * cheer.coerceIn(0f, 1f)
     Row(Modifier.semantics(mergeDescendants = true) { contentDescription = description }, verticalAlignment = Alignment.CenterVertically) {
-        DeviceTile(Icons.Filled.Laptop, linked >= 1f)
+        DeviceTile(Icons.Outlined.Laptop, linked >= 1f)
         Box(Modifier.size(width = 128.dp, height = 96.dp), contentAlignment = Alignment.Center) {
             val accent = p.accent
             Canvas(Modifier.fillMaxWidth().height(3.dp)) {
@@ -206,7 +206,7 @@ private fun PairLinkIllustration(linked: Float, cheer: Float, reduceMotion: Bool
                 )
             }
         }
-        DeviceTile(Icons.Filled.PhoneAndroid, linked >= 1f)
+        DeviceTile(Icons.Outlined.PhoneAndroid, linked >= 1f)
     }
 }
 

@@ -5,11 +5,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ReceiptLong
-import androidx.compose.material.icons.filled.DataUsage
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.DataUsage
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,35 +31,35 @@ fun AutomationsUsageSection(deps: SettingsDeps) {
                 title = stringResource(R.string.settings_providers),
                 detail = c.providers.takeIf { it.isNotEmpty() }?.let { list -> stringResource(R.string.settings_providers_count, list.count { it.enabled }, list.size) }
                     ?: stringResource(R.string.settings_providers_none),
-                icon = Icons.Filled.Key,
+                icon = Icons.Outlined.Key,
                 onClick = { deps.open(Routes.PROVIDERS) },
             )
             HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
                 title = stringResource(R.string.settings_files),
                 detail = stringResource(R.string.settings_files_detail),
-                icon = Icons.Filled.FolderOpen,
+                icon = Icons.Outlined.FolderOpen,
                 onClick = { deps.open(Routes.FILES) },
             )
             HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
                 title = stringResource(R.string.settings_logs),
                 detail = stringResource(R.string.settings_logs_detail),
-                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                icon = Icons.AutoMirrored.Outlined.ReceiptLong,
                 onClick = { deps.open(Routes.LOGS) },
             )
             HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
                 title = stringResource(R.string.settings_automations),
                 detail = if (c.pcSettings.automationsPaused) stringResource(R.string.settings_automations_paused) else stringResource(R.string.settings_automations_detail),
-                icon = Icons.Filled.Schedule,
+                icon = Icons.Outlined.Schedule,
                 onClick = { deps.open(Routes.AUTOMATIONS) },
             )
             HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
                 title = stringResource(R.string.settings_usage),
                 detail = stringResource(R.string.settings_usage_detail),
-                icon = Icons.Filled.DataUsage,
+                icon = Icons.Outlined.DataUsage,
                 onClick = { deps.open(Routes.USAGE) },
             )
         }
