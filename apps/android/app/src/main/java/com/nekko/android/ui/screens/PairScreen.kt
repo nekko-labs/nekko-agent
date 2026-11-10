@@ -16,10 +16,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -157,7 +157,7 @@ fun PairScreen(
                 title = { Text(stringResource(R.string.chats_pair_title)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back)) }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.chats_back)) }
                 },
             )
         },
@@ -180,7 +180,7 @@ fun PairScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Icon(Icons.Filled.Lock, contentDescription = null, tint = p.accent, modifier = Modifier.size(28.dp))
+                        Icon(Icons.Outlined.Lock, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(28.dp))
                         Text(stringResource(R.string.chats_pairing_securely), style = MaterialTheme.typography.titleMedium, color = p.ink)
                         Text(
                             stringResource(R.string.chats_pairing_deriving, Pairing.relayHost(pending.relayUrl)),
@@ -219,7 +219,7 @@ fun PairScreen(
                 }
                 else -> {
                     Button(onClick = scan, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                        Icon(Icons.Filled.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.size(8.dp))
                         Text(stringResource(R.string.chats_scan_qr))
                     }
@@ -255,7 +255,7 @@ fun PairScreen(
                             },
                             modifier = Modifier.heightIn(min = 48.dp),
                         ) {
-                            Icon(Icons.Filled.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Outlined.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(8.dp))
                             Text(stringResource(R.string.chats_paste))
                         }

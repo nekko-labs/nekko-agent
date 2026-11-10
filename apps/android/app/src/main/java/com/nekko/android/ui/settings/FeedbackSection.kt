@@ -5,7 +5,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Feedback
+import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,7 +26,7 @@ fun FeedbackSection(@Suppress("UNUSED_PARAMETER") deps: SettingsDeps) {
             SettingsRow(
                 title = stringResource(R.string.settings_send_feedback),
                 detail = stringResource(R.string.settings_send_feedback_detail),
-                icon = Icons.Filled.Feedback,
+                icon = Icons.Outlined.Feedback,
                 onClick = { open = true },
             )
         }

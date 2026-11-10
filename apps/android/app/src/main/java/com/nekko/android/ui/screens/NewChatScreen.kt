@@ -19,17 +19,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.activity.compose.BackHandler
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.QrCode2
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.automirrored.outlined.Notes
+import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -283,7 +283,7 @@ fun NewChatScreen(
                 title = { Text(stringResource(R.string.chats_new_chat)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back)) }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.chats_back)) }
                 },
             )
         },
@@ -304,7 +304,7 @@ fun NewChatScreen(
                             color = p.inkSoft,
                         )
                         OutlinedButton(onClick = onPair, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Icon(Icons.Filled.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Outlined.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(8.dp))
                             Text(stringResource(R.string.chats_pair_title))
                         }
@@ -323,7 +323,7 @@ fun NewChatScreen(
                     }
                     !online -> OfflineNewChat(repo, active.name, c.conn == RelayState.CONNECTING, phonePick, c.workspaces, shared, onQueued)
                     else -> NCard {
-                        Label(Icons.Filled.Memory, stringResource(R.string.chats_model_from, active.name))
+                        Label(Icons.Outlined.Memory, stringResource(R.string.chats_model_from, active.name))
                         if (phonePickMissing && !touched) {
                             Text(
                                 stringResource(R.string.chats_default_missing, active.name, phonePick?.modelId.toString()),
@@ -362,14 +362,14 @@ fun NewChatScreen(
                         )
                         val chosen = pick
                         if (chosen != null && LocalSimple.current.shown("effort")) {
-                            Label(Icons.Filled.Speed, stringResource(R.string.chats_effort))
+                            Label(Icons.Outlined.Speed, stringResource(R.string.chats_effort))
                             Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.effort"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Chip(stringResource(R.string.chats_computer_default), effort == null) { effort = null }
                                 Effort.levels(chosen.modelId).forEach { e -> Chip(effortLabel(e), effort == e.wire) { effort = e.wire } }
                             }
                         }
                         if (c.workspaces.isNotEmpty()) {
-                            Label(Icons.Filled.Folder, stringResource(R.string.chats_folder))
+                            Label(Icons.Outlined.Folder, stringResource(R.string.chats_folder))
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Chip(stringResource(R.string.chats_folder_none), workspaceId == null) { workspaceId = null }
                                 c.workspaces.forEach { w -> Chip(w.name, w.id == workspaceId) { workspaceId = w.id } }
@@ -384,7 +384,7 @@ fun NewChatScreen(
                             if (busy) {
                                 CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp), color = p.accentInk)
                             } else {
-                                Icon(Icons.Filled.Computer, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Outlined.Computer, contentDescription = null, modifier = Modifier.size(18.dp))
                             }
                             Spacer(Modifier.size(8.dp))
                             Text(stringResource(R.string.chats_start_on, active.name), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -394,7 +394,7 @@ fun NewChatScreen(
                 if (showRunOn) {
                     Spacer(Modifier.size(12.dp))
                     NCard {
-                        Label(Icons.Filled.Computer, stringResource(R.string.chats_run_on))
+                        Label(Icons.Outlined.Computer, stringResource(R.string.chats_run_on))
                         Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.runOn"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (autoOffered) {
                                 Chip(stringResource(R.string.chats_auto), autoShown) {
@@ -446,9 +446,9 @@ private fun SharedTextCard(text: String, onEdit: (String) -> Unit) {
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f)) { Label(Icons.AutoMirrored.Filled.Notes, stringResource(R.string.chats_shared_note)) }
+                Row(Modifier.weight(1f)) { Label(Icons.AutoMirrored.Outlined.Notes, stringResource(R.string.chats_shared_note)) }
                 IconButton(onClick = { onEdit("") }) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chats_remove_shared), tint = p.inkFaint)
+                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.chats_remove_shared), tint = p.inkFaint)
                 }
             }
             OutlinedTextField(
@@ -466,7 +466,7 @@ private fun SharedTextCard(text: String, onEdit: (String) -> Unit) {
 private fun Label(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
     val p = Nekko.palette
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(icon, contentDescription = null, tint = p.accent, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(18.dp))
         Text(text, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
     }
 }
@@ -517,7 +517,7 @@ internal fun ModelList(
             onValueChange = onQuery,
             singleLine = true,
             placeholder = { Text(stringResource(R.string.chats_search_models)) },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -650,7 +650,7 @@ private fun ModelRow(m: ModelInfo, detail: String?, selected: Boolean, onClick: 
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         if (m.loaded) Pill(stringResource(R.string.chats_loaded), Tone.SUCCESS)
-        if (selected) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.chats_selected), tint = p.accent, modifier = Modifier.size(18.dp))
+        if (selected) Icon(Icons.Outlined.Check, contentDescription = stringResource(R.string.chats_selected), tint = p.accent, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -695,10 +695,10 @@ private fun OfflineNewChat(
                 color = p.warning,
             )
         } else {
-            Label(Icons.Filled.Memory, stringResource(R.string.chats_model_named, pick.modelId))
+            Label(Icons.Outlined.Memory, stringResource(R.string.chats_model_named, pick.modelId))
         }
         if (workspaces.isNotEmpty()) {
-            Label(Icons.Filled.Folder, stringResource(R.string.chats_folder))
+            Label(Icons.Outlined.Folder, stringResource(R.string.chats_folder))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Chip(stringResource(R.string.chats_folder_none), workspaceId == null) { workspaceId = null }
                 workspaces.forEach { w -> Chip(w.name, w.id == workspaceId) { workspaceId = w.id } }

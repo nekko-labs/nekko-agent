@@ -9,7 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -179,7 +179,7 @@ fun NekkoVoiceSheet(repo: ComputersRepository, prefs: PhonePrefs, card: StateFlo
                 }
             }
         }) {
-            Icon(Icons.Default.Mic, contentDescription = null)
+            Icon(Icons.Outlined.Mic, contentDescription = null)
             Text(if (mic is MicState.Recording) "Stop listening" else "Listen", Modifier.padding(start = 8.dp))
         }
         if (hasQueued) Text("A message was queued earlier. Cancel only discards current voice input; it does not recall queued work.")

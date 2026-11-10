@@ -5,9 +5,9 @@ import androidx.compose.ui.platform.LocalResources
 import com.nekko.android.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.PowerSettingsNew
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -124,7 +124,7 @@ fun safetyExits(s: ComputersState, exits: SafetyExits, res: Resources): List<Saf
             SafetyExit(
                 res.getString(R.string.settings_exit_sign_out),
                 res.getString(R.string.settings_exit_sign_out_detail, name),
-                Icons.AutoMirrored.Filled.Logout,
+                Icons.AutoMirrored.Outlined.Logout,
                 danger = true,
                 enabled = !exits.busy,
                 action = exits::signOut,
@@ -134,7 +134,7 @@ fun safetyExits(s: ComputersState, exits: SafetyExits, res: Resources): List<Saf
             SafetyExit(
                 res.getString(R.string.settings_exit_stop, name),
                 res.getString(if (online) R.string.settings_exit_stop_detail else R.string.settings_exit_must_be_online, name),
-                Icons.Filled.WifiOff,
+                Icons.Outlined.WifiOff,
                 danger = true,
                 enabled = online && !exits.busy,
                 action = exits::stopRemoteAccess,
@@ -145,7 +145,7 @@ fun safetyExits(s: ComputersState, exits: SafetyExits, res: Resources): List<Saf
                 SafetyExit(
                     res.getString(R.string.settings_exit_quit, name),
                     res.getString(if (online) R.string.settings_exit_quit_detail else R.string.settings_exit_must_be_online, name),
-                    Icons.Filled.PowerSettingsNew,
+                    Icons.Outlined.PowerSettingsNew,
                     danger = true,
                     enabled = online && !exits.busy,
                     action = exits::askQuit,

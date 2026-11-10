@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -165,7 +165,7 @@ fun ConnectionBanner(
                 }
             }
             Icon(
-                if (repair) Icons.Filled.QrCode2 else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                if (repair) Icons.Outlined.QrCode2 else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null,
                 tint = p.inkFaint,
                 modifier = Modifier.size(18.dp),
@@ -173,7 +173,7 @@ fun ConnectionBanner(
             if (exits != null) {
                 Box {
                     IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chats_safety_options, active.name), tint = p.inkSoft)
+                        Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.chats_safety_options, active.name), tint = p.inkSoft)
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         SafetyExitMenuItems(s, exits, onPicked = { menu = false })

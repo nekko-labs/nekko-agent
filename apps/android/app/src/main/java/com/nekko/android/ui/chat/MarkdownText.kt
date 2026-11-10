@@ -37,11 +37,11 @@ import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.OpenInFull
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -317,7 +317,7 @@ private fun TableView(table: MarkdownTable, style: MarkdownStyle, previews: Chat
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (table.isLarge) {
                 TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("markdown.table.expand")) {
-                    Icon(Icons.Filled.OpenInFull, contentDescription = null, tint = style.soft, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Outlined.OpenInFull, contentDescription = null, tint = style.soft, modifier = Modifier.size(16.dp))
                     Text(stringResource(R.string.chat_expand), style = MaterialTheme.typography.labelMedium, color = style.soft, modifier = Modifier.padding(start = 6.dp))
                 }
             }
@@ -362,9 +362,9 @@ private fun rememberTableActions(table: MarkdownTable): TableActions {
 
 @Composable
 private fun TableActionItems(actions: TableActions, done: () -> Unit) {
-    DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_as_markdown)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { done(); actions.markdown() })
-    DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_as_text)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { done(); actions.text() })
-    DropdownMenuItem(text = { Text(stringResource(R.string.chat_share)) }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = { done(); actions.share() })
+    DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_as_markdown)) }, leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) }, onClick = { done(); actions.markdown() })
+    DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_as_text)) }, leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) }, onClick = { done(); actions.text() })
+    DropdownMenuItem(text = { Text(stringResource(R.string.chat_share)) }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = { done(); actions.share() })
 }
 
 /**
@@ -474,10 +474,10 @@ private fun TableScreen(table: MarkdownTable, previews: ChatPreviews?, cards: Li
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                     title = { Text(stringResource(R.string.chat_format_table)) },
-                    navigationIcon = { IconButton(onClick = onDismiss, modifier = Modifier.testTag("markdown.table.done")) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_done)) } },
+                    navigationIcon = { IconButton(onClick = onDismiss, modifier = Modifier.testTag("markdown.table.done")) { Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.chat_done)) } },
                     actions = {
                         Box {
-                            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.chat_table_actions)) }
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.chat_table_actions)) }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { TableActionItems(actions) { menu = false } }
                         }
                     },
@@ -569,7 +569,7 @@ internal fun CodeBlock(language: String, code: String, style: MarkdownStyle) {
                 copied = true
             }) {
                 Icon(
-                    if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+                    if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
                     contentDescription = if (copied) stringResource(R.string.chat_copied) else stringResource(R.string.chat_copy_code),
                     tint = style.soft,
                     modifier = Modifier.size(16.dp),

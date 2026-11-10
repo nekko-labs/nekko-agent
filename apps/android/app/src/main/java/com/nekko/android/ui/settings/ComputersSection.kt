@@ -5,7 +5,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -26,7 +26,7 @@ fun ComputersSection(deps: SettingsDeps) {
             SettingsRow(
                 title = stringResource(R.string.settings_computers),
                 detail = computersDetailText(c),
-                icon = Icons.Filled.Computer,
+                icon = Icons.Outlined.Computer,
                 onClick = { deps.open(Routes.COMPUTERS) },
             )
         }

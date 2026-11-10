@@ -29,25 +29,25 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DesktopWindows
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DesktopWindows
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.nekko.android.data.Computer
 import com.nekko.android.ui.components.RowDivider
 import com.nekko.android.ui.components.SectionHeader
-import androidx.compose.material.icons.filled.RemoveCircleOutline
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -221,8 +221,8 @@ private fun Page(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        if (close) Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_close))
-                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.tools_back))
+                        if (close) Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.tools_close))
+                        else Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.tools_back))
                     }
                 },
                 actions = { actions() },
@@ -278,7 +278,7 @@ private fun FoldersPage(repo: ComputersRepository, onClose: () -> Unit, open: (F
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Icon(Icons.Filled.Folder, contentDescription = null, tint = p.accent)
+                        Icon(Icons.Outlined.Folder, contentDescription = null, tint = p.inkSoft)
                         Column(Modifier.weight(1f)) {
                             Text(w.name, style = MaterialTheme.typography.bodyLarge, color = p.ink)
                             w.path?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.StartEllipsis) }
@@ -287,7 +287,7 @@ private fun FoldersPage(repo: ComputersRepository, onClose: () -> Unit, open: (F
                     DropdownMenu(expanded = menuFor == w.id, onDismissRequest = { menuFor = null }) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.tools_files_remove_saved), color = p.danger) },
-                            leadingIcon = { Icon(Icons.Filled.RemoveCircleOutline, contentDescription = null, tint = p.danger) },
+                            leadingIcon = { Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = null, tint = p.danger) },
                             enabled = online && !busy,
                             onClick = { menuFor = null; removing = w },
                         )
@@ -300,7 +300,7 @@ private fun FoldersPage(repo: ComputersRepository, onClose: () -> Unit, open: (F
                     onClick = { folderPath = ""; adding = true }, enabled = online && !busy,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("files.addFolder"),
                 ) {
-                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Text(stringResource(R.string.tools_files_add_folder), modifier = Modifier.padding(start = 8.dp))
                 }
                 if (busy) CircularProgressIndicator(color = p.accent, modifier = Modifier.padding(horizontal = 16.dp).size(24.dp))
@@ -391,7 +391,7 @@ private fun FolderPage(page: FilesPage.Folder, onBack: () -> Unit, close: Boolea
     }
     val title = if (page.path.isEmpty()) page.title else page.path.substringAfterLast('/')
     Page(title, onBack, close, actions = {
-        IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh)) }
+        IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.tools_refresh)) }
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             OutlinedTextField(
@@ -446,9 +446,9 @@ private fun EntryRow(e: FileEntry, showPath: Boolean = false, onClick: () -> Uni
     ) {
         Icon(
             when {
-                e.dir -> Icons.Filled.Folder
-                isImage(e.name) -> Icons.Filled.Image
-                else -> Icons.AutoMirrored.Filled.InsertDriveFile
+                e.dir -> Icons.Outlined.Folder
+                isImage(e.name) -> Icons.Outlined.Image
+                else -> Icons.AutoMirrored.Outlined.InsertDriveFile
             },
             contentDescription = if (e.dir) stringResource(R.string.tools_files_folder) else null, tint = if (e.dir) p.accent else p.inkSoft, modifier = Modifier.size(22.dp),
         )
@@ -495,7 +495,7 @@ internal fun FilePage(page: FilesPage.File, onBack: () -> Unit, open: (FilesPage
         val diagram = f != null && MermaidRules.isMermaidFile(f.name)
         if (f?.markdown == true || diagram) {
             IconToggleButton(checked = rendered, onCheckedChange = { rendered = it }) {
-                Icon(Icons.Filled.TextFields, contentDescription = stringResource(R.string.tools_files_formatted), tint = if (rendered) p.accent else p.inkSoft)
+                Icon(Icons.Outlined.TextFields, contentDescription = stringResource(R.string.tools_files_formatted), tint = if (rendered) p.accent else p.inkSoft)
             }
         }
         if (f != null && f.canEdit && !changeOff) {
@@ -584,7 +584,7 @@ private fun EditPage(edit: FileEditController, onBack: () -> Unit) {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 title = { Text(edit.path.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
-                navigationIcon = { IconButton(onClick = cancel) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_cancel)) } },
+                navigationIcon = { IconButton(onClick = cancel) { Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.tools_cancel)) } },
                 actions = {
                     if (s.saving) {
                         CircularProgressIndicator(color = p.accent, modifier = Modifier.padding(horizontal = 16.dp).size(24.dp))
@@ -702,7 +702,7 @@ private fun LogsList(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     Page(stringResource(R.string.tools_logs_title), onBack, actions = {
-        IconButton(onClick = { scope.launch { logs.load() } }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh)) }
+        IconButton(onClick = { scope.launch { logs.load() } }) { Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.tools_refresh)) }
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).testTag("logs.list")) {
             groups.forEach { g ->
@@ -711,7 +711,7 @@ private fun LogsList(
                 when {
                     id == null -> item(key = "phone") {
                         LogRow(
-                            Icons.Filled.PhoneAndroid, stringResource(R.string.simple_logs_connection),
+                            Icons.Outlined.PhoneAndroid, stringResource(R.string.simple_logs_connection),
                             when (phoneEvents) {
                                 0 -> stringResource(R.string.simple_logs_nothing)
                                 1 -> stringResource(R.string.simple_logs_entries_one)
@@ -720,7 +720,7 @@ private fun LogsList(
                             "logs.phone", openPhone,
                         )
                     }
-                    !g.active -> item(key = "connect:$id") { LogRow(Icons.Filled.Link, stringResource(R.string.simple_logs_connect), null, "logs.connect") { connect(id) } }
+                    !g.active -> item(key = "connect:$id") { LogRow(Icons.Outlined.Link, stringResource(R.string.simple_logs_connect), null, "logs.connect") { connect(id) } }
                     !s.loaded -> item(key = "loading") {
                         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.accent) }
                     }
@@ -736,9 +736,9 @@ private fun LogsList(
                         val at = l.updatedAt
                         LogRow(
                             when (l.kind) {
-                                LogInfo.Kind.APP -> Icons.Filled.DesktopWindows
-                                LogInfo.Kind.DAEMON -> Icons.Filled.Settings
-                                LogInfo.Kind.AGENT -> Icons.AutoMirrored.Filled.Chat
+                                LogInfo.Kind.APP -> Icons.Outlined.DesktopWindows
+                                LogInfo.Kind.DAEMON -> Icons.Outlined.Settings
+                                LogInfo.Kind.AGENT -> Icons.AutoMirrored.Outlined.Chat
                             },
                             l.title,
                             if (at == null) stringResource(R.string.tools_logs_empty)
@@ -785,7 +785,7 @@ private fun PhoneLogPage(repo: ComputersRepository, onBack: () -> Unit) {
                 .putExtra(Intent.EXTRA_SUBJECT, subject)
                 .putExtra(Intent.EXTRA_TEXT, text)
             context.startActivity(Intent.createChooser(send, null))
-        }, modifier = Modifier.testTag("log.share")) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.simple_share)) }
+        }, modifier = Modifier.testTag("log.share")) { Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.simple_share)) }
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).background(p.code).testTag("log.view")) {
             item { Note("Since the app started: times, states and the relay's host, no keys or messages.", Modifier.padding(12.dp)) }
@@ -847,7 +847,7 @@ private fun LogPage(logs: LogsController, log: LogInfo, onBack: () -> Unit) {
     LaunchedEffect(tail) { tail?.let { if (it.lines.isNotEmpty()) list.scrollToItem(it.lines.size) } }
     Page(log.title, onBack, actions = {
         IconButton(onClick = { scope.launch { load() } }, enabled = !loading, modifier = Modifier.testTag("log.refresh")) {
-            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh))
+            Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.tools_refresh))
         }
         if (shown != null) {
             IconButton(
@@ -858,7 +858,7 @@ private fun LogPage(logs: LogsController, log: LogInfo, onBack: () -> Unit) {
                     context.startActivity(Intent.createChooser(send, null))
                 },
                 modifier = Modifier.testTag("log.share"),
-            ) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.tools_logs_share)) }
+            ) { Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.tools_logs_share)) }
         }
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {

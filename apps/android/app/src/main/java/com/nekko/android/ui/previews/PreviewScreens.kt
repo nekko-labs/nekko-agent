@@ -38,14 +38,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.BrokenImage
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -220,7 +220,7 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                     navigationIcon = {
-                        IconButton(onClick = onDismiss, modifier = Modifier.testTag("preview.done")) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_preview_done)) }
+                        IconButton(onClick = onDismiss, modifier = Modifier.testTag("preview.done")) { Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.tools_preview_done)) }
                     },
                     title = {
                         Column(Modifier.semantics(mergeDescendants = true) { heading() }) {
@@ -229,12 +229,12 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
                         }
                     },
                     actions = {
-                        IconButton(onClick = { attempt++ }, modifier = Modifier.testTag("preview.reload")) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_preview_reload)) }
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.tools_preview_more)) }
+                        IconButton(onClick = { attempt++ }, modifier = Modifier.testTag("preview.reload")) { Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.tools_preview_reload)) }
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.tools_preview_more)) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(if (loopback) R.string.tools_preview_copy_address else R.string.tools_preview_copy_path)) },
-                                leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                                leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
                                 onClick = {
                                     menu = false
                                     scope.launch { clipboard.setClipEntry(ClipEntry(android.content.ClipData.newPlainText(link.title, link.original))) }
@@ -242,7 +242,7 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.tools_preview_share)) },
-                                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                                leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
                                 onClick = {
                                     menu = false
                                     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, link.original)
@@ -505,7 +505,7 @@ private fun PreviewCard(link: ChatPreviewLink, sessionId: String, loader: Previe
                 Text(link.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = p.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(link.detail, style = MaterialTheme.typography.labelSmall, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
             }
-            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = p.accent, modifier = Modifier.size(18.dp))
+            Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, tint = p.accent, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -606,7 +606,7 @@ private fun Thumbnail(link: ChatPreviewLink, sessionId: String, loader: PreviewL
                 }
             }
             failed -> Icon(
-                if (link.isWeb) Icons.Filled.Language else Icons.Filled.BrokenImage, contentDescription = null, tint = p.inkFaint,
+                if (link.isWeb) Icons.Outlined.Language else Icons.Outlined.BrokenImage, contentDescription = null, tint = p.inkFaint,
                 modifier = Modifier.align(Alignment.Center).size(32.dp),
             )
             else -> CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.align(Alignment.Center).size(24.dp))

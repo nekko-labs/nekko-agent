@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,7 +28,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -185,8 +185,8 @@ fun ModeMenuItems(onPicked: () -> Unit) {
         val on = simple.expert == expert
         androidx.compose.material3.DropdownMenuItem(
             text = { Text(stringResource(label)) },
-            leadingIcon = { Icon(if (expert) Icons.Filled.Code else Icons.Filled.ChatBubbleOutline, contentDescription = null, tint = if (on) p.accent else p.inkSoft) },
-            trailingIcon = { Icon(Icons.Filled.Check, contentDescription = null, tint = if (on) p.accent else androidx.compose.ui.graphics.Color.Transparent) },
+            leadingIcon = { Icon(if (expert) Icons.Outlined.Code else Icons.Outlined.ChatBubbleOutline, contentDescription = null, tint = if (on) p.accent else p.inkSoft) },
+            trailingIcon = { Icon(Icons.Outlined.Check, contentDescription = null, tint = if (on) p.accent else androidx.compose.ui.graphics.Color.Transparent) },
             onClick = { if (!on) simple.setExpert(expert); onPicked() },
             modifier = Modifier.semantics { selected = on }.testTag(if (expert) "menu.mode.detailed" else "menu.mode.simple"),
         )

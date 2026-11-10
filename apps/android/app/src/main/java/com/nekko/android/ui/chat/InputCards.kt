@@ -19,13 +19,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextButton
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -134,7 +133,7 @@ fun ApprovalCard(
     }
     InputCardFrame(edge) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(Icons.Filled.Warning, contentDescription = null, tint = edge, modifier = Modifier.size(18.dp))
+            Icon(Icons.Outlined.Warning, contentDescription = null, tint = edge, modifier = Modifier.size(18.dp))
             Text(stringResource(R.string.chat_allow_this), style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.weight(1f))
             Pill(
                 stringResource(
@@ -231,7 +230,7 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
     InputCardFrame(p.accent) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             IconButton(onClick = { step--; error = null }, enabled = step > 0 && !busy, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_previous_question), modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.chat_previous_question), modifier = Modifier.size(18.dp))
             }
             Text(stringResource(R.string.chat_question_page, step + 1, request.questions.size), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
             TextButton(onClick = { form = form.skip(q); otherOpen = otherOpen - q.id; advance() }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -257,7 +256,7 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
                                 enabled = !busy,
                                 onClick = { form = form.toggle(q, o.label) },
                                 leadingIcon = {
-                                    if (on) Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    if (on) Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                                 },
                                 label = {
                                     Column(Modifier.padding(vertical = 6.dp)) {
@@ -280,7 +279,7 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
                             selected = noteOpen,
                             enabled = !busy,
                             onClick = { otherOpen = if (q.id in otherOpen) otherOpen - q.id else otherOpen + q.id },
-                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                            leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) },
                             label = { Text(stringResource(R.string.chat_something_else)) },
                             modifier = Modifier.heightIn(min = 48.dp),
                         )

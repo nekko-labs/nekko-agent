@@ -25,16 +25,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -142,28 +142,28 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_fact_computer)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back)) } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.settings_back)) } },
                 actions = {
                     if (c != null) Box {
                         IconButton(onClick = { menu = true }, modifier = Modifier.testTag("computer.edit")) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.settings_edit_computer, c.name))
+                            Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.settings_edit_computer, c.name))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             if (!active) DropdownMenuItem(
                                 text = { Text(stringResource(R.string.settings_connect)) },
-                                leadingIcon = { Icon(Icons.Filled.Bolt, contentDescription = null) },
+                                leadingIcon = { Icon(Icons.Outlined.Bolt, contentDescription = null) },
                                 onClick = { menu = false; scope.launch { repo.connect(c.id) } },
                             )
-                            DropdownMenuItem(text = { Text(stringResource(R.string.settings_rename)) }, leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }, onClick = { menu = false; renaming = true })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.settings_rename)) }, leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) }, onClick = { menu = false; renaming = true })
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.settings_refresh)) },
-                                leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                                leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
                                 onClick = { menu = false; scope.launch { machine.refresh() } },
                             )
                             HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.settings_forget_ellipsis), color = p.danger) },
-                                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = p.danger) },
+                                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = p.danger) },
                                 onClick = { menu = false; forgetting = true },
                             )
                         }
@@ -191,7 +191,7 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                 }
             } else if (m.summaryError != null && m.loadedOnce) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Info, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Outlined.Info, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
                     Text(m.summaryError.orEmpty(), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
                 }
             }
@@ -230,7 +230,7 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(stringResource(R.string.settings_add_switch_providers), style = MaterialTheme.typography.bodyMedium, color = p.accent, modifier = Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
+                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
                         }
                     }
                 }
