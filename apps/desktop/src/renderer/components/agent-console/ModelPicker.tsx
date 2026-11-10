@@ -10,7 +10,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
 import { useProviderLimitsPortfolio } from '../../useLimits.js';
-import { accountFamilies, identityLine, sharedEmail, useAccountIdentities, type AccountFamily, type AccountIdentity } from '../../providerAccounts.js';
+import { accountFamilies, accountScopeLine, identityLine, useAccountIdentities, type AccountFamily, type AccountIdentity } from '../../providerAccounts.js';
 import { ProviderUsageMeters } from './ProviderUsageMeters.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
 import { Group, QuietTabs } from '../primitives/Quiet.js';
@@ -371,11 +371,14 @@ export function ModelPicker({
     const hasMeter = !q && !!meterProvider && !!limitsKeyFor(meterProvider) && modelsOf(meterProvider.id).length > 0;
     // While searching, a family with no match drops out entirely.
     if (!rows.some((r) => r.count) && (q || (!hasMeter && !several))) return null;
-    const ids = members.map(idOf);
-    const email = sharedEmail(ids) ?? (meterProvider ? idOf(meterProvider).email : undefined);
+    // With tabs, the account on show says its own email and which account it is
+    // under them ("me@x · Organization · Team"); the heading stays the family.
+    const email = several ? undefined : idOf(members[0]).email;
     // One account: its own name and plan ride in the heading's meta, since there are no tabs to say it.
     const single = !several ? identityLine(idOf(members[0])) : '';
     const metaText = [single !== f.name ? single : '', email].filter(Boolean).join(' · ');
+    const shownId = shown ? idOf(shown) : undefined;
+    const whoLine = shownId ? [shownId.email, accountScopeLine(shownId) || shownId.hint].filter(Boolean).join(' · ') : '';
     const claudeSwitch = !!shown && shown.kind === 'claude-code' && currentProvider?.kind === 'claude-code' && members.filter((p) => p.kind === 'claude-code').length > 1;
     return (
       <Group key={f.id} as="div" dense role="group" label={f.name} title={heading(f.name)} meta={metaText && <span data-account-email title={metaText}>{metaText}</span>} data-provider-group={f.id}>
@@ -394,6 +397,7 @@ export function ModelPicker({
                 icon: p.id === providerId ? <span className="h-1.5 w-1.5 shrink-0 self-center rounded-full bg-accent" aria-label="This chat" /> : undefined,
               }))}
             />
+            {whoLine && <p className="truncate px-2 pt-1 text-2xs text-ink-soft" data-account-who title={whoLine}>{whoLine}</p>}
             {claudeSwitch && <p className="px-2 pt-1 text-2xs text-ink-faint">Switching starts a new Claude Code conversation; history stays here.</p>}
           </div>
         )}

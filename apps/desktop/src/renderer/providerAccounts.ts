@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ClaudeCodeStatus, ProviderConfig } from '@nekko-agent/shared';
+import type { ClaudeCodeStatus, ProviderAccount, ProviderConfig } from '@nekko-agent/shared';
 import { isLocalProvider } from '@nekko-agent/shared';
 import { providerMarkKind } from './components/providers/ProviderMark.js';
 import { useAccountEmails } from './accountEmails.js';
@@ -96,7 +96,7 @@ export function accountIdentity(
     // "Claude subscription · Work": the part after the dot is the name the user typed.
     const typed = label.includes(' · ') ? label.split(' · ').slice(1).join(' · ').trim() : ownName(label, family);
     const named = typed || undefined;
-    const s = known.claude;
+    const s = known.claude ?? statusFromAccount(provider.account);
     if (s?.installed && s.loggedIn) {
       if (s.auth !== 'subscription') return { name: named ?? 'Claude Code', hint: 'API', email: s.email ?? undefined };
       const plan = s.subscriptionType?.trim().toLowerCase() ?? '';
@@ -116,6 +116,62 @@ export function accountIdentity(
   const own = ownName(label, family);
   const name = !own || (hint && own.toLowerCase() === hint.toLowerCase()) ? (KIND_NAME[provider.kind] ?? (label || provider.id)) : own;
   return { name, hint: name === hint ? undefined : hint, email: known.email };
+}
+
+/**
+ * The status `providers:list` already carries (`account`, read by nekkod from
+ * `claude auth status`), so an account names itself before its own status
+ * read answers, on every client.
+ */
+function statusFromAccount(a: ProviderAccount | undefined): ClaudeCodeStatus | null {
+  if (!a) return null;
+  if (!a.signedIn) return { installed: true, loggedIn: false } as ClaudeCodeStatus;
+  if (!a.email) return { installed: true, loggedIn: true, auth: 'api_key' } as ClaudeCodeStatus;
+  return {
+    installed: true,
+    loggedIn: true,
+    auth: 'subscription',
+    email: a.email,
+    orgName: a.scope === 'organization' ? a.name : undefined,
+    orgId: a.orgId,
+    // An organization seat whose plan the CLI did not print still reads as one.
+    subscriptionType: a.plan ?? (a.scope === 'organization' ? 'team' : undefined),
+  } as ClaudeCodeStatus;
+}
+
+/**
+ * Which account on a login this is, in words: "Personal plan" or
+ * "Organization", with the plan ("Max", "Team") after it. Empty for an
+ * account that is not a plan login.
+ */
+export function accountScopeLine(identity: AccountIdentity | undefined): string {
+  if (!identity?.plan && !identity?.organization) return '';
+  const plan = identity.plan ? capital(identity.plan) : '';
+  return identity.organization ? ['Organization', plan].filter(Boolean).join(' · ') : ['Personal plan', plan].filter(Boolean).join(' · ');
+}
+
+/** A family's accounts, with the Claude subscription accounts of one login email together. */
+export type LoginEntry =
+  | { kind: 'login'; email: string; providers: ProviderConfig[] }
+  | { kind: 'account'; provider: ProviderConfig };
+
+/**
+ * One login, one connection: Claude subscription accounts that sign in as
+ * the same email (a personal plan and an organization seat) group under that
+ * email, in the order each login first appears. Every other account stands
+ * alone. A login with a single account is still a login, so it can offer to
+ * add the other account on it.
+ */
+export function loginEntries(providers: ProviderConfig[], identities: Record<string, AccountIdentity>): LoginEntry[] {
+  const out: LoginEntry[] = [];
+  for (const p of providers) {
+    const email = p.kind === 'claude-code' ? identities[p.id]?.email : undefined;
+    if (!email || identities[p.id]?.signedOut) { out.push({ kind: 'account', provider: p }); continue; }
+    const hit = out.find((e): e is Extract<LoginEntry, { kind: 'login' }> => e.kind === 'login' && e.email.toLowerCase() === email.toLowerCase());
+    if (hit) hit.providers.push(p);
+    else out.push({ kind: 'login', email, providers: [p] });
+  }
+  return out;
 }
 
 /** Two accounts that would read the same are told apart by their email. */

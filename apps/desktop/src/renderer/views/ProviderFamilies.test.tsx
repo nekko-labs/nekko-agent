@@ -9,6 +9,7 @@ vi.mock('../store.js', async (original) => {
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => ({ byToken: {}, answered: new Set() }) }));
 import type { ProviderConfig, SubscriptionLimits } from '@nekko-agent/shared';
 import { ProviderFamilies, addKindFor, busiestWindow } from './ProviderFamilies.js';
+import { nextAccountFolder } from '../components/claude/AddLoginAccount.js';
 
 const p = (id: string, kind: ProviderConfig['kind'], label: string, extra: Partial<ProviderConfig> = {}): ProviderConfig => ({ id, kind, label, baseUrl: '', enabled: true, ...extra });
 const providers = [
@@ -54,5 +55,29 @@ describe('account usage on the row', () => {
   it('says nothing when no usage is reported', () => {
     expect(busiestWindow(undefined)).toBeNull();
     expect(busiestWindow(limits([]))).toBeNull();
+  });
+});
+
+describe('one Claude login with a personal plan and an organization seat', () => {
+  const login = [
+    p('personal', 'claude-code', 'Claude subscription', { account: { signedIn: true, email: 'philip@example.test', scope: 'personal', name: 'Personal', plan: 'max' } }),
+    p('org', 'claude-code', 'Claude subscription · account-2', { claudeCode: { account: 'account-2' }, account: { signedIn: true, email: 'philip@example.test', scope: 'organization', name: 'Nekko Labs', plan: 'team' } }),
+    p('production', 'anthropic', 'Production', { apiKey: 'sk-never-render' }),
+  ];
+  const html = renderToStaticMarkup(<ProviderFamilies providers={login} onAdd={() => {}} renderDetails={() => null} />);
+  it('shows the login once, as one connection, with both accounts under it', () => {
+    expect(html.match(/data-login="philip@example.test"/g)).toHaveLength(1);
+    const group = html.slice(html.indexOf('data-login='), html.indexOf('data-account-row="production"'));
+    expect(group.match(/data-account-row=/g)).toHaveLength(2);
+    expect(group).toContain('Claude subscription · Personal and Nekko Labs');
+    expect(group).toContain('Personal plan · Max');
+    expect(group).toContain('Organization · Team');
+    expect(group).toContain('+ Add another account on this login');
+    // The heading's summary does not repeat the email the login row says.
+    expect(html.slice(html.indexOf('data-family-summary'), html.indexOf('data-family-summary') + 80)).not.toContain('philip@');
+  });
+  it('picks a folder name nobody uses for the other account', () => {
+    expect(nextAccountFolder(login)).toBe('account-3');
+    expect(nextAccountFolder([])).toBe('account-2');
   });
 });

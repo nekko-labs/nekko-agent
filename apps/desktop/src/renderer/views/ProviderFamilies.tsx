@@ -4,7 +4,8 @@ import { formatModelPriceLabel, isLocalProvider, limitsKeyFor, modelPricing } fr
 import { useProviderLimitsPortfolio } from '../useLimits.js';
 import { useStore } from '../store.js';
 import { Group, Row, StatusDot, Toggle } from '../components/primitives/index.js';
-import { accountFamilies, identityLine, sharedEmail, useAccountIdentities, type AccountFamily, type AccountIdentity } from '../providerAccounts.js';
+import { accountFamilies, accountScopeLine, identityLine, loginEntries, sharedEmail, useAccountIdentities, type AccountFamily, type AccountIdentity } from '../providerAccounts.js';
+import { AddLoginAccount } from '../components/claude/AddLoginAccount.js';
 import { ProviderMark, providerMarkKind } from '../components/providers/ProviderMark.js';
 import type { ProviderSetupKind } from '../components/providers/providerPresets.js';
 import { matchesModelQuery } from '../components/agent-console/modelPickerInteractions.js';
@@ -15,9 +16,11 @@ import { ChevronIcon, StarIcon } from '../icons.js';
 /**
  * The cloud half of the Models page as families: each one (Claude, OpenAI, ...)
  * lists the accounts that come with it, then the models those accounts offer,
- * each naming which accounts have it. One login with a personal plan and an
- * organization seat reads as two accounts under one heading, with the email
- * once. An account's sign-in and connection controls open under its row.
+ * each naming which accounts have it. One login is one connection: a Claude
+ * email with a personal plan and an organization seat reads as that email,
+ * with its two accounts under it, each with its own usage and switch, and a
+ * way to add the other account on it. An account's sign-in and connection
+ * controls open under its row.
  * Quiet surfaces: no cards; families are told apart by space and heading
  * size, with a hairline between families (docs/design-system.md).
  */
@@ -65,7 +68,9 @@ function FamilySection({ family, identities, limits, onAdd, renderDetails }: {
   renderDetails: (provider: ProviderConfig) => React.ReactNode;
 }) {
   const idOf = (p: ProviderConfig): AccountIdentity => identities[p.id] ?? { name: p.label };
-  const email = sharedEmail(family.providers.map(idOf));
+  const entries = loginEntries(family.providers, identities);
+  // A login row says its email; the family heading does not repeat it.
+  const email = entries.some((e) => e.kind === 'login') ? undefined : sharedEmail(family.providers.map(idOf));
   const several = family.providers.length > 1;
   const [open, setOpen] = useState<string | null>(null);
   const markKind = providerMarkKind(family.providers[0]);
@@ -85,22 +90,46 @@ function FamilySection({ family, identities, limits, onAdd, renderDetails }: {
         </button>}
       </div>
       <Group title={<span className="quiet-group-label">Accounts</span>} className="mb-6">
-        {family.providers.map((p) => (
-          <AccountRow
-            key={p.id}
-            provider={p}
-            identity={idOf(p)}
-            sharedEmail={email}
-            limits={limits[limitsKeyFor(p) ?? '']}
-            open={open === p.id}
-            onToggleOpen={() => setOpen((cur) => (cur === p.id ? null : p.id))}
-            details={open === p.id ? renderDetails(p) : null}
-          />
-        ))}
+        {entries.map((entry) => {
+          const account = (p: ProviderConfig, login?: string) => (
+            <AccountRow
+              key={p.id}
+              provider={p}
+              identity={idOf(p)}
+              sharedEmail={login ?? email}
+              inLogin={!!login}
+              limits={limits[limitsKeyFor(p) ?? '']}
+              open={open === p.id}
+              onToggleOpen={() => setOpen((cur) => (cur === p.id ? null : p.id))}
+              details={open === p.id ? renderDetails(p) : null}
+            />
+          );
+          if (entry.kind === 'account') return account(entry.provider);
+          return (
+            <div key={`login:${entry.email}`} className="min-w-0" data-login={entry.email}>
+              <Row
+                leading={<span className="w-2" aria-hidden="true" />}
+                title={entry.email}
+                titleClassName="font-medium"
+                detail={loginSummary(entry.providers.map(idOf))}
+                data-login-row
+              />
+              {entry.providers.map((p) => account(p, entry.email))}
+              <AddLoginAccount email={entry.email} />
+            </div>
+          );
+        })}
       </Group>
       <FamilyModels family={family} identities={identities} several={several} />
     </section>
   );
+}
+
+/** Under a login's email: "Claude subscription · Personal and Nekko Labs". */
+function loginSummary(ids: AccountIdentity[]): string {
+  const names = ids.map((i) => i.name);
+  const list = names.length < 3 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `Claude subscription · ${list}`;
 }
 
 /** "2 accounts" or "1 account". */
@@ -116,12 +145,14 @@ export function busiestWindow(limits?: SubscriptionLimits): { text: string; tone
   return { text: `${w.label} ${Math.round(w.usedPercent)}%`, tone: w.status === 'rate_limited' ? 'danger' : w.status === 'warning' ? 'warning' : null };
 }
 
-function AccountRow({ provider, identity, sharedEmail: loginEmail, limits, open, onToggleOpen, details }: {
+function AccountRow({ provider, identity, sharedEmail: loginEmail, inLogin, limits, open, onToggleOpen, details }: {
   provider: ProviderConfig;
   identity: AccountIdentity;
   limits?: SubscriptionLimits;
-  /** The family's login email, already shown once in its summary. */
+  /** The login or family email, already shown once above. */
   sharedEmail?: string;
+  /** One account of a login: indented under its email, saying which account it is. */
+  inLogin?: boolean;
   open: boolean;
   onToggleOpen: () => void;
   details: React.ReactNode;
@@ -149,10 +180,11 @@ function AccountRow({ provider, identity, sharedEmail: loginEmail, limits, open,
     refreshProviders();
   };
   const usage = enabled ? busiestWindow(limits) : null;
-  const words = [identity.hint, identity.email && identity.email.toLowerCase() !== loginEmail?.toLowerCase() ? identity.email : ''].filter(Boolean).join(' · ');
+  const which = inLogin ? accountScopeLine(identity) : '';
+  const words = [which || identity.hint, identity.email && identity.email.toLowerCase() !== loginEmail?.toLowerCase() ? identity.email : ''].filter(Boolean).join(' · ');
   const detail = usage ? <>{words}{words ? ' · ' : ''}<span style={usage.tone ? { color: `var(--${usage.tone})` } : undefined} data-account-usage>{usage.text}</span></> : words;
   return (
-    <div className="min-w-0" id={`provider-${provider.id}`} data-account-row={provider.id}>
+    <div className={`min-w-0${inLogin ? ' pl-5' : ''}`} id={`provider-${provider.id}`} data-account-row={provider.id}>
       <Row
         leading={<StatusDot tone={status.tone} size={8} title={status.word} />}
         title={identity.name}
