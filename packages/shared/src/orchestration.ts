@@ -53,14 +53,36 @@ export interface OrchestrationSettings {
   maxDepth: number;
   /** Advisory cap on how many sub-agents to run at once (surfaced in the prompt). */
   maxParallel: number;
-  /** Explicit user-selected default. Unset inherits the parent's route; never a fallback. */
+  /** Explicit user-selected model for sub-agents. Wins over `subagentModel`; validated, never a fallback. */
   delegationRoute?: { providerId: string; modelId: string };
+  /** How a sub-agent's model is chosen when no explicit route is saved and the call names none. Unset is `auto`. */
+  subagentModel?: SubagentModelChoice;
+}
+
+/**
+ * The sub-agent model preference (Settings and the model selector's Subagents
+ * row). The `auto` choices pick a lighter model than the chat's, so fanning
+ * out does not multiply the most expensive model; `inherit` is the old
+ * behaviour (the chat's own model).
+ */
+export type SubagentModelChoice = 'auto' | 'auto-same-provider' | 'auto-local' | 'inherit';
+
+export const SUBAGENT_MODEL_CHOICES: { id: SubagentModelChoice; label: string; description: string }[] = [
+  { id: 'auto', label: 'Auto', description: 'Lighter than the chat\'s model, on its provider. A chat on ✨ Auto may use a loaded local model.' },
+  { id: 'auto-same-provider', label: 'Auto · same provider', description: 'Lighter than the chat\'s model, never leaving its provider.' },
+  { id: 'auto-local', label: 'Auto · prefer local', description: 'A local model (loaded first), else lighter on the chat\'s provider.' },
+  { id: 'inherit', label: 'Same model as the chat', description: 'Whatever the chat runs on.' },
+];
+
+export function subagentModelChoice(o: OrchestrationSettings | undefined): SubagentModelChoice {
+  const id = o?.subagentModel;
+  return SUBAGENT_MODEL_CHOICES.some((c) => c.id === id) ? id! : 'auto';
 }
 
 export const DEFAULT_ORCHESTRATION: OrchestrationSettings = {
   strategy: 'balanced',
   maxDepth: 2,
-  maxParallel: 4,
+  maxParallel: 2,
 };
 
 export function getStrategy(id: OrchestrationStrategy | undefined): OrchestrationStrategyDef {

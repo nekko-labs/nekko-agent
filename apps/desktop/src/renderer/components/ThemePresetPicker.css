@@ -38,22 +38,23 @@
   border-radius: 16px;
   color: var(--ink-soft);
 }
+/* The palette's icon, in the palette's accent (set inline). Line at rest, solid once picked. */
 .theme-swatch {
-  display: block;
+  display: grid;
+  place-items: center;
   width: 44px;
   height: 44px;
-  border-radius: 50%;
-  outline: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  outline-offset: 0;
-  transition: transform 170ms cubic-bezier(.2, .8, .2, 1), box-shadow 170ms ease, outline-offset 170ms ease;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
+.theme-swatch .theme-icon { width: 32px; height: 32px; }
 .theme-swatch-large .theme-swatch { width: 56px; height: 56px; }
+.theme-swatch-large .theme-swatch .theme-icon { width: 40px; height: 40px; }
+.theme-icon { display: inline-grid; line-height: 0; }
+.theme-icon > svg { grid-area: 1 / 1; width: 100%; height: 100%; transition: opacity var(--dur-med) var(--ease-out); }
+.theme-icon > .theme-icon-solid,
+.theme-swatch-button[aria-checked='true'] .theme-icon-line { opacity: 0; }
+.theme-swatch-button[aria-checked='true'] .theme-icon-solid { opacity: 1; }
 .theme-swatch-button[aria-checked='true'] { color: var(--accent); }
-.theme-swatch-button[aria-checked='true'] .theme-swatch {
-  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
-  outline-offset: 4px;
-  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 22%, transparent);
-}
 @media (hover: hover) {
   .theme-swatch-button:hover .theme-swatch { transform: scale(1.08); }
 }
@@ -65,6 +66,6 @@
 .theme-custom-colors { width: min(100%, 420px); }
 .theme-custom-trigger { border-radius: 12px; }
 @media (prefers-reduced-motion: reduce) {
-  .theme-swatch, .theme-mode-thumb { transition: none; }
+  .theme-swatch, .theme-mode-thumb, .theme-icon > svg { transition: none; }
   .theme-swatch-button .theme-swatch { transform: none !important; }
 }

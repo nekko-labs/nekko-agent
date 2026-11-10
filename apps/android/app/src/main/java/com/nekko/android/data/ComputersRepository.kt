@@ -782,6 +782,12 @@ class ComputersRepository(
     private fun connectionTo(id: String): Remote? = if (id == _state.value.activeId) client else links[id]?.client
 
     /**
+     * Read-class calls to one paired computer, active or not, over its own connection; null unless
+     * it is online now, so nothing is ever sent to a computer that isn't (Usage by place, #2114).
+     */
+    fun callerFor(id: String): Caller? = connectionTo(id)?.takeIf { _state.value.connOf(id) == RelayState.ONLINE }
+
+    /**
      * Ask every online computer whether it is in use and whether it has a
      * local model, in parallel, and pick one. A computer that doesn't answer
      * in [timeoutMs] counts as not saying.

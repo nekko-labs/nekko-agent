@@ -92,7 +92,7 @@ export function useClaudeCodeStatuses(providers: ProviderConfig[]): Record<strin
 /** A Claude Code terminal shown inline: the installer, or Claude Code's sign-in. */
 interface InlineTerminal { id: string; purpose: 'install' | 'signin'; account?: string }
 
-function useInlineTerminal(onTick: () => void) {
+export function useInlineTerminal(onTick: () => void) {
   const [term, setTerm] = useState<InlineTerminal | null>(null);
   const pushToast = useStore((s) => s.pushToast);
   const workspaceId = useStore((s) => s.activeProjectId) ?? undefined;

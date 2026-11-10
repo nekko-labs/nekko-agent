@@ -313,7 +313,8 @@ fun NekkoNavHost(
                 FilesScreen(repo = repo, onBack = { nav.popBackStack() })
             }
             composable(Routes.USAGE) {
-                UsageScreen(repo = repo, onBack = { nav.popBackStack() })
+                val app = LocalContext.current.applicationContext as? com.nekko.android.NekkoApp
+                UsageScreen(repo = repo, onBack = { nav.popBackStack() }, phonePrefs = phonePrefs, phone = app?.phoneChats)
             }
             composable(Routes.COMPUTERS) {
                 ComputersScreen(
