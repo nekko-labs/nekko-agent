@@ -65,6 +65,12 @@ class WinterThemeTest {
         }
         settle()
         shot("winter-theme")
+        // Give screenrecord a sustained native scene while servicing Compose's test clock.
+        repeat(60) {
+            Thread.sleep(100)
+            compose.mainClock.advanceTimeBy(100)
+            compose.waitForIdle()
+        }
         val mascot = compose.onNodeWithTag("chat.mascot")
         mascot.assertHasClickAction().performClick()
         // The theme overlay must not intercept the real button or remove its greeting.
