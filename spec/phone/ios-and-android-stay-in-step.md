@@ -47,6 +47,10 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Chat environment: repositories and question actions (desktop since #2404) | Actioned `ask_user` options show as plain answers; no repository list | Same | [#2415](https://github.com/nekko-labs/nekko-agent/issues/2415) |
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Being built | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | iPhone: [#2423](https://github.com/nekko-labs/nekko-agent/issues/2423). Both: the native store rating request once on the App Store and Google Play (planned). |
 
+## Pending response messages (#2476, not shipped)
+
+The lower stack layer implements iOS pending in-chat answers and one-time Allow/Deny messages. Android parity is tracked in [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) and the upper stack layer. Neither branch implementation nor an uninspected capture is release verification.
+
 ## Direct cloud text chats (#2414, not shipped)
 
 [#2414](https://github.com/nekko-labs/nekko-agent/issues/2414) tracks both platform PRs and stays open until both land. Android is implemented on `feat/android-phone-cloud-2414`; the iPhone counterpart is separate [draft PR #2462](https://github.com/nekko-labs/nekko-agent/pull/2462), not shipped. Branch implementation is not release or visual approval.

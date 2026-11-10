@@ -168,6 +168,11 @@ struct ChatView: View {
                         }
                         }
                     }
+                    ForEach(chat.responseMessages) { message in
+                        ResponseMessageRow(message: message,
+                            retry: { chat.retryResponse(message.id) }, cancel: { chat.cancelResponse(message.id) })
+                            .id("response-\(message.id)")
+                    }
                     // Prompts written here that the computer doesn't have yet.
                     ForEach(chat.waiting) { item in
                         WaitingRow(item: item, sending: store.outbox.sendingId == item.id, online: store.conn == .online,
@@ -415,13 +420,13 @@ struct ChatView: View {
     /// The approval and question cards, the queue, the PR chip and the composer.
     private func bottomBar(_ chat: ChatModel) -> some View {
         VStack(spacing: 8) {
-            if let a = chat.turn.approval {
+            if let a = chat.responseApproval {
                 ApprovalCard(approval: a, answer: { ok in try await chat.approve(ok) },
                              alwaysAllow: ChatModel.offersAlwaysAllow(a.call) ? { try await chat.alwaysAllowTool() } : nil,
                              startAlways: alwaysNow == a.call.id, startedAlways: { alwaysNow = nil })
                     .id(a.call.id)
             }
-            if let q = chat.turn.question {
+            if let q = chat.responseQuestion {
                 // A new question starts with nothing picked.
                 QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
             }

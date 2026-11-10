@@ -13,10 +13,21 @@ import SwiftUI
 /// Change key, so a guarded save is refused, as a cancelled Face ID would be.
 struct SecurityEvidenceFixture: View {
     @Environment(AppModel.self) private var app
-    @State private var store = ComputersStore(
-        store: SecurityEvidenceSecrets(), makeConnection: { _ in SecurityEvidenceConnection() },
-        deviceName: { "Test iPhone" }, deriveKey: { _, _ in Data(repeating: 0, count: 32) })
+    @State private var store: ComputersStore
+    @State private var connection: SecurityEvidenceConnection
     @State private var ready = false
+    @State private var callSummary = "Calls: 0; accepted: 0"
+
+    /// Both options use only protocols available on the evidence baseline.
+    /// -securityEvidenceQuestion YES substitutes a question for the approval.
+    /// -securityEvidenceControls YES enables synthetic transport controls and call inspection.
+    init() {
+        let connection = SecurityEvidenceConnection()
+        _connection = State(initialValue: connection)
+        _store = State(initialValue: ComputersStore(
+            store: SecurityEvidenceSecrets(), makeConnection: { _ in connection },
+            deviceName: { "Test iPhone" }, deriveKey: { _, _ in Data(repeating: 0, count: 32) }))
+    }
 
     var body: some View {
         NavigationStack {
@@ -29,6 +40,25 @@ struct SecurityEvidenceFixture: View {
                     .background(LiveCardView.background, in: RoundedRectangle(cornerRadius: 22))
                     .padding(.horizontal, 12)
                     .accessibilityIdentifier("securityEvidence.card")
+            }
+            if ready && UserDefaults.standard.bool(forKey: "securityEvidenceControls") {
+                VStack(spacing: 8) {
+                    HStack(spacing: 16) {
+                        Button("Offline") { connection.setMode(.offline) }
+                            .accessibilityIdentifier("securityEvidence.offline")
+                        Button("Fail calls") { connection.setMode(.failure) }
+                            .accessibilityIdentifier("securityEvidence.failure")
+                        Button("Succeed") { connection.setMode(.success) }
+                            .accessibilityIdentifier("securityEvidence.success")
+                        Button("Inspect calls") { callSummary = connection.summary }
+                            .accessibilityIdentifier("securityEvidence.inspect")
+                    }
+                    Text("Link: \(store.conn.rawValue)").accessibilityIdentifier("securityEvidence.status")
+                    Text(callSummary).accessibilityIdentifier("securityEvidence.calls")
+                }
+                .font(.caption)
+                .buttonStyle(.plain)
+                .padding(8)
             }
         }
         .environment(store)
@@ -64,13 +94,34 @@ private final class SecurityEvidenceSecrets: SecureStore, @unchecked Sendable {
 
 private final class SecurityEvidenceConnection: RemoteConnection, @unchecked Sendable {
     static let chatId = "security-evidence"
+    enum Mode: Equatable { case offline, failure, success }
+    private let question = UserDefaults.standard.bool(forKey: "securityEvidenceQuestion")
+    private let controls = UserDefaults.standard.bool(forKey: "securityEvidenceControls")
+    private let lock = NSLock()
+    private var mode: Mode = .offline
+    private var onStatus: (@Sendable (RelayStatus) -> Void)?
+    private var attempts = 0
+    private var accepted = 0
+
+    var summary: String { lock.withLock { "Calls: \(attempts); accepted: \(accepted)" } }
+
+    func setMode(_ mode: Mode) {
+        let handler = lock.withLock {
+            self.mode = mode
+            return onStatus
+        }
+        handler?(RelayStatus(mode == .offline ? .offline : .online))
+    }
 
     func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?,
-                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {}
-    func connect() {}
+                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {
+        lock.withLock { self.onStatus = onStatus }
+    }
+    // Preserve the original security fixture's silent connection unless controls are requested.
+    func connect() { if controls { setMode(lock.withLock { mode }) } }
     func close() {}
     func nudge() {}
-    func reconnect() {}
+    func reconnect() { connect() }
     func registerPush(token: String) async throws {}
     func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {}
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
@@ -85,12 +136,37 @@ private final class SecurityEvidenceConnection: RemoteConnection, @unchecked Sen
             return ["id": .string(Self.chatId), "title": "Release notes", "providerId": "anthropic", "modelId": "claude-opus-5-5",
                     "mode": "guardrails", "updatedAt": 1793800000000, "messages": .array(messages), "activeRun": ["startedAt": 1793800000000]]
         case Channels.chatPending:
+            if lock.withLock({ accepted > 0 }) { return .object([:]) }
+            if question {
+                return [Self.chatId: ["question": [
+                    "callId": "release-question", "askedAt": 1793800000000,
+                    "questions": [["id": "destination", "header": "Destination",
+                                   "question": "Where should I post the release summary?", "multiSelect": false,
+                                   "options": [["label": "Releases"], ["label": "Engineering"]]]],
+                ]]]
+            }
             return [Self.chatId: ["approval": [
                 "call": ["id": "post", "name": "mcp__slack__post_message",
                          "input": ["channel": "#releases", "text": "Release 2.4: faster sync, new themes."]],
                 "reason": "This chat read content from outside this computer, and an MCP tool could send data out.",
                 "severity": "high",
             ]]]
+        case Channels.chatAnswer, Channels.toolApprove:
+            return try lock.withLock {
+                guard controls else { return .null }
+                attempts += 1
+                guard mode == .success else { throw RelayError("Synthetic response call failed.") }
+                let expectedChannel = question ? Channels.chatAnswer : Channels.toolApprove
+                let expectedCall = question ? "release-question" : "post"
+                let expectedPayload: JSONValue = question
+                    ? [["questionId": "destination", "labels": ["Releases"]]] : .bool(true)
+                guard channel == expectedChannel,
+                      args == [.string(Self.chatId), .string(expectedCall), expectedPayload], accepted == 0 else {
+                    throw RelayError("Unexpected synthetic response payload or duplicate delivery.")
+                }
+                accepted += 1
+                return .null
+            }
         default:
             return .null
         }

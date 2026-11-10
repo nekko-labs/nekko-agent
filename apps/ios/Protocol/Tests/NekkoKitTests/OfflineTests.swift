@@ -563,7 +563,7 @@ final class OfflineStoreTests: XCTestCase {
         chat.stop()
     }
 
-    func testApprovalsAreNeverQueued() async throws {
+    func testOfflineApprovalIsAPendingResponseNotAPrompt() async throws {
         let (s, c) = try await makeOnline(files: MemoryOfflineFiles(), computer: FakeComputer(chats: ["s"]))
         let chat = ChatModel(sessionId: "s", store: s)
         chat.start()
@@ -572,13 +572,14 @@ final class OfflineStoreTests: XCTestCase {
         await settleOffline()
         c.status(RelayStatus(.offline))
         await settleOffline()
-        do {
-            try await chat.approve(true)
-            XCTFail("an approval was accepted offline")
-        } catch {
-            XCTAssertEqual(error.localizedDescription, ChatModel.reconnectToAnswer)
-        }
-        XCTAssertEqual(chat.turn.approval?.call.id, "t")
+        try await chat.approve(true)
+        XCTAssertEqual(chat.responseMessages.first?.pendingId, "approval:t")
+        XCTAssertEqual(chat.responseMessages.first?.status, "waiting")
+        XCTAssertNil(chat.responseApproval)
+        XCTAssertTrue(c.callsTo(Channels.toolApprove).isEmpty)
+        chat.cancelResponse(chat.responseMessages[0].id)
+        XCTAssertTrue(chat.responseMessages.isEmpty)
+        XCTAssertEqual(chat.responseApproval?.call.id, "t")
         XCTAssertTrue(s.outbox.items.isEmpty)
         chat.stop()
     }

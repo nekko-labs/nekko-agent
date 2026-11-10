@@ -110,7 +110,7 @@ public struct OutboxItem: Equatable, Sendable, Identifiable {
 /// outbox only when the computer's copy of the chat lists that id, so a
 /// connection lost mid-send means "send again", never "maybe lost" or "twice".
 /// When the computer refuses one (chat deleted, no model, …) it goes back to
-/// its draft with the reason. Approvals and question answers are never queued.
+/// its draft with the reason. Answers and one-time approvals use `PendingResponses` instead.
 @MainActor
 @Observable
 public final class Outbox {
