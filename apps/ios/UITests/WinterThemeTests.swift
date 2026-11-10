@@ -1,6 +1,6 @@
 import XCTest
 
-/// Overlay this file alone on both app revisions with native-mode-evidence.yml.
+/// Overlay this file and the debug ChatStatusFixture on both app revisions.
 /// Uses only pre-existing launch flags, fixture rows and accessibility identifiers.
 @MainActor
 final class WinterThemeTests: XCTestCase {
@@ -21,7 +21,7 @@ final class WinterThemeTests: XCTestCase {
             from.press(forDuration: 0.1, thenDragTo: to)
             XCTAssertTrue(waitValue(mascot, "Refreshing", timeout: 2), "snow does not consume the refresh gesture")
             attach(app, "seasonal-\(theme)-refresh")
-            XCTAssertTrue(waitValue(mascot, "Working", timeout: 8))
+            XCTAssertTrue(waitValue(mascot, "Working", timeout: 12))
             app.terminate()
         }
 
@@ -42,7 +42,7 @@ final class WinterThemeTests: XCTestCase {
     private func launch(theme: String, reduced: Bool) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTestChatStatus", "-splash", "NO", "-appLock", "NO", "-onboarded", "YES",
-                               "-uiTestReset", "YES", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-theme", theme]
+                               "-uiTestReset", "YES", "-uiTestSlowRefresh", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-theme", theme]
         if reduced { app.launchArguments.append("-uiTestReduceMotion") }
         app.launch()
         return app

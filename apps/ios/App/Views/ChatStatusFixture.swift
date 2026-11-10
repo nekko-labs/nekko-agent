@@ -24,7 +24,12 @@ struct ChatStatusFixture: View {
             }
             .listStyle(.plain)
             .appBackground()
-            .pawRefreshable(pull) { try? await Task.sleep(for: .seconds(1.2)) }
+            .pawRefreshable(pull) {
+                // XCTest's post-drag idle wait exceeds the normal 1.2s fixture state.
+                // Opt in only for seasonal evidence; production refresh is unaffected.
+                let seconds = ProcessInfo.processInfo.arguments.contains("-uiTestSlowRefresh") ? 8.0 : 1.2
+                try? await Task.sleep(for: .seconds(seconds))
+            }
             .navigationTitle("Chats")
             .toolbar {
                 RootMascot(working: true, pull: pull)
