@@ -26,7 +26,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -52,6 +52,7 @@ import {
   ReplyStatus, useElementWidth,
 } from './agent-console/index.js';
 import type { PendingApproval } from './agent-console/index.js';
+import { SubagentModelControl } from './SubagentModelControl.js';
 import { replyIconState } from './agent-console/ReplyStatus.js';
 import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/LiveTurn.js';
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
@@ -614,6 +615,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const subagentChildren = useMemo(() => subagentSessions.filter(s => s.parentSessionId === sessionId), [subagentSessions, sessionId]);
   // What a delegation that names no model runs on: the saved route, else this chat's model.
   const delegationDefaultModel = useStore(s => s.settings?.orchestration?.delegationRoute?.modelId);
+  // Under an Auto sub-agent choice the engine picks per call, so a row waits for the child's own model.
+  const subagentsInherit = useStore(s => subagentModelChoice(s.settings?.orchestration) === 'inherit');
   const delegationStrategy = useStore(s => s.settings?.orchestration?.strategy);
   const computer = useComputerOf(sessionId);
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
@@ -2701,8 +2704,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       onOpenChange={openModelMenu}
       needsChoice={needsModel}
       unavailableModel={needsModel ? unavailableModel : null}
-      footer={expertMode ? undefined : <>
-        {autoQualityControl && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1">{autoQualityControl}</div>}
+      footer={<>
+        {!expertMode && autoQualityControl && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1">{autoQualityControl}</div>}
+        {!session?.parentSessionId && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1"><SubagentModelControl /></div>}
       </>}
       onProvider={setProviderId}
       onModel={(pid, v) => {
@@ -2825,7 +2829,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
         {surface !== 'composer' && !cleanStart && (
         <div className="relative flex min-h-0 w-full flex-1">
-          <FoldThoughtsContext.Provider value={!isCloudModel || !showThinking}><SubagentParentContext.Provider value={subagentChildren}><SubagentInheritedModelContext.Provider value={delegationDefaultModel ?? (modelId && modelId !== AUTO_MODEL_ID ? modelId : undefined)}><WatchSessionContext.Provider value={sessionId}><VirtualTranscript
+          <FoldThoughtsContext.Provider value={!isCloudModel || !showThinking}><SubagentParentContext.Provider value={subagentChildren}><SubagentInheritedModelContext.Provider value={delegationDefaultModel ?? (subagentsInherit && modelId && modelId !== AUTO_MODEL_ID ? modelId : undefined)}><WatchSessionContext.Provider value={sessionId}><VirtualTranscript
             ref={transcriptRef}
             rows={rows}
             renderRow={renderRow}

@@ -68,9 +68,16 @@ fn exact(v: &Value) -> bool {
 }
 
 /// Check the route before discovery or admission. Auto is the existing Nekko
-/// router opt-in; Fusion also enables autoProviderSwitch. Neither overrides
-/// cloudOnly. An unknown source fails closed for local targets.
-fn check_delegation_route(parent: &Value, source: Option<&Value>, target: &Value) -> Result<(), String> {
+/// router opt-in; Fusion also enables autoProviderSwitch; the sub-agent
+/// preference `auto-local` (`local_opt_in`) is the user's opt-in for
+/// sub-agents alone. None overrides cloudOnly. An unknown source fails
+/// closed for local targets.
+fn check_delegation_route(
+    parent: &Value,
+    source: Option<&Value>,
+    target: &Value,
+    local_opt_in: bool,
+) -> Result<(), String> {
     if crate::admission::cloud_provider_allowed(target) {
         return Ok(());
     }
@@ -80,10 +87,63 @@ fn check_delegation_route(parent: &Value, source: Option<&Value>, target: &Value
                 .into(),
         );
     }
-    if !js::truthy(parent.get("autoModel")) && source.is_none_or(crate::admission::cloud_provider_allowed) {
+    if !local_opt_in
+        && !js::truthy(parent.get("autoModel"))
+        && source.is_none_or(crate::admission::cloud_provider_allowed)
+    {
         return Err("Cloud chats cannot delegate to local models unless Fusion mode or the Nekko router is enabled. Enable one in this chat, or choose a cloud provider. No child was started and no fallback was used.".into());
     }
     Ok(())
+}
+
+/// The sub-agent model preference's pick, `(provider, model)`, or `None` to
+/// inherit the parent's (`inherit`, a parent on ✨ Auto, nothing lighter
+/// listed, or a list that could not be read). See subagent_model.rs.
+async fn auto_target(
+    ctx: &Ctx,
+    parent: &Value,
+    settings: &Value,
+    provider_id: &Value,
+    model_id: &Value,
+    preference: &str,
+) -> Option<(Value, Value)> {
+    use crate::subagent_model::{lighter_model, local_model};
+    let parent_model = model_id.as_str().filter(|m| !m.is_empty())?;
+    let pid = provider_id.as_str()?;
+    // A parent on ✨ Auto already routes per message: its child inherits that,
+    // except that Auto and prefer-local first look for a local model.
+    let on_auto = parent_model == "__auto__";
+    if preference == "inherit" || (on_auto && preference == "auto-same-provider") {
+        return None;
+    }
+    let providers: Vec<Value> = settings.get("providers").and_then(Value::as_array).cloned().unwrap_or_default();
+    let source = providers.iter().find(|p| p.get("id") == Some(provider_id));
+    // A Claude Code chat runs its own sub-agents; this is never reached for it.
+    if source.is_none_or(|p| p.get("kind").and_then(Value::as_str) == Some("claude-code")) {
+        return None;
+    }
+    let source_is_local = source.is_some_and(nekko_turn::providers::offline_provider_allowed);
+    if !source_is_local && matches!(preference, "auto" | "auto-local") {
+        let loaded_only = preference == "auto";
+        for p in providers.iter().filter(|p| {
+            js::truthy(p.get("enabled"))
+                && nekko_turn::providers::offline_provider_allowed(p)
+                && check_delegation_route(parent, source, p, preference == "auto-local").is_ok()
+        }) {
+            let Some(id) = p.get("id").and_then(Value::as_str) else { continue };
+            let listed = crate::providers::list_models_status(ctx, id).await;
+            let models = listed.get("models").and_then(Value::as_array).cloned().unwrap_or_default();
+            if let Some(m) = local_model(&models, loaded_only) {
+                return Some((json!(id), json!(m)));
+            }
+        }
+    }
+    if on_auto {
+        return None;
+    }
+    let listed = crate::providers::list_models_status(ctx, pid).await;
+    let models = listed.get("models").and_then(Value::as_array).cloned().unwrap_or_default();
+    lighter_model(parent_model, &models).map(|m| (provider_id.clone(), json!(m)))
 }
 
 /// `prepareSubAgent(parent, providerId, modelId, input)`: refused with
@@ -144,10 +204,26 @@ async fn prepare_sub_agent(
         .then(|| orchestration.and_then(|o| o.get("delegationRoute")).filter(|r| js::truthy(Some(r))).cloned())
         .flatten();
     let route = |k: &str| default_route.as_ref().and_then(|r| r.get(k)).filter(|v| !v.is_null()).cloned();
-    let target_provider =
-        inp.get("provider_id").cloned().or_else(|| route("providerId")).unwrap_or_else(|| provider_id.clone());
-    let target_model = inp.get("model_id").cloned().or_else(|| route("modelId")).unwrap_or_else(|| model_id.clone());
-    if target_provider != *provider_id && !explicit_model && default_route.is_none() {
+    let preference = crate::subagent_model::preference(orchestration);
+    // Nothing named and no saved route: the sub-agent model preference (#2487).
+    let auto = if !inp.contains_key("provider_id") && !explicit_model && default_route.is_none() {
+        auto_target(ctx, parent, &settings, provider_id, model_id, preference).await
+    } else {
+        None
+    };
+    let target_provider = inp
+        .get("provider_id")
+        .cloned()
+        .or_else(|| route("providerId"))
+        .or_else(|| auto.as_ref().map(|a| a.0.clone()))
+        .unwrap_or_else(|| provider_id.clone());
+    let target_model = inp
+        .get("model_id")
+        .cloned()
+        .or_else(|| route("modelId"))
+        .or_else(|| auto.as_ref().map(|a| a.1.clone()))
+        .unwrap_or_else(|| model_id.clone());
+    if target_provider != *provider_id && !explicit_model && default_route.is_none() && auto.is_none() {
         return Err("Changing provider requires an explicit model_id known to belong to that provider. Ask the user for the exact model ID; never guess.".into());
     }
     if target_model.as_str().is_none_or(|m| js::trim(m).is_empty()) {
@@ -167,7 +243,7 @@ async fn prepare_sub_agent(
         .get("providers")
         .and_then(Value::as_array)
         .and_then(|ps| ps.iter().find(|p| p.get("id") == Some(provider_id)));
-    check_delegation_route(parent, source, &provider)?;
+    check_delegation_route(parent, source, &provider, preference == "auto-local")?;
     if explicit_model || default_route.is_some() {
         let pid = target_provider.as_str().unwrap_or_default();
         let listed = crate::providers::list_models_status(ctx, pid).await;
@@ -264,7 +340,10 @@ pub async fn prepare(ctx: &Ctx, req: &Value) -> Value {
             let Some(target) = find(&target_id).filter(|p| js::truthy(p.get("enabled"))) else {
                 return json!({ "error": "Target provider is unknown or disabled." });
             };
-            if let Err(error) = check_delegation_route(&parent, find(&provider_id), target) {
+            let local_opt_in =
+                crate::subagent_model::preference(settings.get("orchestration").filter(|o| !o.is_null()))
+                    == "auto-local";
+            if let Err(error) = check_delegation_route(&parent, find(&provider_id), target, local_opt_in) {
                 return json!({ "error": error });
             }
             // Revoke stale router permission, but never relax a child's privacy boundary.
@@ -321,14 +400,17 @@ mod tests {
             for switch in [false, true] {
                 for cloud_only in [false, true] {
                     let parent = json!({"autoModel": auto, "autoProviderSwitch": switch, "cloudOnly": cloud_only});
-                    assert_eq!(check_delegation_route(&parent, Some(&cloud), &local).is_ok(), auto && !cloud_only);
-                    assert!(check_delegation_route(&parent, Some(&cloud), &cloud).is_ok());
-                    assert_eq!(check_delegation_route(&parent, Some(&local), &local).is_ok(), !cloud_only);
+                    assert_eq!(
+                        check_delegation_route(&parent, Some(&cloud), &local, false).is_ok(),
+                        auto && !cloud_only
+                    );
+                    assert!(check_delegation_route(&parent, Some(&cloud), &cloud, false).is_ok());
+                    assert_eq!(check_delegation_route(&parent, Some(&local), &local, false).is_ok(), !cloud_only);
                 }
             }
         }
-        assert!(check_delegation_route(&json!({}), Some(&cloud), &local).is_err());
-        assert!(check_delegation_route(&json!({}), None, &local).is_err());
+        assert!(check_delegation_route(&json!({}), Some(&cloud), &local, false).is_err());
+        assert!(check_delegation_route(&json!({}), None, &local, false).is_err());
     }
 
     #[test]
@@ -339,10 +421,10 @@ mod tests {
             json!({"kind": "openai-compat", "baseUrl": "http://localhost:1234/v1"}),
             json!({"kind": "openai-compat", "baseUrl": "http://[::1]:1234/v1"}),
         ] {
-            assert!(check_delegation_route(&json!({}), Some(&cloud), &local).is_err());
-            assert!(check_delegation_route(&json!({}), Some(&local), &local).is_ok());
+            assert!(check_delegation_route(&json!({}), Some(&cloud), &local, false).is_err());
+            assert!(check_delegation_route(&json!({}), Some(&local), &local, false).is_ok());
         }
         let connected = json!({"kind": "openai-compat", "baseUrl": "http://127.0.0.1:5000/v1", "computerId": "remote"});
-        assert!(check_delegation_route(&json!({"cloudOnly": true}), Some(&cloud), &connected).is_ok());
+        assert!(check_delegation_route(&json!({"cloudOnly": true}), Some(&cloud), &connected, false).is_ok());
     }
 }

@@ -91,12 +91,12 @@ export function ScheduledTasksDemoVideo() {
 /** No autoplay, looping, network embeds or persistent settings changes. */
 export function ScheduledTasksDemo({ playerRef }: { playerRef?: React.Ref<PlayerRef> }) {
   const title = useId();
-  return <section className="rounded-xl border border-(--line) bg-(--surface-2) p-3" aria-labelledby={title} data-scheduled-tasks-demo>
-    <h2 id={title} className="mb-2 text-sm font-medium">See what you can automate <span className="text-xs text-ink-faint">· 42 seconds</span></h2>
+  return <section aria-labelledby={title} data-scheduled-tasks-demo>
+    <h2 id={title} className="mb-2 text-sm font-medium text-ink">See what you can automate <span className="font-normal text-xs text-ink-faint">42 seconds</span></h2>
     <div className="overflow-hidden rounded-lg border border-(--line)" role="group" aria-label="Scheduled Tasks video player">
       <Player ref={playerRef} component={ScheduledTasksDemoVideo} durationInFrames={SCHEDULED_DEMO_FRAMES} fps={SCHEDULED_DEMO_FPS} compositionWidth={SCHEDULED_DEMO_SIZE.width} compositionHeight={SCHEDULED_DEMO_SIZE.height} style={{ width: '100%', aspectRatio: '960 / 600' }} initialFrame={15} controls showVolumeControls={false} clickToPlay />
     </div>
-    <details data-demo-transcript className="mt-2 text-xs leading-relaxed text-ink-soft">
+    <details data-demo-transcript className="mt-2 text-xs leading-relaxed text-ink-faint">
       <summary className="cursor-pointer">Read the walkthrough transcript</summary>
       <ol className="mt-2 list-decimal space-y-2 pl-5">{SCHEDULED_DEMO_SCENES.map(s => <li key={s.start}><strong>{s.title}.</strong> {s.caption} {s.transcript}</li>)}</ol>
       <p className="mt-2">Illustrated with synthetic data. No task is created or run by watching this video. Keep Nekko running; online sources need connectivity.</p>

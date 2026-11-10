@@ -90,7 +90,7 @@ struct StarAskCountTests {
     private final class Listed { var ids: [JSONValue] = [] }
 
     private func online() async throws -> (ComputersStore, FakeConnection) {
-        let (s, c) = try await online()
+        let (s, c) = try await ChatModelTests.makeOnline()
         let listed = Listed()
         c.replies[Channels.chatSend] = { args in listed.ids.append(args.first?["clientMessageId"] ?? .null); return .null }
         c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": [], "clientMessageIds": .array(listed.ids)] }

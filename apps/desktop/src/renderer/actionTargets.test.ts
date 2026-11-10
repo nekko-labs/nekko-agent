@@ -9,6 +9,21 @@ describe('comfortable action targets', () => {
     });
   });
 
+  it('keeps buttons slim for a pointer and 44px for a finger', () => {
+    const btn = cssUtility(sheet, 'btn');
+    expect(btn['min-height']).toBe('28px');
+    const touch: Record<string, string> = {};
+    sheet.walkAtRules('utility', (at) => {
+      if (at.params.trim() !== 'btn') return;
+      at.walkAtRules('apply', (apply) => { expect(apply.params).not.toContain('action-target'); });
+      at.walkAtRules('media', (media) => {
+        if (!media.params.includes('pointer: coarse')) return;
+        media.walkDecls((d) => { touch[d.prop] = d.value; });
+      });
+    });
+    expect(touch).toMatchObject({ 'min-width': '44px', 'min-height': '44px' });
+  });
+
   it('limits the compact height exception to native caption-strip chrome', () => {
     expect(cssRule(sheet, '#command-titlebar-slot .btn')['min-height']).toBe('28px');
     expect(cssRule(sheet, '.voice-island')['flex']).toBe('0 0 44px');

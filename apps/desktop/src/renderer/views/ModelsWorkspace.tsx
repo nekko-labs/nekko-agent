@@ -43,14 +43,10 @@ export function ModelsWorkspace() {
   const showAll = useCallback(() => firstRun.set(false), [firstRun.set]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<ModelsSectionId>('cloud');
-  // The spy would light each section passed on the way down, so it waits
-  // until the jump's scrolling has been still for a moment.
+  // A requested anchor can be clamped at the page end or land on a fractional
+  // pixel. Keep its selection until the user takes over scrolling.
   const jumping = useRef(false);
-  const settle = useRef(0);
-  const settleAfter = (ms: number) => {
-    clearTimeout(settle.current);
-    settle.current = window.setTimeout(() => { jumping.current = false; }, ms);
-  };
+  const releaseJump = () => { jumping.current = false; };
   const goTo = useCallback((to: ModelsSectionId) => {
     // A local section that is not on screen (behind a model's own page)
     // lands on Local's heading instead.
@@ -60,13 +56,12 @@ export function ModelsWorkspace() {
     if (!target) return;
     setActive(id);
     jumping.current = true;
-    settleAfter(300);
     target.scrollIntoView?.({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   }, []);
   // Section spy: it measures the page, so at most once a frame, not per scroll event.
   const spyFrame = useRef(0);
   const onScroll = () => {
-    if (jumping.current) settleAfter(120);
+    if (jumping.current) return;
     if (spyFrame.current) return;
     spyFrame.current = requestAnimationFrame(() => {
       spyFrame.current = 0;
@@ -82,15 +77,15 @@ export function ModelsWorkspace() {
     shown.current = view;
   }, [view, goTo]);
   const fullLocal = firstRun.value === false;
-  return <div className="settings-panel">
-    <aside className="settings-rail">
+  return <div className="models-layout">
+    <aside className="models-rail">
       {!hasAppChrome && <h1 className="view-title">Models</h1>}
-      <nav aria-label="Models sections" className="settings-nav">
+      <nav aria-label="Models sections" className="models-navigation">
         {MODELS_SECTIONS.filter((s) => !('parent' in s) || fullLocal).map((s) => (
           <button
             key={s.id}
             type="button"
-            className={'parent' in s ? 'settings-nav-item models-nav-sub' : 'settings-nav-item'}
+            className={'parent' in s ? 'settings-nav-item models-nav-sub' : 'settings-nav-item models-nav-main'}
             aria-current={active === s.id ? 'true' : undefined}
             onClick={() => goTo(s.id)}
           >
@@ -99,7 +94,12 @@ export function ModelsWorkspace() {
         ))}
       </nav>
     </aside>
-    <div ref={scrollRef} className="models-workspace" onScroll={onScroll}>
+    <div ref={scrollRef} className="models-workspace" onScroll={onScroll}
+      onWheel={releaseJump} onTouchStart={releaseJump} onPointerDown={releaseJump}
+      onKeyDown={(event) => {
+        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) releaseJump();
+      }}
+    >
       <section data-models-section="cloud" className="models-section models-section-cloud" aria-labelledby="models-cloud-title">
         <h2 id="models-cloud-title" className="models-section-heading"><CloudIcon className="h-6 w-6 shrink-0" /> Cloud providers</h2>
         <ModelsView />

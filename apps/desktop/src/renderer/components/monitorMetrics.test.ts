@@ -1,6 +1,6 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { UsageSummary, SessionSummary, ProviderConfig } from '@nekko-agent/shared';
-import { budgetRange, recordedBudgetMetrics, utilizationProviders } from './monitorMetrics.js';
+import { attributionRange, budgetRange, recordedBudgetMetrics, utilizationProviders } from './monitorMetrics.js';
 it('reports unavailable rather than zero when the usage snapshot is missing', () => {
   expect(recordedBudgetMetrics(null, [], [])).toEqual({ topAgent: 'Unavailable', localTokens: 'Unavailable' });
 });
@@ -46,4 +46,20 @@ it('lists every enabled cloud provider once, in order, without modifying configs
   const providers = [chatgpt, local, api, { ...api, id: 'off', enabled: false }];
   expect(utilizationProviders(providers)).toEqual([chatgpt, api]);
   expect(providers).toHaveLength(4);
+});
+
+describe('usage attribution over a range', () => {
+  const slice = (input: number, cacheRead = 0, output = 0) => ({ input, cacheRead, cacheWrite: 0, output, cost: 0, listCost: 0 });
+  const day = (date: string, attribution?: object) => ({ date, input: 10, output: 1, cost: 0, ...(attribution ? { attribution } : {}) });
+  it('sums attributed days and says when the split starts', () => {
+    const a = { user: slice(100, 900, 10), background: slice(20, 400, 4), parent: slice(90, 1000, 10), subagent: slice(30, 300, 4) };
+    const got = attributionRange([day('2026-11-08'), day('2026-11-09', a), day('2026-11-10', a)] as never)!;
+    expect(got.user.input).toBe(200);
+    expect(got.background.cacheRead).toBe(800);
+    expect(got.subagent.output).toBe(8);
+    expect(got.since).toBe('2026-11-09');
+    expect(got.covered).toBe(false);
+    expect(attributionRange([day('2026-11-09', a)] as never)!.covered).toBe(true);
+    expect(attributionRange([day('2026-11-09')] as never)).toBeNull();
+  });
 });

@@ -28,6 +28,8 @@ This is a capability guide, not a promise that every provider, platform or insta
 | Continue from a phone or folding phone | [Phone remote control](/docs/remote) and [foldable layouts](/docs/two-chats-on-a-folding-phone) | Native apps are beta; check platform and device-verification status |
 | Check inference speed and model cost | [Benchmarks](/docs/benchmarks) and [usage limits/prices](/docs/usage-limits) | Benchmarks are workload-specific; estimates are not provider invoices |
 
+Models places cloud providers in up to **three columns** when there is enough room, falling back to two or one as the content narrows. A minimal floating menu beside the content jumps between **Cloud providers**, **Local model server**, and the local **Models** and **Connected servers** sections. On smaller windows the menu sits above the content. The local destinations have their own spaced targets. This is a shared-renderer layout; native phone app layouts and live provider sign-in are separate capabilities.
+
 Provider cards in Models label **Subscription** versus **API**. Claude Code uses its reported login mode: a Claude plan shows Subscription, while API-key and cloud logins show API. OpenRouter sign-in is still metered API billing. Local servers and unknown Claude login modes get neither label; connection health is shown separately.
 
 ## Can Nekko Agent work offline?
