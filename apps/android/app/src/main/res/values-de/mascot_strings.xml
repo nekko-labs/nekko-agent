@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nekko in a chat's title (ChatMascot.kt, #2117), the iPhone's ChatMascot. -->
+<resources>
+    <string name="mascot_say_hello">Nekko Hallo sagen</string>
+    <string name="mascot_hello">Hallo!</string>
+    <string name="mascot_refreshing">Wird aktualisiert</string>
+</resources>

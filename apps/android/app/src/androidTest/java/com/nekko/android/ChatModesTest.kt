@@ -41,6 +41,10 @@ import com.nekko.android.ui.simple.PILL_TAG
 import com.nekko.android.data.PillDock
 import com.nekko.android.data.PillPlace
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import com.nekko.android.ui.panes.PaneLabels
@@ -81,7 +85,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-private const val SIMPLE_DESCRIPTION = "Simple: everyday controls"
 private const val EXPERT_DESCRIPTION = "Detailed: every control"
 
 /**
@@ -145,8 +148,7 @@ class ChatModesTest {
         // Expert (the code icon) with no local model: the monitors are off in both modes until a
         // local model runs (spec/phone/iphone-simple-and-expert-modes.md, "Monitors"), so still no
         // monitor and no hardware reads. Expert with a local model shows them: pillExpandsAndDocks.
-        compose.onAllNodesWithContentDescription(expertDescription).onFirst().performClick()
-        settle()
+        chooseMode(expert = true)
         assertTrue(prefs.get(EXPERT_MODE))
         Thread.sleep(4_000)
         assertEquals("Expert without a local model reads no hardware either", idle, computer.calls.count { it == Channels.SYSTEM_STATS })
@@ -171,16 +173,18 @@ class ChatModesTest {
         Espresso.pressBack()
         settle()
 
-        // Back to Simple (the chat bubble): no monitor, and no more hardware reads.
-        compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).onFirst().performClick()
-        settle()
+        // Back to Simple: no monitor, and no more hardware reads.
+        chooseMode(expert = false)
         val reads = computer.calls.count { it == Channels.SYSTEM_STATS }
         Thread.sleep(4_000)
         assertEquals("Simple stops the hardware reads", reads, computer.calls.count { it == Channels.SYSTEM_STATS })
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
     }
 
-    /** The chats list in Simple with no local model: the mode pill holds only the switch. */
+    /**
+     * The chats list in Simple with no local model: no gauges, so no pill at all (#2117); Simple /
+     * Detailed is the first section of the view menu, a check on the current mode.
+     */
     @Test fun chatsListInSimple() {
         computer.resident = false
         val repo = repo()
@@ -196,16 +200,23 @@ class ChatModesTest {
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty() }
         settle()
         shot("chats-simple")
-        assertTrue(compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty())
-        assertTrue(compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).fetchSemanticsNodes().isNotEmpty())
+        assertEquals(0, compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodes(hasText("Monitors")).fetchSemanticsNodes().size)
+        compose.onAllNodesWithTag("chats.view").onFirst().performClick()
+        settle()
+        compose.onNodeWithTag("menu.mode.simple").assertIsSelected()
+        compose.onNodeWithTag("menu.mode.detailed").assertIsNotSelected()
+        shot("chats-view-menu-mode")
+        compose.onNodeWithTag("menu.mode.detailed").performClick()
+        settle()
+        assertTrue(prefs.get(EXPERT_MODE))
     }
 
     /**
      * A chat in Simple: the turn's steps on one line that opens in place, then a local model
-     * loading brings the minimal monitor into the pill, and it opens the details. The switch and
-     * the monitor take touches over 48 dp.
+     * loading brings the minimal monitor into the pill, and it opens the details. The monitor and
+     * the menu's Detailed take touches over 48 dp.
      */
     @Test fun simpleChatStepsAndLocalModel() {
         computer.resident = false
@@ -240,12 +251,64 @@ class ChatModesTest {
         settle()
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().size)
 
-        // A tap 2 px from the top of the Expert segment's 48 dp touch area still switches.
-        val expertSegment = compose.onAllNodesWithContentDescription(expertDescription).onFirst()
-        assertTrue(expertSegment.fetchSemanticsNode().boundsInRoot.height >= min)
-        expertSegment.performTouchInput { click(Offset(centerX, 2f)) }
+        // The pill holds only the gauges now: Detailed is in the chat's ⋮ menu, a 48 dp row.
+        assertEquals(0, compose.onAllNodesWithContentDescription(expertDescription).fetchSemanticsNodes().size)
+        compose.onAllNodesWithTag("chat.more").onFirst().performClick()
+        settle()
+        assertTrue(compose.onNodeWithTag("menu.mode.detailed").fetchSemanticsNode().boundsInRoot.height >= min)
+        compose.onNodeWithTag("menu.mode.detailed").performClick()
         settle()
         assertTrue(prefs.get(EXPERT_MODE))
+    }
+
+    /**
+     * #2117: Nekko beside the chat's title says hello on a tap, offers Refresh to TalkBack, and
+     * a pull up past the newest message reads the chat again from the computer.
+     */
+    @Test fun titleMascotAndPullUpRefresh() {
+        computer.resident = false
+        show()
+        val mascot = compose.onAllNodesWithTag("chat.mascot").onFirst()
+        mascot.assertExists()
+        shot("chat-title-mascot")
+        mascot.performClick()
+        compose.onAllNodesWithTag("chat.mascot").onFirst().assert(androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Hello!"))
+
+        // Pull up past the newest message: one more session:get.
+        val before = computer.calls.count { it == Channels.SESSION_GET }
+        repeat(2) { compose.onRoot().performTouchInput { swipeUp(startY = height * 0.7f, endY = height * 0.2f, durationMillis = 400) } }
+        compose.waitUntil(10_000) { computer.calls.count { it == Channels.SESSION_GET } > before }
+        settle()
+        shot("chat-after-pull-up")
+
+        // The mascot's Refresh action does the same.
+        val again = computer.calls.count { it == Channels.SESSION_GET }
+        val actions = compose.onAllNodesWithTag("chat.mascot").onFirst().fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.CustomActions]
+        compose.runOnIdle { actions.single { it.label == "Refresh" }.action() }
+        compose.waitUntil(10_000) { computer.calls.count { it == Channels.SESSION_GET } > again }
+
+        // Evidence: the finger held past the end shows the spinner rising; let go, it turns while the chat reloads.
+        computer.slowGet = 2_500
+        compose.onRoot().performTouchInput {
+            down(Offset(centerX, height * 0.7f))
+            repeat(20) { moveBy(Offset(0f, -30f)); advanceEventTime(16) }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("chat.pullUpRefresh").assertExists()
+        shot("chat-pulling-up")
+        compose.onRoot().performTouchInput { up() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("chat.pullUpRefresh").assertExists()
+        shot("chat-refreshing")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat.pullUpRefresh").fetchSemanticsNodes().isEmpty() }
+        computer.slowGet = 0
+
+        // Simple / Detailed is the ⋮ menu's first section.
+        compose.onAllNodesWithTag("chat.more").onFirst().performClick()
+        settle()
+        compose.onNodeWithTag("menu.mode.simple").assertIsSelected()
+        shot("chat-more-menu-mode")
+        Espresso.pressBack()
     }
 
     /**
@@ -274,7 +337,6 @@ class ChatModesTest {
         compose.onAllNodesWithTag("chats.menu.search").onFirst().performClick()
         settle()
         assertTrue(compose.onAllNodesWithTag("chats.search").fetchSemanticsNodes().isNotEmpty())
-        assertEquals(0, compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).fetchSemanticsNodes().size)
         compose.onAllNodesWithTag("chats.search").onFirst().performTextInput("image")
         settle()
         assertTrue(compose.onAllNodes(hasText("Profile the image cache")).fetchSemanticsNodes().isNotEmpty())
@@ -284,7 +346,6 @@ class ChatModesTest {
         compose.onAllNodesWithContentDescription("Cancel search").onFirst().performClick()
         settle()
         assertEquals(0, compose.onAllNodesWithTag("chats.search").fetchSemanticsNodes().size)
-        assertTrue(compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).fetchSemanticsNodes().isNotEmpty())
         assertTrue(compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty())
     }
 
@@ -371,10 +432,11 @@ class ChatModesTest {
 
     /** In a long chat, reading on slides the pill away; scrolling back brings it back. */
     @Test fun pillHidesOnScroll() {
-        computer.resident = false
+        // A local model loaded: the pill has gauges to show (with none there is no pill, #2117).
+        computer.resident = true
         computer.manyMessages = true
         show()
-        assertTrue(compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty())
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty() }
         compose.onRoot().performTouchInput { swipeDown(startY = centerY - 300f, endY = centerY + 300f) }
         settle()
         assertTrue(compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty())
@@ -520,6 +582,14 @@ class ChatModesTest {
         settle()
     }
 
+    /** Simple or Detailed from a chat's ⋮ menu, where the mode is now (#2117). */
+    private fun chooseMode(expert: Boolean) {
+        compose.onAllNodesWithTag("chat.more").onFirst().performClick()
+        settle()
+        compose.onNodeWithTag(if (expert) "menu.mode.detailed" else "menu.mode.simple").performClick()
+        settle()
+    }
+
     private fun settle() {
         compose.waitForIdle()
         Thread.sleep(700)
@@ -563,6 +633,8 @@ class ChatModesTest {
         @Volatile var longChat = false
         /** Forty more exchanges before the last turn, so the chat scrolls. */
         @Volatile var manyMessages = false
+        /** session:get takes this long, so a refresh can be seen turning (milliseconds). */
+        @Volatile var slowGet = 0L
 
         private fun json(s: String): JsonElement = WireJson.parseToJsonElement(s)
 
@@ -645,7 +717,10 @@ class ChatModesTest {
             override fun close() { status.value = RelayStatus(RelayState.IDLE) }
             override fun nudge() {}
             override fun reconnect() {}
-            override suspend fun call(channel: String, vararg args: JsonElement) = answer(channel, args.toList())
+            override suspend fun call(channel: String, vararg args: JsonElement): JsonElement {
+                if (channel == Channels.SESSION_GET && slowGet > 0) kotlinx.coroutines.delay(slowGet)
+                return answer(channel, args.toList())
+            }
             override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) = answer(channel, args.toList())
         }
     }

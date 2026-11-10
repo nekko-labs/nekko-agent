@@ -281,6 +281,25 @@ private fun ChatScreenContent(
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    // Pull up past the newest message to refresh (#2117, the iPhone's #1779); the mascot's Refresh shares it.
+    val pullPx = with(androidx.compose.ui.platform.LocalDensity.current) { 72.dp.toPx() }
+    val pullUp = remember(vm.sessionId) { com.nekko.android.ui.chat.PullUpRefreshState(pullPx, atEnd = { !list.canScrollForward }) }
+    pullUp.onRefresh = {
+        scope.launch {
+            try {
+                vm.refresh()
+                // Keep the newest message in view after the reload.
+                val last = list.layoutInfo.totalItemsCount - 1
+                if (last >= 0) list.animateScrollToItem(last)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Offline or refused: the chat stays as it was; the banner says why.
+            } finally {
+                pullUp.refreshing = false
+            }
+        }
+    }
     val p = Nekko.palette
     var showVoiceConversation by remember(vm) { mutableStateOf(false) }
     val focused by rememberUpdatedState(pane?.focused != false && !showMenu && !showRename && !showMode &&
@@ -504,6 +523,9 @@ private fun ChatScreenContent(
                                     Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chats_more))
                                 }
                                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                    // Simple / Detailed first, as on the iPhone (#2117): the pill holds only the gauges now.
+                                    com.nekko.android.ui.simple.ModeMenuItems(onPicked = { showMenu = false })
+                                    HorizontalDivider()
                                     if (showGit) DropdownMenuItem(
                                         text = { Text("Git") },
                                         leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
@@ -579,6 +601,8 @@ private fun ChatScreenContent(
                                     if (pane != null) {
                                         PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
                                     }
+                                    // Nekko beside the title, as on the iPhone (#2117).
+                                    com.nekko.android.ui.chat.ChatMascot(working = chat.running, refreshing = pullUp.refreshing, onRefresh = pullUp::refresh)
                                     Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                                 if (simple.shown("ph-subtitle")) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -610,7 +634,7 @@ private fun ChatScreenContent(
                         )
                         else -> LazyColumn(
                             state = list,
-                            modifier = Modifier.fillMaxSize().nestedScroll(pill.scroll),
+                            modifier = Modifier.fillMaxSize().nestedScroll(pullUp.connection).nestedScroll(pill.scroll),
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = pill.topInset(simple.pill, otherwise = 16.dp)),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
@@ -682,6 +706,7 @@ private fun ChatScreenContent(
                             }
                         }
                     }
+                    com.nekko.android.ui.chat.PullUpIndicator(pullUp, Modifier.align(Alignment.BottomCenter))
                 }
             }
             val controls: @Composable () -> Unit = {

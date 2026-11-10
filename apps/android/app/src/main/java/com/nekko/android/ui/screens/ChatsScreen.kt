@@ -975,6 +975,9 @@ private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Uni
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // Simple / Detailed first, as on the iPhone (#2117): the pill holds only the gauges now.
+            com.nekko.android.ui.simple.ModeMenuItems(onPicked = { open = false })
+            HorizontalDivider()
             @Composable
             fun heading(text: String) = Text(
                 text.uppercase(), style = MaterialTheme.typography.labelSmall, color = p.inkFaint, fontWeight = FontWeight.SemiBold,
