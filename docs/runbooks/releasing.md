@@ -1,6 +1,6 @@
 # Versions and releases
 
-Every build is `MAJOR.MINOR.BUILD` ([spec](../../spec/product/version-numbers.md), [decision 0055](../decisions/0055-versions-are-major-minor-and-a-per-platform-nightly-build.md)). MAJOR.MINOR come from the newest release tag; BUILD is counted per platform by the nightlies. Never bump a `package.json`, `project.yml` or `build.gradle.kts` version in a PR: nothing reads them for a release any more.
+Every build is `MAJOR.MINOR.BUILD` ([spec](../../spec/product/version-numbers.md), [decision 0055](../decisions/0055-versions-are-major-minor-and-a-per-platform-nightly-build.md)), fixed width `x.xx.xxxx` from the 0.10 line on ([decision 0080](../decisions/0080-versions-are-fixed-width-from-the-0.10-line.md)): MINOR 10-99, BUILD 1000-9999, the release at `.1000`. MAJOR.MINOR come from the newest release tag; BUILD is counted per platform by the nightlies. Do not bump a `package.json`, `Cargo.toml`, `project.yml` or `build.gradle.kts` version in a PR unless Philip asks: nothing reads them for a release, they are only what local and PR builds report (all 0.9.8 since #2540).
 
 ## Start a new MAJOR.MINOR (a release)
 
@@ -8,15 +8,15 @@ Only on Philip's say-so. On an up-to-date `main`:
 
 ```sh
 git fetch origin
-git tag -a v0.9.0 -m v0.9.0 origin/main
-git push origin v0.9.0
+git tag -a v0.10.1000 -m v0.10.1000 origin/main
+git push origin v0.10.1000
 ```
 
-That push starts `release.yml` (installers, the update feed, the GitHub release, the npm packages, all at 0.9.0) and `docker.yml`. Creating a GitHub release with a new `v0.9.0` tag from the web page does the same.
+That push starts `release.yml` (installers, the update feed, the GitHub release, the npm packages, all at 0.10.1000) and `docker.yml`. Creating a GitHub release with a new `v0.10.1000` tag from the web page does the same. A line is released at `.1000`; `release.yml` refuses `v0.10.0`, `v1.0.0` or a MINOR over 99. The line after 0.99 is `v1.10.1000`.
 
-The short form `v0.9` also works: `version-release.yml` adds `v0.9.0` on the same commit and dispatches both workflows there (its own tag push, made with GITHUB_TOKEN, would start nothing). Prefer the full form; a GitHub release made on `v0.9` stays an empty release beside the real `v0.9.0`.
+The short form `v0.10` also works: `version-release.yml` adds `v0.10.1000` on the same commit and dispatches both workflows there (its own tag push, made with GITHUB_TOKEN, would start nothing). Prefer the full form; a GitHub release made on `v0.10` stays an empty release beside the real `v0.10.1000`.
 
-From the next night on, every platform counts from 1 again: desktop 0.9.1, iOS 0.9.1 (build 90001), Android 0.9.1 (versionCode 90001).
+From the next night on, every platform counts from 1001: desktop 0.10.1001, iOS 0.10.1001 (build 101001), Android 0.10.1001 (versionCode 101001).
 
 ## Release a desktop nightly
 
@@ -24,12 +24,12 @@ A nightly desktop build that should go to users as it is: tag its commit with it
 
 ```sh
 git fetch origin --tags
-git tag -l 'nightly/desktop/v0.9.*' --sort=-v:refname | head
-git tag -a v0.9.4 -m v0.9.4 nightly/desktop/v0.9.4^{commit}
-git push origin v0.9.4
+git tag -l 'nightly/desktop/v0.10.*' --sort=-v:refname | head
+git tag -a v0.10.1004 -m v0.10.1004 nightly/desktop/v0.10.1004^{commit}
+git push origin v0.10.1004
 ```
 
-The next desktop nightly counts on above it (0.9.5).
+The next desktop nightly counts on above it (0.10.1005).
 
 ## Check what the next nightly will be
 
@@ -43,7 +43,7 @@ It reads the local tags, so fetch them first. `--reserve` is what the nightly wo
 
 - `nightly/desktop/v…`, `nightly/ios/v…`, `nightly/android/v…`: one annotated tag per build, on the commit built. Never delete or move one; the next number is the highest in the line plus one, so a deleted tag lets its number be handed out again (fatal for iOS, which refuses a repeated build number).
 - A gap (a reserved number whose build failed) is normal.
-- The script refuses BUILD above 9999 or MINOR above 999: tag the next line.
+- The script refuses BUILD above 9999 or MINOR above 99: tag the next line (`v1.10` after 0.99).
 
 ## Where each platform stamps it
 
