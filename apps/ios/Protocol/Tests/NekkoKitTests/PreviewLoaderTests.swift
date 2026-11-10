@@ -2,6 +2,8 @@ import XCTest
 @testable import NekkoKit
 import NekkoProtocol
 
+private final class ThumbnailResult { var value = 0 }
+
 @MainActor
 final class PreviewLoaderTests: XCTestCase {
     /// How many loads run at once, and the most that ever did.
@@ -93,7 +95,7 @@ final class PreviewLoaderTests: XCTestCase {
 
     func testThumbnailSlotKeepsNonSendableResultOnMainActor() async {
         let loader = PreviewLoader(read: { _ in .null }, thumbnailSlots: 1)
-        let value = Gauge()
+        let value = ThumbnailResult()
         let result = await loader.withThumbnailSlot {
             MainActor.assertIsolated()
             await Task.yield()
