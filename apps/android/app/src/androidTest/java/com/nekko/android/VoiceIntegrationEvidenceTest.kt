@@ -111,7 +111,8 @@ class VoiceIntegrationEvidenceTest {
                 compose.onAllNodesWithTag("voice.hold").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("voice.hold").assertIsDisplayed()
-        compose.onNodeWithTag("voice.commands").assertIsDisplayed()
+        // "Nekko, …" commands run from the composer's microphone itself (#2110): no separate button.
+        compose.onNodeWithTag("voice.commands").assertDoesNotExist()
         compose.onAllNodes(hasSetTextAction()).onFirst().assertTextContains("Keep this keyboard draft")
         shot("voice-keyboard-closed")
         assertFalse(remote.calls.any { it == Channels.CHAT_SEND || it == Channels.CHAT_QUEUE })
@@ -135,6 +136,99 @@ class VoiceIntegrationEvidenceTest {
         screenshot.recycle()
     }
 }
+/**
+ * #2110: the composer's microphone runs "Nekko, …" commands, as the iPhone's dictation does.
+ * The real ChatScreen and composer over the same synthetic computer; the phone's recognizer is
+ * scripted (no audio). Two pauses' words are typed, then "Nekko, erase that" takes the last
+ * one back, and nothing is sent. Screenshot `evidence/dictation-commands-<revision>.png`.
+ */
+class DictationCommandsEvidenceTest {
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val remote = VoiceEvidenceRemote()
+    private val prefs = PhonePrefs(VoiceEvidencePrefs())
+    private val appLock = AppLock(true).apply { unlock() }
+    private val stores = androidx.lifecycle.ViewModelStore()
+    private val mic = ScriptedPhoneMic()
+    private val before = InstrumentationRegistry.getArguments().getString("nekkoRevision") == "before"
+
+    /** The phone engine with words the test says, one utterance per [say]; Stop ends the one in progress. */
+    private class ScriptedPhoneMic : com.nekko.android.voice.MicHardware {
+        val said = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+        override suspend fun record(onProgress: (Int, Float) -> Unit): ShortArray = ShortArray(0)
+        override fun stopRecording() = Unit
+        override fun phoneAvailable() = true
+        override suspend fun phoneListen(language: String, onLevel: (Float) -> Unit): String { onLevel(0.5f); return said.receive() }
+        override fun stopPhone() { said.trySend("") }
+    }
+
+    @Before fun setup() {
+        InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(compose.activity.packageName, android.Manifest.permission.RECORD_AUDIO)
+        prefs.set(Dictation.ENABLED, true)
+        prefs.set(Dictation.ENGINE, com.nekko.android.voice.EngineChoice.PHONE)
+        val repo = ComputersRepository(VoiceEvidenceStore(), RemoteFactory { _, _ -> remote }, scope, { "Voice fixture phone" },
+            deriveKey = { _, _ -> ByteArray(32) }, changeSigner = SoftwareChangeSigner.generate())
+        runBlocking {
+            repo.pair(PairingLink("wss://relay.example.dev", "a1b2c3d4e5f60718", "00112233445566778899aabbccddeeff", pair = "ABC123",
+                hostKey = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="))
+            remote.online()
+        }
+        compose.waitUntil(10_000) { repo.state.value.conn == RelayState.ONLINE && !repo.state.value.summariesLoading }
+        val vm = ChatViewModel("voice-session", repo, mic, prefs)
+        stores.put("voice", vm)
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                CompositionLocalProvider(LocalAppLock provides appLock, LocalSimple provides rememberSimpleView(prefs)) {
+                    ChatScreen(vm, onBack = {}, dictationOn = true, onSettings = {}, onNewChat = {})
+                }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("voice.hold").fetchSemanticsNodes().isNotEmpty() }
+    }
+    @After fun close() { stores.clear(); scope.cancel() }
+
+    private fun box() = compose.onAllNodes(hasSetTextAction()).onFirst()
+    private fun boxText(): String = runCatching { box().fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text }.getOrDefault("")
+
+    @Test fun theMicrophoneTypesWordsAndRunsNekkoCommands() {
+        compose.onNodeWithContentDescription("Add").performClick()
+        compose.onNodeWithText("Dictate").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Stop dictating").fetchSemanticsNodes().isNotEmpty() }
+
+        mic.said.trySend("Fix the login bug")
+        compose.waitUntil(5_000) { boxText().contains("Fix the login bug") }
+        mic.said.trySend("and the signup page")
+        compose.waitUntil(5_000) { boxText().contains("signup page") }
+        mic.said.trySend("Nekko, erase that")
+        if (before) {
+            // Before: the command is typed as words.
+            compose.waitUntil(5_000) { boxText().contains("erase that") }
+        } else {
+            compose.waitUntil(5_000) { !boxText().contains("signup page") }
+            assertEquals("Fix the login bug", boxText().trim())
+            assertFalse(boxText().contains("erase", ignoreCase = true))
+        }
+        compose.waitForIdle()
+        Thread.sleep(700)
+        shot()
+        compose.onNodeWithContentDescription("Stop dictating").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Stop dictating").fetchSemanticsNodes().isEmpty() }
+        assertFalse(remote.calls.any { it == Channels.CHAT_SEND || it == Channels.CHAT_QUEUE })
+    }
+
+    private fun shot() {
+        var bitmap: Bitmap? = null
+        for (i in 0 until 10) {
+            bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            if (bitmap != null) break
+            Thread.sleep(300)
+        }
+        val revision = if (before) "before" else "after"
+        val dir = File(compose.activity.getExternalFilesDir(null), "evidence").apply { mkdirs() }
+        File(dir, "dictation-commands-$revision.png").outputStream().use { bitmap!!.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+}
+
 private class VoiceEvidencePrefs : PrefStore {
     private val values = HashMap<String, String>()
     override fun getString(name: String) = values[name]

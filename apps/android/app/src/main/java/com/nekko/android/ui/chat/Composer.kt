@@ -773,7 +773,12 @@ private fun RecordingBar(st: MicState.Recording) {
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(p.danger))
         Text(
-            if (st.engine == Engine.COMPUTER) stringResource(R.string.chat_listening_clock, Dictation.clock(st.samples)) else stringResource(R.string.chat_listening),
+            when {
+                st.engine != Engine.COMPUTER -> stringResource(R.string.chat_listening)
+                // Tap mode has no cap: just the time listened.
+                st.continuous -> stringResource(R.string.chat_listening_clock, Dictation.elapsed(st.samples))
+                else -> stringResource(R.string.chat_listening_clock, Dictation.clock(st.samples))
+            },
             style = MaterialTheme.typography.bodySmall,
             color = p.ink,
         )
@@ -783,6 +788,12 @@ private fun RecordingBar(st: MicState.Recording) {
             trackColor = p.surface2,
             modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)),
         )
-        Text(stringResource(R.string.chat_tap_when_done), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        // Earlier pauses' words on their way while listening goes on.
+        Text(
+            stringResource(if (st.transcribing > 0) R.string.chat_transcribing else R.string.chat_tap_when_done),
+            style = MaterialTheme.typography.bodySmall,
+            color = p.inkFaint,
+            modifier = Modifier.testTag("chat.dictation.hint"),
+        )
     }
 }

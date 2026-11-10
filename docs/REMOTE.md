@@ -485,9 +485,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
 >
-> **Dictation** (Android): tap **+ → Dictate**, speak, and tap ■ (or stop
-> at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
-> itself. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
+> **Dictation** (Android): tap **+ → Dictate** and speak as long as you like; tap ■ when you're done.
+> At each pause the words said so far are turned into text and typed into the message box while you
+> keep talking, and ■ adds the last ones. The words are for you to check and send. Say "Nekko, …" for a
+> command instead of words: "Nekko, send", "Nekko, erase that", "Nekko, clear", "Nekko, open the docs
+> chat" (the same commands as on the iPhone and the computer). Nothing is sent unless you say so. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
 > end-to-end encrypted, the audio never reaches anyone else); install and switch it on there under
 > **Settings → Nekko Voice**. When the computer can't, the phone's own speech recognizer is used,
 > which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use

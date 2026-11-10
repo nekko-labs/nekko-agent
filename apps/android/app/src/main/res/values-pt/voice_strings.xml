@@ -19,6 +19,4 @@
     <string name="voice_reply">Resposta</string>
     <string name="voice_hold">Segure para falar</string>
     <string name="voice_hold_accessibility">Iniciar ou encerrar o ditado por pressão prolongada</string>
-    <string name="voice_commands">Ouvir comandos de “Nekko”</string>
-    <string name="voice_finish">Terminar de ouvir</string>
 </resources>
