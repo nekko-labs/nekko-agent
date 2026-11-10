@@ -27,7 +27,12 @@ struct TranscriptFollow: ViewModifier {
         func body(content: Content) -> some View {
             content
                 .scrollPosition($position)
-                .onScrollPhaseChange { _, phase in
+                .onScrollPhaseChange { oldPhase, phase in
+                    #if DEBUG
+                    if ProcessInfo.processInfo.arguments.contains("-refreshStream") {
+                        print("STREAM_PHASE old=\(oldPhase) new=\(phase) atBottom=\(atBottom)")
+                    }
+                    #endif
                     readerMoving = phase == .tracking || phase == .interacting || phase == .decelerating
                     if readerMoving { readerScrolled() }
                 }
@@ -36,6 +41,11 @@ struct TranscriptFollow: ViewModifier {
                          distance: geometry.contentSize.height + geometry.contentInsets.bottom
                             - geometry.contentOffset.y - geometry.containerSize.height)
                 } action: { old, new in
+                    #if DEBUG
+                    if ProcessInfo.processInfo.arguments.contains("-refreshStream") {
+                        print("STREAM_FOLLOW height=\(new.height) distance=\(new.distance) readerMoving=\(readerMoving) atBottom=\(atBottom)")
+                    }
+                    #endif
                     if readerMoving {
                         atBottom = new.distance <= 24
                     } else if atBottom && new.height != old.height {

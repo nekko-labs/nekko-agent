@@ -64,7 +64,7 @@ private final class RefreshFixtureConnection: RemoteConnection, @unchecked Senda
             let handler = lock.withLock { event }
             Task {
                 try? await Task.sleep(for: .seconds(4))
-                let words = (1...30).map { "Streaming line \($0): the incoming answer should stay steady while words arrive.\n\n" }.joined().split(separator: " ", omittingEmptySubsequences: false)
+                let words = (1...120).map { "Streaming line \($0): the incoming answer should stay steady while words arrive.\n\n" }.joined().split(separator: " ", omittingEmptySubsequences: false)
                 for word in words {
                     handler?(Events.agentEvent, ["type": "text", "sessionId": "refresh-fixture", "delta": .string(String(word) + " ")])
                     try? await Task.sleep(for: .milliseconds(70))
