@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BATCH_CONTEXT, batchCandidates, batchDecision, batchMessage, batchPassed, iosVerdict, largestCompatible, parseBatch } from './ios-batch.mjs';
+import { BATCH_CONTEXT, batchCandidates, batchDecision, batchMessage, batchPassed, changesWorkflow, iosVerdict, largestCompatible, parseBatch, workflowHold } from './ios-batch.mjs';
 
 const pr = (number, { labels = ['deploy:ios'], files = ['apps/ios/App/AppModel.swift'], ...rest } = {}) =>
   ({ number, headRefOid: String(number).padStart(40, 'a'), isDraft: false, isCrossRepository: false, baseRefName: 'main',
@@ -18,6 +18,26 @@ test('a batch takes ready deploy:ios iOS PRs into main, oldest first', () => {
     pr(1007, { files: ['crates/nekkod/src/remote.rs'] }),
   ];
   assert.deepEqual(batchCandidates(prs).map(p => p.number), [980, 1007, 1012]);
+});
+
+test('a PR whose change onto main edits a workflow sits out of the batch (#2030)', () => {
+  assert.equal(changesWorkflow(['apps/ios/App/AppModel.swift', '.github/workflows/native-mode-evidence.yml']), true);
+  assert.equal(changesWorkflow(['.github/workflows/ios-native.yml']), true);
+  assert.equal(changesWorkflow(['apps/ios/App/AppModel.swift', '.github/actions/setup/action.yml', 'docs/.github/workflows.md']), false);
+  assert.equal(changesWorkflow([]), false);
+});
+
+test('a PR left out for a workflow gets one Native iOS run on its head, and says how to start one', () => {
+  const held = pr(2480, { headRefName: 'feat/mode-evidence' });
+  const runs = [{ headSha: 'b'.repeat(40), url: 'https://example/old' }];
+  const fresh = workflowHold(held, runs);
+  assert.equal(fresh.dispatch, true);
+  assert.match(fresh.why, /^Changes a workflow, which the batch can't push: .*gh workflow run ios-native\.yml --ref feat\/mode-evidence/);
+  assert.ok(fresh.why.length <= 140, 'fits a commit status description');
+  // A run already there (a label run or an earlier dispatch, green, red or going): no second one.
+  const again = workflowHold(held, [...runs, { headSha: held.headRefOid, url: 'https://example/this' }]);
+  assert.equal(again.dispatch, false);
+  assert.equal(again.run.url, 'https://example/this');
 });
 
 test('a head with a green batch sits out, whatever else is on it', () => {
