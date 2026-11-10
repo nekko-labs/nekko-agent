@@ -1641,6 +1641,15 @@ impl Turns {
             effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
             config_dir,
+            subagent_model: {
+                let settings = self.settings.shared();
+                let providers = settings.get("providers").and_then(Value::as_array).cloned().unwrap_or_default();
+                crate::subagent_model::claude_code_env(
+                    settings.get("orchestration").filter(|o| !o.is_null()),
+                    &providers,
+                    str_at(opts, "modelId"),
+                )
+            },
         };
         let same_account = |s: &Value| str_at(s, "claudeCodeAccount") == account.as_deref();
         let set_account = |obj: &mut serde_json::Map<String, Value>| match &account {
