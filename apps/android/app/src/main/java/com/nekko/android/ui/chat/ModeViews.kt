@@ -308,8 +308,8 @@ fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit
     val (model, effort) = modelEffortShown(chat)
     val simple = LocalSimple.current
     val context = simple.shown("context")
-    // Simple's view of the tool policy; Expert keeps it in More.
-    val plainAsks = asks?.takeIf { !simple.expert && simple.shown("asks") }
+    // Expert names the tool policy beside the model, as the desktop's details row does; Simple has its icon after + (ComposerAsksIcon).
+    val plainAsks = asks?.takeIf { simple.expert && simple.shown("asks") }
     if (!model && !effort && !context && plainAsks == null) return
     Row(
         modifier.fillMaxWidth(),

@@ -82,8 +82,10 @@ private final class PhotoFixtureConnection: RemoteConnection, @unchecked Sendabl
         case Channels.settingsGet: return ["defaultProviderId": "fixture", "defaultModelId": "fixture"]
         case Channels.chatPending: return [:]
         case Channels.sessionGet:
-            return lock.withLock { ["id": "photo-fixture", "title": "Photo previews", "providerId": "fixture", "modelId": "fixture",
+            return lock.withLock { ["id": "photo-fixture", "title": "Photo previews", "providerId": "fixture", "modelId": "fixture", "workspaceId": "app",
                                     "messages": .array(messages), "queue": [], "clientMessageIds": .array(ids)] }
+        // The chat's folder, shown after + in the composer (#2448).
+        case Channels.workspaceList: return [["id": "app", "name": "nekko-agent", "path": "/code/nekko-agent"]]
         case Channels.chatSend:
             let prompt = args.first ?? .null
             lock.withLock {

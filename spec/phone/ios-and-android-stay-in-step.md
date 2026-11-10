@@ -72,6 +72,7 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Customize page: view, this phone's tone, skills | Missing; Simple/Detailed is in the pill | [#2426](https://github.com/nekko-labs/nekko-agent/issues/2426) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
 | "Send your first prompt" intro | Not built; the iPhone's shows on the first new chat | [#2234](https://github.com/nekko-labs/nekko-agent/issues/2234) |
+| New chat as a composer (the desktop's bottom row: +, folder, asks-first, mic, Start) | A form; only its Chat / Image toggle matches the iPhone's (#2448) | [#2459](https://github.com/nekko-labs/nekko-agent/issues/2459) |
 
 Android features the iPhone lacks have not been audited yet.
 

@@ -434,7 +434,7 @@ struct ChatView: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                     .accessibilityIdentifier("chat.savedCopy")
             }
-            Composer(chat: chat, openTerminals: { showTerminals = true })
+            Composer(chat: chat, openTerminals: { showTerminals = true }, openFiles: { showFiles = true })
         }
         .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
     }
@@ -1100,6 +1100,8 @@ struct Composer: View {
     let chat: ChatModel
     /// + → Terminal: the chat's terminals sheet.
     var openTerminals: () -> Void = {}
+    /// The folder after + → Files: the chat's files sheet.
+    var openFiles: () -> Void = {}
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -1263,11 +1265,14 @@ struct Composer: View {
                         Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
                             .disabled(!UIPasteboard.general.hasImages)
                     } label: {
-                        Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
+                        ComposerGlyph(name: "plus").foregroundStyle(palette.inkSoft)
                             .frame(width: 44, height: 44).contentShape(Rectangle())
                     }
                     .accessibilityLabel("Add")
                     .accessibilityIdentifier("composer.add")
+                    // The desktop composer's order (#2448): +, the folder, then Simple's asks-first icon; mic and Send at the right.
+                    ComposerFolderMenu(chat: chat, openFiles: openFiles)
+                    if !chat.isImageChat && !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat, iconOnly: true) }
                     Spacer(minLength: 0)
                     // Listening (tap mode) keeps its stop button while earlier segments are transcribed.
                     if dictation.recording && !prefs.dictationHold {
@@ -1328,7 +1333,8 @@ struct Composer: View {
                 if parts.model || parts.effort || prefs.shows("context") {
                     HStack(spacing: 0) {
                         if parts.model || parts.effort { ModelEffortButton(chat: chat) }
-                        if !chat.isImageChat && !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
+                        // Expert keeps it beside the model with its name, as the desktop's details row does.
+                        if !chat.isImageChat && prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
                         Spacer(minLength: 8)
                         if prefs.shows("context") { ContextGauge(chat: chat) }
                     }

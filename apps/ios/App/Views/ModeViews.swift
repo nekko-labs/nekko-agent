@@ -166,6 +166,8 @@ func effortLabel(_ e: Effort) -> String {
 /// values and behaviour as More > Tool policy in Expert.
 struct AsksFirstMenu: View {
     let chat: ChatModel
+    /// Simple puts it in the composer's bottom row as just its icon, as the desktop does (#2448).
+    var iconOnly = false
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -178,7 +180,7 @@ struct AsksFirstMenu: View {
     var body: some View {
         ToolPolicyPicker(selection: Binding(get: { mode }, set: { m in
             Task { do { try await chat.setOptions(mode: m) } catch { failed = error.localizedDescription } }
-        }))
+        }), iconOnly: iconOnly)
         .disabled(chat.savedAt != nil)
         .accessibilityIdentifier("chat.asksFirst")
         .alert("Couldn’t change it", isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } })) {

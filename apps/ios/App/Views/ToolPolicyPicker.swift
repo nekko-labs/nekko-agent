@@ -7,6 +7,8 @@ import SwiftUI
 /// so every place that uses it (Simple's chat picker, New chat) warns.
 struct ToolPolicyPicker: View {
     @Binding var selection: PcSettings.ChatMode
+    /// Just the mode's icon, as the desktop composer's bottom row shows it in Simple (#2448).
+    var iconOnly = false
     @Environment(\.palette) private var palette
     @Environment(Prefs.self) private var prefs
     @State private var open = false
@@ -32,11 +34,13 @@ struct ToolPolicyPicker: View {
         Button { open = true } label: {
             HStack(spacing: 4) {
                 Self.image(selection).foregroundStyle(palette.inkSoft)
-                Text(SimpleMode.asksName(selection)).lineLimit(1).truncationMode(.tail)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                if !iconOnly {
+                    Text(SimpleMode.asksName(selection)).lineLimit(1).truncationMode(.tail)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                }
             }
             .font(.footnote).foregroundStyle(palette.ink)
-            .frame(minHeight: 44).contentShape(Rectangle())
+            .frame(minWidth: iconOnly ? 44 : nil, minHeight: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("When the agent asks you")

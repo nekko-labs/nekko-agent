@@ -120,6 +120,8 @@ data class ChatUi(
     val contextTokens: Long? = null,
     val chatType: String? = null,
     val imageParams: com.nekko.protocol.ImageChatParams? = null,
+    /** The chat's folder on the computer, shown after + in the composer; null for none. */
+    val workspaceId: String? = null,
 )
 
 /**
@@ -750,6 +752,7 @@ class ChatController(
                 providerId = providerId,
                 modelId = modelId,
                 chatType = state.session?.chatType,
+                workspaceId = state.session?.workspaceId,
                 imageParams = state.session?.imageParams,
                 modelName = if (image) state.session?.imageParams?.modelId ?: "Image model" else modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
                 effort = Effort.parse(state.session?.effort),

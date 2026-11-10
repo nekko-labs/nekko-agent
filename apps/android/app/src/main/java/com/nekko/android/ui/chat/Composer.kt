@@ -83,7 +83,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.DropdownMenu
@@ -145,6 +146,8 @@ fun Composer(
     sendsLater: String? = null,
     /** This chat can hand a typed follow-up to a sub-agent (`ChatUi.offersSubagent`). */
     offerSubagent: Boolean = false,
+    /** After **+** in the row under the text, as on the desktop (#2448): the chat's folder, then Simple's asks-first icon. */
+    leading: (@Composable RowScope.() -> Unit)? = null,
     /** The box's bottom row (the chat's model and context), inside the box. */
     footer: (@Composable () -> Unit)? = null,
     onVoiceConversation: (() -> Unit)? = null,
@@ -352,7 +355,6 @@ fun Composer(
                                 onDismiss = { plusOpen = false },
                                 onNewAgent = onNewAgent?.let { go -> { plusOpen = false; go() } },
                                 onTerminal = onTerminal?.let { go -> { plusOpen = false; go() } },
-                                onVoiceConversation = onVoiceConversation?.let { go -> { plusOpen = false; go() } },
                                 onDictate = mic?.let { m -> { plusOpen = false; m.onTap(dictated) } },
                                 attach = attach,
                                 onPicked = { plusOpen = false; attach?.clearError?.invoke() },
@@ -367,6 +369,7 @@ fun Composer(
                             )
                         }
                     }
+                    leading?.invoke(this)
                     // *Aa*: show or hide the formatting toolbar, remembered.
                     IconButton(
                         onClick = {
@@ -382,6 +385,12 @@ fun Composer(
                         )
                     }
                     Spacer(Modifier.weight(1f))
+                    // The desktop composer's mic beside Send (#2448): the voice conversation, not in the + menu any more.
+                    onVoiceConversation?.let { go ->
+                        IconButton(onClick = go, modifier = Modifier.testTag("composer.voiceConversation")) {
+                            Icon(painterResource(R.drawable.composer_mic), contentDescription = stringResource(R.string.voice_conversation), tint = p.inkSoft, modifier = Modifier.size(20.dp))
+                        }
+                    }
                     FilledIconButton(
                         onClick = { if (showStop) onStop() else send() },
                         enabled = showStop || canSend,
@@ -587,16 +596,9 @@ class AttachUi(
 @Composable
 private fun PlusButton(open: Boolean, onClick: () -> Unit) {
     val p = Nekko.palette
-    FilledIconButton(
-        onClick = onClick,
-        shape = CircleShape,
-        colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = if (open) p.accentSoft else p.surface2,
-            contentColor = if (open) p.accent else p.inkSoft,
-        ),
-        modifier = Modifier.size(48.dp),
-    ) {
-        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.chat_add))
+    // The desktop composer's plain + (#2448): soft ink at rest, the accent while its menu is open.
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+        Icon(painterResource(R.drawable.composer_plus), contentDescription = stringResource(R.string.chat_add), tint = if (open) p.accent else p.inkSoft, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -608,7 +610,6 @@ private fun PlusMenu(
     onNewAgent: (() -> Unit)?,
     onTerminal: (() -> Unit)?,
     onDictate: (() -> Unit)?,
-    onVoiceConversation: (() -> Unit)? = null,
     attach: AttachUi?,
     onPicked: () -> Unit,
     prompts: List<SavedPrompt> = emptyList(),
@@ -622,12 +623,6 @@ private fun PlusMenu(
         containerColor = p.surface,
         shape = RoundedCornerShape(14.dp),
     ) {
-        if (onVoiceConversation != null) DropdownMenuItem(
-            text = { Text(stringResource(R.string.voice_conversation), color = p.ink) },
-            leadingIcon = { Icon(Icons.Filled.Mic, contentDescription = null, tint = p.inkSoft) },
-            onClick = onVoiceConversation,
-            modifier = Modifier.testTag("composer.voiceConversation"),
-        )
         if (onNewAgent != null) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.chat_new_agent), color = p.ink) },
