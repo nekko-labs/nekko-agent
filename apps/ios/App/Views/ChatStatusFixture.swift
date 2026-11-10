@@ -55,7 +55,7 @@ struct ChatStatusFixture: View {
                     let kidWire: JSONValue = ["id": .string("\(title)-\(i)"), "title": .string(kid.title),
                                               "modelId": .string(kid.model), "parentSessionId": .string(title)]
                     if let kidSummary = SessionSummary.from(kidWire) {
-                        SubagentRow(summary: kidSummary, activity: kid.activity, last: i == subagents.count - 1, providerKind: kid.provider)
+                        ChatSubagentRow(summary: kidSummary, activity: kid.activity, last: i == subagents.count - 1, providerKind: kid.provider)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                             .accessibilityIdentifier("chats.subagent")
                     }

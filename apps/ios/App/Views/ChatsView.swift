@@ -533,7 +533,7 @@ struct ChatsView: View {
     /// A sub-agent: opens its own chat, on the computer its parent runs on.
     private func subagentRow(_ kid: SessionSummary, last: Bool) -> some View {
         NavigationLink(value: Route.chat(kid.id)) {
-            SubagentRow(summary: kid, activity: listActivity[kid.id] ?? (kid.running ? .running : nil), last: last,
+            ChatSubagentRow(summary: kid, activity: listActivity[kid.id] ?? (kid.running ? .running : nil), last: last,
                         providerKind: providerKind(of: kid), showModel: view.showModel)
         }
         .listRowSeparator(.hidden)
@@ -706,7 +706,7 @@ struct ChatRow: View {
 /// `SubAgentRow`: the tree, our status glyph, its title, and at the end the
 /// model it runs on with its provider's mark, so which model did the delegated
 /// work reads at a glance.
-struct SubagentRow: View {
+struct ChatSubagentRow: View {
     let summary: SessionSummary
     let activity: Activity?
     /// The last of its chat's sub-agents: the tree turns the corner here.
