@@ -45,7 +45,7 @@ struct CustomizeView: View {
             }
             Section {
                 ExperienceModePicker()
-                NavigationLink(value: Route.simpleMode) { Label("Visible controls and monitors", systemImage: "slider.horizontal.3") }
+                NavigationLink(value: Route.simpleMode) { Label("Visible controls and monitors", systemImage: "slider.horizontal.3").labelStyle(.quietRow) }
             } header: { SectionHeader("Agent output") } footer: {
                 Text("Simple folds working steps away. Detailed shows them. Both have the same capabilities and permissions. This choice stays on this iPhone.")
             }
@@ -59,12 +59,12 @@ struct CustomizeView: View {
             }
             Section {
                 ThemePicker(selection: Binding(get: { prefs.theme }, set: { prefs.theme = $0 }))
-                NavigationLink(value: Route.settings) { Label("Text size and accessibility", systemImage: "textformat.size") }
+                NavigationLink(value: Route.settings) { Label("Text size and accessibility", systemImage: "textformat.size").labelStyle(.quietRow) }
             } header: { SectionHeader("Visual experience") }
             Section {
-                NavigationLink(value: Route.settings) { Label("Agent behavior and permissions", systemImage: "checkmark.shield") }
+                NavigationLink(value: Route.settings) { Label("Agent behavior and permissions", systemImage: "checkmark.shield").labelStyle(.quietRow) }
                 if !store.computers.isEmpty {
-                    NavigationLink(value: Route.monitors) { Label("Monitors", systemImage: "gauge.with.dots.needle.50percent") }
+                    NavigationLink(value: Route.monitors) { Label("Monitors", systemImage: "gauge.with.dots.needle.50percent").labelStyle(.quietRow) }
                 }
                 Text("Tone and standing instructions for computer-hosted agents are managed in Customize on that computer. Changing this view never grants tool access.")
                     .font(.footnote).foregroundStyle(palette.inkSoft)

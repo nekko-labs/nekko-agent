@@ -3,9 +3,13 @@ import SwiftUI
 import UIKit
 
 /// The message box (MD-3, MD-4): Markdown source with light live styling, the
-/// formatting toolbar inside the card above the text (not a keyboard accessory:
-/// on iOS 26 that floated over the send button), list continuation on Return,
+/// formatting toolbar on the keyboard (#2450), list continuation on Return,
 /// and the paste choice. What is sent is exactly what was typed.
+///
+/// The toolbar is the text view's UIKit `inputAccessoryView`, not SwiftUI's
+/// `.toolbar(placement: .keyboard)`: on iOS 26 that one floated over the send
+/// button, while an accessory is part of the keyboard's frame, so the composer
+/// sits above it and both move with the keyboard in one animation.
 struct MarkdownComposerField: View {
     @Binding var text: String
     @Binding var focused: Bool
@@ -16,8 +20,6 @@ struct MarkdownComposerField: View {
     /// Draws its own card; false when it sits in a box that holds its buttons too (the chat's composer).
     var boxed = true
     @State private var editor = MarkdownEditorState()
-    /// The *Aa* toggle, remembered.
-    @AppStorage("composerToolbar") private var toolbarShown = true
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -37,9 +39,6 @@ struct MarkdownComposerField: View {
                     try? await Task.sleep(nanoseconds: 4_000_000_000)
                     if editor.pasteOffer?.id == offer.id { editor.pasteOffer = nil }
                 }
-            }
-            if focused {
-                MarkdownToolbar(editor: editor, text: text, shown: $toolbarShown)
             }
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
@@ -68,6 +67,8 @@ final class MarkdownEditorState {
     }
 
     var selection = NSRange(location: 0, length: 0)
+    /// The draft, for the toolbar on the keyboard (it lives in another window, outside SwiftUI's bindings).
+    var text = ""
     var pasteOffer: PasteOffer?
     @ObservationIgnored weak var textView: MarkdownTextView?
 
@@ -168,6 +169,99 @@ struct MarkdownToolbar: View {
     }
 }
 
+// MARK: - On the keyboard
+
+/// Who has the keyboard: a composer whose bar carries Hide keyboard, so the
+/// floating one (`floatingKeyboardDismiss`) stays away and nothing stacks twice.
+@MainActor
+@Observable
+final class ComposerKeyboard {
+    static let shared = ComposerKeyboard()
+    private(set) var editing: ObjectIdentifier?
+
+    func began(_ tv: UITextView) { editing = ObjectIdentifier(tv) }
+    func ended(_ tv: UITextView) { if editing == ObjectIdentifier(tv) { editing = nil } }
+}
+
+/// What rides on top of the keyboard while the message box is focused (#2450): the
+/// formatting toolbar, and Hide keyboard fixed at the trailing edge (outside the
+/// scroller and the *Aa* toggle, so it stays when formatting is collapsed).
+struct ComposerKeyboardBar: View {
+    static let height: CGFloat = 48
+    let editor: MarkdownEditorState
+    var palette: Palette
+    /// The *Aa* toggle, remembered.
+    @AppStorage("composerToolbar") private var shown = true
+
+    var body: some View {
+        HStack(spacing: 0) {
+            MarkdownToolbar(editor: editor, text: editor.text, shown: $shown)
+            Button { _ = editor.textView?.resignFirstResponder() } label: {
+                Image(systemName: "keyboard.chevron.compact.down")
+                    .font(.system(size: 20))
+                    .foregroundStyle(palette.inkSoft)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hide keyboard")
+            .accessibilityIdentifier("composer.hideKeyboard")
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
+        .environment(\.palette, palette)
+    }
+}
+
+/// The text view's `inputAccessoryView`: the SwiftUI bar, its foot on the safe area
+/// so it clears the home indicator when a hardware keyboard leaves it alone at the bottom.
+final class ComposerKeyboardBarView: UIView {
+    let host: UIHostingController<ComposerKeyboardBar>
+
+    init(_ bar: ComposerKeyboardBar) {
+        host = UIHostingController(rootView: bar)
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: ComposerKeyboardBar.height))
+        autoresizingMask = .flexibleHeight
+        host.safeAreaRegions = []
+        host.view.backgroundColor = .clear
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(host.view)
+        let line = UIView()
+        line.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(line)
+        self.line = line
+        NSLayoutConstraint.activate([
+            host.view.topAnchor.constraint(equalTo: topAnchor),
+            host.view.leadingAnchor.constraint(equalTo: leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: trailingAnchor),
+            host.view.heightAnchor.constraint(equalToConstant: ComposerKeyboardBar.height),
+            host.view.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor),
+            line.topAnchor.constraint(equalTo: topAnchor),
+            line.leadingAnchor.constraint(equalTo: leadingAnchor),
+            line.trailingAnchor.constraint(equalTo: trailingAnchor),
+            line.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+        ])
+        colors(bar.palette)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    private weak var line: UIView?
+
+    /// Height from the constraints (the bar plus any safe-area foot).
+    override var intrinsicContentSize: CGSize { .zero }
+
+    func update(_ bar: ComposerKeyboardBar) {
+        host.rootView = bar
+        colors(bar.palette)
+    }
+
+    private func colors(_ p: Palette) {
+        backgroundColor = UIColor(p.surface)
+        line?.backgroundColor = UIColor(p.line)
+    }
+}
+
 // MARK: - The text view
 
 struct MarkdownEditor: UIViewRepresentable {
@@ -203,7 +297,10 @@ struct MarkdownEditor: UIViewRepresentable {
         }]
         tv.text = text
         editor.textView = tv
-        context.coordinator.colors(context.environment.palette)
+        if editor.text != text { editor.text = text }
+        let palette = context.environment.palette
+        tv.inputAccessoryView = ComposerKeyboardBarView(ComposerKeyboardBar(editor: editor, palette: palette))
+        context.coordinator.colors(palette)
         context.coordinator.restyle(tv)
         return tv
     }
@@ -223,7 +320,12 @@ struct MarkdownEditor: UIViewRepresentable {
             tv.text = text
             context.coordinator.restyle(tv)
         }
-        if context.coordinator.colors(palette) { context.coordinator.restyle(tv) }
+        if editor.text != text { editor.text = text }
+        let recolored = context.coordinator.colors(palette)
+        if recolored { context.coordinator.restyle(tv) }
+        if let bar = tv.inputAccessoryView as? ComposerKeyboardBarView, recolored || bar.host.rootView.editor !== editor {
+            bar.update(ComposerKeyboardBar(editor: editor, palette: palette))
+        }
         if focused && !tv.isFirstResponder {
             DispatchQueue.main.async { _ = tv.becomeFirstResponder() }
         } else if !focused && tv.isFirstResponder {
@@ -245,14 +347,15 @@ struct MarkdownEditor: UIViewRepresentable {
         var parent: MarkdownEditor
         /// The palette's colours, taken while SwiftUI updates the view (the environment isn't readable from delegate calls).
         private var ink = UIColor.label, faint = UIColor.secondaryLabel, accent = UIColor.tintColor
-        private var palette: (Color, Color, Color)?
+        private var palette: [Color]?
         init(_ parent: MarkdownEditor) { self.parent = parent }
 
-        /// True when the colours changed.
+        /// True when the colours changed (the text's, or the keyboard bar's).
         @discardableResult
         func colors(_ p: Palette) -> Bool {
-            if let old = palette, old == (p.ink, p.inkFaint, p.accent) { return false }
-            palette = (p.ink, p.inkFaint, p.accent)
+            let now = [p.ink, p.inkSoft, p.inkFaint, p.accent, p.surface, p.line]
+            if palette == now { return false }
+            palette = now
             ink = UIColor(p.ink)
             faint = UIColor(p.inkFaint)
             accent = UIColor(p.accent)
@@ -261,6 +364,7 @@ struct MarkdownEditor: UIViewRepresentable {
 
         func textViewDidChange(_ tv: UITextView) {
             if parent.text != tv.text { parent.text = tv.text }
+            if parent.editor.text != tv.text { parent.editor.text = tv.text }
             restyle(tv)
             parent.editor.selection = tv.selectedRange
         }
@@ -269,8 +373,14 @@ struct MarkdownEditor: UIViewRepresentable {
             if parent.editor.selection != tv.selectedRange { parent.editor.selection = tv.selectedRange }
         }
 
-        func textViewDidBeginEditing(_ tv: UITextView) { if !parent.focused { parent.focused = true } }
-        func textViewDidEndEditing(_ tv: UITextView) { if parent.focused { parent.focused = false } }
+        func textViewDidBeginEditing(_ tv: UITextView) {
+            ComposerKeyboard.shared.began(tv)
+            if !parent.focused { parent.focused = true }
+        }
+        func textViewDidEndEditing(_ tv: UITextView) {
+            ComposerKeyboard.shared.ended(tv)
+            if parent.focused { parent.focused = false }
+        }
 
         func textView(_ tv: UITextView, shouldChangeTextIn range: NSRange, replacementText repl: String) -> Bool {
             guard let tv = tv as? MarkdownTextView, !tv.applying, tv.markedTextRange == nil else { return true }

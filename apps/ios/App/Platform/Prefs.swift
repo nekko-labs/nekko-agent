@@ -45,6 +45,9 @@ final class Prefs {
     var voiceIntroSeen: Bool { didSet { d.set(voiceIntroSeen, forKey: "voiceIntroSeen") } }
     /// "Send your first prompt" was closed, any way; it opens once over the first ever new chat until then.
     var firstPromptIntroSeen: Bool { didSet { d.set(firstPromptIntroSeen, forKey: "firstPromptIntroSeen") } }
+    /// The GitHub star ask under the 10th and 50th reply (spec/platform/github-star-ask.md):
+    /// prompts counted, asks shown, stopped. On this device only, never synced or sent.
+    var starAsk: StarAsk { didSet { d.set(starAsk.encoded, forKey: StarAsk.key) } }
     /// The first run (IO-31) was finished or skipped; it never shows again.
     var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
     /// Keep each computer's chat list (titles, times, folders) on this iPhone to show
@@ -118,6 +121,13 @@ final class Prefs {
         voiceIntroSeen = flag("voiceIntroSeen", false)
         // UI test runs start with it seen, so it never covers a test's new chat; a test opts in with `-firstPromptIntroSeen NO`.
         firstPromptIntroSeen = flag("firstPromptIntroSeen", ProcessInfo.processInfo.arguments.contains("-uiTestReset"))
+        // UI test runs never see the star ask, whatever earlier runs counted, unless a test
+        // opts in with `-starAskPrompts N` (that many prompts already counted, no ask shown yet).
+        if Self.uiTestRun {
+            starAsk = defaults.object(forKey: "starAskPrompts") == nil ? .never : StarAsk(prompts: max(0, defaults.integer(forKey: "starAskPrompts")))
+        } else {
+            starAsk = StarAsk.parse(d.string(forKey: StarAsk.key))
+        }
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
         simpleChoices = SimpleMode.parse(d.string(forKey: "simpleChoices"))
@@ -139,6 +149,21 @@ final class Prefs {
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))
         keepTranscripts = OfflineSetting.isOn(stored: choice("keepTranscripts"))
     }
+
+    /// Launched by a UI test (`-uiTestReset` or a `-uiTest…` fixture).
+    private static let uiTestRun = ProcessInfo.processInfo.arguments.contains { $0.hasPrefix("-uiTest") }
+
+    /// A prompt sent from a chat screen got its finished reply: counts it, and says
+    /// whether that reply carries the star ask. Its ask is used up now, so ignoring
+    /// the card is Not now.
+    func starAskAfterReply() -> Bool {
+        let (next, show) = starAsk.afterReply()
+        starAsk = next
+        return show
+    }
+
+    /// Star on GitHub or Don't ask again: never asked again on this device.
+    func stopStarAsk() { starAsk = starAsk.stop() }
 
     /// Whether a Simple mode control is on screen in the current mode.
     func shows(_ id: String, localModelLoaded: Bool = false, changes: Bool = false, pr: Bool = false) -> Bool {

@@ -360,8 +360,10 @@ Starred models stay listed under their provider as well as in the model picker s
 
 Selecting text in the desktop or Local Web UI message editor opens a compact, single-row Markdown formatting toolbar beside the selection. Its pointer identifies the text being edited. The toolbar can extend over a neighboring agent pane, but stays inside the app viewport. Right-click still offers the formatting controls and clipboard actions.
 
-On iOS, tap the keyboard-down button at the right of the message box’s formatting row to hide the keyboard without sending or clearing your draft. It stays available when **Aa** collapses the formatting controls. Tap the message box to continue typing.
+On iOS, tap the keyboard-down button above the active chat’s message box to hide the keyboard without sending or clearing your draft. It stays available while the message box is focused, even when **Aa** collapses the formatting controls. Tap the message box to continue typing.
 
 Development builds show the latest reachable release tag plus a `dev` suffix, commit distance and source hash, rather than the checked-in package version. Installed apps show their stamped release version. Restart development mode after pulling a version-identity fix or fetching new release tags.
 
 Nekko Agent’s app icon uses a white cat on deep plum across desktop, browser and phone launchers. The desktop tray and notification icon use the same artwork. An already running or installed app keeps its bundled icon until you update and restart it; a development launch rebuilds its branded runtime when the icon changes.
+
+On iOS, progress notes start folded as **Progress note**, and compacted context starts folded as **Conversation summary**. Tap to read the full text; tap again to fold it. Closing replies and messages asking for your attention stay visible. A new prompt appended after a context summary stays visible too. This behavior is pending native verification on the development branch (#2452).

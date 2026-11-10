@@ -119,6 +119,14 @@ public final class ChatModel {
     /// The computer's runnable skills, re-read with the chat.
     public private(set) var skills: [SkillSummary] = []
     public private(set) var sending = false
+    /// Prompts sent from this chat screen whose reply then finished (`done`), for
+    /// the GitHub star ask (spec/platform/github-star-ask.md). Not a failed or
+    /// stopped reply, a queued follow-up, an outbox resend or a turn started elsewhere.
+    public private(set) var promptReplies = 0
+    /// Bumped on every prompt sent from here, queued or not: the star ask's card goes.
+    public private(set) var promptsSent = 0
+    /// The running turn is one this screen started with a prompt.
+    private var promptedTurn = false
     /// The chat's context window as the computer counts it (`context:preview`,
     /// totals only): read with the chat and after each turn. Kept when a read
     /// fails; nil from a computer too old to answer.
@@ -342,6 +350,14 @@ public final class ChatModel {
         }
         turn = Transcript.apply(turn, e)
         switch e {
+        case .done where promptedTurn:
+            promptedTurn = false
+            promptReplies += 1
+        // A failure or a stop (an error "Stopped") ends the turn without counting it.
+        case .error: promptedTurn = false
+        default: break
+        }
+        switch e {
         case .done, .error, .sessionMeta: scheduleReload()
         // A watch is armed or cancelled at a tool result; a delegation's child appears then too.
         case .toolResult: Task { await refreshAgentState() }
@@ -368,6 +384,7 @@ public final class ChatModel {
     @discardableResult
     public func send(_ text: String, skill: SkillSummary? = nil, images: [String] = []) async throws -> String {
         try Task.checkCancellation()
+        promptsSent += 1
         // Load the authoritative chat kind before routing. Never guess text for an unread chat.
         if session == nil { await reload() }
         guard let currentSession = session else { throw RelayError("Read this chat before sending. Your prompt has not been sent.") }
@@ -411,6 +428,7 @@ public final class ChatModel {
         let at = now()
         let shown = skill.map { "/\($0.name) \(text)".trimmingCharacters(in: .whitespaces) } ?? text
         outgoingPhotos = images.isEmpty ? nil : ("pending-\(at)", images)
+        promptedTurn = true
         turn = LiveTurn(running: true, blocks: [.user(id: "pending-\(at)", text: shown, at: at, images: images.count)], startedAt: at)
         sending = true
         // Resolves only when the whole turn ends; the events carry the progress.
@@ -429,6 +447,7 @@ public final class ChatModel {
                     self.store.flushOutbox()
                 }
             } catch {
+                self.promptedTurn = false
                 var t = self.turn
                 let started = t.blocks.contains { $0.id != "pending-\(at)" }
                 if !started {
@@ -578,6 +597,8 @@ public final class ChatModel {
     }
 
     public func abort() {
+        // A stopped reply never counts toward the star ask, whatever event ends it.
+        promptedTurn = false
         imageSendTask?.cancel()
         guard let r = try? store.remote() else { return }
         let id = sessionId
