@@ -87,9 +87,9 @@ private struct GitStatusList: View {
             }
             commitSection
             Section {
-                NavigationLink { GitHistoryView(model: model) } label: { Label("History", systemImage: "clock.arrow.circlepath") }
-                NavigationLink { GitBranchesView(model: model) } label: { Label("Branches", systemImage: "arrow.triangle.branch") }
-                NavigationLink { GitCompareView(model: model) } label: { Label("Compare", systemImage: "arrow.left.arrow.right") }
+                NavigationLink { GitHistoryView(model: model) } label: { Label("History", systemImage: "clock.arrow.circlepath").labelStyle(.quietRow) }
+                NavigationLink { GitBranchesView(model: model) } label: { Label("Branches", systemImage: "arrow.triangle.branch").labelStyle(.quietRow) }
+                NavigationLink { GitCompareView(model: model) } label: { Label("Compare", systemImage: "arrow.left.arrow.right").labelStyle(.quietRow) }
                 Button { creatingPr = true } label: { Label("Open a pull request", systemImage: "arrow.triangle.pull") }
                     .accessibilityIdentifier("git.openPr")
             } footer: {
@@ -608,8 +608,8 @@ struct PrDetailView: View {
                 if let url = URL(string: pr.url) { Link(destination: url) { Label("Open on GitHub", systemImage: "safari") } }
             }
             Section {
-                NavigationLink { PrChecksView(model: model, url: pr.url) } label: { Label("Checks", systemImage: "checklist") }
-                NavigationLink { PrDiffView(model: model, url: pr.url) } label: { Label("Files changed", systemImage: "plusminus") }
+                NavigationLink { PrChecksView(model: model, url: pr.url) } label: { Label("Checks", systemImage: "checklist").labelStyle(.quietRow) }
+                NavigationLink { PrDiffView(model: model, url: pr.url) } label: { Label("Files changed", systemImage: "plusminus").labelStyle(.quietRow) }
             }
             Section {
                 ForEach(actions, id: \.self) { a in

@@ -214,7 +214,7 @@ struct WatchWakeRow: View {
         VStack(alignment: .leading, spacing: 2) {
             Button { withAnimation(.snappy) { expanded.toggle() } } label: {
                 HStack(alignment: .center, spacing: 8) {
-                    Image(systemName: "bolt.fill").font(.caption.weight(.semibold)).foregroundStyle(palette.accent)
+                    Image(systemName: "bolt").font(.caption.weight(.semibold)).foregroundStyle(palette.inkSoft)
                         .frame(width: 16, height: 16).accessibilityHidden(true)
                     (Text("Watch triggered").fontWeight(.medium) + Text(" · \(wake.trigger)") + Text(wake.detail.isEmpty ? "" : " (\(wake.detail))"))
                         .font(.footnote).foregroundStyle(palette.inkSoft).lineLimit(1)
@@ -324,7 +324,7 @@ struct SubagentGroup: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .center, spacing: 8) {
                 if working > 0 { RunningDots() } else {
-                    Image(systemName: "point.3.connected.trianglepath.dotted").font(.caption.weight(.semibold)).foregroundStyle(palette.accent)
+                    Image(systemName: "point.3.connected.trianglepath.dotted").font(.caption.weight(.semibold)).foregroundStyle(palette.inkSoft)
                         .frame(width: 16, height: 16).accessibilityHidden(true)
                 }
                 Text(headline(count: blocks.count, working: working, waiting: waiting))

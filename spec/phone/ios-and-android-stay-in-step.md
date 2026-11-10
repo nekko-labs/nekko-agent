@@ -11,7 +11,7 @@ Philip asked (2026-11-02) that the two phone apps do the same things, for what e
 
 1. **Same features.** A feature on one app belongs on the other, existing or new. Someone who changes phones should lose nothing.
 2. **Only a true OS exclusive stays on one app.** If the other OS has an equivalent, build that, the way Apple Pay on iPhone maps to Samsung Pay or Google Pay on Android. A feature stays one-sided only when the other OS has nothing that can do the job, and this file says so.
-3. **Native manners, one look.** Each app follows its own platform's design guidance (Apple's Human Interface Guidelines, Material on Android) for navigation, controls, sheets, type and motion. The Nekko themes, mascot, wording and the order of what a screen shows stay the same, so the two read as one product.
+3. **Native manners, one look.** Each app follows its own platform's design guidance (Apple's Human Interface Guidelines, Material on Android) for navigation, controls, sheets, type and motion. The Nekko themes, mascot, wording and the order of what a screen shows stay the same, so the two read as one product. Icons follow the design system's colours and styles on both (#2451, `[implemented 2026-11-10; Android compiled and unit-tested locally, iOS checked on macOS CI]`): platform line symbols for controls in `inkSoft` at rest, the accent only for a selection, a link or the main action, our own status glyphs for agent status, and the theme's accent as the app-wide tint, so nothing shows the system blue.
 4. **A gap is written down.** When one app gets a feature first, the same PR files a GitHub issue for the other app and adds a row to the gaps table below. Removing the row is part of closing the gap.
 
 ## Acceptance
