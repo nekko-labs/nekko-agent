@@ -185,6 +185,18 @@ jobs:
           xcodebuild "${COMMON[@]}" build-for-testing
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
             "-only-testing:$ONLY_TESTING"
+      - name: Record Winter motion on the owned simulator
+        if: inputs.ios_test_file == 'apps/ios/UITests/WinterThemeTests.swift'
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcrun simctl launch "$DEVICE" dev.nekkolabs.nekkoagent -uiTestChatStatus -splash NO -appLock NO -onboarded YES -uiTestReset YES -AppleLanguages '(en)' -AppleLocale en_US -theme winter
+          sleep 2
+          xcrun simctl io "$DEVICE" recordVideo --codec=h264 evidence/winter-motion.mp4 &
+          RECORDER=$!
+          sleep 8
+          kill -INT "$RECORDER"
+          wait "$RECORDER"
       - name: Export attachments and clean up owned simulator
         if: always()
         working-directory: apps/ios
@@ -212,6 +224,7 @@ jobs:
       fail-fast: false
       matrix:
         revision: [before, after]
+        profile: ${{ fromJSON(inputs.android_test_class == 'com.nekko.android.WinterThemeTest' && '["pixel_2","pixel_fold"]' || '["pixel_2"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -272,17 +285,18 @@ jobs:
           NEKKO_EVIDENCE_REVISION: ${{ matrix.revision }}
           NEKKO_EVIDENCE_CLASS: ${{ inputs.android_test_class }}
           NEKKO_EVIDENCE_EXPECT: ${{ inputs.android_expect }}
+          NEKKO_EVIDENCE_DEVICE: ${{ matrix.profile }}
         with:
           api-level: 34
           arch: x86_64
           target: google_apis
-          profile: pixel_2
+          profile: ${{ matrix.profile }}
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash apps/android/scripts/mode-evidence.sh
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: native-mode-label-android-${{ matrix.revision }}
+          name: native-mode-label-android-${{ matrix.revision }}-${{ matrix.profile }}
           path: apps/android/evidence/**
           if-no-files-found: error

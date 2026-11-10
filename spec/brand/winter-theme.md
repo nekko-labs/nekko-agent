@@ -7,7 +7,7 @@ area: brand
 
 **User intent:** Philip asked (2026-11-09) for a Winter theme, similar to Spooky, with some Easter eggs hidden in it.
 
-**Status `[implemented 2026-11-09 on desktop and the Local Web UI; renderer unit tests, contrast tests and hidden-sandbox screenshots. The iPhone and Android apps get the palette from the shared catalog; Winter's phone extras (a limited app icon like Spooky's) are follow-up work, not claimed here]`**
+**Status `[implemented 2026-11-09 on desktop and the Local Web UI; renderer unit tests, contrast tests and hidden-sandbox screenshots. Native iOS and Android snow and mascot hats are implemented in source with Android builds and unit tests passing; hosted native screenshot, interaction and motion verification are pending. Limited Winter launcher icons remain follow-up work]`**
 
 ## The theme
 
@@ -45,6 +45,15 @@ Dates and hours are the computer's local time. The rules live in `apps/desktop/s
 - Only one hat at a time: the wizard hat is Spooky's, the knitted beanie Winter's, none on any other theme.
 - Reduced motion: no falling, flying or shimmering; everything that remains is still.
 
+## Native phone decorations (issue #2479)
+
+- Both native apps resolve decorations from the same preset as the palette, including Match my computer. Winter shows eight faint, deterministic flakes with one upright cat-shaped flake. Positions scale to compact, unfolded and landscape windows rather than assuming a phone width.
+- The chat/list toolbar mascot wears Winter's cat-ear knitted beanie or Spooky's wizard hat. The hat follows the mascot's existing working and greeting movement without changing its 44-point touch target, greeting action or accessibility Refresh action. Other themes have no hat. Greeting illustrations, launch screens and brand marks remain undressed.
+- Phone hats use the native palette tokens: a muted berry crown, contrasting folded brim and snowflake for Winter; a dark crown and accent brim for Spooky. They are native adaptations, not new image dependencies.
+- Snow and hats have no pointer handlers or accessible copy. Reduced motion holds snow still. The snow clock stops while iOS is inactive or Android is stopped. Leaving Winter removes its snow and replaces/removes the hat immediately.
+- Decoration is local only: no network requests, sounds, persistent particles, notifications or settings writes. No date-based phone extras are added in this change.
+- Verification status: Android app and instrumentation builds plus 592 unit tests pass locally. Baseline-compatible native screenshot/interaction tests exist on both apps. iOS execution and actual phone/fold screenshots and motion inspection remain pending until hosted evidence is reviewed. Source availability is not a shipped or device-verified claim.
+
 ## Not yet
 
-- Winter extras on the phones: a limited Winter app icon (iOS alternate icon, Android activity alias) and the beanie on the phone mascots ([#2411](https://github.com/nekko-labs/nekko-agent/issues/2411)).
+- Winter extras on the phones: a limited Winter app icon (iOS alternate icon, Android activity alias) ([#2411](https://github.com/nekko-labs/nekko-agent/issues/2411)).
