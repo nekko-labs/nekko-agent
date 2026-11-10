@@ -9,8 +9,9 @@ name: Release on a version tag
 #
 # A full `vMAJOR.MINOR.PATCH` tag pushed by a person starts release.yml and
 # docker.yml on its own. This workflow handles the short form: it creates the
-# canonical `vMAJOR.MINOR.0` tag on the same commit and dispatches those two
-# workflows at it.
+# canonical full tag on the same commit and dispatches those two workflows at
+# it. From the 0.10 line on versions are x.xx.xxxx (docs/decisions/0080), so
+# `v0.10` becomes `v0.10.1000`; an older one-digit line still became `.0`.
 #
 # Why this tags *and* dispatches, rather than just tagging: a tag pushed with
 # GITHUB_TOKEN does not trigger other workflows (GitHub blocks that to prevent
@@ -29,7 +30,7 @@ on:
     tags:
       # The short form only; release.yml takes the full one.
       - 'v[0-9]+.[0-9]+'
-  # Re-run for a short tag by hand: gh workflow run version-release.yml -f tag=v0.9
+  # Re-run for a short tag by hand: gh workflow run version-release.yml -f tag=v0.10
   workflow_dispatch:
     inputs:
       tag:
@@ -68,7 +69,18 @@ jobs:
           git rev-parse -q --verify "refs/tags/$SHORT^{commit}" >/dev/null || { echo "No tag $SHORT." >&2; exit 1; }
           # The rule is canonicalReleaseTag() in scripts/nightly-version.mjs, in
           # bash here because the tagged commit may predate that script.
-          echo "tag=$SHORT.0" >> "$GITHUB_OUTPUT"
+          IFS=. read -r major minor <<< "${SHORT#v}"
+          if (( 10#$minor > 99 )); then
+            echo "$SHORT: MINOR is over 99; start the next MAJOR at v$(( 10#$major + 1 )).10." >&2
+            exit 1
+          elif (( 10#$minor >= 10 )); then
+            echo "tag=$SHORT.1000" >> "$GITHUB_OUTPUT"
+          elif (( 10#$major > 0 )); then
+            echo "$SHORT is not x.xx.xxxx; a new MAJOR starts at MINOR 10 (v$major.10)." >&2
+            exit 1
+          else
+            echo "tag=$SHORT.0" >> "$GITHUB_OUTPUT"
+          fi
           echo "commit=$(git rev-parse "$SHORT^{commit}")" >> "$GITHUB_OUTPUT"
 
       - name: Skip if it is already tagged

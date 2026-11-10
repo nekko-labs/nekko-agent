@@ -96,7 +96,12 @@ on `ci/ios-batch` takes every open, ready `deploy:ios` PR that touches iOS and m
 cleanly onto main (the largest set that also merges with each other), and reports to
 each PR's head as the `Native iOS (batch)` status, which `gate` accepts
 (`scripts/ios-batch.mjs`). A PR that conflicts with main gets a red status saying so;
-one that conflicts only with others in the batch waits for a later batch. A red batch
+one that conflicts only with others in the batch waits for a later batch. A PR that
+changes a file under `.github/workflows/` never joins a batch, because the workflow
+token may not push workflow changes and GitHub would refuse the whole batch (#2030):
+the composer starts Native iOS on its branch once per head and marks the head red
+saying so, and that run decides `gate` (re-run it with
+`gh workflow run ios-native.yml --ref <branch>`). A red batch
 marks every PR in it red: run `gh workflow run ios-native.yml --ref <branch>` on your
 branch to see whether the failure is yours (a green run on the PR beats a red batch).
 A head with a green batch is left out of later ones, so main moving can't turn it
