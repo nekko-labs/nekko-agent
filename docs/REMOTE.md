@@ -273,9 +273,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > The iPhone message box writes Markdown: what you type is what is sent, shown with light styling
 > (bold looks bold with its `**` dimmed, headings larger, list markers tinted). While it has the
-> keyboard, a formatting bar sits inside the box above the text: bold, italic, strikethrough, inline
+> keyboard, a formatting bar rides above the keyboard: bold, italic, strikethrough, inline
 > code, link, heading, bulleted, numbered and task lists, indent and outdent, quote, code block and
-> table. **Aa** hides or shows the bar, and the choice is kept. Return continues a list (the next
+> table. A single **Hide keyboard** button at its trailing edge dismisses the keyboard without
+> sending or changing your draft. **Aa** hides or shows formatting, and the choice is kept. Return continues a list (the next
 > number, an empty task box) and ends it on an empty item; inside a table the bar adds **+ Row** and
 > **+ Column**, and Tab moves to the next cell. A normal paste stays plain text; after pasting rich
 > text (from Safari, Notes, Mail or Docs) a chip offers **Use formatting** for a few seconds. Touch
