@@ -1,12 +1,12 @@
 import { monitorPickup } from './monitorPickup.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SubscriptionLimits, SystemStats, UsageSummary } from '@nekko-agent/shared';
+import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SubscriptionLimits, SystemStats, UsageSlice, UsageSummary } from '@nekko-agent/shared';
 import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
 import { accountEmailOf, useAccountEmails } from '../accountEmails.js';
-import { BUDGET_RANGE_LABEL, budgetRange, localRuntimeMetrics, utilizationProviders } from './monitorMetrics.js';
+import { BUDGET_RANGE_LABEL, attributionRange, budgetRange, localRuntimeMetrics, utilizationProviders } from './monitorMetrics.js';
 import { AutomationsPane } from './AutomationsPane.js';
 import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
@@ -550,6 +550,31 @@ function resetPeriod(ms: number): string {
   return `${Math.floor(minutes / 1440)} days ${Math.floor(minutes % 1440 / 60)} hr`;
 }
 
+/**
+ * Where the range's tokens went (#2494): who started the turn, whose turn it
+ * was, and how much of the input was cache reads. Each pair splits the same
+ * tokens, so its shares add up to 100%.
+ */
+function UsageAttributionRows({ a, compact }: { a: NonNullable<ReturnType<typeof attributionRange>>; compact: (n: number) => string }) {
+  const tokens = (s: UsageSlice) => s.input + s.cacheRead + s.cacheWrite + s.output;
+  const total = tokens(a.user) + tokens(a.background);
+  const share = (n: number) => total ? `${Math.round((n / total) * 100)}%` : '0%';
+  const cache = { read: a.user.cacheRead + a.background.cacheRead, fresh: a.user.input + a.background.input, write: a.user.cacheWrite + a.background.cacheWrite };
+  const input = cache.read + cache.fresh + cache.write;
+  const inShare = (n: number) => input ? `${Math.round((n / input) * 100)}%` : '0%';
+  const row = (key: string, label: string, title: string, n: number, pct: string) =>
+    <div key={key} data-row={key}><dt title={title}>{label}</dt><dd title={`${n.toLocaleString()} tokens`}>{pct}<small>{compact(n)} tokens</small></dd></div>;
+  return <dl className="monitors-dock__breakdown" aria-label="Where tokens went" data-usage-attribution>
+    {row('user', 'Sent by you', 'Turns you sent', tokens(a.user), share(tokens(a.user)))}
+    {row('background', 'Background', 'Turns that started on their own: watch wake-ups, automations, automatic continues', tokens(a.background), share(tokens(a.background)))}
+    {row('parent', 'Main chats', 'The chats\' own turns', tokens(a.parent), share(tokens(a.parent)))}
+    {row('subagent', 'Subagents', 'Delegated sub-agents\' turns (a Claude chat reports its sub-agents in its own turns)', tokens(a.subagent), share(tokens(a.subagent)))}
+    {row('cache-read', 'Cache reads', 'Input read back from the prompt cache, billed at a fraction of new input', cache.read, inShare(cache.read))}
+    {row('new-input', 'New input', 'Input sent fresh, including cache writes', cache.fresh + cache.write, inShare(cache.fresh + cache.write))}
+    {!a.covered && <p className="monitors-dock__note">Split since {a.since}; earlier usage is in the totals only.</p>}
+  </dl>;
+}
+
 function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'usage' | 'now' | 'sessions' | 'providers'>) {
   const benchmark = useStore((s) => s.settings?.localCostBenchmark ?? DEFAULT_LOCAL_COST_BENCHMARK);
   const [error, setError] = useState<string | null>(null);
@@ -605,6 +630,7 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
       <div data-row="top"><dt>Top paid agent</dt><dd>{topTitle ? <><span className="monitors-dock__breakdown-name" title={topTitle}>{topTitle}</span>{formatUSD(top![1])}</> : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</dd></div>
       <div data-row="tokens"><dt>Tokens</dt><dd title={ranged ? `${ranged.input.toLocaleString()} in · ${ranged.output.toLocaleString()} out` : undefined}>{ranged ? `${compact(ranged.input)} in · ${compact(ranged.output)} out` : 'Unavailable'}</dd></div>
     </dl>
+    {ranged?.attribution && <UsageAttributionRows a={ranged.attribution} compact={compact} />}
     <p className="monitors-dock__note">{BUDGET_RANGE_LABEL[range]} · UTC. Theoretical is the API price of the same tokens, before plan fees, hardware and electricity.</p>
     <details><summary>Cloud pricing comparison</summary>
       <label className="monitors-dock__benchmark">Fallback for unpriced local models

@@ -67,7 +67,8 @@ export function Row({
     <>
       {leading != null && <span className="flex shrink-0 items-center">{leading}</span>}
       <span className={`flex min-w-0 flex-1 ${stacked ? 'flex-col' : 'items-baseline'}`} style={stacked ? undefined : { gap: 'var(--q-inline)' }}>
-        <span className={`min-w-0 truncate ${dense ? 'text-xs' : 'text-sm'} font-medium ${disabled ? 'text-ink-faint' : selected ? 'text-accent' : ''} ${titleClassName}`} data-row-title>{title}</span>
+        {/* The title is what people scan for: beside a detail, the detail gives way first. */}
+        <span className={`${stacked ? 'min-w-0' : 'max-w-full shrink-0'} truncate ${dense ? 'text-xs' : 'text-sm'} font-medium ${disabled ? 'text-ink-faint' : selected ? 'text-accent' : ''} ${titleClassName}`} data-row-title>{title}</span>
         {detail != null && <span className={`min-w-0 truncate ${dense ? 'text-2xs' : 'text-xs'} text-ink-faint`} data-row-detail>{detail}</span>}
       </span>
       {meta != null && <span className={`shrink-0 ${dense ? 'text-2xs' : 'text-xs'} text-ink-faint tabular-nums`}>{meta}</span>}

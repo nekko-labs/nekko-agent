@@ -121,6 +121,7 @@ jobs:
             apps/ios/App/Views/SecurityEvidenceFixture.swift
             apps/ios/App/Views/ChatStatusFixture.swift
             apps/ios/App/Views/ReplyVoicesFixture.swift
+            apps/ios/Protocol/Tests/NekkoKitTests/StarAskTests.swift
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -143,6 +144,12 @@ jobs:
           # Overlay only deterministic test data for the title comparison.
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then
             cp .evidence-harness/apps/ios/App/Views/ChatStatusFixture.swift apps/ios/App/Views/
+          fi
+          # The keyboard baseline contains the independently diagnosed recursive
+          # StarAskCountTests helper (#2531). Share its test-only repair on both
+          # revisions, leaving production keyboard behavior untouched.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/KeyboardDismissEvidenceTests.swift" ]]; then
+            cp .evidence-harness/apps/ios/Protocol/Tests/NekkoKitTests/StarAskTests.swift apps/ios/Protocol/Tests/NekkoKitTests/
           fi
           # Only the security comparison needs the debug-only in-memory fixture.
           # Production views and behavior remain unchanged in both revisions.
@@ -194,9 +201,9 @@ jobs:
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO)
           xcodebuild "${COMMON[@]}" build-for-testing
-          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/KeyboardDismissEvidenceTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then
             RECORDING=evidence/native-comparison.mp4
-            if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" ]]; then RECORDING=evidence/quiet-transcript.mp4; fi
+            if [[ "$IOS_TEST_FILE" != "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then RECORDING=evidence/quiet-transcript.mp4; fi
             xcrun simctl io "$DEVICE" recordVideo --codec=h264 "$RECORDING" &
             VIDEO_PID=$!
             trap 'kill -INT "$VIDEO_PID" 2>/dev/null || true; wait "$VIDEO_PID" || true' EXIT

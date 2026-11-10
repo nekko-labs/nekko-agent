@@ -26,6 +26,16 @@ export interface ConnectorConfig {
   connectedAt?: number;
 }
 
+/** A sign-in found on this computer that a connector can use (`connectors:detect`). */
+export interface DetectedSignIn {
+  /** Where it came from: the GitHub CLI. */
+  source: 'gh';
+  /** The account it belongs to, or "" when the service did not say. */
+  account: string;
+}
+
+export type DetectedConnectors = Partial<Record<ConnectorKind, DetectedSignIn>>;
+
 export interface ConnectorResource {
   id: string;
   title: string;

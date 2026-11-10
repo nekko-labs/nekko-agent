@@ -1176,19 +1176,6 @@ struct Composer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if focused {
-                HStack {
-                    Spacer()
-                    Button(action: hideKeyboard) {
-                        Image(systemName: "keyboard.chevron.compact.down")
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Hide keyboard")
-                    .accessibilityIdentifier("composer.hideKeyboard")
-                }
-            }
             // With the other next steps, above the box. A skill or saved prompt is a slash command, not work to place.
             if !chat.isImageChat, skill == nil, prompt == nil, chat.offersSubagent(text) { workPlace }
             if let blocked = chat.blocked {
