@@ -9,8 +9,8 @@ import '../src/renderer/styles.css';
 // personal Claude plan and an organization seat, an API key, and a ChatGPT plan.
 // No host, Claude process or network; unknown bridge calls answer null.
 const providers: ProviderConfig[] = [
-  { id: 'personal', kind: 'claude-code', label: 'Claude subscription', baseUrl: '', enabled: true },
-  { id: 'acme', kind: 'claude-code', label: 'Claude subscription · Work', baseUrl: '', enabled: true, claudeCode: { account: 'work' } },
+  { id: 'personal', kind: 'claude-code', label: 'Claude subscription', baseUrl: '', enabled: true, account: { signedIn: true, email: 'alex@example.test', scope: 'personal', name: 'Personal', plan: 'max', orgId: 'org-personal' } } as ProviderConfig,
+  { id: 'acme', kind: 'claude-code', label: 'Claude subscription · Work', baseUrl: '', enabled: true, claudeCode: { account: 'work' }, account: { signedIn: true, email: 'alex@example.test', scope: 'organization', name: 'Acme Inc', plan: 'team', orgId: 'org-acme' } } as ProviderConfig,
   { id: 'production', kind: 'anthropic', label: 'Production', baseUrl: 'https://api.anthropic.com', enabled: true, apiKey: 'synthetic-secret-never-render' },
   { id: 'gpt', kind: 'chatgpt', label: 'ChatGPT (subscription)', baseUrl: 'https://chatgpt.com/backend-api/codex', enabled: true, auth: 'subscription', tokenKey: 'chatgpt:gpt' },
 ];
@@ -20,7 +20,9 @@ const catalog: Record<string, ModelInfo[]> = {
   production: [{ id: 'claude-opus-4-7', providerId: 'production', name: 'Claude Opus 4.7' }, { id: 'claude-sonnet-4-6', providerId: 'production', name: 'Claude Sonnet 4.6' }],
   gpt: [{ id: 'gpt-5.5', providerId: 'gpt', name: 'GPT-5.5' }, { id: 'gpt-5.5-mini', providerId: 'gpt', name: 'GPT-5.5 mini' }],
 };
-const status = (id?: string) => id === 'acme'
+// A third organization on the same email, for "Add another account on this login".
+const globex = { installed: true, version: '2.1.319', loggedIn: true, authMethod: 'claude.ai', auth: 'subscription', email: 'alex@example.test', orgName: 'Globex', orgId: 'org-globex', subscriptionType: 'enterprise' };
+const status = (id?: string, account?: string) => account?.startsWith('account-') ? globex : id === 'acme'
   ? { installed: true, version: '2.1.319', loggedIn: true, authMethod: 'claude.ai', auth: 'subscription', email: 'alex@example.test', orgName: 'Acme Inc', orgId: 'org-acme', subscriptionType: 'team' }
   : { installed: true, version: '2.1.319', loggedIn: true, authMethod: 'claude.ai', auth: 'subscription', email: 'alex@example.test', orgName: "alex@example.test's Organization", orgId: 'org-personal', subscriptionType: 'max' };
 const now = Date.now();
@@ -32,7 +34,9 @@ const known: Record<string, unknown> = {
   listModels: async (id: string) => catalog[id] ?? [],
   listModelsStatus: async (id: string) => ({ models: catalog[id] ?? [] }),
   testProvider: async () => ({ ok: true, message: 'Synthetic' }),
-  getClaudeCodeStatus: async (id?: string) => status(id),
+  getClaudeCodeStatus: async (id?: string, account?: string) => status(id, account),
+  createTerminal: async () => ({ id: 'synthetic-terminal' }),
+  runInTerminal: async () => {},
   getClaudePolicy: async () => null,
   getLimits: async (key: string) => (key.includes('personal') ? limits : null),
   oauthStatus: async () => ({ tokenKey: 'chatgpt:gpt', connected: true, accountEmail: 'alex@example.test' }),

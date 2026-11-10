@@ -92,7 +92,8 @@ class PhoneProvidersTest {
     @Test fun finishReasonIsNotStreamCompletionAndLaterErrorsSurvive() {
         val p = PhoneStreamParser()
         assertTrue(frame(p, """{"choices":[{"delta":{},"finish_reason":"stop"}]}""").isEmpty())
-        assertTrue(frame(p, """{"choices":[],"usage":{"completion_tokens":2}}""").isEmpty())
+        // The usage chunk reports tokens (#2114) but neither ends the stream nor adds text.
+        assertEquals(listOf(PhoneStreamEvent.Usage(null, 2)), frame(p, """{"choices":[],"usage":{"completion_tokens":2}}"""))
         assertTrue(frame(p, """{"error":{"message":"secret"}}""").single() is PhoneStreamEvent.Failure)
         assertTrue(frame(p, "[DONE]").isEmpty())
     }

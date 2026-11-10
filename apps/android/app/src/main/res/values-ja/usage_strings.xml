@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Usage by place (UsageScreen, #2114), the iPhone's Usage and limits by computer and by this phone. -->
+<resources>
+    <string name="usage_all_places">すべての場所</string>
+    <string name="usage_subscription_tokens">サブスクリプション</string>
+    <string name="usage_api_tokens">API（トークン課金）</string>
+    <string name="usage_api_spend">API の推定費用</string>
+    <string name="usage_offline_counted" formatted="true">%1$d 台がオフライン: 最後の数値を含めています。</string>
+    <string name="usage_this_phone">このスマートフォン</string>
+    <string name="usage_offline_heading" formatted="true">%1$s · オフライン</string>
+    <string name="usage_offline_last">オフライン。最後に受け取った数値です。</string>
+    <string name="usage_offline_never">オフライン。再接続すると使用量が表示されます。</string>
+    <string name="usage_error_last" formatted="true">今は読み込めません（%1$s）。最後に受け取った数値です。</string>
+    <string name="usage_subscriptions">サブスクリプション</string>
+    <string name="usage_api">API</string>
+    <string name="usage_tokens_only">このスマートフォンには料金表がありません: トークンのみ。</string>
+</resources>
