@@ -97,6 +97,17 @@ on:
 permissions:
   contents: read
 jobs:
+  ios-protocol-linux:
+    if: inputs.capture_platform != 'android'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - name: Run full native protocol and app-state tests without a Mac
+        run: apps/ios/scripts/linux-test.sh
   ios:
     if: inputs.capture_platform != 'android'
     # The existing ios-native.yml hosted image, never the owner-runner picker.
