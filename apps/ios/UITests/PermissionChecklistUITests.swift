@@ -74,15 +74,35 @@ final class PermissionChecklistUITests: XCTestCase {
         app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-uiTestReset", "YES", "-theme", "light", "-uiTestNotificationStep"]
         app.launch()
         let microphone = app.buttons["permissions.action.microphone"]
-        let row = app.buttons["permissions.row.microphone"]
+        let row = app.descendants(matching: .any)["permissions.row.microphone"].firstMatch
         XCTAssertTrue(app.buttons["permissions.continue"].waitForExistence(timeout: 15))
+        guard row.exists else {
+            attach(app, "permissions-microphone-row-missing")
+            XCTFail("The permission fixture must contain the microphone row")
+            return
+        }
+        // Baseline c018 has an inline card (AX Other), not the repaired accordion Button.
+        // Drive the same deliberate microphone request on both; never tap the baseline's
+        // noninteractive container or assume a missing Button proves authorization failure.
+        let expandable = row.elementType == .button
+        let target = expandable ? row : microphone
+        let route = XCTAttachment(string: "rowType=\(row.elementType.rawValue); requestPath=\(expandable ? "accordion" : "inline")")
+        route.name = "permissions-microphone-request-path"
+        route.lifetime = .keepAlways
+        add(route)
         for _ in 0..<10 {
-            if row.exists && row.isHittable { break }
+            if target.exists && target.isHittable { break }
             app.swipeUp()
         }
-        row.tap()
+        guard target.exists && target.isHittable else {
+            attach(app, "permissions-microphone-request-unreachable")
+            XCTFail("The microphone request must be reachable without granting it")
+            return
+        }
+        if expandable { row.tap() }
         XCTAssertTrue(microphone.waitForExistence(timeout: 5))
         if !microphone.isHittable { app.swipeUp() }
+        XCTAssertTrue(microphone.label.hasPrefix("Allow"), "The unasked microphone request is shown before denial")
         microphone.tap()
         let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let alert = system.alerts.firstMatch

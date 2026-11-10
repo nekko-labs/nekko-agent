@@ -29,3 +29,15 @@ Connection and alerts come first: notifications (approvals, questions, replies a
 Implemented in the task branch: permission reader/request coordinator, reusable checklist, onboarding replacement and Settings entry point. Native unit and onboarding UI tests cover the inventory and status rules. Build, test and inspected simulator evidence results are recorded in the linked PR; physical hardware, real local-network authorization, authentication hardware and APNs delivery must not be claimed from simulator-only checks. English source strings use the native localization APIs; new translations have not been supplied.
 
 Android parity is planned in [#2251](https://github.com/nekko-labs/nekko-agent/issues/2251), with the gap recorded in [phone parity](ios-and-android-stay-in-step.md).
+
+## Matched Settings-recovery diagnostic harness (2026-11-10)
+
+Implemented in the diagnostic harness only, native execution **unverified**: classify the actual
+AX row as accordion Button or baseline inline Other before requesting microphone access. The
+inline baseline's container is not tappable; use its actual action Button. The accordion still
+opens its row before using the same action. Both retain real denial, denied-to-Settings, system
+switch0→1, process-state/return capture and the original10-second Allowed assertion. No product
+code, TCC grant fabrication, assertion removal or increased timeout is involved. The first
+baseline retry stopped on a nonexistent Button and never reached denial/Settings, so it proves
+neither an authorization regression nor a successful recovery. Pinned comparison must use the
+same corrected harness on both app revisions before diagnosing process-refresh behavior.
