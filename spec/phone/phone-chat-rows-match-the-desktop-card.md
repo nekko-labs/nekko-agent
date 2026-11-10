@@ -23,7 +23,7 @@ The desktop's card is the reference ([agent panel view options](../agents/agent-
 
 ## Quiet rows and sub-agents on the iPhone (2026-11-10)
 
-`[Implemented 2026-11-10 on iOS, in source. SessionSummary.subagents and the retired Previews choice are covered by CardDetailsTests; the Swift build, the native fixture screenshots and a device pass await macOS CI. Android has no sub-agent rows yet (see the gap in ios-and-android-stay-in-step.md)]`
+`[Implemented 2026-11-10 on iOS, in source. SessionSummary.subagents and the retired Previews choice are covered by CardDetailsTests; the Swift build, the native fixture screenshots and a device pass await macOS CI. Android has no sub-agent rows yet: #2509]`
 
 Philip asked (2026-11-10) that the iPhone's chat rows drop the chat preview and the divider lines and take the updated quiet style, with PR chips and sub-agents shown just like the desktop, and the model each sub-agent runs on especially.
 
