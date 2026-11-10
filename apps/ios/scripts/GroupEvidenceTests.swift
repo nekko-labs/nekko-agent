@@ -20,14 +20,17 @@ final class GroupEvidenceTests: XCTestCase {
             app.buttons["Card details"].tap()
             attach(app, "card-details-menu")
             app.buttons["Model"].tap()
-            // A menu toggle dismisses the native menu; the other fields must stay on.
+            // The submenu stays open while choosing (#2449); the other fields must stay on.
             XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Model opus")).firstMatch.exists)
             XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Context window:")).firstMatch.exists)
             for label in ["Context window", "Pull requests", "Last updated"] {
-                app.buttons["chats.view"].tap()
-                app.buttons["Card details"].tap()
+                if !app.buttons[label].exists {
+                    app.buttons["chats.view"].tap()
+                    app.buttons["Card details"].tap()
+                }
                 app.buttons[label].tap()
             }
+            closeViewOptions(app)
             attach(app, "card-details-hidden")
             XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Context window:")).firstMatch.exists)
             app.terminate()

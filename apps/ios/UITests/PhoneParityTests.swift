@@ -99,47 +99,23 @@ final class PhoneParityTests: XCTestCase {
         app.buttons["Advance agent"].tap()
         XCTAssertTrue(app.staticTexts["Watching"].waitForExistence(timeout: 3))
         attach(app, "groups-watching")
+        // One native menu (#2449): no Reset while the view is the default, Show is a
+        // submenu whose toggles keep it open, and a tap outside closes it.
         app.buttons["View options"].tap()
-        // Shared before/after harness: the baseline has a menu item; View options
-        // now exposes the same preference as an inline switch in its Show disclosure.
-        let inlineAlways = app.switches["chats.view.showEmptyGroups"]
-        let menuAlways = app.buttons["Always show groups"]
-        let show = app.buttons["Show"]
-        XCTAssertTrue(show.waitForExistence(timeout: 5), "View options has Show")
-        show.tap()
-        // Show's rows open below the fold of the popover's lazy Form, and a row that is
-        // not on screen does not exist for XCTest. Tapping Show again only folds it, so
-        // scroll the Form to them instead (the baseline's menu opens on the first tap).
-        let form = app.popovers.firstMatch.collectionViews.firstMatch
-        for _ in 0..<5 where !(inlineAlways.exists || menuAlways.exists) {
-            if form.exists { form.swipeUp() } else { show.tap() }
-        }
-        XCTAssertTrue(inlineAlways.exists || menuAlways.exists, "Show exposes its controls")
-        let usesInlineControls = inlineAlways.exists
-        let always = usesInlineControls ? inlineAlways : menuAlways
-        XCTAssertTrue(always.waitForExistence(timeout: 3))
-        if usesInlineControls {
-            guard revealViewOption(always, in: app) else { return }
-        }
+        XCTAssertTrue(viewOptionsGroupBy(app).waitForExistence(timeout: 5), "View options has Group by")
+        XCTAssertFalse(app.buttons["Reset to defaults"].exists, "no Reset while the view is the default")
+        let always = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", "chats.view.showEmptyGroups", "Always show groups")).firstMatch
+        guard openViewOptionsSubmenu("Show", showing: always, in: app) else { return }
         attach(app, "groups-show-options")
-        if usesInlineControls {
-            // SwiftUI exposes a row-wide switch containing the actual control.
-            // As in LiveRelayTests, tap the inner switch rather than the inert row.
-            let knob = inlineAlways.switches.firstMatch
-            let control = knob.exists ? knob : inlineAlways
-            guard revealViewOption(control, in: app) else { return }
-            control.tap()
-        } else {
-            always.tap()
-        }
-        if usesInlineControls {
-            XCTAssertEqual(inlineAlways.value as? String, "1", "Always show groups is enabled")
-            let done = app.buttons["chats.view.done"]
-            guard revealViewOption(done, in: app) else { return }
-            done.tap()
-        }
+        always.tap()
+        closeViewOptions(app)
         XCTAssertTrue(app.staticTexts["Building"].waitForExistence(timeout: 3))
         attach(app, "groups-always-visible")
+        // The view now differs from the defaults, so Reset shows.
+        app.buttons["View options"].tap()
+        XCTAssertTrue(app.buttons["Reset to defaults"].waitForExistence(timeout: 5), "Reset once the view differs")
+        attach(app, "groups-view-menu-reset")
+        closeViewOptions(app)
         app.buttons["Folders"].tap()
         XCTAssertTrue(app.buttons["files.addFolder"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["files.star.app"].exists)
@@ -148,9 +124,6 @@ final class PhoneParityTests: XCTestCase {
         XCTAssertTrue(app.buttons["Remove saved folder"].waitForExistence(timeout: 3))
         attach(app, "folders-remove-menu")
     }
-
-    /// Form rows may exist in accessibility while clipped by the popover.
-    /// Scroll that Form, not the chat list behind it, before tapping a control.
 
     private func launch(_ fixture: String, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()

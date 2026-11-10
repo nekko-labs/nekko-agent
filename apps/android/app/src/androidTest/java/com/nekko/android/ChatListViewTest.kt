@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasTestTag
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
 import com.nekko.android.data.ChatListPrefs
 import com.nekko.android.data.ComputersRepository
@@ -143,13 +144,31 @@ class ChatListViewTest {
 
     @Test fun groupByDateAndHidePreviews() {
         show()
+        // One level (#2449): Group by shows its value and opens its choices in place; no Reset at the defaults.
         compose.onNodeWithTag("chats.view").performClick()
         settle()
+        compose.onNodeWithTag("chats.view.reset").assertDoesNotExist()
+        compose.onNodeWithTag("chats.view.groupBy").performClick()
+        settle()
+        shot("2b-group-by")
         compose.onNodeWithText("Date").performClick()
         settle()
+        // A pick closes the menu; Show opens its toggles in place and keeps the menu open.
+        compose.onNodeWithTag("chats.view.groupBy").assertDoesNotExist()
         compose.onNodeWithTag("chats.view").performClick()
         settle()
+        compose.onNodeWithText("Date", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("chats.view.show").performClick()
+        settle()
         compose.onNodeWithText("Previews").performClick()
+        settle()
+        compose.onNodeWithText("Completed chats").assertExists()
+        shot("2c-show")
+        compose.onNodeWithTag("chats.view.back").performClick()
+        settle()
+        compose.onNodeWithTag("chats.view.reset").assertExists()
+        shot("2d-menu-changed")
+        Espresso.pressBack()
         settle()
         assertEquals(ChatListView.GroupBy.DATE, prefs.get(ChatListPrefs.VIEW).groupBy)
         assertEquals(false, prefs.get(ChatListPrefs.VIEW).showPreviews)
@@ -159,7 +178,7 @@ class ChatListViewTest {
         // Reset to defaults brings the list back as it was.
         compose.onNodeWithTag("chats.view").performClick()
         settle()
-        compose.onNodeWithText("Reset to defaults").performClick()
+        compose.onNodeWithTag("chats.view.reset").performClick()
         settle()
         assertEquals(ChatListView.STANDARD, prefs.get(ChatListPrefs.VIEW))
     }

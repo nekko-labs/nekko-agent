@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.automirrored.filled.Sort
 import com.nekko.android.data.PhonePrefs
@@ -962,74 +963,123 @@ private fun ShowMoreToggle(open: Boolean, hidden: Int, onToggle: () -> Unit) {
     }
 }
 
-/** Group by, sort by, and what is shown: the desktop Agents panel's view menu, as on the iPhone. */
+/** The view menu's pages: the menu itself, and the choices one of its rows opens in place. */
+private enum class ViewPage { MAIN, GROUP_BY, SORT_BY, ORDER, CARD_DETAILS, SHOW }
+
+/**
+ * Group by, sort by, and what is shown: the desktop Agents panel's view menu, as on the iPhone.
+ * One level (#2449): each row names a setting and shows its value, and opens its choices in the
+ * same panel with a back row (as the computer menu does). A pick closes the menu; the Card details
+ * and Show toggles keep it open. Reset appears only when the view differs from the defaults.
+ */
 @Composable
 private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Unit, onReorder: () -> Unit) {
     val p = Nekko.palette
     var open by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(ViewPage.MAIN) }
+    val close = { open = false; page = ViewPage.MAIN }
     Box {
-        IconButton(onClick = { open = true }, modifier = Modifier.testTag("chats.view")) {
+        IconButton(onClick = { page = ViewPage.MAIN; open = true }, modifier = Modifier.testTag("chats.view")) {
             Icon(
                 if (view.isStandard) Icons.AutoMirrored.Outlined.Sort else Icons.AutoMirrored.Filled.Sort,
                 contentDescription = stringResource(R.string.chats_view_options),
                 tint = if (view.isStandard) p.inkSoft else p.accent,
             )
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            // Simple / Detailed first, as on the iPhone (#2117): the pill holds only the gauges now.
-            com.nekko.android.ui.simple.ModeMenuItems(onPicked = { open = false })
-            HorizontalDivider()
+        DropdownMenu(expanded = open, onDismissRequest = close) {
+            /** A row that opens choices: its name, the current value in the soft ink tier, a chevron. */
             @Composable
-            fun heading(text: String) = Text(
-                text.uppercase(), style = MaterialTheme.typography.labelSmall, color = p.inkFaint, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp),
+            fun opens(text: String, value: String?, tag: String, to: ViewPage) = DropdownMenuItem(
+                text = { Text(text) },
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkSoft)
+                    }
+                },
+                onClick = { page = to },
+                modifier = Modifier.testTag(tag),
             )
+
+            /** A choice: a check on the chosen one, in the accent. */
             @Composable
             fun choice(text: String, on: Boolean, change: () -> Unit) = DropdownMenuItem(
                 text = { Text(text) },
-                leadingIcon = { Icon(Icons.Filled.Check, contentDescription = null, tint = if (on) p.accent else Color.Transparent) },
+                trailingIcon = { Icon(Icons.Filled.Check, contentDescription = null, tint = if (on) p.accent else Color.Transparent) },
                 onClick = change,
                 modifier = Modifier.semantics { selected = on },
             )
-            heading(stringResource(R.string.chats_group_by))
-            ChatListView.GroupBy.entries.forEach { g -> choice(stringResource(groupName(g)), view.groupBy == g) { onChange(view.copy(groupBy = g)) } }
-            HorizontalDivider()
-            heading(stringResource(R.string.chats_sort_by))
-            ChatListView.SortBy.entries.forEach { o -> choice(stringResource(sortName(o)), view.sortBy == o) { onChange(view.withSort(o)) } }
-            // Manual order has no direction: it is whatever was dragged on the computer.
-            if (view.sortBy != ChatListView.SortBy.MANUAL) {
-                HorizontalDivider()
-                heading(stringResource(R.string.chats_order))
-                val name = view.sortBy == ChatListView.SortBy.NAME
-                choice(stringResource(if (name) R.string.chats_a_to_z else R.string.chats_oldest_first), view.ascending) { onChange(view.copy(ascending = true)) }
-                choice(stringResource(if (name) R.string.chats_z_to_a else R.string.chats_newest_first), !view.ascending) { onChange(view.copy(ascending = false)) }
-            }
-            HorizontalDivider()
-            heading(stringResource(R.string.chats_card_details))
-            choice(stringResource(R.string.chats_showmodel), view.showModel) { onChange(view.copy(showModel = !view.showModel)) }
-            choice(stringResource(R.string.chats_showcontext), view.showContext) { onChange(view.copy(showContext = !view.showContext)) }
-            choice(stringResource(R.string.chats_showpullrequests), view.showPullRequests) { onChange(view.copy(showPullRequests = !view.showPullRequests)) }
-            choice(stringResource(R.string.chats_showupdated), view.showUpdated) { onChange(view.copy(showUpdated = !view.showUpdated)) }
-            HorizontalDivider()
-            heading(stringResource(R.string.chats_show))
-            choice(stringResource(R.string.chats_previews), view.showPreviews) { onChange(view.copy(showPreviews = !view.showPreviews)) }
-            choice(stringResource(R.string.chats_completed_chats), view.showCompleted) { onChange(view.copy(showCompleted = !view.showCompleted)) }
-            choice(stringResource(R.string.chats_empty_groups), view.showEmptyGroups) { onChange(view.copy(showEmptyGroups = !view.showEmptyGroups)) }
-            if (view.canReorderGroups) {
-                HorizontalDivider()
+
+            /** The top of a page of choices: back to the menu, under the setting's name. */
+            @Composable
+            fun back(title: String) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.chats_reorder_groups_menu)) },
-                    leadingIcon = { Icon(Icons.Filled.SwapVert, contentDescription = null) },
-                    onClick = { open = false; onReorder() },
-                    modifier = Modifier.testTag("chats.reorder"),
+                    text = { Text(title, fontWeight = FontWeight.Medium) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back), tint = p.ink) },
+                    onClick = { page = ViewPage.MAIN },
+                    modifier = Modifier.testTag("chats.view.back"),
                 )
+                HorizontalDivider(color = p.line)
             }
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.chats_reset_defaults)) },
-                enabled = !view.isStandard,
-                onClick = { open = false; onChange(ChatListView.STANDARD) },
+            val byName = view.sortBy == ChatListView.SortBy.NAME
+            val orderName = stringResource(
+                if (view.ascending) (if (byName) R.string.chats_a_to_z else R.string.chats_oldest_first)
+                else (if (byName) R.string.chats_z_to_a else R.string.chats_newest_first),
             )
+            when (page) {
+                ViewPage.MAIN -> {
+                    // Simple / Detailed first, as on the iPhone (#2117): the pill holds only the gauges now.
+                    com.nekko.android.ui.simple.ModeMenuItems(onPicked = close)
+                    HorizontalDivider(color = p.line)
+                    opens(stringResource(R.string.chats_group_by), stringResource(groupName(view.groupBy)), "chats.view.groupBy", ViewPage.GROUP_BY)
+                    opens(stringResource(R.string.chats_sort_by), stringResource(sortName(view.sortBy)), "chats.view.sortBy", ViewPage.SORT_BY)
+                    // Manual order has no direction: it is whatever was dragged on the computer.
+                    if (view.sortBy != ChatListView.SortBy.MANUAL) opens(stringResource(R.string.chats_order), orderName, "chats.view.order", ViewPage.ORDER)
+                    HorizontalDivider(color = p.line)
+                    opens(stringResource(R.string.chats_card_details), null, "chats.view.cardDetails", ViewPage.CARD_DETAILS)
+                    opens(stringResource(R.string.chats_show), null, "chats.view.show", ViewPage.SHOW)
+                    // Only what applies now: gone, not greyed out.
+                    if (view.canReorderGroups || !view.isStandard) HorizontalDivider(color = p.line)
+                    if (view.canReorderGroups) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chats_reorder_groups_menu)) },
+                        leadingIcon = { Icon(Icons.Filled.SwapVert, contentDescription = null, tint = p.inkSoft) },
+                        onClick = { close(); onReorder() },
+                        modifier = Modifier.testTag("chats.reorder"),
+                    )
+                    if (!view.isStandard) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chats_reset_defaults), color = p.accent) },
+                        leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null, tint = p.accent) },
+                        onClick = { close(); onChange(ChatListView.STANDARD) },
+                        modifier = Modifier.testTag("chats.view.reset"),
+                    )
+                }
+                ViewPage.GROUP_BY -> {
+                    back(stringResource(R.string.chats_group_by))
+                    ChatListView.GroupBy.entries.forEach { g -> choice(stringResource(groupName(g)), view.groupBy == g) { onChange(view.copy(groupBy = g)); close() } }
+                }
+                ViewPage.SORT_BY -> {
+                    back(stringResource(R.string.chats_sort_by))
+                    ChatListView.SortBy.entries.forEach { o -> choice(stringResource(sortName(o)), view.sortBy == o) { onChange(view.withSort(o)); close() } }
+                }
+                ViewPage.ORDER -> {
+                    back(stringResource(R.string.chats_order))
+                    choice(stringResource(if (byName) R.string.chats_a_to_z else R.string.chats_oldest_first), view.ascending) { onChange(view.copy(ascending = true)); close() }
+                    choice(stringResource(if (byName) R.string.chats_z_to_a else R.string.chats_newest_first), !view.ascending) { onChange(view.copy(ascending = false)); close() }
+                }
+                ViewPage.CARD_DETAILS -> {
+                    back(stringResource(R.string.chats_card_details))
+                    choice(stringResource(R.string.chats_showmodel), view.showModel) { onChange(view.copy(showModel = !view.showModel)) }
+                    choice(stringResource(R.string.chats_showcontext), view.showContext) { onChange(view.copy(showContext = !view.showContext)) }
+                    choice(stringResource(R.string.chats_showpullrequests), view.showPullRequests) { onChange(view.copy(showPullRequests = !view.showPullRequests)) }
+                    choice(stringResource(R.string.chats_showupdated), view.showUpdated) { onChange(view.copy(showUpdated = !view.showUpdated)) }
+                }
+                ViewPage.SHOW -> {
+                    back(stringResource(R.string.chats_show))
+                    choice(stringResource(R.string.chats_previews), view.showPreviews) { onChange(view.copy(showPreviews = !view.showPreviews)) }
+                    choice(stringResource(R.string.chats_completed_chats), view.showCompleted) { onChange(view.copy(showCompleted = !view.showCompleted)) }
+                    choice(stringResource(R.string.chats_empty_groups), view.showEmptyGroups) { onChange(view.copy(showEmptyGroups = !view.showEmptyGroups)) }
+                }
+            }
         }
     }
 }
