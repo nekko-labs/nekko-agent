@@ -239,6 +239,8 @@ data class ChatMessage(
     val toolCalls: List<ToolCall> = emptyList(),
     val toolResult: ToolResult? = null,
     val interrupted: Boolean = false,
+    /** The computer's persisted measurements for the turn this reply ended; null when it recorded none. */
+    val turnStats: TurnStats? = null,
 ) {
     val imageCount: Int get() = images.size
 
@@ -259,6 +261,7 @@ data class ChatMessage(
                 toolCalls = o["toolCalls"].arr()?.mapNotNull { ToolCall.from(it) } ?: emptyList(),
                 toolResult = ToolResult.from(o["toolResult"]),
                 interrupted = o.bool("interrupted"),
+                turnStats = TurnStats.from(o["turnStats"]),
             )
         }
     }

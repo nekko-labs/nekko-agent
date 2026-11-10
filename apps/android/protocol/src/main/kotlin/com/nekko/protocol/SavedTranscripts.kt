@@ -80,6 +80,8 @@ fun ChatMessage.savedJson(): JsonObject = buildJsonObject {
         })
     }
     if (interrupted) put("interrupted", true)
+    // The narrow projection only: counts and identifiers, never the provider's raw payload.
+    turnStats?.let { put("turnStats", it.json()) }
 }
 
 /**
