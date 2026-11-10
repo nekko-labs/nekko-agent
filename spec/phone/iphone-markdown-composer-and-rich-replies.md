@@ -56,3 +56,10 @@ The isolated stack run at `59570f8f` also passed four native and five Markdown U
   - the HTML→Markdown converter, including the security cases
 - A UI test types a nested list and a table with the toolbar, sends it, and reads it back rendered. Its screenshots appear in the PR, in light and dark and at the largest text size.
 - Status stays *planned* or *unverified* until the app has run on a simulator. Code that exists but has not been run is not shipped.
+
+
+## Single keyboard dismissal control (#2534)
+
+The active chat composer must expose exactly one 44-point Hide keyboard control, on its keyboard accessory toolbar. The legacy focused-only button above the composer is removed; the form fallback still stands aside while a composer owns the keyboard. Dismissal preserves the draft and never sends it; reopening restores the same draft and single control. Android already places dismissal on its keyboard toolbar and is unchanged.
+
+Implemented in source; matched native evidence and full journey verification are pending. The comparison harness reproduces two buttons on base and requires exactly one on the fix, with keyboard dismissal, draft preservation and reopening checks. The shared test-only StarAskCountTests helper repair (#2531, identical to #2513) prevents recursion from terminating baseline protocol tests; no production keyboard code is overlaid. No network or storage behavior changes. Physical/hardware keyboards and VoiceOver on a physical device remain unverified.
