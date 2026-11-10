@@ -62,13 +62,13 @@ Displaying a screenshot does not mean it has been inspected or approved. The age
 
 ## Make it yours
 
-In **Settings → Customize → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including the seasonal Spooky and Winter. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
+In **Settings → Customize → Appearance**, choose a palette by its icon (a cat for Nekko, a blueberry for Blueberry, a wizard hat for Spooky, a knitted beanie for Winter, and so on), each drawn in that palette's color, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including the seasonal Spooky and Winter. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
 
 On desktop and the Local Web UI, light **Nekko** and **Indigo** use pale rose and indigo surfaces, tinted selections, and the same plum/violet/rose gradient colors as their dark counterparts. The selected chat keeps its color field from the greeting into the conversation; other panes stay quiet. Dark themes are unchanged, and reduced motion keeps a static field.
 
 The desktop opening splash uses deep plum for Nekko (including the default System look), rather than the lighter accent used for text. Indigo uses its own deep main color; other chosen palettes keep their colors. Older cached splash colors are refreshed automatically.
 
-Open **Custom colors** to adjust the accent and secondary color with the wheel or an exact color value. **Reset to this theme's colors** restores the defaults for the current palette and mode. The same controls appear during first-run setup. Theme circles respond gently to hover and press; the system's reduced-motion preference turns that motion off.
+Open **Custom colors** to adjust the accent and secondary color with the wheel or an exact color value. **Reset to this theme's colors** restores the defaults for the current palette and mode. The same controls appear during first-run setup. Theme icons respond gently to hover and press, and the one you picked fills in; the system's reduced-motion preference turns that motion off.
 
 ## Following tool activity
 
@@ -332,7 +332,7 @@ and wake-up details wrap the same way on desktop and the Local Web UI.
 
 ### Resizing the side panels
 
-Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
+Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Under its totals, Budget shows where the tokens went for the range: **Sent by you** versus **Background** (watch wake-ups, automations, automatic continues), **Main chats** versus **Subagents**, and **Cache reads** versus **New input**. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
 
 ### Customize your experience
 
@@ -341,6 +341,13 @@ Open **Settings > Customize** for appearance, sidebar shortcuts, desktop behavio
 ### Skills and Connectors shortcuts
 
 Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > Customize > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
+
+### Connecting a service
+
+Each service in **Connectors** starts as one **Connect** button. Press it and the steps open one at a time: first a button that opens the page where you get a key, then a field to paste it into. Pasting a GitHub, GitLab, Linear, Slack, ClickUp or Floop key connects straight away; for the others, press **Connect**. Nekko checks every key with a real request before keeping it, and it stays on this computer.
+
+- **GitHub**: if the GitHub CLI (`gh`) is signed in on this computer, the row says so and **Connect** uses that sign-in, with nothing to copy. Choose **Use a token** to paste one instead. Otherwise **Open** goes to GitHub's new-token page with the name and access already filled in: press **Generate token**, copy it and paste it.
+- **GitLab**: **Open** goes to the token page with the name and the `api` scope filled in. For your own GitLab, enter its address first.
 
 ### Download progress in Model Server
 

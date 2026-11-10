@@ -52,9 +52,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         _ => String::new(),
     };
     match channel {
-        "providers:list" => Ok(providers(ctx).await.into()),
+        "providers:list" => Ok(with_accounts(ctx, providers(ctx).await).await.into()),
         "providers:save" => {
-            let p = arg(0);
+            let p = without_account(arg(0));
             if p.is_null() {
                 return Err("Cannot read properties of undefined (reading 'id')".into());
             }
@@ -156,6 +156,60 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
 
 async fn providers(ctx: &Ctx) -> Vec<Value> {
     crate::settings::current(ctx).await.get("providers").and_then(Value::as_array).cloned().unwrap_or_default()
+}
+
+/// How long a Claude login's identity is shown before it is read again, in
+/// the background.
+const ACCOUNT_FRESH: Duration = Duration::from_secs(10 * 60);
+/// How long `providers:list` waits for a Claude login it has never read.
+const ACCOUNT_FIRST_READ: Duration = Duration::from_secs(4);
+
+/// `providers:list`: the saved providers, each Claude Code one with
+/// `account`, who its login is (`AccountIdentity::view`), so every client,
+/// phones included, can show one email's personal plan and organization seat
+/// as two accounts. A login never read is read now, briefly; an old read is
+/// shown and refreshed in the background.
+async fn with_accounts(ctx: &Ctx, mut list: Vec<Value>) -> Vec<Value> {
+    let claude: Vec<String> = list
+        .iter()
+        .filter(|p| p.get("kind").and_then(Value::as_str) == Some("claude-code") && is_enabled(p))
+        .filter_map(|p| p.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    let unread: Vec<String> =
+        claude.iter().filter(|id| ctx.claude_policy.account_view(id).is_none()).cloned().collect();
+    if !unread.is_empty() {
+        let reads = unread.iter().map(|id| async move {
+            let _ = crate::claude_policy::code_status_route(ctx, &[json!(id)]).await;
+        });
+        let _ = tokio::time::timeout(ACCOUNT_FIRST_READ, futures_util::future::join_all(reads)).await;
+    }
+    for id in &claude {
+        if ctx.claude_policy.account_view(id).is_some_and(|(_, age)| age > ACCOUNT_FRESH) {
+            let (ctx, id) = (ctx.clone(), id.clone());
+            tokio::spawn(async move {
+                let _ = crate::claude_policy::code_status_route(&ctx, &[json!(id)]).await;
+            });
+        }
+    }
+    for p in &mut list {
+        let Some(id) = p.get("id").and_then(Value::as_str).map(str::to_string) else { continue };
+        let account = claude.contains(&id).then(|| ctx.claude_policy.account_view(&id)).flatten();
+        if let Some(o) = p.as_object_mut() {
+            o.remove("account");
+            if let Some((view, _)) = account {
+                o.insert("account".into(), view);
+            }
+        }
+    }
+    list
+}
+
+/// A provider as saved: `account` is read from Claude Code each time, never kept.
+fn without_account(mut p: Value) -> Value {
+    if let Some(o) = p.as_object_mut() {
+        o.remove("account");
+    }
+    p
 }
 
 /// The computer's sealing key for phones' provider keys, beside its data.

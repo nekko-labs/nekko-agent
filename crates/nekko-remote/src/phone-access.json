@@ -160,6 +160,7 @@
    "changes:acceptAll",
    "connector:connect",
    "connector:disconnect",
+   "connector:importCli",
    "data:wipe",
    "dir:list",
    "file:read",
@@ -393,6 +394,11 @@
   "voice.language"
  ],
  "providerView": [
+  "account.email",
+  "account.name",
+  "account.plan",
+  "account.scope",
+  "account.signedIn",
   "enabled",
   "id",
   "kind",

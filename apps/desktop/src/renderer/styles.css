@@ -368,8 +368,17 @@
   flex-shrink: 0;
 }
 
+/* Slim with a mouse or trackpad: 28px tall. A finger still gets the 44px
+   target (#2079), so the Local Web UI on a phone or a touch laptop is unchanged. */
 @utility btn {
-  @apply action-target inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
+  @apply inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-0.5 text-sm font-medium;
+  /* The height comes from here, not the padding, so an outline's border and a
+     compact call site's own padding still land on 28. */
+  min-height: 28px;
+  @media (pointer: coarse) {
+    min-width: 44px;
+    min-height: 44px;
+  }
   transition:
     transform 160ms var(--ease-out),
     background 0.12s ease,

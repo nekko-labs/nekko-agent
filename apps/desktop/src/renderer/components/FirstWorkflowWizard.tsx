@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { WorkflowSeed } from './WorkflowEditor.js';
 import { ScheduledTasksDemo } from './ScheduledTasksDemo.js';
+import { Group, Row } from './primitives/index.js';
 
 export const FIRST_WORKFLOW_CATEGORIES = [
   { id: 'shopping', name: 'Shopping & web browsing', description: 'Let Nekko keep an eye on the pages you care about.', examples: [
@@ -45,58 +46,63 @@ export function firstWorkflowDetailValid(example: Example, detail: string): bool
   }
 }
 
-function VideoPlaceholder({ title }: { title: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-(--line) bg-(--surface-2) p-4" data-workflow-video-placeholder>
-      <div className="flex items-center gap-2 text-sm font-medium"><span aria-hidden="true">▷</span>{title}</div>
-      <p className="mt-1 text-xs text-ink-faint">Video coming soon. Travis is preparing this walkthrough.</p>
-    </div>
-  );
-}
+const STEPS = ['Choose an idea', 'Make it yours', 'Review and create'] as const;
 
+/**
+ * The empty Scheduled Tasks page, on quiet surfaces (docs/design-system.md):
+ * one page surface, ideas as grouped rows, one primary button per step.
+ */
 export function FirstWorkflowWizard({ onCreate, onBrowse }: { onCreate: (seed: WorkflowSeed) => void; onBrowse: () => void }) {
   const [selected, setSelected] = useState<{ example: Example; category: string } | null>(null);
   const [detail, setDetail] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
   const isUrl = selected?.example.id === 'stock' || selected?.example.id === 'page';
   const valid = !!selected && firstWorkflowDetailValid(selected.example, detail);
+  const step = selected ? 1 : 0;
   return (
-    <section className="mx-auto w-full max-w-4xl p-4 sm:p-8" data-first-workflow-wizard>
-      <p className="text-xs font-medium text-(--accent)">Your first scheduled task</p>
-      <h1 className="mt-2 text-2xl font-semibold">Put a little work on autopilot</h1>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">A scheduled task gives Nekko repeatable instructions. Try it by hand first, then choose a schedule or an event to run it for you.</p>
-      <ol className="my-5 flex flex-wrap gap-3 text-xs text-ink-faint" aria-label="Setup progress">
-        {['Choose an idea', 'Make it yours', 'Review & create'].map((step, i) => <li key={step} aria-current={i === (selected ? 1 : 0) ? 'step' : undefined} className={i === (selected ? 1 : 0) ? 'font-semibold text-(--accent)' : ''}>{i + 1}. {step}</li>)}
-      </ol>
+    <section className="mx-auto w-full max-w-[720px] px-1 py-5 sm:px-5" data-first-workflow-wizard>
+      <p className="text-xs text-ink-faint" aria-label="Setup progress" data-workflow-step>{`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`}</p>
       {!selected ? (
-        <>
-          <ScheduledTasksDemo />
-          <h2 className="mt-6 text-base font-semibold">What would you like help with?</h2>
-          <p className="mt-1 text-xs text-ink-faint">Expand a category to explore ideas and upcoming video examples.</p>
-          <div className="mt-3 space-y-2">
+        <div className="fade-in">
+          <h1 className="mt-1 text-xl font-semibold text-ink">Put a little work on autopilot</h1>
+          <p className="mt-1 text-sm text-ink-soft">Pick an idea, try it by hand, then give it a schedule or an event.</p>
+          <div className="mt-5"><ScheduledTasksDemo /></div>
+          <div className="mt-10" data-workflow-ideas>
             {FIRST_WORKFLOW_CATEGORIES.map(c => (
-              <details key={c.id} open={category === c.id} className="card p-4" data-workflow-category={c.id} onToggle={e => { if (e.currentTarget.open) setCategory(c.id); else setCategory(current => current === c.id ? null : current); }}>
-                <summary className="cursor-pointer text-sm font-semibold">{c.name}<span className="ml-2 text-2xs font-normal text-ink-faint">{c.examples.length} {c.examples.length === 1 ? 'idea' : 'ideas'}</span></summary>
-                <p className="mt-2 text-xs text-ink-soft">{c.description}</p>
-                <div className="my-3 grid gap-2 sm:grid-cols-2">
-                  {c.examples.map(example => <button key={example.id} data-workflow-example={example.id} className="rounded-xl border border-(--line) p-3 text-left hover:bg-(--surface-2)" onClick={() => { setSelected({ example, category: c.name }); setDetail(''); }}><span className="block text-sm font-semibold">{example.name}</span><span className="mt-1 block text-xs text-ink-faint">{example.description}</span><span className="mt-3 block text-xs text-(--accent)">Set this up →</span></button>)}
+              <Group key={c.id} title={c.name} meta={c.description} data-workflow-category={c.id}>
+                <div className="-mx-3 flex flex-col">
+                  {c.examples.map(example => (
+                    <Row
+                      key={example.id}
+                      stacked
+                      data-workflow-example={example.id}
+                      title={example.name}
+                      detail={example.description}
+                      meta={<span className="hidden text-ink-faint sm:inline" aria-hidden="true">Set up →</span>}
+                      onClick={() => { setSelected({ example, category: c.name }); setDetail(''); }}
+                    />
+                  ))}
                 </div>
-                <VideoPlaceholder title={`${c.name}: example walkthroughs`} />
-              </details>
+              </Group>
             ))}
           </div>
-          <button className="btn btn-outline mt-5" onClick={onBrowse}>Browse all templates or start from scratch</button>
-        </>
+          <button type="button" className="btn mt-10" onClick={onBrowse}>Browse all templates or start from scratch</button>
+        </div>
       ) : (
-        <div className="card space-y-4 p-4 sm:p-6" data-workflow-personalize>
-          <button className="text-xs text-(--accent) underline" onClick={() => setSelected(null)}>← Back to ideas</button>
-          <h2 className="text-xl font-semibold">{selected.example.name}</h2>
-          <p className="text-sm text-ink-soft">{selected.example.description}</p>
-          <label className="block text-sm font-medium">{selected.example.label}<input data-workflow-detail className="input mt-2 w-full" type={isUrl ? 'url' : 'text'} value={detail} onChange={e => setDetail(e.target.value)} placeholder={selected.example.placeholder} aria-describedby="first-workflow-needs" autoFocus /></label>
-          <p id="first-workflow-needs" className="text-xs text-ink-faint">{selected.example.needs}</p>
-          <VideoPlaceholder title={`${selected.example.name}: step-by-step demo`} />
-          <div className="rounded-xl bg-(--surface-2) p-3 text-xs leading-relaxed text-ink-soft"><strong>You stay in control.</strong> Next, review the instructions, model, tools, and trigger. This draft starts manually. Creating it does not run it. Add a schedule or event only when you are ready. Tool access and connected services determine what it can read; prompts are not a security boundary.</div>
-          <button data-workflow-continue className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={!valid} onClick={() => { if (valid) onCreate(firstWorkflowSeed(selected.example, selected.category, detail)); }}>Continue to editor</button>
+        <div className="fade-in flex flex-col gap-5" data-workflow-personalize>
+          <div>
+            <button type="button" className="btn btn-ghost -ml-2 py-1 text-xs" onClick={() => setSelected(null)}><span aria-hidden="true">←</span> Back to ideas</button>
+            <h1 className="mt-2 text-xl font-semibold text-ink">{selected.example.name}</h1>
+            <p className="mt-1 text-sm text-ink-soft">{selected.example.description}</p>
+          </div>
+          <label className="flex flex-col gap-2 text-sm font-medium">
+            {selected.example.label}
+            <input data-workflow-detail className="quiet-field" type={isUrl ? 'url' : 'text'} value={detail} onChange={e => setDetail(e.target.value)} placeholder={selected.example.placeholder} aria-describedby="first-workflow-needs" autoFocus />
+            <span id="first-workflow-needs" className="text-xs font-normal text-ink-faint">{selected.example.needs}</span>
+          </label>
+          <p className="text-xs text-ink-faint" title="Tool access and connected services decide what it can read; instructions are not a security boundary." data-workflow-control>
+            It starts by hand: creating it does not run it. Review the instructions, model and tools next.
+          </p>
+          <button type="button" data-workflow-continue className="btn btn-primary self-start disabled:cursor-not-allowed disabled:opacity-45" disabled={!valid} onClick={() => { if (valid) onCreate(firstWorkflowSeed(selected.example, selected.category, detail)); }}>Continue to editor</button>
         </div>
       )}
     </section>

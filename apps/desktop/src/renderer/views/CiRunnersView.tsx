@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ImageView, RunnerView } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
-import { EmptyHint } from '../components/primitives/index.js';
 import { RunnerCard } from '../components/RunnerCard.js';
 import { ConnectRunnerSheet } from '../components/ConnectRunnerSheet.js';
 import { RunnerSettingsSheet } from '../components/RunnerSettingsSheet.js';
@@ -49,6 +48,16 @@ export function CiRunnersFirstVisit({ connected = false, canResume = false, onCo
   );
 }
 
+/** On a computer that cannot host a runner: where runners live instead, in two quiet lines. */
+export function CiRunnersElsewhere() {
+  return (
+    <div className="mt-2 flex flex-col gap-1" data-ci-runners-elsewhere>
+      <p className="text-sm text-ink-soft">CI runners need a Mac with Apple silicon, where each GitHub Actions job runs in a throwaway macOS VM.</p>
+      <p className="text-xs text-ink-faint">To set one up or see its jobs, open Nekko Agent on that Mac and go to Scheduled Tasks, CI runners.</p>
+    </div>
+  );
+}
+
 /** The section body for each load state; pure so tests can render it without effects. */
 export function runnersBody(
   state: RunnersState,
@@ -56,11 +65,9 @@ export function runnersBody(
 ): React.ReactNode {
   if (state.kind === 'loading') return null;
   if (state.kind === 'unavailable') {
-    // A daemon without runners (not macOS, or older) answers "unknown channel runner:list".
-    const text = state.message.startsWith('unknown channel')
-      ? "CI runners aren't available here. They need a Mac with Apple silicon and an up-to-date Nekko service."
-      : `CI runners aren't available here: ${state.message}`;
-    return <EmptyHint className="mt-4">{text}</EmptyHint>;
+    // A daemon without runners (Windows, Linux, or an older Mac service) answers "unknown channel runner:list".
+    if (state.message.startsWith('unknown channel')) return <CiRunnersElsewhere />;
+    return <p className="mt-2 text-sm text-ink-soft">{`CI runners aren't available here: ${state.message}`}</p>;
   }
   if (!state.views.length) return <CiRunnersFirstVisit onConnect={onConnect} />;
   const first = state.views[0].config.id;
@@ -207,8 +214,9 @@ export function CiRunnersView({ now = nowSecs, panel = false }: { now?: () => nu
   const settingsView = state.kind === 'ready' ? state.views.find((v) => v.config.id === settingsFor) : undefined;
   const setupView = state.kind === 'ready' ? state.views.find((v) => v.config.id === setup?.id) : undefined;
 
-  // A daemon with no runner channel is not a Mac that can host one: leave the section out rather than explain it in every list.
-  if (state.kind === 'unavailable' && state.message.startsWith('unknown channel')) return null;
+  // A daemon with no runner channel is not a Mac that can host one. The Automations panel leaves the section out;
+  // the CI runners page says where runners live instead, so it never looks gone.
+  if (panel && state.kind === 'unavailable' && state.message.startsWith('unknown channel')) return null;
 
   return (
     <section ref={section} tabIndex={-1} data-ci-runners className={panel ? 'mb-3 shrink-0' : undefined}>

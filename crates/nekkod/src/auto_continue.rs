@@ -252,6 +252,8 @@ impl Deps for Daemon {
             "providerId": session.get("providerId"),
             "modelId": session.get("modelId"),
             "text": text,
+            // Nobody sent it: usage counts it as background (#2494).
+            "autoContinue": true,
         });
         Box::pin(async move {
             let _ = crate::routes::route(&self.0, "chat:send", vec![opts]).await;

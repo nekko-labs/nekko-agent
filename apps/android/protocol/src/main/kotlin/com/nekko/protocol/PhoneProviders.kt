@@ -100,6 +100,12 @@ sealed interface PhoneStreamEvent {
     data class Text(val text: String) : PhoneStreamEvent
     data class Failure(val message: String) : PhoneStreamEvent
     data object Done : PhoneStreamEvent
+    /**
+     * The token counts the provider reported so far, as totals (the newest wins per field): Anthropic's
+     * `message_start` (input with cache writes and reads) and `message_delta` (output, a running total);
+     * OpenAI and OpenRouter's last chunk (`prompt_tokens`, `completion_tokens`). For this phone's usage (#2114).
+     */
+    data class Usage(val input: Long? = null, val output: Long? = null) : PhoneStreamEvent
 }
 
 /** SSE frames may contain several data lines. Completion must be explicit, not just EOF. */
@@ -121,6 +127,23 @@ class PhoneStreamParser {
         data.clear()
         return listOf(PhoneStreamEvent.Failure(message))
     }
+    /** A count is a whole, non-negative number; anything else is not one. */
+    private fun count(o: JsonObject?, key: String): Long? = (o?.get(key) as? kotlinx.serialization.json.JsonPrimitive)
+        ?.takeIf { !it.isString }?.content?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }?.toLong()
+
+    private fun usage(o: JsonObject): PhoneStreamEvent.Usage? {
+        val u: JsonObject? = when (o.string("type")) {
+            "message_start" -> (o["message"] as? JsonObject)?.get("usage") as? JsonObject
+            "message_delta" -> o["usage"] as? JsonObject
+            else -> o["usage"] as? JsonObject
+        }
+        u ?: return null
+        val anthropicIn = count(u, "input_tokens")?.let { it + (count(u, "cache_creation_input_tokens") ?: 0) + (count(u, "cache_read_input_tokens") ?: 0) }
+        val input = anthropicIn ?: count(u, "prompt_tokens")
+        val output = count(u, "output_tokens") ?: count(u, "completion_tokens")
+        return if (input == null && output == null) null else PhoneStreamEvent.Usage(input, output)
+    }
+
     fun line(line: String): List<PhoneStreamEvent> {
         if (done) return emptyList()
         if (line.length > MAX_FRAME_CHARS || streamChars.toLong() + line.length + 1 > MAX_STREAM_CHARS || frameChars.toLong() + line.length + 1 > MAX_FRAME_CHARS) return fail("The provider's stream is too large.")
@@ -145,7 +168,8 @@ class PhoneStreamParser {
         val o = runCatching { Json.parseToJsonElement(value) as? JsonObject }.getOrNull() ?: return fail()
         if (o["error"] != null && o["error"] != JsonNull || o.string("type") == "error") return fail("The provider stopped with an error. Test the provider and retry.")
         if (o.string("type") == "message_stop") { done = true; return listOf(PhoneStreamEvent.Done) }
-        val out = mutableListOf<PhoneStreamEvent.Text>()
+        val out = mutableListOf<PhoneStreamEvent>()
+        usage(o)?.let { out += it }
         if (o.string("type") == "content_block_delta") {
             val delta = o["delta"] as? JsonObject ?: return fail()
             if (delta.string("type") in listOf(null, "text_delta")) {
@@ -164,7 +188,7 @@ class PhoneStreamParser {
                 // finish_reason precedes usage and possibly errors. Only [DONE] ends SSE.
             }
         }
-        val added = out.sumOf { it.text.length }
+        val added = out.filterIsInstance<PhoneStreamEvent.Text>().sumOf { it.text.length }
         if (textChars.toLong() + added > MAX_TEXT_CHARS) return fail("The provider's reply is too large.")
         textChars += added
         return out
