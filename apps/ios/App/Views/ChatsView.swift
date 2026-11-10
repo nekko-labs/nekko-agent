@@ -279,27 +279,44 @@ struct ChatsView: View {
             }
             .pickerStyle(.palette)
             .accessibilityIdentifier("chats.view.mode")
+            // Each row names the setting with its current value under it (a menu's
+            // subtitle); its choices open in the system's submenu.
             Section {
-                Picker("Group by", selection: bind(\.groupBy)) {
-                    // By computer, as the desktop offers it, once chats come from more than one place.
-                    ForEach(ChatListView.GroupBy.allCases.filter { $0 != .computer || places.count > 1 }, id: \.self) {
-                        Text(Self.groupName($0)).tag($0)
+                Menu {
+                    Picker("Group by", selection: bind(.groupBy)) {
+                        // By computer, as the desktop offers it, once chats come from more than one place.
+                        ForEach(ChatListView.GroupBy.allCases.filter { $0 != .computer || places.count > 1 }, id: .self) {
+                            Text(Self.groupName($0)).tag($0)
+                        }
                     }
+                    .pickerStyle(.inline).labelsHidden()
+                } label: {
+                    Text("Group by")
+                    Text(Self.groupName(view.groupBy))
                 }
-                .pickerStyle(.menu)
                 .accessibilityIdentifier("chats.view.groupBy")
-                Picker("Sort by", selection: Binding(get: { view.sortBy }, set: { app.prefs.chatListView = view.withSort($0) })) {
-                    ForEach(ChatListView.SortBy.allCases, id: \.self) { Text(Self.sortName($0)).tag($0) }
+                Menu {
+                    Picker("Sort by", selection: Binding(get: { view.sortBy }, set: { app.prefs.chatListView = view.withSort($0) })) {
+                        ForEach(ChatListView.SortBy.allCases, id: .self) { Text(Self.sortName($0)).tag($0) }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                } label: {
+                    Text("Sort by")
+                    Text(Self.sortName(view.sortBy))
                 }
-                .pickerStyle(.menu)
                 .accessibilityIdentifier("chats.view.sortBy")
                 // Manual order has no direction: it is whatever was dragged on the computer.
                 if view.sortBy != .manual {
-                    Picker("Order", selection: bind(\.ascending)) {
-                        Text(view.sortBy == .name ? String(localized: "A to Z") : String(localized: "Oldest first")).tag(true)
-                        Text(view.sortBy == .name ? String(localized: "Z to A") : String(localized: "Newest first")).tag(false)
+                    Menu {
+                        Picker("Order", selection: bind(.ascending)) {
+                            Text(orderName(ascending: true)).tag(true)
+                            Text(orderName(ascending: false)).tag(false)
+                        }
+                        .pickerStyle(.inline).labelsHidden()
+                    } label: {
+                        Text("Order")
+                        Text(orderName(ascending: view.ascending))
                     }
-                    .pickerStyle(.menu)
                 }
             }
             Section {
@@ -342,6 +359,13 @@ struct ChatsView: View {
     }
 
     private var view: ChatListView { app.prefs.chatListView }
+
+    /// A sort's direction in words: names A to Z or Z to A, dates oldest or newest first.
+    private func orderName(ascending: Bool) -> String {
+        view.sortBy == .name
+            ? (ascending ? String(localized: "A to Z") : String(localized: "Z to A"))
+            : (ascending ? String(localized: "Oldest first") : String(localized: "Newest first"))
+    }
 
     private func bind<T>(_ key: WritableKeyPath<ChatListView, T>) -> Binding<T> {
         Binding(get: { app.prefs.chatListView[keyPath: key] }, set: { app.prefs.chatListView[keyPath: key] = $0 })
