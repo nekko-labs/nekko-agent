@@ -701,8 +701,12 @@ export function phoneProviderResultView(result: unknown): Obj {
   return out;
 }
 
-/** The provider fields a phone receives from `providers:list` (never `apiKey`, `tokenKey` or `baseUrl`). */
-export const PHONE_PROVIDER_VIEW = ['enabled', 'id', 'kind', 'label'] as const;
+/**
+ * The provider fields a phone receives from `providers:list` (never `apiKey`, `tokenKey` or `baseUrl`).
+ * `account` is who a Claude subscription login is (`ProviderAccount`), so a phone tells one email's
+ * personal plan and organization seat apart.
+ */
+export const PHONE_PROVIDER_VIEW = ['account.email', 'account.name', 'account.plan', 'account.scope', 'account.signedIn', 'enabled', 'id', 'kind', 'label'] as const;
 
 /**
  * Chat options a phone may set with `session:setOptions`: the model, the
