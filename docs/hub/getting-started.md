@@ -332,7 +332,7 @@ and wake-up details wrap the same way on desktop and the Local Web UI.
 
 ### Resizing the side panels
 
-Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
+Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Under its totals, Budget shows where the tokens went for the range: **Sent by you** versus **Background** (watch wake-ups, automations, automatic continues), **Main chats** versus **Subagents**, and **Cache reads** versus **New input**. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
 
 ### Customize your experience
 
