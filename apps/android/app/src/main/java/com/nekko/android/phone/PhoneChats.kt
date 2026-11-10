@@ -21,6 +21,8 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         val models: Map<String, List<PhoneModel>> = emptyMap(),
         val running: Set<String> = emptySet(),
         val errors: Map<String, String> = emptyMap(),
+        /** What this phone's chats used, by provider, model and day (#2114); never sent anywhere. */
+        val usage: com.nekko.protocol.PhoneUsageLedger = com.nekko.protocol.PhoneUsageLedger(),
     )
     private val mutable = MutableStateFlow(State())
     val state = mutable.asStateFlow()
@@ -33,6 +35,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     private val modelLoads = mutableMapOf<String, Any>()
     private val providersSlot = "phone.providers.v1"
     private val chatsSlot = "phone.chats.v1"
+    private val usageSlot = "phone.usage.v1"
     private fun keySlot(id: String) = "phone.provider.key.$id"
     private fun id() = UUID.randomUUID().toString()
     private fun now() = System.currentTimeMillis()
@@ -44,10 +47,13 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         val chats = secrets.get(chatsSlot)?.let { json.decodeFromString(ListSerializer(PhoneChat.serializer()), it) }.orEmpty().map { c ->
             c.copy(messages = c.messages.map { m -> if (m.role == "assistant" && m.error == STREAMING) m.copy(error = "Stopped when the app closed.") else m })
         }
-        synchronized(gate) { mutable.value = State(ready = true, providers = providers, chats = chats) }
+        val usage = secrets.get(usageSlot)?.let { runCatching { com.nekko.protocol.PhoneUsageLedger.from(Json.parseToJsonElement(it)) }.getOrNull() }
+            ?: com.nekko.protocol.PhoneUsageLedger()
+        synchronized(gate) { mutable.value = State(ready = true, providers = providers, chats = chats, usage = usage) }
     }
     private suspend fun saveProviders() = secrets.set(providersSlot, json.encodeToString(ListSerializer(PhoneProvider.serializer()), mutable.value.providers))
     private suspend fun saveChats() = secrets.set(chatsSlot, json.encodeToString(ListSerializer(PhoneChat.serializer()), mutable.value.chats))
+    private suspend fun saveUsage() = secrets.set(usageSlot, mutable.value.usage.json().toString())
 
     suspend fun add(kind: String, label: String, url: String?, key: String?, workspace: String? = null): String = lock.withLock {
         ready()
@@ -155,6 +161,8 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                         job.ensureActive()
                         if (!complete) parser.line(line).forEach { event -> if (!complete) when (event) {
                             is PhoneStreamEvent.Text -> answer = answer || event.text.isNotBlank()
+                            // A provider test is not a chat: its few tokens are not counted.
+                            is PhoneStreamEvent.Usage -> Unit
                             is PhoneStreamEvent.Failure -> error(event.message)
                             PhoneStreamEvent.Done -> complete = true
                         } }
@@ -196,6 +204,10 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         lateinit var task: Job
         task = scope.launch(start = CoroutineStart.LAZY) {
             var started = false
+            // What the provider reported for this reply, and where it ran, for this phone's usage.
+            var usedIn = 0L
+            var usedOut = 0L
+            var ranOn: Triple<String, String, String>? = null
             try {
                 val request = lock.withLock {
                     currentCoroutineContext().ensureActive()
@@ -209,6 +221,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                             old.messages.dropLast(1)
                         } else old.messages + PhoneMessage(id(), "user", text.trim(), now())
                         val req = PhoneProviders.chatRequest(p, key, old.modelId, messages)
+                        ranOn = Triple(p.id, p.label, old.modelId)
                         val next = old.copy(title = if (old.messages.isEmpty()) text.trim().lineSequence().first().take(60) else old.title, updatedAt = now(), messages = messages + PhoneMessage(attempt, "assistant", "", now(), STREAMING))
                         mutable.update { s -> s.copy(chats = s.chats.map { if (it.id == chatId) next else it }, running = s.running + chatId, errors = s.errors - chatId) }
                         started = true
@@ -222,6 +235,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                         task.ensureActive()
                         if (!complete) parser.line(line).forEach { event -> if (!complete) when (event) {
                             is PhoneStreamEvent.Text -> updateLast(chatId, attempt) { it.copy(text = it.text + event.text) }
+                            is PhoneStreamEvent.Usage -> { event.input?.let { usedIn = it }; event.output?.let { usedOut = it } }
                             is PhoneStreamEvent.Failure -> error(event.message)
                             PhoneStreamEvent.Done -> complete = true
                         } }
@@ -243,6 +257,11 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                 withContext(NonCancellable) {
                     lock.withLock {
                         synchronized(gate) { mutable.update { it.copy(running = it.running - chatId) } }
+                        // A stopped or failed reply still counts what the provider reported.
+                        ranOn?.takeIf { started && (usedIn > 0 || usedOut > 0) }?.let { (pid, label, model) ->
+                            synchronized(gate) { mutable.update { it.copy(usage = it.usage.record(pid, label, model, usedIn, usedOut, now())) } }
+                            runCatching { saveUsage() }
+                        }
                         try { if (started) saveChats() } catch (_: Exception) {
                             synchronized(gate) {
                                 if (mutable.value.chats.any { it.id == chatId }) mutable.update { it.copy(errors = it.errors + (chatId to "Could not save this chat on the phone.")) }
