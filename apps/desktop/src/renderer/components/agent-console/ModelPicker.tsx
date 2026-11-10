@@ -10,7 +10,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
 import { useProviderLimitsPortfolio } from '../../useLimits.js';
-import { accountFamilies, accountScopeLine, identityLine, useAccountIdentities, type AccountFamily, type AccountIdentity } from '../../providerAccounts.js';
+import { accountFamilies, identityLine, useAccountIdentities, type AccountFamily, type AccountIdentity } from '../../providerAccounts.js';
 import { ProviderUsageMeters } from './ProviderUsageMeters.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
 import { Group, QuietTabs } from '../primitives/Quiet.js';
@@ -378,7 +378,8 @@ export function ModelPicker({
     const single = !several ? identityLine(idOf(members[0])) : '';
     const metaText = [single !== f.name ? single : '', email].filter(Boolean).join(' · ');
     const shownId = shown ? idOf(shown) : undefined;
-    const whoLine = shownId ? [shownId.email, accountScopeLine(shownId) || shownId.hint].filter(Boolean).join(' · ') : '';
+    // The tab already says the plan; this says whose login it is and which account on it.
+    const whoLine = !shownId?.email ? '' : [shownId.email, shownId.organization ? 'Organization' : shownId.plan ? 'Personal plan' : ''].filter(Boolean).join(' · ');
     const claudeSwitch = !!shown && shown.kind === 'claude-code' && currentProvider?.kind === 'claude-code' && members.filter((p) => p.kind === 'claude-code').length > 1;
     return (
       <Group key={f.id} as="div" dense role="group" label={f.name} title={heading(f.name)} meta={metaText && <span data-account-email title={metaText}>{metaText}</span>} data-provider-group={f.id}>

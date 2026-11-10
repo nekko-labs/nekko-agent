@@ -111,7 +111,7 @@ function FamilySection({ family, identities, limits, onAdd, renderDetails }: {
                 leading={<span className="w-2" aria-hidden="true" />}
                 title={entry.email}
                 titleClassName="font-medium"
-                detail={loginSummary(entry.providers.map(idOf))}
+                detail="Claude subscription"
                 data-login-row
               />
               {entry.providers.map((p) => account(p, entry.email))}
@@ -123,13 +123,6 @@ function FamilySection({ family, identities, limits, onAdd, renderDetails }: {
       <FamilyModels family={family} identities={identities} several={several} />
     </section>
   );
-}
-
-/** Under a login's email: "Claude subscription · Personal and Nekko Labs". */
-function loginSummary(ids: AccountIdentity[]): string {
-  const names = ids.map((i) => i.name);
-  const list = names.length < 3 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-  return `Claude subscription · ${list}`;
 }
 
 /** "2 accounts" or "1 account". */
@@ -189,7 +182,7 @@ function AccountRow({ provider, identity, sharedEmail: loginEmail, inLogin, limi
         leading={<StatusDot tone={status.tone} size={8} title={status.word} />}
         title={identity.name}
         detail={detail || undefined}
-        meta={<span className="inline-flex items-center gap-2"><span style={status.tone === 'danger' || status.tone === 'warning' ? { color: `var(--${status.tone})` } : undefined} title={status.tone === 'danger' ? message : undefined}>{status.word}</span><ChevronIcon className={`h-3.5 w-3.5 transition-transform duration-150 ${open ? 'rotate-90' : ''}`} aria-hidden="true" /></span>}
+        meta={<span className="inline-flex items-center gap-2"><span className={status.tone === 'success' ? 'max-sm:hidden' : undefined} style={status.tone === 'danger' || status.tone === 'warning' ? { color: `var(--${status.tone})` } : undefined} title={status.tone === 'danger' ? message : undefined}>{status.word}</span><ChevronIcon className={`h-3.5 w-3.5 transition-transform duration-150 ${open ? 'rotate-90' : ''}`} aria-hidden="true" /></span>}
         onClick={onToggleOpen}
         aria-expanded={open}
         titleClassName={enabled ? '' : 'text-ink-faint'}

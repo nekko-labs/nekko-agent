@@ -69,7 +69,7 @@ describe('one Claude login with a personal plan and an organization seat', () =>
     expect(html.match(/data-login="philip@example.test"/g)).toHaveLength(1);
     const group = html.slice(html.indexOf('data-login='), html.indexOf('data-account-row="production"'));
     expect(group.match(/data-account-row=/g)).toHaveLength(2);
-    expect(group).toContain('Claude subscription · Personal and Nekko Labs');
+    expect(group).toContain('>Claude subscription<');
     expect(group).toContain('Personal plan · Max');
     expect(group).toContain('Organization · Team');
     expect(group).toContain('+ Add another account on this login');

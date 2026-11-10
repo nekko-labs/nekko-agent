@@ -42,6 +42,22 @@ area: models
 
 The existing named-profile path is the supported implementation: the same email with a different organization remains a distinct account. Connected-card identity now includes the organization name when Claude Code reports it. The documented `auth status` describes only the current profile; no documented membership-list command was found. Nekko therefore does not list unconnected organizations from one saved login, reuse credentials, or silently choose a billing organization. The user signs in separately through unmodified Claude Code for each named profile, selecting the intended subscription in Anthropic's browser flow where offered. Real same-email multi-organization sign-in remains unverified; [sources, limitations, and manual verification](../../docs/claude-account-selection.md).
 
+## One login, one connection (#2488, 2026-11-10)
+
+**Intent.** A person with one Claude email that has a personal plan and an organization seat sees one connection for that login, with both accounts under it, and picks either account on its own when choosing a model on any platform. Each account keeps its own usage limits and usage tracking.
+
+**Behavior.**
+- nekkod keeps each Claude subscription provider's last `claude auth status` identity and adds it to `providers:list` as `account`: `signedIn`, `email`, `scope` (`personal` for Pro or Max, `organization` for Team or Enterprise, or by the organization name when the CLI prints no plan), `name` ("Personal" or the organization's name), `plan`, `orgId`. A login never read is read when the list is asked for (up to 4 seconds); a read older than 10 minutes is shown and refreshed in the background. `account` is never saved: `providers:save` strips it.
+- Phones get `account.email`, `account.name`, `account.plan`, `account.scope` and `account.signedIn` through the phone provider view, nothing else.
+- Models page (desktop and Local Web UI): in the Claude family, subscription accounts with the same email group under one login row (the email, "Claude subscription"). Each account under it says which it is ("Personal plan · Max", "Organization · Team"), with its own status, busiest usage window and on/off switch. **+ Add another account on this login** opens Claude Code's sign-in in a new folder (`~/.claude-account-2`, the first free number; the user never names it), and the user picks the other account on Anthropic's page. The result goes through the same check as setup: the same account twice is refused, a second personal plan asks for confirmation. The saved account names itself from its sign-in.
+- Model picker (desktop and Local Web UI): account tabs as before ("Personal · Max", "Acme Inc · Team"), and under them the shown account's email and which account it is ("me@example.com · Organization"). Usage meters belong to the shown account.
+- iPhone and Android pickers: each Claude account is its own group, titled "{name} · {Plan}", with "{email} · Personal plan" or "{email} · Organization" under it; a model's short provider name reads "Claude · {name}"; search matches the email and account name.
+- Usage limits and usage tracking stay per account: limits are keyed `claude-code:<provider id>` and usage lines by provider id, so the two accounts on one login never share a window or a total.
+
+**Boundary.** Claude Code signs in to one organization per folder and Nekko never reads its credentials, so the second account is always a second sign-in; one sign-in cannot list or add the login's other organizations.
+
+**Status.** Implemented with fixtures and unit tests on desktop and in nekkod. Not yet tried with a real email that has both a personal plan and an organization seat. Phone views are unit-tested in their protocol and data layers; the iPhone views are checked only on macOS CI.
+
 ## Planned: bring provider history and personalization
 
 [Provider-data import](provider-data-import.md) adds an account-connected-first migration of past prompts/conversations, compatible settings, saved memory and profile, with export-file import as the secondary option. It is **not implemented**. Existing sign-in grants must not be mistaken for consumer-history access; authorization and available categories are checked per account. Imported data is reviewed before activation. See [#2259](https://github.com/nekko-labs/nekko-agent/issues/2259) for access dependencies and implementation work.
