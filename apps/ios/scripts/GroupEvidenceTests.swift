@@ -16,10 +16,10 @@ final class GroupEvidenceTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Build the app"].waitForExistence(timeout: 5))
         attach(app, "card-groups-expanded")
         let fields = [
-            (setting: "chats.view.showModel", marker: "Model opus"),
-            (setting: "chats.view.showContext", marker: "Context window"),
-            (setting: "chats.view.showPullRequests", marker: "Pull request 42, open"),
-            (setting: "chats.view.showUpdated", marker: " ago"),
+            (setting: "chats.view.showModel", title: "Model", marker: "Model opus"),
+            (setting: "chats.view.showContext", title: "Context window", marker: "Context window"),
+            (setting: "chats.view.showPullRequests", title: "Pull requests", marker: "Pull request 42, open"),
+            (setting: "chats.view.showUpdated", title: "Last updated", marker: " ago"),
         ]
         if after {
             // ChatRow combines its children: verify every spoken field before
@@ -27,7 +27,8 @@ final class GroupEvidenceTests: XCTestCase {
             for field in fields { XCTAssertTrue(row(app).label.contains(field.marker), field.marker) }
             for index in fields.indices {
                 app.buttons["chats.view"].tap()
-                let control = app.buttons[fields[index].setting].firstMatch
+                // A menu toggle can lose its identifier, so match its title too (as PhoneParityTests does).
+                let control = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", fields[index].setting, fields[index].title)).firstMatch
                 app.buttons["Card details"].tap()
                 XCTAssertTrue(control.waitForExistence(timeout: 3), fields[index].setting)
                 if index == 0 {
