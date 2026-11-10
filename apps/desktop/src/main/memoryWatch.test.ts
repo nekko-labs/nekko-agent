@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
     constructor(public options: unknown) { mock.windows.push(this); }
   },
 }));
-import { MEMORY_QUIET_MS, createMemoryWatch, decideMemory, leftLine, memoryPromptHtml, parseChoice, rememberChoice, sameRun, type LocalModels, type MemoryState } from './memoryWatch.js';
+import { MEMORY_QUIET_MS, createMemoryWatch, decideMemory, leftLine, memoryPromptHtml, parseChoice, rememberChoice, sameRun, wslLine, type LocalModels, type MemoryState } from './memoryWatch.js';
 
 const GB = 2 ** 30;
 const low: MemoryState = { level: 'low', totalBytes: 64 * GB, availableBytes: 20 * GB, commitLimitBytes: 63 * GB, commitAvailableBytes: 4 * GB, topApp: { name: 'PioneerGame', bytes: 14.3 * GB, processes: 1 }, nekkoBytes: 6 * GB };
@@ -78,6 +78,28 @@ describe('the prompt', () => {
     // Nothing loaded: nothing of Nekko's to shut down. An older daemon: the plain warning.
     expect(memoryPromptHtml(low, { models: 0, busy: 0, bytes: 0 })).not.toContain('value="release"');
     expect(memoryPromptHtml(low)).toContain("Shut down Nekko's local models<small>Agents using them stop.</small>");
+  });
+  it('says when WSL holds the most, as information only, and keeps every option', () => {
+    const wsl = { ...low, level: 'critical' as const, topApp: { name: 'claude', bytes: 6.2 * GB, processes: 14 }, wslBytes: 23.6 * GB };
+    const line = 'Most of it is WSL (Docker and Linux tools): about 23.6 GB. Quitting Docker Desktop or running wsl --shutdown frees it.';
+    expect(wslLine(wsl)).toBe(line);
+    const html = memoryPromptHtml(wsl, loaded);
+    // The amount and the command never wrap mid-way.
+    expect(html).toContain('Apps may crash when it runs out.</p>\n<p>Most of it is WSL (Docker and Linux tools): <span class="nw">about 23.6 GB</span>. Quitting Docker Desktop or running <span class="nw">wsl --shutdown</span> frees it.</p>');
+    expect(html).toContain('Close claude<small>Frees about 6.2 GB.');
+    expect(html).toContain('value="release"'); expect(html).toContain('value="ignore"');
+    // Nothing on the card runs it: no button, no form value for WSL.
+    expect(html).not.toMatch(/value="[^"]*wsl/i);
+    // With no app to close, WSL over 1 GiB is still named.
+    expect(wslLine({ ...wsl, topApp: null })).toBe(line);
+  });
+  it('says nothing of WSL when it is smaller than the app, under 1 GiB, or not reported', () => {
+    expect(wslLine({ ...low, wslBytes: 10 * GB })).toBeNull();
+    expect(wslLine({ ...low, wslBytes: 14.3 * GB })).toBeNull();
+    expect(wslLine({ ...low, topApp: null, wslBytes: 0.9 * GB })).toBeNull();
+    expect(wslLine(low)).toBeNull();
+    expect(memoryPromptHtml({ ...low, wslBytes: 10 * GB }, loaded)).not.toContain('WSL');
+    expect(memoryPromptHtml(low, loaded)).not.toContain('WSL');
   });
   it('reads only its own form', () => {
     expect(parseChoice('https://nekko.invalid/choose?app=PioneerGame&choice=close&remember=1')).toEqual({ choice: 'close', app: 'PioneerGame', remember: true });

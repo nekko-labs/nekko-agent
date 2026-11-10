@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { refreshAgentWatches, useAgentWatches, watchClock } from '../agentWatches.js';
+import { refreshAgentWatches, useAgentWatches, watchClock, watchProgress } from '../agentWatches.js';
 import { WatchIcon } from './agent-console/WatchRow.js';
 
 /** Always visible with the composer, independent of transcript virtualization. */
@@ -17,9 +17,11 @@ export function ActiveWatchChips({ sessionId, owner }: { sessionId: string; owne
   return <div className="flex flex-wrap gap-2 border-b border-line px-3 py-2 text-xs" data-active-watch-chips>
     {watches.map(w => {
       const clock = watchClock({ action: 'create', kind: w.kind, prompt: '' }, w, now);
+      const progress = watchProgress(w);
       return <details key={w.id} className="min-w-0 max-w-full rounded-lg border border-line px-2 py-1">
         <summary className="flex cursor-pointer flex-wrap items-center gap-2" title={clock?.title}>
           <WatchIcon />{owner && <span className="max-w-40 truncate" title={owner}>{owner} ·</span>}<span>{w.kind === 'pr' ? (w.auto ? 'Watching until merge-ready' : 'PR watcher') : 'Timer watcher'}</span>
+          {progress && <span className="text-ink-faint" data-watch-progress>{progress} ·</span>}
           <span>{clock?.text ?? 'Status unavailable'}</span>
         </summary>
         <div className="space-y-1 py-2">

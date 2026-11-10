@@ -7,8 +7,10 @@ import { activitySentence, compactSentence, delegationActivity, delegationChild 
 
 export const SubagentParentContext = createContext<SessionSummary[]>([]);
 /**
- * The model a child gets when the call names none: the saved delegation route,
- * else the parent chat's own model.
+ * The model a child gets when the call names none, when known ahead: the
+ * saved delegation route, else the parent chat's own model under the
+ * "Same model as the chat" choice. Under Auto the engine picks per call, so
+ * the row shows the child's own model once it has one.
  */
 export const SubagentInheritedModelContext = createContext<string | undefined>(undefined);
 
