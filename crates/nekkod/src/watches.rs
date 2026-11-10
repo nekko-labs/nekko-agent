@@ -191,7 +191,45 @@ pub fn view(w: &Value) -> Value {
     if let Some(e) = w.get("lastError").filter(|e| js::truthy(Some(e))) {
         put("lastError", Some(json!(js::slice16(&js::display(e), 300))));
     }
+    // The PR as last polled, so the chip shows progress without a model turn.
+    if let Some(snap) = str_of(w, "fingerprint").and_then(pr_snapshot) {
+        for (k, as_k) in [("checks", "checks"), ("state", "prState")] {
+            if let Some(v) = snap.get(k).filter(|v| v.is_string()) {
+                put(as_k, Some(v.clone()));
+            }
+        }
+    }
     Value::Object(out)
+}
+
+/// A PR watch's fingerprint as the object it was made from, when it is one.
+fn pr_snapshot(fingerprint: &str) -> Option<Map<String, Value>> {
+    match serde_json::from_str::<Value>(fingerprint) {
+        Ok(Value::Object(m)) => Some(m),
+        _ => None,
+    }
+}
+
+/// Whether a PR's change is worth a model turn. Checks starting or still
+/// running, and the push that started them, are progress: the watch records
+/// them and the chip shows them, but waking the chat for them only buys a
+/// "still waiting" reply. What wakes it: checks finishing (passing or
+/// failing), merged or closed, a review decision, draft state, or an update
+/// with the checks unchanged (a comment or review). A fingerprint that is not
+/// a snapshot object wakes on any change, as before.
+pub fn actionable_change(before: Option<&str>, after: &str) -> bool {
+    if before == Some(after) {
+        return false;
+    }
+    let (Some(a), Some(b)) = (before.and_then(pr_snapshot), pr_snapshot(after)) else { return true };
+    let differs = |k: &str| a.get(k) != b.get(k);
+    if ["state", "reviewDecision", "isDraft"].iter().any(|k| differs(k)) {
+        return true;
+    }
+    if differs("checks") {
+        return matches!(b.get("checks").and_then(Value::as_str), Some("passing" | "failing"));
+    }
+    differs("updatedAt")
 }
 
 /// What the scheduler needs from outside: whether a chat exists and is busy,
@@ -730,10 +768,17 @@ impl Watches {
                 pending = Some(format!("Watch deadline reached. Check current status before continuing.{last}"));
             } else if let Some(url) = str_of(w, "url").filter(|u| !u.is_empty()) {
                 let fingerprint = self.host.snapshot(url).await?;
-                if Some(fingerprint.as_str()) != str_of(w, "fingerprint") {
+                let before = str_of(w, "fingerprint");
+                if actionable_change(before, &fingerprint) {
                     pending = Some(format!(
                         "PR state changed for {url}. Fetch the latest details before acting. Snapshot: {fingerprint}"
                     ));
+                } else if before != Some(fingerprint.as_str()) {
+                    // Progress only: remember it (the chip reads it) and keep polling, no turn.
+                    let next = (self.now)() + num(w, "intervalMs");
+                    let patch = json!({ "fingerprint": fingerprint, "nextPollAt": next, "failures": 0, "lastError": null });
+                    self.patch(id, patch).await;
+                    return Ok(());
                 }
             }
             let Some(p) = &pending else {
@@ -1118,6 +1163,56 @@ mod tests {
         r.advance(700_000);
         r.w.tick(None).await;
         assert!(r.resumes().is_empty());
+    }
+
+    #[test]
+    fn only_actionable_pr_changes_are_worth_a_turn() {
+        let s = |checks: &str, updated: &str| format!(r#"{{"state":"open","checks":"{checks}","updatedAt":"{updated}"}}"#);
+        let quiet = [
+            (s("failing", "1"), s("none", "2")),    // the agent pushed a fix
+            (s("none", "2"), s("pending", "2")),    // CI started
+            (s("passing", "1"), s("pending", "3")), // a push restarted CI
+            (s("pending", "1"), s("pending", "1")), // nothing changed
+        ];
+        for (a, b) in &quiet {
+            assert!(!actionable_change(Some(a), b), "{a} -> {b}");
+        }
+        let wake = [
+            (s("pending", "1"), s("passing", "1")),
+            (s("pending", "1"), s("failing", "1")),
+            (s("pending", "1"), s("pending", "2")), // a comment or review while CI runs
+            (s("passing", "1"), r#"{"state":"merged","checks":"passing","updatedAt":"2"}"#.to_string()),
+            (s("passing", "1"), r#"{"state":"open","checks":"passing","updatedAt":"1","reviewDecision":"APPROVED"}"#.into()),
+        ];
+        for (a, b) in &wake {
+            assert!(actionable_change(Some(a), b), "{a} -> {b}");
+        }
+        // Not a snapshot object (an older watch, a test fake): any change wakes.
+        assert!(actionable_change(Some("abc"), "abd"));
+        assert!(actionable_change(None, &s("pending", "1")));
+    }
+
+    #[tokio::test]
+    async fn running_checks_update_the_watch_without_a_turn() {
+        let r = rig("quiet-pr");
+        let url = "https://github.com/owner/repo/pull/2".to_string();
+        r.snapshot(Ok(r#"{"state":"open","checks":"failing","updatedAt":"1"}"#));
+        assert_eq!(r.w.watch_opened_prs("s", std::slice::from_ref(&url)).await.len(), 1);
+        assert_eq!(r.w.views("s")[0]["checks"], json!("failing"));
+        // The agent pushes a fix and CI starts: recorded, shown, no turn.
+        for snap in [r#"{"state":"open","checks":"none","updatedAt":"2"}"#, r#"{"state":"open","checks":"pending","updatedAt":"2"}"#] {
+            r.snapshot(Ok(snap));
+            r.advance(61_000);
+            r.w.tick(None).await;
+        }
+        assert!(r.resumes().is_empty());
+        let view = &r.w.views("s")[0];
+        assert_eq!((view["status"].clone(), view["checks"].clone(), view["prState"].clone()), (json!("active"), json!("pending"), json!("open")));
+        // The checks finish: now the chat wakes.
+        r.snapshot(Ok(r#"{"state":"open","checks":"passing","updatedAt":"2"}"#));
+        r.advance(61_000);
+        r.w.tick(None).await;
+        assert_eq!(r.resumes().len(), 1);
     }
 
     #[tokio::test]
