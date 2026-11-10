@@ -26,6 +26,7 @@ import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
 import { runCeremonyWindow } from './webauthnWindow.js';
+import { configurePlatformAuthenticator } from './webauthnPlatform.js';
 import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
 import { createDisplayWindows, type DisplayWindows, type SpacesApi } from './displayWindows.js';
 import { readSpaces, switchDesktop } from './spaces.js';
@@ -585,6 +586,9 @@ function claimSingleInstance(): boolean {
  * page has no origin WebAuthn accepts. Only the app's own windows may ask.
  */
 function registerWebAuthnCeremony(): void {
+  // Electron services no platform-authenticator request until this is called,
+  // so without it the passkey ceremony never prompts for Touch ID.
+  configurePlatformAuthenticator(app, process.platform, (e) => console.warn('The Touch ID authenticator could not be turned on; passkeys on this computer will be unavailable.', e));
   ipcMain.handle(WEBAUTHN_CEREMONY_CHANNEL, (event, request: unknown) => {
     if (!applicationWindows.has(event.sender.id)) throw new Error('untrusted');
     const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;
@@ -604,8 +608,16 @@ function registerWebAuthnCeremony(): void {
         backgroundColor: DEFAULT_OVERLAY.color,
         icon: resolveWindowIcon(),
         webPreferences: {
-          // Its own in-memory session: the page keeps nothing and shares nothing with the app.
-          partition: 'nekko-webauthn',
+          // Its own session, so the page shares nothing with the app. Persistent
+          // rather than in-memory because Electron keeps the Touch ID metadata
+          // secret in the prefs of whichever session ran the ceremony: an
+          // in-memory session has no folder of its own, so it writes that secret
+          // to the app's own Preferences file. Both sessions then flush there on
+          // the way out of every quit and the last writer wins, which orphans
+          // every registered passkey at the next launch. The page
+          // itself still keeps nothing: it is one static document with a CSP that
+          // allows no script, no storage and no permission.
+          partition: 'persist:nekko-webauthn',
           sandbox: true,
           contextIsolation: true,
           nodeIntegration: false,

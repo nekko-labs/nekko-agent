@@ -18,7 +18,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -252,6 +252,6 @@ private fun Choice(title: String, detail: String, selected: Boolean, enabled: Bo
             Text(title, style = MaterialTheme.typography.bodyLarge, color = if (danger) p.danger else p.ink)
             Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
-        if (selected) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.settings_selected), tint = p.accent, modifier = Modifier.size(20.dp))
+        if (selected) Icon(Icons.Outlined.Check, contentDescription = stringResource(R.string.settings_selected), tint = p.accent, modifier = Modifier.size(20.dp))
     }
 }

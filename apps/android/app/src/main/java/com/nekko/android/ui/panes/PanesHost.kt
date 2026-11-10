@@ -37,11 +37,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloseFullscreen
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.outlined.CloseFullscreen
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.OpenInFull
+import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -431,12 +431,12 @@ private fun RowScope.PaneActions(
     if (mode != PaneMode.TABLETOP) {
         if (!zoomed) {
             IconButton(onClick = { onChange { it.swap() } }) {
-                Icon(if (mode == PaneMode.STACKED) Icons.Filled.SwapVert else Icons.Filled.SwapHoriz, contentDescription = stringResource(R.string.chats_swap_panes), tint = p.inkSoft)
+                Icon(if (mode == PaneMode.STACKED) Icons.Outlined.SwapVert else Icons.Outlined.SwapHoriz, contentDescription = stringResource(R.string.chats_swap_panes), tint = p.inkSoft)
             }
         }
         IconButton(onClick = { onChange { it.zoom(if (zoomed) null else side) } }) {
             Icon(
-                if (zoomed) Icons.Filled.CloseFullscreen else Icons.Filled.OpenInFull,
+                if (zoomed) Icons.Outlined.CloseFullscreen else Icons.Outlined.OpenInFull,
                 contentDescription = stringResource(if (zoomed) R.string.chats_show_both_panes else R.string.chats_focus_pane),
                 tint = p.inkSoft,
             )
@@ -444,7 +444,7 @@ private fun RowScope.PaneActions(
     }
     Box {
         IconButton(onClick = { menu = true }) {
-            Icon(Icons.Filled.Dashboard, contentDescription = stringResource(R.string.chats_replace_with), tint = p.inkSoft)
+            Icon(Icons.Outlined.Dashboard, contentDescription = stringResource(R.string.chats_replace_with), tint = p.inkSoft)
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.widthIn(max = 320.dp)) {
             Text(

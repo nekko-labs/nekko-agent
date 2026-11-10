@@ -19,6 +19,4 @@
     <string name="voice_reply">Réponse</string>
     <string name="voice_hold">Maintenir pour parler</string>
     <string name="voice_hold_accessibility">Démarrer ou terminer la dictée par appui prolongé</string>
-    <string name="voice_commands">Écouter les commandes « Nekko »</string>
-    <string name="voice_finish">Terminer l’écoute</string>
 </resources>

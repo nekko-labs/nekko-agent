@@ -7,8 +7,6 @@ import com.nekko.android.R
 import com.nekko.protocol.AgentRows
 import com.nekko.android.ui.chat.RowChip
 import androidx.compose.material.icons.filled.Outbox
-import androidx.compose.material.icons.filled.QuestionMark
-import androidx.compose.material.icons.outlined.RocketLaunch
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -122,6 +120,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import com.nekko.protocol.ChatSearch
+import com.nekko.android.ui.components.StatusGlyph
+import com.nekko.android.ui.components.StatusGlyphIcon
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.panes.PaneSlot
 import com.nekko.android.ui.security.rememberSafetyExits
@@ -845,13 +845,14 @@ internal fun ChatStatusIcon(activity: Activity?, waiting: Boolean, activeWatchCo
         else -> R.string.chats_status_done
     }
     val label = stringResource(status)
-    val m = Modifier.size(18.dp).semantics { contentDescription = label }
+    val m = Modifier.semantics { contentDescription = label }
+    // Our status glyphs (docs/design-system.md), never Material icons.
     when (status) {
-        R.string.chats_working -> Icon(Icons.Outlined.RocketLaunch, contentDescription = null, tint = p.success, modifier = m)
-        R.string.chats_needs_you -> Icon(Icons.Filled.QuestionMark, contentDescription = null, tint = p.warning, modifier = m)
-        R.string.chats_waiting_to_send -> Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkFaint, modifier = m)
-        R.string.chats_idle -> Text("Zz", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = p.inkFaint, modifier = Modifier.semantics { contentDescription = label })
-        else -> Icon(Icons.Filled.Check, contentDescription = null, tint = p.inkFaint, modifier = m)
+        R.string.chats_working -> StatusGlyphIcon(StatusGlyph.ROCKET, p.success, m)
+        R.string.chats_needs_you -> StatusGlyphIcon(StatusGlyph.QUESTION, p.warning, m)
+        R.string.chats_waiting_to_send -> StatusGlyphIcon(StatusGlyph.CLOCK, p.inkFaint, m)
+        R.string.chats_idle -> StatusGlyphIcon(StatusGlyph.SLEEP, p.inkFaint, m)
+        else -> StatusGlyphIcon(StatusGlyph.CHECK, p.inkFaint, m)
     }
 }
 
@@ -975,6 +976,9 @@ private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Uni
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // Simple / Detailed first, as on the iPhone (#2117): the pill holds only the gauges now.
+            com.nekko.android.ui.simple.ModeMenuItems(onPicked = { open = false })
+            HorizontalDivider()
             @Composable
             fun heading(text: String) = Text(
                 text.uppercase(), style = MaterialTheme.typography.labelSmall, color = p.inkFaint, fontWeight = FontWeight.SemiBold,

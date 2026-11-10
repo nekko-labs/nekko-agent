@@ -19,6 +19,4 @@
     <string name="voice_reply">回复</string>
     <string name="voice_hold">按住说话</string>
     <string name="voice_hold_accessibility">开始或结束长按听写</string>
-    <string name="voice_commands">聆听“Nekko”命令</string>
-    <string name="voice_finish">结束聆听</string>
 </resources>

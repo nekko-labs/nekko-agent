@@ -57,6 +57,8 @@ export interface AccountIdentity {
   signedOut?: boolean;
   /** A seat in an organization rather than a plan bought for oneself. */
   organization?: boolean;
+  /** A Claude plan login's `subscriptionType` (`pro`, `max`), lowercase, as Claude Code printed it. */
+  plan?: string;
 }
 
 const KIND_HINT: Partial<Record<ProviderConfig['kind'], string>> = {
@@ -104,6 +106,7 @@ export function accountIdentity(
         hint: plan ? capital(plan) : undefined,
         email: s.email ?? undefined,
         organization,
+        plan: plan || undefined,
       };
     }
     if (s?.installed && !s.loggedIn) return { name: named ?? 'Subscription', hint: 'Signed out', signedOut: true };
@@ -151,6 +154,27 @@ function claudeStatusOf(provider: ProviderConfig): Promise<ClaudeCodeStatus | nu
   const value = get ? get(provider.id).catch(() => null) : Promise.resolve(null);
   claudeCache.set(key, { at: Date.now(), value });
   return value;
+}
+
+/**
+ * The Claude plan (`pro`, `max`…) a Claude Agent provider is signed in to, as
+ * its Claude Code reported it; undefined for any other provider, an API login,
+ * or before `claude auth status` answers.
+ */
+export function useClaudePlan(provider: ProviderConfig | undefined | null): string | undefined {
+  const [plan, setPlan] = useState<string | undefined>(undefined);
+  const key = provider?.kind === 'claude-code' ? `${provider.id}|${provider.claudeCode?.account ?? ''}` : '';
+  useEffect(() => {
+    setPlan(undefined);
+    if (!key || !provider) return;
+    let live = true;
+    void claudeStatusOf(provider).then((s) => {
+      if (live && s?.installed && s.loggedIn && s.auth === 'subscription') setPlan(s.subscriptionType?.trim().toLowerCase() || undefined);
+    });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return plan;
 }
 
 /** Each provider's account identity, filled in as sign-in statuses answer. */

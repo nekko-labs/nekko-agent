@@ -5,12 +5,12 @@ import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
-import androidx.compose.material.icons.filled.SyncAlt
+import androidx.compose.material.icons.outlined.SyncAlt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Tone
@@ -40,16 +40,16 @@ fun AboutSection(deps: SettingsDeps) {
             Notice(text, Tone.WARNING, Modifier.padding(bottom = 8.dp))
         }
         NCard {
-            SettingsRow(title = "Nekko Agent for Android", detail = version, icon = Icons.Filled.Info)
+            SettingsRow(title = "Nekko Agent for Android", detail = version, icon = Icons.Outlined.Info)
             SettingsRow(
                 title = stringResource(R.string.settings_phone_protocol),
                 detail = c.hostProtocol?.let { stringResource(R.string.settings_protocol_both, "${PhoneProtocol.VERSION}", "$it") } ?: "${PhoneProtocol.VERSION}",
-                icon = Icons.Filled.SyncAlt,
+                icon = Icons.Outlined.SyncAlt,
             )
             SettingsRow(
                 title = stringResource(R.string.settings_licenses),
                 detail = stringResource(R.string.settings_licenses_detail),
-                icon = Icons.Filled.Description,
+                icon = Icons.Outlined.Description,
                 onClick = { deps.open(Routes.LICENSES) },
             )
         }

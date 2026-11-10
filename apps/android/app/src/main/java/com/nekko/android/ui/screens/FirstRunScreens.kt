@@ -22,9 +22,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -93,9 +93,9 @@ fun FirstRunIntro(onContinue: () -> Unit, onSkip: () -> Unit) {
             modifier = Modifier.semantics { heading() },
         )
         Text(stringResource(R.string.chats_intro_body), style = MaterialTheme.typography.bodyLarge, color = p.inkSoft)
-        Point(Icons.Filled.Forum, stringResource(R.string.chats_intro_follow_title), stringResource(R.string.chats_intro_follow_text))
-        Point(Icons.Filled.VerifiedUser, stringResource(R.string.chats_intro_approve_title), stringResource(R.string.chats_intro_approve_text))
-        Point(Icons.Filled.Lock, stringResource(R.string.chats_intro_private_title), stringResource(R.string.chats_intro_private_text))
+        Point(Icons.Outlined.Forum, stringResource(R.string.chats_intro_follow_title), stringResource(R.string.chats_intro_follow_text))
+        Point(Icons.Outlined.VerifiedUser, stringResource(R.string.chats_intro_approve_title), stringResource(R.string.chats_intro_approve_text))
+        Point(Icons.Outlined.Lock, stringResource(R.string.chats_intro_private_title), stringResource(R.string.chats_intro_private_text))
     }
 }
 
@@ -103,7 +103,7 @@ fun FirstRunIntro(onContinue: () -> Unit, onSkip: () -> Unit) {
 private fun Point(icon: ImageVector, title: String, text: String) {
     val p = Nekko.palette
     Row(Modifier.semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Icon(icon, contentDescription = null, tint = p.accent, modifier = Modifier.padding(top = 2.dp).size(24.dp))
+        Icon(icon, contentDescription = null, tint = p.inkSoft, modifier = Modifier.padding(top = 2.dp).size(24.dp))
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = p.ink)
             Text(text, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)

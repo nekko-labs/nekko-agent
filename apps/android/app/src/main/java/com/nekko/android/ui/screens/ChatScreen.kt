@@ -33,7 +33,7 @@ import android.content.pm.PackageManager
 import android.Manifest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -56,9 +56,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.Difference
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.Difference
 import com.nekko.android.ui.chat.ChangesSheet
 import com.nekko.android.ui.chat.AuditSheet
 import androidx.compose.material3.CircularProgressIndicator
@@ -135,13 +135,13 @@ import com.nekko.android.previews.LocalChatPreviews
 import androidx.compose.runtime.CompositionLocalProvider
 import com.nekko.android.ui.git.GitDialog
 import com.nekko.android.ui.terminal.TerminalsDialog
-import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.outlined.Terminal
 import com.nekko.android.ui.git.PrChip
 import com.nekko.android.ui.git.PrSheet
 import com.nekko.protocol.PullRequest
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.AccountTree
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
@@ -175,11 +175,11 @@ import com.nekko.android.ui.security.PendingStepUp
 import com.nekko.android.ui.security.StepUpSheet
 import com.nekko.android.ui.settings.modeTitleRes
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Policy
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Policy
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Shield
 
 @Composable
 fun ChatScreen(
@@ -281,12 +281,33 @@ private fun ChatScreenContent(
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    // Pull up past the newest message to refresh (#2117, the iPhone's #1779); the mascot's Refresh shares it.
+    val pullPx = with(androidx.compose.ui.platform.LocalDensity.current) { 72.dp.toPx() }
+    val pullUp = remember(vm.sessionId) { com.nekko.android.ui.chat.PullUpRefreshState(pullPx, atEnd = { !list.canScrollForward }) }
+    pullUp.onRefresh = {
+        scope.launch {
+            try {
+                vm.refresh()
+                // Keep the newest message in view after the reload.
+                val last = list.layoutInfo.totalItemsCount - 1
+                if (last >= 0) list.animateScrollToItem(last)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Offline or refused: the chat stays as it was; the banner says why.
+            } finally {
+                pullUp.refreshing = false
+            }
+        }
+    }
     val p = Nekko.palette
     var showVoiceConversation by remember(vm) { mutableStateOf(false) }
     val focused by rememberUpdatedState(pane?.focused != false && !showMenu && !showRename && !showMode &&
         !showChanges && !showAudit && !showPrs && !showModelEffort && !showImageSettings && modeStepUp == null)
     val voiceComputer = remember(vm) { vm.repo.state.value.activeId }
-    val mic = rememberMic(vm.dictation.takeIf { dictationOn }, vm.computers) {
+    // The mic's words go through the chat's voice commands (installed by ChatVoiceControls).
+    val dictationCommands = remember(vm) { com.nekko.android.voice.DictationCommands() }
+    val mic = rememberMic(vm.dictation.takeIf { dictationOn }, vm.computers, dictationCommands) {
         vm.voiceEnabled && focused && voiceComputer != null && vm.repo.state.value.activeId == voiceComputer &&
             vm.repo.state.value.conn == com.nekko.protocol.RelayState.ONLINE && vm.completedAt.value == null && vm.repo.overlays.value[vm.sessionId] == null
     }
@@ -493,32 +514,35 @@ private fun ChatScreenContent(
                                 val filesChanged = if (changedFiles == 1) stringResource(R.string.simple_files_changed_one) else stringResource(R.string.simple_files_changed_other, changedFiles)
                                 IconButton(onClick = { vm.loadChanges(); showChanges = true }, modifier = Modifier.testTag("chat.changes")) {
                                     BadgedBox(badge = { Badge(containerColor = p.accent, contentColor = p.accentInk) { Text("$changedFiles") } }) {
-                                        Icon(Icons.Filled.Difference, contentDescription = filesChanged)
+                                        Icon(Icons.Outlined.Difference, contentDescription = filesChanged)
                                     }
                                 }
                             }
                             Box {
                                 IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
-                                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chats_more))
+                                    Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.chats_more))
                                 }
                                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                    // Simple / Detailed first, as on the iPhone (#2117): the pill holds only the gauges now.
+                                    com.nekko.android.ui.simple.ModeMenuItems(onPicked = { showMenu = false })
+                                    HorizontalDivider()
                                     if (showGit) DropdownMenuItem(
                                         text = { Text("Git") },
-                                        leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
+                                        leadingIcon = { Icon(Icons.Outlined.AccountTree, contentDescription = null) },
                                         onClick = { showMenu = false; vm.openGit() },
                                         enabled = chat.savedAt == null,
                                         modifier = Modifier.testTag("chat.git"),
                                     )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chats_files)) },
-                                        leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                                        leadingIcon = { Icon(Icons.Outlined.FolderOpen, contentDescription = null) },
                                         onClick = { showMenu = false; vm.openFiles() },
                                         enabled = chat.savedAt == null,
                                         modifier = Modifier.testTag("chat.files"),
                                     )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chats_terminals)) },
-                                        leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
+                                        leadingIcon = { Icon(Icons.Outlined.Terminal, contentDescription = null) },
                                         onClick = { showMenu = false; vm.openTerminals() },
                                         enabled = chat.savedAt == null,
                                         modifier = Modifier.testTag("chat.terminals"),
@@ -526,28 +550,28 @@ private fun ChatScreenContent(
                                     HorizontalDivider()
                                     if (simple.expert && simple.shown("asks")) DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chats_chat_mode)) },
-                                        leadingIcon = { Icon(Icons.Filled.Shield, contentDescription = null) },
+                                        leadingIcon = { Icon(Icons.Outlined.Shield, contentDescription = null) },
                                         onClick = { showMenu = false; showMode = true },
                                         enabled = online,
                                         modifier = Modifier.testTag("chat.toolMode"),
                                     )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chat_audit_trail)) },
-                                        leadingIcon = { Icon(Icons.Filled.Policy, contentDescription = null) },
+                                        leadingIcon = { Icon(Icons.Outlined.Policy, contentDescription = null) },
                                         onClick = { showMenu = false; vm.loadAudit(); showAudit = true },
                                         enabled = online,
                                         modifier = Modifier.testTag("chat.audit"),
                                     )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chats_rename)) },
-                                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                                        leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
                                         onClick = { showMenu = false; showRename = true },
                                         enabled = online,
                                         modifier = Modifier.testTag("chat.rename"),
                                     )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(if (pinned) R.string.chats_unpin else R.string.chats_pin)) },
-                                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+                                        leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
                                         onClick = { showMenu = false; chatAction(res.getString(R.string.chats_change_this_failed)) { vm.setPinned(!pinned) } },
                                         enabled = online,
                                         modifier = Modifier.testTag("chat.pin"),
@@ -555,7 +579,7 @@ private fun ChatScreenContent(
                                     if (completedAt == null) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.chats_complete)) },
-                                            leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
+                                            leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) },
                                             onClick = { showMenu = false; chatAction(res.getString(R.string.chats_complete_this_failed)) { vm.complete() } },
                                             enabled = online,
                                             modifier = Modifier.testTag("chat.complete"),
@@ -567,7 +591,7 @@ private fun ChatScreenContent(
                         },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back))
+                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.chats_back))
                             }
                         },
                         title = {
@@ -577,10 +601,12 @@ private fun ChatScreenContent(
                                     if (pane != null) {
                                         PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
                                     }
+                                    // Nekko beside the title, as on the iPhone (#2117).
+                                    com.nekko.android.ui.chat.ChatMascot(working = chat.running, refreshing = pullUp.refreshing, onRefresh = pullUp::refresh)
                                     Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                                 if (simple.shown("ph-subtitle")) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
+                                    Icon(Icons.Outlined.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
                                     Text(
                                         chat.subtitle,
                                         style = MaterialTheme.typography.bodySmall,
@@ -608,7 +634,7 @@ private fun ChatScreenContent(
                         )
                         else -> LazyColumn(
                             state = list,
-                            modifier = Modifier.fillMaxSize().nestedScroll(pill.scroll),
+                            modifier = Modifier.fillMaxSize().nestedScroll(pullUp.connection).nestedScroll(pill.scroll),
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = pill.topInset(simple.pill, otherwise = 16.dp)),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
@@ -680,6 +706,7 @@ private fun ChatScreenContent(
                             }
                         }
                     }
+                    com.nekko.android.ui.chat.PullUpIndicator(pullUp, Modifier.align(Alignment.BottomCenter))
                 }
             }
             val controls: @Composable () -> Unit = {
@@ -774,6 +801,7 @@ private fun ChatScreenContent(
                             com.nekko.android.voice.ChatVoiceControls(
                                 vm, dictationOn, focused, composer,
                                 showVoiceConversation, { showVoiceConversation = false }, onOpenChat, onNewChat, onSettings,
+                                dictation = dictationCommands,
                             )
                         },
                         footer = {
@@ -864,7 +892,7 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
     ) {
         error?.let { Notice(it, Tone.DANGER) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(Icons.Filled.Check, contentDescription = null, tint = p.success, modifier = Modifier.size(16.dp))
+            Icon(Icons.Outlined.Check, contentDescription = null, tint = p.success, modifier = Modifier.size(16.dp))
             Text(
                 stringResource(R.string.chats_completed_bar),
                 style = MaterialTheme.typography.bodyMedium,
@@ -881,7 +909,13 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
  * tapped (Android shows its own prompt), then starts or stops dictation.
  */
 @Composable
-private fun rememberMic(d: DictationController?, updates: kotlinx.coroutines.flow.Flow<*>? = null, authorized: () -> Boolean = { true }): MicUi? {
+private fun rememberMic(
+    d: DictationController?,
+    updates: kotlinx.coroutines.flow.Flow<*>? = null,
+    /** Routes the words through the chat's voice commands ("Nekko, send"); else they are typed. */
+    commands: com.nekko.android.voice.DictationCommands? = null,
+    authorized: () -> Boolean = { true },
+): MicUi? {
     if (d == null) return null
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -911,8 +945,23 @@ private fun rememberMic(d: DictationController?, updates: kotlinx.coroutines.flo
         if (allowed()) {
             val has = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             if (has) {
-                com.nekko.android.voice.VoiceAudioOwner.claim(token) { d.cancel() }
-                d.toggle { words -> if (allowed() && com.nekko.android.voice.VoiceAudioOwner.owns(token)) onText(words) }
+                // Tap mode (the iPhone's): listens until Stop, each pause's words as they come. Starting,
+                // the chat's voice controls take the microphone so "Nekko, …" commands in the words run;
+                // without them the words are typed. Stopping needs neither.
+                if (d.state.value !is com.nekko.android.voice.MicState.Idle) {
+                    // Stop: keep whoever holds the microphone, or taking it back would cancel and restart.
+                    d.toggle(continuous = true) { }
+                    return@MicUi
+                }
+                val sink = commands?.start()
+                if (sink == null) com.nekko.android.voice.VoiceAudioOwner.claim(token) { d.cancel() }
+                d.toggle(continuous = true) { words ->
+                    when {
+                        !allowed() -> Unit
+                        sink != null -> sink(words)
+                        com.nekko.android.voice.VoiceAudioOwner.owns(token) -> onText(words)
+                    }
+                }
             } else ask.launch(Manifest.permission.RECORD_AUDIO)
         }
     }

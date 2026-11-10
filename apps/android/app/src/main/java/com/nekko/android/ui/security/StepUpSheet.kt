@@ -18,7 +18,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -137,7 +137,7 @@ fun StepUpSheet(repo: ComputersRepository, pending: PendingStepUp, onDone: () ->
                             colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.accentInk),
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         ) {
-                            Icon(Icons.Filled.Key, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Outlined.Key, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(8.dp))
                             Text(stringResource(R.string.settings_use_key))
                         }
