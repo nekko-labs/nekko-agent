@@ -3,5 +3,6 @@
         <activity android:name=".PurposeEvidenceActivity" android:exported="true" />
         <activity android:name=".ReplyVoicesEvidenceActivity" android:exported="true" />
         <activity android:name=".ModelTabsEvidenceActivity" android:exported="true" />
+        <activity android:name=".LockEvidenceActivity" android:exported="true" />
     </application>
 </manifest>
