@@ -49,6 +49,8 @@ fun ChatVoiceControls(
     onOpenChat: (String, String?) -> Unit,
     onNewChat: (() -> Unit)?,
     onSettings: (() -> Unit)?,
+    /** The composer's microphone: its words run through [runner] (typed, or "Nekko, …" commands). */
+    dictation: DictationCommands? = null,
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -73,6 +75,8 @@ fun ChatVoiceControls(
     var stepResult by remember { mutableStateOf<CompletableDeferred<JsonElement>?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var permissionVersion by remember { mutableIntStateOf(0) }
+    /** The composer's mic dictation holds this chat's voice lease (its words go to [runner]). */
+    var dictating by remember { mutableStateOf(false) }
     val hold = remember(vm, owner) { HoldToTalk() }
     fun baseAllowed(): Boolean {
         val state = vm.repo.state.value
@@ -173,6 +177,8 @@ fun ChatVoiceControls(
     val listening = remember(vm, owner) { VoiceListening(scope, runner) }
     fun abort() {
         epoch++
+        // Lock, cover, leaving, another owner: the mic's dictation stops with everything else.
+        if (dictating) { dictating = false; vm.dictation?.cancel() }
         hold.reset(); listening.abort()
         stepResult?.cancel(); stepResult = null; stepUp = null
         VoiceAudioOwner.release(token)
@@ -212,6 +218,7 @@ fun ChatVoiceControls(
             if (held && pressed) hold.press(SystemClock.elapsedRealtime(), HoldToTalk.Permission.GRANTED)
         }
         link = vm.repo.remote(); leaseEpoch = epoch
+        dictating = false
         vm.dictation?.cancel()
         VoiceAudioOwner.claim(token) { epoch++; hold.reset(); listening.abort(); stepResult?.cancel(); stepUp = null }
     }
@@ -227,6 +234,42 @@ fun ChatVoiceControls(
                 allowed = { voiceAllowed() && safety.foreground },
             ), held)
         } catch (e: Exception) { hold.reset(); abort(); announce(e.message ?: "Voice could not start.") }
+    }
+
+    /**
+     * The composer's mic starts (the iPhone's tap mode into VoiceRunner): take this chat's voice lease,
+     * so each pause's words are typed or run as commands with the same checks as Hold to talk.
+     * Null (type plainly) when voice can't run here now.
+     */
+    fun beginDictation(): ((String) -> Unit)? {
+        if (!baseAllowed() || conversationOpen) return null
+        if (listening.state.value.active || hold.holding) abort()
+        link = runCatching { vm.repo.remote() }.getOrNull() ?: return null
+        leaseEpoch = epoch
+        val run = leaseEpoch
+        dictating = true
+        VoiceAudioOwner.claim(token) { epoch++; dictating = false; vm.dictation?.cancel(); hold.reset(); listening.abort(); stepResult?.cancel(); stepUp = null }
+        runner.started()
+        return { words ->
+            if (voiceAllowed() && epoch == run && dictating) scope.launch {
+                // Refused authority ends quietly: the lease's owner already said why.
+                try { runner.hear(words) } catch (_: kotlinx.coroutines.CancellationException) { }
+            }
+        }
+    }
+    DisposableEffect(dictation) {
+        dictation?.claim = ::beginDictation
+        onDispose { if (dictation?.claim != null) dictation.claim = null }
+    }
+    // Dictation over (Stop and its last words typed, or cancelled): a confirmation it offered ends, the lease goes.
+    val micState = vm.dictation?.state?.collectAsState()?.value
+    LaunchedEffect(micState is MicState.Idle) {
+        if (micState is MicState.Idle && dictating) {
+            dictating = false
+            val run = leaseEpoch
+            scope.launch { if (epoch == run) runCatching { runner.stopped() } }
+            VoiceAudioOwner.release(token)
+        }
     }
 
     val labels = voiceLabels()
@@ -268,10 +311,7 @@ fun ChatVoiceControls(
                 accessibilityAction = stringResource(R.string.voice_hold_accessibility),
             )
         }
-        TextButton(enabled = baseAllowed() && !conversationOpen, onClick = {
-            if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permission.launch(Manifest.permission.RECORD_AUDIO)
-            else if (listeningState.active) { listening.finish(); hold.reset() } else start(held = false)
-        }, modifier = Modifier.testTag("voice.commands")) { Text(stringResource(if (listeningState.active) R.string.voice_finish else R.string.voice_commands)) }
+        // "Nekko, …" commands now run from the composer's microphone itself (beginDictation), as on the iPhone.
         (listeningState.error ?: notice)?.let { Text(it, modifier = Modifier.testTag("voice.notice")) }
         if (voiceAllowed()) pending?.let { VoiceCommandPrompt(it, { intent, id -> scope.launch { runner.answer(intent, id) } }, cancelLabel = stringResource(R.string.voice_cancel)) }
     }

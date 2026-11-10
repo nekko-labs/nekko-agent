@@ -19,6 +19,4 @@
     <string name="voice_reply">Antwort</string>
     <string name="voice_hold">Zum Sprechen gedrückt halten</string>
     <string name="voice_hold_accessibility">Diktat per Gedrückthalten starten oder beenden</string>
-    <string name="voice_commands">Auf „Nekko“-Befehle hören</string>
-    <string name="voice_finish">Zuhören beenden</string>
 </resources>

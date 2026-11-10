@@ -19,6 +19,4 @@
     <string name="voice_reply">返信</string>
     <string name="voice_hold">長押しして話す</string>
     <string name="voice_hold_accessibility">長押し音声入力を開始または終了</string>
-    <string name="voice_commands">「Nekko」コマンドを聞き取る</string>
-    <string name="voice_finish">聞き取りを終了</string>
 </resources>
