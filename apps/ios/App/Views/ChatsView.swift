@@ -298,11 +298,17 @@ struct ChatsView: View {
                 }
                 .pickerStyle(.menu)
             }
-            Menu("Card details") {
+            // A nested popup inside this Form can leave its controls inaccessible.
+            // Keep the field switches in the same popover, like Show below.
+            DisclosureGroup("Card details") {
                 Toggle("Model", isOn: bind(\.showModel))
+                    .accessibilityIdentifier("chats.view.showModel")
                 Toggle("Context window", isOn: bind(\.showContext))
+                    .accessibilityIdentifier("chats.view.showContext")
                 Toggle("Pull requests", isOn: bind(\.showPullRequests))
+                    .accessibilityIdentifier("chats.view.showPullRequests")
                 Toggle("Last updated", isOn: bind(\.showUpdated))
+                    .accessibilityIdentifier("chats.view.showUpdated")
             }
             // Keep these controls in the popover: a second popup menu did not
             // expose its toggles reliably when hosted inside this Form.
