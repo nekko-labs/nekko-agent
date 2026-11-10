@@ -15,12 +15,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MergeType
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.automirrored.outlined.MergeType
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.AccountTree
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -77,7 +77,7 @@ fun PrChip(pr: PullRequest, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(Icons.AutoMirrored.Filled.MergeType, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
+        Icon(Icons.AutoMirrored.Outlined.MergeType, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
         Text(pr.summary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -119,14 +119,14 @@ fun PrSheet(
                         Text(it.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
                     }
                     HorizontalDivider(color = p.line)
-                    Row2(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.tools_git_open_github)) { uri.openUri(pr.url) }
+                    Row2(Icons.AutoMirrored.Outlined.OpenInNew, stringResource(R.string.tools_git_open_github)) { uri.openUri(pr.url) }
                     HorizontalDivider(color = p.line)
-                    Row2(Icons.Filled.Checklist, stringResource(R.string.tools_pr_detail), Modifier.testTag("pr.detail")) { onGit(pr) }
+                    Row2(Icons.Outlined.Checklist, stringResource(R.string.tools_pr_detail), Modifier.testTag("pr.detail")) { onGit(pr) }
                 }
             }
             item {
                 Box {
-                    Row2(Icons.Filled.AccountTree, stringResource(R.string.tools_pr_git), Modifier.testTag("pr.git")) { onGit(null) }
+                    Row2(Icons.Outlined.AccountTree, stringResource(R.string.tools_pr_git), Modifier.testTag("pr.git")) { onGit(null) }
                 }
                 Text(stringResource(R.string.tools_pr_done_here), style = MaterialTheme.typography.bodySmall, color = p.inkFaint,
                     modifier = Modifier.padding(top = 8.dp, start = 4.dp))
@@ -140,9 +140,9 @@ fun PrSheet(
                     GitPrompt.offered(prs).forEachIndexed { i, a ->
                         if (i > 0) HorizontalDivider(color = p.line)
                         val icon = when (a) {
-                            GitPrompt.COMMIT -> Icons.Filled.Verified
-                            GitPrompt.OPEN_PR -> Icons.AutoMirrored.Filled.MergeType
-                            GitPrompt.FIX_CHECKS -> Icons.Filled.Build
+                            GitPrompt.COMMIT -> Icons.Outlined.Verified
+                            GitPrompt.OPEN_PR -> Icons.AutoMirrored.Outlined.MergeType
+                            GitPrompt.FIX_CHECKS -> Icons.Outlined.Build
                         }
                         Row2(icon, a.label, Modifier.testTag("pr.ask.${a.name.lowercase()}")) {
                             failed = null

@@ -27,17 +27,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
-import androidx.compose.material.icons.automirrored.filled.ListAlt
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Lan
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardReturn
+import androidx.compose.material.icons.automirrored.outlined.ListAlt
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Lan
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -168,8 +168,8 @@ private fun Page(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        if (close) Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_close))
-                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.tools_back))
+                        if (close) Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.tools_close))
+                        else Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.tools_back))
                     }
                 },
                 actions = { actions() },
@@ -204,7 +204,7 @@ private fun ListPage(terminals: TerminalsController, online: Boolean, computer: 
     }
     Page(
         stringResource(R.string.tools_term_title), onClose, close = true,
-        actions = { IconButton(onClick = { scope.launch { terminals.load() } }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh)) } },
+        actions = { IconButton(onClick = { scope.launch { terminals.load() } }) { Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.tools_refresh)) } },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(Modifier.fillMaxSize().testTag("terminals.list"), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -213,7 +213,7 @@ private fun ListPage(terminals: TerminalsController, online: Boolean, computer: 
                 if (s.loaded && s.error == null && s.terminals.isEmpty()) item { Text(stringResource(R.string.tools_term_none), color = p.inkSoft) }
                 items(s.terminals, key = { it.id }) { t -> TerminalRow(t) { open(terminals.session(t)) } }
                 item {
-                    Row2(Icons.Filled.Add, stringResource(R.string.tools_term_new), enabled = !busy && online, modifier = Modifier.testTag("terminals.new")) {
+                    Row2(Icons.Outlined.Add, stringResource(R.string.tools_term_new), enabled = !busy && online, modifier = Modifier.testTag("terminals.new")) {
                         opening { terminals.newTerminal(PHONE_COLS, PHONE_ROWS) }
                     }
                     Footnote(stringResource(R.string.tools_term_new_note, computer))
@@ -224,7 +224,7 @@ private fun ListPage(terminals: TerminalsController, online: Boolean, computer: 
                     s.loaded && s.hosts.isEmpty() -> item { Text(stringResource(R.string.tools_term_no_hosts, computer), color = p.inkSoft) }
                 }
                 items(s.hosts, key = { "ssh:${it.alias}" }) { h ->
-                    Row2(Icons.Filled.Lan, h.alias, detail = h.detail, enabled = !busy && online, modifier = Modifier.testTag("terminals.ssh.${h.alias}")) {
+                    Row2(Icons.Outlined.Lan, h.alias, detail = h.detail, enabled = !busy && online, modifier = Modifier.testTag("terminals.ssh.${h.alias}")) {
                         opening { terminals.openSsh(h, PHONE_COLS, PHONE_ROWS) }
                     }
                 }
@@ -247,9 +247,9 @@ private fun ListPage(terminals: TerminalsController, online: Boolean, computer: 
 private fun TerminalRow(t: PhoneTerminal, onClick: () -> Unit) {
     val p = Nekko.palette
     val icon = when (t.kind) {
-        PhoneTerminal.Kind.SSH -> Icons.Filled.Lan
-        PhoneTerminal.Kind.AGENT -> Icons.AutoMirrored.Filled.ListAlt
-        PhoneTerminal.Kind.SHELL -> Icons.Filled.Terminal
+        PhoneTerminal.Kind.SSH -> Icons.Outlined.Lan
+        PhoneTerminal.Kind.AGENT -> Icons.AutoMirrored.Outlined.ListAlt
+        PhoneTerminal.Kind.SHELL -> Icons.Outlined.Terminal
     }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.surface).border(1.dp, p.line, RoundedCornerShape(12.dp))
@@ -262,7 +262,7 @@ private fun TerminalRow(t: PhoneTerminal, onClick: () -> Unit) {
             Text(t.title.ifEmpty { t.shell }, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(t.detail, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (t.viewers > 0) Icon(Icons.Filled.PhoneAndroid, contentDescription = stringResource(R.string.tools_term_attached), tint = p.inkSoft, modifier = Modifier.size(18.dp))
+        if (t.viewers > 0) Icon(Icons.Outlined.PhoneAndroid, contentDescription = stringResource(R.string.tools_term_attached), tint = p.inkSoft, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -326,12 +326,12 @@ private fun TerminalPage(session: TerminalSession, terminals: TerminalsControlle
         terminal.title.ifEmpty { stringResource(R.string.tools_term_terminal) }, onBack,
         actions = {
             Box {
-                IconButton(onClick = { menu = true }, modifier = Modifier.testTag("terminal.more")) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.tools_term_more)) }
+                IconButton(onClick = { menu = true }, modifier = Modifier.testTag("terminal.more")) { Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.tools_term_more)) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.tools_term_read_again)) }, leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                    DropdownMenuItem(text = { Text(stringResource(R.string.tools_term_read_again)) }, leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
                         onClick = { menu = false; scope.launch { session.refresh() } })
                     if (!terminal.readOnly) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.tools_term_close), color = p.danger) }, leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null, tint = p.danger) },
+                        DropdownMenuItem(text = { Text(stringResource(R.string.tools_term_close), color = p.danger) }, leadingIcon = { Icon(Icons.Outlined.Close, contentDescription = null, tint = p.danger) },
                             onClick = { menu = false; confirmClose = true }, modifier = Modifier.testTag("terminal.close"))
                     }
                 }
@@ -444,7 +444,7 @@ private fun Controls(session: TerminalSession) {
                     val clip = clipboard.getClipEntry()?.clipData ?: return@launch
                     if (clip.itemCount > 0) clip.getItemAt(0).coerceToText(context)?.toString()?.let(session::paste)
                 }
-            }) { Icon(Icons.Filled.ContentPaste, contentDescription = stringResource(R.string.tools_term_paste)) }
+            }) { Icon(Icons.Outlined.ContentPaste, contentDescription = stringResource(R.string.tools_term_paste)) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
@@ -467,7 +467,7 @@ private fun Controls(session: TerminalSession) {
                 modifier = Modifier.weight(1f).testTag("terminal.line"),
             )
             IconButton(onClick = send, modifier = Modifier.testTag("terminal.send")) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = stringResource(R.string.tools_term_send))
+                Icon(Icons.AutoMirrored.Outlined.KeyboardReturn, contentDescription = stringResource(R.string.tools_term_send))
             }
         }
     }

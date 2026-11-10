@@ -8,7 +8,7 @@ The switch has two icons: a chat bubble for Simple and angle brackets for Detail
 
 - **Desktop and Local Web UI:** open **View** in the app’s top-right corner. Under **Interface detail**, select the **Simple** or **Detailed** radio row. **Customize** opens **Settings > Customize**, not a modal. These app-wide controls no longer sit in the agent panel’s view menu.
 - **iPhone:** at the top of the chats list's view menu (the filter icon) and of a chat's **More** menu.
-- **Android:** in the floating pill just under the top bar, in a chat and in the chats list.
+- **Android:** at the top of the chats list's view menu (the sort icon) and of a chat's ⋮ menu.
 
 Each computer and phone remembers its own mode. A new install starts in Simple.
 
@@ -83,7 +83,7 @@ In Detailed on the desktop, the bottom row (folder, model, effort, context, cost
 - **Effort** is in the menu under the model's name: a bar you slide or tap to set how hard the model thinks. The fuller the bar, the higher the effort. Detailed also shows a small dial beside the name.
 - **Approvals** sits beside the model in Simple, and in **More** in Detailed.
 - **Changes** is in **More** on the iPhone and an icon with a count on Android, once the agent has changed files.
-- **The pill:** it shows while the hardware gauges do (on Android it also holds the switch). Tap the gauges and the pill opens into the agent's details (hardware, loaded models, this chat). Point at one gauge with a mouse for its reading in full. The pill slides away while you scroll on and comes back when you scroll back.
+- **The pill:** it shows while the hardware gauges do, on the iPhone and on Android alike. Tap the gauges and the pill opens into the agent's details (hardware, loaded models, this chat). Point at one gauge with a mouse for its reading in full. The pill slides away while you scroll on and comes back when you scroll back.
 - **Moving the pill:** touch and hold it, then drag. Let go near the left or right edge to dock it there, stacked; anywhere else it lies across the screen at that height. Drag it back near the top to put it under the bar again.
 - **Tucking the pill away:** swipe it into its edge (a side it is docked at, or up into the bar) and only a slim arrow tab stays. Tap the tab, or swipe it back out, to bring the pill back.
 - **Search** is in the computer menu at the top left: **Search chats**.

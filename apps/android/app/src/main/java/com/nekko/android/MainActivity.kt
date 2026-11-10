@@ -177,7 +177,11 @@ class MainActivity : FragmentActivity() {
         when (intent?.action) {
             TALK_TO_NEKKO -> incomingLink.value = DeepLink.Talk
             OPEN_DASHBOARD -> incomingLink.value = DeepLink.Dashboard
-            Intent.ACTION_VIEW -> intent.data?.let(DeepLink::from)?.let { incomingLink.value = it }
+            Intent.ACTION_VIEW -> intent.data?.let(DeepLink::from)?.let { link ->
+                // Any chat link sets or drops the pending Always allow (taken by that chat's card).
+                if (link is DeepLink.Chat) (application as NekkoApp).alwaysAllow.opened(link.id, link.alwaysAllow)
+                incomingLink.value = link
+            }
             Intent.ACTION_SEND -> {
                 // Only plain text and links; files and images are not taken (no URI read permission asked).
                 val text = SharedText.from(
@@ -198,4 +202,4 @@ class MainActivity : FragmentActivity() {
 }
 
 private fun DeepLink.Companion.from(uri: Uri): DeepLink? =
-    from(uri.toString(), uri.scheme, uri.host, uri.pathSegments.orEmpty())
+    from(uri.toString(), uri.scheme, uri.host, uri.pathSegments.orEmpty(), if (uri.isHierarchical) uri.getQueryParameter("alwaysAllow") else null)

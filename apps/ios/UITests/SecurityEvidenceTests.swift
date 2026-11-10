@@ -44,9 +44,10 @@ final class SecurityEvidenceTests: XCTestCase {
         XCTAssertEqual(picker.value as? String, "Ask when it matters")
     }
 
-    /// "Always allow this tool" from outside the chat: the Lock Screen card offers it
-    /// for an MCP approval, and its link (also the notification action's) opens the
-    /// chat, whose card runs its own "Always allow" for that call. This fixture phone
+    /// "Always allow this tool" from outside the chat: the notification action's link
+    /// opens the chat, whose card runs its own "Always allow" for that call. (The
+    /// Lock Screen card is a totals dashboard since #2047 and no longer carries an
+    /// approval strip; it stays in the shot for context.) This fixture phone
     /// has no Change key, so the save is refused, as a cancelled Face ID would be:
     /// the card shows why, and the call still waits, approved by nobody.
     func testAlwaysAllowFromTheLockScreenOrANotificationEvidence() {
@@ -65,7 +66,7 @@ final class SecurityEvidenceTests: XCTestCase {
         // Photographed before the checks, so the revision without the feature is captured too.
         attach(app, "always-allow-from-outside")
 
-        XCTAssertTrue(app.staticTexts["Always allow"].exists, "the Lock Screen card offers Always allow for an MCP approval")
+        XCTAssertTrue(app.descendants(matching: .any)["securityEvidence.card"].exists, "the Lock Screen card is shown")
         XCTAssertTrue(ran, "the link ran the card's own Always allow")
         XCTAssertTrue(waiting.exists, "a refused save approves nothing: the call still waits")
     }

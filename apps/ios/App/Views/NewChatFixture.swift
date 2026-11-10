@@ -11,7 +11,9 @@ struct NewChatFixture: View {
 
     var body: some View {
         NavigationStack {
-            if ProcessInfo.processInfo.arguments.contains("-uiTestAutomatic") {
+            if ProcessInfo.processInfo.arguments.contains("-uiTestImageChat") {
+                ImageChatFixture()
+            } else if ProcessInfo.processInfo.arguments.contains("-uiTestAutomatic") {
                 AutomaticMachineFixture()
             } else if ready {
                 NewChatView(path: $path)

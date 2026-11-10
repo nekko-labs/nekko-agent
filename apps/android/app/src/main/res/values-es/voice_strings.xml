@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_conversation">Conversación por voz</string>
+    <string name="voice_explanation">Toca Iniciar y habla. Cada intervención se envía a este chat de texto. El teléfono lee la nueva respuesta completa y vuelve a escuchar. Detener, salir, bloquear o desconectarse finaliza la voz, no el trabajo del agente. La voz nunca pone solicitudes en cola ni las reintenta. Mantén vacío el cuadro de mensaje.</string>
+    <string name="voice_start">Iniciar</string>
+    <string name="voice_stop">Detener voz</string>
+    <string name="voice_close">Cerrar</string>
+    <string name="voice_cancel">Cancelar</string>
+    <string name="voice_settings">Abrir ajustes del micrófono</string>
+    <string name="voice_permission_granted">Micrófono permitido. Toca Iniciar o mantén pulsado de nuevo para comenzar.</string>
+    <string name="voice_permission_denied">Permite el acceso al micrófono en Ajustes → Aplicaciones → Nekko Agent → Permisos y vuelve a iniciar.</string>
+    <string name="voice_unavailable">Este teléfono necesita reconocimiento de voz instalado en el dispositivo (Android 12 o posterior). No se usa reconocimiento de voz en la nube como alternativa.</string>
+    <string name="voice_ready">Listo</string>
+    <string name="voice_listening">Escuchando</string>
+    <string name="voice_waiting">Pensando</string>
+    <string name="voice_speaking">Hablando</string>
+    <string name="voice_stopped">Detenido</string>
+    <string name="voice_heard">Has dicho</string>
+    <string name="voice_reply">Respuesta</string>
+    <string name="voice_hold">Mantén pulsado para hablar</string>
+    <string name="voice_hold_accessibility">Iniciar o finalizar el dictado mantenido</string>
+</resources>

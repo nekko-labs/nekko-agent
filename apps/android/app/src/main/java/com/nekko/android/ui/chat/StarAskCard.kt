@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,7 +53,7 @@ fun StarAskCard(thanked: Boolean, onStar: () -> Unit, onLater: () -> Unit, onNev
     val uri = LocalUriHandler.current
     NCard(Modifier.testTag(StarAskTags.CARD)) {
         Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Filled.Star, contentDescription = null, tint = p.accent, modifier = Modifier.padding(top = 2.dp).size(20.dp))
+            Icon(Icons.Outlined.Star, contentDescription = null, tint = p.inkSoft, modifier = Modifier.padding(top = 2.dp).size(20.dp))
             Column(Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     stringResource(if (thanked) R.string.chat_star_thanks else R.string.chat_star_title),
@@ -68,7 +68,7 @@ fun StarAskCard(thanked: Boolean, onStar: () -> Unit, onLater: () -> Unit, onNev
             }
             if (thanked) {
                 IconButton(onClick = onClose, modifier = Modifier.size(32.dp).testTag(StarAskTags.CLOSE)) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_close), tint = p.inkFaint, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.tools_close), tint = p.inkFaint, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -86,7 +86,7 @@ fun StarAskCard(thanked: Boolean, onStar: () -> Unit, onLater: () -> Unit, onNev
                     },
                     modifier = Modifier.heightIn(min = 48.dp).testTag(StarAskTags.STAR),
                 ) {
-                    Icon(Icons.Filled.Star, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Star, contentDescription = null, modifier = Modifier.size(18.dp))
                     Text(stringResource(R.string.chat_star_on_github), modifier = Modifier.padding(start = 8.dp))
                 }
                 OutlinedButton(onClick = onLater, modifier = Modifier.heightIn(min = 48.dp).testTag(StarAskTags.LATER)) {

@@ -57,10 +57,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.UnfoldMore
-import androidx.compose.material.icons.filled.ViewInAr
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.UnfoldMore
+import androidx.compose.material.icons.outlined.ViewInAr
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,7 +74,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -345,7 +344,7 @@ fun LongChatNudge(tokens: Long, onStartFresh: (() -> Unit)?, onDismiss: () -> Un
             style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f).padding(vertical = 6.dp),
         )
         if (onStartFresh != null) TextButton(onClick = onStartFresh) { Text(stringResource(R.string.simple_start_fresh), color = p.accent) }
-        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.simple_dismiss), tint = p.inkFaint, modifier = Modifier.size(16.dp)) }
+        IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.simple_dismiss), tint = p.inkFaint, modifier = Modifier.size(16.dp)) }
     }
 }
 
@@ -373,7 +372,7 @@ private fun ModelEffortButton(chat: ChatUi, enabled: Boolean, onClick: () -> Uni
     ) {
         if (showEffort) EffortDial(level, levels.size, 18.dp)
         if (showModel) Text(name, style = MaterialTheme.typography.labelLarge, color = if (enabled) p.ink else p.inkFaint, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, modifier = Modifier.widthIn(max = 220.dp))
-        Icon(Icons.Filled.UnfoldMore, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(14.dp))
+        Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(14.dp))
     }
 }
 
@@ -432,7 +431,7 @@ fun ModelEffortSheet(
                         Text(chat.modelName ?: stringResource(R.string.model_choose), style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         chat.modelId?.takeIf { it != chat.modelName }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
+                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
                 }
                 if (picking) {
                     ModelList(
@@ -848,7 +847,7 @@ private fun MiniGaugeView(g: MiniGauge, compact: Boolean, vertical: Boolean, any
             .semantics(mergeDescendants = true) { contentDescription = g.spoken }
         val content: @Composable () -> Unit = {
             if (g.models) {
-                Icon(Icons.Filled.ViewInAr, contentDescription = null, tint = if (anyLoaded) p.accent else p.inkFaint, modifier = Modifier.size(15.dp))
+                Icon(Icons.Outlined.ViewInAr, contentDescription = null, tint = if (anyLoaded) p.accent else p.inkFaint, modifier = Modifier.size(15.dp))
                 Text(g.value, style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
             } else {
                 ThinRing(g.fraction)

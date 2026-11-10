@@ -11,9 +11,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Password
-import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Password
+import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -56,9 +56,9 @@ fun stepUpMethodLabel(m: StepUpMethod): String = when (m) {
 }
 
 private fun stepUpMethodIcon(m: StepUpMethod): ImageVector = when (m) {
-    StepUpMethod.SECURITY_KEY -> Icons.Filled.Key
-    StepUpMethod.PASSKEY -> Icons.Filled.Smartphone
-    StepUpMethod.TOTP -> Icons.Filled.Password
+    StepUpMethod.SECURITY_KEY -> Icons.Outlined.Key
+    StepUpMethod.PASSKEY -> Icons.Outlined.Smartphone
+    StepUpMethod.TOTP -> Icons.Outlined.Password
 }
 
 /** The line under Settings → Security's step-up card for what the computer said. */

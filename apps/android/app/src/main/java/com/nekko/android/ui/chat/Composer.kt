@@ -147,6 +147,8 @@ fun Composer(
     offerSubagent: Boolean = false,
     /** The box's bottom row (the chat's model and context), inside the box. */
     footer: (@Composable () -> Unit)? = null,
+    onVoiceConversation: (() -> Unit)? = null,
+    voiceControls: (@Composable (com.nekko.android.voice.VoiceComposer) -> Unit)? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -350,6 +352,7 @@ fun Composer(
                                 onDismiss = { plusOpen = false },
                                 onNewAgent = onNewAgent?.let { go -> { plusOpen = false; go() } },
                                 onTerminal = onTerminal?.let { go -> { plusOpen = false; go() } },
+                                onVoiceConversation = onVoiceConversation?.let { go -> { plusOpen = false; go() } },
                                 onDictate = mic?.let { m -> { plusOpen = false; m.onTap(dictated) } },
                                 attach = attach,
                                 onPicked = { plusOpen = false; attach?.clearError?.invoke() },
@@ -402,6 +405,12 @@ fun Composer(
                         }
                     }
                 }
+                voiceControls?.invoke(com.nekko.android.voice.VoiceComposer(
+                    read = { com.nekko.android.voice.VoiceTurn.Draft(text, skillName != null || promptId != null, photos.isNotEmpty(), sending || addingPhotos) },
+                    replace = { expected, replacement ->
+                        if (text != expected || sending) false else { setText(replacement); true }
+                    },
+                ))
                 footer?.invoke()
             }
         }
@@ -599,6 +608,7 @@ private fun PlusMenu(
     onNewAgent: (() -> Unit)?,
     onTerminal: (() -> Unit)?,
     onDictate: (() -> Unit)?,
+    onVoiceConversation: (() -> Unit)? = null,
     attach: AttachUi?,
     onPicked: () -> Unit,
     prompts: List<SavedPrompt> = emptyList(),
@@ -612,6 +622,12 @@ private fun PlusMenu(
         containerColor = p.surface,
         shape = RoundedCornerShape(14.dp),
     ) {
+        if (onVoiceConversation != null) DropdownMenuItem(
+            text = { Text(stringResource(R.string.voice_conversation), color = p.ink) },
+            leadingIcon = { Icon(Icons.Filled.Mic, contentDescription = null, tint = p.inkSoft) },
+            onClick = onVoiceConversation,
+            modifier = Modifier.testTag("composer.voiceConversation"),
+        )
         if (onNewAgent != null) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.chat_new_agent), color = p.ink) },
@@ -757,7 +773,12 @@ private fun RecordingBar(st: MicState.Recording) {
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(p.danger))
         Text(
-            if (st.engine == Engine.COMPUTER) stringResource(R.string.chat_listening_clock, Dictation.clock(st.samples)) else stringResource(R.string.chat_listening),
+            when {
+                st.engine != Engine.COMPUTER -> stringResource(R.string.chat_listening)
+                // Tap mode has no cap: just the time listened.
+                st.continuous -> stringResource(R.string.chat_listening_clock, Dictation.elapsed(st.samples))
+                else -> stringResource(R.string.chat_listening_clock, Dictation.clock(st.samples))
+            },
             style = MaterialTheme.typography.bodySmall,
             color = p.ink,
         )
@@ -767,6 +788,12 @@ private fun RecordingBar(st: MicState.Recording) {
             trackColor = p.surface2,
             modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)),
         )
-        Text(stringResource(R.string.chat_tap_when_done), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        // Earlier pauses' words on their way while listening goes on.
+        Text(
+            stringResource(if (st.transcribing > 0) R.string.chat_transcribing else R.string.chat_tap_when_done),
+            style = MaterialTheme.typography.bodySmall,
+            color = p.inkFaint,
+            modifier = Modifier.testTag("chat.dictation.hint"),
+        )
     }
 }

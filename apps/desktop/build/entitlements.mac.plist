@@ -56,5 +56,21 @@
        for separately, only when the user picks "Allow and switch". -->
   <key>com.apple.security.automation.apple-events</key>
   <true/>
+
+  <!-- Settings → Security's "Add passkey on this computer": Electron's Touch ID
+       authenticator keeps the WebAuthn credential in this group, and macOS
+       grants the group only when the signature carries it. The team-id prefix
+       is spelled out because codesign does not expand $(AppIdentifierPrefix)
+       (Xcode does, and nothing here runs Xcode); it matches
+       WEBAUTHN_KEYCHAIN_ACCESS_GROUP in src/main/webauthnPlatform.ts, and the
+       two have to move together. An ad-hoc or self-signed build is not granted
+       it, so Touch ID stays unavailable there. Chromium reads this off the main
+       executable, so the inherited copy in the helpers does nothing for it; it
+       is here because this one file is both entitlements and
+       entitlementsInherit, not because a helper needs it. -->
+  <key>keychain-access-groups</key>
+  <array>
+    <string>3HM5598S99.dev.nekkolabs.nekkoagent.webauthn</string>
+  </array>
 </dict>
 </plist>

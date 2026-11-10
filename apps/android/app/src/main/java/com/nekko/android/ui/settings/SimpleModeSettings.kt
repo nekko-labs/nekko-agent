@@ -24,8 +24,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -79,7 +79,7 @@ fun SimpleModeSection(deps: SettingsDeps) {
             SettingsRow(
                 title = stringResource(R.string.simple_mode_title),
                 detail = if (changed == 0) stringResource(R.string.simple_mode_detail) else stringResource(R.string.simple_mode_detail_changed, changed),
-                icon = Icons.Filled.Tune,
+                icon = Icons.Outlined.Tune,
                 onClick = { deps.open(Routes.SIMPLE_MODE) },
             )
         }
@@ -178,7 +178,7 @@ fun SimpleModeScreen(prefs: PhonePrefs, onBack: () -> Unit) {
             TopAppBar(
                 title = { Text(stringResource(R.string.simple_mode_title)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back)) } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.chats_back)) } },
             )
         },
     ) { padding ->

@@ -161,8 +161,14 @@ jobs:
     # !cancelled(): a skipped or failed picker must not skip this job.
     if: ${{ !inputs.relay_baseline_ref && !inputs.photos_baseline_ref && !inputs.baseline_ref && !inputs.groups_baseline_ref && !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'deploy:ios') && contains(fromJSON('["deploy:ios","ci:theme"]'), github.event.label.name))) }}
     runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
-    # Light and dark live tests alone take 35-45 min on macos-14 (2026-10-25), so 50 cut
-    # passing runs off mid-test. A slow runner reaches 75 by itself, and a retried journey adds about 8.
+    # Isolate the ~40-minute fixture suite from the themed pairing retries and
+    # the remaining live journeys (#2035). Keep every leg's existing time budget.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [fixtures, pairing, journeys]
+    env:
+      SHARD: ${{ matrix.shard }}
     timeout-minutes: 85
     steps:
       - uses: actions/checkout@v7
@@ -170,6 +176,8 @@ jobs:
           # A PR checks out its merge commit and a batch is one commit on main:
           # either way HEAD^1 is the base, for the appearance scope.
           fetch-depth: 2
+      - name: Validate suite shard
+        run: node scripts/ios-suite-shards.mjs shard "$SHARD"
       # The xcode-27 image's default Xcode is its newest release (the newer ones on it are
       # release candidates), matching what we build with locally.
       - name: Show the Xcode
@@ -276,115 +284,121 @@ jobs:
           ready() { xcrun simctl bootstatus "$DEVICE" -b; xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100 || true; }
           ready
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="")
-          # Unit tests and first-run UI tests.
+          # This leg runs only its assigned suite; all legs are required.
           # Every suite runs even when one fails, so one run shows every failure and keeps its evidence.
           failed=0
           # A failed live run prints its stack's own logs (fake model, relay, agent): the phone's
           # screenshots alone can't say why the computer stopped answering.
           stack_logs() { for f in "$NEKKO_ITEST_LOGDIR"/*.log; do echo "::group::$1 $(basename "$f")"; tail -n 120 "$f"; echo "::endgroup::"; done; }
-          # The first-run suite is the only one split across simulator clones: its tests set all state by
-          # launch argument, open no host ports and leave evidence only in the one xcresult. One worker per
-          # 2 vCPUs and 4 GB of the VM, at most 4; a hosted 3-vCPU Mac gets 1, so it stays serial.
-          WORKERS=$(( $(sysctl -n hw.ncpu) / 2 )); MEM=$(( $(sysctl -n hw.memsize) / 4294967296 ))
-          [ "$MEM" -lt "$WORKERS" ] && WORKERS=$MEM; [ "$WORKERS" -gt 4 ] && WORKERS=4
-          PARALLEL=(-parallel-testing-enabled NO)
-          [ "$WORKERS" -lt 2 ] || PARALLEL=(-parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS")
-          echo "First-run suite: ${PARALLEL[*]}"
-          TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests \
-            "${PARALLEL[@]}" -retry-tests-on-failure -test-iterations 2 || failed=1
-          # A failing test gets one retry above: XCTest can hang minutes at "Setting up automation session"
-          # before the app launches. Then a fresh boot, since every simulator loss so far followed this long suite.
-          xcrun simctl shutdown "$DEVICE" || true
-          # The live runs below stay serial: each is one test against its own stack (the shell's single
-          # NEKKO_ITEST_PIDS and log dir), and the appearance and reinstalls are set on $DEVICE, which clones don't share.
-          # The live journey, once per appearance, each against a fresh stack (pairing codes are single-use).
-          # The first-run suite already asked for notifications; a fresh install gets the prompt again.
-          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-          for THEME in $THEMES; do
-            # The first journey after the boot can time out reading the app at any step, and the same
-            # journey then passes (#1567). So one more try, with a fresh stack and install. Right after
-            # the boot the computer's engine can also miss its start deadline; that try counts as failed.
-            for try in 1 2; do
-              ready
-              xcrun simctl ui "$DEVICE" appearance "$THEME"
-              journey=0
-              ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env" || { journey=1; continue; }
-              . "/tmp/stack-$THEME.env"
-              TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
-                xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME-$try.xcresult" test-without-building \
-                -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone || { journey=1; stack_logs "live-$THEME-$try"; }
-              kill $NEKKO_ITEST_PIDS 2>/dev/null || true
-              # The app is reinstalled per run; wipe it so the next run pairs from scratch.
-              xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-              [ "$journey" = 1 ] || break
+          if [ "$SHARD" = fixtures ]; then
+            # The first-run suite is the only one split across simulator clones: its tests set all state by
+            # launch argument, open no host ports and leave evidence only in the one xcresult. One worker per
+            # 2 vCPUs and 4 GB of the VM, at most 4; a hosted 3-vCPU Mac gets 1, so it stays serial.
+            WORKERS=$(( $(sysctl -n hw.ncpu) / 2 )); MEM=$(( $(sysctl -n hw.memsize) / 4294967296 ))
+            [ "$MEM" -lt "$WORKERS" ] && WORKERS=$MEM; [ "$WORKERS" -gt 4 ] && WORKERS=4
+            PARALLEL=(-parallel-testing-enabled NO)
+            [ "$WORKERS" -lt 2 ] || PARALLEL=(-parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS")
+            echo "First-run suite: ${PARALLEL[*]}"
+            TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests \
+              "${PARALLEL[@]}" -retry-tests-on-failure -test-iterations 2 || failed=1
+            # A failing test gets one retry above: XCTest can hang minutes at "Setting up automation session"
+            # before the app launches. Then a fresh boot, since every simulator loss so far followed this long suite.
+            xcrun simctl shutdown "$DEVICE" || true
+          fi
+          if [ "$SHARD" = pairing ]; then
+            # The live runs below stay serial: each is one test against its own stack (the shell's single
+            # NEKKO_ITEST_PIDS and log dir), and the appearance and reinstalls are set on $DEVICE, which clones don't share.
+            # The live journey, once per appearance, each against a fresh stack (pairing codes are single-use).
+            # A fresh install gets the notifications prompt again.
+            xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+            for THEME in $THEMES; do
+              # The first journey after the boot can time out reading the app at any step, and the same
+              # journey then passes (#1567). So one more try, with a fresh stack and install. Right after
+              # the boot the computer's engine can also miss its start deadline; that try counts as failed.
+              for try in 1 2; do
+                ready
+                xcrun simctl ui "$DEVICE" appearance "$THEME"
+                journey=0
+                ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env" || { journey=1; continue; }
+                . "/tmp/stack-$THEME.env"
+                TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
+                  xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME-$try.xcresult" test-without-building \
+                  -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone || { journey=1; stack_logs "live-$THEME-$try"; }
+                kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+                # The app is reinstalled per run; wipe it so the next run pairs from scratch.
+                xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+                [ "$journey" = 1 ] || break
+              done
+              failed=$((failed | journey))
             done
-            failed=$((failed | journey))
-          done
-          # Offline mode: a prompt sent with the relay down waits, then goes exactly once when it is back.
-          ready
-          xcrun simctl ui "$DEVICE" appearance light
-          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-offline.env
-          . /tmp/stack-offline.env
-          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_RELAY_CTL="$NEKKO_ITEST_RELAY_CTL" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/offline.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testSendWithTheRelayDownAndSeeItDelivered || { failed=1; stack_logs offline; }
-          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
-          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-          # Beyond the chat (IO-22 to IO-29): queue edit, fork, Continue, an automation run, usage.
-          ready
-          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-beyond.env
-          . /tmp/stack-beyond.env
-          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/beyond.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testQueueForkAutomationsAndUsageFromThePhone || failed=1
-          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
-          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-          # Simple and Expert: the model and effort control, the context gauge, the monitor panel and the whole monitor.
-          ready
-          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-modes.env
-          . /tmp/stack-modes.env
-          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/modes.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testSimpleAndExpertModes || { failed=1; stack_logs modes; }
-          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
-          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-          # The plan sheet behind the composer, folded and open (#1474).
-          ready
-          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-plan.env
-          . /tmp/stack-plan.env
-          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/plan.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testPlanSheetBehindTheComposer || { failed=1; stack_logs plan; }
-          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
-          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-          # A typed follow-up, here or in a subagent.
-          ready
-          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-subagent.env
-          . /tmp/stack-subagent.env
-          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/subagent.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testFollowUpInASubagent || { failed=1; stack_logs subagent; }
-          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
-          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-          # One list across a paired computer and this iPhone's own provider (decision 0050).
-          ready
-          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-fleet.env
-          . /tmp/stack-fleet.env
-          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/fleet.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testChatsOnTheComputerAndOnThisIPhoneInOneList || { failed=1; stack_logs fleet; }
-          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
-          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-          # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.
-          ready
-          xcrun simctl ui "$DEVICE" appearance light
-          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-link.env
-          . /tmp/stack-link.env
-          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/deeplink.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testPairFromADeepLink || { failed=1; stack_logs deeplink; }
-          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+          fi
+          if [ "$SHARD" = journeys ]; then
+            # Offline mode: a prompt sent with the relay down waits, then goes exactly once when it is back.
+            ready
+            xcrun simctl ui "$DEVICE" appearance light
+            ../../apps/ios/scripts/itest-stack.sh /tmp/stack-offline.env
+            . /tmp/stack-offline.env
+            TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_RELAY_CTL="$NEKKO_ITEST_RELAY_CTL" \
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/offline.xcresult test-without-building \
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testSendWithTheRelayDownAndSeeItDelivered || { failed=1; stack_logs offline; }
+            kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+            xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+            # Beyond the chat (IO-22 to IO-29): queue edit, fork, Continue, an automation run, usage.
+            ready
+            ../../apps/ios/scripts/itest-stack.sh /tmp/stack-beyond.env
+            . /tmp/stack-beyond.env
+            TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/beyond.xcresult test-without-building \
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testQueueForkAutomationsAndUsageFromThePhone || failed=1
+            kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+            xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+            # Simple and Expert: the model and effort control, the context gauge, the monitor panel and the whole monitor.
+            ready
+            ../../apps/ios/scripts/itest-stack.sh /tmp/stack-modes.env
+            . /tmp/stack-modes.env
+            TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/modes.xcresult test-without-building \
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testSimpleAndExpertModes || { failed=1; stack_logs modes; }
+            kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+            xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+            # The plan sheet behind the composer, folded and open (#1474).
+            ready
+            ../../apps/ios/scripts/itest-stack.sh /tmp/stack-plan.env
+            . /tmp/stack-plan.env
+            TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/plan.xcresult test-without-building \
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testPlanSheetBehindTheComposer || { failed=1; stack_logs plan; }
+            kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+            xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+            # A typed follow-up, here or in a subagent.
+            ready
+            ../../apps/ios/scripts/itest-stack.sh /tmp/stack-subagent.env
+            . /tmp/stack-subagent.env
+            TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/subagent.xcresult test-without-building \
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testFollowUpInASubagent || { failed=1; stack_logs subagent; }
+            kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+            xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+            # One list across a paired computer and this iPhone's own provider (decision 0050).
+            ready
+            ../../apps/ios/scripts/itest-stack.sh /tmp/stack-fleet.env
+            . /tmp/stack-fleet.env
+            TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/fleet.xcresult test-without-building \
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testChatsOnTheComputerAndOnThisIPhoneInOneList || { failed=1; stack_logs fleet; }
+            kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+            xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+            # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.
+            ready
+            xcrun simctl ui "$DEVICE" appearance light
+            ../../apps/ios/scripts/itest-stack.sh /tmp/stack-link.env
+            . /tmp/stack-link.env
+            TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/deeplink.xcresult test-without-building \
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testPairFromADeepLink || { failed=1; stack_logs deeplink; }
+            kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+          fi
           exit $failed
       - name: Export screenshots from the test results
         if: always()
@@ -408,27 +422,26 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: native-ios-evidence
+          name: native-ios-evidence-${{ matrix.shard }}
           path: |
             apps/ios/evidence/shots/**
           if-no-files-found: warn
-      - name: Report the batch to each PR
-        if: always() && inputs.batch
+  report-batch:
+    # A matrix's needs result covers ALL legs, including failed/cancelled legs.
+    # Never post a batch verdict from inside one leg: that could pass partial work.
+    needs: protocol-and-build
+    if: always() && inputs.batch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Report the batch to each PR after every required shard
         env:
           GH_TOKEN: ${{ github.token }}
           BATCH: ${{ inputs.batch }}
-          # A cancel (by hand, or the job's timeout) is not a test failure; it still blocks.
-          STATE: ${{ job.status == 'success' && 'success' || job.status == 'cancelled' && 'error' || 'failure' }}
+          RESULT: ${{ needs.protocol-and-build.result }}
           URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          # Cancelled because a newer batch replaced this one (ios-batch.mjs pushes it first):
-          # that batch, or its compose, already gave these heads their status.
-          if [ "$STATE" = error ] && [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/ci/ios-batch" --jq .object.sha)" != "$GITHUB_SHA" ]; then
-            echo "Superseded by a newer batch on ci/ios-batch: reporting nothing."
-            exit 0
-          fi
-          prs=$(echo "$BATCH" | jq -r '[.[] | "#\(.number)"] | join(", ")')
-          echo "$BATCH" | jq -r '.[].sha' | while read -r sha; do
-            gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state="$STATE" -f context='Native iOS (batch)' \
-              -f target_url="$URL" -f description="Native iOS $( [ "$STATE" = error ] && echo 'cancelled or timed out' || echo "$STATE") on the batch $prs"
-          done
+        run: node scripts/ios-suite-shards.mjs report

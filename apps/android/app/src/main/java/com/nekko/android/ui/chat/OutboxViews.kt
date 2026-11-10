@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,7 +52,7 @@ fun WaitingList(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+            Icon(Icons.Outlined.Schedule, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
             Text(
                 if (items.size == 1) stringResource(R.string.chat_waiting_to_send_one) else stringResource(R.string.chat_waiting_to_send_other, items.size),
                 style = MaterialTheme.typography.labelLarge,
@@ -71,7 +71,7 @@ fun WaitingList(
                     } else {
                         TextButton(onClick = { onEdit(item.id) }, modifier = Modifier.testTag("outbox.edit")) { Text(stringResource(R.string.chat_edit)) }
                         IconButton(onClick = { onDelete(item.id) }, modifier = Modifier.testTag("outbox.delete")) {
-                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_delete_waiting), tint = p.inkSoft)
+                            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.chat_delete_waiting), tint = p.inkSoft)
                         }
                     }
                 }
@@ -90,6 +90,6 @@ fun RefusalNote(reason: String, onDismiss: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(stringResource(R.string.chat_not_sent, reason), style = MaterialTheme.typography.bodySmall, color = p.danger, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
-        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_dismiss), tint = p.inkSoft) }
+        IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.chat_dismiss), tint = p.inkSoft) }
     }
 }

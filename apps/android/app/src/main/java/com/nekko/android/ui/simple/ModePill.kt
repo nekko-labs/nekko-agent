@@ -49,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -135,6 +136,9 @@ class ModePillState {
     /** The lying pill's height, which the content makes room for while it rests at the top. */
     internal var height by mutableIntStateOf(0)
 
+    /** The pill is drawn: it has gauges to show (the mode moved to the menus, #2117). */
+    internal var shown by mutableStateOf(false)
+
     /** On the scrolling content: reading on slides the pill away, scrolling back brings it back. */
     val scroll: NestedScrollConnection = object : NestedScrollConnection {
         override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
@@ -146,7 +150,8 @@ class ModePillState {
     /** The content's top padding: the pill's height plus 8 dp while it rests at the top, else [otherwise]. */
     @Composable
     fun topInset(place: PillPlace, otherwise: androidx.compose.ui.unit.Dp = 0.dp): androidx.compose.ui.unit.Dp {
-        if (!place.atTop) return otherwise
+        // No pill (no gauges to show), no room left for it.
+        if (!shown || !place.atTop) return otherwise
         return with(LocalDensity.current) { height.toDp() }.coerceAtLeast(48.dp) + 8.dp
     }
 }
@@ -160,8 +165,9 @@ fun rememberModePill(atStart: () -> Boolean): ModePillState {
 }
 
 /**
- * The mode pill, floating over a screen's content (it takes no room): the Simple/Expert switch
- * and, when [gauges] show, the minimal monitor. It rests centered under the top bar ([barBottom],
+ * The mode pill, floating over a screen's content (it takes no room): the minimal monitor's
+ * [gauges]. Simple / Detailed is in the menus now ([ModeMenuItems], the iPhone's #1840), so
+ * with no gauges there is no pill. It rests centered under the top bar ([barBottom],
  * root coordinates) or wherever it was moved: a long press lifts it, and let go near a side it
  * docks upright there. It moves between the bar and [floor] (the message box's top, root
  * coordinates; null for the screen's bottom). Tapping the gauges opens it into a card with
@@ -179,6 +185,8 @@ fun ModePill(
     modifier: Modifier = Modifier,
     visible: Boolean = true,
 ) {
+    SideEffect { state.shown = gauges != null }
+    if (gauges == null) return
     val simple = LocalSimple.current
     val place = simple.pill
     val p = Nekko.palette
@@ -339,19 +347,11 @@ fun ModePill(
                             val open = { if (canOpen) state.expanded = true }
                             if (vertical) {
                                 Column(Modifier.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    ModeSwitch(simple.expert, simple.setExpert, vertical = true)
-                                    if (gauges != null) {
-                                        Box(Modifier.padding(vertical = 4.dp).size(width = 24.dp, height = 1.dp).background(p.line))
-                                        gauges(true, open)
-                                    }
+                                    gauges(true, open)
                                 }
                             } else {
                                 Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    ModeSwitch(simple.expert, simple.setExpert)
-                                    if (gauges != null) {
-                                        Box(Modifier.padding(horizontal = 4.dp).size(width = 1.dp, height = 22.dp).background(p.line))
-                                        gauges(false, open)
-                                    }
+                                    gauges(false, open)
                                 }
                             }
                         }

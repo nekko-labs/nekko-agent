@@ -359,7 +359,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Always allow this tool** beside Allow and Deny: it allows this call and stops asking for that one
 > tool in that chat, after your fingerprint, face or screen lock (and your security key or code
 > when the computer asks for one). Other tools keep asking, a new chat starts with none allowed, and
-> the chat never switches to No restrictions. Monitors and notifications still offer Allow and Deny only.
+> the chat never switches to No restrictions. The approval notification of an MCP tool offers it too:
+> after you unlock the phone it opens the chat, and the card does the same, with the same confirmation.
+> If you cancel the confirmation, nothing is allowed. Monitors still offer Allow and Deny only.
 >
 > **Write offline** (iPhone and Android): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
@@ -483,9 +485,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
 >
-> **Dictation** (Android): tap **+ → Dictate**, speak, and tap ■ (or stop
-> at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
-> itself. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
+> **Dictation** (Android): tap **+ → Dictate** and speak as long as you like; tap ■ when you're done.
+> At each pause the words said so far are turned into text and typed into the message box while you
+> keep talking, and ■ adds the last ones. The words are for you to check and send. Say "Nekko, …" for a
+> command instead of words: "Nekko, send", "Nekko, erase that", "Nekko, clear", "Nekko, open the docs
+> chat" (the same commands as on the iPhone and the computer). Nothing is sent unless you say so. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
 > end-to-end encrypted, the audio never reaches anyone else); install and switch it on there under
 > **Settings → Nekko Voice**. When the computer can't, the phone's own speech recognizer is used,
 > which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use

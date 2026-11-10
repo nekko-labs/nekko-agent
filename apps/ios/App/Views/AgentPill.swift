@@ -83,6 +83,10 @@ struct AgentPillLayer: ViewModifier {
     @State private var grab: CGSize = .zero
     @State private var lifted = false
     @State private var swipe: CGFloat = 0
+    /// When a finger last travelled across the pill. The gauges' tap still fires when a
+    /// short swipe ends on the pill, and opening the details would take the pill (and
+    /// its tuck) away before the swipe ends, so a tap this soon after is the swipe's.
+    @State private var swipedAt: Date = .distantPast
 
     static let gap: CGFloat = 8
     /// The room a screen's scrolling content leaves above itself for the pill under the bar.
@@ -151,6 +155,7 @@ struct AgentPillLayer: ViewModifier {
     /// A quick swipe into the pill's edge tucks it away. A held pill is moving, not swiping.
     private var tuck: some Gesture {
         DragGesture(minimumDistance: 16)
+            .onChanged { _ in swipedAt = .now }
             .onEnded { v in
                 if !lifted && prefs.pillPlacement.swipesIn(v.translation, predicted: v.predictedEndTranslation) { setTucked(true) }
             }
@@ -258,7 +263,7 @@ struct AgentPillLayer: ViewModifier {
     }
 
     private func open() {
-        guard monitor != nil else { return }
+        guard monitor != nil, !lifted, Date.now.timeIntervalSince(swipedAt) > 0.4 else { return }
         withAnimation(morph) { expanded = true }
     }
 

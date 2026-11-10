@@ -66,7 +66,7 @@ public enum Transcript {
                 out.append(.user(id: m.id, text: text, at: m.createdAt, images: m.imageCount))
             case "assistant":
                 let reasoning = m.reasoning.flatMap { $0.isEmpty ? nil : $0 }
-                if !m.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(reasoning?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) || (m.turnStats != nil && m.toolCalls.isEmpty) {
+                if m.imageCount > 0 || !m.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(reasoning?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) || (m.turnStats != nil && m.toolCalls.isEmpty) {
                     out.append(.assistant(id: m.id, text: m.content, reasoning: reasoning, streaming: false, interrupted: m.interrupted))
                 }
                 for call in m.toolCalls {
@@ -132,6 +132,8 @@ public enum Transcript {
             // A user stop arrives as an error; it isn't one from the user's side.
             let m = message.lowercased()
             t.error = (m == "stopped" || m == "aborted") ? nil : message
+        case .other(_, "image_status"):
+            t.running = true
         case .sessionMeta, .other:
             break
         }
@@ -319,7 +321,7 @@ public enum ActivityTracker {
         let next: Activity?
         switch e {
         case .approvalRequired, .question: next = .needsYou
-        case .text, .reasoning, .toolCall, .toolResult, .questionResolved: next = .running
+        case .text, .reasoning, .toolCall, .toolResult, .questionResolved, .other(_, "image_status"): next = .running
         case .error: next = .failed
         case .done: next = activity[e.sessionId] == .failed ? .failed : nil
         default: return activity
