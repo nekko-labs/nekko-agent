@@ -986,7 +986,8 @@ private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Uni
                 tint = if (view.isStandard) p.inkSoft else p.accent,
             )
         }
-        DropdownMenu(expanded = open, onDismissRequest = close) {
+        // One width for every page, so the panel does not jump as a row opens its choices.
+        DropdownMenu(expanded = open, onDismissRequest = close, modifier = Modifier.widthIn(min = 220.dp)) {
             /** A row that opens choices: its name, the current value in the soft ink tier, a chevron. */
             @Composable
             fun opens(text: String, value: String?, tag: String, to: ViewPage) = DropdownMenuItem(
