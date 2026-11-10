@@ -76,3 +76,9 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 Android features the iPhone lacks have not been audited yet.
 
 Nothing is recorded as a true OS exclusive yet.
+
+## Quiet transcript follow-up
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Planned | [#2453](https://github.com/nekko-labs/nekko-agent/issues/2453) |
