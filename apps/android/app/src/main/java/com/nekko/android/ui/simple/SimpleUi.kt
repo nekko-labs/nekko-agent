@@ -27,6 +27,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -171,44 +173,23 @@ fun <T> TextSegments(options: List<T>, selected: T, onSelect: (T) -> Unit, label
 const val MODE_SWITCH_TAG = "simple.mode"
 
 /**
- * Simple (a chat bubble) or Expert (angle brackets), in the mode pill. [vertical] stacks the two
- * (the pill docked on a side), each a 48 dp touch target with the selected one on an accent disc.
+ * Simple / Detailed as the first section of a menu (the chats list's view menu, a chat's ⋮), the
+ * iPhone's `ModeMenuPicker` (#1840): a check on the current mode. The mode is the phone's, so it
+ * works on a saved copy too. [onPicked] closes the menu.
  */
 @Composable
-fun ModeSwitch(expert: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, vertical: Boolean = false) {
+fun ModeMenuItems(onPicked: () -> Unit) {
+    val simple = LocalSimple.current
     val p = Nekko.palette
-    val expertWords = stringResource(R.string.simple_switch_expert)
-    val simpleWords = stringResource(R.string.simple_switch_simple)
-    if (vertical) {
-        Column(modifier.testTag(MODE_SWITCH_TAG).selectableGroup(), horizontalAlignment = Alignment.CenterHorizontally) {
-            listOf(false, true).forEach { o ->
-                val on = o == expert
-                Box(
-                    Modifier
-                        .size(48.dp)
-                        .drawBehind { if (on) drawCircle(p.accent, 15.dp.toPx()) }
-                        .selectable(on, interactionSource = null, indication = null, role = Role.RadioButton) { if (!on) onChange(o) }
-                        .semantics { contentDescription = if (o) expertWords else simpleWords },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(if (o) Icons.Filled.Code else Icons.Filled.ChatBubbleOutline, contentDescription = null, tint = if (on) p.accentInk else p.inkSoft, modifier = Modifier.size(16.dp))
-                }
-            }
-        }
-        return
-    }
-    Box(modifier.testTag(MODE_SWITCH_TAG)) {
-        Segments(
-            options = listOf(false, true), selected = expert, onSelect = onChange, height = 26.dp,
-            describe = { if (it) expertWords else simpleWords },
-        ) { o, on ->
-            Icon(
-                if (o) Icons.Filled.Code else Icons.Filled.ChatBubbleOutline,
-                contentDescription = null,
-                tint = if (on) p.accentInk else p.inkSoft,
-                modifier = Modifier.size(16.dp),
-            )
-        }
+    listOf(false to R.string.mode_simple, true to R.string.mode_expert).forEach { (expert, label) ->
+        val on = simple.expert == expert
+        androidx.compose.material3.DropdownMenuItem(
+            text = { Text(stringResource(label)) },
+            leadingIcon = { Icon(if (expert) Icons.Filled.Code else Icons.Filled.ChatBubbleOutline, contentDescription = null, tint = if (on) p.accent else p.inkSoft) },
+            trailingIcon = { Icon(Icons.Filled.Check, contentDescription = null, tint = if (on) p.accent else androidx.compose.ui.graphics.Color.Transparent) },
+            onClick = { if (!on) simple.setExpert(expert); onPicked() },
+            modifier = Modifier.semantics { selected = on }.testTag(if (expert) "menu.mode.detailed" else "menu.mode.simple"),
+        )
     }
 }
 

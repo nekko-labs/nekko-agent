@@ -317,6 +317,9 @@ class ChatViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.summaries.firstOrNull { it.id == sessionId }?.pinned == true)
 
+    /** Pull up past the newest message (or the mascot's Refresh): read the chat again from the computer. */
+    suspend fun refresh() = controller.reload()
+
     /** The chat's ⋮ → Rename, Pin, Complete and Chat mode: each changes the chat on the computer, then re-reads it. */
     suspend fun rename(title: String) {
         repo.renameChat(sessionId, title)
