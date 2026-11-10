@@ -50,6 +50,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.CircularProgressIndicator
@@ -101,8 +105,10 @@ import kotlinx.coroutines.launch
  * queues the prompt on the computer and an empty box turns Send into Stop.
  * Typing `/` offers the computer's skills; a picked skill shows as a chip and
  * the box becomes its input. Photos show as thumbnails above the box.
- * Nothing goes below the box: a [footer] row is its last row, inside it.
+ * Nothing goes below the box: a [footer] row is its last row, inside it. Only the
+ * formatting toolbar does, while the box is in use: it rides on the keyboard (#2450).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun Composer(
     running: Boolean,
@@ -297,8 +303,6 @@ fun Composer(
                 if (attach != null && (photos.isNotEmpty() || addingPhotos)) {
                     Box(Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp)) { PhotoStrip(photos, attach.state.adding, attach.onRemove) }
                 }
-                // The toolbar sits inside the card, above the text, while the box is in use.
-                if (focused && toolbarOn) MarkdownToolbar(draft, text, setText)
                 PastedChip(draft, text, setText)
                 val fieldValue = draft.valueFor(text)
                 val messageLabel = stringResource(R.string.chat_message)
@@ -412,6 +416,17 @@ fun Composer(
                     },
                 ))
                 footer?.invoke()
+            }
+        }
+        // On the keyboard (#2450): the composer's last row, so the chat's IME padding puts it on the
+        // keyboard's top edge and it comes and goes with the keyboard. With a hardware keyboard (no IME)
+        // it stays at the bottom of the box while the box is focused.
+        val config = LocalConfiguration.current
+        val hardwareKeyboard = config.keyboard != Configuration.KEYBOARD_NOKEYS && config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
+        if (focused && toolbarOn && (WindowInsets.isImeVisible || hardwareKeyboard)) {
+            HorizontalDivider(color = p.line)
+            Box(Modifier.fillMaxWidth().testTag("composer.keyboardBar").background(p.surface).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                MarkdownToolbar(draft, text, setText)
             }
         }
     }

@@ -20,7 +20,7 @@ A destination shared by desktop and iPhone, inspired by the supplied tabbed refe
 - iOS: Customize entry, Experience/Connectors/Skills tabs, native segmented mode selector, theme and visible-control/monitor preferences. Existing phone-owned connectors are unchanged. Skills lists the active computer's runnable skills without claiming local install support.
 - iOS introduction includes the same rendered Remotion composition, with playback controls and Reduce Motion support.
 - iOS model picker: provider limits read from existing `limits:get`, displayed using the Usage screen's percentage/reset/status bar. Load on open, refresh on pull and every 30 seconds while presented. Null responses do not become unlimited or 0% claims. Switching computer clears the readings.
-- iOS message composer: model/effort/computer/folder chips lose capsule fills, retaining hit areas. Keyboard dismissal moves outside the formatting toolbar to a trailing 44pt control in a transparent inset above the software keyboard, on new, computer-hosted and phone-hosted chats.
+- iOS message composer: model/effort/computer/folder chips lose capsule fills, retaining hit areas. Keyboard dismissal moves outside the formatting toolbar to a trailing 44pt control in a transparent inset above the software keyboard, on new, computer-hosted and phone-hosted chats. Since #2450 the formatting toolbar rides on the keyboard and carries Hide keyboard at its trailing edge; the floating control stands aside while a message box has the keyboard.
 
 ## Verification and limitations
 

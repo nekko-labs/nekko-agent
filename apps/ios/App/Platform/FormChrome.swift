@@ -16,6 +16,8 @@ extension View {
 }
 
 /// A separate trailing control above the software keyboard, outside composer actions.
+/// The message box's own keyboard bar carries Hide keyboard (#2450), so this one
+/// stands aside while a composer has the keyboard.
 private struct FloatingKeyboardDismiss: ViewModifier {
     @Environment(\.palette) private var palette
     @State private var visible = false
@@ -23,7 +25,7 @@ private struct FloatingKeyboardDismiss: ViewModifier {
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if visible {
+                if visible && ComposerKeyboard.shared.editing == nil {
                     HStack {
                         Spacer()
                         Button(action: hideKeyboard) {
