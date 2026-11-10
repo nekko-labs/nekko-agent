@@ -124,6 +124,16 @@ class WinterThemeTest {
             compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
             settle()
             val resumed = compose.onNodeWithTag("winter.static").captureToImage().asAndroidBitmap()
+            shot("winter-resumed")
+            if (!first.sameAs(resumed)) {
+                var changed = 0
+                if (first.width == resumed.width && first.height == resumed.height) {
+                    for (y in 0 until first.height) for (x in 0 until first.width) {
+                        if (first.getPixel(x, y) != resumed.getPixel(x, y)) changed++
+                    }
+                }
+                println("Winter resume pixels: first=${first.width}x${first.height}, resumed=${resumed.width}x${resumed.height}, changed=$changed")
+            }
             assertTrue("Reduced-motion layout survives stop/start", first.sameAs(resumed))
         } finally {
             scale(original)
