@@ -46,7 +46,8 @@ data class LicenseGroup(val license: String, val components: List<String>, @RawR
  */
 val OpenSourceLicenses: List<LicenseGroup> = listOf(
     LicenseGroup("MIT License", listOf("Nekko Agent (this app), © 2026 Nekko Labs"), R.raw.license_nekko_mit),
-    LicenseGroup("MIT License (Gentleface)", listOf("Gentleface 0.3.0 permission and pull request icons, © 2026 andaja"), R.raw.license_gentleface_mit),
+    LicenseGroup("MIT License (Gentleface)", listOf("Gentleface 0.3.0 and 0.6.0 permission, pull request and theme icons, © 2026 andaja"), R.raw.license_gentleface_mit),
+    LicenseGroup("MIT License (IconOven)", listOf("IconOven Stroke wizard hat (Spooky's theme icon), © 2026 Appic Marketing LLC"), R.raw.license_iconoven_mit),
     LicenseGroup(
         "MIT License (Lobe Icons)", listOf("Lobe Icons provider marks, © 2023 LobeHub"), R.raw.license_lobe_icons_mit,
         note = "Provider names and marks belong to their respective owners.",
