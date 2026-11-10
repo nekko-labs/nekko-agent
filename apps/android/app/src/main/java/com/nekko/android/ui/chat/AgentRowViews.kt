@@ -323,7 +323,7 @@ fun WatchWakeRow(wake: AgentRows.Wake, content: String, at: Long?) {
             onClick = { open = !open },
             description = stringResource(R.string.chat_watch_triggered_description, wake.trigger, wake.detail),
             state = if (open) stringResource(R.string.chat_wake_text_shown) else stringResource(R.string.chat_wake_text_hidden),
-            mark = { Mark(Icons.Outlined.Bolt, p.accent) },
+            mark = { Mark(Icons.Outlined.Bolt, p.inkSoft) },
             trailing = {
                 if (at != null && at > 0) {
                     Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at)), style = MaterialTheme.typography.labelSmall, color = p.inkFaint)
