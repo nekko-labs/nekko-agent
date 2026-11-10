@@ -27,6 +27,8 @@ struct ReconnectingNotice: View {
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // Keep child labels and identifiers distinct from the parent notice identifier.
+        .accessibilityElement(children: .contain)
         .foregroundStyle(palette.inkSoft)
         .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -24,6 +24,11 @@ final class StreamingStabilityTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["You are at the latest message."].waitForExistence(timeout: 15))
         Thread.sleep(forTimeInterval: 8)
         let metric = app.descendants(matching: .any)["stream.maxBackward"].firstMatch
+        let trace = XCTAttachment(string: metric.label)
+        trace.name = "stream-offset-and-content-size-trace"
+        trace.lifetime = .keepAlways
+        add(trace)
+        print("STREAM_GEOMETRY_TRACE \(metric.label)")
         let regression = Double(metric.value as? String ?? "")
         XCTAssertNotNil(regression, "the fixture collected offset samples: \(metric.value ?? "nil")")
         if !baseline, let regression { XCTAssertLessThanOrEqual(regression, 1, "append-only streaming must not jump backward") }
@@ -52,6 +57,13 @@ final class StreamingStabilityTests: XCTestCase {
         Thread.sleep(forTimeInterval: 1.2)
         if !baseline {
             let title = app.descendants(matching: .any)["reconnect.title"].firstMatch
+            if !title.exists {
+                let hierarchy = XCTAttachment(string: app.debugDescription)
+                hierarchy.name = "reconnect-accessibility-hierarchy"
+                hierarchy.lifetime = .keepAlways
+                add(hierarchy)
+                print("RECONNECT_ACCESSIBILITY \(app.debugDescription)")
+            }
             XCTAssertTrue(title.exists)
             XCTAssertEqual(title.label, "Gomi is reconnecting...")
             XCTAssertTrue(app.staticTexts["Draft your message now and it will send when Gomi reconnects"].exists)
