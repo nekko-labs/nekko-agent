@@ -121,6 +121,7 @@ jobs:
             apps/ios/App/Views/SecurityEvidenceFixture.swift
             apps/ios/App/Views/ReplyVoicesFixture.swift
             apps/ios/Protocol/Tests/NekkoKitTests/StarAskTests.swift
+            scripts/ios-permission-return-fixture.mjs
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -140,6 +141,13 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+          # TCC legitimately kills both permission-return apps. Keep the DEBUG
+          # route/UI configuration across the argument-free relaunch, identically
+          # on both revisions. Never overlay permissions or authorization values.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/PermissionReturnTimingTests.swift" ]]; then
+            node .evidence-harness/scripts/ios-permission-return-fixture.mjs .
+            shasum -a 256 apps/ios/App/AppModel.swift apps/ios/App/NekkoApp.swift >> apps/ios/evidence/revisions.txt
+          fi
           # The keyboard baseline contains the independently diagnosed recursive
           # StarAskCountTests helper (#2531). Share its test-only repair on both
           # revisions, leaving production keyboard behavior untouched.

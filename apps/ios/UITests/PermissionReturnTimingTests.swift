@@ -1,6 +1,6 @@
 import XCTest
 
-/// Strict, common before/after evidence harness. No product behavior is overlaid.
+/// Strict common evidence harness. Only DEBUG fixture routing is overlaid.
 @MainActor
 final class PermissionReturnTimingTests: XCTestCase {
     func testSettingsReturnReportsAllowedWithinTenSeconds() throws {
@@ -8,7 +8,7 @@ final class PermissionReturnTimingTests: XCTestCase {
                           "Strict return timing belongs to disposable matched evidence simulators")
         let app = XCUIApplication()
         app.resetAuthorizationStatus(for: .microphone)
-        app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-uiTestReset", "YES", "-theme", "light", "-uiTestNotificationStep"]
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-uiTestReset", "YES", "-theme", "light", "-uiTestNotificationStep", "-uiTestPermissionReturnEvidence"]
         app.launch()
         let microphone = app.buttons["permissions.action.microphone"]
         let row = app.descendants(matching: .any)["permissions.row.microphone"].firstMatch
@@ -73,28 +73,48 @@ final class PermissionReturnTimingTests: XCTestCase {
             return
         }
         XCTAssertEqual(toggle.value as? String, "0")
-        // Settings exposes the entire label row as a Switch on iOS 26.
-        // Tap its trailing control, not the row's inert label center.
-        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        let enabled = expectation(for: NSPredicate(format: "value == %@", "1"), evaluatedWith: toggle)
-        wait(for: [enabled], timeout: 5)
-        // The same public XCTest return action runs on both app revisions. Never
-        // select launch/activate from the observed process state or force a grant.
-        let resumeState = app.state
-        let microphoneStatus = app.descendants(matching: .any)["permissions.status.microphone"].firstMatch
-        let restored = expectation(for: NSPredicate(format: "exists == true AND label == %@", "Allowed"), evaluatedWith: microphoneStatus)
+        // One clock includes the real Settings toggle, its TCC-driven process
+        // exit, activation, AX lookup and predicate setup. Neither observed process
+        // teardown nor the fixture's cold-launch setup is hidden off-clock.
         let returnBudget: TimeInterval = 10
         let returnStarted = ProcessInfo.processInfo.systemUptime
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        let enabled = expectation(for: NSPredicate(format: "value == %@", "1"), evaluatedWith: toggle)
+        let toggleRemaining = max(0, returnBudget - (ProcessInfo.processInfo.systemUptime - returnStarted))
+        guard XCTWaiter.wait(for: [enabled], timeout: toggleRemaining) == .completed else {
+            XCTFail("The real Settings change did not finish in the total Allowed budget")
+            return
+        }
+        let exitRemaining = returnBudget - (ProcessInfo.processInfo.systemUptime - returnStarted)
+        guard exitRemaining > 0 else {
+            XCTFail("Settings toggle exhausted the total Allowed deadline")
+            return
+        }
+        // Both retained legs were killed by TCC. Require its observed stopped
+        // state, inside the budget, before the same single activation on both.
+        guard app.wait(for: .notRunning, timeout: exitRemaining) else {
+            XCTFail("TCC exit was not observed in the total Allowed budget; no activation attempted")
+            return
+        }
+        let exitElapsed = ProcessInfo.processInfo.systemUptime - returnStarted
+        guard exitElapsed < returnBudget else {
+            XCTFail("TCC exit exhausted the total Allowed deadline")
+            return
+        }
+        let resumeState = app.state
+        // No conditional launch(), second activation or fabricated grant.
         app.activate()
         let activationElapsed = ProcessInfo.processInfo.systemUptime - returnStarted
-        let remaining = max(0, returnBudget - activationElapsed)
+        let microphoneStatus = app.descendants(matching: .any)["permissions.status.microphone"].firstMatch
+        let restored = expectation(for: NSPredicate(format: "exists == true AND label == %@", "Allowed"), evaluatedWith: microphoneStatus)
+        let remaining = max(0, returnBudget - (ProcessInfo.processInfo.systemUptime - returnStarted))
         let result = XCTWaiter.wait(for: [restored], timeout: remaining)
         let allowedElapsed = ProcessInfo.processInfo.systemUptime - returnStarted
         // Assertion time includes activation, automation-session setup and the AX
         // predicate. Expensive evidence capture happens only AFTER this boundary.
         XCTAssertEqual(result, .completed, "The returned fixture must report Allowed in the single return budget")
         XCTAssertLessThanOrEqual(allowedElapsed, returnBudget, "Settings return through Allowed, including activation, must finish within ten seconds")
-        let process = XCTAttachment(string: "beforeSettingsReturn=\(resumeState.rawValue); returnAction=activate; activationSeconds=\(activationElapsed); allowedSeconds=\(allowedElapsed); budgetSeconds=\(returnBudget); waiter=\(result.rawValue); afterSettingsReturn=\(app.state.rawValue)")
+        let process = XCTAttachment(string: "beforeSettingsReturn=\(resumeState.rawValue); returnPath=tcc-cold-activation; toggleAndExitSeconds=\(exitElapsed); returnAction=activate; activationBoundarySeconds=\(activationElapsed); allowedSeconds=\(allowedElapsed); budgetSeconds=\(returnBudget); waiter=\(result.rawValue); afterSettingsReturn=\(app.state.rawValue)")
         process.name = "permissions-settings-return-timing"
         process.lifetime = .keepAlways
         add(process)

@@ -46,13 +46,17 @@ frame inside the scroll viewport and above the pinned Continue footer, not merel
 XCTest isHittable; target geometry and a pre-request screenshot are retained. The
 first native baseline run compiled but tapped below the visible microphone control
 and failed before denial, so it supplied no Settings-return measurement. This
-visibility repair still requires native verification. Both perform a real microphone
+visibility repair succeeded in the repaired comparison, but neither native leg met acceptance. Both perform a real microphone
 denial and public Settings switch change from 0 to 1. Both then call `app.activate()`
 without a process-state-dependent launch branch. A monotonic ten-second budget
-starts before activation and includes activation/session setup and the first AX
+starts before the Settings toggle and includes toggle/exit observation, activation/session setup and the first AX
 predicate that requires both the status element and Allowed. Screenshots, full AX
 and timing attachments are collected only after the timed assertion. The manual
 mode-evidence workflow retains a recording for this test on each disposable phone.
+
+Retained system archives now explicitly attribute both initial app deaths to TCC (`OS_REASON_TCC`: microphone service changed). BEFORE obtains a new PID; AFTER's open request precedes RunningBoard's termination report and still targets the old PID, with no observed replacement spawn. This supports a teardown/activation race hypothesis, not proof of an app defect or symmetric successful cold launches.
+
+The next common evidence harness preserves the DEBUG route marker and the initial app-owned fixture UI preferences (App lock off and light theme) across argument-free platform launch, never OS authorization or credentials, and requires the real TCC-driven `.notRunning` state before exactly one unconditional activation. Its single monotonic **total Allowed <=10s** clock starts before the Settings toggle: toggle, exit observation, activation and AX/predicate setup all count. It never conditionally relaunches or waits for death outside the clock. The overlay is identical on both pinned original revisions and is not included in ordinary builds. This tighter cold-return experiment is **unverified** until matched native recordings, process paths and total times are inspected; do not compare it directly to old timing starts or present it as warm-resume evidence.
 
 Source regressions cannot certify native timing. A completed comparison must be
 inspected for exact app/harness/device/runtime identities, actual return actions,
