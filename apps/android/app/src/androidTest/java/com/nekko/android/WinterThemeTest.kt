@@ -77,7 +77,9 @@ class WinterThemeTest {
             assertTrue(actions.single().action())
         }
         assertEquals(1, refreshes)
-        Thread.sleep(1_400)
+        // Greeting delay runs on Compose's test scheduler, not wall-clock sleep.
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
         mascot.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,
             compose.activity.getString(R.string.chats_idle)))
         for (id in listOf("autumn", "dark", "winter")) {
