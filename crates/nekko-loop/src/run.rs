@@ -803,7 +803,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                 nudged = true;
                 loops.reset();
                 loop_extra = vec![user_nudge(&loop_nudge(&reason))];
-            } else if steps > 0 && steps % CHECKPOINT_EVERY == 0 && !turn.calls.is_empty() {
+            } else if steps > 0 && steps.is_multiple_of(CHECKPOINT_EVERY) && !turn.calls.is_empty() {
                 loop_extra = vec![user_nudge(&checkpoint_note(steps))];
             }
         };
