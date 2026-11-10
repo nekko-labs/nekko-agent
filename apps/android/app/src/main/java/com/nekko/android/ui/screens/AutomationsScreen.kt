@@ -54,14 +54,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.beyond.AutomationsController
-import com.nekko.android.beyond.UsageController
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.AutomationTask
 import com.nekko.protocol.AutomationWorkflow
-import com.nekko.protocol.ProviderAccounts
 import com.nekko.protocol.ProviderLimits
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.CancellationException
@@ -247,56 +245,127 @@ private fun AutomationRow(
 
 /** What the computer's providers have used, and each plan's limits (AN-29, the iPhone's `UsageView`). Read only. */
 @Composable
-fun UsageScreen(repo: ComputersRepository, onBack: () -> Unit) {
+fun UsageScreen(
+    repo: ComputersRepository,
+    onBack: () -> Unit,
+    /** Where each computer's last numbers are kept for when it is offline. */
+    phonePrefs: com.nekko.android.data.PhonePrefs? = null,
+    /** This phone's own chats, whose usage is a place of its own; null leaves it out. */
+    phone: com.nekko.android.phone.PhoneChats? = null,
+) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
-    val u = remember { UsageController(repo.caller) { repo.state.value.providers } }
+    // Every paired computer, in the app's order, then this phone (#2114, the iPhone's #1773).
+    val u = remember(repo, phone) {
+        com.nekko.android.beyond.UsageByPlaceController(
+            computers = { repo.state.value.computers.map { it.id to it.name } },
+            callerFor = repo::callerFor,
+            phone = { phone?.state?.value?.takeIf { it.ready }?.usage },
+            prefs = phonePrefs,
+        )
+    }
     val s by u.state.collectAsStateWithLifecycle()
-    LaunchedEffect(u) { u.load() }
+    val state by repo.state.collectAsStateWithLifecycle()
+    LaunchedEffect(u) {
+        runCatching { phone?.load() }
+        u.load()
+    }
+    Page(stringResource(R.string.settings_usage), onBack, onRefresh = { scope.launch { u.load() } }) { pad ->
+        UsagePlacesList(s.places, s.loaded, s.loading, iconOf = { id -> state.computers.firstOrNull { it.id == id }?.icon }, pad = pad)
+    }
+}
+
+/**
+ * Usage by place (#2114): All places when there is more than one, then each computer (its icon,
+ * Offline in the heading when it is), then this phone. In each: subscriptions with their limits,
+ * then API use, then recent days, folded.
+ */
+@Composable
+internal fun UsagePlacesList(
+    places: List<com.nekko.protocol.UsagePlace>,
+    loaded: Boolean,
+    loading: Boolean,
+    iconOf: (String) -> String?,
+    pad: PaddingValues = PaddingValues(16.dp),
+) {
+    val p = Nekko.palette
     val money = remember { NumberFormat.getCurrencyInstance(Locale.US).apply { currency = Currency.getInstance("USD") } }
     val compact = { n: Long -> compactNumber(n) }
-    val allTime = stringResource(R.string.settings_all_time)
-    val tokensLabel = stringResource(R.string.settings_tokens)
-    val spendLabel = stringResource(R.string.settings_estimated_spend)
-    val recentDays = stringResource(R.string.settings_recent_days)
-    val byModel = stringResource(R.string.settings_by_model)
-    val noUsage = stringResource(R.string.settings_no_usage_recorded)
     val res = LocalResources.current
-    Page(stringResource(R.string.settings_usage), onBack, onRefresh = { scope.launch { u.load() } }) { pad ->
+    var openDays by remember { mutableStateOf(setOf<String>()) }
+    run {
         LazyColumn(Modifier.fillMaxSize().testTag("usage.view"), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            s.error?.let { item { Notice(it, Tone.DANGER) } }
-            items(s.limited, key = { "l:${it.first.id}" }) { (provider, limits) ->
-                Label(listOfNotNull(ProviderAccounts.shortName(provider), limits.planType?.replaceFirstChar { it.uppercase() }).joinToString(" · "))
+            if (places.size > 1) item(key = "all") {
+                val t = com.nekko.protocol.UsageTotals.of(places)
+                Label(stringResource(R.string.usage_all_places))
                 Card {
-                    if (limits.windows.isEmpty()) Text(stringResource(R.string.settings_no_limits), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
-                    limits.windows.forEach { LimitBar(it) }
+                    Line(stringResource(R.string.settings_tokens), compact(t.tokens))
+                    Line(stringResource(R.string.usage_subscription_tokens), compact(t.subscriptionTokens))
+                    Line(stringResource(R.string.usage_api_tokens), compact(t.apiTokens))
+                    Line(stringResource(R.string.usage_api_spend), money.format(t.apiCost))
+                    if (t.offline > 0) Text(stringResource(R.string.usage_offline_counted, t.offline), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
                 }
             }
-            val sum = s.summary
-            if (sum != null) {
-                item {
-                    Label(allTime)
-                    Card {
-                        Line(tokensLabel, compact(sum.totalTokens))
-                        Line(spendLabel, money.format(sum.totalCost))
+            items(places, key = { "place:${it.id}" }) { place ->
+                val phonePlace = place.kind == com.nekko.protocol.UsagePlace.Kind.PHONE
+                val name = if (phonePlace) stringResource(R.string.usage_this_phone) else place.name
+                Row(Modifier.padding(top = 8.dp).testTag("usage.place.${place.id}"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (!phonePlace) com.nekko.android.ui.components.ComputerTileIcon(iconOf(place.id), 16.dp, p.inkSoft)
+                    Label(if (place.online) name else stringResource(R.string.usage_offline_heading, name))
+                }
+                Card {
+                    if (!place.online) Text(
+                        when {
+                            place.error != null -> stringResource(R.string.usage_error_last, place.error!!)
+                            place.summary != null || place.plans.isNotEmpty() -> stringResource(R.string.usage_offline_last)
+                            else -> stringResource(R.string.usage_offline_never)
+                        },
+                        style = MaterialTheme.typography.bodySmall, color = p.inkSoft,
+                    )
+                    // The place's total first, as the one-computer screen had it.
+                    place.summary?.let { Line(stringResource(R.string.settings_tokens), compact(it.totalTokens)) }
+                    // Subscriptions first: each plan with its limits, then the models that bill to a plan.
+                    if (place.plans.isNotEmpty() || place.subscriptionModels.isNotEmpty()) {
+                        Sub(stringResource(R.string.usage_subscriptions))
+                        place.plans.forEach { plan ->
+                            Text(plan.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = p.ink)
+                            if (plan.limits.windows.isEmpty()) Text(stringResource(R.string.settings_no_limits), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+                            plan.limits.windows.forEach { LimitBar(it) }
+                        }
+                        place.subscriptionModels.forEach { m -> Line(m.model, res.getString(R.string.settings_plan_tokens, compact(m.tokens))) }
                     }
-                }
-                if (sum.days.isNotEmpty()) item {
-                    Label(recentDays)
-                    Card { sum.days.reversed().forEach { d -> Line(d.date, "${compact(d.tokens)} · ${money.format(d.cost)}") } }
-                }
-                if (sum.models.isNotEmpty()) item {
-                    Label(byModel)
-                    Card {
-                        sum.models.forEach { m -> Line(m.model, if (m.subscription) res.getString(R.string.settings_plan_tokens, compact(m.tokens)) else "${compact(m.tokens)} · ${money.format(m.cost)}") }
+                    // Then pay-per-token use: by provider on this phone, tokens only; with cost on a computer.
+                    val api = place.apiGroups
+                    if (api.isNotEmpty()) {
+                        Sub(stringResource(R.string.usage_api))
+                        api.forEach { g ->
+                            g.label?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = p.ink) }
+                            g.models.forEach { m -> Line(m.model, if (place.priced) "${compact(m.tokens)} · ${money.format(m.cost)}" else compact(m.tokens)) }
+                        }
+                        place.apiCost?.let { Line(stringResource(R.string.usage_api_spend), money.format(it)) }
+                        if (!place.priced) Text(stringResource(R.string.usage_tokens_only), style = MaterialTheme.typography.labelSmall, color = p.inkFaint)
                     }
+                    val days = place.summary?.days.orEmpty()
+                    if (days.isNotEmpty()) {
+                        val open = place.id in openDays
+                        TextButton(onClick = { openDays = if (open) openDays - place.id else openDays + place.id }, modifier = Modifier.testTag("usage.days.${place.id}")) {
+                            Text(stringResource(R.string.settings_recent_days) + if (open) " ▴" else " ▾")
+                        }
+                        if (open) days.reversed().forEach { d -> Line(d.date, if (place.priced) "${compact(d.tokens)} · ${money.format(d.cost)}" else compact(d.tokens)) }
+                    }
+                    if (place.online && place.isEmpty) Text(stringResource(R.string.settings_no_usage_recorded), color = p.inkSoft)
                 }
-            } else if (s.loaded && s.error == null) {
-                item { Text(noUsage, color = p.inkSoft) }
             }
-            if (!s.loaded) item { CircularProgressIndicator(color = p.accent) }
+            if (loaded && places.isEmpty()) item { Text(stringResource(R.string.settings_no_usage_recorded), color = p.inkSoft) }
+            if (loading && !loaded) item { CircularProgressIndicator(color = p.accent) }
         }
     }
+}
+
+/** A part of a place: Subscriptions, API. */
+@Composable
+private fun Sub(text: String) {
+    Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = Nekko.palette.inkFaint, modifier = Modifier.padding(top = 4.dp).semantics { heading() })
 }
 
 @Composable

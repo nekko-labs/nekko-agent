@@ -24,7 +24,7 @@ User intent: the app is read for hours a day, so its small print has to be legib
 
 ## Action targets (#2079)
 
-Shared CTA buttons and composer/question actions reserve at least 44 × 44 CSS pixels in layout, keeping existing glyph sizes. Compact padding overrides do not shrink targets. The OS caption strip is an explicit compact-chrome exception. See [question pages and action targets](../chat/question-pages-and-action-targets.md) for coverage and pending visual/native verification.
+Shared CTA buttons and composer/question actions reserve at least 44 × 44 CSS pixels in layout, keeping existing glyph sizes. Compact padding overrides do not shrink targets. The OS caption strip is an explicit compact-chrome exception. Since 2026-11-10 shared `.btn` buttons are 28px tall with a mouse or trackpad and keep the 44px target under a finger only; composer and question actions are unchanged. See [question pages and action targets](../chat/question-pages-and-action-targets.md) for coverage and pending visual/native verification.
 
 ## Status
 
