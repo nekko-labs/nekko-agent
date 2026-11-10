@@ -44,3 +44,12 @@ test('reconnect punctuation changes opacity, never its text or width', () => {
   assert.match(notice, /accessibilityLabel\("\\\(name\) is reconnecting\.\.\."\)/);
   assert.match(notice, /Draft your message now and it will send when \\\(name\) reconnects/);
 });
+
+test('measured growth targets the content edge, not a lazy sentinel', () => {
+  const follow = read('ios/App/Views/TranscriptFollow.swift');
+  assert.match(follow, /ScrollPosition\(edge: \.bottom\)/);
+  assert.match(follow, /position\.scrollTo\(edge: \.bottom\)/);
+  assert.doesNotMatch(follow, /proxy\.scrollTo|follow\(\)/);
+  const tests = read('ios/UITests/StreamingStabilityTests.swift');
+  assert.match(tests, /XCTAssertEqual\(title\.label, "Gomi is reconnecting\.\.\."\)/);
+});

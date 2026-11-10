@@ -4,21 +4,20 @@ import SwiftUI
 /// Lazy row visibility is not reader intent: a growing row can evict the end sentinel.
 struct TranscriptFollow: ViewModifier {
     @Binding var atBottom: Bool
-    let follow: () -> Void
     let readerScrolled: () -> Void
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content.modifier(Measured(atBottom: $atBottom, follow: follow, readerScrolled: readerScrolled))
+            content.modifier(Measured(atBottom: $atBottom, readerScrolled: readerScrolled))
         } else { content }
     }
 
     @available(iOS 18.0, *)
     private struct Measured: ViewModifier {
         @Binding var atBottom: Bool
-        let follow: () -> Void
         let readerScrolled: () -> Void
         @State private var readerMoving = false
+        @State private var position = ScrollPosition(edge: .bottom)
 
         private struct Size: Equatable {
             let height: CGFloat
@@ -27,6 +26,7 @@ struct TranscriptFollow: ViewModifier {
 
         func body(content: Content) -> some View {
             content
+                .scrollPosition($position)
                 .onScrollPhaseChange { _, phase in
                     readerMoving = phase == .tracking || phase == .interacting || phase == .decelerating
                     if readerMoving { readerScrolled() }
@@ -41,7 +41,9 @@ struct TranscriptFollow: ViewModifier {
                     } else if atBottom && new.height != old.height {
                         var transaction = Transaction(animation: nil)
                         transaction.disablesAnimations = true
-                        withTransaction(transaction) { follow() }
+                        // Use the measured scroll-content edge, not a lazy sentinel whose
+                        // estimated position can move backward as rows are realised.
+                        withTransaction(transaction) { position.scrollTo(edge: .bottom) }
                     } else if new.distance <= 24 {
                         atBottom = true
                     }

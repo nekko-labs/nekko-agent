@@ -22,6 +22,7 @@ struct ReconnectingNotice: View {
             .font(.footnote.weight(.medium))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(name) is reconnecting...")
+            .accessibilityIdentifier("reconnect.title")
             Text("Draft your message now and it will send when \(name) reconnects")
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)

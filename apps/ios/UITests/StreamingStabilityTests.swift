@@ -51,7 +51,9 @@ final class StreamingStabilityTests: XCTestCase {
         attach(app, "reconnect-notice")
         Thread.sleep(forTimeInterval: 1.2)
         if !baseline {
-            XCTAssertTrue(app.staticTexts["Gomi is reconnecting..."].exists)
+            let title = app.descendants(matching: .any)["reconnect.title"].firstMatch
+            XCTAssertTrue(title.exists)
+            XCTAssertEqual(title.label, "Gomi is reconnecting...")
             XCTAssertTrue(app.staticTexts["Draft your message now and it will send when Gomi reconnects"].exists)
             XCTAssertEqual(note.frame.width, before.width, accuracy: 0.5)
             XCTAssertEqual(note.frame.height, before.height, accuracy: 0.5)

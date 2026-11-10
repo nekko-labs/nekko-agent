@@ -227,7 +227,6 @@ struct ChatView: View {
             .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
              .modifier(TranscriptFollow(atBottom: $atBottom,
-                 follow: { proxy.scrollTo("bottom", anchor: .bottom) },
                  readerScrolled: { settling?.cancel() }))
             .contentMargins(.top, pillRoom, for: .scrollContent)
             .hidesPillOnScroll($pillHidden)
