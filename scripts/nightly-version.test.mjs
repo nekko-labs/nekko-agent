@@ -14,8 +14,37 @@ test('release tags parse in both forms; suffixes and other prefixes are not rele
   assert.deepEqual(parseReleaseTag('v0.8.2'), { major: 0, minor: 8, patch: 2 });
   for (const t of ['v1.0.0-rc.1', 'decision-models-v1', 'nightly/ios/v0.9.1', '0.9.0', 'v0.9.0.1']) assert.equal(parseReleaseTag(t), null, t);
   assert.equal(canonicalReleaseTag('v0.9'), 'v0.9.0');
-  assert.equal(canonicalReleaseTag('v1.2.0'), 'v1.2.0');
+  assert.equal(canonicalReleaseTag('v0.9.5'), 'v0.9.5', 'an old one-digit tag can still be rebuilt');
   assert.throws(() => canonicalReleaseTag('v1.2.0-beta'));
+});
+
+test('from 0.10 a release is x.xx.xxxx: the short tag expands to .1000, off-shape tags are refused', () => {
+  assert.equal(canonicalReleaseTag('v0.10'), 'v0.10.1000');
+  assert.equal(canonicalReleaseTag('v0.10.1000'), 'v0.10.1000');
+  assert.equal(canonicalReleaseTag('v0.10.1004'), 'v0.10.1004', 'a promoted nightly');
+  assert.equal(canonicalReleaseTag('v1.10'), 'v1.10.1000');
+  assert.throws(() => canonicalReleaseTag('v0.10.0'), /release it as v0\.10\.1000/);
+  assert.throws(() => canonicalReleaseTag('v1.0'), /new MAJOR starts at MINOR 10 \(v1\.10\)/);
+  assert.throws(() => canonicalReleaseTag('v1.2.0'), /not x\.xx\.xxxx/);
+  assert.throws(() => canonicalReleaseTag('v0.100'), /start the next MAJOR at v1\.10/);
+});
+
+test('a fixed-width line counts every platform from 1001, above the .1000 release', () => {
+  const tags = [...today, 'v0.9.5', 'nightly/desktop/v0.9.8', 'nightly/ios/v0.9.8', 'nightly/android/v0.9.4', 'v0.10.1000'];
+  for (const platform of ['desktop', 'ios', 'android']) {
+    const plan = planVersion({ tags, platform });
+    assert.equal(plan.version, '0.10.1001', platform);
+    assert.equal(plan.code, 101001, platform);
+  }
+  // Above every 0.9 build already shipped (0.9.8 is 90008).
+  assert.ok(planVersion({ tags, platform: 'ios' }).code > storeCode({ major: 0, minor: 9, build: 8 }));
+  // The short tag alone (before version-release.yml adds .1000) counts the same.
+  assert.equal(planVersion({ tags: [...today, 'v0.10'], platform: 'android' }).version, '0.10.1001');
+  // Counters and promoted nightlies count on as before.
+  const later = [...tags, 'nightly/ios/v0.10.1001', 'nightly/desktop/v0.10.1003', 'v0.10.1004'];
+  assert.equal(planVersion({ tags: later, platform: 'ios' }).version, '0.10.1002');
+  assert.equal(planVersion({ tags: later, platform: 'desktop' }).version, '0.10.1005');
+  assert.equal(planVersion({ tags: later, platform: 'android' }).version, '0.10.1001');
 });
 
 test('the line is the newest MAJOR.MINOR, compared numerically, ignoring prereleases', () => {
@@ -52,7 +81,7 @@ test('a manual MAJOR.MINOR tag resets every counter', () => {
 });
 
 test('store codes increase across every build and line, and refuse to overflow', () => {
-  const seq = [[0, 8, 1], [0, 8, 9999], [0, 9, 0], [0, 9, 1], [0, 999, 9999], [1, 0, 0], [209, 999, 9999]];
+  const seq = [[0, 8, 1], [0, 8, 9999], [0, 9, 0], [0, 9, 1], [0, 9, 8], [0, 10, 1000], [0, 10, 1001], [0, 99, 9999], [1, 10, 1000], [209, 99, 9999]];
   const codes = seq.map(([major, minor, build]) => storeCode({ major, minor, build }));
   for (let i = 1; i < codes.length; i++) assert.ok(codes[i] > codes[i - 1], `${seq[i]} after ${seq[i - 1]}`);
   assert.equal(storeCode({ major: 0, minor: 8, build: 1 }), 80001);
@@ -60,7 +89,7 @@ test('store codes increase across every build and line, and refuse to overflow',
   assert.ok(codes[0] > 179);
   assert.ok(codes.at(-1) <= 2_100_000_000);
   assert.throws(() => storeCode({ major: 0, minor: 8, build: 10000 }), /tag a new MAJOR.MINOR/);
-  assert.throws(() => storeCode({ major: 0, minor: 1000, build: 0 }), /bump MAJOR/);
+  assert.throws(() => storeCode({ major: 0, minor: 100, build: 1000 }), /bump MAJOR/);
   assert.throws(() => storeCode({ major: 210, minor: 0, build: 1 }), /over/);
 });
 

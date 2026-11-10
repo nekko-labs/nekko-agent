@@ -349,10 +349,20 @@ struct ThemePicker: View {
         NavigationLink {
             ThemeList(selection: $selection)
         } label: {
-            LabeledContent { Text(Self.name(selection)) } label: { Text("Theme") }
+            LabeledContent {
+                HStack(spacing: 8) {
+                    if let icon = Self.icon(selection) { ThemeGlyph(icon: icon, preset: ThemePreset.find(selection)) }
+                    Text(Self.name(selection))
+                }
+            } label: { Text("Theme") }
                 .foregroundStyle(palette.ink, palette.inkSoft)
         }
         .accessibilityIdentifier("settings.theme")
+    }
+
+    /// The row's icon, as the desktop's picker draws the theme (ThemeIcons).
+    static func icon(_ id: String) -> String? {
+        id == Prefs.matchComputer ? ThemeIcons.computer : ThemeIcons.of(ThemePreset.find(id))
     }
 
     static func name(_ id: String) -> String {
@@ -402,7 +412,11 @@ private struct ThemeList: View {
             selection = id
             dismiss()
         } label: {
-            HStack {
+            HStack(spacing: 12) {
+                Group {
+                    if let icon = ThemePicker.icon(id) { ThemeGlyph(icon: icon, preset: ThemePreset.find(id)) }
+                }
+                .frame(width: 22, height: 22)
                 Text(ThemePicker.name(id)).foregroundStyle(palette.ink)
                 Spacer()
                 if selection == id { Image(systemName: "checkmark").foregroundStyle(palette.accent) }

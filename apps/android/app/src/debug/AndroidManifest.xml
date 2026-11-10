@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <activity android:name=".WinterEvidenceActivity" android:exported="false" />
         <activity android:name=".PurposeEvidenceActivity" android:exported="true" />
         <activity android:name=".ReplyVoicesEvidenceActivity" android:exported="true" />
         <activity android:name=".ModelTabsEvidenceActivity" android:exported="true" />

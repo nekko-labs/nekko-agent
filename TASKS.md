@@ -238,3 +238,10 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 - ~~**Capacitor over React Native for mobile**~~ (superseded 2026-10-03): it was chosen to wrap the shared renderer. Once the phone became its own client (PF21) and gained on-device models (PF22), the reuse argument was gone and llama.cpp needed a real native binding, so the app moved to **Expo + llama.rn** (the stack PocketPal ships on both stores). The full app in a phone browser over the relay remains for people who want every surface.
 - **Tags over hierarchical folders** for conversation organization (lighter, less sidebar restructuring).
 - **Hand-rolled MCP & push** (JSON-RPC over stdio; APNs/FCM JWTs via `node:crypto`), dependency-free, in keeping with "no native modules" and a lean tree.
+
+## Native Winter decorations (#2479, PR #2480)
+
+- [x] Implement native eight-flake Winter snow, one cat flake, and Winter/Spooky toolbar mascot hats on iOS and Android. Follow selected or computer-matched presets; no touch/accessibility interception.
+- [x] Android app/instrumentation builds and 592 unit tests pass. Add baseline-compatible native evidence journeys.
+- [ ] Inspect and publish matching phone/fold screenshots and snow motion from native evidence run 42818265509; iOS native suite run 42818785164. Keep the PR draft until required native checks and visual evidence pass.
+- [ ] Winter launcher icons remain separate follow-up #2411; not part of this PR.

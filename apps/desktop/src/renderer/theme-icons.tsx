@@ -13,6 +13,9 @@
  *   wears, SeasonalHat.tsx). Gentleface has neither.
  *
  * `{id}` is replaced per instance and variant so masks never collide.
+ *
+ * The phones draw the line variants: scripts/phone-marks.mjs reads the constants
+ * below (keep each on one line) and the Gentleface paths in ART.
  */
 import React, { useId } from 'react';
 
@@ -45,8 +48,9 @@ const BEANIE_RIBS = 'M5 11.5V12.5M8 11.5V12.5M11 11.5V12.5';
 // cut where the front one overlaps it, leaving a 1px gap.
 const BERRY_FRONT = '<circle cx="6.5" cy="10" r="4.5"/>';
 const BERRY_BACK = '<circle cx="10.75" cy="5.75" r="3.75"/>';
-const BERRY_CROWNS = 'M5.2 8.7L5.95 9.3L6.5 8.3L7.05 9.3L7.8 8.7L7.55 10.3H5.45Z' +
-  'M9.8 4.7L10.35 5.1L10.75 4.4L11.15 5.1L11.7 4.7L11.5 5.85H10Z';
+/** The back berry's outline where it shows: its circle, stopping 1px short of the front one. */
+const BERRY_BACK_ARC = 'M7.199 4.545A3.75 3.75 0 1 1 11.955 9.301';
+const BERRY_CROWNS = 'M5.2 8.7L5.95 9.3L6.5 8.3L7.05 9.3L7.8 8.7L7.55 10.3H5.45ZM9.8 4.7L10.35 5.1L10.75 4.4L11.15 5.1L11.7 4.7L11.5 5.85H10Z';
 /** Hides the back berry behind the front one. */
 const BERRY_BEHIND = '<mask id="{id}b" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16"><rect width="16" height="16" fill="#fff"/><circle cx="6.5" cy="10" r="5.5" fill="#000"/></mask>';
 
@@ -86,7 +90,7 @@ const ART: Record<ThemeIconName, Art> = {
       `<g mask="url(#{id})" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><path d="${BEANIE_CROWN}Z"/>${BEANIE_BRIM}</g>`,
   },
   blueberry: {
-    line: BERRY_BEHIND + `<g ${STROKE}><g mask="url(#{id}b)">${BERRY_BACK}</g>${BERRY_FRONT}<path d="${BERRY_CROWNS}"/></g>`,
+    line: `<g ${STROKE}><path d="${BERRY_BACK_ARC}"/>${BERRY_FRONT}<path d="${BERRY_CROWNS}"/></g>`,
     solid: BERRY_BEHIND + cut(`<path d="${BERRY_CROWNS}" fill="#000"/>`) +
       `<g mask="url(#{id})" fill="currentColor" stroke="currentColor" stroke-width="1"><g mask="url(#{id}b)">${BERRY_BACK}</g>${BERRY_FRONT}</g>`,
   },

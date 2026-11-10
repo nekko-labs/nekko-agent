@@ -4,6 +4,8 @@
 //   - provider marks (Lobe Icons, public/providers/*.svg): iOS ProviderMarks + Android provider_*.xml
 //   - PR status glyphs (Gentleface line, gentleface-icons.tsx): iOS PrIcons + Android pr_*.xml
 //   - connector marks (connectorIcons.tsx): iOS ConnectorMarks (Android has no Connectors page yet)
+//   - theme icons (theme-icons.tsx line art, plus phone-theme-icons.json for the rows only
+//     the phones list): iOS ThemeIcons + Android theme_*.xml
 // The desktop stays the only place the drawings live. Run it after changing one:
 //   node scripts/phone-marks.mjs
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -23,6 +25,10 @@ export const CONNECTORS = {
   jira: 'brand', asana: 'brand', clickup: 'brand', floop: 'brand',
   bitbucket: 'bitbucket',
 };
+/** Theme icons from the desktop's picker (theme-icons.tsx). */
+export const DESKTOP_THEME_ICONS = ['cat', 'galaxy', 'terminal', 'mountain', 'flame', 'tree-evergreen', 'blueberry', 'wizard-hat', 'beanie'];
+/** Theme icons only the phones list (phone-theme-icons.json): mode rows, extra presets and families. */
+export const PHONE_THEME_ICONS = Object.keys(JSON.parse(readFileSync(new URL('./phone-theme-icons.json', import.meta.url), 'utf8')).icons);
 // Not on the desktop yet: Simple Icons' bitbucket path (CC0), in Atlassian blue.
 const BITBUCKET = 'M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.891zM14.52 15.53H9.522L8.17 8.466h7.561z';
 
@@ -48,7 +54,15 @@ function imageset(out, folder, name, svg, template) {
 }
 
 function drawable(out, name, viewport, paths, comment) {
-  const body = paths.map((p) => [
+  const body = paths.map((p) => p.stroke ? [
+    '    <path',
+    '        android:fillColor="#00000000"',
+    '        android:strokeColor="#FF000000"',
+    `        android:strokeWidth="${p.stroke}"`,
+    '        android:strokeLineCap="round"',
+    '        android:strokeLineJoin="round"',
+    `        android:pathData="${p.d}" />`,
+  ].join('\n') : [
     '    <path',
     '        android:fillColor="#FF000000"',
     ...(p.opacity < 1 ? [`        android:fillAlpha="${p.opacity}"`] : []),
@@ -66,6 +80,58 @@ ${body}
 </vector>
 `;
 }
+
+/** A <rect> or <circle> as path data, for assets that keep to plain paths. */
+function shapePath(el, scale = 1) {
+  const a = (k) => Math.round(Number(new RegExp(`\\s${k}="([^"]+)"`).exec(el)?.[1] ?? 0) * scale * 1000) / 1000;
+  if (el.startsWith('<circle')) {
+    const [cx, cy, r] = [a('cx'), a('cy'), a('r')];
+    return `M${cx - r} ${cy}A${r} ${r} 0 1 0 ${cx + r} ${cy}A${r} ${r} 0 1 0 ${cx - r} ${cy}Z`;
+  }
+  const [x, y, w, h, r] = [a('x'), a('y'), a('width'), a('height'), a('rx')];
+  return `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
+}
+
+/** Scales every number in path data without arcs (IconOven's 24 grid onto our 16). */
+function scalePath(d, k) {
+  if (/[aA]/.test(d)) throw new Error('scalePath: arcs are not handled');
+  // Compact data runs numbers together (".56-1.06.88.1"); keep a space where one number follows another.
+  let out = '';
+  for (const [, cmd, n] of d.matchAll(/([a-zA-Z])|(-?(?:\d*\.\d+|\d+))/g)) {
+    if (cmd) { out += cmd; continue; }
+    const v = String(Math.round(Number(n) * k * 1000) / 1000);
+    out += /[\d.]$/.test(out) && !v.startsWith('-') ? ` ${v}` : v;
+  }
+  return out;
+}
+
+/**
+ * Each theme icon's line art as paths: filled outlines (Gentleface) or 1px round
+ * strokes on the 16 grid (the wizard hat, beanie and blueberry).
+ */
+function themeIconPaths() {
+  const ti = read('apps/desktop/src/renderer/theme-icons.tsx');
+  const konst = (name) => new RegExp(`\\nconst ${name} = '([^']+)';`).exec(ti)[1];
+  const path = (d, scale = 1) => (konst(d).startsWith('<') ? shapePath(konst(d), scale) : scale === 1 ? konst(d) : scalePath(konst(d), scale));
+  const icons = {};
+  for (const name of DESKTOP_THEME_ICONS.slice(0, 6)) {
+    const line = new RegExp(`\\n  "${name}": \\{\\r?\\n    line: "(.*?)",\\r?\\n`).exec(ti)[1].replace(/\\"/g, '"');
+    icons[name] = [{ d: /d="([^"]+)"/.exec(line)[1], opacity: 1 }];
+  }
+  const k = 2 / 3;
+  icons['wizard-hat'] = ['WIZ_CONE', 'WIZ_BAND', 'WIZ_STAR'].map((n) => ({ d: path(n, k), stroke: 1 }));
+  icons.beanie = ['BEANIE_CROWN', 'BEANIE_BRIM', 'BEANIE_FLAKE', 'BEANIE_RIBS'].map((n) => ({ d: path(n), stroke: 1 }));
+  icons.blueberry = ['BERRY_BACK_ARC', 'BERRY_FRONT', 'BERRY_CROWNS'].map((n) => ({ d: path(n), stroke: 1 }));
+  const extra = JSON.parse(read('scripts/phone-theme-icons.json')).icons;
+  for (const name of PHONE_THEME_ICONS) icons[name] = [{ d: extra[name], opacity: 1 }];
+  return icons;
+}
+
+const THEME_ICON_SOURCE = {
+  'wizard-hat': 'IconOven Stroke wizard-hat (MIT, res/raw/license_iconoven_mit.txt), scaled from its 24 grid',
+  beanie: "Nekko Agent's own knitted cat-ear beanie",
+  blueberry: "Nekko Agent's own blueberries",
+};
 
 /** Every generated file, by its path from the repository root. */
 export function generate() {
@@ -120,6 +186,15 @@ export function generate() {
       const fill = how === 'ink' ? '#000000' : b.color;
       imageset(out, 'ConnectorMarks', name, square('0 0 24 24', `<path${b.evenOdd ? ' fill-rule="evenodd"' : ''} fill="${fill}" d="${b.d}"/>`), how === 'ink');
     }
+  }
+  out[`${iosAssets}/ThemeIcons/Contents.json`] = FOLDER;
+  for (const [icon, paths] of Object.entries(themeIconPaths())) {
+    const svgPath = (p) => p.stroke
+      ? `<path fill="none" stroke="#000000" stroke-width="${p.stroke}" stroke-linecap="round" stroke-linejoin="round" d="${p.d}"/>`
+      : `<path fill="#000000" d="${p.d}"/>`;
+    imageset(out, 'ThemeIcons', `theme-${icon}`, `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">${paths.map(svgPath).join('')}</svg>`, true);
+    drawable(out, `theme_${icon.replace(/-/g, '_')}`, 16, paths,
+      `${THEME_ICON_SOURCE[icon] ?? `Gentleface 0.6.0 ${icon} (line-round, 16px), MIT`}, as the desktop's theme picker (theme-icons.tsx). Tinted by the theme. Generated by scripts/phone-marks.mjs.`);
   }
   return out;
 }
