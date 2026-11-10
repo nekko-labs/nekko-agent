@@ -1,6 +1,7 @@
 package com.nekko.android.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -10,6 +11,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
@@ -185,7 +187,13 @@ fun NekkoTheme(dark: Boolean = isSystemInDarkTheme(), accent: Long? = null, pres
             errorContainer = p.dangerSoft, onErrorContainer = p.danger,
         )
     }
-    CompositionLocalProvider(LocalPalette provides p) {
-        MaterialTheme(colorScheme = scheme, typography = typography, content = content)
+    val decoration = SeasonalDecoration.from(preset)
+    CompositionLocalProvider(LocalPalette provides p, LocalSeasonalDecoration provides decoration) {
+        MaterialTheme(colorScheme = scheme, typography = typography) {
+            Box {
+                content()
+                if (decoration == SeasonalDecoration.WINTER) WinterSnow(Modifier.matchParentSize())
+            }
+        }
     }
 }
