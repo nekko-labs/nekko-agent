@@ -51,7 +51,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo 'Expected a full existing release tag.' >&2; exit 1; }
+          [[ "$RELEASE_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]] || { echo 'Expected a full existing release tag.' >&2; exit 1; }
+          # x.xx.xxxx from the 0.10 line on (docs/decisions/0080,
+          # canonicalReleaseTag in scripts/nightly-version.mjs). Older 0.x tags
+          # still pass so they can be rebuilt.
+          major=$((10#${BASH_REMATCH[1]})); minor=$((10#${BASH_REMATCH[2]})); patch=$((10#${BASH_REMATCH[3]}))
+          if (( minor > 99 )) || (( minor >= 10 && patch < 1000 )) || (( minor < 10 && major > 0 )); then
+            echo "$RELEASE_TAG is not x.xx.xxxx: release the line as vMAJOR.MINOR.1000 with MINOR 10-99 (for example v0.10.1000), or push the short vMAJOR.MINOR." >&2
+            exit 1
+          fi
       - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ env.RELEASE_TAG }}
