@@ -343,45 +343,41 @@ struct NewChatView: View {
                 // Where it runs, whenever there is a choice (2026-11-04): it starts on the
                 // computer the list was showing, or the one used last, and every paired
                 // computer is already connected, so picking another is instant.
-                if isLocal || pickedComputer || store.computers.count + (phone.isSetUp ? 1 : 0) > 1 {
-                    Menu {
-                        Picker("Run on", selection: Binding(get: { autoShown ? Self.autoTag : onPhone ? PhoneProviders.computerId : store.activeId }, set: { if let id = $0 { place(id) } })) {
-                            if autoOffered {
-                                Label {
-                                    Text("Automatic")
-                                    Text("A free computer")
-                                } icon: { Image(systemName: "sparkles") }
-                                .tag(Optional(Self.autoTag))
-                            }
-                            ForEach(store.computers) { c in
-                                Label {
-                                    Text(c.name)
-                                    Text(stateName(store.state(of: c.id)))
-                                } icon: {
-                                    if let icon = c.icon { Image("computer-\(icon)") } else { Image(systemName: cloud.machine(forComputer: c.id) == nil ? "desktopcomputer" : "cloud") }
-                                }
-                                .tag(Optional(c.id))
-                            }
-                            if phone.isSetUp {
-                                Label {
-                                    Text(ChatPlace.phoneName)
-                                    Text("Its own models, no tools")
-                                } icon: { Image(systemName: "iphone") }
-                                .tag(Optional(PhoneProviders.computerId))
-                            }
+                Menu {
+                    Picker("Run on", selection: Binding(get: { autoShown ? Self.autoTag : onPhone ? PhoneProviders.computerId : store.activeId }, set: { if let id = $0 { place(id) } })) {
+                        if autoOffered {
+                            Label {
+                                Text("Automatic")
+                                Text("A free computer")
+                            } icon: { Image(systemName: "sparkles") }
+                            .tag(Optional(Self.autoTag))
                         }
-                    } label: {
-                        if onPhone {
-                            chip(ChatPlace.phoneName, icon: "iphone")
-                        } else if autoShown {
-                            chip(String(localized: "Auto · \(store.active?.name ?? String(localized: "Computer"))"), icon: "sparkles")
-                        } else {
-                            chip(store.active?.name ?? String(localized: "Computer"), icon: "desktopcomputer", computerIcon: store.active?.icon)
+                        ForEach(store.computers) { c in
+                            Label {
+                                Text(c.name)
+                                Text(stateName(store.state(of: c.id)))
+                            } icon: {
+                                if let icon = c.icon { Image("computer-\(icon)") } else { Image(systemName: cloud.machine(forComputer: c.id) == nil ? "desktopcomputer" : "cloud") }
+                            }
+                            .tag(Optional(c.id))
                         }
+                        Label {
+                            Text(ChatPlace.phoneName)
+                            Text("Its own models, no tools")
+                        } icon: { Image(systemName: "iphone") }
+                        .tag(Optional(PhoneProviders.computerId))
                     }
-                    .accessibilityHint("Where the chat runs. Choosing another computer shows its models and folders; a local model runs on that computer’s own hardware.")
-                    .accessibilityIdentifier("newChat.computer")
+                } label: {
+                    if onPhone {
+                        chip(ChatPlace.phoneName, icon: "iphone")
+                    } else if autoShown {
+                        chip(String(localized: "Auto · \(store.active?.name ?? String(localized: "Computer"))"), icon: "sparkles")
+                    } else {
+                        chip(store.active?.name ?? String(localized: "Computer"), icon: "desktopcomputer", computerIcon: store.active?.icon)
+                    }
                 }
+                .accessibilityHint("Where the chat runs. Choosing another computer shows its models and folders; a local model runs on that computer’s own hardware.")
+                .accessibilityIdentifier("newChat.computer")
                 if !onPhone {
                     Menu {
                         Picker("Folder", selection: Binding(get: { folder }, set: { value in

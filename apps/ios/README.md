@@ -16,6 +16,10 @@ implemented, planned and unverified capabilities, security boundaries and device
 verification limitations, see the [native iOS specification](../../spec/phone/native-ios-app.md).
 Removing Expo does not claim full native parity or complete outstanding device tests.
 
+## Direct cloud text chats (no computer)
+
+Use **Settings → Models on this iPhone → Add a provider**, or choose **This iPhone** in New chat’s Run on menu and add a provider from its model picker. Bring your own provider API key; subscriptions are not API credentials. Direct chats have no tools, photos or sync. See the [setup and troubleshooting guide](docs/direct-cloud-chat.md).
+
 ## Build and verification
 
 Use macOS with Xcode, the iOS SDK and XcodeGen. See `project.yml`, `scripts/`,
