@@ -371,6 +371,8 @@ data class SessionSummary(
     val contextWindow: Long? = null,
     val chatType: String? = null,
     val imageParams: ImageChatParams? = null,
+    /** Prompts sent in the chat; null when the computer doesn't say (an older one). The first-chat intro reads it. */
+    val exchangeCount: Long? = null,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -400,6 +402,7 @@ data class SessionSummary(
                 imageParams = ImageChatParams.from(o["imageParams"]),
                 prUrls = o["prUrls"].arr()?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList(),
                 transcriptTokens = o.long("transcriptTokens")?.takeIf { it > 0 },
+                exchangeCount = o.long("exchangeCount")?.takeIf { it >= 0 },
                 contextUsed = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
                 contextWindow = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )

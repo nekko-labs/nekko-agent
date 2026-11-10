@@ -70,7 +70,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Customize page: view, this phone's tone, skills | Missing; Simple/Detailed is in the pill | [#2426](https://github.com/nekko-labs/nekko-agent/issues/2426) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
-| "Send your first prompt" intro | Not built; the iPhone's shows on the first new chat | [#2234](https://github.com/nekko-labs/nekko-agent/issues/2234) |
 
 Android features the iPhone lacks have not been audited yet.
 

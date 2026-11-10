@@ -40,7 +40,20 @@ Someone opening their very first chat gets a short, skippable explanation of how
 - **When it opens.** Once, as a sheet over New chat, when it has not been seen, the chat is for a computer (a chat that runs on the iPhone has no photos or folders), the computer's chat list has been read, and no chat (on any paired computer or on the iPhone) has an exchange. A chat whose count the computer does not send counts as used, so people who already chatted never see it. There is no "tips off" setting on the phone to respect.
 - **Closing.** **Skip** (top left, every step but the last), **Get started**, or swiping the sheet down; any of them sets `firstPromptIntroSeen` on the iPhone.
 - **The videos** are MP4s in the app (`first-prompt-<step>-<light|dark>.mp4`, about 520 KB together), drawn in Remotion (`apps/desktop/scripts/first-prompt-intro-render/`) and rendered by `node apps/desktop/scripts/render-first-prompt-intro.mjs`, so the demos must be re-rendered and committed when they change. They are muted, loop, have no controls and are hidden from VoiceOver (the words under them say the same). With Reduce Motion each holds one still frame.
-- **Android** has no intro yet ([#2234](https://github.com/nekko-labs/nekko-agent/issues/2234)).
+- **Android**: see below.
+
+## Android
+
+`[Implemented 2026-11-10 (#2234); the rule is JVM-tested; a device test on an API 37 emulator opens it over New chat, walks Next, Back and Get started, closes it with Skip in dark, checks it never opens twice and never for someone who already chatted; not yet seen on a real first pairing or a physical phone]`
+
+- **Same three steps, drawn on Android's own screens.** Android's New chat is a form (model, effort, folder chips, **Start on <computer>**) and the first prompt is written in the chat that opens, so the demos follow that order: the chat's composer (formatting bar, **+**, the round Send, the model and permission row) and New chat's folder chips. Neither screen has a peeking Nekko, so the Android demos draw none.
+  1. **Start with a question**: the box is tapped and "Summarize the sales notes" is typed. Body: the iPhone's.
+  2. **Add photos and a folder**: on New chat **Sales** is picked and **Start on Mac** tapped; in the chat **+** opens Dictate / Image from files / Take photo, and a photo lands in the box. Body: the iPhone's.
+  3. **Tap Send, and Nekko gets to work**: Send glows and is tapped, the message rises, Nekko thinks, a reply appears. Body: the iPhone's. The title says Send, not Start (Davide's decision on #2234): on Android, Start only opens the chat, and Send is what sets Nekko working.
+- **When it opens.** The iPhone's rule (`FirstPromptIntro.shouldShow`): once, as a bottom sheet over New chat, when `firstPromptIntroSeen` is not set on this phone, the computer's own list has been read since it became active (`summariesLoaded`, not the phone's saved copy) and no chat in it has an exchange. A chat whose `exchangeCount` the computer does not send counts as used. Android now reads `exchangeCount` from `sessions:summaries`.
+- **Closing.** **Skip** (every step but the last), **Get started**, swiping the sheet down or Back; any of them sets `firstPromptIntroSeen`.
+- **The videos** are MP4s in `res/raw` (`first_prompt_<step>_<light|dark>.mp4`, about 420 KB together), drawn in Remotion (`AndroidDemos.tsx`) and rendered by `node apps/desktop/scripts/render-first-prompt-intro.mjs --android`. They follow the app's theme (light or dark), are muted, loop, have no controls and are hidden from TalkBack (the words under them say the same). With **Remove animations** on, each holds one still frame.
+- **Words** in all seven app languages (`intro_strings.xml`); the iPhone's intro is still English-only, so these translations are new and not yet reviewed by a native speaker.
 
 ## Boundaries
 
