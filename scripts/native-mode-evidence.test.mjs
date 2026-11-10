@@ -3,6 +3,25 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 const workflow = readFileSync(new URL('../.github/workflows/native-mode-evidence.yml', import.meta.url), 'utf8');
+const androidScript = readFileSync(new URL('../apps/android/scripts/mode-evidence.sh', import.meta.url), 'utf8');
+const voiceFixture = readFileSync(new URL('../apps/android/app/src/androidTest/java/com/nekko/android/VoiceIntegrationEvidenceTest.kt', import.meta.url), 'utf8');
+
+test('Android voice baseline assertions and media use the runner revision argument', () => {
+  assert.match(androidScript, /-e nekkoRevision "\$revision"/);
+  assert.match(voiceFixture, /getString\("nekkoRevision"\) == "before"/);
+  assert.match(voiceFixture, /getString\("nekkoRevision", "after"\)/);
+  assert.doesNotMatch(voiceFixture, /nekkoModeRevision/);
+  assert.match(androidScript, /\$out\/\$revision-phone-voice-motion\.mp4/);
+  assert.match(androidScript, /\[\[ "\$revision" == "before" \|\| "\$revision" == "after" \]\]/);
+});
+
+test('Android voice fixture receives IME insets using the production window contract', () => {
+  const setup = voiceFixture.indexOf('compose.activity.enableEdgeToEdge()');
+  assert.ok(setup >= 0 && setup < voiceFixture.indexOf('compose.setContent'));
+  assert.match(voiceFixture, /setSoftInputMode\(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE\)/);
+  assert.match(voiceFixture, /WindowInsetsCompat.Type.ime\(\)/);
+  assert.match(voiceFixture, /Espresso.closeSoftKeyboard\(\)/);
+});
 
 test('native evidence exposes optional runtime pin for dispatch and reusable callers', () => {
   assert.equal((workflow.match(/^      ios_runtime:$/gm) ?? []).length, 2);

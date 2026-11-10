@@ -27,6 +27,7 @@ data class SavedChatList(val savedAt: Long, val summaries: List<SessionSummary>,
                 s.archivedAt?.let { put("archivedAt", it) }
                 s.order?.let { put("order", JsonPrimitive(it)) }
                 if (s.pinned) put("pinned", true)
+                s.chatType?.let { put("chatType", it) }
             }
         }))
         put("folders", buildJsonArray {

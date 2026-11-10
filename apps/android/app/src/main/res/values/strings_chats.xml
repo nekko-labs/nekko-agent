@@ -19,6 +19,7 @@
     <string name="chats_banner_online">%1$s is online</string>
     <string name="chats_banner_offline">%1$s is offline. Open Nekko Agent on it.</string>
     <string name="chats_banner_connecting">Connecting to %1$s…</string>
+    <string name="chats_banner_host_not_found">Can’t find %1$s, the address this phone was paired with. On %2$s, change how phones connect in Settings → Remote access, then pair again.</string>
     <string name="chats_reconnect">Reconnect</string>
     <string name="chats_pair_again">Pair again</string>
     <string name="chats_manage_computers">Manage computers</string>

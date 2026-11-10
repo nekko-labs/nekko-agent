@@ -88,6 +88,7 @@ On the desktop, the Remote access card has two matching controls:
 ## Where it works
 
 - **Desktop app**: security keys over USB, NFC or Bluetooth; Touch ID on a Mac; Windows Hello. Linux: keys only.
+  - A Touch ID passkey is kept in that Mac's Secure Enclave, so it stays on that Mac and does not sync through iCloud Keychain, and it needs a Mac that has one (Apple silicon, or an Intel Mac with a T2 chip). It also needs the app you downloaded from us: a copy you built yourself is not signed for it. Where Touch ID cannot be offered, *Add passkey on this computer* says so and you can use a security key instead.
 - **Local Web UI**: the same, at `http://localhost`. If you reach it through a reverse proxy on another host name, step-up needs `https`, and the page says so.
 - **iPhone**: security keys over NFC, Lightning or USB-C, and passkeys.
 - **Android**: security keys over NFC or USB-C, and passkeys.

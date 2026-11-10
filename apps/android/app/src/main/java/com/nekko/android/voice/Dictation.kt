@@ -96,6 +96,12 @@ object Dictation {
             // The name is in no recognizer's vocabulary: they write what they hear (Neco, Necco, Neko).
             .replace(Regex("""\bne[ck][ck]?o\b""", RegexOption.IGNORE_CASE), "Nekko")
 
+    /** "1:07" for tap mode's recording bar, which has no cap. */
+    fun elapsed(samples: Int): String {
+        val s = samples / Wav.SAMPLE_RATE
+        return "%d:%02d".format(s / 60, s % 60)
+    }
+
     /** "0:07 / 0:30" for the recording bar. */
     fun clock(samples: Int): String {
         val s = samples / Wav.SAMPLE_RATE

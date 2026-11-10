@@ -98,7 +98,7 @@ export function ModelDock() {
         {/* Collapsed, still say whether anything runs on the CPU: it is the one
             fact that explains a slow reply without opening the group. */}
         {!open && rows.some((r) => r.resident.loadedOn && r.resident.loadedOn !== 'gpu') && (
-          <span className="shrink-0 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
+          <span className="shrink-0 text-2xs" style={{ color: 'var(--warning)' }}>
             part on CPU
           </span>
         )}
@@ -249,7 +249,7 @@ function DockRow({
       >
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full"
-          style={{ background: split ? 'var(--warning, #d1a054)' : 'var(--success)' }}
+          style={{ background: split ? 'var(--warning)' : 'var(--success)' }}
         />
         <span className="min-w-0 flex-1 truncate font-medium text-ink-soft" title={model.path}>
           {model.name}
@@ -257,7 +257,7 @@ function DockRow({
         {resident.loadedOn && (
           <span
             className="shrink-0 text-2xs tabular-nums"
-            style={split ? { color: 'var(--warning, #d1a054)' } : undefined}
+            style={split ? { color: 'var(--warning)' } : undefined}
             title={placementTitle(resident)}
           >
             {placementLabel(resident)}

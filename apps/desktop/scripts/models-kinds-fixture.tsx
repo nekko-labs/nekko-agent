@@ -3,7 +3,7 @@
 // picture picks, and a catalog of the usual chat starters. Never contacts a host.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource-variable/inter-tight';
+import '@fontsource-variable/geist';
 import '../src/renderer/styles.css';
 import fixture from '../src/renderer/components/engine/recommendations.fixture.json';
 

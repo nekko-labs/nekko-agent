@@ -12,11 +12,21 @@ struct LiveCardView: View {
     var computerName = ""
     var stale = false
 
-    static let background = Color(red: 28/255, green: 28/255, blue: 30/255)
+    /// The card is always dark, whatever the phone's appearance: the Nekko plum
+    /// ground, the app icon's tile and the launch screen's colour.
+    static let background = BrandColor.plum
+    /// The app's coloured ground (`AppBackdrop` in dark): the accent washed in
+    /// from the top. Drawn over `background` on the Lock Screen and in the
+    /// Settings preview; the Dynamic Island stays black.
+    static var wash: LinearGradient {
+        LinearGradient(colors: [accent.opacity(0.16), accent.opacity(0.04)], startPoint: .top, endPoint: .bottom)
+    }
     /// Plum, not the retired lavender `#8B7DFF` (spec/brand/colour-palette.md).
     static let accent = BrandColor.accentOnDark
     private static let onAccent = Color(red: 0x0C/255, green: 0x0C/255, blue: 0x11/255)
     private static let grey = Color(red: 0xA3/255, green: 0xA1/255, blue: 0xB0/255)
+    /// A secondary button: the plum of the app's own message bubbles.
+    private static let raised = Color(red: 0x3A/255, green: 0x14/255, blue: 0x38/255)
     static let attention = Color(red: 0xED/255, green: 0xBE/255, blue: 0x79/255)
     static let chatsURL = URL(string: "nekko-agent://chats")!
     static let showsMic = true
@@ -66,7 +76,8 @@ struct LiveCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Circle().fill(Self.accent).frame(width: 6, height: 6)
+                // No taller than the 11 pt line beside it: the card is capped at 160 pt.
+                PixelCat().frame(width: 13, height: 13)
                 Text("Nekko Agent").fontWeight(.semibold)
                 Spacer(minLength: 4)
                 // A card the phone built covers every chat its list shows; a computer's push, that computer.
@@ -207,7 +218,7 @@ struct LiveCardView: View {
         label.font(.system(size: 12, weight: .semibold)).lineLimit(1)
             .foregroundStyle(primary ? Self.onAccent : .white)
             .frame(maxWidth: .infinity).frame(height: 44)
-            .background(primary ? Self.accent : Self.grey.opacity(0.2), in: RoundedRectangle(cornerRadius: 12))
+            .background(primary ? Self.accent : Self.raised, in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder

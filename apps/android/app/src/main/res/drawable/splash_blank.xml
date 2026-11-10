@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The system splash's icon: nothing. The splash is plain plum and the app's own opening
+     builds the cat in its first frame (lock/Splash.kt), as the iPhone's plain-plum launch
+     screen does (#1894, #2120). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <size android:width="1dp" android:height="1dp" />
+</shape>

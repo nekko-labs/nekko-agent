@@ -54,12 +54,17 @@ test('the iPhone draws its brand surfaces from BrandColor, which is plum', () =>
   assert.match(read('apps/ios/App/Shared/LiveCardView.swift'), /static let accent = BrandColor\.accentOnDark/);
 });
 
-test('Android 12+ opens on the brand plum with the white mark', () => {
+test('Android 12+ opens on the plain brand plum, and the opening draws the white cat on it', () => {
   assert.match(read('apps/android/app/src/main/res/values/colors.xml'), /<color name="ic_launcher_background">#FF190019<\/color>/);
   for (const theme of ['values-v31', 'values-night-v31']) {
-    assert.match(read(`apps/android/app/src/main/res/${theme}/themes.xml`),
-      /windowSplashScreenBackground">@color\/ic_launcher_background</, theme);
+    const xml = read(`apps/android/app/src/main/res/${theme}/themes.xml`);
+    assert.match(xml, /windowSplashScreenBackground">@color\/ic_launcher_background</, theme);
+    // No cat on the system splash: it would hide the opening's pixel build-up (#2120).
+    assert.match(xml, /windowSplashScreenAnimatedIcon">@drawable\/splash_blank</, theme);
   }
+  const splash = read('apps/android/app/src/main/java/com/nekko/android/lock/Splash.kt');
+  assert.match(splash, /val GROUND = Color\(0xFF190019\)/);
+  assert.match(splash, /val INK = Color\.White/);
 });
 
 test('the Android pixel cat is plum with a white line', () => {

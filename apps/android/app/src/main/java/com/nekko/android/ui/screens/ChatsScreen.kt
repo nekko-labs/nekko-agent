@@ -780,9 +780,11 @@ internal fun ChatRow(
                 if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = stringResource(R.string.chats_pinned), tint = p.warning, modifier = Modifier.size(14.dp))
                 if (details.showUpdated) Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
             }
+            if (s.chatType == "image") Text(stringResource(R.string.image_kind_image), style = MaterialTheme.typography.bodySmall, color = p.accent, modifier = Modifier.testTag("chats.row.image"))
             // The desktop card's line: the provider's mark and the model, then how
-            // full the context is while the chat is in progress.
-            val model = s.modelId?.takeIf { details.showModel }
+            // full the context is while the chat is in progress. An image chat's
+            // badge stands in for the chat model.
+            val model = s.modelId?.takeIf { details.showModel && s.chatType != "image" }
             val context = if (details.showContext && ChatCard.showsContext(s, activity)) ChatCard.context(s) else null
             if (model != null || context != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -973,6 +975,9 @@ private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Uni
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // Simple / Detailed first, as on the iPhone (#2117): the pill holds only the gauges now.
+            com.nekko.android.ui.simple.ModeMenuItems(onPicked = { open = false })
+            HorizontalDivider()
             @Composable
             fun heading(text: String) = Text(
                 text.uppercase(), style = MaterialTheme.typography.labelSmall, color = p.inkFaint, fontWeight = FontWeight.SemiBold,

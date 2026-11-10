@@ -238,6 +238,7 @@ fun NekkoNavHost(
                         nav.navigate(Routes.chat(newId))
                     },
                     onNewChat = { nav.navigate(Routes.NEW) },
+                    onSettings = { nav.navigate(Routes.SETTINGS) },
                     onStartFresh = startFresh,
                 )
             }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_conversation">Conversation vocale</string>
+    <string name="voice_explanation">Touchez Démarrer, puis parlez. Chaque intervention est envoyée dans cette discussion textuelle. Le téléphone lit la nouvelle réponse terminée, puis écoute à nouveau. Arrêter, quitter, verrouiller ou se déconnecter met fin à la voix, pas au travail de l’agent. La voix ne met jamais une demande en attente et ne la renvoie jamais. Gardez le champ de message vide.</string>
+    <string name="voice_start">Démarrer</string>
+    <string name="voice_stop">Arrêter la voix</string>
+    <string name="voice_close">Fermer</string>
+    <string name="voice_cancel">Annuler</string>
+    <string name="voice_settings">Ouvrir les réglages du microphone</string>
+    <string name="voice_permission_granted">Microphone autorisé. Touchez Démarrer ou maintenez à nouveau le bouton pour commencer.</string>
+    <string name="voice_permission_denied">Autorisez le microphone dans Paramètres → Applications → Nekko Agent → Autorisations, puis redémarrez.</string>
+    <string name="voice_unavailable">Ce téléphone nécessite une reconnaissance vocale installée sur l’appareil (Android 12 ou ultérieur). Aucune reconnaissance vocale dans le cloud n’est utilisée en remplacement.</string>
+    <string name="voice_ready">Prêt</string>
+    <string name="voice_listening">À l’écoute</string>
+    <string name="voice_waiting">Réflexion</string>
+    <string name="voice_speaking">Lecture vocale</string>
+    <string name="voice_stopped">Arrêté</string>
+    <string name="voice_heard">Vous avez dit</string>
+    <string name="voice_reply">Réponse</string>
+    <string name="voice_hold">Maintenir pour parler</string>
+    <string name="voice_hold_accessibility">Démarrer ou terminer la dictée par appui prolongé</string>
+</resources>

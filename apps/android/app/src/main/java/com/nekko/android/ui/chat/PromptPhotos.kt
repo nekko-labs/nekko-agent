@@ -76,15 +76,16 @@ object PhotoDecoder {
     }
 
     /** Null for `""`, a data URL that isn't base64, or bytes Android can't decode. */
-    suspend fun decode(url: String): ImageBitmap? {
+    suspend fun decode(url: String, targetPx: Int = TARGET_PX): ImageBitmap? {
         if (url.isEmpty()) return null
-        cache.get(url)?.let { return it }
+        val key = "$targetPx:$url"
+        cache.get(key)?.let { return it }
         return withContext(Dispatchers.Default) {
             val bytes = bytesOf(url) ?: return@withContext null
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-            val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, TARGET_PX) }
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)?.asImageBitmap()?.also { cache.put(url, it) }
+            val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, targetPx) }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)?.asImageBitmap()?.also { cache.put(key, it) }
         }
     }
 

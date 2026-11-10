@@ -68,6 +68,7 @@ mod procgroup;
 mod providers;
 mod remote;
 mod remote_image;
+mod repos;
 mod repository_review;
 mod resource_queue;
 mod routes;

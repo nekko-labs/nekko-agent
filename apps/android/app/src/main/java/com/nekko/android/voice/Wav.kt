@@ -49,4 +49,8 @@ object Wav {
         }
         return (peak / 32768f).coerceIn(0f, 1f)
     }
+
+    /** [VoiceSegmenter]'s -1..1 samples back to 16-bit PCM for [encode]. */
+    fun pcm(samples: FloatArray): ShortArray =
+        ShortArray(samples.size) { (samples[it] * 32767f).toInt().coerceIn(-32768, 32767).toShort() }
 }

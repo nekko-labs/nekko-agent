@@ -4,8 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { ActivityGroup } from '../src/renderer/components/agent-console/ActivityGroup';
 import { ReplyActivityIcon } from '../src/renderer/components/agent-console/ReplyStatus';
 import '../src/renderer/styles.css';
-import '@fontsource-variable/inter-tight';
-import '@fontsource-variable/jetbrains-mono';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
 const calls = [
   ['bash', { command: 'python3 analyze.py' }],
   ['read_file', { path: 'src/App.tsx' }],

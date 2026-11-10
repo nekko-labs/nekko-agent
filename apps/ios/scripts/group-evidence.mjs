@@ -34,6 +34,11 @@ replace('let flags = [', 'let flags = ["-uiTestGroupList", ');
 fs.writeFileSync(root, source);
 const prefs = 'apps/ios/App/Platform/Prefs.swift';
 source = fs.readFileSync(prefs, 'utf8');
+// A before revision can already persist groups. Classify that capability from
+// both read and write paths, independently of the newer card-details controls.
+const loadsGroups = source.includes('openedChatGroups = Set(d.stringArray(forKey: "openedChatGroups") ?? [])');
+const savesGroups = source.includes('d.set(openedChatGroups.sorted(), forKey: "openedChatGroups")');
+if (loadsGroups !== savesGroups) throw new Error('Unrecognized group persistence: read/write capabilities disagree');
 // Start each isolated test clean, but leave the real stored value intact on relaunch.
 replace('d = defaults', `d = defaults
         if ProcessInfo.processInfo.arguments.contains("-uiTestGroupList") && !ProcessInfo.processInfo.arguments.contains("-uiTestKeepGroups") {
@@ -43,5 +48,5 @@ replace('chatListView = ChatListView.parse(d.data(forKey: "chatListView"))', 'ch
 fs.writeFileSync(prefs, source);
 const test = 'apps/ios/UITests/GroupEvidenceTests.swift';
 if (process.argv.includes('--before')) {
-  fs.writeFileSync(test, fs.readFileSync(test, 'utf8').replace('let after = true', 'let after = false').replace('let remembersGroups = true', 'let remembersGroups = false'));
+  fs.writeFileSync(test, fs.readFileSync(test, 'utf8').replace('let after = true', 'let after = false').replace('let remembersGroups = true', `let remembersGroups = ${loadsGroups}`));
 }

@@ -5,6 +5,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -37,7 +38,7 @@ class OkHttpTransport(
                 if (closed.compareAndSet(false, true)) listener.onClosed(code, reason)
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (closed.compareAndSet(false, true)) listener.onClosed(1006, t.message ?: "connection failed")
+                if (closed.compareAndSet(false, true)) listener.onClosed(1006, reason(t))
             }
         })
         return object : WsConnection {
@@ -46,5 +47,16 @@ class OkHttpTransport(
                 ws.close(code, reason.take(120))
             }
         }
+    }
+
+    companion object {
+        /**
+         * The close reason for a failed socket. A name that doesn't resolve gets
+         * [RelayStatus.HOST_NOT_FOUND] whatever the phone's language, so the app can
+         * say the paired address is gone instead of "Connecting…" forever.
+         */
+        fun reason(t: Throwable): String =
+            if (generateSequence(t) { it.cause }.take(8).any { it is UnknownHostException }) RelayStatus.HOST_NOT_FOUND
+            else t.message ?: "connection failed"
     }
 }

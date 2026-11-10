@@ -17,6 +17,7 @@
     <string name="chats_banner_online">%1$s est en ligne</string>
     <string name="chats_banner_offline">%1$s est hors ligne. Ouvrez Nekko Agent dessus.</string>
     <string name="chats_banner_connecting">Connexion à %1$s…</string>
+    <string name="chats_banner_host_not_found">Impossible de trouver %1$s, l’adresse avec laquelle ce téléphone a été associé. Sur %2$s, changez la façon dont les téléphones se connectent dans Paramètres → Accès à distance, puis associez-le à nouveau.</string>
     <string name="chats_reconnect">Se reconnecter</string>
     <string name="chats_pair_again">Associer à nouveau</string>
     <string name="chats_manage_computers">Gérer les ordinateurs</string>

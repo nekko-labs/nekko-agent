@@ -46,7 +46,7 @@ Each command shows a short message ("Erased", "Sent", "New chat") so you know it
 
 **Confirming.** Only merging and completing a chat ask first. Say "Nekko, yes" or tap **Confirm**; "Nekko, no" or **Cancel** to back out. A question waits one minute, then goes away, so a "yes" much later does nothing.
 
-To use the microphone for dictation only, turn off **Enable "Nekko..." commands** in Settings > Dictation. This switch is on the computer only: the iPhone always listens for "Nekko" commands.
+To use the microphone for dictation only, turn off **Enable "Nekko..." commands** in Settings > Dictation. This switch is on the computer only: the phones always listen for "Nekko" commands. On Android they run from the message box's **+ → Dictate** microphone, which types your words at each pause; **Hold to talk** does the same for one held phrase.
 
 ## On iPhone
 

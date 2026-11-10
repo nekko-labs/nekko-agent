@@ -13,11 +13,35 @@
  * sometimes not on the list.
  */
 
+/**
+ * Something the app does when the user answers with an option (#2404), before
+ * the agent reads the answer: let them pick a folder, add a folder the agent
+ * found, or add a repository from a connected git provider. Each one widens
+ * the chat's environment; the answer tells the agent what was added.
+ */
+export type AskAction =
+  | { kind: 'pickFolder' }
+  | { kind: 'addFolder'; path: string }
+  | { kind: 'connectRepo' };
+
 /** One answer a question offers. */
 export interface AskOption {
   label: string;
   /** What picking this means, in one line. */
   description?: string;
+  action?: AskAction;
+}
+
+/** An option's action as the model wrote it, or undefined when unusable. */
+export function normalizeAskAction(value: unknown): AskAction | undefined {
+  const a = (value ?? {}) as Record<string, unknown>;
+  const kind = typeof a.kind === 'string' ? a.kind.trim() : '';
+  if (kind === 'pickFolder' || kind === 'connectRepo') return { kind };
+  if (kind === 'addFolder') {
+    const path = typeof a.path === 'string' ? a.path.trim() : '';
+    if (path && path.length <= 4096) return { kind, path };
+  }
+  return undefined;
 }
 
 /** One question in a request. */
@@ -111,7 +135,8 @@ function normalizeOptions(value: unknown): AskOption[] {
     const label = typeof obj.label === 'string' ? obj.label.trim() : '';
     if (!label) continue;
     const description = typeof obj.description === 'string' ? obj.description.trim() : '';
-    out.push({ label, ...(description ? { description } : {}) });
+    const action = normalizeAskAction(obj.action);
+    out.push({ label, ...(description ? { description } : {}), ...(action ? { action } : {}) });
   }
   return out;
 }

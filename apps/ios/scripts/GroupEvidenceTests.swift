@@ -44,7 +44,7 @@ final class GroupEvidenceTests: XCTestCase {
     }
 
     func testGroupChoicesSurviveRelaunchAndSearch() {
-        let remembersGroups = true // The harness sets false for the unchanged baseline.
+        let remembersGroups = true // The harness matches the baseline persistence capability, not its before label.
         let app = XCUIApplication()
         app.launchArguments = ["-uiTestGroupList", "-splash", "NO", "-AppleLanguages", "(en)"]
         app.launch()

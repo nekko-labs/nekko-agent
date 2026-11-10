@@ -23,7 +23,7 @@ object AttentionNotices {
                 input.question != null -> PhoneEvent.NEEDS_INPUT
                 else -> return@mapNotNull null
             }
-            EventNotice.of(id, event, titles[id], state.active?.name ?: "your computer", hideContent, input.approval?.call?.id)
+            EventNotice.of(id, event, titles[id], state.active?.name ?: "your computer", hideContent, input.approval?.call?.id, input.approval?.call?.name)
         }
     }
 }

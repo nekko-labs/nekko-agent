@@ -22,7 +22,7 @@ object TurnSteps {
     private fun isStep(b: Block) = b is Block.Tool || isWake(b) || (b is Block.Assistant && !b.reasoning.isNullOrEmpty())
 
     /** A thought with no reply text: nothing left to show once its reasoning is folded. */
-    private fun onlyStep(b: Block) = b is Block.Tool || isWake(b) || (b is Block.Assistant && b.text.isBlank() && !b.streaming && !b.interrupted)
+    private fun onlyStep(b: Block) = b is Block.Tool || isWake(b) || (b is Block.Assistant && b.text.isBlank() && b.thumbs.isEmpty() && !b.streaming && !b.interrupted)
 
     /**
      * [items] in order, each turn's steps folded into a [Row.Summary] unless its key is in [open].

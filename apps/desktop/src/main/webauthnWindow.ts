@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { SECURITY_KEY_UNTESTED_NOTE, WEBAUTHN_CEREMONY_TIMEOUT_MS, type WebAuthnCeremonyRequest, type WebAuthnCeremonyResult } from '@nekko-agent/shared';
+import { SECURITY_KEY_UNTESTED_NOTE, WEBAUTHN_CANCELLED, WEBAUTHN_CEREMONY_TIMEOUT_MS, type WebAuthnCeremonyRequest, type WebAuthnCeremonyResult } from '@nekko-agent/shared';
 import { CEREMONY_PAGE_CSP, ceremonyPage, runWebAuthnCeremony, validCeremonyRequest } from '../webauthnCeremony.js';
 
 /**
@@ -13,7 +13,10 @@ import { CEREMONY_PAGE_CSP, ceremonyPage, runWebAuthnCeremony, validCeremonyRequ
  * window, runs the ceremony in it and hands the JSON result back. The
  * daemon verifies everything; this window only lets the key talk to the
  * browser engine. The page has no script of its own, no permissions, no
- * navigation, and a session of its own that keeps nothing.
+ * navigation, and a session of its own. That session is persistent, which the
+ * page itself has no use for: Electron keeps the Touch ID metadata secret in
+ * the prefs of the session that ran the ceremony, and an in-memory one has no
+ * folder to keep them in (see the partition in main/index.ts).
  */
 
 /** The parts of Electron the window uses, so tests can fake them. */
@@ -33,6 +36,18 @@ export interface CeremonyWindow {
     };
   };
 }
+
+/**
+ * What the owner is told when this computer has no platform authenticator to
+ * offer: Linux, a Mac with no Secure Enclave, or a build whose signature does
+ * not carry the keychain access group (webauthnPlatform.ts). Without this the
+ * window waits on a prompt that never comes.
+ */
+export const NO_PLATFORM_AUTHENTICATOR = 'This computer has no built-in passkey (Touch ID or Windows Hello) to register. Use a security key instead.';
+
+/** Asked in the ceremony window before a platform registration: does this computer actually have one? */
+const PLATFORM_AUTHENTICATOR_PROBE =
+  'typeof PublicKeyCredential === "function" && typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === "function" ? PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable() : false';
 
 export interface CeremonyDeps {
   /** A new modal window over `parent` (the window that asked). */
@@ -84,19 +99,31 @@ export async function runCeremonyWindow(request: unknown, deps: CeremonyDeps): P
     w.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
     w.webContents.on('will-navigate', (e) => e.preventDefault());
     w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    const closed = new Promise<WebAuthnCeremonyResult>((resolve) => w.once('closed', () => resolve({ ok: false, error: 'Cancelled.', cancelled: true })));
+    const closed = new Promise<WebAuthnCeremonyResult>((resolve) => w.once('closed', () => resolve({ ok: false, error: WEBAUTHN_CANCELLED, cancelled: true })));
     const timedOut = new Promise<WebAuthnCeremonyResult>((resolve) => {
       timer = setTimeout(() => resolve({ ok: false, error: 'The security key didn’t answer in time.', cancelled: true }), deps.timeoutMs ?? WEBAUTHN_CEREMONY_TIMEOUT_MS);
     });
     await w.loadURL(`http://localhost:${server.port}/${req.mode}`);
-    w.show();
-    w.focus();
     // The page is only a stage: the ceremony is this one function, run in it.
     const code = `(${runWebAuthnCeremony.toString()})(${JSON.stringify(req)}, navigator.credentials)`;
-    const ran = w.webContents.executeJavaScript(code, true).then(
-      (r) => (r && typeof r === 'object' && 'ok' in r ? (r as WebAuthnCeremonyResult) : { ok: false as const, error: 'The security key prompt gave no answer.' }),
-      (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }),
-    );
+    const ran = (async (): Promise<WebAuthnCeremonyResult> => {
+      // A platform registration with no platform authenticator never prompts, so
+      // say so instead of waiting out the timeout. Asked before the window is
+      // shown, so an answer of no is a message rather than a window that flashes;
+      // the first ask of a session makes a Secure Enclave key pair and takes a
+      // few hundred milliseconds, which is a pause before the window rather than
+      // a pause in it. The Add passkey button is disabled meanwhile.
+      if (req.mode === 'create' && req.attachment === 'platform') {
+        const available = await w.webContents.executeJavaScript(PLATFORM_AUTHENTICATOR_PROBE).catch(() => false);
+        if (available !== true) return { ok: false, error: NO_PLATFORM_AUTHENTICATOR };
+      }
+      w.show();
+      w.focus();
+      return await w.webContents.executeJavaScript(code, true).then(
+        (r) => (r && typeof r === 'object' && 'ok' in r ? (r as WebAuthnCeremonyResult) : { ok: false as const, error: 'The security key prompt gave no answer.' }),
+        (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }),
+      );
+    })();
     return await Promise.race([ran, closed, timedOut]);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

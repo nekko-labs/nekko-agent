@@ -122,6 +122,13 @@ class Notices(private val context: Context) {
                 })
                 // Deny is safe to answer unseen (nothing runs), so it skips the app lock;
                 // Allow needs the command in view, so it is only in the chat.
+                // Always allow (MCP tools only) opens the chat on an unlocked phone: its card saves the
+                // tool for the chat with a Change proof, then releases this call.
+                if (n.canAlwaysAllow) addAction(
+                    NotificationCompat.Action.Builder(0, context.getString(R.string.chat_always_allow_tool), alwaysAllow(n.sessionId, n.callId!!))
+                        .setAuthenticationRequired(true)
+                        .build(),
+                )
                 if (n.canDeny) addAction(0, context.getString(R.string.chat_notice_deny), deny(n.sessionId, n.callId!!))
             }
             .build()
@@ -295,6 +302,12 @@ class Notices(private val context: Context) {
         return PendingIntent.getActivity(context, sessionId.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
+    private fun alwaysAllow(sessionId: String, callId: String): PendingIntent {
+        val intent = Intent(Intent.ACTION_VIEW, alwaysAllowUri(sessionId, callId), context, MainActivity::class.java)
+        // Its own request code, so it never replaces the notification's tap (openChat) or Deny.
+        return PendingIntent.getActivity(context, "alwaysAllow:$sessionId".hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     private fun deny(sessionId: String, callId: String): PendingIntent {
         val intent = Intent(context, DenyReceiver::class.java)
             .setAction(DenyReceiver.ACTION)
@@ -381,6 +394,10 @@ class Notices(private val context: Context) {
             listOf(NEEDS_YOU, FINISHED, FAILED).forEach { prefs.set(it, on) }
             prefs.set(ENABLED, on)
         }
+
+        /** `nekko-agent://chat/<id>?alwaysAllow=<call id>`, the link `DeepLink.Chat` reads. */
+        fun alwaysAllowUri(sessionId: String, callId: String): Uri =
+            Uri.parse("nekko-agent://chat/${Uri.encode(sessionId)}?alwaysAllow=${Uri.encode(callId)}")
 
         private const val EXTRA_COMPUTER = "attention.computer"
         const val TAG_TEST = "test"

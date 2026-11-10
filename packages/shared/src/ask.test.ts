@@ -145,3 +145,32 @@ describe('summarizeAsk', () => {
     expect(summarizeAsk(request)).toBe('Which parser? (+1 more)');
   });
 });
+
+describe('option actions (#2404)', () => {
+  it('keeps the environment actions and drops anything else', () => {
+    const request = ok({
+      questions: [{
+        header: 'Project',
+        question: 'Where is hypergate?',
+        options: [
+          { label: 'Search this computer' },
+          { label: 'Use /code/hypergate', action: { kind: 'addFolder', path: ' /code/hypergate ' } },
+          { label: 'Choose a folder', action: { kind: 'pickFolder' } },
+          { label: 'Add from GitHub', action: { kind: 'connectRepo', path: 'ignored' } },
+          { label: 'Odd', action: { kind: 'deleteEverything' } },
+        ],
+      }],
+    });
+    const options = request.questions[0]!.options;
+    expect(options[0]).toEqual({ label: 'Search this computer' });
+    expect(options[1]!.action).toEqual({ kind: 'addFolder', path: '/code/hypergate' });
+    expect(options[2]!.action).toEqual({ kind: 'pickFolder' });
+    expect(options[3]!.action).toEqual({ kind: 'connectRepo' });
+    expect(options[4]).toEqual({ label: 'Odd' });
+  });
+
+  it('drops an addFolder action without a path', () => {
+    const request = ok({ questions: [{ header: 'h', question: 'q?', options: [{ label: 'a', action: { kind: 'addFolder' } }, 'b'] }] });
+    expect(request.questions[0]!.options[0]).toEqual({ label: 'a' });
+  });
+});

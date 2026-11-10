@@ -29,6 +29,8 @@ public struct SavedTranscript: Equatable, Sendable {
         if let m = s.modelId { o["modelId"] = .string(m) }
         if let w = s.workspaceId { o["workspaceId"] = .string(w) }
         if let m = s.mode { o["mode"] = .string(m) }
+        if let kind = s.chatType { o["chatType"] = .string(kind) }
+        if let params = s.imageParams { o["imageParams"] = params.json }
         if s.omittedMessages > 0 { o["omittedMessages"] = .int(Int64(s.omittedMessages)) }
         return .object(["v": .int(Self.version), "savedAt": .int(savedAt), "session": .object(o)])
     }

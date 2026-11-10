@@ -1,6 +1,18 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import type { AskAnswer, AskQuestion, AskRequest } from '@nekko-agent/shared';
+import type { AskAction, AskAnswer, AskOption, AskQuestion, AskRequest, RemoteRepo } from '@nekko-agent/shared';
 import { ChevronIcon } from '../icons.js';
+import { RepoBrowser } from './RepoBrowser.js';
+
+/**
+ * What a host does for an option's environment action (#2404). Each returns
+ * the line the agent reads alongside the answer; `run` returns null when the
+ * user cancelled (the folder picker closed), which keeps the card open.
+ */
+export interface QuestionActions {
+  run: (action: Exclude<AskAction, { kind: 'connectRepo' }>) => Promise<string | null>;
+  addRepo: (repo: RemoteRepo) => Promise<string>;
+  connect: () => void;
+}
 import { ASK_OTHER_LABEL, isAskComplete } from '@nekko-agent/shared';
 
 /**
@@ -27,6 +39,7 @@ export function QuestionCard({
   onSkip,
   compact = false,
   tone = 'attention',
+  actions,
 }: {
   request: AskRequest;
   onAnswer: (answers: AskAnswer[]) => void | Promise<void>;
@@ -38,6 +51,8 @@ export function QuestionCard({
    * An explicit accent tone is available for branded surfaces.
    */
   tone?: 'accent' | 'attention';
+  /** Runs options' environment actions. Without it they are plain answers. */
+  actions?: QuestionActions;
 }) {
   const hue = tone === 'attention' ? 'var(--warning)' : 'var(--accent)';
   const [step, setStep] = useState(0);
@@ -55,6 +70,10 @@ export function QuestionCard({
   // A pick and a send can land in the same keystroke; see `goNext`.
   const pickedRef = useRef(picked);
   const notesRef = useRef(notes);
+  /** What each question's action did, keyed by question, sent with its answer. */
+  const actionNotes = useRef<Record<string, { label: string; note: string }>>({});
+  /** The question whose "add a repository" answer is showing the repository list. */
+  const [repoFor, setRepoFor] = useState<string | null>(null);
 
   const total = request.questions.length;
   const index = Math.min(step, total - 1);
@@ -112,7 +131,7 @@ export function QuestionCard({
    * would drop the very option the user just hit Enter on. The refs are written
    * by the same setters, so they are current within the event.
    */
-  const goNext = useCallback(() => {
+  const advance = useCallback(() => {
     if (!last) {
       showStep(index + 1);
       return;
@@ -121,12 +140,48 @@ export function QuestionCard({
     submitted.current = true;
     setSending(true);
     setError('');
-    const reply = toAnswers(request.questions, pickedRef.current, notesRef.current);
+    const reply = withActionNotes(toAnswers(request.questions, pickedRef.current, notesRef.current), actionNotes.current);
     Promise.resolve().then(() => reply.length ? onAnswer(reply) : onSkip()).catch((e) => {
       submitted.current = false;
       setError('Could not send your answers. Try again. ' + String(e));
     }).finally(() => setSending(false));
   }, [index, last, onAnswer, onSkip, request.questions, showStep]);
+
+  /**
+   * Advance, first running the picked option's action once: a folder picker,
+   * adding a folder the agent found, or the repository list in place of the
+   * options. A cancelled or failed action keeps the user on this question.
+   */
+  const goNext = useCallback(() => {
+    const opt = actions && pendingAction(q, pickedRef.current[q.id] ?? [], actionNotes.current);
+    if (!opt?.action) {
+      advance();
+      return;
+    }
+    if (opt.action.kind === 'connectRepo') {
+      setRepoFor(q.id);
+      return;
+    }
+    const action = opt.action;
+    setSending(true);
+    setError('');
+    actions!.run(action)
+      .then((note) => {
+        if (note === null) { setError('Nothing was added. Choose a folder, or pick another answer.'); return; }
+        actionNotes.current = { ...actionNotes.current, [q.id]: { label: opt.label, note } };
+        advance();
+      })
+      .catch((e) => setError(String(e).replace(/^Error:s*/, '')))
+      .finally(() => setSending(false));
+  }, [actions, advance, q]);
+
+  const repoPicked = useCallback(async (repo: RemoteRepo) => {
+    const opt = pendingAction(q, pickedRef.current[q.id] ?? [], {});
+    const note = await actions!.addRepo(repo);
+    actionNotes.current = { ...actionNotes.current, [q.id]: { label: opt?.label ?? '', note } };
+    setRepoFor(null);
+    advance();
+  }, [actions, advance, q]);
 
   const skipCurrent = () => {
     pickedRef.current = { ...pickedRef.current, [q.id]: [] };
@@ -227,6 +282,12 @@ export function QuestionCard({
           <span className="text-2xs text-ink-soft">{q.multiSelect ? 'pick any' : 'pick one'}</span>
         </div>
 
+        {repoFor === q.id && actions ? (
+          <div className="flex max-h-72 min-h-0 flex-col" data-question-repos>
+            <RepoBrowser onPick={repoPicked} onConnect={actions.connect} />
+            <button type="button" className="btn btn-ghost mt-1 self-start px-2 py-1 text-xs" onClick={() => setRepoFor(null)}>Back to the options</button>
+          </div>
+        ) : (
         <div
           className="flex flex-col gap-1"
           role={q.multiSelect ? 'group' : 'radiogroup'}
@@ -299,13 +360,14 @@ export function QuestionCard({
             />
           )}
         </div>
+        )}
       </div>
 
       {error && <p className="mt-2 text-xs text-danger" role="alert">{error}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button type="button" data-question-next
           className="btn btn-primary ml-auto px-3 py-1 text-xs disabled:opacity-40"
-          disabled={!hasAnswer || sending} onClick={goNext}
+          disabled={!hasAnswer || sending || repoFor === q.id} onClick={goNext}
           title={last && !complete ? 'Skipped questions are sent as unanswered' : undefined}>
           {sending ? 'Sending…' : last ? 'Send answers' : 'Next'}
         </button>
@@ -346,6 +408,25 @@ export function toAnswers(
       note: notes[item.id]?.trim() || undefined,
     }))
     .filter((a) => a.labels.length > 0 || !!a.note);
+}
+
+/** The picked option whose action has not run yet for this question, if any. */
+export function pendingAction(
+  q: AskQuestion,
+  chosen: readonly string[],
+  done: Record<string, { label: string }>,
+): AskOption | undefined {
+  const opt = q.options.find((o) => o.action && chosen.includes(o.label));
+  return opt && done[q.id]?.label !== opt.label ? opt : undefined;
+}
+
+/** Each answer with what its option's action did appended to its note. */
+export function withActionNotes(answers: AskAnswer[], notes: Record<string, { label: string; note: string }>): AskAnswer[] {
+  return answers.map((a) => {
+    const done = notes[a.questionId];
+    if (!done || !a.labels.includes(done.label)) return a;
+    return { ...a, note: [a.note, done.note].filter(Boolean).join(' ') };
+  });
 }
 
 /** The radio dot or checkbox tick, so the shape says whether picks are exclusive. */

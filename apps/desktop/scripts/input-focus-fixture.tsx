@@ -6,8 +6,8 @@ import { QuestionCard } from '../src/renderer/components/QuestionCard';
 import { MarkdownEditor } from '../src/renderer/components/agent-console/MarkdownEditor';
 import { ApprovalBar } from '../src/renderer/components/agent-console/ApprovalBar';
 import type { AskRequest } from '@nekko-agent/shared';
-import '@fontsource-variable/inter-tight';
-import '@fontsource-variable/jetbrains-mono';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
 import '../src/renderer/styles.css';
 
 const request: AskRequest = { callId: 'question-1', askedAt: 0, questions: [
