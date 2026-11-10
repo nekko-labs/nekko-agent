@@ -100,7 +100,10 @@ export function accountIdentity(
     if (s?.installed && s.loggedIn) {
       if (s.auth !== 'subscription') return { name: named ?? 'Claude Code', hint: 'API', email: s.email ?? undefined };
       const plan = s.subscriptionType?.trim().toLowerCase() ?? '';
-      const organization = ORG_PLANS.has(plan);
+      // Same rule as nekkod: the plan decides; with no plan, an organization not
+      // named "<email>'s Organization" (a personal plan's) is a seat.
+      const orgName = s.orgName?.trim() ?? '';
+      const organization = plan ? ORG_PLANS.has(plan) : !!orgName && !orgName.endsWith("'s Organization");
       return {
         name: organization ? (s.orgName?.trim() || named || 'Organization') : (named ?? 'Personal'),
         hint: plan ? capital(plan) : undefined,
@@ -134,8 +137,7 @@ function statusFromAccount(a: ProviderAccount | undefined): ClaudeCodeStatus | n
     email: a.email,
     orgName: a.scope === 'organization' ? a.name : undefined,
     orgId: a.orgId,
-    // An organization seat whose plan the CLI did not print still reads as one.
-    subscriptionType: a.plan ?? (a.scope === 'organization' ? 'team' : undefined),
+    subscriptionType: a.plan,
   } as ClaudeCodeStatus;
 }
 

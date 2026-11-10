@@ -102,3 +102,11 @@ describe('one login, one connection', () => {
     ]);
   });
 });
+
+describe('an organization seat whose plan Claude Code did not print', () => {
+  it('still reads as the organization, without inventing a plan', () => {
+    const seat = p('s', 'claude-code', 'Claude subscription', { account: { signedIn: true, email: 'a@b.test', scope: 'organization', name: 'Nekko Labs' } });
+    expect(accountIdentity(seat)).toMatchObject({ name: 'Nekko Labs', organization: true, hint: undefined });
+    expect(accountScopeLine(accountIdentity(seat))).toBe('Organization');
+  });
+});
