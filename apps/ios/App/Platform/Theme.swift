@@ -122,6 +122,36 @@ extension EnvironmentValues {
     }
 }
 
+/// The theme's accent as UIKit's tint on every window of the scene. SwiftUI's `.tint` does
+/// not reach what UIKit draws (popovers, menus, alerts, the keyboard's toolbar,
+/// `UIColor.tintColor` in text views), which otherwise fell back to the system blue.
+private struct WindowTint: UIViewRepresentable {
+    let color: Color
+
+    func makeUIView(context: Context) -> Probe {
+        let view = Probe()
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = false
+        return view
+    }
+
+    func updateUIView(_ view: Probe, context: Context) { view.tint = UIColor(color) }
+
+    final class Probe: UIView {
+        var tint: UIColor? { didSet { apply() } }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            apply()
+        }
+
+        private func apply() {
+            guard let tint, let scene = window?.windowScene else { return }
+            for window in scene.windows where window.tintColor != tint { window.tintColor = tint }
+        }
+    }
+}
+
 /// Resolves the app's color scheme and palette from the phone's choice and the computer's look.
 struct Themed: ViewModifier {
     let choice: String
@@ -135,6 +165,7 @@ struct Themed: ViewModifier {
             .environment(\.palette, palette)
             .preferredColorScheme(scheme)
             .tint(palette.accent)
+            .background { WindowTint(color: palette.accent) }
     }
 
     private var preset: ThemePreset? { Prefs.preset(choice, computer: appearance) }

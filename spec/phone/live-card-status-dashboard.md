@@ -80,6 +80,39 @@ None disables the card. All enabled iOS levels draw counts and voice, with an in
 
 Dashboard and Settings catalog labels have the existing seven-language coverage. Command parsing and dispatcher replies remain initially English; adding catalog entries does not localize dynamically returned English replies. Android notification action labels are localized, not the entire foreground voice sheet.
 
+## Strict native acceptance follow-up (2026-11-09)
+
+Test-only follow-up, not a new product capability: the security evidence checks the fixture's actual
+**0 Building / 1 Need input / 0 Done** totals, the Open app handoff and absence of a dashboard
+approval strip. It retains the authenticated notification-link execution and the refused-save
+assertion that the call still waits; a container's presence alone is not authorization evidence.
+The separate live notification journey retains its original **20-second** result deadline,
+online-button precondition, yielding poll, actual result label and visible banner assertions.
+Source-contract checks do not prove Swift compilation, delivery timing, or native accessibility
+labels. Exact-head native run 42779029268 compiled and passed the seven journeys,
+including pill tuck/restore. Pairing retained two light-mode failures to turn off
+finished replies and one missing banner; dark passed, and the 20-second result
+checks did not fail. This is not whole-suite acceptance.
+
+The follow-up notification driver requires each control's full frame below the
+navigation bar and inside the app viewport, then rechecks the settled frame before
+the actual switch/button interaction. The recording of the failed light2 tap shows
+the row clipped under navigation followed by a scroll-to-top. The bounded driver
+keeps two bounded eight-step reveal passes, all switch/result/banner assertions,
+and the original five-/20-/10-second deadlines; it does not set preferences or
+permissions directly. Source contracts reject the old hittability-only path.
+Native compilation and execution of this new driver remain **unverified**.
+
+The completed 5c933 fixture shard failed only the dashboard count/handoff queries
+on both attempts (eight assertions). Both exported screenshots were inspected and
+show all three required totals and Open app, above the refused in-app approval.
+This supports a query-scoping diagnosis, not missing dashboard rendering; the old
+export has no security hierarchy attachment to prove the exact accessibility cause.
+The DEBUG fixture now explicitly contains its real accessibility children, and the
+test targets that Other container and records the app hierarchy before retaining
+all count, handoff, no-strip, signed-link and refused-save assertions. This fixture
+and query repair has **not yet been compiled or executed natively**.
+
 ## Verification still pending
 
 Source changes include producer/relay/protocol/dispatcher tests and native UI evidence fixtures. Their presence is not a passing native run.

@@ -76,14 +76,12 @@ class VoiceIntegrationEvidenceTest {
     @Test fun realComposerEntryDraftPreservationAndLockDismissal() {
         compose.onAllNodes(hasSetTextAction()).onFirst().performTextInput("Keep this typed draft")
         shot("voice-composer")
-        compose.onNodeWithContentDescription("Add").performClick()
         compose.onNodeWithTag("composer.voiceConversation").performClick()
         compose.onNodeWithText("Ready", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Start").assertExists()
         shot("voice-conversation-ready")
         compose.onNodeWithText("Close").performClick()
         compose.onAllNodes(hasSetTextAction()).onFirst().assertTextContains("Keep this typed draft")
-        compose.onNodeWithContentDescription("Add").performClick()
         compose.onNodeWithTag("composer.voiceConversation").performClick()
         compose.runOnIdle { appLock.onBackground() }
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Start").fetchSemanticsNodes().isEmpty() }
@@ -118,7 +116,6 @@ class VoiceIntegrationEvidenceTest {
         assertFalse(remote.calls.any { it == Channels.CHAT_SEND || it == Channels.CHAT_QUEUE })
     }
     @Test fun voiceOffRemovesNativeControlsAndOpenConversation() {
-        compose.onNodeWithContentDescription("Add").performClick()
         compose.onNodeWithTag("composer.voiceConversation").performClick()
         compose.runOnIdle { prefs.set(Dictation.ENABLED, false) }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("voice.hold").fetchSemanticsNodes().isEmpty() && compose.onAllNodesWithText("Start").fetchSemanticsNodes().isEmpty() }

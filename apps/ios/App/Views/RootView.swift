@@ -373,8 +373,8 @@ struct LockView: View {
                         Label("Unlock", systemImage: "faceid").frame(maxWidth: 220).padding(.vertical, 6).foregroundStyle(SplashView.ground)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.white)
-                    if let e = app.lock.error { Text(e).font(.footnote).foregroundStyle(.white).multilineTextAlignment(.center) }
+                    .tint(BrandColor.mark)
+                    if let e = app.lock.error { Text(e).font(.footnote).foregroundStyle(BrandColor.mark).multilineTextAlignment(.center) }
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 96)

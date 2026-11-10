@@ -6,6 +6,9 @@
 // cannot be copied beside the daemon only warns, since this machine already
 // has one. Packaging never passes it.
 //
+// Outside CI the release build is signed with the development identity
+// (dev-signing.cjs), since a local app runs target/release/nekkod too.
+//
 // `--dev` is for `npm run dev`: it builds the `dev-daemon` profile (no LTO,
 // incremental) and stages nothing, because a development app runs the newest
 // build straight out of target/ (findDaemon in engine-process.ts).
@@ -93,7 +96,7 @@ function stageVmHelper(dirs) {
 
 if (dev) {
   execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod', '--features', 'dev-tools'], { cwd: repo, stdio: 'inherit' });
-  // A stable signature, so the Keychain keeps its answers across rebuilds.
+  // A stable signature, so the Keychain access list keeps its answer across rebuilds.
   signDevDaemon(join(repo, 'target', 'dev-daemon', exe));
   stageSpeechHelper([join(repo, 'target', 'dev-daemon')]);
   stageVmHelper([join(repo, 'target', 'dev-daemon')]);
@@ -107,6 +110,12 @@ if (!existsSync(built)) {
   console.error(`expected ${built} after the build`);
   process.exit(1);
 }
+
+// A development checkout also runs this build straight out of target/release
+// (findDaemon), so sign it like the dev build before staging the copy. CI
+// packages leave signing to electron-builder (after-pack.cjs, sign-mac.cjs).
+if (!process.env.CI) signDevDaemon(built);
+
 const dest = join(here, '..', 'resources', 'bin');
 mkdirSync(dest, { recursive: true });
 copyFileSync(built, join(dest, exe));

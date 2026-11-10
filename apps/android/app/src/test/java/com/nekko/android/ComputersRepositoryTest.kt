@@ -476,7 +476,7 @@ class ComputersRepositoryTest {
                     put("defaultProviderId", "openai"); put("defaultModelId", "gpt"); put("relayKey", "secret")
                 }
                 Channels.SESSIONS_SUMMARIES -> buildJsonArray {
-                    add(buildJsonObject { put("id", "s1"); put("title", "Hello"); put("updatedAt", 5) })
+                    add(buildJsonObject { put("id", "s1"); put("title", "Hello"); put("updatedAt", 5); put("exchangeCount", 3) })
                     add(buildJsonObject { put("id", "s2"); put("title", "Sub"); put("updatedAt", 6); put("parentSessionId", "s1") })
                 }
                 Channels.CHAT_PENDING -> buildJsonObject {
@@ -492,10 +492,14 @@ class ComputersRepositoryTest {
         }
         val repo = repo(store, remotes)
         val id = repo.pair(link)
+        // Not read yet: the first-chat intro must not take an unread list for an empty one.
+        assertFalse(repo.state.value.summariesLoaded)
         remotes.last.goOnline()
         runCurrent()
 
         val s = repo.state.value
+        assertTrue(s.summariesLoaded)
+        assertEquals(3L, s.summaries.single().exchangeCount)
         assertEquals("Studio Mac", s.active?.name)
         assertEquals("darwin", s.active?.platform)
         assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"Studio Mac\""))

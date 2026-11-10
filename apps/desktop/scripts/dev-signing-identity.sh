@@ -2,8 +2,9 @@
 # Create the "Nekko Agent Development" code-signing identity, once per Mac.
 #
 # Development builds sign nekkod with it (scripts/dev-signing.cjs), so the
-# Keychain keeps "Always Allow" across rebuilds instead of asking again for
-# every item after each one. It is a self-signed certificate in your login
+# Keychain's access list keeps "Always Allow" across rebuilds. Each rebuild
+# still asks once, for the item's partition list (docs/signing.md, "Development
+# builds"). It is a self-signed certificate in your login
 # keychain, trusted for code signing by you only: it signs nothing anyone else
 # runs, and it is no Apple identity.
 #
@@ -59,7 +60,7 @@ echo "Trusting \"$NAME\" for code signing (macOS asks for your password)..."
 security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN" "$work/cert.pem"
 
 if security find-identity -v -p codesigning | grep -q "\"$NAME\""; then
-  echo "Done. The next \`npm run dev\` signs nekkod with \"$NAME\"; answer the Keychain once more with Always Allow, and later rebuilds keep it."
+  echo "Done. The next \`npm run dev\` or \`npm run local\` signs nekkod with \"$NAME\". Answer both Keychain prompts with Always Allow; after that each rebuild asks once (Always Allow again)."
 else
   echo "The certificate was imported but macOS does not list it as a valid signing identity." >&2
   exit 1

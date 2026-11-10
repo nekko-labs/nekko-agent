@@ -262,6 +262,36 @@ class ChatModesTest {
     }
 
     /**
+     * #2112: a finished reply's metrics under it, with the check for a turn that completed, and its
+     * breakdown on a tap, in Simple (steps folded) and Detailed.
+     */
+    @Test fun turnMetricsAndDetails() {
+        computer.resident = false
+        computer.turnStats = true
+        show()
+        val footer = compose.onAllNodesWithTag("turn.details.s1-a").onFirst()
+        footer.assertExists()
+        compose.onAllNodes(hasText("Done")).onFirst().assertExists()
+        // TalkBack reads the line as one label.
+        compose.onAllNodes(androidx.compose.ui.test.hasContentDescription("Done. claude-opus-4-7, anthropic, High effort, 12k in, 612 out, 75 tok/s, 14s")).onFirst().assertExists()
+        shot("turn-metrics")
+        footer.performClick()
+        settle()
+        // The row is one button for TalkBack, so the breakdown is inside its merged node.
+        compose.onAllNodesWithTag("turn.breakdown", useUnmergedTree = true).onFirst().assertExists()
+        compose.onAllNodes(hasText("Read from cache"), useUnmergedTree = true).onFirst().assertExists()
+        compose.onAllNodes(hasText("Finished"), useUnmergedTree = true).onFirst().assertExists()
+        shot("turn-details")
+        footer.performClick()
+        settle()
+        assertEquals(0, compose.onAllNodesWithTag("turn.breakdown", useUnmergedTree = true).fetchSemanticsNodes().size)
+        // Detailed shows the same line, once.
+        chooseMode(expert = true)
+        assertEquals(1, compose.onAllNodesWithTag("turn.details.s1-a").fetchSemanticsNodes().size)
+        computer.turnStats = false
+    }
+
+    /**
      * #2117: Nekko beside the chat's title says hello on a tap, offers Refresh to TalkBack, and
      * a pull up past the newest message reads the chat again from the computer.
      */
@@ -633,6 +663,8 @@ class ChatModesTest {
         @Volatile var longChat = false
         /** Forty more exchanges before the last turn, so the chat scrolls. */
         @Volatile var manyMessages = false
+        /** The finished reply carries the computer's turn measurements (#2112). */
+        @Volatile var turnStats = false
         /** session:get takes this long, so a refresh can be seen turning (milliseconds). */
         @Volatile var slowGet = 0L
 
@@ -669,7 +701,15 @@ class ChatModesTest {
                     )
                     add(buildJsonObject { put("id", "$id-r1"); put("role", "tool"); put("toolResult", buildJsonObject { put("toolCallId", "$id-c1"); put("output", "# Release notes\n- Faster chat list\n- Faster chat list"); put("isError", false) }) })
                     add(buildJsonObject { put("id", "$id-r2"); put("role", "tool"); put("toolResult", buildJsonObject { put("toolCallId", "$id-c2"); put("output", "17"); put("isError", false) }) })
-                    add(buildJsonObject { put("id", "$id-a"); put("role", "assistant"); put("createdAt", T0 + 14_000); put("content", "Done: 14 notes in 4 areas (Chat, Phone, Models, Settings). I removed 3 duplicates and kept the clearer wording of each.") })
+                    add(buildJsonObject {
+                        put("id", "$id-a"); put("role", "assistant"); put("createdAt", T0 + 14_000); put("content", "Done: 14 notes in 4 areas (Chat, Phone, Models, Settings). I removed 3 duplicates and kept the clearer wording of each.")
+                        // The computer's persisted measurements for the turn (#2112): a turn that ran to the end.
+                        if (turnStats) put("turnStats", buildJsonObject {
+                            put("providerId", "anthropic"); put("modelId", "claude-opus-4-7"); put("effort", "high")
+                            put("inputTokens", 2_400); put("cacheReadTokens", 9_800); put("outputTokens", 612)
+                            put("outputMs", 8_200); put("wallMs", 14_300); put("calls", 3); put("stop", "complete")
+                        })
+                    })
                 },
             )
         }

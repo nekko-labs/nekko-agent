@@ -216,7 +216,7 @@ struct ChatsView: View {
             withAnimation { flip(&prefs.openedChatGroups, g.key) }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.accent)
+                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.inkSoft)
                     .rotationEffect(.degrees(open ? 90 : 0))
                 // By computer: the place's mark in its colour, as on its rows.
                 if let id = sourceId(g), let place = ChatPlace.of(id, store: store) {
@@ -297,7 +297,7 @@ struct ChatsView: View {
                 .accessibilityIdentifier("chats.view.groupBy")
                 Menu {
                     Picker("Sort by", selection: Binding(get: { view.sortBy }, set: { app.prefs.chatListView = view.withSort($0) })) {
-                        ForEach(ChatListView.SortBy.allCases, id: .self) { Text(Self.sortName($0)).tag($0) }
+                        ForEach(ChatListView.SortBy.allCases, id: \.self) { Text(Self.sortName($0)).tag($0) }
                     }
                     .pickerStyle(.inline).labelsHidden()
                 } label: {
@@ -308,7 +308,7 @@ struct ChatsView: View {
                 // Manual order has no direction: it is whatever was dragged on the computer.
                 if view.sortBy != .manual {
                     Menu {
-                        Picker("Order", selection: bind(.ascending)) {
+                        Picker("Order", selection: bind(\.ascending)) {
                             Text(orderName(ascending: true)).tag(true)
                             Text(orderName(ascending: false)).tag(false)
                         }
@@ -323,9 +323,13 @@ struct ChatsView: View {
                 // Toggles keep the submenu open, so several can be flipped in one go.
                 Menu("Card details") {
                     Toggle("Model", isOn: bind(\.showModel)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showModel")
                     Toggle("Context window", isOn: bind(\.showContext)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showContext")
                     Toggle("Pull requests", isOn: bind(\.showPullRequests)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showPullRequests")
                     Toggle("Last updated", isOn: bind(\.showUpdated)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showUpdated")
                 }
                 Menu("Show") {
                     Toggle("Previews", isOn: bind(\.showPreviews)).menuActionDismissBehavior(.disabled)

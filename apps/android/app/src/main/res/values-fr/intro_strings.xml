@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Send your first prompt" (FirstPromptIntro.kt): the iPhone's words; step 3 says Send, as Android's chat does (#2234). -->
+<resources>
+    <string name="intro_title">Envoie ton premier prompt</string>
+    <string name="intro_start_title">Commence par une question</string>
+    <string name="intro_start_body">Écris ce que tu veux faire, comme tu le demanderais à un collègue. Tu peux aussi toucher le micro et le dire.</string>
+    <string name="intro_add_title">Ajoute des photos et un dossier</string>
+    <string name="intro_add_body">Touche + pour ajouter des photos ou coller une image. Choisis un dossier pour que Nekko travaille au bon endroit sur ton ordinateur.</string>
+    <string name="intro_send_title">Touche Envoyer, et Nekko se met au travail</string>
+    <string name="intro_send_body">Nekko travaille sur ton ordinateur et te répond ici. Avant d’exécuter une commande ou de modifier quoi que ce soit, il te demande d’abord.</string>
+    <string name="intro_skip">Passer</string>
+    <string name="intro_next">Suivant</string>
+    <string name="intro_back">Retour</string>
+    <string name="intro_done">C’est parti</string>
+    <string name="intro_step" formatted="true">Étape %1$d : %2$s</string>
+</resources>

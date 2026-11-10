@@ -60,7 +60,7 @@ struct ComputersView: View {
                     .foregroundStyle(palette.inkSoft)
             }
             CloudFleetSection()
-            Section { NavigationLink(value: Route.pair) { Label("Pair another computer", systemImage: "plus") } }
+            Section { NavigationLink(value: Route.pair) { Label("Pair another computer", systemImage: "plus").labelStyle(.quietRow) } }
         }
         .appBackground()
         .navigationTitle("Computers")
@@ -128,7 +128,7 @@ struct SettingsView: View {
         Form {
             Section {
                 ThemePicker(selection: $prefs.theme)
-                NavigationLink(value: Route.customize) { Label("Customize", systemImage: "slider.horizontal.3") }
+                NavigationLink(value: Route.customize) { Label("Customize", systemImage: "slider.horizontal.3").labelStyle(.quietRow) }
                     .accessibilityIdentifier("settings.customize")
                 NavigationLink(value: Route.simpleMode) {
                     LabeledContent("Simple mode", value: prefs.expertMode ? String(localized: "Detailed") : String(localized: "Simple"))
@@ -151,7 +151,7 @@ struct SettingsView: View {
                 NavigationLink {
                     PermissionChecklistView()
                 } label: {
-                    Label("Permissions", systemImage: "checklist")
+                    Label("Permissions", systemImage: "checklist").labelStyle(.quietRow)
                 }
                 .accessibilityIdentifier("settings.permissions")
             } header: { SectionHeader("Device access") }
@@ -167,7 +167,7 @@ struct SettingsView: View {
                 if store.active != nil {
                     // SK-6: the active computer's step-up (security keys, passkeys, codes).
                     NavigationLink(value: Route.security) {
-                        Label("Security keys and codes", systemImage: "key.horizontal")
+                        Label("Security keys and codes", systemImage: "key.horizontal").labelStyle(.quietRow)
                     }
                     .accessibilityIdentifier("settings.security")
                     UntestedHardwareNote()
@@ -278,16 +278,16 @@ struct SettingsView: View {
                 .disabled(!store.pcSettings.known || store.conn != .online)
             }
             Section {
-                NavigationLink(value: Route.cloud) { Label("Nekko Cloud sync", systemImage: "lock.icloud") }
+                NavigationLink(value: Route.cloud) { Label("Nekko Cloud sync", systemImage: "lock.icloud").labelStyle(.quietRow) }
                     .accessibilityIdentifier("settings.cloud")
-                NavigationLink(value: Route.computers) { Label("Paired computers", systemImage: "desktopcomputer") }
+                NavigationLink(value: Route.computers) { Label("Paired computers", systemImage: "desktopcomputer").labelStyle(.quietRow) }
                 // Chats that run on this iPhone, on its own cloud providers (decision 0050).
-                NavigationLink(value: Route.phoneModels) { Label("Models on \(ChatPlace.phoneName)", systemImage: "iphone") }
+                NavigationLink(value: Route.phoneModels) { Label("Models on \(ChatPlace.phoneName)", systemImage: "iphone").labelStyle(.quietRow) }
                     .accessibilityIdentifier("settings.phoneModels")
                 // GitHub, Linear, Jira and the rest, on this iPhone itself (decision 0058).
-                NavigationLink(value: Route.connectors) { Label("Connectors", systemImage: "point.3.connected.trianglepath.dotted") }
+                NavigationLink(value: Route.connectors) { Label("Connectors", systemImage: "point.3.connected.trianglepath.dotted").labelStyle(.quietRow) }
                     .accessibilityIdentifier("settings.connectors")
-                NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right") }
+                NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right").labelStyle(.quietRow) }
                 Picker("Open at launch", selection: $prefs.defaultComputer) {
                     Text("The one used last").tag(String?.none)
                     ForEach(store.computers) { ComputerLabel(c: $0).tag(Optional($0.id)) }

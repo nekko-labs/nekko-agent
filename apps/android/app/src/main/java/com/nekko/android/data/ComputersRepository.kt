@@ -483,7 +483,7 @@ class ComputersRepository(
         _state.update {
             it.copy(
                 activeId = id, conn = RelayState.CONNECTING, denied = null, connDetail = null,
-                summaries = emptyList(), providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(), attention = AttentionState(),
+                summaries = emptyList(), summariesLoaded = false, providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(), attention = AttentionState(),
                 // Another computer, or the same one later: its settings are unknown until it answers.
                 pcSettings = PcSettings(),
                 quitFromPhone = false,
@@ -1110,7 +1110,7 @@ class ComputersRepository(
             _state.update { s ->
                 s.copy(
                     summaries = r.summaries, providers = r.providers, defaults = r.defaults, appearance = r.appearance, pcSettings = r.pcSettings,
-                    workspaces = r.workspaces, summariesLoading = false, savedListAt = null,
+                    workspaces = r.workspaces, summariesLoading = false, summariesLoaded = true, savedListAt = null,
                     imageGeneration = r.info?.imageGeneration == true,
                 )
             }

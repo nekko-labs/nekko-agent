@@ -59,7 +59,7 @@ struct StepUpSheet: View {
             Form {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Image(systemName: "key.horizontal.fill").font(.title2).foregroundStyle(palette.accent)
+                        Image(systemName: "key.horizontal").font(.title2).foregroundStyle(palette.inkSoft)
                             .accessibilityHidden(true)
                         Text(request.action).font(.headline).foregroundStyle(palette.ink)
                             .fixedSize(horizontal: false, vertical: true)
@@ -440,7 +440,7 @@ struct ThisComputerSection: View {
     var body: some View {
         if store.activeId == computerId, let c = store.active {
             Section {
-                NavigationLink(value: Route.security) { Label("Security keys and codes", systemImage: "key.horizontal") }
+                NavigationLink(value: Route.security) { Label("Security keys and codes", systemImage: "key.horizontal").labelStyle(.quietRow) }
                     .accessibilityIdentifier("computer.security")
                 SafetyExitItems()
             } header: { SectionTitle(String(localized: "This computer")) } footer: {

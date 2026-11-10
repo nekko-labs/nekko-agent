@@ -214,12 +214,17 @@ fun ChatsScreen(
     var actionError by remember { mutableStateOf<String?>(null) }
     // Long-press on a completed chat: Restore it, or delete it for good.
     var pressedDone by remember { mutableStateOf<SessionSummary?>(null) }
-    // Folded groups and groups showing all their chats; kept while a chat is open.
-    var collapsed by rememberSaveable { mutableStateOf(setOf<String>()) }
+    // Groups showing all their chats; kept while a chat is open.
     var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
-    // The view menu (group by, sort by, what is shown) and the project groups' order, kept on this phone.
+    // The view menu (group by, sort by, what is shown), the project groups' order and the closed groups, kept on this phone.
     val localView = remember { MutableStateFlow(ChatListView.STANDARD) }
     val localOrder = remember { MutableStateFlow(emptyMap<String, List<String>>()) }
+    val localCollapsed = remember { MutableStateFlow(emptySet<String>()) }
+    val collapsed by (phonePrefs?.flow(ChatListPrefs.COLLAPSED_GROUPS) ?: localCollapsed).collectAsStateWithLifecycle()
+    val toggleGroup: (String) -> Unit = { key ->
+        if (phonePrefs != null) phonePrefs.set(ChatListPrefs.COLLAPSED_GROUPS, ChatListPrefs.toggled(phonePrefs.get(ChatListPrefs.COLLAPSED_GROUPS), key))
+        else localCollapsed.value = ChatListPrefs.toggled(localCollapsed.value, key)
+    }
     val view by (phonePrefs?.flow(ChatListPrefs.VIEW) ?: localView).collectAsStateWithLifecycle()
     val orders by (phonePrefs?.flow(ChatListPrefs.GROUP_ORDER) ?: localOrder).collectAsStateWithLifecycle()
     val setView: (ChatListView) -> Unit = { v -> if (phonePrefs != null) phonePrefs.set(ChatListPrefs.VIEW, v) else localView.value = v }
@@ -503,7 +508,7 @@ fun ChatsScreen(
                                     GroupHeader(
                                         groupTitle(g.key, g.name), open, groupCounts(g),
                                         onReorder = if (view.canReorderGroups && sections.size > 1) ({ reordering = true }) else null,
-                                    ) { collapsed = if (open) collapsed + g.key else collapsed - g.key }
+                                    ) { toggleGroup(g.key) }
                                 }
                                 if (!open) return@forEach
                                 if (g.chats.isEmpty()) {

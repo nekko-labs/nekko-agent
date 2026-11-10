@@ -98,6 +98,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 object Routes {
     const val CHATS = "chats"
+    const val PHONE = "phone"
     const val VOICE = "voice"
     const val CHAT = "chat/{id}"
     const val NEW = "new"
@@ -187,24 +188,17 @@ fun NekkoNavHost(
                     nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
                 }
             }
+            composable(Routes.PHONE) {
+                val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                com.nekko.android.phone.PhoneScreen(app.phoneChats) { nav.popBackStack() }
+            }
             composable(Routes.CHATS) {
-                // First run (IO-31): step 1 before pairing, step 3 right after the first pairing.
-                if (firstRunStep(repo, phonePrefs)) return@composable
-                if (mode != PaneMode.ONE) {
-                    Panes(window, panes, repo, phonePrefs, shareInbox, nav, startFresh)
-                    return@composable
+                Column(Modifier.fillMaxSize()) {
+                    androidx.compose.material3.TextButton(onClick = { nav.navigate(Routes.PHONE) }, modifier = Modifier.padding(top = 24.dp)) { Text("This phone") }
+                    Box(Modifier.weight(1f)) {
+                        PhoneComputerHome(repo, phonePrefs, mode, window, panes, shareInbox, nav, startFresh)
+                    }
                 }
-                ChatsScreen(
-                    repo = repo,
-                    onOpenChat = { nav.navigate(Routes.chat(it)) },
-                    onNewChat = { nav.navigate(Routes.NEW) },
-                    onPair = { nav.navigate(Routes.pair()) },
-                    onComputers = { nav.navigate(Routes.COMPUTERS) },
-                    onSettings = { nav.navigate(Routes.SETTINGS) },
-                    onMonitors = { nav.navigate(Routes.MONITORS) },
-                    onSkipFirstRun = firstRunSkip(phonePrefs),
-                    phonePrefs = phonePrefs,
-                )
             }
             composable(Routes.MONITORS) {
                 if (mode != PaneMode.ONE) {
@@ -535,4 +529,36 @@ private fun NavHostController.backToChats() {
     if (!popBackStack(Routes.CHATS, inclusive = false)) {
         navigate(Routes.CHATS) { popUpTo(graph.id) { inclusive = true }; launchSingleTop = true }
     }
+}
+
+@Composable
+private fun PhoneComputerHome(
+    repo: ComputersRepository,
+    phonePrefs: PhonePrefs,
+    mode: PaneMode,
+    window: WindowPosture,
+    panes: PanesViewModel,
+    shareInbox: ShareInbox,
+    nav: NavHostController,
+    startFresh: (ModelPick?) -> Unit,
+) {
+
+    // First run (IO-31): step 1 before pairing, step 3 right after the first pairing.
+    if (firstRunStep(repo, phonePrefs)) return
+    if (mode != PaneMode.ONE) {
+        Panes(window, panes, repo, phonePrefs, shareInbox, nav, startFresh)
+        return
+    }
+    ChatsScreen(
+        repo = repo,
+        onOpenChat = { nav.navigate(Routes.chat(it)) },
+        onNewChat = { nav.navigate(Routes.NEW) },
+        onPair = { nav.navigate(Routes.pair()) },
+        onComputers = { nav.navigate(Routes.COMPUTERS) },
+        onSettings = { nav.navigate(Routes.SETTINGS) },
+        onMonitors = { nav.navigate(Routes.MONITORS) },
+        onSkipFirstRun = firstRunSkip(phonePrefs),
+        phonePrefs = phonePrefs,
+    )
+
 }

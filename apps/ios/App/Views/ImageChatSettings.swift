@@ -7,6 +7,7 @@ struct ImageChatSettings: View {
     @Binding var params: ImageChatParams
     @Environment(ComputersStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
     @State private var error: String?
     @State private var loading = false
     var save: ((ImageChatParams) async throws -> Void)? = nil
@@ -17,7 +18,7 @@ struct ImageChatSettings: View {
             Form {
                 Section("Local image model") {
                     if loading { ProgressView("Reading image models…") }
-                    if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("imageChat.error") }
+                    if let error { Text(error).foregroundStyle(palette.danger).accessibilityIdentifier("imageChat.error") }
                     Picker("Image model", selection: $params.modelId) {
                         Text("Choose a model").tag(String?.none)
                         ForEach(store.imageModels) { model in

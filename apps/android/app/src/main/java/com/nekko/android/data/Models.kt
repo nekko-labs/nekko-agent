@@ -71,6 +71,8 @@ data class ComputersState(
     val denied: DenyReason? = null,
     val summaries: List<SessionSummary> = emptyList(),
     val summariesLoading: Boolean = false,
+    /** The active computer's own list has been read since it became active (not the phone's saved copy). */
+    val summariesLoaded: Boolean = false,
     val providers: List<PublicProvider> = emptyList(),
     val defaults: RemoteDefaults = RemoteDefaults(),
     /** The computer's phone-settable settings (Settings → On <computer>); defaults until it answers. */
