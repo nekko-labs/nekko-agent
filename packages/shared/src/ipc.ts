@@ -25,7 +25,7 @@ import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
 import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, JobAction, LinuxImageView, RunnerSettings, RunnerView } from './runners.js';
-import type { ConnectorConfig, ConnectorKind, ConnectorResource, DetectedConnectors } from './connectors.js';
+import type { ConnectorConfig, ConnectorKind, ConnectorResource, DetectedConnectors, RepoExclusions } from './connectors.js';
 import type {
   AgentToolId,
   AgentToolStatus,
@@ -376,6 +376,10 @@ export const IpcChannels = {
   connectorFetch: 'connector:fetch',
   connectorsDetect: 'connectors:detect',
   connectorImportCli: 'connector:importCli',
+  /** Every repository a git connector reaches, removed ones included (#2562). */
+  connectorRepos: 'connector:repos',
+  /** Save which repositories and owners a git connector leaves out (#2562). */
+  connectorExclude: 'connector:exclude',
 
   integrationsDetect: 'integrations:detect',
   integrationsInstall: 'integrations:install',
@@ -1228,6 +1232,10 @@ export interface NekkoApi {
   detectConnectors(): Promise<DetectedConnectors>;
   /** Connect GitHub with the GitHub CLI's sign-in; the daemon reads the token itself. */
   importConnectorCli(kind: ConnectorKind): Promise<ConnectorConfig[]>;
+  /** Every repository GitHub or GitLab reaches, including the ones removed from the app. */
+  connectorRepos(kind: ConnectorKind): Promise<import('./workspace.js').RemoteRepoList>;
+  /** Replace the repositories and owners a git connector leaves out of Add repository and chat context. */
+  excludeConnectorRepos(kind: ConnectorKind, choice: RepoExclusions): Promise<ConnectorConfig[]>;
 
   /** Which agent CLIs are present and whether Nekko is installed as an MCP subagent. */
   detectAgentTools(): Promise<AgentToolStatus[]>;
