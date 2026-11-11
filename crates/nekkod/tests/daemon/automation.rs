@@ -165,7 +165,7 @@ async fn a_local_task_waits_while_someone_uses_the_computer() {
 
 /// The reply requests the model got, leaving out chat titles.
 fn replies_asked(model: &ScriptedModel) -> usize {
-    let titled = |r: &Value| r["messages"].to_string().contains("Give this task a short title");
+    let titled = |r: &Value| r["messages"].to_string().contains("Name this chat for a sidebar list");
     model.requests.lock().unwrap().iter().filter(|r| !titled(r)).count()
 }
 
