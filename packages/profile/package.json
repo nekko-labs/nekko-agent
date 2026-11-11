@@ -3,7 +3,7 @@
   "version": "0.9.8",
   "private": true,
   "type": "module",
-  "description": "The user's data folder on this machine: where it lives, moving it, older installs' profiles, and the running app.",
+  "description": "Node-side pieces the desktop app and the Local Web UI share: the user's data folder (where it lives, moving it, older installs' profiles), the running app, and the local server for HTML previews.",
   "exports": {
     "./user-data": {
       "types": "./dist/user-data.d.ts",
@@ -16,6 +16,10 @@
     "./app-control": {
       "types": "./dist/app-control.d.ts",
       "import": "./dist/app-control.js"
+    },
+    "./html-preview": {
+      "types": "./dist/html-preview.d.ts",
+      "import": "./dist/html-preview.js"
     }
   },
   "scripts": {

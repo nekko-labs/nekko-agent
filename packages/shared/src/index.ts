@@ -75,6 +75,7 @@ export * from './pairing-link.js';
 export * from './phone-access.js';
 export * from './phone-changes.js';
 export * from './phone-files.js';
+export * from './html-preview.js';
 export * from './phone-views.js';
 export * from './phone-terminal.js';
 export * from './phone-git.js';

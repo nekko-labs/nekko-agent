@@ -1038,6 +1038,15 @@ export interface NekkoApi {
 
   /** Read a file as text (for the in-app viewer/editor). */
   readFile(path: string): Promise<FileContent>;
+  /**
+   * Serve a local .html page with its folder so it renders with its own
+   * stylesheets, scripts and images (answered by the host, not the engine).
+   * Absent, or rejecting, where nothing can serve it (a relayed browser):
+   * the preview then falls back to the page's text in a scriptless frame.
+   */
+  serveHtmlPreview?(path: string, options: import('./html-preview.js').HtmlPreviewOptions): Promise<import('./html-preview.js').HtmlPreviewServed>;
+  /** Stop serving a page `serveHtmlPreview` returned. */
+  releaseHtmlPreview?(id: string): Promise<void>;
   /** Write text to a file (in-app editor save). */
   writeFile(path: string, content: string): Promise<void>;
   /** List a directory's immediate entries (file explorer). */
