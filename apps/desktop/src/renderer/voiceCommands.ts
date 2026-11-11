@@ -32,7 +32,7 @@ export function parseVoiceIntent(text: string): VoiceIntent {
   return { kind: 'unknown', text: trimmed };
 }
 
-const VIEWS: Record<string, View> = { 'agent board': 'command', 'command center': 'command', agents: 'command', models: 'models', 'model providers': 'models', 'model server': 'modelserver', settings: 'settings', connectors: 'connectors', memory: 'memory', skills: 'skills', training: 'training', workflows: 'workflows', 'scheduled tasks': 'workflows', design: 'design', library: 'artifacts', artifacts: 'artifacts' };
+const VIEWS: Record<string, View> = { 'agent board': 'command', 'command center': 'command', agents: 'command', models: 'models', 'model providers': 'models', 'model server': 'modelserver', settings: 'settings', connectors: 'connectors', memory: 'memory', skills: 'skills', training: 'training', workflows: 'workflows', automations: 'workflows', 'scheduled tasks': 'workflows', design: 'design', library: 'artifacts', artifacts: 'artifacts' };
 
 const PICKS: Record<string, 1 | 2 | 3> = { first: 1, one: 1, 1: 1, second: 2, two: 2, 2: 2, third: 3, three: 3, 3: 3 };
 

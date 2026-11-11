@@ -38,6 +38,7 @@ Object.assign(window, { nekko: {
   openPath: async (url: string) => { calls.push(['open', url]); },
   listWorkflows: async () => ({ workflows: [], runs: [] }), onWorkflowsUpdated: () => () => {},
   engineStatus: async () => null,
+  machineProfile: async () => (fail.startsWith('unknown channel') ? { platform: 'win32', arch: 'x64' } : { platform: 'darwin', arch: 'arm64' }),
 } });
 localStorage.setItem('nekko.chatMode', 'expert');
 useStore.setState({ view: 'command', settings: {} as never });

@@ -1,12 +1,91 @@
 import React, { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { isServableHtml, type HtmlPreviewServed } from '@nekko-agent/shared';
 
 /** Untrusted documents get an opaque origin, no app bridge, and no network. */
 export function isolatedDocument(source: string): string {
   return `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'"><meta name="referrer" content="no-referrer">${source}`;
 }
 
-export function ArtifactPreview({ source, title = 'Design preview' }: { source: string; title?: string }) {
+/**
+ * The sandbox a served page gets: scripts, forms (the server's policy stops
+ * them submitting anywhere) and alerts, but no `allow-same-origin`, so the
+ * page's origin is opaque and it can reach no cookie, storage or API of the
+ * app, even on the same host. No popups and no top navigation either.
+ */
+export const SERVED_PREVIEW_SANDBOX = 'allow-scripts allow-forms allow-modals';
+
+function ViewportSelect({ width, onChange }: { width: string; onChange: (width: string) => void }) {
+  return <select aria-label="Preview viewport" className="input w-auto" value={width} onChange={(e) => onChange(e.target.value)}>
+    <option value="100%">Fit</option><option value="375px">Phone · 375</option><option value="768px">Tablet · 768</option><option value="1280px">Desktop · 1280</option>
+  </select>;
+}
+
+/**
+ * An HTML preview. Given the page's `path` and a host that can serve it, the
+ * page runs live with its own folder (`ServedPreview`); otherwise its text is
+ * drawn in a scriptless, network-less frame (`StaticPreview`).
+ */
+export function ArtifactPreview({ source, title = 'Design preview', path }: { source: string; title?: string; path?: string }) {
+  const servable = !!path && isServableHtml(path) && typeof window !== 'undefined' && !!window.nekko?.serveHtmlPreview;
+  return servable ? <ServedPreview path={path} source={source} title={title} /> : <StaticPreview source={source} title={title} />;
+}
+
+/**
+ * A local .html page live, served with its folder by the host so its own
+ * stylesheets, scripts, images and fonts load. The network stays off until
+ * "Load from internet" is switched on for this preview (https and wss only);
+ * opening another file turns it off again. If the host refuses or can't
+ * serve the page, the scriptless preview shows with the reason.
+ */
+function ServedPreview({ path, source, title }: { path: string; source: string; title: string }) {
+  const [width, setWidth] = useState('100%');
+  const [internet, setInternet] = useState(false);
+  const [served, setServed] = useState<HtmlPreviewServed | null>(null);
+  const [failed, setFailed] = useState('');
+  useEffect(() => { setInternet(false); }, [path]);
+  useEffect(() => {
+    let live = true;
+    let id = '';
+    const release = (served: string) => { void window.nekko.releaseHtmlPreview?.(served).catch(() => {}); };
+    setServed(null); setFailed('');
+    window.nekko.serveHtmlPreview!(path, { internet }).then((s) => {
+      if (!s?.url) throw new Error('Nothing here can serve the page.');
+      if (!live) { release(s.id); return; }
+      id = s.id;
+      setServed(s);
+    }).catch((e) => { if (live) setFailed((e as Error).message || 'The page could not be served.'); });
+    return () => { live = false; if (id) release(id); };
+  }, [path, internet]);
+  if (failed) return <StaticPreview source={source} title={title} note={`${failed} Showing it without its files or scripts.`} />;
+  return <div className="flex h-full min-h-96 flex-col gap-2 p-3" data-served-preview>
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <strong>{title}</strong>
+      <ViewportSelect width={width} onChange={setWidth} />
+      <button type="button" className="ctl-toggle text-2xs" aria-pressed={internet} onClick={() => setInternet((on) => !on)} data-preview-internet
+        title={internet ? 'This page may load from the internet (https only). Click to block it again.' : 'Only files in this page’s folder load. Click to let it load from the internet too.'}>
+        <span className="ctl-dot" /> Load from internet
+      </button>
+    </div>
+    <div className="min-h-96 flex-1 overflow-auto rounded-lg bg-surface-2">
+      {served
+        // A saved edit changes `source`, which reloads the frame from disk.
+        ? <iframe key={`${served.url}:${source.length}:${hashText(source)}`} title={title} src={served.url} sandbox={SERVED_PREVIEW_SANDBOX}
+            referrerPolicy="no-referrer" style={{ width, height: '100%', minHeight: 480, border: 0, background: 'white' }} />
+        : <p className="p-4 text-xs text-ink-faint">Loading…</p>}
+    </div>
+  </div>;
+}
+
+/** A cheap, stable fingerprint of the page text, to reload the frame when it changes. */
+function hashText(text: string): number {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (Math.imul(h, 31) + text.charCodeAt(i)) | 0;
+  return h;
+}
+
+/** The page's text in a scriptless frame with no network and no app bridge. */
+function StaticPreview({ source, title, note }: { source: string; title: string; note?: string }) {
   const [width, setWidth] = useState('100%');
   const [error, setError] = useState('');
   const openInteractive = async () => {
@@ -17,13 +96,11 @@ export function ArtifactPreview({ source, title = 'Design preview' }: { source: 
   return <div className="flex h-full min-h-96 flex-col gap-2 p-3">
     <div className="flex flex-wrap items-center gap-2 text-xs">
       <strong>{title}</strong>
-      <select aria-label="Preview viewport" className="input w-auto" value={width} onChange={(e) => setWidth(e.target.value)}>
-        <option value="100%">Fit</option><option value="375px">Phone · 375</option><option value="768px">Tablet · 768</option><option value="1280px">Desktop · 1280</option>
-      </select>
+      <ViewportSelect width={width} onChange={setWidth} />
       <button className="chip chip-action" onClick={openInteractive}>Open interactive preview</button>
       <span className="text-ink-faint">Isolated · network blocked</span>
     </div>
-    {error && <p role="status" className="text-xs text-ink-soft">{error}</p>}
+    {(note || error) && <p role="status" className="text-xs text-ink-soft">{error || note}</p>}
     <div className="min-h-96 flex-1 overflow-auto rounded-lg border border-line bg-surface-2">
       <iframe title={title} sandbox="" referrerPolicy="no-referrer"
         srcDoc={isolatedDocument(source)} style={{ width, height: '100%', minHeight: 480, border: 0, background: 'white' }} />

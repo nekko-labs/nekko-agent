@@ -15,7 +15,7 @@ Jobs appear under **Queued**, **In progress**, and **Completed**. Use the existi
 Accept now/Decline, Cancel/Re-run, and log controls there. Cancel and restart still
 ask for confirmation because they affect the workflow run on GitHub.
 
-Choose **View CI runners** to open the full CI section in Scheduled Tasks, where you
+Choose **View CI runners** to open the full CI section in Automations, where you
 can also connect GitHub and set up this Mac. With no connected runners the panel
 shows a short setup hint. Runners are hidden when the connected service does not
 support them; a temporary service failure shows an error and retries.
@@ -32,7 +32,7 @@ This is not the [Local CI runner](git-runner.md) workflow template. That one run
 directly on the machine and reports a commit status; this one picks up real `runs-on:` jobs from
 the GitHub Actions queue, each in its own VM.
 
-You find it in **Scheduled Tasks > CI runners**, in the menu at the top left of the page. In Simple
+You find it in **Automations > CI runners**, in the menu at the top left of the page. In Simple
 mode that entry appears once this Mac is a runner; before that, switch to Detailed or use **View
 CI runners** on the Automations panel.
 
@@ -57,9 +57,12 @@ and no packaged release has the setup screens yet; both are part of the pilot (T
 
 ## Before you start
 
-- **An Apple silicon Mac.** On Windows and Linux, **Scheduled Tasks > CI runners** says so and
-  points you to Nekko Agent on your Mac, where runners are set up and their jobs shown. A Mac
-  that cannot run VMs shows "VM support unavailable" on the runner card.
+- **An Apple silicon Mac.** **Automations > CI runners** lists what this computer can run:
+  macOS, Linux and Windows, each available or greyed with the reason. A Mac with Apple silicon
+  runs macOS and Linux jobs. On another computer macOS reads "Needs a Mac with Apple silicon",
+  and the page points you to Nekko Agent on your Mac. Windows and Linux jobs on a Windows PC
+  are coming ([#2553](https://github.com/nekko-labs/nekko-agent/issues/2553)). A Mac that
+  cannot run VMs shows "VM support unavailable" on the runner card.
 - **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. On macOS 27
   Nekko [builds it](#set-up-this-mac) from Apple's restore image; on macOS 26 you
   [bring your own](ci-runners-image.md). Until an image exists, the runner card offers **Set up this Mac**.
@@ -73,7 +76,7 @@ The runner talks to GitHub as a GitHub App you own, so its access is limited to 
 you can revoke it at any time. Nekko creates the app for you with two clicks on GitHub. Nothing is
 copied or pasted.
 
-In **Scheduled Tasks > CI runners**, choose **Connect GitHub**:
+In **Automations > CI runners**, choose **Connect GitHub**:
 
 1. **Where do your repos live?** Nekko checks GitHub first. When `gh` is signed in, pick your
    account or an org from the list. Without it, Nekko goes straight to GitHub for your own
@@ -202,7 +205,7 @@ list workflow runs and re-run a job. See GitHub's
 
 ### Connect this Mac
 
-In **Scheduled Tasks > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
+In **Automations > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
 sheet has three steps:
 
 1. **Install app.** Paste the App ID, the installation ID and the whole private key file. The key
@@ -315,7 +318,8 @@ you). A ready VM still waits for the mode: with Do not disturb it boots only whi
 ## Keep awake
 
 - **System default**. The Mac follows its own Energy settings. If it sleeps mid-job, the job is
-  lost and re-run (when **Re-run jobs lost to sleep** is on).
+  lost and re-run (when **Re-run jobs lost to sleep** is on). A job cut off because Nekko
+  quit or restarted is audited as lost and re-run the same way when Nekko starts again.
 - **While a runner is active** (default). Keeps the Mac from sleeping while a job runs and lets
   it sleep when the last one ends. The display can still sleep.
 - **Always**. Keeps the Mac awake whenever the runner is on and allowed to take jobs.
@@ -346,7 +350,8 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **Memory per VM**: 4 to 64 GB, for macOS and Linux VMs alike.
 - **Total runner memory**: **Use the recommendation** (the sheet shows
   `Recommended: N GB for this Mac`), or your own figure from 4 GB up to 75% of the Mac's memory.
-- **CPU per VM**: **Mode default**, or 2 up to the Mac's cores minus 2.
+- **CPU per VM**: **Mode default**, or 2 up to the Mac's cores minus 2. The mode default is
+  shared between your macOS slots, so two slots on a 10-core Mac get 4 vCPUs each.
 - **Disk**: an image budget of 50 to 4000 GB, and a free-disk floor of 10 to 1000 GB below which
   no new VM starts.
 - **Only when**: **On power**, **Trusted networks**, **Never on hotspots**, and
@@ -474,7 +479,8 @@ The two logs have different sources:
   boot to finish before checking a job in a newly started VM. This updates future VMs, not a VM
   already running or a log lost when its VM was deleted. Empty output or a collection failure
   can also leave no saved log; the message alone does not prove the image is old. This Mac
-  keeps the last 20 nonempty VM logs, up to 1 MB each.
+  keeps the last 20 nonempty VM logs, up to 1 MB each: the first 256 KB and the latest output,
+  with a note between them of how much was dropped.
 
 Runner settings **Save** shows **Saving runner settings…**, prevents edits and dismissal while
 saving, and closes with a confirmation after the service accepts the change. On failure, the

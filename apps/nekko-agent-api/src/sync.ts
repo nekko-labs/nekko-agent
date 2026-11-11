@@ -214,6 +214,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       // A revoked device key cannot enroll again; its advertisement no longer
       // needs a revision guard, and must not consume fleet capacity forever.
       await tx.query("delete from fleet_computers where device_id = $1 and user_id = $2", [id, caller.userId]);
+      await tx.query("delete from org_fleet_computers where device_id = $1 and user_id = $2", [id, caller.userId]);
       return reply.code(204).send();
     });
   });
@@ -451,6 +452,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       }
     }
     await db.transaction(async (tx) => {
+      await tx.query("delete from org_fleet_computers where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_objects where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_keyrings where user_id = $1", [caller.userId]);
       await tx.query("update api_tokens set device_id = null, sync_proven_key_id = null where user_id = $1", [caller.userId]);

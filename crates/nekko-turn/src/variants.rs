@@ -555,9 +555,15 @@ pub fn sandbox_workspaces(session: &Value) -> Vec<Value> {
             ids.len()
         }
     };
-    (0..count)
-        .map(|i| json!({ "id": format!("sandbox-{i}"), "name": format!("folder-{i}"), "path": format!("folder-{i}"), "addedAt": 0 }))
-        .collect()
+    let folder = |i: usize| json!({ "id": format!("sandbox-{i}"), "name": format!("folder-{i}"), "path": format!("folder-{i}"), "addedAt": 0 });
+    let mut out: Vec<Value> = (0..count).map(folder).collect();
+    // Repositories cloned straight into the sandbox follow the folders (#2561).
+    for (j, r) in session.pointer("/sandbox/sourceRepos").and_then(Value::as_array).into_iter().flatten().enumerate() {
+        let mut f = folder(count + j);
+        f["repo"] = json!({ "provider": r["provider"], "fullName": r["fullName"], "webUrl": r.get("webUrl").cloned().unwrap_or(json!("")) });
+        out.push(f);
+    }
+    out
 }
 
 /// `sandboxAdmissionRefusal(session, opts)`: why a sandbox chat's turn cannot start.

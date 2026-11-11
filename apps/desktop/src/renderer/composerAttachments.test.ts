@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attachmentName, pastedFileName, planAttachment, unreadableNote } from './composerAttachments.js';
+import { attachmentName, attachmentOnlyText, pastedFileName, planAttachment, unreadableNote } from './composerAttachments.js';
 
 const sighted = { image: 'yes', video: 'yes' } as const;
 const blind = { image: 'no', video: 'no' } as const;
@@ -48,5 +48,12 @@ describe('names', () => {
     expect(pastedFileName(new File([''], 'report.pdf', { type: 'application/pdf' }), at)).toBe('report.pdf');
     expect(attachmentName('C:\\a\\b\\c.txt')).toBe('c.txt');
     expect(attachmentName('/x/y.md')).toBe('y.md');
+  });
+});
+
+describe('attachmentOnlyText', () => {
+  it('names the files a message carries when nothing was typed', () => {
+    expect(attachmentOnlyText(['/Users/a/text-A6CD-1.txt', 'C:\\notes\\plan.md'])).toBe('Attached text-A6CD-1.txt, plan.md');
+    expect(attachmentOnlyText([])).toBe('');
   });
 });

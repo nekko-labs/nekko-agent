@@ -15,7 +15,7 @@ itests (decision 0059):
 | Full | nightly at 03:17 JST (skipped if `main` has not moved), or `gh workflow run ci.yml --ref <branch>` | every job on every OS, macOS included, plus `perf` and the itests |
 
 Every other platform build is nightly too, or on a PR with its label:
-`deploy:ios` (Native iOS, CodeQL Swift), `deploy:android` (Native Android),
+`deploy:ios` (Native iOS; CodeQL's Swift scan is nightly only), `deploy:android` (Native Android),
 `deploy:macos` (dev identity, nekkod darwin, decision-model CoreML, the macOS
 installer), `deploy:windows` (the Windows installer). Add the label to a PR that
 changes that platform's code (`cfg(target_os = ...)`, ConPTY, the dev bundle,

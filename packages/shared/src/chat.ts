@@ -262,6 +262,8 @@ export interface Session {
   /** Opt-in marker written only on new chats; older sessions keep their checkout. */
   executionMode?: ExecutionMode;
   sandbox?: SandboxIdentity;
+  /** Repositories for this sandbox chat's sandbox, before it is set up (#2561). */
+  sandboxRepos?: SandboxRepo[];
   gitIsolation?: boolean;
   /** Explicit dependent work, pinned when Continue as stacked PR is selected. */
   gitStackParent?: { workspaceId: string; url: string; branch: string; sha: string };
@@ -315,6 +317,12 @@ export interface Session {
    * chat's alias) to. Trusted only while the chat's `modelId` still matches.
    */
   claudeCodeContext?: ClaudeCodeContext;
+  /**
+   * The attached files a Claude Agent chat's Claude Code session has already
+   * been given, so each goes once per session. Set by nekkod; cleared when
+   * Claude Code compacts, so they are given again.
+   */
+  claudeCodeAttached?: { session: string; paths: string[] };
   messages: ChatMessage[];
   contextPrefs?: ContextPrefs;
   /** Files explicitly attached to this chat's context (absolute paths). */
@@ -757,7 +765,9 @@ export interface ReplySuggestions {
 
 /** Explicit execution mode is authoritative; legacy sessions retain their previous behavior. */
 export type ExecutionMode = 'sandbox' | 'worktree' | 'unified';
-export interface SandboxIdentity { image: string; identity: string; configuredAt: number; sourceWorkspaceIds: string[] }
+/** A repository a sandbox chat clones into its sandbox rather than onto this computer (#2561). */
+export interface SandboxRepo { provider: 'github' | 'gitlab'; fullName: string; cloneUrl: string; webUrl: string }
+export interface SandboxIdentity { image: string; identity: string; configuredAt: number; sourceWorkspaceIds: string[]; sourceRepos?: SandboxRepo[] }
 export interface SandboxStatus { mode: ExecutionMode; phase: 'unconfigured' | 'configured' | 'ready' | 'error'; identity?: string; image?: string; error?: string; applySupported: false }
 export interface SandboxDiff { identity: string; diffId: string; changes: Array<{ path: string; before: string | null; after: { path: string; base64: string; hash: string } | null }> }
 export function getExecutionMode(session?: Pick<Session, 'executionMode' | 'gitIsolation'>): ExecutionMode {

@@ -71,6 +71,45 @@ hostname).
   enrollment, descriptor crypto, phone connections and local-model execution
   are **not implemented by these routes**. Keep disabled until those are
   verified. See [account fleet spec](../../spec/phone/account-synced-computer-fleet.md).
+- `/v1/orgs`: **organizations and their shared computer fleet** (decision 0086,
+  [spec](../../spec/platform/organizations.md)). Routes exist only with
+  `NEKKO_ORGS_ENABLED=1` (always on in `dev:local`), independent of the account
+  fleet flag. `NEKKO_ORGS_ALLOWED_EMAILS` (comma-separated, lower-cased) limits
+  who may create orgs, accept invites or call the org fleet routes (403
+  `orgs-not-available`); unset allows everyone. All routes are Bearer `nk_`,
+  `Cache-Control: no-store`, inside the authenticated rate limit. Wire shapes:
+  `Org {id, name, role, keyId, memberCount, createdAt}`,
+  `Member {userId, email, role, addedAt, you}`, `Invite {id, email, role, createdAt, expiresAt}`,
+  `FleetComputer {deviceId, userId, orgKeyId, revision, descriptor, seenAt, expiresAt, online, you}`.
+  - `GET /v1/orgs` -> `{orgs, invites}` (invites addressed to the caller's email:
+    `{id, orgId, orgName, role, invitedBy, expiresAt}`). `POST /v1/orgs {name}` (Pro/Team,
+    201, caller becomes owner; 409 `org-limit` at 20 orgs). `GET /v1/orgs/:orgId`
+    -> `Org & {members, invites}` (invites for owner/admin only). `PATCH` rename
+    (owner/admin), `DELETE` (owner, 204). A non-member gets 404 `not-found` on every
+    org route; a member without the role gets 403 `forbidden`.
+  - `POST /v1/orgs/:orgId/invites {email, role?}` (owner/admin, role `admin` or
+    `member`, 201; 409 `invite-exists`, `already-member`, `org-full`). No email is sent
+    yet. `DELETE /v1/orgs/:orgId/invites/:inviteId` (204). `POST /v1/orgs/invites/:inviteId/accept`
+    -> `Org` (the account's email must match; otherwise 404; 410 `invite-expired`;
+    invites last 14 days).
+  - `DELETE /v1/orgs/:orgId/members/:userId`: owner removes anyone, admin removes
+    members, anyone removes themself. 409 `last-owner`. Deletes that user's org
+    computers and answers `{rotateKey: true}` (the server holds no key, so a
+    key-holding client rotates).
+  - `PUT /v1/orgs/:orgId/key {keyId, proof?}`: advance the org-key epoch to exactly
+    current + 1 (409 `org-key-epoch` with `currentKeyId`); owner/admin on an unlocked
+    device; answers `{keyId}`. Older-epoch computers stay stored but are hidden
+    until republished.
+  - Org fleet: `GET /v1/orgs/:orgId/fleet` -> `{orgKeyId, computers}`;
+    `PUT /v1/orgs/:orgId/fleet/self {orgKeyId, revision, descriptor}` (Pro/Team; 201
+    first time, 200 after; 400 `bad-descriptor`, 409 `org-key-epoch` / `revision` /
+    `fleet-full`); `POST .../fleet/self/heartbeat` (409 `publish-required`);
+    `DELETE .../fleet/self` (204, any plan, no unlock, needs a device token). Reads,
+    publish and heartbeat need org membership **and** an unlocked device (403
+    `needs-synced-device`), like the account fleet. A computer is listed only for the
+    org's current key, from a current member's unrevoked device with a live,
+    proven token. 90-second presence lease. Limits: 100 members and 100 computers
+    per org, 20 orgs per user.
 - `GET /v1/auth/config`, `POST /v1/auth/session`, `GET /v1/auth/me`,
   `DELETE /v1/auth/session`: sign-in.
 - `DELETE /v1/account` (Bearer `nk_` token): deletes the account for good
@@ -164,6 +203,13 @@ fly secrets set ALERT_EMAIL='<who gets alerts>'
   `0014`). No model names, connection coordinates or secrets in plaintext.
   Revocation, sync deletion and account deletion remove the corresponding rows;
   withdrawal retains a hidden revision guard.
+- `orgs`, `org_members`, `org_invites`, `org_fleet_computers` (migration `0015`):
+  organizations, their roster with roles, invites addressed to a lower-cased email
+  (14 days), and sealed computer descriptors per org (publishing device, user and
+  token, org key epoch, revision, presence). `orgs.key_id` is only the epoch
+  number. Removing a member, revoking a device, `DELETE /v1/sync` and account
+  deletion remove the matching computers; account deletion also deletes orgs the
+  account alone owns.
 - `signups.marketing_opt_in`, `signups.policy_version` (migration `0011`):
   marketing consent apart from the beta, and the policy version agreed to.
 - `pending_auth_deletions` (migration `0012`): Supabase users still to delete
