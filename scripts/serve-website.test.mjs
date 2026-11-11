@@ -47,6 +47,14 @@ test('marketing preview serves only static website files and read requests', asy
       assert.equal((await get(`/media/${f}`)).status, 200, f);
     }
   }
+  // Profiles: the spot claims separation of chats, notes and connectors, and
+  // its footnote keeps the two things a profile is not.
+  const profiles = page.body.slice(page.body.indexOf('id="profiles"'), page.body.indexOf('id="why"'));
+  assert.ok(profiles.length > 200, 'profiles spot present');
+  assert.match(profiles, /cannot read another profile&rsquo;s chats, notes or connectors/);
+  assert.match(profiles, /do not lock the app against someone using your unlocked computer/);
+  assert.match(profiles, /a terminal command can still reach files anywhere your computer account can/);
+  assert.doesNotMatch(profiles, /cannot (read|reach|access) another profile&rsquo;s (files|folders)/);
   // The benchmark summary keeps the result, its conditions, the measured losses
   // and the link to the full method, so the headline never hides them.
   const bench = page.body.slice(page.body.indexOf('id="benchmarks"'), page.body.indexOf('panels-foot', page.body.indexOf('id="benchmarks"')));

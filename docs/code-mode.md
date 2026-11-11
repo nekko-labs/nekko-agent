@@ -62,6 +62,11 @@ For the whole chat, hover the cost chip under the message box: **Saved by code m
 
 The figures are estimates at about 4 characters a token, the same rule the Context Inspector uses. They are not your provider's billed counts. If code mode costs more than a tool list on a reply (a very short tool list, or a single small call), the line shows nothing and the hover says by how much.
 
+## Where code mode does not apply
+
+- **Claude Agent chats.** Claude Code runs its own tools (Bash, Read, Edit and the rest), so Nekko Agent has nothing to wrap. The Tools flyout shows the tool list and says why, and these replies show no savings. Pick another model for the chat to use code mode.
+- **Sandbox chats** keep the tool list: their few tools run in the container.
+
 ## When to use the tool list instead
 
 - You want to watch each tool call appear in the transcript as it happens. In code mode a script's calls show up as approvals and in the script's output, not as separate rows.

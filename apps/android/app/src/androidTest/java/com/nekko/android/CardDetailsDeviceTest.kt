@@ -120,6 +120,9 @@ class CardDetailsDeviceTest {
         compose.onNodeWithTag("chats.view").performClick()
         settle()
         if (before) { shot("menu"); return }
+        // Card details opens its toggles in place of the menu (#2449).
+        compose.onNodeWithTag("chats.view.cardDetails").performClick()
+        settle()
         compose.onNodeWithText("Model").performScrollTo()
         shot("menu")
         compose.onNodeWithText("Model").performClick()

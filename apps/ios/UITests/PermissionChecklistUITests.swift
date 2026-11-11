@@ -126,7 +126,13 @@ final class PermissionChecklistUITests: XCTestCase {
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         let enabled = expectation(for: NSPredicate(format: "value == %@", "1"), evaluatedWith: toggle)
         wait(for: [enabled], timeout: 5)
-        app.activate()
+        // iOS may terminate the app when permissions change in Settings.
+        // Re-launch if it is no longer running so the permission recovery completes.
+        if app.state == .notRunning {
+            app.launch()
+        } else {
+            app.activate()
+        }
         let microphoneStatus = app.descendants(matching: .any)["permissions.status.microphone"].firstMatch
         let restored = expectation(for: NSPredicate(format: "label == %@", "Allowed"), evaluatedWith: microphoneStatus)
         wait(for: [restored], timeout: 10)

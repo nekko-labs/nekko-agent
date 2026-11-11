@@ -36,7 +36,7 @@
       content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=plum-white-2" />
-    <link rel="stylesheet" href="styles.css?v=12" />
+    <link rel="stylesheet" href="styles.css?v=13" />
     <link rel="stylesheet" href="fonts.css?v=1" />
     <!-- Structured data: so search and answer engines describe Nekko Agent accurately -->
     <script type="application/ld+json">
@@ -82,6 +82,7 @@
               "CLI and MCP server, so Claude Code, Codex and other agents can hand work to your local models",
               "Skills library and marketplace, plus sub-agents and long-running goals",
               "Context Inspector, command approvals, folder limits and line-by-line change review",
+              "Profiles: separate chats, settings, permissions, connectors and folders under one account",
               "Connectors for GitHub, Linear, Slack, Discord, Gmail, Drive and more",
               "Phone remote control for iOS and Android, end-to-end encrypted (in beta)",
               "Desktop, self-hosted browser and Docker editions"
@@ -528,6 +529,38 @@
         <p class="micro center reveal mf-foot">
           Meet Nekko: a small pixel cat keeping you company while your agents get to work.
         </p>
+      </section>
+
+      <!-- ===== profiles: one account, separate spaces. The copy claims only what
+           the app enforces; the footnote names what a profile is not. ===== -->
+      <section id="profiles" class="chapter band band-lavender" aria-labelledby="profiles-title">
+        <h2 id="profiles-title" class="reveal">Work and personal, <span class="grad">kept apart</span></h2>
+        <p class="chapter-lede reveal">Profiles give each part of your life its own Nekko under one account. Switch in a click, and the agents in the profile you left keep working.</p>
+        <div class="split reveal">
+          <ul class="check">
+            <li>Each profile has its own chats, saved notes and settings</li>
+            <li>Its own connectors and sign-ins, so your work GitHub never meets your personal Gmail</li>
+            <li>Its own folders, repositories and permission rules</li>
+            <li>A model in one profile cannot read another profile&rsquo;s chats, notes or connectors</li>
+            <li>Only you can move a chat across. Agents have no tool for it</li>
+          </ul>
+          <div class="profile-wall" role="img" aria-label="Two example profiles side by side, Personal and Work. Each has its own chats, folders and connectors, with a wall between them.">
+            <div class="pw-col" aria-hidden="true">
+              <div class="pw-name"><span class="pw-mark">P</span>Personal</div>
+              <div class="sc glass"><b>Chats</b><span>Plan the Kyoto trip</span></div>
+              <div class="sc glass"><b>Folders</b><code>~/Pictures</code></div>
+              <div class="sc glass"><b>Connectors</b><span>Gmail, Drive</span></div>
+            </div>
+            <div class="pw-divide" aria-hidden="true"></div>
+            <div class="pw-col" aria-hidden="true">
+              <div class="pw-name"><span class="pw-mark is-work">W</span>Work</div>
+              <div class="sc glass"><b>Chats</b><span>Fix the retry backoff</span></div>
+              <div class="sc glass"><b>Folders</b><code>~/code/acme-api</code></div>
+              <div class="sc glass"><b>Connectors</b><span>GitHub, Linear, Slack</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="micro center reveal">Example profiles, not a scan of your machine. Profiles separate what agents can reach inside Nekko; they do not lock the app against someone using your unlocked computer, and a terminal command can still reach files anywhere your computer account can.</p>
       </section>
 
       <section id="why" class="chapter">

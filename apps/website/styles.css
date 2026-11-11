@@ -307,6 +307,18 @@ a { color: var(--accent); }
 .sc b { min-width: 90px; }
 .sc code { margin-left: auto; }
 
+/* ---- profiles: two example profiles with a wall between them ---- */
+.profile-wall { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.pw-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pw-name { display: flex; align-items: center; gap: 10px; font-weight: 650; color: var(--ink); }
+.pw-mark { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; flex-shrink: 0; background: #5a2352; color: #fff; font-size: 12px; font-weight: 700; }
+.pw-mark.is-work { background: #1f6680; }
+.pw-col .sc { flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; }
+.pw-col .sc b { min-width: 0; font-size: 12px; font-weight: 500; color: var(--muted); }
+.pw-col .sc span, .pw-col .sc code { margin-left: 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.pw-divide { border-left: 2px dashed var(--line); }
+#profiles .split + .micro { margin-top: 30px; }
+
 /* ---- download: one smart button for the visitor's machine, plus a menu ---- */
 .download { text-align: center; }
 .download .chapter-lede { margin-left: auto; margin-right: auto; }

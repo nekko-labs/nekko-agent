@@ -16,20 +16,21 @@ final class GroupEvidenceTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Build the app"].waitForExistence(timeout: 5))
         attach(app, "card-groups-expanded")
         let fields = [
-            (setting: "chats.view.showModel", marker: "Model opus"),
-            (setting: "chats.view.showContext", marker: "Context window"),
-            (setting: "chats.view.showPullRequests", marker: "Pull request 42, open"),
-            (setting: "chats.view.showUpdated", marker: " ago"),
+            (setting: "chats.view.showModel", title: "Model", marker: "Model opus"),
+            (setting: "chats.view.showContext", title: "Context window", marker: "Context window"),
+            (setting: "chats.view.showPullRequests", title: "Pull requests", marker: "Pull request 42, open"),
+            (setting: "chats.view.showUpdated", title: "Last updated", marker: " ago"),
         ]
         if after {
-            // ChatRow combines its children: inspect its real spoken label rather than
-            // child identifiers that are not exposed. The English offline fixture
-            // has a timestamp several days old ("… ago"), never a live seconds ticker.
-            // Every field must initially be visible, not just absent after a toggle.
+            // ChatRow combines its children: verify every spoken field before
+            // toggling, then verify each change leaves all other fields intact.
             for field in fields { XCTAssertTrue(row(app).label.contains(field.marker), field.marker) }
             for index in fields.indices {
                 app.buttons["chats.view"].tap()
+                // A menu toggle can lose its identifier, so match its title too (as PhoneParityTests does).
+                let control = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", fields[index].setting, fields[index].title)).firstMatch
                 app.buttons["Card details"].tap()
+                XCTAssertTrue(control.waitForExistence(timeout: 3), fields[index].setting)
                 if index == 0 {
                     attach(app, "card-details-menu")
                     let hierarchy = XCTAttachment(string: app.debugDescription)
@@ -37,22 +38,10 @@ final class GroupEvidenceTests: XCTestCase {
                     hierarchy.lifetime = .keepAlways
                     add(hierarchy)
                 }
-                // A changed setting must not silently change any other field.
-                for other in fields.indices {
-                    let control = reveal(app, app.switches[fields[other].setting].firstMatch)
-                    XCTAssertEqual(control.value as? String, other < index ? "0" : "1", fields[other].setting)
-                }
-                let control = reveal(app, app.switches[fields[index].setting].firstMatch)
-                // Native AX represents this Form toggle as a 308pt-wide row
-                // containing the actual 63pt switch. The row's label center is
-                // inert; drive the child control whose frame the AX tree records.
-                let thumb = control.switches.firstMatch
-                XCTAssertTrue(thumb.exists, fields[index].setting)
-                XCTAssertTrue(control.frame.contains(thumb.frame), fields[index].setting)
-                XCTAssertTrue(thumb.isHittable, fields[index].setting)
-                thumb.tap()
-                XCTAssertEqual(control.value as? String, "0", fields[index].setting)
-                closeCardViewOptions(app)
+                XCTAssertTrue(control.isHittable, fields[index].setting)
+                control.tap()
+                XCTAssertTrue(control.waitForExistence(timeout: 3), "a toggle keeps its submenu open")
+                closeCardViewOptions(app, control: control)
                 for other in fields.indices {
                     XCTAssertEqual(row(app).label.contains(fields[other].marker), other > index, fields[other].marker)
                 }
@@ -66,12 +55,6 @@ final class GroupEvidenceTests: XCTestCase {
             group.tap()
             for field in fields { XCTAssertFalse(row(app).label.contains(field.marker), field.marker) }
             attach(app, "card-details-persisted")
-            app.buttons["chats.view"].tap()
-            app.buttons["Card details"].tap()
-            for field in fields {
-                XCTAssertEqual(reveal(app, app.switches[field.setting].firstMatch).value as? String, "0", field.setting)
-            }
-            closeCardViewOptions(app)
         } else {
             app.buttons["chats.view"].tap()
             attach(app, "card-details-menu")
@@ -82,41 +65,10 @@ final class GroupEvidenceTests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
     }
 
-    private func reveal(_ app: XCUIApplication, _ element: XCUIElement) -> XCUIElement {
-        let popover = app.popovers.firstMatch
-        let form = popover.collectionViews.firstMatch
-        // Search toward the bottom first: an unseen row is virtualized below the
-        // fold. Do not pull down at the top, which dismissed the native popover.
-        // Keep both drag endpoints inside the Form and away from its controls.
-        for down in [false, true] {
-            for attempt in 0...4 {
-                guard popover.exists, form.exists else {
-                    XCTFail("View options must remain open while revealing a field")
-                    return element
-                }
-                if element.exists, !element.frame.isEmpty,
-                   popover.frame.contains(element.frame), element.isHittable {
-                    return element
-                }
-                if attempt < 4 {
-                    let start = form.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: down ? 0.25 : 0.8))
-                    let end = form.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: down ? 0.8 : 0.25))
-                    start.press(forDuration: 0.05, thenDragTo: end)
-                }
-            }
-        }
-        let hierarchy = XCTAttachment(string: app.debugDescription)
-        hierarchy.name = "card-details-field-not-reachable"
-        hierarchy.lifetime = .keepAlways
-        add(hierarchy)
-        XCTAssertTrue(element.exists)
-        XCTAssertTrue(popover.frame.contains(element.frame))
-        XCTAssertTrue(element.isHittable)
-        return element
-    }
-
-    private func closeCardViewOptions(_ app: XCUIApplication) {
-        reveal(app, app.buttons["chats.view.done"]).tap()
+    private func closeCardViewOptions(_ app: XCUIApplication, control: XCUIElement) {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: control)
+        XCTAssertEqual(XCTWaiter().wait(for: [closed], timeout: 5), .completed, "a tap outside closes Card details")
     }
 
     func testGroupChoicesSurviveRelaunchAndSearch() {
