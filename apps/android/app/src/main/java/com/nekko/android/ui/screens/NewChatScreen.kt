@@ -76,6 +76,8 @@ import com.nekko.android.data.ModelChoice
 import com.nekko.android.data.ModelGroup
 import com.nekko.android.data.ModelPick
 import com.nekko.android.data.ModelScope
+import com.nekko.android.data.ModelSection
+import com.nekko.android.data.ModelSections
 import com.nekko.android.data.modelGroups
 import com.nekko.android.ui.chat.effortLabel
 import com.nekko.android.ui.simple.LocalSimple
@@ -535,6 +537,8 @@ internal fun ModelList(
     val inScope = scope.groups(groups)
     val shown = ModelChoice.filter(inScope, query)
     val starred = if (query.isBlank()) ModelChoice.starred(inScope, favorites) else emptyList()
+    // Which Claude account the slider shows, once the user taps one.
+    var viewing by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
         if (inScope.isEmpty()) {
             Text(
@@ -551,45 +555,101 @@ internal fun ModelList(
                 ModelRow(m, detail = ProviderAccounts.shortName(pr), selected = k == selected) { onPick(k) }
             }
         }
-        shown.forEach { g ->
-            ProviderGroupTitle(g.provider)
-            val list = g.models
-            when {
-                g.error != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(R.string.chats_list_models_failed, g.error.orEmpty()),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = p.danger,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = onRetry) { Text(stringResource(R.string.chats_retry)) }
+        ModelSections.of(shown, viewing, selected, searching = query.isNotBlank()).forEach { section ->
+            when (section) {
+                is ModelSection.Provider -> {
+                    ProviderGroupTitle(section.group.provider)
+                    GroupModels(section.group, selected, onPick, onRetry)
                 }
-                list == null -> Row(
-                    Modifier.padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                    Text(stringResource(R.string.chats_asking), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
-                }
-                list.isEmpty() -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(R.string.chats_no_models),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = p.inkFaint,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = onRetry) { Text(stringResource(R.string.chats_retry)) }
-                }
-                else -> list.forEach { m ->
-                    val k = ModelPick(g.provider.id, m.id)
-                    ModelRow(m, detail = null, selected = k == selected) { onPick(k) }
+                is ModelSection.Accounts -> {
+                    GroupTitle(stringResource(R.string.chats_account_family_claude))
+                    AccountSlider(section, onTap = { g ->
+                        viewing = g.provider.id
+                        ModelSections.switchTo(section, g, selected)?.let(onPick)
+                    })
+                    GroupModels(section.shown, selected, onPick, onRetry)
                 }
             }
         }
         if (shown.isEmpty() && inScope.isNotEmpty()) {
             Text(stringResource(R.string.chats_no_models_match, query.trim()), style = MaterialTheme.typography.bodyMedium, color = p.inkFaint)
         }
+    }
+}
+
+/** One provider's models, or why there are none yet. */
+@Composable
+private fun GroupModels(g: ModelGroup, selected: ModelPick?, onPick: (ModelPick) -> Unit, onRetry: () -> Unit) {
+    val p = Nekko.palette
+    val list = g.models
+    when {
+        g.error != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.chats_list_models_failed, g.error.orEmpty()),
+                style = MaterialTheme.typography.bodySmall,
+                color = p.danger,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.chats_retry)) }
+        }
+        list == null -> Row(
+            Modifier.padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+            Text(stringResource(R.string.chats_asking), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        }
+        list.isEmpty() -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.chats_no_models),
+                style = MaterialTheme.typography.bodySmall,
+                color = p.inkFaint,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.chats_retry)) }
+        }
+        else -> list.forEach { m ->
+            val k = ModelPick(g.provider.id, m.id)
+            ModelRow(m, detail = null, selected = k == selected) { onPick(k) }
+        }
+    }
+}
+
+/**
+ * The desktop's account slider: one tab per Claude login ("Personal · Max",
+ * "Acme Inc · Team"), and under it the email and which account the one on
+ * show is. Tapping a tab shows that account's models; when the pick is on
+ * another of these accounts it also moves to the same model there.
+ */
+@Composable
+private fun AccountSlider(section: ModelSection.Accounts, onTap: (ModelGroup) -> Unit) {
+    val words = accountWords()
+    val labels = ProviderAccounts.tabLabels(section.groups.map { it.provider }, words)
+    val switcher = stringResource(R.string.chats_account_switcher)
+    SingleChoiceSegmentedButtonRow(
+        Modifier.fillMaxWidth().padding(top = 4.dp).semantics { contentDescription = switcher }.testTag("modelPicker.accounts"),
+    ) {
+        section.groups.forEachIndexed { i, g ->
+            SegmentedButton(
+                selected = g.provider.id == section.shown.provider.id,
+                onClick = { onTap(g) },
+                shape = SegmentedButtonDefaults.itemShape(i, section.groups.size),
+                modifier = Modifier.testTag("modelPicker.accounts.${g.provider.id}"),
+            ) {
+                Text(labels.getValue(g.provider.id), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+    ProviderAccounts.whoLine(section.shown.provider, words)?.let { who ->
+        Text(
+            who,
+            style = MaterialTheme.typography.bodySmall,
+            color = Nekko.palette.inkFaint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 2.dp).testTag("modelPicker.account.${section.shown.provider.id}"),
+        )
     }
 }
 

@@ -203,6 +203,7 @@
     <string name="chats_account_signed_out">Sesión cerrada</string>
     <string name="chats_account_personal_plan">Plan personal</string>
     <string name="chats_account_organization">Organización</string>
+    <string name="chats_account_switcher">Cuenta de Claude</string>
     <string name="chats_model_source">Origen del modelo</string>
     <string name="chats_scope_all">Todos</string>
     <string name="chats_scope_cloud">Nube</string>

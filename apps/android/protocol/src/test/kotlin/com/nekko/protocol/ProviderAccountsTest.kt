@@ -65,4 +65,19 @@ class ProviderAccountsTest {
         )
         assertEquals(listOf("Claude API"), ProviderAccounts.searchable(PublicProvider("a", "anthropic", "Claude API", true)))
     }
+
+    @Test fun `slider tabs name each account, and two that read the same by email`() {
+        val a = PublicProvider("a", "claude-code", "Claude subscription", true, ProviderAccount(true, "a@example.test", "personal", "Personal", "max"))
+        val b = PublicProvider("b", "claude-code", "Claude subscription · 2", true, ProviderAccount(true, "b@example.test", "personal", "Personal", "max"))
+        val c = PublicProvider("c", "claude-code", "Claude subscription · 3", true, ProviderAccount(false))
+        val o = PublicProvider("o", "claude-code", "Claude subscription · 4", true, ProviderAccount(true, "a@example.test", "organization", "Nekko Labs", "team"))
+        assertEquals(mapOf("a" to "Personal · Max", "o" to "Nekko Labs · Team"), ProviderAccounts.tabLabels(listOf(a, o)))
+        assertEquals(
+            mapOf("a" to "a@example.test", "b" to "b@example.test", "c" to "Claude subscription · 3 · Signed out"),
+            ProviderAccounts.tabLabels(listOf(a, b, c)),
+        )
+        // The line under the slider: whose login and which account; nothing for a signed-out one (its tab says so).
+        assertEquals("a@example.test · Organization", ProviderAccounts.whoLine(o))
+        assertNull(ProviderAccounts.whoLine(c))
+    }
 }

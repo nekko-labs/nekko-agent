@@ -203,6 +203,7 @@
     <string name="chats_account_signed_out">Abgemeldet</string>
     <string name="chats_account_personal_plan">Persönlicher Plan</string>
     <string name="chats_account_organization">Organisation</string>
+    <string name="chats_account_switcher">Claude-Konto</string>
     <string name="chats_model_source">Modellquelle</string>
     <string name="chats_scope_all">Alle</string>
     <string name="chats_scope_cloud">Cloud</string>

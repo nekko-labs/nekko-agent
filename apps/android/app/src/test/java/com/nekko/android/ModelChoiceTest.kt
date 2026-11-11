@@ -3,6 +3,8 @@ package com.nekko.android
 import com.nekko.android.data.ModelChoice
 import com.nekko.android.data.ModelGroup
 import com.nekko.android.data.ModelPick
+import com.nekko.android.data.ModelSection
+import com.nekko.android.data.ModelSections
 import com.nekko.protocol.AUTO_MODEL_ID
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.ProviderAccount
@@ -100,5 +102,42 @@ class ModelChoiceTest {
         assertEquals("anthropic", s.providerId)
         val d = RemoteDefaults.from(Json.parseToJsonElement("""{"favoriteModels":["anthropic::opus",3],"apiKey":"x"}"""))
         assertEquals(listOf("anthropic::opus"), d.favoriteModels)
+    }
+
+    private val personalLogin = ModelGroup(
+        PublicProvider("p1", "claude-code", "Claude subscription", true, ProviderAccount(true, "philip@example.test", "personal", "Personal", "max")),
+        listOf(ModelInfo("opus", "p1", "Claude Opus", false), ModelInfo("sonnet", "p1", "Claude Sonnet", false)),
+    )
+    private val orgLogin = ModelGroup(
+        PublicProvider("p2", "claude-code", "Claude subscription · account-2", true, ProviderAccount(true, "philip@example.test", "organization", "Nekko Labs", "team")),
+        listOf(ModelInfo("opus", "p2", "Claude Opus", false)),
+    )
+
+    @Test
+    fun `two Claude logins share one slider group where the first one was`() {
+        val list = listOf(groups[0], personalLogin, groups[1], orgLogin)
+        val sections = ModelSections.of(list, viewing = null, selected = ModelPick("p2", "opus"), searching = false)
+        assertEquals(3, sections.size)
+        val accounts = sections[1] as ModelSection.Accounts
+        assertEquals(listOf("p1", "p2"), accounts.groups.map { it.provider.id })
+        // Opens on the account the pick is on; a tapped tab wins after that.
+        assertEquals("p2", accounts.shown.provider.id)
+        assertEquals("p1", (ModelSections.of(list, "p1", ModelPick("p2", "opus"), false)[1] as ModelSection.Accounts).shown.provider.id)
+        assertEquals("p1", (ModelSections.of(list, null, ModelPick("anthropic", "opus"), false)[1] as ModelSection.Accounts).shown.provider.id)
+        // One login, or a search, lists each provider on its own.
+        assertTrue(ModelSections.of(listOf(personalLogin) + groups, null, null, false).all { it is ModelSection.Provider })
+        assertTrue(ModelSections.of(list, null, null, searching = true).all { it is ModelSection.Provider })
+    }
+
+    @Test
+    fun `tapping an account moves the pick to the same model there when it has it`() {
+        val section = ModelSections.of(listOf(personalLogin, orgLogin), null, null, false).single() as ModelSection.Accounts
+        assertEquals(ModelPick("p2", "opus"), ModelSections.switchTo(section, orgLogin, ModelPick("p1", "opus")))
+        // The other account lacks the model: it only shows its models.
+        assertNull(ModelSections.switchTo(section, orgLogin, ModelPick("p1", "sonnet")))
+        // The pick is elsewhere (another provider) or already here: nothing moves.
+        assertNull(ModelSections.switchTo(section, orgLogin, ModelPick("anthropic", "opus")))
+        assertNull(ModelSections.switchTo(section, personalLogin, ModelPick("p1", "opus")))
+        assertNull(ModelSections.switchTo(section, orgLogin, ModelPick("p1", AUTO_MODEL_ID)))
     }
 }

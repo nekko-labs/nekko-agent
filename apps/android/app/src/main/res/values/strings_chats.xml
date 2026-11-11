@@ -217,6 +217,8 @@
     <string name="chats_account_signed_out">Signed out</string>
     <string name="chats_account_personal_plan">Personal plan</string>
     <string name="chats_account_organization">Organization</string>
+    <string name="chats_account_family_claude" translatable="false">Claude</string>
+    <string name="chats_account_switcher">Claude account</string>
     <string name="chats_model_source">Model source</string>
     <string name="chats_scope_all">All</string>
     <string name="chats_scope_cloud">Cloud</string>

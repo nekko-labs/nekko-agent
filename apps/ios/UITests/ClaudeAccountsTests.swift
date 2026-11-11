@@ -1,26 +1,37 @@
 import XCTest
 
 /// One Claude login with a personal plan and an organization seat (#2488): the
-/// model picker lists each account as its own group, named and with the email
-/// and which account it is under it. Seeded offline, no pairing or network.
+/// model picker shows both under one Claude group with the desktop's account
+/// slider, the email and which account it is under it, and only the account on
+/// show's models. Seeded offline, no pairing or network.
 @MainActor
 final class ClaudeAccountsTests: XCTestCase {
-    func testEachClaudeAccountIsItsOwnGroup() {
+    func testClaudeAccountsShareOneSlider() {
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES",
                                "-theme", "computer", "-AppleLanguages", "(en)", "-uiTestModelTabs", "-uiTestClaudeAccounts"]
         app.launch()
-        let personal = app.descendants(matching: .any)["modelPicker.provider.personal"]
-        let acme = app.descendants(matching: .any)["modelPicker.provider.acme"]
-        XCTAssertTrue(personal.waitForExistence(timeout: 10))
-        XCTAssertTrue(acme.exists)
+        let slider = app.segmentedControls["modelPicker.accounts"]
+        XCTAssertTrue(slider.waitForExistence(timeout: 10))
+        XCTAssertTrue(slider.buttons["Personal · Max"].isSelected)
+        XCTAssertTrue(slider.buttons["Acme Inc · Team"].exists)
+        // Opens on the account the pick is on.
+        let personal = app.staticTexts["modelPicker.account.personal"]
+        XCTAssertTrue(personal.exists)
+        XCTAssertEqual(personal.label, "alex@example.test · Personal plan")
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "iphone-claude-accounts"
         shot.lifetime = .keepAlways
         add(shot)
-        XCTAssertTrue(personal.label.contains("Personal · Max"), personal.label)
-        XCTAssertTrue(personal.label.contains("alex@example.test · Personal plan"), personal.label)
-        XCTAssertTrue(acme.label.contains("Acme Inc · Team"), acme.label)
-        XCTAssertTrue(acme.label.contains("alex@example.test · Organization"), acme.label)
+
+        slider.buttons["Acme Inc · Team"].tap()
+        let acme = app.staticTexts["modelPicker.account.acme"]
+        XCTAssertTrue(acme.waitForExistence(timeout: 5))
+        XCTAssertEqual(acme.label, "alex@example.test · Organization")
+        XCTAssertFalse(personal.exists)
+        let after = XCTAttachment(screenshot: app.screenshot())
+        after.name = "iphone-claude-accounts-acme"
+        after.lifetime = .keepAlways
+        add(after)
     }
 }

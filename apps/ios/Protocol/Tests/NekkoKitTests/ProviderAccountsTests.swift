@@ -97,4 +97,46 @@ final class ProviderAccountsTests: XCTestCase {
         let p = try XCTUnwrap(PublicProvider.list(raw).first)
         XCTAssertEqual([p.accountTitle, p.accountCaption, p.shortName], ["Nekko Labs · Team", "philip@example.test · Organization", "Claude · Nekko Labs"])
     }
+
+    private func login(_ id: String, _ account: ProviderAccount, models: [String]) -> ModelGroup {
+        ModelGroup(provider: PublicProvider(id: id, kind: "claude-code", label: "Claude subscription · \(id)", enabled: true, account: account),
+                   models: models.map { ModelInfo(id: $0, providerId: id, name: $0, loaded: false) }, error: nil)
+    }
+
+    func testTwoClaudeLoginsShareOneSliderWhereTheFirstWas() {
+        let api = ModelGroup(provider: PublicProvider(id: "api", kind: "anthropic", label: "Claude API", enabled: true), models: [], error: nil)
+        let p1 = login("p1", personal, models: ["opus", "sonnet"]), p2 = login("p2", org, models: ["opus"])
+        let ollama = ModelGroup(provider: PublicProvider(id: "ollama", kind: "ollama", label: "Ollama", enabled: true), models: [], error: nil)
+        let sections = ModelSection.of([api, p1, ollama, p2], viewing: nil, selectedProvider: "p2", searching: false)
+        XCTAssertEqual(sections.map(\.id), ["api", "claude-accounts", "ollama"])
+        // Opens on the account the pick is on; a tapped tab wins after that.
+        XCTAssertEqual(sections[1], .accounts([p1, p2], shown: p2))
+        XCTAssertEqual(ModelSection.of([p1, p2], viewing: "p1", selectedProvider: "p2", searching: false), [.accounts([p1, p2], shown: p1)])
+        XCTAssertEqual(ModelSection.of([p1, p2], viewing: nil, selectedProvider: "api", searching: false), [.accounts([p1, p2], shown: p1)])
+        // A search, or a single login, lists each provider on its own.
+        XCTAssertEqual(ModelSection.of([p1, p2], viewing: nil, selectedProvider: nil, searching: true), [.provider(p1), .provider(p2)])
+        XCTAssertEqual(ModelSection.of([p1, api], viewing: nil, selectedProvider: nil, searching: false), [.provider(p1), .provider(api)])
+    }
+
+    func testTappingAnAccountMovesThePickToTheSameModelThere() {
+        let p1 = login("p1", personal, models: ["opus", "sonnet"]), p2 = login("p2", org, models: ["opus"])
+        XCTAssertEqual(ModelSection.switchTo([p1, p2], tapped: p2, selected: ("p1", "opus")), "p2")
+        XCTAssertNil(ModelSection.switchTo([p1, p2], tapped: p2, selected: ("p1", "sonnet")))
+        XCTAssertNil(ModelSection.switchTo([p1, p2], tapped: p2, selected: ("api", "opus")))
+        XCTAssertNil(ModelSection.switchTo([p1, p2], tapped: p1, selected: ("p1", "opus")))
+        XCTAssertNil(ModelSection.switchTo([p1, p2], tapped: p2, selected: ("p1", autoModelId)))
+    }
+
+    func testSliderTabsNameEachAccountAndTellTwoAlikeApartByEmail() {
+        let a = PublicProvider(id: "a", kind: "claude-code", label: "Claude subscription", enabled: true,
+                               account: ProviderAccount(signedIn: true, email: "a@example.test", scope: .personal, name: "Personal", plan: "max"))
+        let b = PublicProvider(id: "b", kind: "claude-code", label: "Claude subscription · 2", enabled: true,
+                               account: ProviderAccount(signedIn: true, email: "b@example.test", scope: .personal, name: "Personal", plan: "max"))
+        let c = PublicProvider(id: "c", kind: "claude-code", label: "Claude subscription · 3", enabled: true, account: ProviderAccount(signedIn: false))
+        let o = PublicProvider(id: "o", kind: "claude-code", label: "Claude subscription · 4", enabled: true, account: org)
+        XCTAssertEqual(PublicProvider.accountTabLabels([a, o]), ["a": "Personal · Max", "o": "Nekko Labs · Team"])
+        XCTAssertEqual(PublicProvider.accountTabLabels([a, b, c]), ["a": "a@example.test", "b": "b@example.test", "c": "Claude subscription · 3 · Signed out"])
+        XCTAssertEqual(o.accountWhoLine, "philip@example.test · Organization")
+        XCTAssertNil(c.accountWhoLine)
+    }
 }

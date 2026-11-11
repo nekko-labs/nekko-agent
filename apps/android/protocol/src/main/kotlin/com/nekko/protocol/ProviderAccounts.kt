@@ -47,6 +47,29 @@ object ProviderAccounts {
         return listOfNotNull(email, which).joinToString(" · ")
     }
 
+    /** A Claude subscription login. A computer's logins share one "Claude" group with a tab per account. */
+    fun isClaudeLogin(provider: PublicProvider): Boolean = provider.kind == "claude-code"
+
+    /**
+     * Each login's tab in the account slider: [title] ("Personal · Max"), a
+     * signed-out login's label with "Signed out" after it, and the email for two
+     * accounts that would otherwise read the same (as the desktop's `disambiguate`).
+     */
+    fun tabLabels(providers: List<PublicProvider>, words: Words = Words()): Map<String, String> {
+        val raw = providers.associate { p ->
+            p.id to if (p.account?.signedIn == false) "${p.label} · ${words.signedOut}" else title(p)
+        }
+        return providers.associate { p ->
+            val mine = raw.getValue(p.id)
+            val clash = providers.any { it.id != p.id && raw[it.id] == mine }
+            p.id to (if (clash) p.account?.email?.takeIf { name(p) != null } ?: mine else mine)
+        }
+    }
+
+    /** The line under the slider for the account on show: its email and which account it is; null without an email. */
+    fun whoLine(provider: PublicProvider, words: Words = Words()): String? =
+        if (provider.account?.signedIn == true) caption(provider, words) else null
+
     /** "Claude · Personal" beside a model for a plan login with an email; else the provider's label. */
     fun shortName(provider: PublicProvider): String = name(provider)?.let { "Claude · $it" } ?: provider.label
 

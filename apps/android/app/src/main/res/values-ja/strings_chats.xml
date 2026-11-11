@@ -203,6 +203,7 @@
     <string name="chats_account_signed_out">サインアウト済み</string>
     <string name="chats_account_personal_plan">個人プラン</string>
     <string name="chats_account_organization">組織</string>
+    <string name="chats_account_switcher">Claude アカウント</string>
     <string name="chats_model_source">モデルの提供元</string>
     <string name="chats_scope_all">すべて</string>
     <string name="chats_scope_cloud">クラウド</string>
