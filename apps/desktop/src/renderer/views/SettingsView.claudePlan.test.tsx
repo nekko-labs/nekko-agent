@@ -27,7 +27,7 @@ describe('Claude plan features', () => {
     const find = (el: any): any => {
       if (!el || typeof el !== 'object') return null;
       if (el.props?.['aria-describedby'] === 'claude-plan-features-warning' && el.props.onChange) return el;
-      for (const c of React.Children.toArray(el.props?.children)) {
+      for (const c of [...React.Children.toArray(el.props?.children), el.props?.control, el.props?.detail]) {
         const hit = find(c);
         if (hit) return hit;
       }

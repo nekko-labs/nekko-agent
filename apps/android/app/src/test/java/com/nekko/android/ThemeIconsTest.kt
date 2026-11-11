@@ -38,6 +38,15 @@ class ThemeIconsTest {
         }
     }
 
+    @Test fun aPaleAccentDeepensOnALightPhoneAndKeepsItsHue() {
+        val terminal = ThemeIcons.tint(ThemePreset.find("terminal"), null, LightPalette.surface, LightPalette.inkSoft)
+        assertTrue("Terminal stays green", terminal.green > terminal.red && terminal.green > terminal.blue)
+        val nebula = ThemeIcons.tint(ThemePreset.find("nebula"), null, LightPalette.surface, LightPalette.inkSoft)
+        assertTrue("Nebula stays violet", nebula.blue > nebula.green && nebula.red > nebula.green)
+        val forest = ThemeIcons.tint(ThemePreset.find("x-forest-white"), null, DarkPalette.surface, DarkPalette.inkSoft)
+        assertTrue("Forest's deep green lightens on a dark phone", forest.green > forest.red && forest.green > forest.blue)
+    }
+
     @Test fun aDarkThemesLightAccentFallsBackToItsPage() {
         val blueberryDark = ThemePreset.find("x-blueberry-dark")!!
         assertEquals(androidx.compose.ui.graphics.Color(blueberryDark.paper!!), ThemeIcons.tint(blueberryDark, null, LightPalette.surface, LightPalette.inkSoft))

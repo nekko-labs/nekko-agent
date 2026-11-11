@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { COMPUTER_ICONS, parsePairingLink, pairingLink, relayRoute, type ComputerState, type ComputerStatus, type NekkoApi } from '@nekko-agent/shared';
-import { COMPUTER_ICON_GLYPHS, ComputerIcon } from '../icons.js';
+import { COMPUTER_ICON_GLYPHS } from '../icons.js';
 import { useStore } from '../store.js';
 import { ComputerGlyph } from './ComputerChip.js';
 import { pairingAlts } from './RemoteAccess.js';
 import { Toggle } from './primitives/Toggle.js';
+import { StatusDot } from './primitives/index.js';
+import { SettingRow, SettingsSection } from './SettingsSection.js';
 
 const STATE_LABEL: Record<ComputerState, string> = {
   connecting: 'Connecting',
@@ -53,14 +55,14 @@ function IconPicker({ icon, label, onPick }: { icon?: string; label: string; onP
         {icon ? <ComputerGlyph icon={icon} className="h-4 w-4" /> : <span className="text-2xs text-ink-faint">Icon</span>}
       </button>
       {open && (
-        <div role="menu" className="card absolute left-0 top-8 z-10 w-56 p-2" data-icon-picker>
+        <div role="menu" className="quiet-popover absolute left-0 top-8 z-10 w-56 p-2" data-icon-picker>
           <div className="grid grid-cols-6 gap-1">
             {COMPUTER_ICONS.map((id) => {
               const Glyph = COMPUTER_ICON_GLYPHS[id];
-              return <button key={id} role="menuitem" title={id} aria-label={id} className={`btn btn-ghost h-8 w-8 p-0 ${icon === id ? 'ring-1 ring-accent' : ''}`} onClick={() => pick(id)}><Glyph className="h-4 w-4" /></button>;
+              return <button key={id} role="menuitem" title={id} aria-label={id} className={`btn btn-ghost h-8 w-8 p-0 ${icon === id ? 'bg-accent-soft text-accent' : ''}`} onClick={() => pick(id)}><Glyph className="h-4 w-4" /></button>;
             })}
           </div>
-          <button role="menuitem" className="btn btn-ghost mt-1 w-full py-0.5 text-xs" onClick={() => pick('')}>No icon</button>
+          <button role="menuitem" className="btn btn-ghost mt-(--q-tight) w-full py-1 text-xs" onClick={() => pick('')}>No icon</button>
         </div>
       )}
     </span>
@@ -130,44 +132,38 @@ export function ComputersSection() {
   };
 
   return (
-    <section className="card mt-5 p-5">
-      <div className="flex items-center gap-2">
-        <ComputerIcon className="h-4 w-4" />
-        <h2 className="font-semibold">Computers</h2>
-        <button className="btn btn-primary ml-auto py-1 text-xs" onClick={() => { setAdding(!adding); setError(null); }}>
-          Add a computer
-        </button>
-      </div>
-      <p className="mt-1 text-xs text-ink-faint">
-        See and run agents on your other computers from here. Each one stays on its own machine, with its own files, models and accounts.
-      </p>
+    <SettingsSection
+      title="Computers"
+      help="See and run agents on your other computers from here. Each one stays on its own machine, with its own files, models and accounts."
+      actions={<button className="btn btn-primary py-1 text-xs" onClick={() => { setAdding(!adding); setError(null); }}>Add a computer</button>}
+    >
 
       {adding && (
-        <div className="mt-3 space-y-2">
-          <label className="block text-xs text-ink-soft" htmlFor="computer-link">On the other computer, open Settings, Computers, and make a link. Paste it here.</label>
-          <div className="flex gap-2">
-            <input id="computer-link" className="input min-w-0 flex-1 py-1 text-sm" placeholder="nekko-agent-pair:?relay=…" value={paste} onChange={(e) => setPaste(e.target.value)} />
+        <div className="mt-(--q-group)">
+          <label className="block text-sm font-medium" htmlFor="computer-link">On the other computer, open Settings, Computers, and make a link. Paste it here.</label>
+          <div className="mt-(--q-inline) flex gap-2">
+            <input id="computer-link" className="quiet-field min-w-0 flex-1 py-1.5 text-sm" placeholder="nekko-agent-pair:?relay=…" value={paste} onChange={(e) => setPaste(e.target.value)} />
             <button className="btn btn-primary py-1 text-xs" onClick={() => void add()} disabled={busy || !paste.trim()}>{busy ? 'Connecting…' : 'Connect'}</button>
           </div>
-          {error && <p role="alert" className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
+          {error && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text">{error}</p>}
         </div>
       )}
 
       {computers.length > 0 && (
-        <ul className="mt-3 divide-y divide-line">
-          <li className="flex items-center gap-3 py-2 text-sm">
+        <ul className="-mx-2 mt-(--q-group)">
+          <li className="quiet-row min-h-(--q-row) gap-3 px-2! text-sm">
             <span aria-hidden className="h-2 w-2 shrink-0" />
             <IconPicker icon={machineIcon} label="this computer" onPick={(icon) => void window.nekko.updateSettings({ machineIcon: icon }).then(() => refreshSettings())} />
             <span className="min-w-0 flex-1 font-medium">This computer</span>
           </li>
           {computers.map((c) => (
-            <li key={c.id} className="flex items-center gap-3 py-2 text-sm">
-              <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: STATE_COLOR[c.state] }} />
+            <li key={c.id} className="quiet-row min-h-(--q-row) gap-3 px-2! text-sm" data-quiet-row>
+              <StatusDot color={STATE_COLOR[c.state]} />
               <IconPicker icon={c.icon} label={c.name} onPick={(icon) => void setIcon(c, icon)} />
               <div className="min-w-0 flex-1">
                 {renaming === c.id ? (
                   <input
-                    className="input max-w-[220px] py-0.5 text-xs"
+                    className="quiet-field max-w-[220px] py-1 text-xs"
                     aria-label={`Name for ${c.name}`}
                     autoFocus
                     value={renameText}
@@ -178,31 +174,31 @@ export function ComputersSection() {
                 ) : (
                   <button className="truncate text-left font-medium" title="Rename" onClick={() => { setRenaming(c.id); setRenameText(c.name); }}>{c.name}</button>
                 )}
-                <p className="truncate text-xs text-ink-faint">{computerDetail(c)}</p>
+                <p className="mt-(--q-tight) truncate text-xs text-ink-faint">{computerDetail(c)}</p>
               </div>
-              <button className="btn btn-ghost py-0.5 text-xs" style={{ color: 'var(--danger)' }} onClick={() => void forget(c)}>Remove</button>
+              <button className="btn btn-ghost quiet-row-action py-1 text-xs text-danger-text" onClick={() => void forget(c)}>Remove</button>
             </li>
           ))}
         </ul>
       )}
 
-      <div className="mt-4 border-t border-line pt-3">
+      <div className="mt-(--q-group)">
         <h3 className="text-sm font-medium">Let a computer connect to this one</h3>
-        <p className="mt-1 text-xs text-ink-faint">
+        <p className="mt-(--q-tight) text-xs text-ink-faint">
           Connecting works one way. A computer that connects here can run agents here with no prompt for each change, and an agent in YOLO mode can do anything your account can. Only connect a computer you trust like this one.
         </p>
-        <button className="btn btn-outline mt-2 py-1 text-xs" onClick={() => void makeLink()}>Make a link</button>
-        {linkNote && <p className="mt-2 text-xs text-ink-soft">{linkNote}</p>}
+        <button className="btn btn-ghost mt-(--q-inline) py-1 text-xs" onClick={() => void makeLink()}>Make a link</button>
+        {linkNote && <p className="mt-(--q-inline) text-xs text-ink-soft">{linkNote}</p>}
         {link && (
-          <div className="mt-2">
-            <code className="block break-all rounded-md bg-surface-2 p-2 text-2xs">{link}</code>
-            <button className="btn btn-outline mt-2 py-1 text-xs" onClick={() => void navigator.clipboard?.writeText(link)}>Copy</button>
-            <p className="mt-1 text-2xs text-ink-faint">Works once, for 10 minutes. It holds this computer's keys, so keep it private.</p>
+          <div className="mt-(--q-inline)">
+            <code className="block break-all rounded-lg bg-surface-2 p-2 text-2xs">{link}</code>
+            <button className="btn btn-ghost mt-(--q-inline) py-1 text-xs" onClick={() => void navigator.clipboard?.writeText(link)}>Copy</button>
+            <p className="mt-(--q-tight) text-xs text-ink-faint">Works once, for 10 minutes. It holds this computer's keys, so keep it private.</p>
           </div>
         )}
       </div>
       <KeepAwakeSwitch />
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -218,14 +214,12 @@ function KeepAwakeSwitch() {
       .catch((e) => useStore.getState().pushToast('error', String(e)));
   };
   return (
-    <div data-shot="keep-awake" className="mt-4 flex items-start justify-between gap-3 border-t border-line pt-3">
-      <div className="min-w-0">
-        <div className="text-sm font-medium">Keep this computer awake while agents run</div>
-        <p className="mt-0.5 text-xs text-ink-faint">
-          While any agent runs here, this computer doesn't go to sleep on its own, so a run started from another computer or a phone carries on. Closing the lid still sleeps it.
-        </p>
-      </div>
-      <Toggle value={on} onChange={set} label="Keep this computer awake while agents run" />
-    </div>
+    <SettingRow
+      data-shot="keep-awake"
+      className="mt-(--q-group)"
+      title="Keep this computer awake while agents run"
+      detail="While any agent runs here, this computer doesn't go to sleep on its own, so a run started from another computer or a phone carries on. Closing the lid still sleeps it."
+      control={<Toggle value={on} onChange={set} label="Keep this computer awake while agents run" />}
+    />
   );
 }

@@ -7,6 +7,7 @@ use crate::http::{Http, Request, Response};
 use crate::js::{
     self, arr, at, date_ms, encode_uri_component, iso_string, max_of, num, obj, or_empty, setting, string,
 };
+use crate::repos::excluded;
 use base64::Engine;
 use serde_json::{Value, json};
 
@@ -43,7 +44,7 @@ pub async fn fetch(
 ) -> Result<Value, String> {
     let query = query.filter(|q| !q.is_empty());
     match kind {
-        "github" => github_fetch(http, token, query).await,
+        "github" => github_fetch(http, token, query, settings).await,
         "linear" => linear_fetch(http, token, query).await,
         "slack" => slack_fetch(http, token, query).await,
         "discord" => {
@@ -162,24 +163,33 @@ fn with_headers(mut req: Request, headers: Vec<(String, String)>) -> Request {
     req
 }
 
-async fn github_fetch(http: &dyn Http, token: &str, query: Option<&str>) -> Result<Value, String> {
+/// Results from repositories the user removed (#2562) are left out.
+async fn github_fetch(
+    http: &dyn Http,
+    token: &str,
+    query: Option<&str>,
+    settings: Option<&Value>,
+) -> Result<Value, String> {
     if let Some(q) = query {
         let url = format!("https://api.github.com/search/issues?q={}&per_page=20", encode_uri_component(q));
         let res = send(http, with_headers(Request::get(url, &[]), github_headers(token))).await?;
         ok_or(&res, "GitHub")?;
         let json = js::parse_json(&res.body)?;
+        let repo_of = |it: &Value| {
+            it.get("repository_url")
+                .and_then(Value::as_str)
+                .map(|u| {
+                    let parts: Vec<&str> = u.split('/').collect();
+                    parts[parts.len().saturating_sub(2)..].join("/")
+                })
+                .unwrap_or_default()
+        };
         return Ok(Value::Array(
             arr(json.get("items"))
                 .iter()
+                .filter(|it| !excluded(settings, &repo_of(it)))
                 .map(|it| {
-                    let repo = it
-                        .get("repository_url")
-                        .and_then(Value::as_str)
-                        .map(|u| {
-                            let parts: Vec<&str> = u.split('/').collect();
-                            parts[parts.len().saturating_sub(2)..].join("/")
-                        })
-                        .unwrap_or_default();
+                    let repo = repo_of(it);
                     let kind = if nekko_js::truthy(it.get("pull_request")) { "PR" } else { "Issue" };
                     obj(vec![
                         ("id", Some(json!(string(it.get("id"))))),
@@ -205,6 +215,7 @@ async fn github_fetch(http: &dyn Http, token: &str, query: Option<&str>) -> Resu
     Ok(Value::Array(
         arr(Some(&repos))
             .iter()
+            .filter(|r| !excluded(settings, &string(r.get("full_name"))))
             .map(|r| {
                 obj(vec![
                     ("id", Some(json!(string(r.get("id"))))),
@@ -496,6 +507,7 @@ async fn gitlab_fetch(
     Ok(Value::Array(
         arr(Some(&projects))
             .iter()
+            .filter(|p| !excluded(settings, &string(p.get("path_with_namespace"))))
             .map(|p| {
                 obj(vec![
                     ("id", Some(json!(string(p.get("id"))))),

@@ -116,6 +116,26 @@ fn every_write_leaves_the_file_the_ts_host_would() {
 }
 
 #[test]
+fn sandbox_repos_join_the_identity_and_freeze_with_it() {
+    // #2561: repositories not on this computer live in the sandbox, set before it is made.
+    let data = std::env::temp_dir().join(format!("nekko-sandbox-repos-{}", std::process::id()));
+    let store = SessionStore::new(&data);
+    let s = store.create(None).unwrap();
+    let id = s["id"].as_str().unwrap();
+    let repo = serde_json::json!([{ "provider": "github", "fullName": "me/app", "cloneUrl": "https://github.com/me/app.git", "webUrl": "" }]);
+    assert_eq!(store.set_sandbox_repos(id, &repo).unwrap()["sandboxRepos"], repo);
+    let image = format!("img@sha256:{}", "a".repeat(64));
+    let saved = store.configure_sandbox(id, &image, "ident", 1.0).unwrap();
+    assert_eq!(saved["sandbox"]["sourceRepos"], repo);
+    assert!(store.set_sandbox_repos(id, &serde_json::json!([])).unwrap_err().contains("already set up"));
+    // A sandbox with no repositories keeps its identity shape unchanged.
+    let plain = store.create(None).unwrap();
+    let saved = store.configure_sandbox(plain["id"].as_str().unwrap(), &image, "ident2", 1.0).unwrap();
+    assert!(saved["sandbox"].get("sourceRepos").is_none());
+    std::fs::remove_dir_all(&data).ok();
+}
+
+#[test]
 fn set_options_accepts_git_isolation() {
     let data = std::env::temp_dir().join(format!("nekko-options-{}", std::process::id()));
     let store = SessionStore::new(&data);

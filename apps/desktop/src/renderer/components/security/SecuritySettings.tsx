@@ -111,11 +111,14 @@ export function SecuritySettings() {
       const t = await api.securityTotpBegin!();
       setTotp({ ...t, qr: await QRCode.toDataURL(t.uri, { margin: 1, width: 200 }).catch(() => '') });
     });
-  const confirmTotp = (code: string) =>
+  /** Confirms the code app under the typed name. True once it is added, so the view clears the name only then. */
+  const confirmTotp = (code: string, name: string) =>
     run(async () => {
-      added(await api.securityTotpConfirm!(code));
+      added(await api.securityTotpConfirm!(code, name));
       setTotp(null);
     });
+  /** Renames a method. True once the computer took the name; with step-up on, the transport asks for a confirmation first. */
+  const rename = (id: string, name: string) => run(async () => setStatus(await api.securityRenameMethod!(id, name)));
 
   const enable = () => {
     if (!status) return;
@@ -155,12 +158,13 @@ export function SecuritySettings() {
       rpId={pageRpId(window as never)}
       onAddKey={(kind, name) => addKey(kind, name)}
       onTotpBegin={() => void beginTotp()}
-      onTotpConfirm={(code) => void confirmTotp(code)}
+      onTotpConfirm={(code, name) => confirmTotp(code, name)}
       onTotpCancel={() => setTotp(null)}
       onCodesSaved={() => setCodes(null)}
       onEnable={enable}
       onDisable={() => void disable()}
       onRemove={(id, name) => void remove(id, name)}
+      onRename={(id, name) => rename(id, name)}
       onNewCodes={newCodes}
       onCopyCodes={(list) => {
         void navigator.clipboard?.writeText(list.join('\n')).then(() => useStore.getState().pushToast('info', 'Recovery codes copied'));
@@ -192,17 +196,22 @@ export function SecuritySettingsView(p: {
   /** Resolves true when the method was registered; false when the ceremony was cancelled or refused, and the name is kept. */
   onAddKey: (kind: SecurityCredentialKind, name: string) => boolean | Promise<boolean>;
   onTotpBegin: () => void;
-  onTotpConfirm: (code: string) => void;
+  /** Resolves true when the code app was added under `name`; false on a refusal, and the name is kept. */
+  onTotpConfirm: (code: string, name: string) => boolean | Promise<boolean>;
   onTotpCancel: () => void;
   onCodesSaved: () => void;
   onEnable: () => void;
   onDisable: () => void;
   onRemove: (id: string, name: string) => void;
+  /** Resolves true when the computer took the new name. */
+  onRename: (id: string, name: string) => boolean | Promise<boolean>;
   onNewCodes: () => void;
   onCopyCodes: (codes: string[]) => void;
 }) {
   const [keyName, setKeyName] = useState('');
   const [code, setCode] = useState('');
+  /** The method being renamed in place, and what is typed so far. */
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const s = p.status;
   const now = p.now ?? Date.now();
   const blocker = s ? stepUpEnableBlocker(s) : null;
@@ -211,18 +220,60 @@ export function SecuritySettingsView(p: {
   const add = async (kind: SecurityCredentialKind) => {
     if (await p.onAddKey(kind, keyName)) setKeyName('');
   };
-  const methodRow = (id: string, title: string, detail: string, removeName: string, extra?: React.ReactNode) => (
-    <li key={id} className="quiet-row min-h-(--q-row) gap-2 px-2!" data-method={id} data-quiet-row>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium">{title}</span>
-        <span className="truncate text-xs text-ink-faint">{detail}</span>
-      </span>
-      {extra}
-      <button className="btn btn-ghost quiet-row-action py-1 text-xs text-danger-text" onClick={() => p.onRemove(id, removeName)} disabled={p.busy}>
-        Remove
-      </button>
-    </li>
-  );
+  const confirmTotp = async () => {
+    const ok = await p.onTotpConfirm(code, keyName);
+    setCode('');
+    if (ok) setKeyName('');
+  };
+  /** Keep the field open with what was typed until the computer takes the name. */
+  const saveRename = async () => {
+    if (!renaming) return;
+    if (await p.onRename(renaming.id, renaming.name)) setRenaming(null);
+  };
+  const methodRow = (id: string, title: string, detail: string, removeName: string, extra?: React.ReactNode) =>
+    renaming?.id === id ? (
+      <li key={id} className="quiet-row min-h-(--q-row) gap-2 px-2!" data-method={id} data-renaming data-quiet-row>
+        <form
+          className="flex min-w-0 flex-1 items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void saveRename();
+          }}
+        >
+          <input
+            className="quiet-field max-w-[240px] py-1.5 text-sm"
+            aria-label={`New name for ${title}`}
+            value={renaming.name}
+            maxLength={60}
+            autoFocus
+            onChange={(e) => setRenaming({ id, name: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setRenaming(null);
+            }}
+          />
+          <button className="btn btn-ghost py-1 text-xs" type="submit" disabled={p.busy}>
+            Save
+          </button>
+          <button className="btn btn-ghost py-1 text-xs" type="button" onClick={() => setRenaming(null)}>
+            Cancel
+          </button>
+        </form>
+      </li>
+    ) : (
+      <li key={id} className="quiet-row min-h-(--q-row) gap-2 px-2!" data-method={id} data-quiet-row>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-medium">{title}</span>
+          <span className="truncate text-xs text-ink-faint">{detail}</span>
+        </span>
+        {extra}
+        <button className="btn btn-ghost quiet-row-action py-1 text-xs" onClick={() => setRenaming({ id, name: title })} disabled={p.busy}>
+          Rename
+        </button>
+        <button className="btn btn-ghost quiet-row-action py-1 text-xs text-danger-text" onClick={() => p.onRemove(id, removeName)} disabled={p.busy}>
+          Remove
+        </button>
+      </li>
+    );
   return (
     <section id={SECURITY_SECTION_ID} data-shot="security-settings" className="mt-(--q-section) min-w-0">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -234,7 +285,9 @@ export function SecuritySettingsView(p: {
           </span>
         )}
       </div>
-      <p className="mt-(--q-tight) text-xs text-ink-faint">Ask for a key, a passkey or a code before risky actions. This computer checks every answer itself.</p>
+      <p className="mt-(--q-tight) text-xs text-ink-faint">
+        A step-up is a second check before risky actions: a security key, a passkey or a one-time code. This computer checks every answer itself.
+      </p>
       <details className="mt-(--q-tight) text-xs text-ink-faint">
         <summary className="w-fit cursor-pointer transition-colors duration-(--dur-fast) hover:text-ink">Which actions</summary>
         <p className="mt-(--q-tight)">
@@ -269,9 +322,9 @@ export function SecuritySettingsView(p: {
           {s?.totp &&
             methodRow(
               'totp',
-              'One-time code app',
-              `Authenticator · added ${when(s.totp.addedAt, now)} · used ${when(s.totp.lastUsedAt, now)}`,
-              'the one-time code app',
+              s.totp.name ?? 'One-time code app',
+              `One-time code app · added ${when(s.totp.addedAt, now)} · used ${when(s.totp.lastUsedAt, now)}`,
+              s.totp.name ?? 'the one-time code app',
               s.totp.lockedUntil ? <span className="shrink-0 text-xs text-warning-text">locked for a minute after wrong codes</span> : undefined,
             )}
           {s && s.methods.length === 0 && !s.totp && <li className="px-2 py-(--q-inline) text-xs text-ink-faint">Nothing registered yet.</li>}
@@ -281,7 +334,7 @@ export function SecuritySettingsView(p: {
           <input
             className="quiet-field max-w-[200px] py-1.5 text-xs"
             placeholder="Name, e.g. YubiKey 5C"
-            aria-label="Name for the new key"
+            aria-label="Name for the new method"
             value={keyName}
             maxLength={60}
             onChange={(e) => setKeyName(e.target.value)}
@@ -325,8 +378,7 @@ export function SecuritySettingsView(p: {
               className="mt-(--q-inline) flex items-center gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                p.onTotpConfirm(code);
-                setCode('');
+                void confirmTotp();
               }}
             >
               <input
@@ -374,8 +426,9 @@ export function SecuritySettingsView(p: {
           <div className="quiet-group-label mb-(--q-heading)">When to ask</div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium">Require a step-up</div>
-              <p className="mt-(--q-tight) text-xs text-ink-faint">
+              {/* Blocked: the title goes faint and the reason, in words, is the detail (design system; #2393). */}
+              <div className={`text-sm font-medium ${!s.enabled && blocker ? 'text-ink-faint' : ''}`}>Require a step-up</div>
+              <p id="security-step-up-state" className={`mt-(--q-tight) text-xs ${!s.enabled && blocker ? 'text-ink-soft' : 'text-ink-faint'}`}>
                 {s.enabled ? 'On. One confirmation covers the same kind of action for five minutes.' : blocker ?? 'Two methods are registered: you can turn it on.'}
               </p>
               {!s.enabled && !blocker && warning && <p className="mt-(--q-tight) text-xs text-warning-text">{warning}</p>}
@@ -393,7 +446,12 @@ export function SecuritySettingsView(p: {
                 Turn off…
               </button>
             ) : (
-              <button className="btn btn-primary py-1 text-xs" onClick={p.onEnable} disabled={p.busy || !!blocker}>
+              <button
+                className="btn btn-primary py-1 text-xs"
+                onClick={p.onEnable}
+                disabled={p.busy || !!blocker}
+                aria-describedby={blocker ? 'security-step-up-state' : undefined}
+              >
                 Turn on
               </button>
             )}

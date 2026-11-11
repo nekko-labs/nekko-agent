@@ -294,6 +294,21 @@ async fn the_daemon_keeps_and_reads_connectors() {
     assert_eq!(list, json!([]));
     let (_, list) = post(d.port, "connectors:list", json!([]), Some(TOKEN)).await;
     assert_eq!(list, json!([]));
+
+    // Removing repositories (#2562) touches only the two lists, never the token.
+    let site = json!({ "site": "https://gl.example.com" });
+    post(d.port, "connector:connect", json!(["gitlab", "glpat-x", site]), Some(TOKEN)).await;
+    let choice = json!({ "excludedRepos": ["Acme/Site", "acme/site"], "excludedOwners": ["old-org"] });
+    let (_, list) = post(d.port, "connector:exclude", json!(["gitlab", choice]), Some(TOKEN)).await;
+    assert_eq!(list[0]["settings"]["excludedRepos"], json!(["acme/site"]), "{list}");
+    assert_eq!(list[0]["settings"]["excludedOwners"], json!(["old-org"]));
+    assert_eq!(list[0]["settings"]["site"], "https://gl.example.com");
+    let (_, bad) = post(d.port, "connector:exclude", json!(["gitlab", { "excludedRepos": [1] }]), Some(TOKEN)).await;
+    assert!(bad["error"].as_str().unwrap().contains("list of names"), "{bad}");
+    let (_, other) = post(d.port, "connector:exclude", json!(["slack", choice]), Some(TOKEN)).await;
+    assert!(other["error"].is_string(), "{other}");
+    let (_, unconnected) = post(d.port, "connector:repos", json!(["github"]), Some(TOKEN)).await;
+    assert_eq!(unconnected["error"], "Connector not connected");
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
