@@ -477,7 +477,8 @@ The two logs have different sources:
   boot to finish before checking a job in a newly started VM. This updates future VMs, not a VM
   already running or a log lost when its VM was deleted. Empty output or a collection failure
   can also leave no saved log; the message alone does not prove the image is old. This Mac
-  keeps the last 20 nonempty VM logs, up to 1 MB each.
+  keeps the last 20 nonempty VM logs, up to 1 MB each: the first 256 KB and the latest output,
+  with a note between them of how much was dropped.
 
 Runner settings **Save** shows **Saving runner settings…**, prevents edits and dismissal while
 saving, and closes with a confirmation after the service accepts the change. On failure, the
