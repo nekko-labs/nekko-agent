@@ -173,6 +173,12 @@ Each terminal has its own Agents-panel row, including terminals opened beside a 
 
 Claude Code users can opt into explicit tool/permission/completion signals using the [terminal hook setup](https://github.com/nekko-labs/nekko-agent/blob/main/docs/terminal-claude-hooks.md). Nekko never installs hooks or approves tools silently. Without integration signals a terminal says **Shell open**, not Working.
 
+### Run a command the agent suggests
+
+When a reply suggests commands for you to run, its shell code blocks (`bash`, `sh`, `zsh`, `powershell`, `console` and the like) show **Run** beside **Copy**. Run opens the chat's own terminal, in the chat's folder, and types the commands there; the terminal appears under the block, live, so you can answer a password prompt or a `y/N`. Run on another block reuses the same terminal and moves it under that block. **Share output** puts the terminal's recent output in your message so the agent can read it once you send; **Open in a panel** shows the terminal in its own window, and **Hide** (×) closes the view while the shell keeps running.
+
+Only your click runs anything: the agent cannot press Run. In a `console` block only the lines that start with a prompt (`$ `, `PS> `) run, without the prompt; output and `#` notes never do. Run is not offered in Sandbox chats, whose work never runs on this computer's shell. The terminal uses your default shell, whatever language the block names.
+
 ### Approvals and delegated work
 
 When a tool needs permission, its approval card appears in that agent's own window, above its composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.

@@ -72,15 +72,15 @@ export function ciScope({ event, files = [], labels = [] }) {
 /**
  * The languages codeql.yml analyses. The schedule and a dispatch take all five.
  * A PR takes the ones its files are in (every Linux one when the list is
- * unknown or CI changed); Swift needs a macOS runner, so a PR takes it only
- * with `deploy:ios`.
+ * unknown or CI changed). Swift needs a macOS runner, and the Team plan's 5
+ * macOS runners are the CI's bottleneck, so a PR never takes it: the nightly
+ * schedule analyses Swift on main.
  */
-export function codeqlLanguages({ event, files = [], labels = [] }) {
+export function codeqlLanguages({ event, files = [] }) {
   if (FULL.has(event)) return Object.keys(CODEQL);
   const all = files.length === 0 || files.length >= FILE_LIST_CAP || touches(files, EVERYTHING);
-  const swift = event === 'pull_request' && labels.includes('deploy:ios');
   const changed = lang => all || touches(files, CODEQL[lang]);
-  return Object.keys(CODEQL).filter(lang => changed(lang) && (lang !== 'swift' || swift));
+  return Object.keys(CODEQL).filter(lang => lang !== 'swift' && changed(lang));
 }
 
 const { pathToFileURL } = await import('node:url');
