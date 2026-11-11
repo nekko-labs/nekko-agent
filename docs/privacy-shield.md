@@ -32,6 +32,8 @@ The shield only acts when the chat's model is off your computer: Anthropic, Open
 
 ## Seeing what will be sent
 
+While the shield is on and the chat uses a cloud model, the Shield icon is lit and a faint ring pulses around it. In the message you are writing, each value it will replace is tinted and bracketed, with its placeholder to the right: `[jane@acme.com] → [PII_EMAIL_1]`. The brackets and placeholder are only drawn on screen; they are not part of your message. A value you just typed is marked a moment after you stop typing.
+
 Open the **Shield** panel at any time, on or off, to see:
 
 - every value it would replace in your draft and the chat so far, what the model reads instead, and whether it is in your draft, the chat, or both;
