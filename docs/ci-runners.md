@@ -57,9 +57,12 @@ and no packaged release has the setup screens yet; both are part of the pilot (T
 
 ## Before you start
 
-- **An Apple silicon Mac.** On Windows and Linux, **Scheduled Tasks > CI runners** says so and
-  points you to Nekko Agent on your Mac, where runners are set up and their jobs shown. A Mac
-  that cannot run VMs shows "VM support unavailable" on the runner card.
+- **An Apple silicon Mac.** **Scheduled Tasks > CI runners** lists what this computer can run:
+  macOS, Linux and Windows, each available or greyed with the reason. A Mac with Apple silicon
+  runs macOS and Linux jobs. On another computer macOS reads "Needs a Mac with Apple silicon",
+  and the page points you to Nekko Agent on your Mac. Windows and Linux jobs on a Windows PC
+  are coming ([#2553](https://github.com/nekko-labs/nekko-agent/issues/2553)). A Mac that
+  cannot run VMs shows "VM support unavailable" on the runner card.
 - **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. On macOS 27
   Nekko [builds it](#set-up-this-mac) from Apple's restore image; on macOS 26 you
   [bring your own](ci-runners-image.md). Until an image exists, the runner card offers **Set up this Mac**.

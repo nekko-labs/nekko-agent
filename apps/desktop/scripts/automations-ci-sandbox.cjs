@@ -79,7 +79,7 @@ app.whenReady().then(async () => {
           await run('integration.full()'); await sleep(300);
           await check('no runner channel keeps the sub-navigation', "!!document.querySelector('[data-workflows-subnav]')");
           await run("[...document.querySelectorAll('[data-workflows-subnav] button')].find(b=>b.textContent.includes('CI runners')).click()"); await sleep(300);
-          await check('no runner channel explains where runners live', "!!document.querySelector('[data-ci-runners-elsewhere]') && document.body.innerText.includes('need a Mac with Apple silicon')");
+          await check('no runner channel explains where runners live', "!!document.querySelector('[data-ci-runners-elsewhere]') && document.body.innerText.includes('Needs a Mac with Apple silicon') && document.querySelector('[data-runner-option=macos]')?.getAttribute('aria-disabled')==='true'");
           await capture('unsupported-ci-page-1000');
           await run("localStorage.setItem('nekko.chatMode','simple'); integration.show('unsupported'); integration.full()"); await sleep(400);
           await check('Simple keeps the explanation too', "!!document.querySelector('[data-workflows-subnav]')");
