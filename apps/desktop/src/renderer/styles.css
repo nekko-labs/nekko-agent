@@ -4340,9 +4340,14 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 
 /* One Models workspace, quiet navigation and compact provider actions. */
 .models-add-provider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.models-layout { display: flex; gap: 40px; width: 100%; max-width: 112rem; height: 100%; min-height: 0; margin-inline: auto; padding-inline: clamp(20px, 4vw, 80px); }
-.models-rail { flex: 0 0 192px; align-self: center; max-height: calc(100% - 40px); overflow-y: auto; }
-.models-rail .view-title { margin-bottom: 20px; }
+/* Models, Settings and Automations share one side menu: inset from the window's
+   edge with no divider, starting at the top of the page beside its content. */
+.models-layout, .settings-panel, .automations-layout { display: flex; gap: 40px; width: 100%; max-width: 112rem; height: 100%; min-height: 0; margin-inline: auto; padding-inline: clamp(20px, 4vw, 80px); }
+.models-rail, .automations-rail { flex: 0 0 192px; min-height: 0; overflow-y: auto; padding: 20px 0; }
+.automations-rail { flex-basis: 240px; }
+.models-rail .view-title, .automations-rail .view-title { margin-bottom: 20px; }
+.automations-filters { margin-top: 20px; }
+.automations-content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 0 64px; }
 .models-navigation { display: flex; flex-direction: column; gap: 8px; }
 .models-navigation .settings-nav-item { min-height: 40px; font-size: var(--text-sm); }
 .models-navigation .models-nav-main + .models-nav-main { margin-top: 20px; }
@@ -4381,16 +4386,23 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-navigation .models-nav-sub[aria-current] { color: var(--ink); }
 @media (max-width: 1000px) {
   .models-layout { flex-direction: column; gap: 20px; padding-inline: 20px; }
-  .models-rail { flex: none; align-self: stretch; max-height: 40%; padding-top: 12px; }
+  .models-rail { flex: none; max-height: 40%; padding: 12px 0 0; }
   .models-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
   .models-navigation .settings-nav-item { width: 100%; }
   .models-navigation .models-nav-main + .models-nav-main { margin-top: 0; }
   .models-navigation .models-nav-sub { margin: 0; width: 100%; }
   .models-navigation .models-nav-sub + .models-nav-sub { margin-top: 0; }
   .models-workspace { height: auto; min-height: 0; padding: 0 0 48px; }
+  /* Automations keeps its side menu down to a phone width, one item a row. */
+  .automations-rail .models-navigation { display: flex; }
+  .automations-layout { gap: 20px; padding-inline: 20px; }
 }
 @media (max-width: 767px) {
   .models-layout { padding-inline: 16px; }
+  /* Like Settings: the menu and filters become a band above the list. */
+  .automations-layout { flex-direction: column; gap: 0; padding-inline: 16px; }
+  .automations-rail { flex: none; max-height: 40%; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .automations-content { padding-top: 16px; }
   .models-section-local { margin-top: 40px; }
   .models-local-connections { margin-top: 40px; }
   .models-provider-bar { gap: 12px; }
@@ -4409,13 +4421,14 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-eyes"] { fill: var(--on-accent); }
 
-/* Settings, Skills, Connectors and Models use the Artifacts and Scheduled Tasks
+/* Settings, Skills, Connectors and Models use the Artifacts and Automations
    page shell: edge to edge on the app background, with content capped at the
-   Scheduled Tasks list's width. Settings adds a ruled left rail with its own
+   scheduled tasks list's width. Settings adds a left rail with its own
    scroll, which becomes wrapping rows above the page in a narrow window. */
-.settings-panel { display: flex; height: 100%; min-height: 0; }
-.settings-rail { display: flex; flex-direction: column; width: 240px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--line); padding: 12px; }
-.settings-rail .view-title { margin: 0 0 12px; }
+.settings-rail { display: flex; flex-direction: column; width: 240px; flex-shrink: 0; min-height: 0; overflow-y: auto; padding: 20px 0; }
+.settings-rail .view-title { margin: 0 0 20px; }
+.settings-rail .settings-nav-item { min-height: 40px; }
+@media (min-width: 768px) { .settings-rail .settings-nav { gap: 8px; } }
 .settings-nav-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border-radius: var(--radius-lg); font-size: var(--text-base); text-align: left; transition: background-color 150ms; }
 @media (hover: hover) {
   .settings-nav-item:hover { background: var(--surface-2); }
@@ -4425,7 +4438,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .settings-content { flex: 1; min-width: 0; overflow-y: auto; }
 .settings-page, .models-section { max-width: 64rem; margin-inline: auto; }
 /* The design system's content column: a setting's control stays within reach of its label. */
-.settings-page { max-width: 720px; padding: 12px 20px 64px; }
+.settings-page { max-width: 720px; padding: 20px 20px 64px; }
 .settings-destination { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 /* Bars above the page's scroller reserve its scrollbar, so both centre on the same line. */
 .settings-bar { flex-shrink: 0; overflow: hidden; scrollbar-gutter: stable; }
@@ -4433,8 +4446,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .settings-back-bar .btn { margin-left: -16px; }
 .settings-destination-content { flex: 1; min-height: 0; overflow-y: auto; }
 @media (max-width: 767px) {
-  .settings-panel { flex-direction: column; }
-  .settings-rail { width: auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .settings-panel { flex-direction: column; gap: 0; padding-inline: 16px; }
+  .settings-rail { width: auto; max-height: 40%; padding: 12px 0; border-bottom: 1px solid var(--line); }
   .settings-nav-item { width: auto; }
   .settings-page { padding: 16px 16px 48px; }
 }

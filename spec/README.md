@@ -181,7 +181,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 
 Workflows, goals, integrations and tools.
 
-- [Automating repeatable work (Scheduled Tasks tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
+- [Automating repeatable work (Automations tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
 - [CI runners](automation/ci-runners.md) (61 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)

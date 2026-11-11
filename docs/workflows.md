@@ -6,7 +6,7 @@ editor, decide which model it uses and what its agent steps may do.
 
 ## Your first scheduled task
 
-If you have no scheduled tasks yet, the Scheduled Tasks tab walks you through your first one:
+If you have no scheduled tasks yet, the Automations tab walks you through your first one:
 
 1. Pick an idea under **Shopping & web browsing**, **Developer**, **Research**, or
    **Email & productivity**, such as checking product stock, reviewing

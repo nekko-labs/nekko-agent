@@ -43,11 +43,19 @@ Acceptance: both back buttons return to Settings; all section content remains av
 
 User intent: Settings, Skills, Connectors and Models should feel like the same app as Artifacts and Scheduled Tasks, which are the reference. This replaces the 80% width, the floating paper panel and the accent-underlined section links from issue #1220.
 
-All four run edge to edge on the app background, with content centred and capped at the width of the Scheduled Tasks list, in standard bordered cards. Settings has a 240px left rail behind a hairline divider that stays put while the content scrolls. Its rows are shaped like the Scheduled Tasks category rows (rounded, the current one filled, with a visible keyboard focus outline) at 16px, larger than that page's on request. In a narrow window the rail becomes wrapping rows above the page. Models has no side menu ([decision 0057](../../docs/decisions/0057-models-is-one-page-without-a-side-menu.md)). The Skills tabs use the Scheduled Tasks filter buttons.
+All four run edge to edge on the app background, with content centred and capped at the width of the Scheduled Tasks list, in standard bordered cards. Settings has a 240px left rail that stays put while the content scrolls (inset and without its divider since 2026-11-11, see below). Its rows are shaped like the Scheduled Tasks category rows (rounded, the current one filled, with a visible keyboard focus outline) at 16px, larger than that page's on request. In a narrow window the rail becomes wrapping rows above the page. Models has no side menu ([decision 0057](../../docs/decisions/0057-models-is-one-page-without-a-side-menu.md)). The Skills tabs use the Scheduled Tasks filter buttons.
 
 Search within Settings covers the page, so it no longer matches the Skills and Connectors rows, which are in the rail. No setting, credential or permission changes.
 
 Status: implemented, not yet landed. Checked in a hidden renderer of the full app with a stub bridge (dark theme, 1440×900 and 600×900). Not yet checked: light theme, the installed app, and the Local Web UI.
+
+## One inset side menu for Settings, Models and Automations (2026-11-11)
+
+User intent: Settings and Automations should have the Models page's side menu, set in from the window's edge, and all three menus start at the top of the page rather than in the middle of it.
+
+Settings, Models and Automations share one layout: the side menu sits inside the page's side margins (up to 80px from the app rail) with 40px to the content and no hairline divider, and its first item lines up with the top of the content. Models' menu used to be centred vertically; it now starts at the top too. Settings rows keep their 16px text and become 40px tall with 8px between section items, like Models'. Below 768px Settings and Automations turn the menu into a band above the page behind one hairline; Models keeps its two-column grid below 1000px. Layout only: no setting, permission or data changes.
+
+Status: implemented 2026-11-11. Checked in a hidden renderer of the full app with a stub bridge (default dark theme, 1440×900 and 600×900): all three menus start 20px below the title bar at the same left edge, with no horizontal overflow. Not yet checked: the installed app and the Local Web UI.
 
 ## Customize grouping (issue #2097)
 
