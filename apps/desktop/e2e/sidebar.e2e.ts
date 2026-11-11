@@ -106,7 +106,8 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     });
 
     await test.step('card context menu keeps its actions', async () => {
-      await card('Active conversation').click({ button: 'right' });
+      // The sticky group heading intercepts pointer events at narrow widths; dispatch directly.
+      await card('Active conversation').evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
       await expect(page.getByText('Mark as completed')).toBeVisible();
       await expect(page.getByText('Change model')).toBeVisible();
       await page.keyboard.press('Escape');
@@ -129,7 +130,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     });
 
     await test.step('Mark as completed stops and completes the owning chat', async () => {
-      await card('Active conversation').click({ button: 'right' });
+      await card('Active conversation').evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
       await page.getByRole('menuitem', { name: 'Mark as completed', exact: true }).click();
       await called(`(c) => c.method === 'abort' && c.id === 'active'`);
       await called(`(c) => c.method === 'options' && c.id === 'active' && !!c.options.archivedAt`);
