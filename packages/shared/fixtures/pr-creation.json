@@ -1,0 +1,25 @@
+{
+  "_": "Which shell tool results attach a PR to the chat that ran them. Run by packages/shared/src/pr.test.ts and crates/nekko-store/src/pr.rs. The commands are the shapes agents really use.",
+  "cases": [
+    { "name": "gh pr create alone", "tool": "bash", "command": "gh pr create --fill", "output": "https://github.com/o/r/pull/9", "expect": ["https://github.com/o/r/pull/9"] },
+    { "name": "Claude Code heredoc body", "tool": "Bash", "command": "gh pr create --title \"Fix\" --body \"$(cat <<'EOF'\n## Summary\n- one; two | three\nEOF\n)\"", "output": "https://github.com/o/r/pull/9", "expect": ["https://github.com/o/r/pull/9"] },
+    { "name": "leading cd into a worktree", "tool": "Bash", "command": "cd \"/tmp/my repo\" && gh pr create --fill", "output": "https://github.com/o/r/pull/9", "expect": ["https://github.com/o/r/pull/9"] },
+    { "name": "warnings before the URL, trimmed output", "tool": "Bash", "command": "cd /w && gh pr create --fill 2>&1 | tail -5", "output": "Warning: 1 uncommitted change\r\nhttps://github.com/o/r/pull/9", "expect": ["https://github.com/o/r/pull/9"] },
+    { "name": "pulls API POST", "tool": "bash", "command": "gh api repos/o/r/pulls -X POST -f title=x", "output": "  https://github.com/o/r/pull/7  ", "expect": ["https://github.com/o/r/pull/7"] },
+    { "name": "push then create then arm auto-merge", "tool": "Bash", "command": "git push -u origin fix 2>&1 | tail -2 && gh pr create --title \"Fix\" --body-file /tmp/pr.md && gh pr merge --auto --squash", "output": "To github.com:o/r.git\n * [new branch]      fix -> fix\nhttps://github.com/o/r/pull/9\n! The merge strategy for main is set by the merge queue", "expect": ["https://github.com/o/r/pull/9"] },
+    { "name": "body written by a heredoc first", "tool": "Bash", "command": "cat > /tmp/pr.md <<'EOF'\nCloses #1. It's done; really | truly.\nEOF\ngh pr create --title \"Fix\" --body-file /tmp/pr.md", "output": "https://github.com/o/r/pull/9", "expect": ["https://github.com/o/r/pull/9"] },
+    { "name": "PowerShell here-string body", "tool": "PowerShell", "command": "cd C:\\code\\app\\.worktrees\\fix; $body = @'\nPhilip's request: \"run it; now\" | done\n'@\ngh pr create --title \"Fix\" --body $body --base main 2>&1 | Select-Object -Last 2", "output": "Creating pull request for fix into main in o/r\r\n\r\nhttps://github.com/o/r/pull/9", "expect": ["https://github.com/o/r/pull/9"] },
+    { "name": "PowerShell assignment then echo", "tool": "PowerShell", "command": "$u = gh pr create --draft --title \"Fix\" --body-file .pr-body.md; $u; gh pr merge $u --auto --squash", "output": "https://github.com/o/r/pull/9\r\n", "expect": ["https://github.com/o/r/pull/9"] },
+    { "name": "a stack of two creates", "tool": "Bash", "command": "gh pr create --fill --base main && git checkout b && gh pr create --fill --base a", "output": "https://github.com/o/r/pull/9\nSwitched to branch 'b'\nhttps://github.com/o/r/pull/10", "expect": ["https://github.com/o/r/pull/9", "https://github.com/o/r/pull/10"] },
+    { "name": "more bare URLs than creates is ambiguous", "tool": "Bash", "command": "gh pr create --fill; gh pr list --json url -q '.[].url'", "output": "https://github.com/o/r/pull/9\nhttps://github.com/o/r/pull/3\nhttps://github.com/o/r/pull/4", "expect": [] },
+    { "name": "a PR that already existed", "tool": "PowerShell", "command": "gh pr create --fill; gh pr view --json url -q .url", "output": "a pull request for branch \"fix\" into branch \"main\" already exists:\nhttps://github.com/o/r/pull/9\nhttps://github.com/o/r/pull/9", "expect": [] },
+    { "name": "URL inside prose, not a bare line", "tool": "bash", "command": "gh pr create --fill", "output": "Created https://github.com/o/r/pull/10", "expect": [] },
+    { "name": "failed call", "tool": "bash", "command": "gh pr create --fill", "output": "https://github.com/o/r/pull/8", "isError": true, "expect": [] },
+    { "name": "not a shell tool", "tool": "write_file", "command": "gh pr create --fill", "output": "https://github.com/o/r/pull/9", "expect": [] },
+    { "name": "echoed, not run", "tool": "Bash", "command": "echo gh pr create --fill", "output": "https://github.com/o/r/pull/9", "expect": [] },
+    { "name": "mentioned inside a quoted script", "tool": "Bash", "command": "node -e \"console.log('gh pr create --fill; https://github.com/o/r/pull/9')\"", "output": "https://github.com/o/r/pull/9", "expect": [] },
+    { "name": "mentioned inside a PowerShell here-string", "tool": "PowerShell", "command": "$notes = @'\ngh pr create --fill\n'@\ngh pr view 9 --json url -q .url", "output": "https://github.com/o/r/pull/9", "expect": [] },
+    { "name": "viewing a PR claims nothing", "tool": "Bash", "command": "gh pr view 9 --json url -q .url", "output": "https://github.com/o/r/pull/9", "expect": [] },
+    { "name": "pulls API without POST", "tool": "bash", "command": "gh api repos/o/r/pulls", "output": "https://github.com/o/r/pull/12", "expect": [] }
+  ]
+}
