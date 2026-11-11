@@ -8,9 +8,9 @@ import { SubagentModelControl } from './SubagentModelControl.js';
  * model, or one exact model saved as the delegation route.
  */
 export function DelegationRouteSettings({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => Promise<void> }) {
-  return <div className="mt-4 border-t border-line pt-4">
+  return <div className="min-w-0">
     <h3 className="text-sm font-medium">Subagent model</h3>
-    <p className="mt-1 text-2xs text-ink-faint">What sub-agents run on when the agent does not name a model. Auto picks a lighter model than the chat's so fanning out costs less. Also in the model selector, under Subagents.</p>
-    <div className="mt-2"><SubagentModelControl settingsOverride={settings} update={update} /></div>
+    <p className="mt-(--q-tight) text-xs text-ink-faint">What sub-agents run on when the agent does not name a model. Auto picks a lighter model than the chat's so fanning out costs less. Also in the model selector, under Subagents.</p>
+    <div className="mt-(--q-inline)"><SubagentModelControl settingsOverride={settings} update={update} /></div>
   </div>;
 }

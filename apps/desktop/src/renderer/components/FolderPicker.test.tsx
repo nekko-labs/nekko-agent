@@ -71,6 +71,18 @@ describe('composer folder picker', () => {
     expect(out).not.toContain('aria-pressed');
   });
 
+  it('lists a sandbox chat\'s sandbox repositories, removable before the sandbox is set up (#2561)', () => {
+    const repos = [{ provider: 'github' as const, fullName: 'acme/billing', cloneUrl: '', webUrl: '' }];
+    const menu = (onRemoveSandboxRepo?: () => void) => renderToStaticMarkup(<FolderPickerMenu folders={folders} chat={{ workspaceId: 'a' }} onPick={() => {}} onClear={() => {}} onAdd={() => {}} onRemove={() => {}}
+      onAddRepo={() => {}} reposConnected sandboxRepos={repos} onRemoveSandboxRepo={onRemoveSandboxRepo} />);
+    const out = menu(() => {});
+    expect(out).toContain('acme/billing');
+    expect(out).toContain('In the sandbox');
+    expect(out).toContain('aria-label="Remove acme/billing from this chat"');
+    // Once the sandbox is made its repositories are fixed.
+    expect(menu()).not.toContain('Remove acme/billing');
+  });
+
   it('offers per-chat removal only for included folders, separately from saved-access revocation', () => {
     const out = renderToStaticMarkup(<FolderPickerMenu folders={folders} chat={{ workspaceId: 'a' }} onPick={() => {}} onClear={() => {}} onAdd={() => {}} onRemove={() => {}} onExclude={() => {}} />);
     expect(out).toContain('aria-label="Remove nekko-agent from this chat"');

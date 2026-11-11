@@ -17,6 +17,8 @@ pub const CHANNELS: &[&str] = &[
     "connector:fetch",
     "connectors:detect",
     "connector:importCli",
+    "connector:repos",
+    "connector:exclude",
 ];
 
 /// How long a turn waits for the connectors' context before going without (TS: 2.5 s).
@@ -83,8 +85,53 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             let kind = kind.as_str().unwrap_or("");
             nekko_connectors::fetch(NET.as_ref(), kind, &token, query, cfg.get("settings")).await
         }
+        // Every repository a git connector reaches, the removed ones too, so
+        // the card can group them and bring a removed one back (#2562).
+        "connector:repos" => {
+            let kind = kind.as_str().unwrap_or("");
+            let mine: Vec<Value> =
+                connectors_of(&crate::settings::current(ctx).await).into_iter().filter(|c| c["kind"] == kind).collect();
+            if nekko_connectors::repos::connected(&mine).is_empty() {
+                return Err("Connector not connected".into());
+            }
+            let api =
+                std::env::var("NEKKO_GITHUB_API_URL").unwrap_or_else(|_| nekko_connectors::repos::GITHUB_API.into());
+            Ok(nekko_connectors::repos::list_reachable(NET.as_ref(), &api, &mine).await)
+        }
+        "connector:exclude" => exclude(ctx, &kind, arg(1)).await,
         other => Err(format!("unknown channel {other}")),
     }
+}
+
+/// The repositories and owners a git connector's user removed from what the
+/// app offers and reads (#2562), saved in the connector's settings. Only
+/// these two lists change, so the token and where it is sent never do.
+async fn exclude(ctx: &Ctx, kind: &Value, choice: &Value) -> Result<Value, String> {
+    if !matches!(kind.as_str(), Some("github" | "gitlab")) {
+        return Err("Only GitHub and GitLab have repositories to choose.".into());
+    }
+    let names = |key: &str| -> Result<Value, String> {
+        let list = choice.get(key).and_then(Value::as_array).ok_or(format!("{key} must be a list of names."))?;
+        let mut out: Vec<String> = Vec::new();
+        for v in list {
+            let name = v.as_str().map(str::trim).filter(|n| !n.is_empty() && n.len() <= 300);
+            let name = name.ok_or(format!("{key} must be a list of names."))?.to_lowercase();
+            if !out.contains(&name) {
+                out.push(name);
+            }
+        }
+        Ok(json!(out))
+    };
+    let (repos, owners) = (names("excludedRepos")?, names("excludedOwners")?);
+    let mut connectors = connectors_of(&crate::settings::current(ctx).await);
+    let entry = connectors.iter_mut().find(|c| c.get("kind") == Some(kind)).ok_or("Connector not connected")?;
+    if !entry.get("settings").is_some_and(Value::is_object) {
+        entry["settings"] = json!({});
+    }
+    entry["settings"]["excludedRepos"] = repos;
+    entry["settings"]["excludedOwners"] = owners;
+    let next = crate::settings::update(ctx, json!({ "connectors": connectors })).await?;
+    Ok(next.get("connectors").cloned().unwrap_or(json!([])))
 }
 
 /// Saves `{ kind, connected: true, token, settings, connectedAt }` in place of

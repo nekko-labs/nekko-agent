@@ -246,6 +246,27 @@ export interface CodeModeSavings {
   toolCalls: number;
 }
 
+/** Code mode's net savings over a whole chat: every code-mode reply's estimate, summed. */
+export interface ChatCodeModeSavings {
+  /** Net estimated tokens saved; negative when code mode cost more than a tool list. */
+  tokensSaved: number;
+  /** Replies that ran in code mode. */
+  replies: number;
+}
+
+/** Sum the code-mode estimates on a chat's replies; null when no reply used code mode. */
+export function chatCodeModeSavings(messages: readonly { turnStats?: TurnStats }[] | undefined): ChatCodeModeSavings | null {
+  let tokensSaved = 0;
+  let replies = 0;
+  for (const m of messages ?? []) {
+    const c = m.turnStats?.codeMode;
+    if (!c) continue;
+    tokensSaved += c.tokensSaved;
+    replies += 1;
+  }
+  return replies ? { tokensSaved, replies } : null;
+}
+
 /** Display-only engine notices. Never included in model history. */
 export interface ConnectivityNotice {
   id: string;
@@ -262,6 +283,8 @@ export interface Session {
   /** Opt-in marker written only on new chats; older sessions keep their checkout. */
   executionMode?: ExecutionMode;
   sandbox?: SandboxIdentity;
+  /** Repositories for this sandbox chat's sandbox, before it is set up (#2561). */
+  sandboxRepos?: SandboxRepo[];
   gitIsolation?: boolean;
   /** Explicit dependent work, pinned when Continue as stacked PR is selected. */
   gitStackParent?: { workspaceId: string; url: string; branch: string; sha: string };
@@ -315,6 +338,12 @@ export interface Session {
    * chat's alias) to. Trusted only while the chat's `modelId` still matches.
    */
   claudeCodeContext?: ClaudeCodeContext;
+  /**
+   * The attached files a Claude Agent chat's Claude Code session has already
+   * been given, so each goes once per session. Set by nekkod; cleared when
+   * Claude Code compacts, so they are given again.
+   */
+  claudeCodeAttached?: { session: string; paths: string[] };
   messages: ChatMessage[];
   contextPrefs?: ContextPrefs;
   /** Files explicitly attached to this chat's context (absolute paths). */
@@ -495,6 +524,10 @@ export type AgentEvent =
   | { type: 'question_resolved'; sessionId: string; callId: string }
   /** The approval was answered or dropped; the approved tool may still run for a while. */
   | { type: 'approval_resolved'; sessionId: string; callId: string }
+  /** The agent asked for a secret (`request_secret`, #2594): the chat shows its secret box. */
+  | { type: 'secret_request'; sessionId: string; request: SecretRequest }
+  /** The secret box was answered (`provided`) or skipped, or the turn ended. Never carries the value. */
+  | { type: 'secret_resolved'; sessionId: string; callId: string; provided: boolean }
   | {
       type: 'usage';
       sessionId: string;
@@ -588,7 +621,29 @@ export interface PendingInput {
   };
   /** An `ask_user` call waiting on answers. */
   question?: import('./ask.js').AskRequest;
+  /** A `request_secret` call waiting on the chat's secret box. */
+  secret?: SecretRequest;
 }
+
+/**
+ * The agent asked the user for a secret (#2594): an API key, token or
+ * password its commands need. The user's answer goes to the engine on its
+ * own channel (`chat:provideSecret`) and becomes the environment variable
+ * `name` for the chat's commands; the agent only ever learns that it was
+ * given, and output that contains it reads `[secret NAME]`.
+ */
+export interface SecretRequest {
+  /** The `request_secret` call this answers. */
+  callId: string;
+  /** The environment variable the value is set as, e.g. `OPENAI_API_KEY`. */
+  name: string;
+  /** One line from the agent: what it is for, where to get it. */
+  reason: string;
+  requestedAt: number;
+}
+
+/** A secret's request tool, as the transcript shows it. */
+export const REQUEST_SECRET_TOOL = 'request_secret';
 
 /**
  * Output tokens per second, measured over the time the model spent generating
@@ -757,7 +812,9 @@ export interface ReplySuggestions {
 
 /** Explicit execution mode is authoritative; legacy sessions retain their previous behavior. */
 export type ExecutionMode = 'sandbox' | 'worktree' | 'unified';
-export interface SandboxIdentity { image: string; identity: string; configuredAt: number; sourceWorkspaceIds: string[] }
+/** A repository a sandbox chat clones into its sandbox rather than onto this computer (#2561). */
+export interface SandboxRepo { provider: 'github' | 'gitlab'; fullName: string; cloneUrl: string; webUrl: string }
+export interface SandboxIdentity { image: string; identity: string; configuredAt: number; sourceWorkspaceIds: string[]; sourceRepos?: SandboxRepo[] }
 export interface SandboxStatus { mode: ExecutionMode; phase: 'unconfigured' | 'configured' | 'ready' | 'error'; identity?: string; image?: string; error?: string; applySupported: false }
 export interface SandboxDiff { identity: string; diffId: string; changes: Array<{ path: string; before: string | null; after: { path: string; base64: string; hash: string } | null }> }
 export function getExecutionMode(session?: Pick<Session, 'executionMode' | 'gitIsolation'>): ExecutionMode {

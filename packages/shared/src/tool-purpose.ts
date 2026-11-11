@@ -42,7 +42,7 @@ const WEB_SEARCH = new Set(['websearch', 'searchweb', 'googlesearch']);
 const WEB = new Set([...WEB_SEARCH, 'webfetch', 'fetchurl', 'fetch', 'browser', 'browse']);
 const PLAN = new Set(['updateplan', 'todowrite', 'todoread', 'writetodos', 'exitplanmode', 'enterplanmode', 'decide']);
 const DELEGATE = new Set(['spawnagent', 'task', 'agent', 'subagent', 'dispatchagent', 'delegationtargets']);
-const ASK = new Set(['askuser', 'askuserquestion', 'askfollowupquestion']);
+const ASK = new Set(['askuser', 'askuserquestion', 'askfollowupquestion', 'requestsecret']);
 
 function isMcp(name: string): boolean {
   return name.startsWith('mcp__');

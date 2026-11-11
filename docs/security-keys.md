@@ -14,8 +14,9 @@ Open **Settings → Security** on the computer. It lists the methods registered 
 
 1. **Add a security key.** Choose to add a security key, give it a name you will recognize, and touch the key (or hold it to the top of your phone for NFC). On a Mac you can use Touch ID, on Windows, Windows Hello. On Linux only a key works: Chromium has no built-in authenticator there.
 2. **Add a second method.** Step-up cannot be turned on with fewer than **two** methods, so a lost key never locks you out of your own computer. Good pairs are two keys (keep one at home), or a key and a one-time code.
-   - **One-time code:** choose to add a one-time code, scan the QR with any authenticator app (1Password, Google Authenticator, Authy and the like), and type the six digits it shows. Settings warns, but lets you go on, if the authenticator is on the same phone you are protecting.
+   - **One-time code:** type a name if you like (the app's, say), choose to add a one-time code, scan the QR with any authenticator app (1Password, Google Authenticator, Authy and the like), and type the six digits it shows. Settings warns, but lets you go on, if the authenticator is on the same phone you are protecting.
    - **Passkey on this phone or computer:** registered the same way as a key, with Face ID, Touch ID, Windows Hello or the phone's fingerprint.
+   - To rename a method later, choose **Rename** on its row. With step-up on, renaming asks for a confirmation, the same as adding a method.
 3. **Save your recovery codes.** When you register your first method, Nekko Agent shows **ten recovery codes, once**. Print them or keep them in a password manager. Each works once.
 4. **Turn step-up on.**
 

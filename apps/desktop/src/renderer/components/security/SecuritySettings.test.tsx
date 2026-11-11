@@ -40,6 +40,7 @@ const html = (o: Partial<Parameters<typeof SecuritySettingsView>[0]> = {}) =>
       onEnable={vi.fn()}
       onDisable={vi.fn()}
       onRemove={vi.fn()}
+      onRename={vi.fn().mockReturnValue(false)}
       onNewCodes={vi.fn()}
       onCopyCodes={vi.fn()}
       {...o}
@@ -63,6 +64,12 @@ describe('Settings → Security', () => {
     expect(out).toContain('Nothing registered yet.');
     expect(out).toContain('Add 2 methods first');
     expect(out).toMatch(/<button[^>]*disabled=""[^>]*>Turn on<\/button>/);
+    // Blocked (#2393): the title goes faint and the button points at the reason.
+    expect(out).toMatch(/text-ink-faint">Require a step-up/);
+    expect(out).toMatch(/<button[^>]*aria-describedby="security-step-up-state"[^>]*>Turn on<\/button>/);
+    expect(out).toMatch(/id="security-step-up-state"[^>]*>Add 2 methods first/);
+    // The term is defined where it first appears (#2392).
+    expect(text(out)).toContain('A step-up is a second check before risky actions');
     expect(text(out)).toContain(SECURITY_KEY_UNTESTED_NOTE);
     expect(out).toContain('href="https://github.com/nekko-labs/nekko-agent/issues/new"');
     expect(out).toContain('Add passkey on this computer');
@@ -78,6 +85,21 @@ describe('Settings → Security', () => {
     expect(out).toContain('9 recovery codes left.');
     expect(out).toMatch(/<button[^>]*>Turn on<\/button>/);
     expect(out).not.toMatch(/disabled=""[^>]*>Turn on/);
+    expect(out).not.toContain('aria-describedby="security-step-up-state"');
+    expect(out).not.toMatch(/text-ink-faint">Require a step-up/);
+  });
+
+  it('shows the code app under the name it was given, and offers Rename on every method', () => {
+    const out = html({ status: status({ methods: [key('a', 'YubiKey 5C')], totp: { name: 'Microsoft Authenticator', addedAt: NOW - 1000 } }) });
+    expect(out).toMatch(/data-method="totp"[^>]*>.*Microsoft Authenticator/);
+    expect(out).toContain('One-time code app · added today');
+    expect((out.match(/>Rename<\/button>/g) ?? []).length).toBe(2);
+    expect(out).toContain('aria-label="Name for the new method"');
+  });
+
+  it('calls a code app from an older computer, with no name, One-time code app', () => {
+    const out = html({ status: status({ totp: { addedAt: NOW - 1000 } }) });
+    expect(out).toMatch(/data-method="totp"[^>]*>.*One-time code app<\/span>/);
   });
 
   it('warns, not refuses, when the second method is a code app and phones are paired', () => {

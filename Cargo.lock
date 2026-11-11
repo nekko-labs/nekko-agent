@@ -1748,7 +1748,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-agent"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -1763,7 +1763,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-automation"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -1777,7 +1777,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-bench"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -1791,10 +1791,11 @@ dependencies = [
 
 [[package]]
 name = "nekko-cloud"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "chrono",
  "futures-util",
  "getrandom 0.3.4",
  "nekko-js",
@@ -1813,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-codemode"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "nekko-js",
  "rquickjs",
@@ -1822,7 +1823,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-connectors"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
@@ -1837,7 +1838,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-context"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "nekko-js",
  "serde_json",
@@ -1845,7 +1846,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-decide"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "ort",
  "serde",
@@ -1856,7 +1857,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-engine"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "futures-util",
  "libc",
@@ -1875,7 +1876,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-harness"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "getrandom 0.3.4",
  "libc",
@@ -1887,7 +1888,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-infer"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "axum",
  "bytes",
@@ -1905,7 +1906,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-js"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "getrandom 0.3.4",
  "icu_collator",
@@ -1914,7 +1915,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-loop"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "nekko-js",
  "serde_json",
@@ -1923,7 +1924,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-machine"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "core-foundation 0.10.1",
  "libc",
@@ -1938,7 +1939,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-messaging"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "nekko-js",
  "nekko-tools",
@@ -1947,7 +1948,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-native"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "base64 0.22.1",
  "block2",
@@ -1972,7 +1973,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-net"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "reqwest",
  "serde_json",
@@ -1981,7 +1982,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-oauth"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "chrono",
  "getrandom 0.3.4",
@@ -1995,7 +1996,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-privacy"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "regress",
  "serde_json",
@@ -2003,7 +2004,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-remote"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -2027,7 +2028,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-runner"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "serde",
  "serde_json",
@@ -2035,7 +2036,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-sandbox"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "base64 0.22.1",
  "libc",
@@ -2049,7 +2050,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-settings"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "nekko-js",
  "nekko-vault",
@@ -2059,7 +2060,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-store"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -2075,7 +2076,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-sync"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -2090,7 +2091,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-term"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "bytes",
  "getrandom 0.3.4",
@@ -2103,7 +2104,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-tools"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "libc",
  "memchr",
@@ -2118,7 +2119,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-turn"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "futures-util",
  "nekko-context",
@@ -2133,7 +2134,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-usage"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "chrono",
  "nekko-js",
@@ -2143,7 +2144,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-vault"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "keyring",
  "nekko-js",
@@ -2155,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-web"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "axum",
  "encoding_rs",
@@ -2175,7 +2176,7 @@ dependencies = [
 
 [[package]]
 name = "nekko-workspace"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "futures-util",
  "getrandom 0.3.4",
@@ -2195,7 +2196,7 @@ dependencies = [
 
 [[package]]
 name = "nekkod"
-version = "0.1.0"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "axum",

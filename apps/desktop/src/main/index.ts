@@ -22,6 +22,7 @@ import { createForegroundGuard, holdNotices, type ForegroundGuard } from './fore
 import { startAgentBrowser } from './agentBrowser.js';
 import { guardSession } from './connectionsGuard.js';
 import { registerArtifactPreview } from './artifactPreview.js';
+import { registerHtmlPreview } from './htmlPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
@@ -130,7 +131,7 @@ preservePackagedProfile(app);
  * background and a light-themed overlay would flash white in the corner for
  * the frame or two before the page mounts.
  */
-const DEFAULT_OVERLAY: TitleBarOverlayTheme = { color: '#0c0c11', symbolColor: '#a3a1b0' };
+const DEFAULT_OVERLAY: TitleBarOverlayTheme = { color: '#0b0c14', symbolColor: '#a3a4b6' };
 
 /**
  * The URL scheme other apps use to reach Nekko Agent
@@ -634,6 +635,7 @@ if (!isPrimary) app.quit();
 
 app.whenReady().then(async () => {
   registerArtifactPreview((sender) => applicationWindows.has(sender.id));
+  registerHtmlPreview((sender) => applicationWindows.has(sender.id));
   if (!isPrimary) return;
   // No File/Edit/View/Window bar: it cost a whole strip of chrome above the UI
   // to duplicate shortcuts the app already owns. macOS keeps its menu — there

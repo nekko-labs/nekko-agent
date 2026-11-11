@@ -4,6 +4,7 @@ import { composerMarkdownNodes } from './ComposerHighlight.js';
 import { composerFenceAt } from './composerCode.js';
 import { revealEditorCaret } from './editorCaret.js';
 import { ComposerEditingTools } from './ComposerEditingTools.js';
+import { markPrivacyNodes, type PrivacyMark } from '../../privacyMarks.js';
 
 /** Textarea-compatible selection API, backed by the browser's visible editable text. */
 export type MarkdownEditorElement = HTMLDivElement & {
@@ -87,13 +88,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorElement, {
   onPaste?: (e: React.ClipboardEvent<MarkdownEditorElement>) => void;
   className: string; placeholder: string; disabled: boolean;
   'aria-expanded': boolean; 'aria-controls'?: string;
-}>(function MarkdownEditor({ value, onChange, onKeyDown, onPaste, disabled, placeholder, ...props }, ref) {
+  /** Privacy Shield: values in the draft a cloud model will read as placeholders. */
+  privacyMarks?: readonly PrivacyMark[];
+}>(function MarkdownEditor({ value, onChange, onKeyDown, onPaste, disabled, placeholder, privacyMarks, ...props }, ref) {
   const local = useRef<MarkdownEditorElement | null>(null);
   const composing = useRef(false);
   const pending = useRef<[number, number] | null>(null);
   const history = useRef<MarkdownEdit[]>([]);
   const redo = useRef<MarkdownEdit[]>([]);
   const previous = useRef(value);
+  const marks = useRef(privacyMarks);
+  marks.current = privacyMarks;
   const remember = (el: MarkdownEditorElement) => {
     history.current.push({ text: previous.current, start: el.selectionStart, end: el.selectionEnd });
     if (history.current.length > 200) history.current.shift();
@@ -103,7 +108,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorElement, {
     // Keep an empty editor truly empty, so its `:empty::before` placeholder
     // (and ghost suggestions written into it) can show. A `<br>` child counts
     // as a child element and defeats `:empty`.
-    const html = text ? renderToStaticMarkup(<>{composerMarkdownNodes(text)}</>) + (text.endsWith('\n') ? '<br>' : '') : '';
+    // Privacy Shield marks wrap the styled text; their placeholders are CSS, not text.
+    const nodes = text ? composerMarkdownNodes(text) : [];
+    const shielded = marks.current?.length ? markPrivacyNodes(nodes, text, marks.current) : nodes;
+    const html = text ? renderToStaticMarkup(<>{shielded}</>) + (text.endsWith('\n') ? '<br>' : '') : '';
     // Most keys leave the highlighting as it was: the browser's own edit
     // already reads the same, caret included. Rewriting it anyway and putting
     // the caret back forced a layout of the whole page on every key.
@@ -118,6 +126,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorElement, {
     if (el && !composing.current && el.value !== value) paint(el, value);
     previous.current = value;
   }, [value]);
+  // A new preview from the engine re-marks the draft as it stands, caret kept.
+  useLayoutEffect(() => {
+    const el = local.current;
+    if (el && !composing.current) paint(el, el.value);
+  }, [privacyMarks]);
   const apply = (el: MarkdownEditorElement, edit: MarkdownEdit, record = true) => {
     if (record) remember(el);
     pending.current = [edit.start, edit.end];

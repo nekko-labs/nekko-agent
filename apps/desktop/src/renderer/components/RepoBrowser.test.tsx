@@ -8,7 +8,7 @@ vi.mock('../store.js', async (original) => {
 });
 import type { RemoteRepo } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
-import { RepoBrowser, filterRepos, savedClone } from './RepoBrowser.js';
+import { RepoBrowser, RepoFolderStep, filterRepos, savedClone } from './RepoBrowser.js';
 
 const repo = (fullName: string, description = '', provider: RemoteRepo['provider'] = 'github'): RemoteRepo => ({
   provider, id: fullName, fullName, cloneUrl: `https://github.com/${fullName}.git`, webUrl: '', defaultBranch: 'main', private: false, description, updatedAt: '',
@@ -49,5 +49,14 @@ describe('repository browser (#2404)', () => {
       expect(out).toContain('aria-label="Search repositories"');
       expect(out).toContain('Loading repositories…');
     } finally { useStore.setState({ settings: prev.settings }); }
+  });
+
+  it('offers the suggested repositories folder, another folder, or cancel (#2561)', () => {
+    const out = renderToStaticMarkup(<RepoFolderStep repo="me/app" suggested="/home/me/nekko-repos" onChosen={() => {}} onCancel={() => {}} />);
+    expect(out).toContain('Where should repositories sync?');
+    expect(out).toContain('me/app isn&#x27;t on this computer yet');
+    expect(out).toContain('Use /home/me/nekko-repos');
+    expect(out).toContain('Choose…');
+    expect(out).toContain('Cancel');
   });
 });

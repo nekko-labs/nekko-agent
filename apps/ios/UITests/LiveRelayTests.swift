@@ -506,7 +506,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(viewMenu.waitForExistence(timeout: 5), "the view menu")
         XCTAssertTrue(waitForFrame(viewMenu, in: app, 10), "the view menu never got a frame")
         viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        XCTAssertTrue(app.buttons["chats.view.groupBy"].waitForExistence(timeout: 5), "Group by")
+        XCTAssertTrue(viewOptionsGroupBy(app).waitForExistence(timeout: 5), "Group by")
         attach(app, "beyond-6-view-menu")
         closeViewOptions(app)
         auditAccessibility(app, "beyond-chats")
@@ -943,7 +943,7 @@ final class LiveRelayTests: XCTestCase {
         let viewMenu = app.buttons["chats.view"].firstMatch
         XCTAssertTrue(waitForFrame(viewMenu, in: app, 10))
         viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        let groupBy = app.buttons["chats.view.groupBy"]
+        let groupBy = viewOptionsGroupBy(app)
         XCTAssertTrue(groupBy.waitForExistence(timeout: 5), "Group by")
         let byComputer = app.buttons["Computer"].firstMatch
         XCTAssertTrue(groupBy.tapUntil { byComputer.exists }, "Group by opens its choices")

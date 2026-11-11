@@ -11,7 +11,9 @@ import { MermaidDiagram } from './ArtifactPreview.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { isPrUrl, PrLinkChip } from './PrLinkChip.js';
 import { useStore } from '../store.js';
-import { BranchIcon, CompassIcon, ListIcon, QuestionIcon, TerminalIcon } from '../icons.js';
+import { BranchIcon, CheckIcon, CompassIcon, CopyIcon, ListIcon, QuestionIcon, TerminalIcon } from '../icons.js';
+import { commandToRun } from '../suggestedCommands.js';
+import { ChatCodeRun, InlineChatTerminal, RunCommandButton, useInlineTerminals } from './ChatCodeRun.js';
 import { endsOnUnlabelledQuestion, topicLine, type Topic } from '../replyTopics.js';
 
 
@@ -45,9 +47,9 @@ export const MarkdownSession = React.createContext<string | undefined>(undefined
 
 export const MarkdownSandbox = React.createContext(false);
 
-export function Markdown({ text, doc = false, basePath, topics, askTail }: MarkdownProps) {
+export function Markdown({ text, doc = false, basePath, topics, askTail, runnable }: MarkdownProps) {
   if (doc) return <DocMarkdown text={text} basePath={basePath} />;
-  return <ChatMarkdown text={text} basePath={basePath} topics={topics} askTail={askTail} />;
+  return <ChatMarkdown text={text} basePath={basePath} topics={topics} askTail={askTail} runnable={runnable} />;
 }
 
 /** A document is parsed whole: it is read, not streamed, and its HTML stripping works line by line. */
@@ -56,16 +58,18 @@ function DocMarkdown({ text, basePath }: { text: string; basePath?: string }) {
   return <div className="md-doc text-sm leading-[1.6]">{blocks}</div>;
 }
 
-function ChatMarkdown({ text, basePath, topics, askTail }: { text: string; basePath?: string; topics?: boolean; askTail?: boolean }) {
+function ChatMarkdown({ text, basePath, topics, askTail, runnable }: { text: string; basePath?: string; topics?: boolean; askTail?: boolean; runnable?: boolean }) {
   const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics, evidence: topics ? verificationPairs(text, basePath) : [] }), [basePath, topics, text]);
   const segments = markdownSegments(text);
   // A closing question gets the header the model did not write.
   const question = askTail && endsOnUnlabelledQuestion(text) ? segments.filter((s) => s.kind === 'text').at(-1) : undefined;
+  // A fence still being written (an odd number of ```) is not a command yet.
+  const open = (text.match(/```/g)?.length ?? 0) % 2 === 1 ? segments.filter((s) => s.kind === 'code').at(-1) : undefined;
   return (
     <div className="space-y-1 text-sm leading-[1.6]">
       {segments.map((s) =>
         s.kind === 'code'
-          ? <MemoCodeBlock key={s.key} lang={s.lang} code={s.code} />
+          ? <MemoCodeBlock key={s.key} lang={s.lang} code={s.code} runnable={runnable && s !== open} />
           : (
             <React.Fragment key={s.key}>
               {s === question && <TopicHeader topic="question" label="Question" />}
@@ -171,6 +175,8 @@ export interface MarkdownProps {
   topics?: boolean;
   /** Give a closing question a header when the message did not. For settled text: a stream ends on one in passing. */
   askTail?: boolean;
+  /** An agent's own words: its shell blocks may offer Run when the chat provides `ChatCodeRun` (#2595). */
+  runnable?: boolean;
 }
 
 /** Rendering options threaded through the block/inline walk. */
@@ -181,8 +187,18 @@ export interface Ctx {
   evidence?: EvidencePair[];
 }
 
-function CodeBlock({ lang, code }: { lang: string; code: string }) {
+/**
+ * A fenced block. In an agent's reply in a chat that may run commands
+ * (`runnable` and a `ChatCodeRun` target), a shell block also offers Run,
+ * and shows the chat's terminal under it once run (#2595).
+ */
+function CodeBlock({ lang, code, runnable = false }: { lang: string; code: string; runnable?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const target = React.useContext(ChatCodeRun);
+  const sandbox = React.useContext(MarkdownSandbox);
+  const command = runnable && target && !sandbox ? commandToRun(lang, code) : null;
+  const block = `${lang}\n${code}`;
+  const inline = useInlineTerminals((s) => (command && target ? s.open[target.sessionId] : undefined));
   const copy = () => {
     navigator.clipboard?.writeText(code).then(() => {
       setCopied(true);
@@ -190,23 +206,29 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
     });
   };
   if (lang.toLowerCase() === 'mermaid') return <MermaidDiagram code={code} />;
+  const copyButton = (
+    <button type="button" onClick={copy} title="Copy code" className="quiet-tab code-action items-center!">
+      {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
   return (
-    <div className="group relative my-2">
-      <pre
-        className="overflow-x-auto rounded-xl border border-line p-3 font-mono text-sm leading-relaxed"
-        style={{ background: 'var(--surface-2)' }}
-      >
-        {lang && <div className="mb-1 text-xs text-ink-soft">{lang}</div>}
+    <div data-code-block className="group relative my-2 overflow-hidden rounded-xl border border-line" style={{ background: 'var(--surface-2)' }}>
+      {lang ? (
+        <div className="flex min-w-0 items-center gap-2 pl-3 pr-1.5 pt-1.5">
+          <span className="min-w-0 truncate text-xs text-ink-soft">{lang}</span>
+          <span className="ml-auto flex shrink-0 items-center gap-1">
+            {command && target && <RunCommandButton target={target} block={block} command={command} />}
+            {copyButton}
+          </span>
+        </div>
+      ) : (
+        <span className="code-copy-float">{copyButton}</span>
+      )}
+      <pre className={`overflow-x-auto px-3 pb-3 font-mono text-sm leading-relaxed ${lang ? 'pt-1' : 'pt-3'}`}>
         <code>{code}</code>
       </pre>
-      <button
-        onClick={copy}
-        title="Copy code"
-        className="absolute right-2 top-2 rounded-md border border-line px-2 py-0.5 text-2xs text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
-        style={{ background: 'var(--surface)' }}
-      >
-        {copied ? '✓ copied' : 'Copy'}
-      </button>
+      {target && inline?.block === block && <InlineChatTerminal target={target} terminalId={inline.terminalId} />}
     </div>
   );
 }

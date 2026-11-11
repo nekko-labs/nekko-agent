@@ -25,6 +25,7 @@ struct ChatMascot: View {
     private let refresh: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.seasonalDecoration) private var decoration
     @State private var greeting = false
     @State private var greetingID = 0
 
@@ -43,6 +44,7 @@ struct ChatMascot: View {
             TimelineView(.animation(minimumInterval: 0.2, paused: reduceMotion || scenePhase != .active)) { timeline in
                 let frame = Int(timeline.date.timeIntervalSinceReferenceDate * 5) % 40
                 PixelCat(happy: greeting || pull.smiling, shocked: pull.shocked, blink: !working && frame == 14)
+                    .overlay { MascotHat(decoration: decoration) }
                     .frame(width: 40, height: 40)
                     .offset(y: reduceMotion || scenePhase != .active || pull.animating ? 0 : working && frame % 4 < 2 ? -2 : 0)
             }

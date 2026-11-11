@@ -55,7 +55,7 @@ const model = createServer((req, res) => {
     const parsed = JSON.parse(body || '{}');
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     // The chat's auto-title is a side call, answered at once and not counted.
-    const titling = JSON.stringify(parsed.messages ?? []).includes('short title');
+    const titling = JSON.stringify(parsed.messages ?? []).includes('Name this chat for a sidebar list');
     if (!titling) requests.push(parsed);
     // Slower than the bridge's 1.5 s flush, so the reply is sent and then edited.
     for (const piece of titling ? ['Telegram chat'] : ['Hello ', 'from ', 'nekkod']) {

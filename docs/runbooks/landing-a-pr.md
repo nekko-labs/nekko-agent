@@ -35,6 +35,14 @@ Every feature or change is tracked as a GitHub issue in `nekko-labs/nekko-agent`
 gh issue create --title "<what changes, in plain words>" --body "<what and why>"
 ```
 
+Assign the issue to yourself as soon as you start on it, so everyone can see what is being worked on:
+
+```
+gh issue edit <n> --add-assignee @me
+```
+
+If someone else is already assigned, ask before taking it over. If you stop without opening a PR, unassign yourself (`--remove-assignee @me`) and leave a comment saying where the work stands. When fanning work out to parallel agents, assign each agent's issue when you hand it over.
+
 Put the requester's prompt, screenshots or other chat context in the issue only when they said to (the app's Settings > Project management holds the same choice for its own users). Then put `Closes #<n>` in the PR description. A fix for a baseline failure links the issue for that failure.
 
 ## Always land work as a PR
@@ -58,7 +66,14 @@ gh pr create --title "..." --body "..."    # ready, not --draft
 gh pr merge --auto --squash                 # it merges itself when `gate` is green
 ```
 
-`main` requires one check, `gate`, a PR, and resolved review threads. There is no
+`main` requires one check, `gate`, a PR, one approving review, and resolved review
+threads. `team-auto-approve.yml` approves a ready PR whose author is an active member
+of the nekkolabs-devs team, so the team's PRs still merge with nobody watching; a PR
+from anyone else (outside collaborators, and the runtime-updates App) waits for a
+person with write access to approve it, then auto-merges
+([decision 0087](../decisions/0087-team-prs-merge-on-gate-others-need-a-review.md)).
+If a team PR shows "Review required", run `gh workflow run team-auto-approve.yml`;
+the job log says why it skipped. There is no
 merge queue (removed 2026-11-06, [decision 0056](../decisions/0056-no-merge-queue-speed-contract-and-itests-run-nightly.md)):
 a PR merges itself through GitHub's native auto-merge (squash) as soon as `gate`
 passes. With no queue, `gate` on the PR is the last check before `main`, so it
@@ -96,7 +111,12 @@ on `ci/ios-batch` takes every open, ready `deploy:ios` PR that touches iOS and m
 cleanly onto main (the largest set that also merges with each other), and reports to
 each PR's head as the `Native iOS (batch)` status, which `gate` accepts
 (`scripts/ios-batch.mjs`). A PR that conflicts with main gets a red status saying so;
-one that conflicts only with others in the batch waits for a later batch. A red batch
+one that conflicts only with others in the batch waits for a later batch. A PR that
+changes a file under `.github/workflows/` never joins a batch, because the workflow
+token may not push workflow changes and GitHub would refuse the whole batch (#2030):
+the composer starts Native iOS on its branch once per head and marks the head red
+saying so, and that run decides `gate` (re-run it with
+`gh workflow run ios-native.yml --ref <branch>`). A red batch
 marks every PR in it red: run `gh workflow run ios-native.yml --ref <branch>` on your
 branch to see whether the failure is yours (a green run on the PR beats a red batch).
 A head with a green batch is left out of later ones, so main moving can't turn it

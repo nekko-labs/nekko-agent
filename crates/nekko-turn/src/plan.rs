@@ -99,6 +99,10 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     if can_ask && !disabled.contains(name(&c.ask_user)) {
         tools.push(c.ask_user.clone());
     }
+    // #2594: the user gives a secret the agent's commands use and it never sees.
+    if can_ask && !disabled.contains(crate::secret::REQUEST_SECRET) {
+        tools.push(crate::secret::request_secret_tool());
+    }
     if truthy(input, "decide") && !offline && !disabled.contains(name(&c.decide)) {
         tools.push(c.decide.clone());
     }
