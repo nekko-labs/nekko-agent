@@ -707,6 +707,27 @@ async fn stale_vms_are_reaped_on_start() {
     assert_eq!(h.count("clone_bundle"), 1);
 }
 
+#[tokio::test(start_paused = true)]
+async fn a_job_cut_off_by_a_restart_is_audited_lost_and_rerun() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.running().await;
+    // The journal of the busy VM, as the daemon leaves it when it dies mid-job.
+    let vm = h.vms().remove(0);
+    let journal = h.dir.path().join("vms").join(&vm).join("job.json");
+    let saved = std::fs::read(&journal).expect("a busy VM keeps a journal");
+    // A restart: the old VM is gone and `start` finds its folder.
+    let dir = h.dir.path().join("vms").join("old-vm");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("job.json"), saved).unwrap();
+    h.sup.start().await;
+    let audit = h.audit();
+    let last = audit.last().unwrap();
+    assert_eq!((last.result, last.reason.clone()), (AuditResult::Lost, vec!["daemon restarted".to_owned()]));
+    assert!(!dir.exists());
+    h.tick_for(10).await;
+    assert_eq!(h.count("rerun"), 1);
+}
+
 /// A running job, then a 600 s jump of the wall clock in one tick.
 async fn sleep_through_a_job(h: &mut H) {
     h.running().await;

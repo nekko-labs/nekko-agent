@@ -318,7 +318,8 @@ you). A ready VM still waits for the mode: with Do not disturb it boots only whi
 ## Keep awake
 
 - **System default**. The Mac follows its own Energy settings. If it sleeps mid-job, the job is
-  lost and re-run (when **Re-run jobs lost to sleep** is on).
+  lost and re-run (when **Re-run jobs lost to sleep** is on). A job cut off because Nekko
+  quit or restarted is audited as lost and re-run the same way when Nekko starts again.
 - **While a runner is active** (default). Keeps the Mac from sleeping while a job runs and lets
   it sleep when the last one ends. The display can still sleep.
 - **Always**. Keeps the Mac awake whenever the runner is on and allowed to take jobs.
