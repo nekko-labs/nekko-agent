@@ -60,7 +60,10 @@ describe('quiet permission rows', () => {
   });
   it('leaves info enabled for locked cloud internet access', () => {
     const html = renderToStaticMarkup(<PermissionRows toggles={toggles.filter(t => t.key === 'internet')} onToggle={() => {}} />);
-    expect(html).toMatch(/disabled="" data-asks-toggle="internet"/);
+    // Locked but hoverable, so the reason shows on hover.
+    expect(html).toMatch(/aria-disabled="true" data-asks-toggle="internet"/);
+    expect(html).not.toMatch(/ disabled=""/);
+    expect(html).toContain('This cloud model needs an internet connection');
     const info = html.slice(html.indexOf('class="permission-info"'));
     expect(info).toContain('aria-expanded="false"');
     expect(info).not.toContain('disabled');

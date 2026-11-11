@@ -548,6 +548,11 @@ impl SessionStore {
             if s.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
                 s.set("mode", Some(json!("ask")));
             }
+            // Incognito is a choice for one chat: a new chat never starts in it,
+            // even from a saved mode that recorded it.
+            if nekko_js::truthy(s.get("incognito")) {
+                s.set("incognito", Some(json!(false)));
+            }
         }
         if snapshot && parent_id.is_none() {
             if let Some(defaults) = settings.get("defaultSessionOptions").and_then(Value::as_object) {
@@ -557,7 +562,6 @@ impl SessionStore {
                     "mode",
                     "offline",
                     "cloudOnly",
-                    "incognito",
                     "disabledTools",
                     "workMode",
                     "effort",

@@ -26,7 +26,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -92,7 +92,9 @@ import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import { UsageLimitsChip } from './UsageLimitsChip.js';
 import { PaneActions, PaneMetadata, useInPaneFrame } from './PaneFrame.js';
 import { ContextWarning } from './ContextWarning.js';
-import { ChatControls, InternetToggle, McpMenu, ToolsMenu } from './ChatControls.js';
+import { usePrivacyPreviewFetch } from './PrivacyShield.js';
+import { draftPrivacyMarks, usePrivacyPreviews } from '../privacyMarks.js';
+import { ChatControls, INCOGNITO_OFF_HINT, INCOGNITO_ON_HINT, InternetToggle, McpMenu, ToolsMenu } from './ChatControls.js';
 import { useElementCompact } from './agent-console/useElementWidth.js';
 import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
@@ -2487,6 +2489,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   ];
 
   const isCloudModel = !providerKind || !isLocalProvider(providerKind);
+  const codeModeTotal = useMemo(() => chatCodeModeSavings(session?.messages), [session?.messages]);
+  // Privacy Shield: while it is on, keep the engine's preview of this draft
+  // current, and mark in the composer each value a cloud model reads as a
+  // placeholder. The Shield menu reads the same shared preview for its count.
+  const defaultPrivacyMode = useStore((s) => s.settings?.privacyMode);
+  const shieldOn = !imageMode && session?.chatType !== 'image' && privacyMode(session ?? undefined, { privacyMode: defaultPrivacyMode }) === 'redact';
+  usePrivacyPreviewFetch(session ?? null, draft, shieldOn);
+  const shieldPreview = usePrivacyPreviews((s) => s.bySession[sessionId]);
+  const shieldMarks = useMemo(() => draftPrivacyMarks(shieldPreview, shieldOn), [shieldPreview, shieldOn]);
   // A cloud-only chat's picker lists cloud providers only (the engine refuses the rest).
   const cloudOnlyFilter = useMemo(() => (session?.cloudOnly ? cloudProviderAllowed : undefined), [session?.cloudOnly]);
   const selectedModelInfo = modelId && modelId !== AUTO_MODEL_ID ? models.find((m) => m.id === modelId) : undefined;
@@ -3062,7 +3073,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <span className="composer-summary-meta">
                     {!imageMode && ` \u00b7 ${CHAT_MODE_LABEL[session?.mode ?? settings?.defaultChatMode ?? 'guardrails']}`}
                     {session?.offline && ' \u00b7 Offline'}
-                    {session?.incognito && ' \u00b7 Incognito'}
+                    {session?.incognito && <>{' · '}<span className="text-warning-text" data-incognito-summary>Incognito</span></>}
                   </span>
                   <span className="ctl-caret">{controlsOpen ? '\u25b4' : '\u25be'}</span>
                 </button>
@@ -3354,6 +3365,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     onPaste={imageMode ? onPhotoPaste : onPaste}
                     onKeyDown={onComposerKeyDown}
                     disabled={!canCompose}
+                    privacyMarks={shieldMarks}
                   />
                   <ComposerFocus target={composerRef} sessionId={sessionId} ready={canCompose} />
                 </div>
@@ -3470,12 +3482,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                             className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
                             onClick={() => { closeAttachMenu(); toggleIncognito(); }}
                             onMouseEnter={closeSkillsFly}
-                            title="Don't save this chat or update memory"
+                            title={session.incognito ? INCOGNITO_ON_HINT : INCOGNITO_OFF_HINT}
                             data-plus-incognito
                           >
                             <IncognitoIcon className="h-3.5 w-3.5 shrink-0" />
                             <span className="flex-1">Incognito</span>
-                            {session.incognito && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-accent" />}
+                            {session.incognito && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-warning" />}
                           </button>
                         </>}
                         <button
@@ -3608,7 +3620,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <div className="min-w-0 max-w-full shrink-0">{modelControls}</div>
                         {detailsShown && expertMode && asksFirst}
                         <div className="ml-auto flex shrink-0 items-center gap-1">
-                          {plusCarries && session?.incognito && <span className="ctl-toggle ctl-toggle-neutral whitespace-nowrap" data-incognito-on title="Don't save this chat or update memory"><IncognitoIcon className="h-3.5 w-3.5" /> Incognito</span>}
+                          {plusCarries && session?.incognito && <span className="ctl-toggle ctl-toggle-warning whitespace-nowrap" data-incognito-on data-on title={INCOGNITO_ON_HINT}><IncognitoIcon className="h-3.5 w-3.5" /> Incognito</span>}
                           {!expertMode && usageGauge}
                           {expertMode && <button
                             type="button"
@@ -3637,6 +3649,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                             avoidedCosts={avoidedCosts}
                             running={streaming}
                             unpriced={!!avoidedCosts?.unpricedTokens || (streaming && !getModelPrice(modelForCostRef.current ?? undefined))}
+                            codeMode={codeModeTotal}
                           />
                         )}
                         <div className="agent-footer-reach ml-auto flex flex-wrap items-center gap-1" data-agent-footer-controls>

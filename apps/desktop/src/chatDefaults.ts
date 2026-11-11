@@ -1,8 +1,11 @@
 import type { AppSettings, NekkoApi, Session } from '@nekko-agent/shared';
 
-/** Only Mode choices travel to the next chat, never its folders, identity or transcript. */
+/**
+ * Only Mode choices travel to the next chat, never its folders, identity or
+ * transcript. Incognito stays with the one chat it was turned on for.
+ */
 const MODE_KEYS = [
-  'executionMode', 'gitIsolation', 'mode', 'offline', 'cloudOnly', 'incognito',
+  'executionMode', 'gitIsolation', 'mode', 'offline', 'cloudOnly',
   'disabledTools', 'workMode', 'effort', 'disabledMcpServers', 'disabledConnectors',
   'memory', 'guidance', 'toolApproach', 'autoModel', 'autoProviderSwitch',
 ] as const;

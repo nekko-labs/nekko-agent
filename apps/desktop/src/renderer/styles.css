@@ -753,6 +753,11 @@
   &:disabled {
     opacity: 0.45;
   }
+  /* Locked, but still hoverable so its title can say why. */
+  &[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
   /* `.ctl-toggle-on` is the same lit state for a read-only indicator (a span
      that reports state rather than a button that changes it). */
   &[aria-pressed='true'] {
@@ -777,6 +782,29 @@
      ink when on so Offline stays the only accent-colored state in the strip. */
   &[aria-pressed='true'] {
     color: var(--ink);
+  }
+}
+
+@utility ctl-toggle-warning {
+  /* Incognito: on is a caution, not a feature to leave running. It reads in
+     the warning colour on its soft tint, so nobody mistakes it for a good
+     default, and it never carries over to the next chat. `data-on` lights a
+     read-only indicator the same way. */
+  &[aria-pressed='true'],
+  &[data-on] {
+    color: var(--warning-text);
+    background: var(--warning-soft);
+  }
+  &[aria-pressed='true'] .ctl-dot,
+  &[data-on] .ctl-dot {
+    background: var(--warning);
+    opacity: 1;
+  }
+  @media (hover: hover) {
+    &[aria-pressed='true']:hover:not(:disabled) {
+      color: var(--warning-text);
+      background: color-mix(in srgb, var(--warning) 22%, transparent);
+    }
   }
 }
 
@@ -3449,7 +3477,76 @@
 .agent-internet-toggle { color: var(--success); transition: background-color .12s ease, color .12s ease; }
 .agent-internet-toggle[data-internet='blocked'] { color: var(--ink-faint); }
 @media (hover: hover) {
-  .agent-internet-toggle:hover { background: var(--surface-2); }
+  .agent-internet-toggle:hover { background: var(--surface-2); color: var(--ink); }
+  .agent-internet-toggle[data-internet='allowed']:hover { color: var(--success); }
+}
+/* Privacy Shield's glyph. Switched on, a ring sweeps once around it (arming);
+   while on, a faint halo breathes out every few seconds so the shield reads as
+   working. Both animate only opacity and transform on a pseudo-element, so
+   they stay on the compositor; reduced motion keeps the glyph still. */
+.privacy-shield-glyph { position: relative; display: inline-flex; }
+[data-shield-on] .privacy-shield-glyph { color: var(--accent); }
+.privacy-shield-glyph::before,
+.privacy-shield-glyph::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+}
+[data-shield-on] .privacy-shield-glyph::after {
+  border: 1px solid var(--accent);
+  animation: shield-halo 3.2s var(--ease-out) infinite;
+}
+[data-shield-arming] .privacy-shield-glyph::before {
+  background: conic-gradient(from 0deg, transparent 0 55%, var(--accent) 100%);
+  mask: radial-gradient(circle closest-side, transparent 72%, var(--accent) 76%);
+  animation: shield-sweep 0.9s var(--ease-out) 1;
+}
+@keyframes shield-halo {
+  0% { opacity: 0.5; transform: scale(0.8); }
+  45% { opacity: 0; transform: scale(1.35); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+@keyframes shield-sweep {
+  0% { opacity: 1; transform: rotate(0deg) scale(0.9); }
+  80% { opacity: 1; transform: rotate(360deg) scale(1); }
+  100% { opacity: 0; transform: rotate(420deg) scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-shield-on] .privacy-shield-glyph::after,
+  [data-shield-arming] .privacy-shield-glyph::before { animation: none; opacity: 0; }
+}
+
+/* Privacy Shield in the draft: each value the model will not see, tinted and
+   bracketed, with the placeholder it reads instead drawn after it. The
+   brackets and placeholder are generated content, never the draft's text. */
+.composer-privacy-mark {
+  background: var(--info-soft);
+  color: inherit;
+  border-radius: 3px;
+  transition: background-color var(--dur-med) var(--ease-out);
+}
+.composer-privacy-mark[data-privacy-open]::before {
+  content: '[';
+  color: var(--info-text);
+  user-select: none;
+}
+.composer-privacy-mark[data-privacy-token]::after {
+  content: '] \2192\00a0' attr(data-privacy-token);
+  margin-left: 1px;
+  color: var(--info-text);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Locked on for a cloud model: it still hovers (to say why) but reads as fixed. */
+.agent-internet-toggle[aria-disabled='true'] { cursor: not-allowed; opacity: 0.6; }
+@media (hover: hover) {
+  .agent-internet-toggle[aria-disabled='true']:hover { opacity: 0.8; }
 }
 .agent-internet-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .agent-footer-status { min-width: 16px; justify-content: flex-end; }
@@ -4824,7 +4921,10 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 .permission-row { display: flex; align-items: center; gap: var(--q-tight); }
 .permission-choice { display: flex; flex: 1; min-width: 0; align-items: center; gap: var(--q-inline); min-height: var(--q-row-dense); padding: var(--q-inline); border-radius: 8px; text-align: left; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); transition: color var(--dur-med) var(--ease-out), background var(--dur-fast) var(--ease-out); }
 .permission-choice[aria-checked='true'] { color: var(--accent); }
-.permission-choice:disabled { opacity: .55; }
+.permission-choice:disabled, .permission-choice[aria-disabled='true'] { opacity: .55; }
+.permission-choice[aria-disabled='true'] { cursor: not-allowed; }
+/* Incognito on is a caution, not a feature: warning colour, never the accent. */
+.permission-choice[data-asks-toggle='incognito'][aria-checked='true'] { color: var(--warning-text); }
 .permission-check { display: grid; place-items: center; width: 14px; height: 14px; flex-shrink: 0; }
 .permission-glyph { display: inline-flex; flex-shrink: 0; }
 .permission-choice[aria-checked='true'] .permission-check { animation: permission-check-in var(--dur-med) var(--ease-out); }

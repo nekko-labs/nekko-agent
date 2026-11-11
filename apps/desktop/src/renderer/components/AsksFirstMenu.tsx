@@ -36,11 +36,11 @@ export function privacyToggles(session: Session, opts: { shieldOn: boolean; isCl
   const internetLocked = opts.isCloudModel && online;
   return [
     { key: 'incognito', label: 'Incognito', on: incognito, disabled: false,
-      title: incognito ? 'Incognito is on: this chat is not saved and memory is not read or updated' : 'Incognito: don’t save this chat or use memory' },
+      title: incognito ? 'Incognito is on: this chat is not saved and memory is not read or updated. New chats start without it.' : 'Incognito: don’t save this chat or use memory. For this chat only.' },
     { key: 'shield', label: 'Privacy Shield', on: opts.shieldOn, disabled: false,
       title: opts.shieldOn ? 'Privacy Shield is on: private values are replaced before a cloud model sees them' : 'Privacy Shield: replace private values before a cloud model sees them' },
     { key: 'internet', label: 'Internet access', on: online, disabled: internetLocked,
-      title: internetLocked ? 'Internet access is on: a cloud model needs it. Pick a local model to block it.'
+      title: internetLocked ? 'This cloud model needs an internet connection, so internet access stays on. Pick a local model to block it.'
         : online ? 'Internet access is on: web tools, connectors and MCP can reach the internet'
           : 'Internet access is off: online tools, connectors and MCP are off' },
   ];
@@ -69,8 +69,10 @@ export function PermissionRows({ toggles, onToggle, busy = false }: { toggles: P
       {toggles.map((t) => (
         <div key={t.key} role="none">
           <div className="permission-row" role="none">
+            {/* A locked row is aria-disabled, not disabled, so it still hovers and its title says why. */}
             <button type="button" role="menuitemcheckbox" aria-checked={t.on} aria-label={t.label} title={t.title}
-              disabled={t.disabled || busy} data-asks-toggle={t.key} className="permission-choice" onClick={() => onToggle(t.key)}>
+              disabled={busy} aria-disabled={t.disabled || undefined} data-asks-toggle={t.key} className="permission-choice"
+              onClick={() => { if (!t.disabled) onToggle(t.key); }}>
               <span className="permission-check" aria-hidden="true">{t.on && <CheckIcon className="h-3.5 w-3.5" />}</span>
               <span className="permission-glyph" aria-hidden="true">{TOGGLE_ICON[t.key](t.on)}</span>
               <span className="min-w-0 truncate">{t.label}</span>
