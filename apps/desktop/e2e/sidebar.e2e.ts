@@ -42,7 +42,9 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     });
 
     await test.step('a completed chat opens read-only', async () => {
-      await page.locator('[data-completed-row=completed]').click();
+      // The sticky group heading intercepts pointer events at the top of the
+      // list; dispatch directly so the test does not depend on scroll state.
+      await page.locator('[data-completed-row=completed]').evaluate((el) => (el as HTMLElement).click());
       await expect(page.getByText('Back to active agents')).toBeVisible();
       await expect(page.locator('[data-wall-composer]')).toHaveCount(0);
       await shot(`completed-${theme}-${width}`);
@@ -77,6 +79,12 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
 
     await test.step('create an agent, a media agent and a terminal', async () => {
       await page.evaluate('integration.calls.length = 0');
+      // Suppress the per-kind first-use modals that appear on the first Photo
+      // or Video session; they would overlay the next create-menu click.
+      await page.evaluate(() => {
+        localStorage.setItem('nekko.media-intro.image.v1', 'seen');
+        localStorage.setItem('nekko.media-intro.video.v1', 'seen');
+      });
       await openList();
       const create = async (label: string) => {
         await page.locator('[data-agent-panel]').getByRole('button', { name: 'New agent', exact: true }).dispatchEvent('focusin');
@@ -87,8 +95,10 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       const before = await creates();
       await create('Agent');
       await expect.poll(creates).toBeGreaterThan(before);
-      await create('Create or Edit Photos and Videos');
+      await create('Photo');
       await called(`(c) => c.method === 'options' && c.options.chatType === 'image'`);
+      await create('Video');
+      await called(`(c) => c.method === 'options' && c.options.chatType === 'video'`);
       await create('Terminal');
       await called(`(c) => c.method === 'terminal'`);
       expect(await state<number>('(i) => i.state().terminals.length')).toBe(1);
@@ -148,7 +158,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       await expect(page.locator('[role=menu]')).toHaveCount(0);
 
       await openList();
-      await page.locator('[data-completed-row=completed]').click();
+      await page.locator('[data-completed-row=completed]').evaluate((el) => (el as HTMLElement).click());
       await expect(page.getByText('Back to active agents')).toBeVisible();
       await openList();
       await rowMenu('completed');
