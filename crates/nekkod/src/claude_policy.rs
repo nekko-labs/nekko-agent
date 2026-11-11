@@ -556,7 +556,12 @@ mod tests {
 
     #[test]
     fn an_unknown_plan_falls_back_to_the_organization_name() {
-        let org = AccountIdentity { signed_in: true, email: Some("a@b".into()), org_name: Some("Acme".into()), ..Default::default() };
+        let org = AccountIdentity {
+            signed_in: true,
+            email: Some("a@b".into()),
+            org_name: Some("Acme".into()),
+            ..Default::default()
+        };
         assert!(org.is_organization());
         let own = AccountIdentity { org_name: Some("a@b's Organization".into()), ..org.clone() };
         assert!(!own.is_organization());
@@ -566,7 +571,10 @@ mod tests {
 
     #[test]
     fn signed_out_and_api_key_logins_name_no_one() {
-        let out = AccountIdentity::from_status(&nekko_harness::parse_auth_status(r#"{"loggedIn":false,"authMethod":"none","email":"stale@x"}"#, false).unwrap());
+        let out = AccountIdentity::from_status(
+            &nekko_harness::parse_auth_status(r#"{"loggedIn":false,"authMethod":"none","email":"stale@x"}"#, false)
+                .unwrap(),
+        );
         assert_eq!(out.view(), json!({ "signedIn": false }));
         let key = AccountIdentity::from_status(&status(r#"{"loggedIn":true,"authMethod":"api_key"}"#));
         assert_eq!(key.view(), json!({ "signedIn": true }));
@@ -576,7 +584,15 @@ mod tests {
     fn the_store_keeps_each_providers_identity() {
         let store = ClaudePolicyStore::with_key([7; 32], None, None);
         assert!(store.account_view("p").is_none());
-        store.note_identity("p", AccountIdentity { signed_in: true, email: Some("me@x".into()), plan: Some("pro".into()), ..Default::default() });
+        store.note_identity(
+            "p",
+            AccountIdentity {
+                signed_in: true,
+                email: Some("me@x".into()),
+                plan: Some("pro".into()),
+                ..Default::default()
+            },
+        );
         let (view, age) = store.account_view("p").unwrap();
         assert_eq!(view["scope"], "personal");
         assert!(age.as_secs() < 5);
