@@ -27,6 +27,7 @@ pub mod plan;
 pub mod plan_update;
 pub mod providers;
 pub mod scope;
+pub mod secret;
 pub mod side;
 pub mod stats;
 pub mod variants;

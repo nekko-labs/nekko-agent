@@ -4457,6 +4457,11 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @keyframes conversation-question-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .conversation-question { animation: none; } }
 
+/* The chat's secret box (#2594): the user must act, so it wears the attention tint and nothing else. */
+.secret-box { padding: 16px 20px; border-radius: 16px 16px 4px 4px; background: var(--attention-soft); }
+.secret-box .quiet-field { width: auto; background: var(--paper); }
+.secret-box .quiet-field:focus { background: var(--paper); }
+
 /* One Models workspace, quiet navigation and compact provider actions. */
 .models-add-provider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 /* Models, Settings and Automations share one side menu: inset from the window's

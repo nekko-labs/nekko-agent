@@ -212,6 +212,7 @@ const api: NekkoApi = {
   fillPromptPart: (sessionId, part, draft) => inv(IpcChannels.chatFillPrompt, sessionId, part, draft),
   approveTool: (sessionId, toolCallId, approved) => inv(IpcChannels.toolApprove, sessionId, toolCallId, approved),
   answerQuestion: (sessionId, callId, answers) => inv(IpcChannels.chatAnswer, sessionId, callId, answers),
+  provideSecret: (sessionId, callId, value) => inv(IpcChannels.chatProvideSecret, sessionId, callId, value),
   pendingInput: () => inv(IpcChannels.chatPending),
   runningSessions: () => inv(IpcChannels.chatRunning),
 

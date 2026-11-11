@@ -524,6 +524,10 @@ export type AgentEvent =
   | { type: 'question_resolved'; sessionId: string; callId: string }
   /** The approval was answered or dropped; the approved tool may still run for a while. */
   | { type: 'approval_resolved'; sessionId: string; callId: string }
+  /** The agent asked for a secret (`request_secret`, #2594): the chat shows its secret box. */
+  | { type: 'secret_request'; sessionId: string; request: SecretRequest }
+  /** The secret box was answered (`provided`) or skipped, or the turn ended. Never carries the value. */
+  | { type: 'secret_resolved'; sessionId: string; callId: string; provided: boolean }
   | {
       type: 'usage';
       sessionId: string;
@@ -617,7 +621,29 @@ export interface PendingInput {
   };
   /** An `ask_user` call waiting on answers. */
   question?: import('./ask.js').AskRequest;
+  /** A `request_secret` call waiting on the chat's secret box. */
+  secret?: SecretRequest;
 }
+
+/**
+ * The agent asked the user for a secret (#2594): an API key, token or
+ * password its commands need. The user's answer goes to the engine on its
+ * own channel (`chat:provideSecret`) and becomes the environment variable
+ * `name` for the chat's commands; the agent only ever learns that it was
+ * given, and output that contains it reads `[secret NAME]`.
+ */
+export interface SecretRequest {
+  /** The `request_secret` call this answers. */
+  callId: string;
+  /** The environment variable the value is set as, e.g. `OPENAI_API_KEY`. */
+  name: string;
+  /** One line from the agent: what it is for, where to get it. */
+  reason: string;
+  requestedAt: number;
+}
+
+/** A secret's request tool, as the transcript shows it. */
+export const REQUEST_SECRET_TOOL = 'request_secret';
 
 /**
  * Output tokens per second, measured over the time the model spent generating

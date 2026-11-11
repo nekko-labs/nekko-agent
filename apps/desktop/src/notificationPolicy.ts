@@ -41,6 +41,9 @@ export function decideNotification(event: AgentEvent, ctx: NotificationContext):
       return { sessionId: event.sessionId, kind: 'failed', title: 'Reply failed', body: `${chat}: ${event.message.slice(0, 120)}` };
     case 'question':
       return { sessionId: event.sessionId, kind: 'question', title: 'Nekko Agent has a question', body: `${chat}: ${summarizeAsk(event.request).slice(0, 120)}` };
+    case 'secret_request':
+      // The name only: it is what the agent asked for, never a value.
+      return { sessionId: event.sessionId, kind: 'question', title: 'Nekko Agent needs a secret', body: `${chat}: ${event.request.name}` };
     case 'tool_approval_required':
       return { sessionId: event.sessionId, kind: 'approval', title: 'Approval needed', body: `${chat}: ${event.reason || event.call.name}` };
     default:

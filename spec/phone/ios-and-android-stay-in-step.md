@@ -90,6 +90,12 @@ Android features the iPhone lacks have not been audited yet.
 
 Nothing is recorded as a true OS exclusive yet.
 
+## Secret box (desktop first, #2594)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| The chat's secret box when the agent asks for a secret (`request_secret`) | Not implemented: the chat looks busy while it waits | Not implemented: the chat looks busy while it waits | [#2603](https://github.com/nekko-labs/nekko-agent/issues/2603), [#2604](https://github.com/nekko-labs/nekko-agent/issues/2604) |
+
 ## Quiet transcript follow-up
 
 | Feature | iPhone | Android | Follow-up |
