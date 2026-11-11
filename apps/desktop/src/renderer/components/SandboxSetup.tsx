@@ -77,7 +77,7 @@ export function SandboxSetup({ session, onChange, onClose }: { session: Session;
         finally { setBusy(false); }
       }}>Delete sandbox resources</button>}
       <label className="block text-sm">Local image digest<input className="input mt-1 w-full" value={image} onChange={(e) => setImage(e.target.value)} placeholder="image@sha256:…" /></label>
-      <label className="flex gap-2 text-sm"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />{session.sandbox ? 'I understand cleanup permanently deletes this sandbox copy, including unsaved changes.' : "I consent to copying this chat's scoped folders into a local sandbox."}</label>
+      <label className="flex gap-2 text-sm"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />{session.sandbox ? 'I understand cleanup permanently deletes this sandbox copy, including unsaved changes.' : session.sandboxRepos?.length ? `I consent to copying this chat's scoped folders into a local sandbox, and to cloning ${session.sandboxRepos.map((r) => r.fullName).join(', ')} straight into it.` : "I consent to copying this chat's scoped folders into a local sandbox."}</label>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <div className="flex justify-end gap-2"><button className="ctl-menu" disabled={busy} onClick={onClose}>Cancel</button><button className="ctl-menu" disabled={busy || !!session.sandbox || !consent || !isPinnedSandboxImage(image)} onClick={() => void configure()}>{busy ? 'Configuring…' : 'Configure Sandbox'}</button></div>
     </div>

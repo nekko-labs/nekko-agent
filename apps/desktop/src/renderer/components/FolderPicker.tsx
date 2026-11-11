@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { uniqueFolders, type RemoteRepo, type Session, type SessionMeta, type WorkspaceFolder } from '@nekko-agent/shared';
+import { uniqueFolders, type RemoteRepo, type SandboxRepo, type Session, type SessionMeta, type WorkspaceFolder } from '@nekko-agent/shared';
 import { CloseIcon, FolderIcon, PlugIcon, PlusIcon, StarIcon, TrashIcon } from '../icons.js';
 import { ConnectorIcon } from '../connectorIcons.js';
 import { useStore } from '../store.js';
@@ -22,7 +22,7 @@ function Heading({ children }: { children: React.ReactNode }) {
  * repositories from a git provider, each with an add action (or "Connect
  * repositories" when no provider is connected), then "No folder".
  */
-export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear, onAdd, onRemove, onExclude, onToggleDefault, reposConnected, onAddRepo, onConnectRepos }: {
+export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear, onAdd, onRemove, onExclude, onToggleDefault, reposConnected, onAddRepo, onConnectRepos, sandboxRepos = [], onRemoveSandboxRepo }: {
   folders: WorkspaceFolder[];
   chat: ChatFolders | null;
   /** Starred folders new chats start with. */
@@ -39,6 +39,9 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
   /** Browse the connected accounts' repositories. Without it the Repositories section is hidden. */
   onAddRepo?: () => void;
   onConnectRepos?: () => void;
+  /** A sandbox chat's repositories that live only in its sandbox (#2561). */
+  sandboxRepos?: SandboxRepo[];
+  onRemoveSandboxRepo?: (repo: SandboxRepo) => void;
 }) {
   const primary = chat?.workspaceId;
   const supporting = new Set(chat?.supportingWorkspaceIds ?? []);
@@ -91,6 +94,22 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
       <div className="mt-1 border-t border-line pt-1" role="presentation" />
       <Heading>Repositories</Heading>
       {repos.map(folderRow)}
+      {sandboxRepos.map((r) => (
+        <div key={`${r.provider}:${r.fullName}`} className="flex items-center" data-sandbox-repo>
+          {/* Lines up with the folders' star column; a sandbox repository is never a default. */}
+          {onToggleDefault && <span aria-hidden className="shrink-0 p-2"><span className="block h-3.5 w-3.5" /></span>}
+          <span className={`${row} hover:bg-transparent`} title={`${r.fullName} is cloned into this chat's sandbox, not onto this computer`}>
+            <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
+              <span className="shrink-0"><ConnectorIcon kind={r.provider} size={12} /></span>
+              <span className="min-w-0 truncate" dir="auto">{r.fullName}</span>
+            </span>
+            <span className="text-2xs text-ink-faint">In the sandbox</span>
+          </span>
+          {onRemoveSandboxRepo && <button type="button" aria-label={`Remove ${r.fullName} from this chat`} title="Remove from this chat" className="shrink-0 rounded p-2 text-ink-faint hover:bg-surface-2 hover:text-ink" onClick={() => onRemoveSandboxRepo(r)}>
+            <CloseIcon className="h-3.5 w-3.5" />
+          </button>}
+        </div>
+      ))}
       {reposConnected && onAddRepo
         ? <button role="menuitem" className={action} onClick={onAddRepo}><PlusIcon className="h-3.5 w-3.5" /> Add repository…</button>
         : <button role="menuitem" className={action} onClick={onConnectRepos} title="Connect GitHub or GitLab in Connectors"><PlugIcon className="h-3.5 w-3.5" /> Connect repositories</button>}
@@ -247,7 +266,9 @@ export function FolderPicker({ sessionId, session, disabled, onChange, selectedS
             </div>
           : <div ref={menu} style={position} className="card fixed z-[100] overflow-y-auto p-2 shadow-(--shadow-float)" role="menu" aria-label="Environment">
               <FolderPickerMenu folders={folders} chat={chat} defaults={defaults} onPick={pick} onClear={clear} onAdd={add} onRemove={remove} onExclude={(id) => run(() => applyFolderSelection(sessionId, withExcluded(chat, id)))} onToggleDefault={toggleDefaultFolder}
-                reposConnected={reposConnected} onAddRepo={() => setMode('repos')} onConnectRepos={connectRepos} />
+                reposConnected={reposConnected} onAddRepo={() => setMode('repos')} onConnectRepos={connectRepos}
+                sandboxRepos={session?.sandboxRepos ?? session?.sandbox?.sourceRepos}
+                onRemoveSandboxRepo={session && !session.sandbox ? (r) => run(() => window.nekko.setSandboxRepos(sessionId, (session.sandboxRepos ?? []).filter((x) => x !== r))) : undefined} />
             </div>, document.body,
       )}
     </div>

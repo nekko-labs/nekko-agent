@@ -73,6 +73,13 @@ app.whenReady().then(async () => {
       await sleep(600);
       check('question shows the repository list', await run('!!document.querySelector("[data-question-repos]") && document.body.innerText.includes("acme/mobile")'));
       await shot('question-repositories');
+      // #2561: a sandbox chat lists the repository that lives only in its sandbox.
+      await run('document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))');
+      await sleep(200);
+      await click('[data-fixture-sandbox] .composer-folders button');
+      await sleep(400);
+      check('sandbox repository listed', await run('!!document.querySelector("[data-sandbox-repo]") && document.body.innerText.includes("In the sandbox")'));
+      await shot('menu-sandbox-repo');
     }
   } catch (e) {
     report.errors.push(String(e && e.stack || e));

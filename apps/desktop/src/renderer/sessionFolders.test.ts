@@ -105,4 +105,15 @@ describe('adding a folder to a chat', () => {
     expect(err.suggested).toBe('/home/me/nekko-repos');
     expect(setSessionFolders).not.toHaveBeenCalled();
   });
+
+  it('adds a repository to a sandbox chat\'s sandbox, not this computer (#2561)', async () => {
+    const session = { id: 's1', sandboxRepos: [{ provider: 'github', fullName: 'me/app', cloneUrl: '', webUrl: '' }] };
+    const cloneRepo = vi.fn(async () => ({ sandbox: true as const, session }));
+    (globalThis as any).window.nekko = { cloneRepo };
+    const out = await addRepoToChat('s1', { workspaceId: null, supportingWorkspaceIds: [] } as any,
+      { provider: 'github', fullName: 'me/app', cloneUrl: 'https://github.com/me/app.git', webUrl: '' });
+    expect(cloneRepo).toHaveBeenCalledWith(expect.objectContaining({ fullName: 'me/app' }), { sessionId: 's1' });
+    expect(out.session).toBe(session);
+    expect(out.path).toContain('sandbox');
+  });
 });
