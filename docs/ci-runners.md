@@ -349,7 +349,8 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **Memory per VM**: 4 to 64 GB, for macOS and Linux VMs alike.
 - **Total runner memory**: **Use the recommendation** (the sheet shows
   `Recommended: N GB for this Mac`), or your own figure from 4 GB up to 75% of the Mac's memory.
-- **CPU per VM**: **Mode default**, or 2 up to the Mac's cores minus 2.
+- **CPU per VM**: **Mode default**, or 2 up to the Mac's cores minus 2. The mode default is
+  shared between your macOS slots, so two slots on a 10-core Mac get 4 vCPUs each.
 - **Disk**: an image budget of 50 to 4000 GB, and a free-disk floor of 10 to 1000 GB below which
   no new VM starts.
 - **Only when**: **On power**, **Trusted networks**, **Never on hotspots**, and
