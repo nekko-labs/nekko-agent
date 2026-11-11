@@ -489,6 +489,19 @@ export const IpcChannels = {
   syncSetEnabled: 'sync:setEnabled',
   syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
   syncDeleteAll: 'sync:deleteAll',
+  // Nekko Cloud organizations and the shared computer fleet (crates/nekko-cloud).
+  orgList: 'org:list',
+  orgCreate: 'org:create',
+  orgGet: 'org:get',
+  orgInvite: 'org:invite',
+  orgRevokeInvite: 'org:revokeInvite',
+  orgAcceptInvite: 'org:acceptInvite',
+  orgRemoveMember: 'org:removeMember',
+  orgRename: 'org:rename',
+  orgDelete: 'org:delete',
+  fleetSetSharing: 'fleet:setSharing',
+  fleetList: 'fleet:list',
+  fleetStatus: 'fleet:status',
   // Settings > Connections (crates/nekkod/src/connections.rs).
   connectionsStatus: 'connections:status',
   connectionsEvents: 'connections:events',
@@ -631,6 +644,22 @@ export interface NekkoApi {
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncSetIncludeLocalOnly(on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
+  /** Organizations you belong to and invites waiting for you. */
+  orgList(): Promise<import('./cloud.js').OrgList>;
+  /** Create an organization (needs an unlocked account on Pro or Team); this device creates its key. */
+  orgCreate(name: string): Promise<import('./cloud.js').Org>;
+  orgGet(orgId: string): Promise<import('./cloud.js').OrgDetail>;
+  orgInvite(orgId: string, email: string, role?: 'admin' | 'member'): Promise<unknown>;
+  orgRevokeInvite(orgId: string, inviteId: string): Promise<unknown>;
+  orgAcceptInvite(inviteId: string): Promise<unknown>;
+  orgRemoveMember(orgId: string, userId: string): Promise<unknown>;
+  orgRename(orgId: string, name: string): Promise<unknown>;
+  orgDelete(orgId: string): Promise<unknown>;
+  /** Share this computer with an organization, or stop. Off by default. */
+  fleetSetSharing(orgId: string, on: boolean): Promise<import('./cloud.js').FleetSharingResult>;
+  /** The computers shared with an organization, decrypted on this device. */
+  fleetList(orgId: string): Promise<import('./cloud.js').FleetList>;
+  fleetStatus(): Promise<import('./cloud.js').FleetStatus>;
   onCloudStatus(cb: (s: import('./cloud.js').CloudStatus) => void): () => void;
   voiceStatus(): Promise<import('./voice.js').VoiceStatus>;
   voiceInstall(engine?: import('./voice.js').VoiceEngine): Promise<import('./voice.js').VoiceStatus>;
@@ -1038,6 +1067,15 @@ export interface NekkoApi {
 
   /** Read a file as text (for the in-app viewer/editor). */
   readFile(path: string): Promise<FileContent>;
+  /**
+   * Serve a local .html page with its folder so it renders with its own
+   * stylesheets, scripts and images (answered by the host, not the engine).
+   * Absent, or rejecting, where nothing can serve it (a relayed browser):
+   * the preview then falls back to the page's text in a scriptless frame.
+   */
+  serveHtmlPreview?(path: string, options: import('./html-preview.js').HtmlPreviewOptions): Promise<import('./html-preview.js').HtmlPreviewServed>;
+  /** Stop serving a page `serveHtmlPreview` returned. */
+  releaseHtmlPreview?(id: string): Promise<void>;
   /** Write text to a file (in-app editor save). */
   writeFile(path: string, content: string): Promise<void>;
   /** List a directory's immediate entries (file explorer). */

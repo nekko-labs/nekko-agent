@@ -458,7 +458,7 @@ function HostFilePane({ path }: { path: string }) {
           ) : binary ? (
             <p className="p-4 text-xs text-ink-faint">Binary file, can't display as text.</p>
           ) : isHtml && preview ? (
-            <ArtifactPreview source={content} title={name} />
+            <ArtifactPreview source={content} title={name} path={path} />
           ) : isMermaid && preview ? (
             <MermaidDiagram code={content} />
           ) : isMd && preview ? (

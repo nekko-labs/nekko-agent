@@ -18,6 +18,7 @@ import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
 import { SecuritySettings } from '../components/security/SecuritySettings.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
+import { OrganizationSettings } from '../components/cloud/OrganizationSettings.js';
 import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
 import { UsageReportsSection } from '../components/UsageReports.js';
 import { GitHubStarSupport } from '../components/GitHubStarSupport.js';
@@ -284,6 +285,7 @@ export function SettingsView() {
               <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
               {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
               <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
+              <ErrorBoundary label="Organization"><OrganizationSettings /></ErrorBoundary>
             </SettingsGroup>
             {computersPage && <SettingsGroup id="computers">
               <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>

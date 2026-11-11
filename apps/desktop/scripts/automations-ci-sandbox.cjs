@@ -37,9 +37,15 @@ app.whenReady().then(async () => {
       report.checks.push({ name: `full view position ${width}`, top: await run("document.querySelector('[data-ci-runners]').getBoundingClientRect().top") });
       await capture(`runners-${width}`);
     }
+    if (!baseline) {
+      await check('full view keeps facts and completed jobs', "!!document.querySelector('[data-runner-facts]') && document.body.innerText.includes('Completed')");
+      await run("document.querySelector('[data-recent-job] button').click()"); await sleep(200);
+      await check('completed log opens', "document.querySelector('[data-log=job]')?.textContent==='Tests passed'");
+    }
     await run('integration.show()'); await sleep(250);
     if (!baseline) {
-      await check('VMs and all job groups visible', "['nekko-mac-01','nekko-mac-02','Queued','In progress','Completed','View CI runners'].every(s=>document.body.textContent.includes(s))");
+      await check('compact runner: idle VM, queued and in progress jobs', "['nekko-mac-02','Queued','In progress','View CI runners'].every(s=>document.body.textContent.includes(s)) && !!document.querySelector('[data-running-job=\"nekko-mac-01\"]')");
+      await check('compact runner leaves page detail out', "!!document.querySelector('[data-runner-card][data-compact]') && !document.querySelector('[data-runner-facts]') && !document.body.textContent.includes('Completed')");
       await click('Live log', '[data-runner-vm="nekko-mac-02"] button');
       await check('ready VM log uses its identity', "integration.calls.some(c=>c[0]==='log'&&c[2]==='nekko-mac-02') && document.body.innerText.includes('Listening for jobs')");
       await click('Accept now');
@@ -48,8 +54,6 @@ app.whenReady().then(async () => {
       await check('cancel needs confirmation', "document.body.innerText.includes('Cancel the whole workflow run on GitHub?') && !integration.calls.some(c=>c[1]==='cancel')");
       await click('Cancel run');
       await check('confirmed cancel targets running job', "integration.calls.some(c=>c[1]==='cancel'&&c[3]===42)");
-      await run("document.querySelector('[data-recent-job] button').click()"); await sleep(200);
-      await check('completed log opens', "document.querySelector('[data-log=job]')?.textContent==='Tests passed'");
       await run("document.querySelector('[role=switch]').click()"); await sleep(200);
       await check('runner switch uses existing bridge', "integration.calls.some(c=>c[0]==='enabled'&&c[2]===false)");
       await run('integration.show()'); await sleep(250);
