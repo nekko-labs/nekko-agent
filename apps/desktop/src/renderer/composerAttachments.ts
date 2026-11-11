@@ -52,6 +52,14 @@ export function attachmentName(path: string): string {
 }
 
 /**
+ * The message a send carries when the user attached files and typed nothing,
+ * so the transcript shows what was sent instead of an empty bubble.
+ */
+export function attachmentOnlyText(paths: string[]): string {
+  return paths.length ? `Attached ${paths.map(attachmentName).join(', ')}` : '';
+}
+
+/**
  * A pasted blob rarely has a name (`image.png`, or nothing at all), so give it
  * one that says where it came from and when, keeping any real extension.
  */
