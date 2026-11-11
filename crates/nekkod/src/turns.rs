@@ -2106,7 +2106,7 @@ fn claude_turn_content(user: &Value, name_chat: bool, attachments: Option<&str>)
     if !name_chat {
         return content;
     }
-    const NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a concise, specific 3-6 word title describing the user's task. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
+    const NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a short 2-4 word label for what the chat is for, leading with an issue or PR number if the request names one (like \"Issue #2391\"); never copy the opening words of the request. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
     match &mut content {
         Value::String(text) => {
             text.push_str("\n\n");
@@ -3716,6 +3716,7 @@ mod tests {
         assert!(text.starts_with("Fix the login form\n\n"));
         assert!(text.contains("mcp__nekko_bridge__set_chat_title"));
         assert!(text.contains("Never overwrite a user-chosen title"));
+        assert!(text.contains("2-4 word label") && text.contains("never copy the opening words"));
         assert!(text.contains("do not start another turn"));
         assert_eq!(user["content"], "Fix the login form");
         let image = json!({ "content": "Fix this", "images": ["data:image/png;base64,AAAA"] });

@@ -131,7 +131,7 @@ preservePackagedProfile(app);
  * background and a light-themed overlay would flash white in the corner for
  * the frame or two before the page mounts.
  */
-const DEFAULT_OVERLAY: TitleBarOverlayTheme = { color: '#0c0c11', symbolColor: '#a3a1b0' };
+const DEFAULT_OVERLAY: TitleBarOverlayTheme = { color: '#0b0c14', symbolColor: '#a3a4b6' };
 
 /**
  * The URL scheme other apps use to reach Nekko Agent

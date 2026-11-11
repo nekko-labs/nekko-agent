@@ -99,43 +99,23 @@ final class PhoneParityTests: XCTestCase {
         app.buttons["Advance agent"].tap()
         XCTAssertTrue(app.staticTexts["Watching"].waitForExistence(timeout: 3))
         attach(app, "groups-watching")
+        // One native menu (#2449): no Reset while the view is the default, Show is a
+        // submenu whose toggles keep it open, and a tap outside closes it.
         app.buttons["View options"].tap()
-        // Shared before/after harness: the baseline has a menu item; View options
-        // now exposes the same preference as an inline switch in its Show disclosure.
-        let inlineAlways = app.switches["chats.view.showEmptyGroups"]
-        let menuAlways = app.buttons["Always show groups"]
-        // The Form is lazy: its first Show row is exposed before the lower
-        // Always show groups row exists (native run 42578046165's AX tree).
-        let firstShown = app.switches["Completed chats"]
-        guard app.buttons["Show"].tapUntil(until: { firstShown.exists || menuAlways.exists }) else {
-            XCTFail("Show exposes its controls")
-            return
-        }
-        let usesInlineControls = firstShown.exists
-        let always = usesInlineControls ? inlineAlways : menuAlways
-        if usesInlineControls {
-            guard revealViewOption(always, in: app) else { return }
-        }
-        XCTAssertTrue(always.waitForExistence(timeout: 3))
+        XCTAssertTrue(viewOptionsGroupBy(app).waitForExistence(timeout: 5), "View options has Group by")
+        XCTAssertFalse(app.buttons["Reset to defaults"].exists, "no Reset while the view is the default")
+        let always = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", "chats.view.showEmptyGroups", "Always show groups")).firstMatch
+        guard openViewOptionsSubmenu("Show", showing: always, in: app) else { return }
         attach(app, "groups-show-options")
-        if usesInlineControls {
-            // SwiftUI exposes a row-wide switch containing the actual control.
-            // As in LiveRelayTests, tap the inner switch rather than the inert row.
-            let knob = inlineAlways.switches.firstMatch
-            let control = knob.exists ? knob : inlineAlways
-            guard revealViewOption(control, in: app) else { return }
-            control.tap()
-        } else {
-            always.tap()
-        }
-        if usesInlineControls {
-            XCTAssertEqual(inlineAlways.value as? String, "1", "Always show groups is enabled")
-            let done = app.buttons["chats.view.done"]
-            guard revealViewOption(done, in: app) else { return }
-            done.tap()
-        }
+        always.tap()
+        closeViewOptions(app)
         XCTAssertTrue(app.staticTexts["Building"].waitForExistence(timeout: 3))
         attach(app, "groups-always-visible")
+        // The view now differs from the defaults, so Reset shows.
+        app.buttons["View options"].tap()
+        XCTAssertTrue(app.buttons["Reset to defaults"].waitForExistence(timeout: 5), "Reset once the view differs")
+        attach(app, "groups-view-menu-reset")
+        closeViewOptions(app)
         app.buttons["Folders"].tap()
         XCTAssertTrue(app.buttons["files.addFolder"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["files.star.app"].exists)
@@ -144,9 +124,6 @@ final class PhoneParityTests: XCTestCase {
         XCTAssertTrue(app.buttons["Remove saved folder"].waitForExistence(timeout: 3))
         attach(app, "folders-remove-menu")
     }
-
-    /// Form rows may exist in accessibility while clipped by the popover.
-    /// Scroll that Form, not the chat list behind it, before tapping a control.
 
     private func launch(_ fixture: String, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()

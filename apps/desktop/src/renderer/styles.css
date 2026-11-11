@@ -4887,7 +4887,9 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 .composer-folders { flex: 0 1 auto; min-width: 0; max-width: min(240px, 35%); }
 .composer-folders > div, .composer-folders button { max-width: 100%; }
 .composer-folders .ctl-menu { height: 28px; gap: 6px; border: 0; padding: 4px; }
-.composer-permissions { flex-shrink: 0; justify-content: center; width: 28px; height: 28px; padding: 0; border-color: transparent; background: transparent; }
+.composer-permissions { flex-shrink: 0; justify-content: center; min-width: 28px; height: 28px; padding: 0; border-color: transparent; background: transparent; }
+/* With switch marks beside the approvals icon, the button grows to hold them. */
+.composer-permissions:has(.permission-marks) { padding: 0 8px; }
 
 @container (max-width: 520px) {
   /* Let the folder summary truncate before pushing the 44px actions outside. */
@@ -4970,11 +4972,15 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
   .permission-choice, .permission-info { min-height: 44px; }
   .permission-info { width: 44px; }
 }
+/* The switches that are on, shown on the closed menu: one group, 4px apart. */
+.permission-marks { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; color: var(--ink-faint); }
+.permission-mark { display: inline-flex; animation: permission-check-in var(--dur-med) var(--ease-out); }
+.permission-mark[data-permission-mark='incognito'] { color: var(--warning-text); }
 @keyframes permission-enable { from { opacity: .5; transform: translateX(var(--permission-x)) scale(var(--permission-scale)) rotate(var(--permission-angle)); } to { opacity: 1; transform: none; } }
 @keyframes permission-check-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
 @keyframes permission-detail-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
 @keyframes permission-menu-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .permissions-menu, .permission-detail, .permission-choice[aria-checked='true'] .permission-glyph, .permission-choice[aria-checked='true'] .permission-check { animation: none; }
+  .permissions-menu, .permission-detail, .permission-mark, .permission-choice[aria-checked='true'] .permission-glyph, .permission-choice[aria-checked='true'] .permission-check { animation: none; }
   .permission-choice:active:not(:disabled), .permission-info:active { transform: none; }
 }

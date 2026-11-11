@@ -482,9 +482,11 @@ final class ChatStatusIconTests: XCTestCase {
                 .frame(width: 32, height: 32)
             return try XCTUnwrap(ImageRenderer(content: icon).uiImage?.pngData())
         }
-        let grayCheck = Image(systemName: "checkmark")
-            .foregroundStyle(Palette.make(dark: false, accent: nil).inkFaint)
-            .font(.caption.weight(.semibold))
+        // Our own check glyph since #2456, never the SF Symbol, stroked as ChatStatusIcon strokes it.
+        let grayCheck = CheckGlyph()
+            .stroke(Palette.make(dark: false, accent: nil).inkFaint,
+                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            .frame(width: 18, height: 18)
             .frame(width: 32, height: 32)
         let expected = try XCTUnwrap(ImageRenderer(content: grayCheck).uiImage?.pngData())
         XCTAssertEqual(try render(true), expected)
