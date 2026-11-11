@@ -5,9 +5,52 @@ import { PRIVACY_KINDS, PRIVACY_KIND_LABELS, patchPrivacy, privacyMode, toggleAl
 import { useStore } from '../store.js';
 import { ShieldIcon } from '../icons.js';
 import { useFloatingMenu } from './floatingMenu.js';
+import { usePrivacyPreviews } from '../privacyMarks.js';
 
 /** How long the draft must sit still before the preview asks the engine again. */
 const PREVIEW_DEBOUNCE_MS = 250;
+
+/** How long the shield's arming sweep plays when it is switched on. */
+const ARMING_MS = 900;
+
+/**
+ * Ask the engine what the shield would replace, and share the answer with
+ * every surface showing this chat (the Shield menu and the composer's marks).
+ * `fast` while the panel is open; otherwise a slower pace for the composer.
+ */
+export function usePrivacyPreviewFetch(session: Session | null, draft: string, active: boolean, fast = false): string | null {
+  const settings = useStore((s) => s.settings);
+  const publish = usePrivacyPreviews((s) => s.publish);
+  const [error, setError] = useState<string | null>(null);
+  const id = session?.id;
+  useEffect(() => {
+    if (!active || !id) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      window.nekko.previewPrivacy(id, draft)
+        .then((p) => { if (live) { publish(id, p); setError(null); } })
+        .catch((e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
+    }, fast ? PREVIEW_DEBOUNCE_MS : PREVIEW_DEBOUNCE_MS * 3);
+    return () => { live = false; clearTimeout(timer); };
+  }, [active, fast, id, draft, publish, session?.privacy, session?.messages?.length, settings?.privacyMode, settings?.privacyTerms, settings?.privacyDisabledKinds]);
+  return error;
+}
+
+/** True for a moment after `on` turns true, so the arming sweep plays once. */
+function useArming(on: boolean): boolean {
+  const [arming, setArming] = useState(false);
+  const was = useRef(on);
+  useEffect(() => {
+    if (on && !was.current) {
+      setArming(true);
+      const t = setTimeout(() => setArming(false), ARMING_MS);
+      was.current = on;
+      return () => clearTimeout(t);
+    }
+    was.current = on;
+  }, [on]);
+  return arming;
+}
 
 /** The kind, in the few letters a list row has room for. */
 const KIND_SHORT: Record<PrivacyKind, string> = {
@@ -42,8 +85,7 @@ export function PrivacyShieldMenu({
 }) {
   const settings = useStore((s) => s.settings);
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<PrivacyPreview | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const preview = usePrivacyPreviews((s) => s.bySession[session.id]) ?? null;
   const ref = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
@@ -59,18 +101,11 @@ export function PrivacyShieldMenu({
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
 
-  // Ask again whenever what would be sent, or what the shield covers, changes:
-  // while the panel is open, and while the shield is on (for the count on the button).
-  useEffect(() => {
-    if (!open && !on) return;
-    let live = true;
-    const timer = setTimeout(() => {
-      window.nekko.previewPrivacy(session.id, draft)
-        .then((p) => { if (live) { setPreview(p); setError(null); } })
-        .catch((e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
-    }, open ? PREVIEW_DEBOUNCE_MS : PREVIEW_DEBOUNCE_MS * 3);
-    return () => { live = false; clearTimeout(timer); };
-  }, [open, on, session.id, draft, session.privacy, session.messages?.length, settings?.privacyMode, settings?.privacyTerms, settings?.privacyDisabledKinds]);
+  // Ask again whenever what would be sent, or what the shield covers, changes,
+  // while the panel is open. While the shield is on, the chat's composer keeps
+  // the shared preview current (for the count here and the marks in the draft).
+  const error = usePrivacyPreviewFetch(session, draft, open, true);
+  const arming = useArming(on);
 
   const patch = async (p: Partial<SessionPrivacy>) =>
     onChange(await window.nekko.setSessionOptions(session.id, { privacy: patchPrivacy(session.privacy, p) }));
@@ -99,10 +134,12 @@ export function PrivacyShieldMenu({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-pressed={on}
+        data-shield-on={on || undefined}
+        data-shield-arming={arming || undefined}
         title={on ? 'Privacy Shield is on: private values are replaced before a cloud model sees them' : 'Privacy Shield: see and control what a cloud model receives'}
       >
         <span className="ctl-dot" />
-        <ShieldIcon className="h-3.5 w-3.5" /> <span className="foot-label">Shield</span>
+        <span className="privacy-shield-glyph" aria-hidden="true"><ShieldIcon className="h-3.5 w-3.5" /></span> <span className="foot-label">Shield</span>
         {count > 0 && <span className="tabular-nums text-2xs text-ink-faint">{count}</span>}
       </button>
       {open && createPortal(

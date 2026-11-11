@@ -47,6 +47,20 @@ pub fn web_origin(kind: &str, settings: Option<&Value>) -> Result<String, String
     }
 }
 
+/// Whether the user removed `full` (`owner/name`, GitLab `group/sub/name`)
+/// from what the app offers and reads (#2562): the repository itself
+/// (`settings.excludedRepos`) or its whole owner or top group
+/// (`settings.excludedOwners`), ignoring case. The token's own access is
+/// unchanged, and an owner's new repositories stay out too.
+pub fn excluded(settings: Option<&Value>, full: &str) -> bool {
+    let full = full.to_lowercase();
+    let owner = full.split('/').next().unwrap_or_default();
+    let listed = |key: &str, want: &str| {
+        arr(settings.and_then(|s| s.get(key))).iter().any(|v| v.as_str().is_some_and(|s| s.to_lowercase() == want))
+    };
+    listed("excludedRepos", &full) || listed("excludedOwners", owner)
+}
+
 fn matches(query: &str, repo: &Value) -> bool {
     let q = query.trim().to_lowercase();
     q.is_empty()
@@ -135,9 +149,20 @@ fn refused(label: &str, status: u16) -> String {
 }
 
 /// `{ repos, providers }`: every connected provider's repositories matching
-/// `query` (most recently updated first, per provider), and each provider
-/// asked with its error, if any. One provider failing never hides another's.
+/// `query` (most recently updated first, per provider), leaving out the ones
+/// the user removed, and each provider asked with its error, if any. One
+/// provider failing never hides another's.
 pub async fn list(http: &dyn Http, github_api: &str, connectors: &[Value], query: &str) -> Value {
+    list_with(http, github_api, connectors, query, false).await
+}
+
+/// `list` including the removed repositories: what the connector card shows,
+/// so a removed one can be brought back.
+pub async fn list_reachable(http: &dyn Http, github_api: &str, connectors: &[Value]) -> Value {
+    list_with(http, github_api, connectors, "", true).await
+}
+
+async fn list_with(http: &dyn Http, github_api: &str, connectors: &[Value], query: &str, all: bool) -> Value {
     let mut repos = Vec::new();
     let mut providers = Vec::new();
     for p in connected(connectors) {
@@ -147,7 +172,9 @@ pub async fn list(http: &dyn Http, github_api: &str, connectors: &[Value], query
         };
         match found {
             Ok(list) => {
-                repos.extend(list.into_iter().filter(|r| matches(query, r)));
+                repos.extend(list.into_iter().filter(|r| {
+                    matches(query, r) && (all || !excluded(p.settings, r["fullName"].as_str().unwrap_or_default()))
+                }));
                 providers.push(json!({ "kind": p.kind }));
             }
             Err(e) => providers.push(json!({ "kind": p.kind, "error": e })),
@@ -241,6 +268,49 @@ mod tests {
         assert_eq!(out["repos"].as_array().unwrap().len(), 1);
         assert!(out["providers"][0]["error"].as_str().unwrap().contains("Reconnect GitHub"));
         assert_eq!(out["providers"][1], json!({"kind":"gitlab"}));
+    }
+
+    #[test]
+    fn removed_repos_and_owners_ignore_case() {
+        let s = json!({"excludedRepos":["Me/App"],"excludedOwners":["acme"]});
+        assert!(excluded(Some(&s), "me/app"));
+        assert!(!excluded(Some(&s), "me/apps"));
+        assert!(excluded(Some(&s), "ACME/anything"));
+        assert!(excluded(Some(&s), "acme/sub/tool"));
+        assert!(!excluded(Some(&s), "acmeco/x"));
+        assert!(!excluded(None, "me/app"));
+        assert!(!excluded(Some(&json!({"excludedRepos":"me/app"})), "me/app"));
+    }
+
+    #[tokio::test]
+    async fn list_leaves_out_removed_repos_and_list_reachable_keeps_them() {
+        let body = r#"[{"id":1,"full_name":"me/app"},{"id":2,"full_name":"me/old"},{"id":3,"full_name":"Acme/site"}]"#;
+        let connectors = vec![json!({"kind":"github","connected":true,"token":"t",
+            "settings":{"excludedRepos":["me/old"],"excludedOwners":["acme"]}})];
+        let names =
+            |v: &Value| v["repos"].as_array().unwrap().iter().map(|r| r["fullName"].clone()).collect::<Vec<_>>();
+        let out = list(&Script::new(vec![ok(body)]), GITHUB_API, &connectors, "").await;
+        assert_eq!(names(&out), vec![json!("me/app")]);
+        let all = list_reachable(&Script::new(vec![ok(body)]), GITHUB_API, &connectors).await;
+        assert_eq!(all["repos"].as_array().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn connector_context_leaves_out_removed_repos() {
+        let settings = json!({"excludedOwners":["acme"]});
+        let repos = r#"[{"id":1,"full_name":"me/app"},{"id":2,"full_name":"acme/site"}]"#;
+        let out = crate::fetch(&Script::new(vec![ok(repos)]), "github", "t", None, Some(&settings)).await.unwrap();
+        assert_eq!(out.as_array().unwrap().len(), 1);
+        assert_eq!(out[0]["title"], "me/app");
+        let found = r#"{"items":[{"id":1,"title":"bug","number":3,"repository_url":"https://api.github.com/repos/acme/site"},
+                                 {"id":2,"title":"ok","number":4,"repository_url":"https://api.github.com/repos/me/app"}]}"#;
+        let out =
+            crate::fetch(&Script::new(vec![ok(found)]), "github", "t", Some("bug"), Some(&settings)).await.unwrap();
+        assert_eq!(out.as_array().unwrap().len(), 1);
+        assert_eq!(out[0]["title"], "ok");
+        let projects = r#"[{"id":1,"path_with_namespace":"acme/sub/tool"},{"id":2,"path_with_namespace":"me/x"}]"#;
+        let out = crate::fetch(&Script::new(vec![ok(projects)]), "gitlab", "t", None, Some(&settings)).await.unwrap();
+        assert_eq!(out.as_array().unwrap().len(), 1);
     }
 
     #[test]

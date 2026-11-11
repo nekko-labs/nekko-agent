@@ -44,6 +44,7 @@ export const TOOL_CATEGORY_OF: Readonly<Record<string, ToolCategory>> = {
   set_chat_title: 'agent',
   complete_session: 'agent',
   ask_user: 'agent',
+  request_secret: 'agent',
   decide: 'agent',
   report_experiment: 'agent',
   report_artifact: 'agent',

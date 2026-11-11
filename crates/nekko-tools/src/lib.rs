@@ -32,6 +32,7 @@ pub mod path;
 pub mod process;
 mod sandbox;
 mod search;
+pub mod secrets;
 mod spec;
 
 pub use allowlist::Dialect;
@@ -49,4 +50,5 @@ pub use guardrails::{
 pub use nodefs::code_name as node_error_code;
 pub use process::{Processes, describe_process};
 pub use sandbox::{assert_in_jail, assert_readable, assert_writable, real_location, resolve_path};
+pub use secrets::Secrets;
 pub use spec::{NOT_PORTED, PORTED_TOOLS, ToolSpec, builtin_tools, is_ported};

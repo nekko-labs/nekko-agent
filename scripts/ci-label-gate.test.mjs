@@ -24,7 +24,7 @@ test('a failed or cancelled run fails; skipped and neutral pass', () => {
   const state = labelRuns([
     run(1, ios, 'completed', 'failure'),
     run(2, '.github/workflows/nekkod-npm.yml', 'completed', 'cancelled'),
-    run(3, '.github/workflows/codeql.yml', 'completed', 'neutral'),
+    run(3, '.github/workflows/decision-models.yml', 'completed', 'neutral'),
     run(4, '.github/workflows/dev-identity.yml', 'completed', 'skipped'),
   ]);
   assert.deepEqual(state.failed.map(r => r.id), [1, 2]);
@@ -73,6 +73,15 @@ test('Native iOS passes on a green batch status, a green run, or neither when th
   // A green run on the PR (a dispatch to tell which PR broke a batch) beats a red batch.
   assert.deepEqual(labelRuns([run(3, ios, 'completed', 'success')], { batch: status('failure'), iosRequired: true }).passed.map(r => r.id), [3]);
   assert.deepEqual(labelRuns([], { iosRequired: false }), { pending: [], failed: [], passed: [] });
+});
+
+test('a PR the batch leaves out for changing a workflow is decided by its own Native iOS run (#2030)', () => {
+  // ios-batch.mjs starts the run on the branch, then marks the head red: the run decides.
+  const held = { iosRequired: true, batch: { state: 'failure', target_url: 'https://example/held' } };
+  assert.equal(labelRuns([run(4, ios, 'in_progress')], held).pending[0].name, 'Native iOS');
+  assert.deepEqual(labelRuns([run(4, ios, 'in_progress')], held).failed, []);
+  assert.deepEqual(labelRuns([run(4, ios, 'completed', 'success')], held).passed.map(r => r.id), [4]);
+  assert.equal(labelRuns([run(4, ios, 'completed', 'failure')], held).failed.length, 1);
 });
 
 test('Automatic evidence dispatch still runs the full required Native iOS suite', () => {

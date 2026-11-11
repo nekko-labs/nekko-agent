@@ -13,7 +13,7 @@ the runbooks it links. Read a runbook before the work it names.
 | The task list | GitHub issues (one per change, see Landing work). Tasks up to 2026-11-04, and the task IDs code comments cite, are in [docs/history/tasks-archive.md](docs/history/tasks-archive.md) |
 | Why a technical or product choice was made | [docs/decisions/](docs/decisions/README.md) |
 | Landing a change: worktrees, PRs, auto-merge, stacks | [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md) |
-| Version numbers, cutting a release (a `vMAJOR.MINOR.0` tag; never bump a version in a PR) | [docs/runbooks/releasing.md](docs/runbooks/releasing.md) |
+| Version numbers (`x.xx.xxxx`), cutting a release (a `vMAJOR.MINOR.1000` tag; never bump a version in a PR unasked) | [docs/runbooks/releasing.md](docs/runbooks/releasing.md) |
 | Cutting an iOS release / TestFlight upload (manual GitHub action, not EAS or desktop tags) | [docs/runbooks/ios-release.md](docs/runbooks/ios-release.md) |
 | A red check, on your PR or on `main` | [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md) |
 | Any UI work: layout, spacing, colour, type, icons, status, motion, copy | [docs/design-system.md](docs/design-system.md) |
@@ -29,7 +29,7 @@ Full procedure: [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md).
 
 - The primary checkout stays on `main`; work in a worktree and branch per task (`git worktree add -b <branch> .worktrees/<task> main`).
 - Every change has a GitHub issue: find the one for the feature or change, or file one (plain-language title, the what and why), before opening the PR, and link the PR to it (`Closes #123`). The issue is the task: its plan notes and checklist live there, never as a new group in TASKS.md. Put the requester's prompt or screenshots in the issue only with their say-so.
-- Every change lands as a PR: commit, push, open it **ready** (not draft) once your own checks pass, and arm auto-merge with `gh pr merge --auto --squash` (never `--admin`). `main` requires one check, `gate`; there is no merge queue, so `gate` waits for the speed contract (when the PR touches what it measures; `ci:perf` forces it) and the loopback itests on the PR itself ([decision 0059](docs/decisions/0059-speed-contract-and-itests-run-on-every-pr.md)).
+- Every change lands as a PR: commit, push, open it **ready** (not draft) once your own checks pass, and arm auto-merge with `gh pr merge --auto --squash` (never `--admin`). `main` requires one check, `gate`; there is no merge queue, so `gate` waits for the speed contract (when the PR touches what it measures; `ci:perf` forces it) and the loopback itests on the PR itself ([decision 0059](docs/decisions/0059-speed-contract-and-itests-run-on-every-pr.md)). `main` also needs one approving review: `team-auto-approve.yml` gives it to PRs from nekkolabs-devs members, and anyone else's PR waits for a person to approve it ([decision 0087](docs/decisions/0087-team-prs-merge-on-gate-others-need-a-review.md)).
 - In the Claude desktop app, turn on Auto-fix for every PR you open (`mcp__ccd_pr__set_monitor` with `auto_fix: true`), without asking: red checks, conflicts and review comments get fixed and pushed as they arrive.
 - Split a feature of several hundred lines into a stack (`gh stack`), 2-4 layers.
 - Every PR description has an **Unfinished work / release blockers** section, kept current and read back after publishing. Only a named release blocker keeps a PR in draft.
@@ -49,7 +49,7 @@ Every UI change follows [docs/design-system.md](docs/design-system.md) and passe
 
 Full procedure: [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md).
 
-Before/after screenshots (and a short recording for motion) in the PR description, uploaded with `node scripts/pr-media.mjs <pr>` to the shared `pr-media` pre-releases, never committed. Write "no visual change" when there is none. Verification runs hidden, off-screen and non-focusable, in an isolated profile: never over the user's desktop, never the user's running app.
+Before/after screenshots (and a short recording for motion) in the PR description, uploaded with `node scripts/pr-media.mjs <pr>` to the shared `pr-media` pre-releases, never committed. iPhone evidence and diagnostics run on a Mac with `node scripts/ios-evidence-local.mjs`, not on CI's 5 macOS runners (Native iOS, and so `gate`, queues behind them). Write "no visual change" when there is none. Verification runs hidden, off-screen and non-focusable, in an isolated profile: never over the user's desktop, never the user's running app.
 
 ## No AI attribution in anything we ship
 

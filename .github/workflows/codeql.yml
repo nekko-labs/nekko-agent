@@ -4,8 +4,9 @@ name: CodeQL
 # on a macOS runner for every PR, whatever it changed, and could not be told
 # otherwise; the Team plan's 5 macOS runners are shared by every workflow (see
 # ci.yml). Here a PR analyses only the languages its files are in
-# (scripts/ci-scope.mjs, codeqlLanguages); Swift (apps/ios) needs macOS, so it
-# runs on the weekly schedule and on a PR that changes Swift and carries `deploy:ios`.
+# (scripts/ci-scope.mjs, codeqlLanguages). Swift (apps/ios) needs macOS, the
+# CI's scarcest runner, so it never runs on a PR: the nightly schedule analyses
+# every language on main, Swift included.
 #
 # Swift needs a build for CodeQL to trace; the protocol package is a plain
 # SwiftPM package, so `swift build` covers it. The app targets need Xcode and
@@ -15,7 +16,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   schedule:
-    - cron: '27 4 * * 1'
+    # Nightly, 13:27 JST.
+    - cron: '27 4 * * *'
   workflow_dispatch:
 
 permissions:

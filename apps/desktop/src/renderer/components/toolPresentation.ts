@@ -16,6 +16,7 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   delegation_targets: 'Find available agent models',
   spawn_agent: 'Delegate to an agent',
   ask_user: 'Ask a question',
+  request_secret: 'Ask for a secret',
   report_experiment: 'Report an experiment',
   update_plan: 'Update the plan',
   report_artifact: 'Report an artifact',

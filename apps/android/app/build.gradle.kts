@@ -24,7 +24,7 @@ android {
         // (scripts/nightly-version.mjs, docs/decisions/0055); a local build
         // keeps these defaults.
         versionCode = providers.gradleProperty("nekkoVersionCode").orElse("1").get().toInt()
-        versionName = providers.gradleProperty("nekkoVersionName").orElse("0.1.0").get()
+        versionName = providers.gradleProperty("nekkoVersionName").orElse("0.9.8").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

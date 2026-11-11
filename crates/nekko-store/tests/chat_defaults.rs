@@ -20,7 +20,6 @@ fn new_windows_snapshot_latest_defaults_and_old_chats_keep_theirs() {
         "mode",
         "executionMode",
         "gitIsolation",
-        "incognito",
         "offline",
         "cloudOnly",
         "memory",
@@ -35,6 +34,8 @@ fn new_windows_snapshot_latest_defaults_and_old_chats_keep_theirs() {
     ] {
         assert_eq!(next[key], settings["defaultSessionOptions"][key], "{key}");
     }
+    // Incognito belongs to the chat it was turned on in, never the next one.
+    assert_ne!(next["incognito"], true);
     assert_eq!(next["title"], "New chat");
     assert!(next.get("workspaceId").is_none());
     let disk = store.get(first["id"].as_str().unwrap()).unwrap();
@@ -87,5 +88,11 @@ fn saved_mode_is_the_baseline_and_manual_choices_override_only_their_fields() {
     assert_eq!(unstarred["mode"], "ask");
     assert!(unstarred.get("memory").is_none());
     assert_eq!(store.get(starred["id"].as_str().unwrap()).unwrap(), starred);
+    // A default saved mode that recorded Incognito still starts a saved chat.
+    settings["defaultSavedModeId"] = json!("custom");
+    settings["savedModes"][0]["options"]["incognito"] = json!(true);
+    let private_mode = store.create_with_mode_defaults(None, None, None, &settings, true).unwrap();
+    assert_eq!(private_mode["incognito"], false);
+    assert_eq!(private_mode["mode"], "yolo");
     std::fs::remove_dir_all(dir).unwrap();
 }

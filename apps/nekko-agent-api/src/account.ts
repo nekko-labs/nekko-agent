@@ -114,6 +114,18 @@ export async function deleteAccount(db: Db, userId: string, del: AccountDeletion
     const { rows } = await tx.query<{ email: string; auth_subject: string | null }>("select email, auth_subject from users where id = $1 for update", [userId]);
     const user = rows[0];
     if (!user) return null;
+    // Orgs this account alone owns go with it; everywhere else its membership and
+    // computers cascade. Same lock order as the org routes: user, then each org.
+    await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${userId}`]);
+    const sole = await tx.query<{ org_id: string }>(
+      `select m.org_id from org_members m where m.user_id = $1 and m.role = 'owner'
+          and not exists (select 1 from org_members o where o.org_id = m.org_id and o.role = 'owner' and o.user_id <> $1)
+        order by m.org_id`,
+      [userId],
+    );
+    for (const { org_id } of sole.rows) await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`org:${org_id}`]);
+    if (sole.rows.length) await tx.query("delete from orgs where id = any($1::uuid[])", [sole.rows.map((r) => r.org_id)]);
+    await tx.query("delete from org_invites where email = lower($1)", [user.email]);
     await tx.query("insert into email_suppressions (email_hash) values ($1) on conflict do nothing", [emailHash(user.email)]);
     await tx.query("delete from signups where user_id = $1 or lower(email) = lower($2)", [userId, user.email]);
     if (user.auth_subject) await tx.query("insert into pending_auth_deletions (auth_subject) values ($1) on conflict do nothing", [user.auth_subject]);

@@ -161,7 +161,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > The iPhone app has the desktop's themes too: **Settings → Appearance → Theme** offers **Match my
 > computer** (the computer's preset, mode and accent), **Match this iPhone**, **Light**, **Dark** and
-> every desktop preset (Nebula, Terminal, Nord, Solar, Lilac, Lavender, Ember, Spooky and the
+> every desktop preset (Nebula, Terminal, Nord, Solar, Lilac, Lavender, Ember, Spooky, Winter and the
 > experimental families). In October, **Spooky** also switches the app icon to a limited fall
 > version; iOS confirms the change, and the usual icon comes back with any other theme or after
 > Halloween. The iPhone app speaks the desktop's languages (English, Spanish, French, German,
@@ -952,3 +952,7 @@ background.
 ### Card details
 
 View options → Card details lets you independently hide model, context window, PRs and update time on iOS and Android. Choices persist on the phone. Empty groups default off; explicit saved choices are preserved. Context uses reported summary counts and never invents an unknown window size. iOS groups are separator-free and use desktop-style chevrons, activity motifs and count capsules.
+
+### Seasonal phone decorations
+
+Choose **Winter** in either native phone app's theme picker for gentle snowflakes and Nekko's cat-ear beanie. **Spooky** gives the chat mascot a wizard hat. Matching your computer also follows its seasonal preset. Switching to another theme removes the decorations. Snow stays still when the phone's Reduce Motion / Remove animations setting is on, and pauses when the app is inactive. The decorations do not change the mascot's greeting or Refresh actions. Winter launcher icons remain planned separately. Native visual verification is pending for this implementation.

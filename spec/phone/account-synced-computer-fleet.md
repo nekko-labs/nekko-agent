@@ -8,6 +8,8 @@ status: in-progress
 
 Tracking: [#2160](https://github.com/nekko-labs/nekko-agent/issues/2160).
 
+**Organizations.** Sharing a computer with a team uses the same trust gate with a different scope: an organization's members see its computers, sealed under an org key. See [organizations](../platform/organizations.md) and [decision 0086](../../docs/decisions/0086-organizations-own-the-computer-fleet.md). This page stays the account-only fleet (`/v1/fleet`); the org routes (`/v1/orgs/:id/fleet`) are separate and independent of `NEKKO_FLEET_ENABLED`.
+
 ## Goal and trust decision
 
 A user-owned Windows, macOS or Linux computer explicitly shares its local model through Nekko Cloud. A phone on the same **unlocked encrypted account** discovers it without scanning a QR code, copying a pairing link, or pairing with each computer. Inference runs on the selected computer, not a cloud model; no silent fallback. This is neither a provisioned `/v1/machines` computer nor the existing paired-computer list.

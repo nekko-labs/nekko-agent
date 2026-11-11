@@ -95,6 +95,20 @@ fn cpus_leave_two_cores_to_the_host() {
 }
 
 #[test]
+fn default_cpus_are_shared_between_macos_slots() {
+    let host = HostFacts { ram_mb: 65536, cores: 10, other_macos_vms: 0, user_memory_mb: None };
+    let two = |p, cpus| RunnerSettings { priority: p, macos_slots: 2, cpus_per_vm: cpus, ..Default::default() };
+    // 8 cores for jobs, two VMs: never more vCPUs than cores.
+    assert_eq!(cpus_per_vm(&two(Priority::Balanced, None), &host), 4);
+    assert_eq!(cpus_per_vm(&two(Priority::RunnerFirst, None), &host), 4);
+    assert_eq!(cpus_per_vm(&two(Priority::DoNotDisturb, None), &host), 4);
+    // One slot is as before.
+    assert_eq!(cpus_per_vm(&RunnerSettings { priority: Priority::Balanced, ..Default::default() }, &host), 6);
+    // The owner's number is kept.
+    assert_eq!(cpus_per_vm(&two(Priority::Balanced, Some(6)), &host), 6);
+}
+
+#[test]
 fn explicit_cpus_are_clamped() {
     let host = HostFacts { ram_mb: 65536, cores: 8, other_macos_vms: 0, user_memory_mb: None };
     let s = |n| RunnerSettings { cpus_per_vm: Some(n), ..Default::default() };

@@ -132,8 +132,10 @@ export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): A
     case 'compaction':
     case 'claude_code_background': return undefined;
     case 'tool_approval_required':
-    case 'question': return 'input';
+    case 'question':
+    case 'secret_request': return 'input';
     case 'question_resolved':
+    case 'secret_resolved':
     case 'approval_resolved':
     case 'tool_result': return 'working';
     case 'error': return 'error';
@@ -1118,7 +1120,7 @@ function SubAgentRow({
     <button
       onClick={onOpen}
       data-subagent-row={session.id}
-      className={`relative flex w-full items-center gap-1.5 rounded-lg py-1 pl-7 pr-2 text-left text-xs transition-colors duration-150 ${
+      className={`subagent-row relative flex items-center gap-1.5 rounded-lg py-1 pl-7 pr-2 text-left text-xs transition-colors duration-150 ${
         isActive ? 'bg-accent-soft text-ink' : 'text-ink-soft hover:bg-surface-2'
       }`}
     >

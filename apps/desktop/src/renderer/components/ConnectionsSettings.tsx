@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { CONNECTION_GROUPS, CONNECTIONS, connectionAllowed, withConnection } from '@nekko-agent/shared';
 import type { AppSettings, ConnectionEvent, ConnectionInfo, ConnectionStatus, ConnectionsStatus } from '@nekko-agent/shared';
-import { GlobeIcon } from '../icons.js';
 import { Toggle } from './primitives/Toggle.js';
+import { SettingRow, SettingsSection } from './SettingsSection.js';
 
 /** How often the counts refresh while Settings is open. */
 const POLL_MS = 5000;
@@ -41,13 +41,13 @@ function EventLog({ id }: { id: string }) {
     const t = setInterval(load, POLL_MS);
     return () => { live = false; clearInterval(t); };
   }, [id]);
-  if (failed) return <p className="mt-2 text-xs text-danger" role="status">Couldn’t read the log.</p>;
-  if (!events) return <p className="mt-2 text-xs text-ink-faint">Loading…</p>;
-  if (!events.length) return <p className="mt-2 text-xs text-ink-faint">Nothing logged yet.</p>;
+  if (failed) return <p className="mt-(--q-inline) text-xs text-danger-text" role="status">Couldn’t read the log.</p>;
+  if (!events) return <p className="mt-(--q-inline) text-xs text-ink-faint">Loading…</p>;
+  if (!events.length) return <p className="mt-(--q-inline) text-xs text-ink-faint">Nothing logged yet.</p>;
   return (
-    <ol className="mt-2 max-h-56 overflow-auto rounded-md border border-line p-2 font-mono text-2xs" aria-label="Connection log">
+    <ol className="mt-(--q-inline) max-h-56 overflow-auto rounded-lg p-2 font-mono text-2xs" style={{ background: 'var(--surface-2)' }} aria-label="Connection log">
       {events.map((e, i) => (
-        <li key={`${e.at}-${i}`} className={`flex gap-3 py-0.5 ${e.kind === 'blocked' || e.error || (e.status ?? 0) >= 400 ? 'text-danger' : ''}`}>
+        <li key={`${e.at}-${i}`} className={`flex gap-3 py-0.5 ${e.kind === 'blocked' || e.error || (e.status ?? 0) >= 400 ? 'text-danger-text' : ''}`}>
           <time className="shrink-0 text-ink-faint" dateTime={new Date(e.at).toISOString()}>{new Date(e.at).toLocaleTimeString()}</time>
           <span className="min-w-0 break-all">{eventText(e)}</span>
         </li>
@@ -66,15 +66,15 @@ function Row({ c, st, on, disabled, onChange, now }: {
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-t border-line py-3" data-connection={c.id}>
-      <div className="flex items-start justify-between gap-3">
+    <div className="py-(--q-inline)" data-connection={c.id}>
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <span className="text-sm">{c.label}</span>
-          <span className="ml-2 text-2xs text-ink-faint">{c.where}</span>
-          <p className="text-2xs text-ink-faint">{c.desc}</p>
-          <p className="mt-0.5 text-2xs text-ink-faint">
+          <span className={`text-sm font-medium ${disabled ? 'text-ink-faint' : ''}`}>{c.label}</span>
+          <span className="ml-2 text-xs text-ink-faint">{c.where}</span>
+          <p className="mt-(--q-tight) text-xs text-ink-faint">{c.desc}</p>
+          <p className="mt-(--q-tight) text-2xs text-ink-faint">
             {statusLine(st, now)}
-            <button className="ml-2 underline" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide log' : 'Show log'}</button>
+            <button className="ml-2 underline underline-offset-2 transition-colors duration-(--dur-fast) hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide log' : 'Show log'}</button>
           </p>
         </div>
         <Toggle label={c.label} value={on} disabled={disabled} onChange={onChange} />
@@ -110,24 +110,23 @@ export function ConnectionsSettings({ settings, update }: {
   const clear = async () => setStatus(await window.nekko.connectionsClear());
 
   return (
-    <section className="card mt-5 p-5" id="connections">
-      <div className="flex items-center gap-2"><GlobeIcon className="h-4 w-4" /><h2 className="font-semibold">Connections</h2></div>
-      <p className="mt-1 text-xs text-ink-faint">
-        Everything Nekko Agent connects to besides this computer. Nekko Agent sends no usage or crash reports unless you turn them on under System. The log keeps when each connection was used and where it went, never what was sent.
-      </p>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3 rounded-md p-3" style={{ background: allOff ? 'color-mix(in srgb, var(--warning) 12%, transparent)' : 'var(--surface-2, transparent)' }}>
-        <div className="min-w-0">
-          <span className="text-sm font-medium">All connections off</span>
-          <p className="text-2xs text-ink-faint">
-            Nothing reaches or leaves this computer over the network. Every chat runs Offline, so only local models on this computer answer.
-          </p>
-        </div>
-        <Toggle label="All connections off" value={allOff} onChange={(v) => update({ connections: { ...conn, allOff: v } })} />
-      </div>
+    <SettingsSection id="connections" title="Connections" help="Everything Nekko Agent connects to besides this computer.">
+      <details className="mt-(--q-tight) text-xs text-ink-faint">
+        <summary className="w-fit cursor-pointer transition-colors duration-(--dur-fast) hover:text-ink">What is logged</summary>
+        <p className="mt-(--q-tight)">
+          Nekko Agent sends no usage or crash reports unless you turn them on under System. The log keeps when each connection was used and where it went, never what was sent.
+        </p>
+      </details>
+      <SettingRow
+        className="mt-(--q-inline)"
+        title={<span className={allOff ? 'text-warning-text' : ''}>All connections off</span>}
+        detail="Nothing reaches or leaves this computer over the network. Every chat runs Offline, so only local models on this computer answer."
+        control={<Toggle label="All connections off" value={allOff} onChange={(v) => update({ connections: { ...conn, allOff: v } })} />}
+      />
       {CONNECTION_GROUPS.map((g) => (
-        <div key={g.id} className="mt-4">
-          <h3 className="text-xs font-medium text-ink-soft">{g.label}</h3>
-          <p className="text-2xs text-ink-faint">{g.desc}</p>
+        <div key={g.id} className="mt-(--q-group)">
+          <h3 className="quiet-group-label">{g.label}</h3>
+          <p className="mt-(--q-tight) text-xs text-ink-faint">{g.desc}</p>
           {CONNECTIONS.filter((c) => c.group === g.id).map((c) => (
             <Row
               key={c.id}
@@ -141,10 +140,10 @@ export function ConnectionsSettings({ settings, update }: {
           ))}
         </div>
       ))}
-      <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
-        <button className="btn btn-outline py-1 text-xs" onClick={() => void clear()}>Clear connection logs</button>
+      <div className="mt-(--q-group) flex flex-wrap items-center gap-2">
+        <button className="btn btn-ghost py-1 text-xs" onClick={() => void clear()}>Clear connection logs</button>
         <span className="text-2xs text-ink-faint">Kept in logs/connections.log, at most about 6 MB.</span>
       </div>
-    </section>
+    </SettingsSection>
   );
 }
