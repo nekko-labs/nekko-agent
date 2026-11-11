@@ -51,6 +51,7 @@ export * from './training.js';
 export * from './workflows.js';
 export * from './workflow-access.js';
 export * from './runners.js';
+export * from './runner-options.js';
 export * from './skills.js';
 export * from './skills-market.js';
 export * from './skill-markdown.js';
