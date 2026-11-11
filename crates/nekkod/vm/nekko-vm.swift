@@ -347,23 +347,95 @@ func finishConfiguration(
 /// The most of the guest's console `--console` keeps.
 let consoleLimit = 1 << 20
 
-/// The guest's serial console, written to a new file at `path`. The guest is not trusted: past
-/// `consoleLimit` its output is still read but dropped, so it can neither fill the host's disk
-/// nor stall on a full pipe. Only text leaves the guest this way; nothing goes in.
+/// The start of the limit holds the start of the console (the runner's setup, the job's first
+/// steps); the rest holds the latest output, so a job that fails after a long build still shows
+/// why. A marker between them says how much was dropped.
+let consoleHead = 256 << 10
+
+/// Keeps the start of the console and a sliding window of its end, inside `consoleLimit` bytes.
+/// The window is rewritten to the file at most once a second and when the helper finishes, so a
+/// killed helper loses at most the last second.
+final class ConsoleLog {
+    private let fd: Int32
+    private let limit: Int
+    private let head: Int
+    private var written = 0
+    private var tail = Data()
+    private var dropped = 0
+    private var flushedAt = Date.distantPast
+    private let lock = NSLock()
+
+    init(fd: Int32, limit: Int = consoleLimit, head: Int = consoleHead) {
+        self.fd = fd
+        self.limit = limit
+        self.head = head
+    }
+
+    private var tailLimit: Int { limit - head - 128 }
+
+    func add(_ input: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        var data = input
+        if written < head {
+            let part = data.prefix(head - written)
+            pwriteAll(Data(part), at: written)
+            written += part.count
+            data = Data(data.dropFirst(part.count))
+        }
+        guard !data.isEmpty else { return }
+        tail.append(data)
+        if tail.count > tailLimit {
+            dropped += tail.count - tailLimit
+            tail = Data(tail.suffix(tailLimit))
+        }
+        if Date().timeIntervalSince(flushedAt) >= 1 { flushLocked() }
+    }
+
+    func flush() {
+        lock.lock()
+        defer { lock.unlock() }
+        flushLocked()
+    }
+
+    private func flushLocked() {
+        flushedAt = Date()
+        guard written >= head, !tail.isEmpty else { return }
+        let marker = dropped > 0 ? "\n[\(dropped) bytes of the console were dropped here]\n" : ""
+        let body = Data(marker.utf8) + tail
+        pwriteAll(body, at: head)
+        ftruncate(fd, off_t(head + body.count))
+    }
+
+    private func pwriteAll(_ data: Data, at offset: Int) {
+        data.withUnsafeBytes { raw in
+            var done = 0
+            while done < raw.count {
+                let n = pwrite(fd, raw.baseAddress! + done, raw.count - done, off_t(offset + done))
+                if n <= 0 { return }
+                done += n
+            }
+        }
+    }
+}
+
+/// The console being written, flushed when the helper finishes.
+var activeConsole: ConsoleLog?
+
+/// The guest's serial console, written to a new file at `path`. The guest is not trusted: the file
+/// never grows past `consoleLimit` (the start of the output and a window of its end), so the guest
+/// can neither fill the host's disk nor stall on a full pipe. Only text leaves the guest this way;
+/// nothing goes in.
 func consolePort(_ path: String) throws -> VZVirtioConsoleDeviceSerialPortConfiguration {
     let fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
     guard fd >= 0 else { throw Failure(description: "cannot create \(path): \(String(cString: strerror(errno)))") }
-    let out = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    let log = ConsoleLog(fd: fd)
+    activeConsole = log
     let pipe = Pipe()
-    var written = 0
     pipe.fileHandleForReading.readabilityHandler = { h in
         let data = h.availableData
-        if data.isEmpty { h.readabilityHandler = nil; return }
-        guard written < consoleLimit else { return }
-        let part = data.prefix(consoleLimit - written)
-        out.write(part)
-        written += part.count
-        if written >= consoleLimit { out.write(Data("\n[the rest of the console was dropped]\n".utf8)) }
+        if data.isEmpty { h.readabilityHandler = nil; log.flush(); return }
+        log.add(data)
     }
     keep.append(pipe)
     let port = VZVirtioConsoleDeviceSerialPortConfiguration()
@@ -382,6 +454,7 @@ func finish(_ reason: String, _ detail: String, code: Int32) -> Never {
         finished = true
         emit(["event": "stopped", "reason": reason, "detail": detail])
     }
+    activeConsole?.flush()
     exit(code)
 }
 

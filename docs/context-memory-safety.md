@@ -32,6 +32,14 @@ Native local file tools also have the app's `~/.nekko-agent` root available unde
 
 Git configuration changes receive special scrutiny because apparently read-only Git commands can invoke configured programs. File edits still go through these gates, including [batch replacements](/docs/file-recovery#how-do-batch-file-edits-work).
 
+## How do I give the agent an API key without it seeing the key?
+
+Don't paste it into the chat: when the agent needs a key, token or password for a command, it asks for it by name (for example `OPENAI_API_KEY`) and the chat shows a secret box. Press **Paste**, or paste or type it yourself, then **Provide** or Enter. The value goes straight to the engine on this computer, never into the chat, the agent's context or the chat file.
+
+From then on the agent's shell commands in that chat get it as an environment variable (`$OPENAI_API_KEY`), and any output that contains it reads `[secret OPENAI_API_KEY]` to the agent and in the transcript. **Skip** tells the agent you chose not to give it.
+
+Limits: secrets are kept in memory for that chat, so restarting the app forgets them and the agent asks again. Redaction catches the value as written and URL-encoded; a command that transforms it (base64, a slice) could still show it. The phone apps, Claude Agent chats and sandbox chats do not have the secret box yet.
+
 ## Does Nekko Agent protect against prompt injection?
 
 Nekko treats outside text as untrusted input. In the native guarded tool path, reading successful web, browser or MCP results marks the chat as having consumed external content. It then asks before fetching a new, unseen URL (including a changed query string), calling MCP tools, delegating to a child or saving a memory. This outbound-data gate reduces opportunities for injected text to send data elsewhere or persist instructions.

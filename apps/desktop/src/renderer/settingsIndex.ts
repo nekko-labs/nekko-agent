@@ -29,7 +29,7 @@ export interface SettingEntry {
   id: string;
   label: string;
   /** The Settings group (`settings-<group>` on the page) it lives in. */
-  group: 'support' | 'general' | 'customize' | 'agents' | 'tools' | 'system';
+  group: 'support' | 'general' | 'customize' | 'agents' | 'safety' | 'tools' | 'system';
   /** Extra words people search for that the label does not say. */
   keywords?: string;
   control: SettingControl;
@@ -48,14 +48,14 @@ export const SETTINGS_INDEX: SettingEntry[] = [
     control: toggle((s) => s.sidebarViews?.[view] === true, (v, s) => ({ sidebarViews: { ...s.sidebarViews, [view]: v } })),
   })),
   { id: 'background-animation', label: 'Background animation', group: 'customize', keywords: 'appearance pixel wave power', control: toggle((s) => s.backgroundAnimation !== false, (v) => ({ backgroundAnimation: v })) },
-  { id: 'language', label: 'Language', group: 'customize', keywords: 'locale translation', control: { kind: 'select', options: [{ value: '', label: 'System default' }, ...LANGUAGES.map((l) => ({ value: l.code, label: l.label }))], get: (s) => s.language ?? '', set: (v) => ({ language: v || undefined }) } },
-  { id: 'chat-pane-action', label: 'Chat pane top-right action', group: 'customize', keywords: 'complete delete close x', control: { kind: 'select', options: [{ value: 'complete', label: 'Complete' }, { value: 'delete', label: 'Delete' }], get: (s) => s.chatPaneAction ?? 'complete', set: (v) => ({ chatPaneAction: v === 'delete' ? 'delete' : 'complete' }) } },
-  { id: 'auto-complete', label: 'Complete idle agents after', group: 'customize', keywords: 'archive inactive', control: { kind: 'select', options: AUTO_COMPLETE_CHOICES.map((c) => ({ value: String(c.days), label: c.label })), get: (s) => String(autoCompleteDays(s.autoCompleteAfterDays)), set: (v) => ({ autoCompleteAfterDays: Number(v) }) } },
-  { id: 'tips', label: 'Show tips', group: 'customize', control: toggle((s) => s.showTips !== false, (v) => ({ showTips: v })) },
-  { id: 'warn-before-yolo', label: 'Warn before No restrictions', group: 'customize', keywords: 'yolo no restrictions warning approvals safety', control: toggle((s) => s.skipYoloWarning !== true, (v) => ({ skipYoloWarning: !v })) },
-  { id: 'confirm-deletions', label: 'Confirm deletions', group: 'customize', keywords: 'delete prompt', control: toggle((s) => s.skipDeleteConfirmation !== true, (v) => ({ skipDeleteConfirmation: !v })) },
-  { id: 'close-behavior', label: 'When I close the window', group: 'customize', keywords: 'tray quit shut down desktop behavior', control: { kind: 'select', options: [{ value: 'tray', label: 'Keep running in tray' }, { value: 'shutdown', label: 'Shut down Nekko' }], get: (s) => s.desktopCloseBehavior ?? 'tray', set: (v) => ({ desktopCloseBehavior: v === 'shutdown' ? 'shutdown' : 'tray' }) } },
-  { id: 'low-memory', label: 'When memory runs low', group: 'customize', keywords: 'ram memory tray close app free unload shut down local models', control: { kind: 'select', options: [{ value: 'ask', label: 'Ask me' }, { value: 'release', label: 'Shut down local models' }, { value: 'ignore', label: 'Do nothing' }], get: (s) => s.lowMemoryAction ?? 'ask', set: (v) => ({ lowMemoryAction: v === 'release' || v === 'ignore' ? v : undefined }) } },
+  { id: 'language', label: 'Language', group: 'general', keywords: 'locale translation', control: { kind: 'select', options: [{ value: '', label: 'System default' }, ...LANGUAGES.map((l) => ({ value: l.code, label: l.label }))], get: (s) => s.language ?? '', set: (v) => ({ language: v || undefined }) } },
+  { id: 'chat-pane-action', label: 'Chat pane top-right action', group: 'general', keywords: 'complete delete close x', control: { kind: 'select', options: [{ value: 'complete', label: 'Complete' }, { value: 'delete', label: 'Delete' }], get: (s) => s.chatPaneAction ?? 'complete', set: (v) => ({ chatPaneAction: v === 'delete' ? 'delete' : 'complete' }) } },
+  { id: 'auto-complete', label: 'Complete idle agents after', group: 'general', keywords: 'archive inactive', control: { kind: 'select', options: AUTO_COMPLETE_CHOICES.map((c) => ({ value: String(c.days), label: c.label })), get: (s) => String(autoCompleteDays(s.autoCompleteAfterDays)), set: (v) => ({ autoCompleteAfterDays: Number(v) }) } },
+  { id: 'tips', label: 'Show tips', group: 'general', control: toggle((s) => s.showTips !== false, (v) => ({ showTips: v })) },
+  { id: 'warn-before-yolo', label: 'Warn before No restrictions', group: 'safety', keywords: 'yolo no restrictions warning approvals safety', control: toggle((s) => s.skipYoloWarning !== true, (v) => ({ skipYoloWarning: !v })) },
+  { id: 'confirm-deletions', label: 'Confirm deletions', group: 'general', keywords: 'delete prompt', control: toggle((s) => s.skipDeleteConfirmation !== true, (v) => ({ skipDeleteConfirmation: !v })) },
+  { id: 'close-behavior', label: 'When I close the window', group: 'general', keywords: 'tray quit shut down desktop behavior', control: { kind: 'select', options: [{ value: 'tray', label: 'Keep running in tray' }, { value: 'shutdown', label: 'Shut down Nekko' }], get: (s) => s.desktopCloseBehavior ?? 'tray', set: (v) => ({ desktopCloseBehavior: v === 'shutdown' ? 'shutdown' : 'tray' }) } },
+  { id: 'low-memory', label: 'When memory runs low', group: 'general', keywords: 'ram memory tray close app free unload shut down local models', control: { kind: 'select', options: [{ value: 'ask', label: 'Ask me' }, { value: 'release', label: 'Shut down local models' }, { value: 'ignore', label: 'Do nothing' }], get: (s) => s.lowMemoryAction ?? 'ask', set: (v) => ({ lowMemoryAction: v === 'release' || v === 'ignore' ? v : undefined }) } },
   { id: 'agent-activity-animation', label: 'Agent activity animation', group: 'customize', keywords: 'animations accessibility motion reduce nekko moving panel', control: toggle((s) => s.agentActivityAnimation !== false, (v) => ({ agentActivityAnimation: v })) },
   { id: 'mascot', label: 'Show Nekko mascot', group: 'customize', keywords: 'fun cat', control: toggle((s) => s.mascotEnabled === true, (v) => ({ mascotEnabled: v })) },
   { id: 'tray-farewell', label: 'Tray farewell', group: 'customize', keywords: 'fun goodbye', control: toggle((s) => s.trayFarewellEnabled !== false, (v) => ({ trayFarewellEnabled: v })) },
@@ -76,11 +76,11 @@ export const SETTINGS_INDEX: SettingEntry[] = [
 /** Each Settings group with the sections it holds, so searching "hooks" or "guardrails" can jump there. */
 export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: string }> = [
   { group: 'support', label: 'Help out the Nekko Team', keywords: 'support star starred github improve usage crash reports telemetry privacy' },
-  { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history' },
+  { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history chats complete idle delete confirm desktop behavior close window tray low memory language tips setup wizard' },
   { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access sync' },
-  { group: 'customize', label: 'Customize', keywords: 'view appearance theme agents wall customization desktop behavior fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
-  { group: 'agents', label: 'Agents', keywords: 'chat modes agent loop hooks spec-driven development orchestration delegation routes automations' },
-  { group: 'safety', label: 'Safety', keywords: 'security sandbox guardrails permissions' },
+  { group: 'customize', label: 'Customize', keywords: 'view appearance theme agents wall customization fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
+  { group: 'agents', label: 'Agents', keywords: 'agent loop hooks spec-driven development orchestration delegation routes automations' },
+  { group: 'safety', label: 'Safety', keywords: 'chat modes default mode no restrictions yolo ask security step-up sandbox guardrails permissions' },
   { group: 'connections', label: 'Connections', keywords: 'network activity log' },
   { group: 'tools', label: 'Tools', keywords: 'git management project management pull requests terminal shell mcp servers' },
   { group: 'system', label: 'System', keywords: 'updates developer experimental backup data privacy' },

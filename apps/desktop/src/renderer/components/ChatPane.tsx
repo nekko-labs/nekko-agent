@@ -12,6 +12,7 @@ import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
 import { ChatArtifacts } from './ChatArtifacts.js';
 import { MarkdownSession } from './Markdown.js';
+import { ChatCodeRun, type ChatCodeRunTarget } from './ChatCodeRun.js';
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
 import { chatPaneSettings, initialChatBrain } from './ChatPane.settings.js';
@@ -25,8 +26,8 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
-import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import type { AgentEvent, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -87,12 +88,15 @@ import { AgentMonitorButton, PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
 import { ReplyStatsRow } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
+import { SecretBox } from './agent-console/SecretBox.js';
 import { useWallLogs } from '../wallLogs.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import { UsageLimitsChip } from './UsageLimitsChip.js';
 import { PaneActions, PaneMetadata, useInPaneFrame } from './PaneFrame.js';
 import { ContextWarning } from './ContextWarning.js';
-import { ChatControls, InternetToggle, McpMenu, ToolsMenu } from './ChatControls.js';
+import { usePrivacyPreviewFetch } from './PrivacyShield.js';
+import { draftPrivacyMarks, usePrivacyPreviews } from '../privacyMarks.js';
+import { ChatControls, INCOGNITO_OFF_HINT, INCOGNITO_ON_HINT, InternetToggle, McpMenu, ToolsMenu } from './ChatControls.js';
 import { useElementCompact } from './agent-console/useElementWidth.js';
 import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
@@ -675,6 +679,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * closed is still there when it opens.
    */
   const [question, setQuestion] = useState<AskRequest | null>(null);
+  /** A `request_secret` call waiting on the chat's secret box (#2594). */
+  const [secretAsk, setSecretAsk] = useState<SecretRequest | null>(null);
   const [ctx, setCtx] = useState<ContextBundle | null>(null);
   // Tokens this turn has produced that the last context bundle doesn't include
   // yet. Everything the agent writes (its reply, its tool calls, their results)
@@ -1134,6 +1140,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         if (!live) return;
         const mine = pending[sessionId];
         if (mine?.question) setQuestion(mine.question);
+        if (mine?.secret) setSecretAsk(mine.secret);
         if (mine?.approval) setApproval({ call: mine.approval.call, reason: mine.approval.reason, severity: mine.approval.severity });
       }).catch(() => {});
     });
@@ -1195,6 +1202,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           break;
         case 'question_resolved':
           setQuestion((q) => (q?.callId === e.callId ? null : q));
+          break;
+        case 'secret_request':
+          setErrorNotice(null);
+          setSecretAsk(e.request);
+          setMascotMood('thinking');
+          break;
+        case 'secret_resolved':
+          setSecretAsk((s) => (s?.callId === e.callId ? null : s));
           break;
         case 'approval_resolved':
           setApproval((current) => approvalAfterResult(current, e.callId));
@@ -2008,6 +2023,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     await window.nekko.answerQuestion(sessionId, pending.callId, answers);
     setQuestion((current) => current?.callId === pending.callId ? null : current);
   };
+  /** Hand the secret box's value to the engine, or skip it (`null`). The value
+   *  lives only in this call: nothing in the pane or the store keeps it. */
+  const answerSecret = async (value: string | null) => {
+    const pending = secretAsk;
+    if (!pending) return false;
+    const ok = await window.nekko.provideSecret(sessionId, pending.callId, value);
+    setSecretAsk((current) => current?.callId === pending.callId ? null : current);
+    return ok;
+  };
   const sessionNow = useRef(session);
   sessionNow.current = session;
   // A chat on another computer has no folders here to add.
@@ -2203,7 +2227,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Generated follow-ups own their destination selector; typed drafts use the composer.
   const canDelegateFollowUp = !imageMode && !remoteBlock && hasProvider && !!session
     && canOfferSubagent(session, delegationStrategy);
-  const showFollowUpChoices = !readOnly && !session?.archivedAt && !draft.trim() && !streaming && !held && !errorNotice && !question && !approval
+  const showFollowUpChoices = !readOnly && !session?.archivedAt && !draft.trim() && !streaming && !held && !errorNotice && !question && !secretAsk && !approval
     && !imageMode && !remoteBlock && hasProvider && !!liveSuggestions?.options.length;
 
   const onComposerKeyDown = (e: React.KeyboardEvent<MarkdownEditorElement>) => {
@@ -2487,6 +2511,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   ];
 
   const isCloudModel = !providerKind || !isLocalProvider(providerKind);
+  const codeModeTotal = useMemo(() => chatCodeModeSavings(session?.messages), [session?.messages]);
+  // Privacy Shield: while it is on, keep the engine's preview of this draft
+  // current, and mark in the composer each value a cloud model reads as a
+  // placeholder. The Shield menu reads the same shared preview for its count.
+  const defaultPrivacyMode = useStore((s) => s.settings?.privacyMode);
+  const shieldOn = !imageMode && session?.chatType !== 'image' && privacyMode(session ?? undefined, { privacyMode: defaultPrivacyMode }) === 'redact';
+  usePrivacyPreviewFetch(session ?? null, draft, shieldOn);
+  const shieldPreview = usePrivacyPreviews((s) => s.bySession[sessionId]);
+  const shieldMarks = useMemo(() => draftPrivacyMarks(shieldPreview, shieldOn), [shieldPreview, shieldOn]);
   // A cloud-only chat's picker lists cloud providers only (the engine refuses the rest).
   const cloudOnlyFilter = useMemo(() => (session?.cloudOnly ? cloudProviderAllowed : undefined), [session?.cloudOnly]);
   const selectedModelInfo = modelId && modelId !== AUTO_MODEL_ID ? models.find((m) => m.id === modelId) : undefined;
@@ -2592,6 +2625,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const onDelete = useCallback((id: string) => { void takeBack('delete', id); }, [takeBack]);
   const onRestart = useCallback((id: string) => { void takeBack('restart', id); }, [takeBack]);
   const artifactBasePath = session?.workspaceId ? session.gitWorktrees?.[session.workspaceId]?.path ?? settings?.workspaces.find((w) => w.id === session.workspaceId)?.path : undefined;
+  // Run on a suggested command (#2595): a local chat the user can write in.
+  // Sandbox work never runs on this computer's shell, so it gets no Run.
+  const sandboxChat = session?.executionMode === 'sandbox';
+  const codeRun = useMemo<ChatCodeRunTarget | null>(() => (readOnly || sandboxChat ? null : {
+    sessionId,
+    cwd: artifactBasePath,
+    workspaceId: session?.workspaceId,
+    share: (text: string) => {
+      setDraft((d) => (d.trim() ? `${d}\n\n${text}` : text));
+      composerRef.current?.focus();
+    },
+  }), [readOnly, sandboxChat, sessionId, artifactBasePath, session?.workspaceId]);
   const renderRow = useCallback(
     (row: TranscriptRow) => (
       <TranscriptRowView
@@ -2678,7 +2723,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const toggleIncognito = () => {
     window.nekko.setSessionOptions(sessionId, { incognito: !session?.incognito }).then(setSession).catch((e) => useStore.getState().pushToast('error', String(e)));
   };
-  const asksFirst = showAsks && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} /> : null;
+  const asksFirst = showAsks && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} isCloudModel={isCloudModel} /> : null;
   const effortProps = {
     metadata: selectedModelInfo?.effort,
     session, onSessionChange: setSession, modelId: autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined),
@@ -2770,6 +2815,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   return (
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
+    <ChatCodeRun.Provider value={codeRun}>
     <ChatImages.Provider value={chatImages}>
     <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <ContextChangeNotice tokens={ctx ? ctxUsed : undefined} onClose={closeContextNotice} />}
@@ -2901,7 +2947,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   last={lastTurn}
                   done={doneSummary}
                   persisted={!streaming && !![...(session?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.turnStats}
-                  blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : null}
+                  blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : secretAsk ? `Waiting for ${secretAsk.name}` : null}
                 />
                 {!streaming && <ClaudeBackgroundTasks tasks={claudeBackground} />}
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
@@ -2909,10 +2955,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" actions={questionActions} />
                 </div>}
+                {secretAsk && <div className="conversation-question" data-agent-secret>
+                  <SecretBox key={secretAsk.callId} request={secretAsk} onProvide={(v) => answerSecret(v)} onSkip={() => answerSecret(null)} />
+                </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
-                {starAsk && !streaming && !question && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
+                {starAsk && !streaming && !question && !secretAsk && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
-                  eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
+                  eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!secretAsk || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
                 {errorNotice && !question && !streaming && (() => {
                   // A stop the user asked for is not a failure, so it doesn't wear
@@ -3062,7 +3111,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <span className="composer-summary-meta">
                     {!imageMode && ` \u00b7 ${CHAT_MODE_LABEL[session?.mode ?? settings?.defaultChatMode ?? 'guardrails']}`}
                     {session?.offline && ' \u00b7 Offline'}
-                    {session?.incognito && ' \u00b7 Incognito'}
+                    {session?.incognito && <>{' · '}<span className="text-warning-text" data-incognito-summary>Incognito</span></>}
                   </span>
                   <span className="ctl-caret">{controlsOpen ? '\u25b4' : '\u25be'}</span>
                 </button>
@@ -3354,6 +3403,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     onPaste={imageMode ? onPhotoPaste : onPaste}
                     onKeyDown={onComposerKeyDown}
                     disabled={!canCompose}
+                    privacyMarks={shieldMarks}
                   />
                   <ComposerFocus target={composerRef} sessionId={sessionId} ready={canCompose} />
                 </div>
@@ -3470,12 +3520,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                             className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
                             onClick={() => { closeAttachMenu(); toggleIncognito(); }}
                             onMouseEnter={closeSkillsFly}
-                            title="Don't save this chat or update memory"
+                            title={session.incognito ? INCOGNITO_ON_HINT : INCOGNITO_OFF_HINT}
                             data-plus-incognito
                           >
                             <IncognitoIcon className="h-3.5 w-3.5 shrink-0" />
                             <span className="flex-1">Incognito</span>
-                            {session.incognito && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-accent" />}
+                            {session.incognito && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-warning" />}
                           </button>
                         </>}
                         <button
@@ -3608,7 +3658,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <div className="min-w-0 max-w-full shrink-0">{modelControls}</div>
                         {detailsShown && expertMode && asksFirst}
                         <div className="ml-auto flex shrink-0 items-center gap-1">
-                          {plusCarries && session?.incognito && <span className="ctl-toggle ctl-toggle-neutral whitespace-nowrap" data-incognito-on title="Don't save this chat or update memory"><IncognitoIcon className="h-3.5 w-3.5" /> Incognito</span>}
+                          {plusCarries && session?.incognito && <span className="ctl-toggle ctl-toggle-warning whitespace-nowrap" data-incognito-on data-on title={INCOGNITO_ON_HINT}><IncognitoIcon className="h-3.5 w-3.5" /> Incognito</span>}
                           {!expertMode && usageGauge}
                           {expertMode && <button
                             type="button"
@@ -3637,6 +3687,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                             avoidedCosts={avoidedCosts}
                             running={streaming}
                             unpriced={!!avoidedCosts?.unpricedTokens || (streaming && !getModelPrice(modelForCostRef.current ?? undefined))}
+                            codeMode={codeModeTotal}
                           />
                         )}
                         <div className="agent-footer-reach ml-auto flex flex-wrap items-center gap-1" data-agent-footer-controls>
@@ -3705,6 +3756,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       )}
     </div>
     </ChatImages.Provider>
+    </ChatCodeRun.Provider>
     </MarkdownSandbox.Provider>
   );
 }

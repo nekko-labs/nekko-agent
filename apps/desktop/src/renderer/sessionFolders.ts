@@ -112,12 +112,24 @@ export function hasRepoProvider(connectors: ConnectorConfig[] | undefined): bool
  * Clone a repository (or reuse its existing clone) and wire it into the chat:
  * primary when the chat has none, otherwise supporting.
  */
+/** Where a sandbox chat's repository goes, as the add's confirmation names it. */
+export const SANDBOX_REPO_PLACE = "this chat's sandbox, cloned there when it is set up";
+
+/** No copy of the repository is here and no repositories folder is chosen yet. */
+export class RepoFolderNeeded extends Error {
+  constructor(public readonly suggested: string) {
+    super('Choose where repositories sync first.');
+  }
+}
+
 export async function addRepoToChat(
   sessionId: string,
   session: ChatFolders,
   repo: Pick<RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>,
 ): Promise<{ session: Session | null; path: string }> {
-  const result = await window.nekko.cloneRepo({ provider: repo.provider, fullName: repo.fullName, cloneUrl: repo.cloneUrl, webUrl: repo.webUrl });
+  const result = await window.nekko.cloneRepo({ provider: repo.provider, fullName: repo.fullName, cloneUrl: repo.cloneUrl, webUrl: repo.webUrl }, { sessionId });
+  if (result.needsFolder) throw new RepoFolderNeeded(result.suggested);
+  if (result.sandbox) return { session: result.session, path: SANDBOX_REPO_PLACE };
   await useStore.getState().refreshSettings();
   if (!result.folderId) return { session: null, path: result.path };
   return { session: await applyFolderSelection(sessionId, withIncluded(session, result.folderId)), path: result.path };

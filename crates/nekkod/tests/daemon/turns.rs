@@ -507,6 +507,68 @@ async fn sockets_take_only_the_chats_they_subscribe_to() {
     assert_eq!(streamed_text(&rest, "s_one"), "went");
 }
 
+/// #2594: the agent asks for a secret, the user gives it through
+/// `chat:provideSecret`, and a command uses it; the value is in no event, no
+/// saved message and nothing the model reads.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_secret_reaches_commands_and_never_the_model_or_the_chat() {
+    const VALUE: &str = "sk-nekko-secret-0123456789";
+    let session = json!({
+        "id": "s_secret", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("secret", session);
+    #[cfg(windows)]
+    let echo = "echo key=%NEKKO_T_TOKEN%";
+    #[cfg(not(windows))]
+    let echo = "echo key=$NEKKO_T_TOKEN";
+    let model = scripted_model(vec![
+        call_tool("c_secret", "request_secret", json!({ "name": "NEKKO_T_TOKEN", "reason": "For the test." })),
+        call_tool("c_echo", "bash", json!({ "command": echo })),
+        say_text("all done"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_secret", "s_secret", json!({}));
+    let (status, started) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+
+    let request = wait_pending(rig.d.port, "s_secret", "secret", "c_secret").await;
+    assert_eq!(request["name"], "NEKKO_T_TOKEN");
+    assert_eq!(request["reason"], "For the test.");
+    // Another chat, or a call nobody waits on, cannot set it.
+    let (_, wrong) = post(rig.d.port, "chat:provideSecret", json!(["other", "c_secret", "x"]), Some(TOKEN)).await;
+    assert_eq!(wrong, json!(false));
+    let (status, body) =
+        post(rig.d.port, "chat:provideSecret", json!(["s_secret", "c_secret", format!("{VALUE}\n")]), Some(TOKEN))
+            .await;
+    assert_eq!((status, body), (200, json!(true)));
+
+    let (events, end) = turn_record(&rig, "turn_secret", "s_secret").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let types = event_types(&events);
+    for t in ["secret_request", "secret_resolved", "tool_result", "done"] {
+        assert!(types.iter().any(|x| x == t), "no {t} event in {types:?}");
+    }
+    let all = serde_json::to_string(&events).unwrap();
+    assert!(!all.contains(VALUE), "an event carries the value");
+    let (_, pending) = post(rig.d.port, "chat:pending", json!([]), Some(TOKEN)).await;
+    assert_eq!(pending, json!({}), "nothing may stay pending after the turn");
+
+    let saved = saved_session(&rig, "s_secret");
+    let text = serde_json::to_string(&saved).unwrap();
+    assert!(!text.contains(VALUE), "the chat file carries the value");
+    let messages = saved["messages"].as_array().unwrap();
+    let tool_out = |id: &str| -> String {
+        let m = messages.iter().find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id).unwrap();
+        m["toolResult"]["output"].as_str().unwrap_or_default().to_string()
+    };
+    assert!(tool_out("c_secret").starts_with("The user provided NEKKO_T_TOKEN."), "{}", tool_out("c_secret"));
+    assert!(tool_out("c_echo").contains("key=[secret NEKKO_T_TOKEN]"), "{}", tool_out("c_echo"));
+    // What the model read back on its last request.
+    let asked = serde_json::to_string(&*model.requests.lock().unwrap()).unwrap();
+    assert!(!asked.contains(VALUE), "the model read the value");
+    assert!(asked.contains("[secret NEKKO_T_TOKEN]"));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     let session = json!({
@@ -840,7 +902,10 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
     assert_eq!(lines.len(), 1, "{usage}");
     let keys: Vec<&str> = lines[0].as_object().unwrap().keys().map(String::as_str).collect();
     // `origin` (#2494): a turn the person sent; no `parentSessionId` for a chat of its own.
-    assert_eq!(keys, ["ts", "providerId", "modelId", "inputTokens", "outputTokens", "sessionId", "auth", "local", "origin"]);
+    assert_eq!(
+        keys,
+        ["ts", "providerId", "modelId", "inputTokens", "outputTokens", "sessionId", "auth", "local", "origin"]
+    );
     assert_eq!(lines[0]["origin"], "user");
     assert_eq!(lines[0]["inputTokens"], 10);
     assert_eq!(lines[0]["outputTokens"], 3);

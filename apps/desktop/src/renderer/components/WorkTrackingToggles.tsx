@@ -12,10 +12,10 @@ type PullRequests = NonNullable<AppSettings['pullRequests']>;
 function Toggle({ label, hint, value, defaultOn, onChange }: { label: string; hint: string; value?: boolean; defaultOn?: boolean; onChange: (v: boolean) => void }) {
   const ask = !defaultOn && value === undefined;
   return (
-    <label className="mt-3 flex items-center justify-between gap-3 text-sm">
-      <span>
+    <label className="flex min-h-(--q-row) items-center justify-between gap-4 py-(--q-inline) text-sm font-medium">
+      <span className="min-w-0">
         {label}
-        <span className="mt-0.5 block text-2xs text-ink-faint">{ask ? `${hint} Not set yet: Nekko asks the first time.` : hint}</span>
+        <span className="mt-(--q-tight) block text-xs font-normal text-ink-faint">{ask ? `${hint} Not set yet: Nekko asks the first time.` : hint}</span>
       </span>
       <input
         type="checkbox"

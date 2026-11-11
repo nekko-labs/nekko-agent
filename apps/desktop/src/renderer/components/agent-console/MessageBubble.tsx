@@ -108,7 +108,7 @@ export const MessageBubble = memo(function MessageBubble({
           <div className="msg-ai" data-voice={voice}>
             {!entering && claudeCode && <ClaudeCodeSpeaker />}
             {voice === 'working' && <ThoughtIcon className="msg-voice-icon" />}
-            <div data-chat-search-text><Markdown basePath={basePath} text={message.content} topics askTail={voice === 'reply' || voice === 'attention'} /></div>
+            <div data-chat-search-text><Markdown basePath={basePath} text={message.content} topics askTail={voice === 'reply' || voice === 'attention'} runnable /></div>
             {/* A note between steps is not the end of anything. */}
             {!entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length && voice !== 'working' && voice !== 'attention'} stats={message.turnStats} />}
             {displayText && message.content && (
@@ -176,7 +176,7 @@ export const MessageBubble = memo(function MessageBubble({
         )}
         {/* Your own messages render as markdown too: people type dashed lists and
             `code` in the composer and expect them to come out formatted. */}
-        {displayText && <div data-chat-search-text><Markdown basePath={basePath} text={isUser ? displayText : message.content} /></div>}
+        {displayText && <div data-chat-search-text><Markdown basePath={basePath} text={isUser ? displayText : message.content} runnable={!isUser} /></div>}
         {message.toolCalls?.map((c) => <ToolCard key={c.id} call={c} />)}
         {!isUser && !entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
         {(displayText && message.content || (isUser && (message.images?.length || message.videos?.length))) && (

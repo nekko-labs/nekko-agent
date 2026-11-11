@@ -1,5 +1,5 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
-import { AGENT_REPLAY, IpcChannels, IpcEvents, challengeIsGenuine, deriveKey, ephemeralKeys, publicKeyText, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, sessionInfo, sessionKey, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
+import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, challengeIsGenuine, deriveKey, ephemeralKeys, publicKeyText, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, sessionInfo, sessionKey, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
@@ -375,6 +375,7 @@ function makeWebClient(): NekkoApi {
 
   // A guarded call refused `step-up-required` opens the page's step-up sheet and runs again once confirmed (SK-5).
   let stepUpHandler: StepUpHandler | null = null;
+  const servesHtmlPreviews = !(relayUrl && room && key) && location.protocol === 'http:';
   const transport = call;
   call = (channel, ...args) => withStepUpRetry(() => transport(channel, ...args), () => stepUpHandler);
 
@@ -435,6 +436,18 @@ function makeWebClient(): NekkoApi {
     syncSetEnabled: (on) => call(IpcChannels.syncSetEnabled, on),
     syncSetIncludeLocalOnly: (on) => call(IpcChannels.syncSetIncludeLocalOnly, on),
     syncDeleteAll: () => call(IpcChannels.syncDeleteAll),
+    orgList: () => call(IpcChannels.orgList),
+    orgCreate: (name) => call(IpcChannels.orgCreate, name),
+    orgGet: (orgId) => call(IpcChannels.orgGet, orgId),
+    orgInvite: (orgId, email, role) => call(IpcChannels.orgInvite, ...(role ? [orgId, email, role] : [orgId, email])),
+    orgRevokeInvite: (orgId, inviteId) => call(IpcChannels.orgRevokeInvite, orgId, inviteId),
+    orgAcceptInvite: (inviteId) => call(IpcChannels.orgAcceptInvite, inviteId),
+    orgRemoveMember: (orgId, userId) => call(IpcChannels.orgRemoveMember, orgId, userId),
+    orgRename: (orgId, name) => call(IpcChannels.orgRename, orgId, name),
+    orgDelete: (orgId) => call(IpcChannels.orgDelete, orgId),
+    fleetSetSharing: (orgId, on) => call(IpcChannels.fleetSetSharing, orgId, on),
+    fleetList: (orgId) => call(IpcChannels.fleetList, orgId),
+    fleetStatus: () => call(IpcChannels.fleetStatus),
     voiceStatus: () => call(IpcChannels.voiceStatus),
   voiceInstall: (engine) => call(IpcChannels.voiceInstall, engine),
   voiceCancelInstall: () => call(IpcChannels.voiceCancelInstall),
@@ -519,6 +532,7 @@ function makeWebClient(): NekkoApi {
     fillPromptPart: (sessionId, part, draft) => call(IpcChannels.chatFillPrompt, sessionId, part, draft),
     approveTool: (sessionId, toolCallId, approved) => call(IpcChannels.toolApprove, sessionId, toolCallId, approved),
     answerQuestion: (sessionId, callId, answers) => call(IpcChannels.chatAnswer, sessionId, callId, answers),
+    provideSecret: (sessionId, callId, value) => call(IpcChannels.chatProvideSecret, sessionId, callId, value),
     pendingInput: () => call(IpcChannels.chatPending),
     runningSessions: () => call(IpcChannels.chatRunning),
 
@@ -592,7 +606,8 @@ function makeWebClient(): NekkoApi {
     addWorkspaceByPath: (path) => call(IpcChannels.workspaceAddByPath, path),
     removeWorkspace: (id) => call(IpcChannels.workspaceRemove, id),
     listRepos: (query) => call(IpcChannels.reposList, query ?? ''),
-    cloneRepo: (repo) => call(IpcChannels.reposClone, repo),
+    cloneRepo: (repo, opts) => call(IpcChannels.reposClone, repo, opts ?? {}),
+    setSandboxRepos: (id, repos) => call(IpcChannels.reposSetSandbox, id, repos),
     indexWorkspace: (id) => call(IpcChannels.workspaceIndex, id),
     getIndexStatus: (id) => call(IpcChannels.workspaceIndexStatus, id),
     searchWorkspace: (id, query) => call(IpcChannels.workspaceSearch, id, query),
@@ -602,6 +617,13 @@ function makeWebClient(): NekkoApi {
     removeChatWorktree: (root) => call(IpcChannels.chatWorktreesRemove, root),
 
     readFile: (path) => call(IpcChannels.fileRead, path),
+    // The Local Web UI server serves pages on a port of its own, over plain
+    // http. A relayed browser can't reach it, and a page behind an https proxy
+    // can't frame it, so both keep the scriptless preview.
+    ...(servesHtmlPreviews ? {
+      serveHtmlPreview: (path: string, options: import('@nekko-agent/shared').HtmlPreviewOptions) => call(HTML_PREVIEW_CHANNELS.serve, path, options),
+      releaseHtmlPreview: (id: string) => call(HTML_PREVIEW_CHANNELS.release, id),
+    } : {}),
     writeFile: (path, content) => call(IpcChannels.fileWrite, path, content),
     listDir: (path) => call(IpcChannels.dirList, path),
     listScopedFiles: (root, relPath) => call(IpcChannels.filesList, root, relPath),
@@ -718,6 +740,8 @@ function makeWebClient(): NekkoApi {
     disconnectConnector: (kind) => call(IpcChannels.connectorDisconnect, kind),
     fetchConnector: (kind, query) => call(IpcChannels.connectorFetch, kind, query),
     detectConnectors: () => call(IpcChannels.connectorsDetect),
+    connectorRepos: (kind) => call(IpcChannels.connectorRepos, kind),
+    excludeConnectorRepos: (kind, choice) => call(IpcChannels.connectorExclude, kind, choice),
     importConnectorCli: (kind) => call(IpcChannels.connectorImportCli, kind),
 
     detectAgentTools: () => call(IpcChannels.integrationsDetect),

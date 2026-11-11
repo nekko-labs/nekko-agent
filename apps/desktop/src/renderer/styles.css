@@ -16,8 +16,8 @@
 .pixel-skeleton > canvas { display: block; width: 100%; height: 100%; }
 
 /* Context menus remain neutral even when a preset gives the page a vivid tint. */
-.context-menu, .create-menu { background: #ffffff; color: #17191f; }
-[data-theme='dark'] :is(.context-menu, .create-menu) { background: #191c23; color: #f3f4f6; }
+.context-menu, .create-menu, .permissions-menu { background: #ffffff; color: #17191f; }
+[data-theme='dark'] :is(.context-menu, .create-menu, .permissions-menu) { background: #191c23; color: #f3f4f6; }
 /* Hover, checked and open rows are a neutral wash of the menu's own ink: the
    accent is kept for the primary action, focus and data. */
 .context-menu [role^="menuitem"][aria-checked="true"],
@@ -508,6 +508,26 @@
   .quiet-row-action:focus-visible { opacity: 1; }
 }
 
+/* A code block's own actions (Run, Copy, and the inline terminal's): quiet
+   tabs that wash on hover and press in (#2595). */
+.code-action { transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+@media (hover: hover) { .code-action:hover:not(:disabled) { background: var(--q-wash); } }
+.code-action:active:not(:disabled) { transform: scale(0.97); }
+/* A block with no language line keeps its Copy floating, shown on hover. */
+.code-copy-float { position: absolute; right: 6px; top: 6px; transition: opacity var(--dur-fast) var(--ease-out); }
+@media (hover: hover) {
+  .code-copy-float { opacity: 0; }
+  [data-code-block]:hover .code-copy-float, .code-copy-float:focus-within { opacity: 1; }
+}
+/* The chat's terminal under the block that ran it: a hairline, then it opens in. */
+.inline-terminal { border-top: 1px solid var(--line); animation: inline-terminal-in var(--dur-med) var(--ease-out); }
+@keyframes inline-terminal-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .inline-terminal { animation-name: inline-terminal-fade; }
+  .code-action:active:not(:disabled) { transform: none; }
+}
+@keyframes inline-terminal-fade { from { opacity: 0; } }
+
 @utility quiet-group-label {
   @apply text-xs font-medium text-ink-soft;
 }
@@ -753,6 +773,11 @@
   &:disabled {
     opacity: 0.45;
   }
+  /* Locked, but still hoverable so its title can say why. */
+  &[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
   /* `.ctl-toggle-on` is the same lit state for a read-only indicator (a span
      that reports state rather than a button that changes it). */
   &[aria-pressed='true'] {
@@ -777,6 +802,29 @@
      ink when on so Offline stays the only accent-colored state in the strip. */
   &[aria-pressed='true'] {
     color: var(--ink);
+  }
+}
+
+@utility ctl-toggle-warning {
+  /* Incognito: on is a caution, not a feature to leave running. It reads in
+     the warning colour on its soft tint, so nobody mistakes it for a good
+     default, and it never carries over to the next chat. `data-on` lights a
+     read-only indicator the same way. */
+  &[aria-pressed='true'],
+  &[data-on] {
+    color: var(--warning-text);
+    background: var(--warning-soft);
+  }
+  &[aria-pressed='true'] .ctl-dot,
+  &[data-on] .ctl-dot {
+    background: var(--warning);
+    opacity: 1;
+  }
+  @media (hover: hover) {
+    &[aria-pressed='true']:hover:not(:disabled) {
+      color: var(--warning-text);
+      background: color-mix(in srgb, var(--warning) 22%, transparent);
+    }
   }
 }
 
@@ -2740,11 +2788,14 @@
 .settings-shortcuts, .settings-nav { display: flex; flex-wrap: wrap; gap: 2px; }
 .settings-shortcuts { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 @media (min-width: 768px) { .settings-shortcuts, .settings-nav { flex-direction: column; flex-wrap: nowrap; } }
-.settings-group { scroll-margin-top: 16px; padding-top: 24px; }
+.settings-group { scroll-margin-top: 16px; padding-top: var(--q-section); }
 .settings-group:first-child { padding-top: 4px; }
-.settings-group + .settings-group { margin-top: 40px; border-top: 1px solid var(--line); }
-/* Matches the selected .settings-nav-item, so a section's heading reads like its rail entry. */
-.settings-group-title { font-size: var(--text-base); font-weight: 500; color: var(--ink); }
+/* The one hairline: between groups, which are of a different kind. Sections inside a group are separated by space alone. */
+.settings-group + .settings-group { margin-top: var(--q-section); border-top: 1px solid var(--line); }
+/* Each rail group reads as a page, so its title is the page title size (design system type ladder). */
+.settings-group-title { font-size: var(--text-xl); font-weight: 600; color: var(--ink); }
+.settings-section { margin-top: var(--q-section); scroll-margin-top: 16px; }
+.settings-group-title + .settings-section, .settings-group-title + * > .settings-section:first-child { margin-top: var(--q-group); }
 /* Pinned over the rail's "Search settings" row: its left edge and width come from the row, so it never spills out of the rail. */
 .settings-search-pop { position: fixed; z-index: 60; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; box-sizing: border-box; padding: 4px 4px 4px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-float); }
 .settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: var(--text-sm); color: var(--ink); }
@@ -3020,6 +3071,8 @@
 /* The tree line from a parent's card to each of its sub-agent rows: a tee for
    every row, an elbow for the last. It reaches a little above the row so the
    lines join across the gap between rows. */
+/* Parent metadata starts at 24px; its 10px icon is centered at 29px. */
+.subagent-row { margin-left: 15px; width: calc(100% - 15px); }
 .subagent-tree { position: absolute; left: 14px; top: 0; bottom: 0; width: 8px; pointer-events: none; --tree-line: color-mix(in srgb, var(--ink) 32%, transparent); }
 .subagent-tree::before { content: ''; position: absolute; left: 0; top: -4px; bottom: 0; border-left: 1px solid var(--tree-line); }
 .subagent-tree::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; border-top: 1px solid var(--tree-line); }
@@ -3444,7 +3497,76 @@
 .agent-internet-toggle { color: var(--success); transition: background-color .12s ease, color .12s ease; }
 .agent-internet-toggle[data-internet='blocked'] { color: var(--ink-faint); }
 @media (hover: hover) {
-  .agent-internet-toggle:hover { background: var(--surface-2); }
+  .agent-internet-toggle:hover { background: var(--surface-2); color: var(--ink); }
+  .agent-internet-toggle[data-internet='allowed']:hover { color: var(--success); }
+}
+/* Privacy Shield's glyph. Switched on, a ring sweeps once around it (arming);
+   while on, a faint halo breathes out every few seconds so the shield reads as
+   working. Both animate only opacity and transform on a pseudo-element, so
+   they stay on the compositor; reduced motion keeps the glyph still. */
+.privacy-shield-glyph { position: relative; display: inline-flex; }
+[data-shield-on] .privacy-shield-glyph { color: var(--accent); }
+.privacy-shield-glyph::before,
+.privacy-shield-glyph::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+}
+[data-shield-on] .privacy-shield-glyph::after {
+  border: 1px solid var(--accent);
+  animation: shield-halo 3.2s var(--ease-out) infinite;
+}
+[data-shield-arming] .privacy-shield-glyph::before {
+  background: conic-gradient(from 0deg, transparent 0 55%, var(--accent) 100%);
+  mask: radial-gradient(circle closest-side, transparent 72%, var(--accent) 76%);
+  animation: shield-sweep 0.9s var(--ease-out) 1;
+}
+@keyframes shield-halo {
+  0% { opacity: 0.5; transform: scale(0.8); }
+  45% { opacity: 0; transform: scale(1.35); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+@keyframes shield-sweep {
+  0% { opacity: 1; transform: rotate(0deg) scale(0.9); }
+  80% { opacity: 1; transform: rotate(360deg) scale(1); }
+  100% { opacity: 0; transform: rotate(420deg) scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-shield-on] .privacy-shield-glyph::after,
+  [data-shield-arming] .privacy-shield-glyph::before { animation: none; opacity: 0; }
+}
+
+/* Privacy Shield in the draft: each value the model will not see, tinted and
+   bracketed, with the placeholder it reads instead drawn after it. The
+   brackets and placeholder are generated content, never the draft's text. */
+.composer-privacy-mark {
+  background: var(--info-soft);
+  color: inherit;
+  border-radius: 3px;
+  transition: background-color var(--dur-med) var(--ease-out);
+}
+.composer-privacy-mark[data-privacy-open]::before {
+  content: '[';
+  color: var(--info-text);
+  user-select: none;
+}
+.composer-privacy-mark[data-privacy-token]::after {
+  content: '] \2192\00a0' attr(data-privacy-token);
+  margin-left: 1px;
+  color: var(--info-text);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Locked on for a cloud model: it still hovers (to say why) but reads as fixed. */
+.agent-internet-toggle[aria-disabled='true'] { cursor: not-allowed; opacity: 0.6; }
+@media (hover: hover) {
+  .agent-internet-toggle[aria-disabled='true']:hover { opacity: 0.8; }
 }
 .agent-internet-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .agent-footer-status { min-width: 16px; justify-content: flex-end; }
@@ -4335,11 +4457,21 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @keyframes conversation-question-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .conversation-question { animation: none; } }
 
+/* The chat's secret box (#2594): the user must act, so it wears the attention tint and nothing else. */
+.secret-box { padding: 16px 20px; border-radius: 16px 16px 4px 4px; background: var(--attention-soft); }
+.secret-box .quiet-field { width: auto; background: var(--paper); }
+.secret-box .quiet-field:focus { background: var(--paper); }
+
 /* One Models workspace, quiet navigation and compact provider actions. */
 .models-add-provider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.models-layout { display: flex; gap: 40px; width: 100%; max-width: 112rem; height: 100%; min-height: 0; margin-inline: auto; padding-inline: clamp(20px, 4vw, 80px); }
-.models-rail { flex: 0 0 192px; align-self: center; max-height: calc(100% - 40px); overflow-y: auto; }
-.models-rail .view-title { margin-bottom: 20px; }
+/* Models, Settings and Automations share one side menu: inset from the window's
+   edge with no divider, starting at the top of the page beside its content. */
+.models-layout, .settings-panel, .automations-layout { display: flex; gap: 40px; width: 100%; max-width: 112rem; height: 100%; min-height: 0; margin-inline: auto; padding-inline: clamp(20px, 4vw, 80px); }
+.models-rail, .automations-rail { flex: 0 0 192px; min-height: 0; overflow-y: auto; padding: 20px 0; }
+.automations-rail { flex-basis: 240px; }
+.models-rail .view-title, .automations-rail .view-title { margin-bottom: 20px; }
+.automations-filters { margin-top: 20px; }
+.automations-content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 0 64px; }
 .models-navigation { display: flex; flex-direction: column; gap: 8px; }
 .models-navigation .settings-nav-item { min-height: 40px; font-size: var(--text-sm); }
 .models-navigation .models-nav-main + .models-nav-main { margin-top: 20px; }
@@ -4378,16 +4510,23 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-navigation .models-nav-sub[aria-current] { color: var(--ink); }
 @media (max-width: 1000px) {
   .models-layout { flex-direction: column; gap: 20px; padding-inline: 20px; }
-  .models-rail { flex: none; align-self: stretch; max-height: 40%; padding-top: 12px; }
+  .models-rail { flex: none; max-height: 40%; padding: 12px 0 0; }
   .models-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
   .models-navigation .settings-nav-item { width: 100%; }
   .models-navigation .models-nav-main + .models-nav-main { margin-top: 0; }
   .models-navigation .models-nav-sub { margin: 0; width: 100%; }
   .models-navigation .models-nav-sub + .models-nav-sub { margin-top: 0; }
   .models-workspace { height: auto; min-height: 0; padding: 0 0 48px; }
+  /* Automations keeps its side menu down to a phone width, one item a row. */
+  .automations-rail .models-navigation { display: flex; }
+  .automations-layout { gap: 20px; padding-inline: 20px; }
 }
 @media (max-width: 767px) {
   .models-layout { padding-inline: 16px; }
+  /* Like Settings: the menu and filters become a band above the list. */
+  .automations-layout { flex-direction: column; gap: 0; padding-inline: 16px; }
+  .automations-rail { flex: none; max-height: 40%; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .automations-content { padding-top: 16px; }
   .models-section-local { margin-top: 40px; }
   .models-local-connections { margin-top: 40px; }
   .models-provider-bar { gap: 12px; }
@@ -4406,13 +4545,14 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-eyes"] { fill: var(--on-accent); }
 
-/* Settings, Skills, Connectors and Models use the Artifacts and Scheduled Tasks
+/* Settings, Skills, Connectors and Models use the Artifacts and Automations
    page shell: edge to edge on the app background, with content capped at the
-   Scheduled Tasks list's width. Settings adds a ruled left rail with its own
+   scheduled tasks list's width. Settings adds a left rail with its own
    scroll, which becomes wrapping rows above the page in a narrow window. */
-.settings-panel { display: flex; height: 100%; min-height: 0; }
-.settings-rail { display: flex; flex-direction: column; width: 240px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--line); padding: 12px; }
-.settings-rail .view-title { margin: 0 0 12px; }
+.settings-rail { display: flex; flex-direction: column; width: 240px; flex-shrink: 0; min-height: 0; overflow-y: auto; padding: 20px 0; }
+.settings-rail .view-title { margin: 0 0 20px; }
+.settings-rail .settings-nav-item { min-height: 40px; }
+@media (min-width: 768px) { .settings-rail .settings-nav { gap: 8px; } }
 .settings-nav-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border-radius: var(--radius-lg); font-size: var(--text-base); text-align: left; transition: background-color 150ms; }
 @media (hover: hover) {
   .settings-nav-item:hover { background: var(--surface-2); }
@@ -4421,8 +4561,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .settings-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .settings-content { flex: 1; min-width: 0; overflow-y: auto; }
 .settings-page, .models-section { max-width: 64rem; margin-inline: auto; }
-.settings-page { padding: 12px 16px 64px; }
-.settings-panel .card h2 { font-size: var(--text-sm); }
+/* The design system's content column: a setting's control stays within reach of its label. */
+.settings-page { max-width: 720px; padding: 20px 20px 64px; }
 .settings-destination { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 /* Bars above the page's scroller reserve its scrollbar, so both centre on the same line. */
 .settings-bar { flex-shrink: 0; overflow: hidden; scrollbar-gutter: stable; }
@@ -4430,8 +4570,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .settings-back-bar .btn { margin-left: -16px; }
 .settings-destination-content { flex: 1; min-height: 0; overflow-y: auto; }
 @media (max-width: 767px) {
-  .settings-panel { flex-direction: column; }
-  .settings-rail { width: auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .settings-panel { flex-direction: column; gap: 0; padding-inline: 16px; }
+  .settings-rail { width: auto; max-height: 40%; padding: 12px 0; border-bottom: 1px solid var(--line); }
   .settings-nav-item { width: auto; }
   .settings-page { padding: 16px 16px 48px; }
 }
@@ -4799,3 +4939,42 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
   80% { transform: translateY(0) rotate(-4deg) scale(1.04); }
 }
 @media (prefers-reduced-motion: reduce) { .support-star-celebrate { animation: none; } }
+
+/* Permissions are quiet named rows, not a strip of icon buttons. */
+.permissions-menu { border-radius: 12px; box-shadow: var(--shadow-float); overflow-y: auto; animation: permission-menu-in var(--dur-med) var(--ease-out); }
+.permission-rows { margin-top: var(--q-group); }
+.permission-row { display: flex; align-items: center; gap: var(--q-tight); }
+.permission-choice { display: flex; flex: 1; min-width: 0; align-items: center; gap: var(--q-inline); min-height: var(--q-row-dense); padding: var(--q-inline); border-radius: 8px; text-align: left; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); transition: color var(--dur-med) var(--ease-out), background var(--dur-fast) var(--ease-out); }
+.permission-choice[aria-checked='true'] { color: var(--accent); }
+.permission-choice:disabled, .permission-choice[aria-disabled='true'] { opacity: .55; }
+.permission-choice[aria-disabled='true'] { cursor: not-allowed; }
+/* Incognito on is a caution, not a feature: warning colour, never the accent. */
+.permission-choice[data-asks-toggle='incognito'][aria-checked='true'] { color: var(--warning-text); }
+.permission-check { display: grid; place-items: center; width: 14px; height: 14px; flex-shrink: 0; }
+.permission-glyph { display: inline-flex; flex-shrink: 0; }
+.permission-choice[aria-checked='true'] .permission-check { animation: permission-check-in var(--dur-med) var(--ease-out); }
+.permission-choice[aria-checked='true'] .permission-glyph { animation: permission-enable var(--dur-med) var(--ease-out); }
+.permission-choice[data-asks-toggle='incognito'] { --permission-x: 2px; --permission-scale: 1; --permission-angle: 0deg; }
+.permission-choice[data-asks-toggle='shield'] { --permission-x: 0px; --permission-scale: .9; --permission-angle: 0deg; }
+.permission-choice[data-asks-toggle='internet'] { --permission-x: 0px; --permission-scale: 1; --permission-angle: -12deg; }
+.permission-info { display: grid; place-items: center; flex-shrink: 0; width: var(--q-row-dense); height: var(--q-row-dense); border-radius: 8px; color: var(--ink-faint); transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out); }
+.permission-info[aria-expanded='true'] { color: var(--info); }
+.permission-choice:active:not(:disabled), .permission-info:active { transform: scale(.98); }
+.permission-choice:focus-visible, .permission-info:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.permission-detail { padding: var(--q-inline) var(--q-inline) var(--q-inline) 30px; color: var(--ink-faint); font-size: var(--text-xs); line-height: 1.5; animation: permission-detail-in var(--dur-med) var(--ease-out); }
+@media (hover: hover) {
+  .permission-choice:hover:not(:disabled), .permission-info:hover { background: var(--q-wash); }
+  .permission-info:hover { color: var(--ink); }
+}
+@media (pointer: coarse) {
+  .permission-choice, .permission-info { min-height: 44px; }
+  .permission-info { width: 44px; }
+}
+@keyframes permission-enable { from { opacity: .5; transform: translateX(var(--permission-x)) scale(var(--permission-scale)) rotate(var(--permission-angle)); } to { opacity: 1; transform: none; } }
+@keyframes permission-check-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes permission-detail-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+@keyframes permission-menu-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .permissions-menu, .permission-detail, .permission-choice[aria-checked='true'] .permission-glyph, .permission-choice[aria-checked='true'] .permission-check { animation: none; }
+  .permission-choice:active:not(:disabled), .permission-info:active { transform: none; }
+}

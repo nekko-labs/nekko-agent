@@ -110,6 +110,8 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     bridge.setSessionWorkspace = async (_id: string, workspaceId: string) => { record.workspaceId = workspaceId; return { ...record }; };
     bridge.setSessionSupportingWorkspaces = async (_id: string, ids: string[]) => { record.supportingWorkspaceIds = ids; return { ...record }; };
     bridge.setSessionOptions = async (_id: string, patch: any) => { Object.assign(record, patch); return { ...record }; };
+    // A sandbox can shape the chat (messages, privacy, incognito) before it mounts.
+    (window as any).layoutFixture.composerSeed?.(record);
     putCachedSession(record);
     useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], sessions: records.map(summarizeSession), settings: { ...settings }, activeSessionId: record.id, running: new Set() } as any);
     root.render(React.createElement('div', { className: surface === 'window' ? 'wall-composer' : undefined, style: { height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 16 } }, React.createElement(ChatPane, { key: `folders-${cleanStart}-${expert}-${surface}`, sessionId: record.id, cleanStart, surface: surface === 'composer' ? 'composer' : 'full', commandCenter: surface === 'window', header: surface === 'composer' ? React.createElement('span', null, 'Active chat') : undefined })));

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { type RemoteRepo, type RemoteRepoList, type WorkspaceFolder } from '@nekko-agent/shared';
 import { ConnectorIcon } from '../connectorIcons.js';
-import { PlugIcon, SearchIcon } from '../icons.js';
+import { FolderIcon, PlugIcon, SearchIcon } from '../icons.js';
 import { useStore } from '../store.js';
-import { hasRepoProvider } from '../sessionFolders.js';
+import { hasRepoProvider, RepoFolderNeeded } from '../sessionFolders.js';
 
 const PROVIDER_LABEL = { github: 'GitHub', gitlab: 'GitLab' } as const;
 
@@ -17,6 +17,35 @@ export function filterRepos(repos: RemoteRepo[], query: string): RemoteRepo[] {
 /** The saved folder already holding a clone of `repo`, if any. */
 export function savedClone(folders: WorkspaceFolder[], repo: Pick<RemoteRepo, 'provider' | 'fullName'>): WorkspaceFolder | undefined {
   return folders.find((f) => f.repo?.provider === repo.provider && f.repo.fullName.toLowerCase() === repo.fullName.toLowerCase());
+}
+
+/**
+ * Asked once, the first time a repository is not already on this computer:
+ * where repositories sync. The answer is `settings.repoCloneDir`.
+ */
+export function RepoFolderStep({ repo, suggested, onChosen, onCancel }: {
+  repo: string;
+  suggested: string;
+  onChosen: (dir: string) => void;
+  onCancel: () => void;
+}) {
+  const choose = async () => {
+    const dir = await window.nekko.pickFolder();
+    if (dir) onChosen(dir);
+  };
+  return (
+    <div className="px-3 py-2" role="group" aria-label="Where repositories sync">
+      <p className="text-xs font-medium">Where should repositories sync?</p>
+      <p className="mt-1 text-2xs text-ink-faint">{repo} isn&apos;t on this computer yet. Pick a folder for it and the repositories you add later. Settings can change it.</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" className="btn btn-primary flex min-w-0 items-center gap-2 text-xs" onClick={() => onChosen(suggested)} title={suggested}>
+          <FolderIcon className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 truncate">Use {suggested}</span>
+        </button>
+        <button type="button" className="btn btn-ghost text-xs" onClick={() => void choose()}>Choose…</button>
+        <button type="button" className="btn btn-ghost text-xs" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
 }
 
 /** Shown in place of the list when no git provider is connected. */
@@ -48,6 +77,7 @@ export function RepoBrowser({ onPick, onConnect, autoFocus = true }: {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsFolder, setNeedsFolder] = useState<{ repo: RemoteRepo; suggested: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
   // One read on open, then a server search (GitLab searches its own side) a
@@ -76,9 +106,30 @@ export function RepoBrowser({ onPick, onConnect, autoFocus = true }: {
     setBusy(key);
     setError(null);
     onPick(repo)
-      .catch((e) => setError(String(e).replace(/^Error:\s*/, '')))
+      .catch((e) => {
+        if (e instanceof RepoFolderNeeded) setNeedsFolder({ repo, suggested: e.suggested });
+        else setError(String(e).replace(/^Error:\s*/, ''));
+      })
       .finally(() => setBusy(null));
   };
+
+  const saveFolder = async (dir: string) => {
+    const repo = needsFolder?.repo;
+    setNeedsFolder(null);
+    try {
+      await window.nekko.updateSettings({ repoCloneDir: dir });
+      await useStore.getState().refreshSettings();
+    } catch (e) {
+      setError(String(e).replace(/^Error:\s*/, ''));
+      return;
+    }
+    if (repo) pick(repo);
+  };
+
+  if (needsFolder) {
+    return <RepoFolderStep repo={needsFolder.repo.fullName} suggested={needsFolder.suggested}
+      onChosen={(dir) => void saveFolder(dir)} onCancel={() => setNeedsFolder(null)} />;
+  }
 
   const failures = (list?.providers ?? []).filter((p) => p.error);
   return (
@@ -96,7 +147,7 @@ export function RepoBrowser({ onPick, onConnect, autoFocus = true }: {
           const added = savedClone(saved, r);
           return (
             <button key={key} type="button" role="option" aria-selected={false} disabled={!!busy && busy !== key}
-              title={added ? `Already on this computer: ${added.path}` : `Clone ${r.fullName} from ${PROVIDER_LABEL[r.provider]}`}
+              title={added ? `Already on this computer: ${added.path}` : `Add ${r.fullName} from ${PROVIDER_LABEL[r.provider]}: a copy already on this computer is used, otherwise it is cloned`}
               className="flex w-full min-w-0 items-start gap-2 rounded-lg px-3 py-1 text-left hover:bg-surface-2 disabled:opacity-50"
               onClick={() => pick(r)}>
               <span className="mt-0.5 shrink-0"><ConnectorIcon kind={r.provider} size={14} /></span>
@@ -107,7 +158,7 @@ export function RepoBrowser({ onPick, onConnect, autoFocus = true }: {
                 </span>
                 {r.description && <span className="truncate text-2xs text-ink-faint">{r.description}</span>}
               </span>
-              <span className="shrink-0 text-2xs text-ink-faint">{busy === key ? 'Cloning…' : added ? 'On this computer' : ''}</span>
+              <span className="shrink-0 text-2xs text-ink-faint">{busy === key ? 'Adding…' : added ? 'On this computer' : ''}</span>
             </button>
           );
         })}

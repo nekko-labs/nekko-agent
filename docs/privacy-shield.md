@@ -6,7 +6,9 @@ Everything happens on your computer. Nothing is sent to another service to decid
 
 ## Turning it on
 
-In the composer's privacy row, next to **Offline** and **Incognito**, click **Shield** and switch on **Shield this chat**. The dot lights up, and the number beside it is how many values are being replaced.
+On desktop and the Local Web UI, open the composer's **Permissions** menu and select the **Privacy Shield** row. A checkmark on the left means it is enabled. The info button on the right explains the limits and links back to this guide; opening info does not change the setting. Incognito and Internet access have their own rows in the same menu.
+
+In Detailed mode, the composer's existing **Shield** panel also offers **Shield this chat**, previews and category controls. The number beside Shield is how many values are being replaced. Native iOS and Android permission pickers have not gained these desktop rows.
 
 The switch applies to that chat. Its sub-agents inherit it. To shield every chat that has no setting of its own, set `"privacyMode": "redact"` in `settings.json` (a Settings page for this is coming).
 
@@ -29,6 +31,8 @@ The shield only acts when the chat's model is off your computer: Anthropic, Open
 **Your own terms** are the way to make a request generic: add your client's name, a codename or a person's name once, and every shielded chat sends a placeholder instead.
 
 ## Seeing what will be sent
+
+While the shield is on and the chat uses a cloud model, the Shield icon is lit and a faint ring pulses around it. In the message you are writing, each value it will replace is tinted and bracketed, with its placeholder to the right: `[jane@acme.com] → [PII_EMAIL_1]`. The brackets and placeholder are only drawn on screen; they are not part of your message. A value you just typed is marked a moment after you stop typing.
 
 Open the **Shield** panel at any time, on or off, to see:
 

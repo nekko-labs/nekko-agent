@@ -20,7 +20,7 @@ const en: Dict = {
   'nav.design': 'Design',
   'nav.skills': 'Skills',
   'nav.training': 'Training',
-  'nav.workflows': 'Scheduled Tasks',
+  'nav.workflows': 'Automations',
   'nav.models': 'Models',
   'nav.modelserver': 'Model Server',
   'nav.connectors': 'Connectors',

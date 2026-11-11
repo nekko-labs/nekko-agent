@@ -25,7 +25,7 @@ import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
 import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, JobAction, LinuxImageView, RunnerSettings, RunnerView } from './runners.js';
-import type { ConnectorConfig, ConnectorKind, ConnectorResource, DetectedConnectors } from './connectors.js';
+import type { ConnectorConfig, ConnectorKind, ConnectorResource, DetectedConnectors, RepoExclusions } from './connectors.js';
 import type {
   AgentToolId,
   AgentToolStatus,
@@ -165,6 +165,7 @@ export const IpcChannels = {
   chatFillPrompt: 'chat:fillPrompt',
   toolApprove: 'tool:approve',
   chatAnswer: 'chat:answer',
+  chatProvideSecret: 'chat:provideSecret',
   chatPending: 'chat:pending',
   chatRunning: 'chat:running',
 
@@ -221,6 +222,7 @@ export const IpcChannels = {
   workspaceAddByPath: 'workspace:addByPath',
   reposList: 'repos:list',
   reposClone: 'repos:clone',
+  reposSetSandbox: 'repos:setSandbox',
   workspaceRemove: 'workspace:remove',
   workspaceIndex: 'workspace:index',
   workspaceIndexStatus: 'workspace:indexStatus',
@@ -376,6 +378,10 @@ export const IpcChannels = {
   connectorFetch: 'connector:fetch',
   connectorsDetect: 'connectors:detect',
   connectorImportCli: 'connector:importCli',
+  /** Every repository a git connector reaches, removed ones included (#2562). */
+  connectorRepos: 'connector:repos',
+  /** Save which repositories and owners a git connector leaves out (#2562). */
+  connectorExclude: 'connector:exclude',
 
   integrationsDetect: 'integrations:detect',
   integrationsInstall: 'integrations:install',
@@ -488,6 +494,19 @@ export const IpcChannels = {
   syncSetEnabled: 'sync:setEnabled',
   syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
   syncDeleteAll: 'sync:deleteAll',
+  // Nekko Cloud organizations and the shared computer fleet (crates/nekko-cloud).
+  orgList: 'org:list',
+  orgCreate: 'org:create',
+  orgGet: 'org:get',
+  orgInvite: 'org:invite',
+  orgRevokeInvite: 'org:revokeInvite',
+  orgAcceptInvite: 'org:acceptInvite',
+  orgRemoveMember: 'org:removeMember',
+  orgRename: 'org:rename',
+  orgDelete: 'org:delete',
+  fleetSetSharing: 'fleet:setSharing',
+  fleetList: 'fleet:list',
+  fleetStatus: 'fleet:status',
   // Settings > Connections (crates/nekkod/src/connections.rs).
   connectionsStatus: 'connections:status',
   connectionsEvents: 'connections:events',
@@ -630,6 +649,22 @@ export interface NekkoApi {
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncSetIncludeLocalOnly(on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
+  /** Organizations you belong to and invites waiting for you. */
+  orgList(): Promise<import('./cloud.js').OrgList>;
+  /** Create an organization (needs an unlocked account on Pro or Team); this device creates its key. */
+  orgCreate(name: string): Promise<import('./cloud.js').Org>;
+  orgGet(orgId: string): Promise<import('./cloud.js').OrgDetail>;
+  orgInvite(orgId: string, email: string, role?: 'admin' | 'member'): Promise<unknown>;
+  orgRevokeInvite(orgId: string, inviteId: string): Promise<unknown>;
+  orgAcceptInvite(inviteId: string): Promise<unknown>;
+  orgRemoveMember(orgId: string, userId: string): Promise<unknown>;
+  orgRename(orgId: string, name: string): Promise<unknown>;
+  orgDelete(orgId: string): Promise<unknown>;
+  /** Share this computer with an organization, or stop. Off by default. */
+  fleetSetSharing(orgId: string, on: boolean): Promise<import('./cloud.js').FleetSharingResult>;
+  /** The computers shared with an organization, decrypted on this device. */
+  fleetList(orgId: string): Promise<import('./cloud.js').FleetList>;
+  fleetStatus(): Promise<import('./cloud.js').FleetStatus>;
   onCloudStatus(cb: (s: import('./cloud.js').CloudStatus) => void): () => void;
   voiceStatus(): Promise<import('./voice.js').VoiceStatus>;
   voiceInstall(engine?: import('./voice.js').VoiceEngine): Promise<import('./voice.js').VoiceStatus>;
@@ -908,6 +943,13 @@ export interface NekkoApi {
     answers: import('./ask.js').AskAnswer[],
   ): Promise<void>;
   /**
+   * Answer a `request_secret` call from the chat's secret box (#2594): the
+   * value goes to the engine, which sets it for the chat's commands and tells
+   * the agent only that it was given. `null` skips it. Resolves false when
+   * no turn waits on that call any more.
+   */
+  provideSecret(sessionId: string, callId: string, value: string | null): Promise<boolean>;
+  /**
    * Every session currently waiting on a person, keyed by session id. The board
    * reads this on mount so a question asked while it was closed is still there.
    */
@@ -1009,8 +1051,13 @@ export interface NekkoApi {
   removeWorkspace(id: string): Promise<WorkspaceFolder[]>;
   /** Repositories the connected GitHub/GitLab accounts can reach, matching `query`. */
   listRepos(query?: string): Promise<import('./workspace.js').RemoteRepoList>;
-  /** Clone a listed repository onto this computer and save it as a folder. */
-  cloneRepo(repo: Pick<import('./workspace.js').RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>): Promise<import('./workspace.js').RepoCloneResult>;
+  /**
+   * Add a listed repository: the copy already on this computer, else a clone
+   * into the repositories folder; for a sandbox chat (`sessionId`), its sandbox.
+   */
+  cloneRepo(repo: Pick<import('./workspace.js').RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>, opts?: { sessionId?: string }): Promise<import('./workspace.js').RepoCloneResult>;
+  /** A sandbox chat's sandbox repositories, before the sandbox is set up (#2561). */
+  setSandboxRepos(sessionId: string, repos: import('./chat.js').SandboxRepo[]): Promise<Session>;
   indexWorkspace(id: string): Promise<IndexStatus>;
   getIndexStatus(id: string): Promise<IndexStatus | null>;
   searchWorkspace(id: string, query: string): Promise<SearchHit[]>;
@@ -1032,6 +1079,15 @@ export interface NekkoApi {
 
   /** Read a file as text (for the in-app viewer/editor). */
   readFile(path: string): Promise<FileContent>;
+  /**
+   * Serve a local .html page with its folder so it renders with its own
+   * stylesheets, scripts and images (answered by the host, not the engine).
+   * Absent, or rejecting, where nothing can serve it (a relayed browser):
+   * the preview then falls back to the page's text in a scriptless frame.
+   */
+  serveHtmlPreview?(path: string, options: import('./html-preview.js').HtmlPreviewOptions): Promise<import('./html-preview.js').HtmlPreviewServed>;
+  /** Stop serving a page `serveHtmlPreview` returned. */
+  releaseHtmlPreview?(id: string): Promise<void>;
   /** Write text to a file (in-app editor save). */
   writeFile(path: string, content: string): Promise<void>;
   /** List a directory's immediate entries (file explorer). */
@@ -1228,6 +1284,10 @@ export interface NekkoApi {
   detectConnectors(): Promise<DetectedConnectors>;
   /** Connect GitHub with the GitHub CLI's sign-in; the daemon reads the token itself. */
   importConnectorCli(kind: ConnectorKind): Promise<ConnectorConfig[]>;
+  /** Every repository GitHub or GitLab reaches, including the ones removed from the app. */
+  connectorRepos(kind: ConnectorKind): Promise<import('./workspace.js').RemoteRepoList>;
+  /** Replace the repositories and owners a git connector leaves out of Add repository and chat context. */
+  excludeConnectorRepos(kind: ConnectorKind, choice: RepoExclusions): Promise<ConnectorConfig[]>;
 
   /** Which agent CLIs are present and whether Nekko is installed as an MCP subagent. */
   detectAgentTools(): Promise<AgentToolStatus[]>;
