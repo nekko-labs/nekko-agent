@@ -86,7 +86,7 @@ public enum Purpose {
     static let web: Set<String> = webSearch.union(["webfetch", "fetchurl", "fetch", "browser", "browse"])
     static let planTools: Set<String> = ["updateplan", "todowrite", "todoread", "writetodos", "exitplanmode", "enterplanmode", "decide"]
     static let delegateTools: Set<String> = ["spawnagent", "task", "agent", "subagent", "dispatchagent", "delegationtargets"]
-    static let ask: Set<String> = ["askuser", "askuserquestion", "askfollowupquestion"]
+    static let ask: Set<String> = ["askuser", "askuserquestion", "askfollowupquestion", "requestsecret"]
 
     static func isMcp(_ name: String) -> Bool { name.hasPrefix("mcp__") }
 

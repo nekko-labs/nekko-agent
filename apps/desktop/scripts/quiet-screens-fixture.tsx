@@ -47,7 +47,7 @@ Promise.all([
   document.documentElement.dataset.theme = 'dark';
   createRoot(document.getElementById('root')!).render(
     h('main', { style: { display: 'flex', gap: 16, padding: 16, alignItems: 'flex-start', background: 'var(--surface-2)', minHeight: '100vh' } },
-      col('Settings › Security', h(SecuritySettingsView, { status, codes: null, totp: null, pairedPhones: 1, webAuthnBlocked: null, passkeys: true, rpId: 'localhost', onAddKey: () => false, onTotpBegin: noop, onTotpConfirm: noop, onTotpCancel: noop, onCodesSaved: noop, onEnable: noop, onDisable: noop, onRemove: noop, onNewCodes: noop, onCopyCodes: noop })),
+      col('Settings › Security', h(SecuritySettingsView, { status, codes: null, totp: null, pairedPhones: 1, webAuthnBlocked: null, passkeys: true, rpId: 'localhost', onAddKey: () => false, onTotpBegin: noop, onTotpConfirm: noop, onTotpCancel: noop, onCodesSaved: noop, onEnable: noop, onDisable: noop, onRemove: noop, onRename: () => false, onNewCodes: noop, onCopyCodes: noop })),
       col('Models › On this computer', h(ModelLibrary, { providerId: 'local', models, canLoad: true, onChanged: noop, running: true, autoloadIds: new Set(['qwen']) }), 640),
       col('Change review', h('div', { style: { height: 460, margin: -20 } }, h(DiffPane, { sessionId: 's1' })), 420),
     ),

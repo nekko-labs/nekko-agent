@@ -366,6 +366,27 @@ impl Table {
                 Ok(Value::Null)
             }),
         );
+        // #2594: the chat's secret box. The value goes into the chat's secrets
+        // here and nowhere else (no event, log, audit or chat file); the
+        // waiting `request_secret` call only hears that it was given. A null
+        // value is Skip. Not a phone or paired-computer channel.
+        t.add(
+            &["chat:provideSecret"],
+            handler!(|ctx, channel, args| {
+                let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+                let Some(name) = ctx.turns.pending.secret_name(sid, cid) else {
+                    return Ok(json!(false));
+                };
+                let provided = match arg(&args, 2).as_str() {
+                    Some(value) => {
+                        ctx.turns.secrets.for_chat(sid).set(&name, value)?;
+                        true
+                    }
+                    None => false,
+                };
+                Ok(json!(ctx.turns.pending.resolve_secret(sid, cid, provided)))
+            }),
+        );
         t.add(
             &["chat:pending"],
             handler!(|ctx, channel, args| Ok(merge_pending(json!({}), ctx.turns.pending.snapshot()))),
@@ -725,6 +746,7 @@ impl Table {
                     && let Some(id) = args.first().and_then(Value::as_str)
                 {
                     ctx.turns.harness.close(id).await;
+                    ctx.turns.secrets.forget(id);
                 }
                 let closing = channel == "session:delete"
                     || (channel == "session:setOptions"

@@ -24,10 +24,15 @@ describe('command palette settings search', () => {
     expect(matchSettingsPages(query).map((page) => page.group)).toEqual(['customize']);
   });
 
-  it('routes moved controls to Customize without moving operational settings', () => {
-    const moved = ['sidebar-skills', 'sidebar-connectors', 'background-animation', 'language', 'chat-pane-action', 'auto-complete', 'tips', 'warn-before-yolo', 'confirm-deletions', 'close-behavior', 'low-memory', 'agent-activity-animation', 'mascot', 'tray-farewell', 'text-size'];
-    for (const id of moved) expect(SETTINGS_INDEX.find((entry) => entry.id === id)?.group).toBe('customize');
-    expect(SETTINGS_INDEX.filter((entry) => entry.group === 'general').map((entry) => entry.id)).toEqual(['desktop-notifications']);
+  it('keeps the look under Customize, how the app behaves under General and the default chat mode under Safety', () => {
+    const look = ['sidebar-skills', 'sidebar-connectors', 'background-animation', 'agent-activity-animation', 'mascot', 'tray-farewell', 'text-size'];
+    for (const id of look) expect(SETTINGS_INDEX.find((entry) => entry.id === id)?.group).toBe('customize');
+    expect(SETTINGS_INDEX.filter((entry) => entry.group === 'general').map((entry) => entry.id).sort()).toEqual(
+      ['auto-complete', 'chat-pane-action', 'close-behavior', 'confirm-deletions', 'desktop-notifications', 'language', 'low-memory', 'tips'],
+    );
+    expect(SETTINGS_INDEX.find((entry) => entry.id === 'warn-before-yolo')?.group).toBe('safety');
+    expect(matchSettingsPages('chat modes').map((page) => page.group)).toEqual(['safety']);
+    expect(matchSettingsPages('close window').map((page) => page.group)).toEqual(['general']);
     expect(SETTINGS_INDEX.find(entry => entry.id === 'telemetry')?.group).toBe('support');
     expect(matchSettingsPages('github star').map(page => page.group)).toEqual(['support']);
     expect(matchSettingsPages('notifications').map((page) => page.group)).toEqual(['general']);

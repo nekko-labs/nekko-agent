@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { allowModeChange } from './YoloWarning.js';
 import { createPortal } from 'react-dom';
-import { CHAT_MODE_LABEL } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND } from '@nekko-agent/shared';
 import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
   CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getWorkMode, matchSavedMode, newSavedModeId,
@@ -226,6 +226,7 @@ export function ModePanel({
   const [flyStyle, setFlyStyle] = useState<React.CSSProperties>({});
   const anchors = useRef<Partial<Record<Fly, HTMLButtonElement | null>>>({});
   const panel = useRef<HTMLDivElement | null>(null);
+  const flyRef = useRef<HTMLDivElement | null>(null);
   const actions = modePanelActions({ session, isCloudModel, onChange, onSandboxSetup });
   const { modes, current, active, edited } = chatModeState(session, settings);
   const defaultId = defaultSavedMode(settings)?.id;
@@ -235,19 +236,27 @@ export function ModePanel({
   const narrow = typeof window !== 'undefined' && window.innerWidth < 720;
 
   // A flyout sits out the panel's side when there is room, else beside its row.
+  // It is placed from its measured height, so it is re-placed whenever it resizes
+  // (its width lands, the tool list loads, a filter narrows it).
   useLayoutEffect(() => {
     if (!fly || narrow) return;
     const place = () => {
       const a = anchors.current[fly]?.getBoundingClientRect(), p = panel.current?.getBoundingClientRect();
       if (!a || !p) return;
-      const w = 320, vw = window.innerWidth, vh = window.innerHeight;
+      const w = fly === 'tools' ? 380 : 320, vw = window.innerWidth, vh = window.innerHeight;
       const left = p.right + 8 + w <= vw - 8 ? p.right + 8 : a.right + 6 + w <= vw - 8 ? a.right + 6 : Math.max(8, a.left - w - 6);
-      const maxHeight = Math.min(480, vh - 16);
-      setFlyStyle({ left, width: w, maxHeight, top: Math.max(8, Math.min(a.top - 10, vh - maxHeight - 8)) });
+      const maxHeight = vh - 16;
+      // Sit level with the row; only a tall flyout (the tool list) is pushed up to fit.
+      if (flyRef.current) flyRef.current.style.width = `${w}px`; // measure at the final width
+      const h = Math.min(flyRef.current?.offsetHeight ?? 0, maxHeight);
+      const top = Math.max(8, Math.min(a.top - 10, vh - h - 8));
+      setFlyStyle((o) => (o.left === left && o.width === w && o.maxHeight === maxHeight && o.top === top ? o : { left, width: w, maxHeight, top }));
     };
     place();
     window.addEventListener('resize', place);
-    return () => window.removeEventListener('resize', place);
+    const ro = typeof ResizeObserver !== 'undefined' && flyRef.current ? new ResizeObserver(place) : null;
+    if (ro && flyRef.current) ro.observe(flyRef.current);
+    return () => { window.removeEventListener('resize', place); ro?.disconnect(); };
   }, [fly, narrow]);
 
   const toggleFly = (f: Fly) => setFly((o) => (o === f ? null : f));
@@ -284,10 +293,14 @@ export function ModePanel({
     </div>
   );
 
-  const approach: ToolApproach = sandbox ? 'list' : session.toolApproach ?? 'list';
+  // Code mode wraps Nekko's own tools. A Claude Agent chat runs Claude Code's
+  // tools instead, so the engine never applies it there (nekkod turns.rs).
+  const claudeAgent = useStore((s) => s.providers?.find((p) => p.id === session.providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND);
+  const approachLock: ToolApproachLock = sandbox ? 'sandbox' : claudeAgent ? 'claude-agent' : null;
+  const approach: ToolApproach = approachLock ? 'list' : session.toolApproach ?? 'list';
   const flyBody = (f: Fly) => f === 'tools'
     ? <>
-        <ToolApproachPicker approach={approach} sandbox={sandbox} onPick={(a) => void actions.setToolApproach(a)} />
+        <ToolApproachPicker approach={approach} locked={approachLock} onPick={(a) => void actions.setToolApproach(a)} />
         <p className="mode-group">{approach === 'code' ? 'Tools code can call' : 'Tools'}</p>
         <ToolsList session={session} onChange={onChange} tools={tools} />
       </>
@@ -464,7 +477,7 @@ export function ModePanel({
     </div>
 
     {fly && !narrow && createPortal(
-      <div className="mode-fly card fixed z-[101] shadow-(--shadow-float)" style={flyStyle} role="dialog" aria-label={FLY_TITLE[fly][0]} data-mode-panel onKeyDown={onKeyDown}>
+      <div ref={flyRef} className="mode-fly card fixed z-[101] shadow-(--shadow-float)" style={flyStyle} role="dialog" aria-label={FLY_TITLE[fly][0]} data-mode-panel onKeyDown={onKeyDown}>
         <p className="mode-fly-h">{FLY_TITLE[fly][1]} {FLY_TITLE[fly][0]}</p>
         <div className="mode-fly-body">{flyBody(fly)}</div>
       </div>,
@@ -473,16 +486,24 @@ export function ModePanel({
   </>);
 }
 
+/** Why a chat cannot use code mode: its tools run in a sandbox, or Claude Code runs them. */
+export type ToolApproachLock = 'sandbox' | 'claude-agent' | null;
+
+const LOCK_NOTE: Record<NonNullable<ToolApproachLock>, string> = {
+  sandbox: 'Sandbox chats use the tool list: their few tools run in the container.',
+  'claude-agent': "Claude Agent chats run Claude Code's own tools, so code mode doesn't apply and saves nothing. Pick another model to use it.",
+};
+
 /**
  * The Tools flyout's choice of how tools reach the model: a tool list, or
- * code mode (new). A sandbox chat keeps the list.
+ * code mode (new). A sandbox chat and a Claude Agent chat keep the list.
  */
-export function ToolApproachPicker({ approach, sandbox, onPick }: { approach: ToolApproach; sandbox: boolean; onPick: (a: ToolApproach) => void }) {
+export function ToolApproachPicker({ approach, locked = null, onPick }: { approach: ToolApproach; locked?: ToolApproachLock; onPick: (a: ToolApproach) => void }) {
   return (
     <div role="radiogroup" aria-label="How tools reach the model" data-tool-approaches>
       <p className="mode-group">How tools reach the model</p>
       {TOOL_APPROACHES.map((a) => (
-        <button key={a.id} role="radio" aria-checked={approach === a.id} disabled={sandbox} data-tool-approach={a.id} className="mode-opt disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onPick(a.id)}>
+        <button key={a.id} role="radio" aria-checked={approach === a.id} disabled={!!locked} data-tool-approach={a.id} className="mode-opt disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onPick(a.id)}>
           <span className="mode-opt-ic">{a.id === 'code' ? <CodeIcon /> : <ListIcon />}</span>
           <span className="min-w-0 flex-1">
             <span className="mode-t">{a.label}{a.isNew && <span className="mode-badge is-accent">New</span>}{approach === a.id && <CheckIcon className="h-3.5 w-3.5 text-accent" />}</span>
@@ -491,13 +512,17 @@ export function ToolApproachPicker({ approach, sandbox, onPick }: { approach: To
         </button>
       ))}
       <a className="mode-link block" href={CODE_MODE_DOCS} data-code-mode-docs onClick={(e) => { e.preventDefault(); void window.nekko.openPath(CODE_MODE_DOCS); }}>What's code mode, and what does it save? <ExternalIcon className="inline h-2.5 w-2.5" /></a>
-      {sandbox && <p className="mode-note">Sandbox chats use the tool list: their few tools run in the container.</p>}
+      {locked && <p className="mode-note" data-tool-approach-lock={locked}>{LOCK_NOTE[locked]}</p>}
     </div>
   );
 }
 
-/** The Mode button's label: the saved mode this chat is in, or Custom. */
-export function modeButtonLabel(session: Session, settings: Parameters<typeof chatModeState>[1]) {
+/**
+ * The Mode button's label: the saved mode this chat is in, or Custom. A Claude
+ * Agent chat never runs in code mode, so its summary leaves it out.
+ */
+export function modeButtonLabel(session: Session, settings: Parameters<typeof chatModeState>[1], opts: { claudeAgent?: boolean } = {}) {
   const { active, current } = chatModeState(session, settings);
-  return { name: active?.name ?? 'Custom', icon: active ? SAVED_MODE_GLYPH[active.icon] : SparkleIcon, summary: savedModeSummary(current) };
+  const summary = savedModeSummary(opts.claudeAgent ? { ...current, toolApproach: undefined } : current);
+  return { name: active?.name ?? 'Custom', icon: active ? SAVED_MODE_GLYPH[active.icon] : SparkleIcon, summary };
 }

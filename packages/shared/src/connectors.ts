@@ -21,9 +21,20 @@ export interface ConnectorConfig {
   connected: boolean;
   /** Token-based connectors store a token; oauth stores tokens elsewhere. */
   token?: string;
-  /** Free-form per-connector settings (workspace id, channel, etc.). */
-  settings?: Record<string, string>;
+  /** Free-form per-connector settings (workspace id, channel, etc.); a git connector's `RepoExclusions` too. */
+  settings?: Record<string, string | string[]>;
   connectedAt?: number;
+}
+
+/**
+ * What a GitHub or GitLab connector leaves out of Add repository and chat
+ * context (#2562), as lower-case `owner/name` and owner names. Lists of what
+ * is removed, so new repositories show up by default and a removed owner's
+ * new ones stay out. The token's own access is unchanged.
+ */
+export interface RepoExclusions {
+  excludedRepos: string[];
+  excludedOwners: string[];
 }
 
 /** A sign-in found on this computer that a connector can use (`connectors:detect`). */

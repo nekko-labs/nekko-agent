@@ -205,3 +205,48 @@ async fn a_sandbox_chat_turn_runs_in_the_daemon_and_its_container() {
         std::panic::resume_unwind(panic);
     }
 }
+
+/// #2561: a repository already on this computer is reused, none here asks for
+/// the repositories folder first, and a sandbox chat keeps one in its sandbox.
+#[tokio::test(flavor = "multi_thread")]
+async fn repositories_reuse_a_local_clone_ask_for_a_folder_or_stay_in_the_sandbox() {
+    let home = std::env::temp_dir().join(format!("nekkod-repos-home-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    let clone = home.join("code").join("app");
+    std::fs::create_dir_all(clone.join(".git")).unwrap();
+    std::fs::write(clone.join(".git").join("config"), "[remote \"origin\"]\n\turl = git@github.com:me/app.git\n")
+        .unwrap();
+    let home_s = home.to_string_lossy().to_string();
+    let session = json!({ "id": "s_repo", "title": "Repo", "executionMode": "sandbox", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig =
+        turn_rig_env("repos-2561", session, json!({}), &[("HOME", Some(&home_s)), ("USERPROFILE", Some(&home_s))]);
+    write_settings(&rig, json!({ "connectors": [{ "kind": "github", "connected": true, "token": "ghp_test" }] })).await;
+    let pick = |name: &str| json!({ "provider": "github", "fullName": name, "cloneUrl": format!("https://github.com/{name}.git"), "webUrl": "" });
+
+    // Not here, no repositories folder: nothing cloned, the folder is asked for.
+    let (status, asked) = post(rig.d.port, "repos:clone", json!([pick("me/other")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{asked}");
+    assert_eq!(asked["needsFolder"], true, "{asked}");
+    assert!(asked["suggested"].as_str().unwrap().ends_with("nekko-repos"), "{asked}");
+    assert!(!home.join("nekko-repos").exists());
+
+    // Already under ~/code: tagged and added, nothing downloaded.
+    let (status, reused) = post(rig.d.port, "repos:clone", json!([pick("me/app")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{reused}");
+    assert_eq!(reused["reused"], true, "{reused}");
+    assert_eq!(reused["path"], clone.to_string_lossy().as_ref(), "{reused}");
+    let saved = reused["workspaces"].as_array().unwrap();
+    assert!(saved.iter().any(|w| w["repo"]["fullName"] == "me/app"), "{reused}");
+
+    // A sandbox chat: recorded for its sandbox, nothing on this computer.
+    let (status, boxed) =
+        post(rig.d.port, "repos:clone", json!([pick("me/other"), { "sessionId": "s_repo" }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{boxed}");
+    assert_eq!(boxed["sandbox"], true, "{boxed}");
+    assert_eq!(saved_session(&rig, "s_repo")["sandboxRepos"][0]["fullName"], "me/other");
+    assert!(!home.join("nekko-repos").exists());
+    let (status, cleared) = post(rig.d.port, "repos:setSandbox", json!(["s_repo", []]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{cleared}");
+    assert!(saved_session(&rig, "s_repo").get("sandboxRepos").is_none());
+    let _ = std::fs::remove_dir_all(&home);
+}

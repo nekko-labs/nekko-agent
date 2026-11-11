@@ -107,6 +107,37 @@ async fn a_large_output_fills_the_cap_and_is_mirrored_whole() {
     assert!(*log.0.lock().unwrap() >= 20_000 * 12);
 }
 
+/// #2594: a chat secret reaches the command as an environment variable, and
+/// neither the result nor the Agent commands terminal shows its value.
+#[tokio::test]
+async fn a_chat_secret_is_in_the_environment_and_out_of_the_output() {
+    #[derive(Default)]
+    struct Log(Mutex<String>);
+    impl CommandLog for Log {
+        fn append(&self, _s: &str, _w: Option<&str>, data: &str) {
+            self.0.lock().unwrap().push_str(data);
+        }
+    }
+    let secrets = Arc::new(nekko_tools::Secrets::new());
+    secrets.set("NEKKO_TEST_TOKEN", "sk-test-0123456789").unwrap();
+    let mut ctx = context(BashLimits::default());
+    let log = Arc::new(Log::default());
+    ctx.session_id = Some("s".into());
+    ctx.command_log = Some(log.clone());
+    ctx.secrets = Some(secrets);
+    #[cfg(windows)]
+    let cmd = "echo key=%NEKKO_TEST_TOKEN% & echo len-ok";
+    #[cfg(not(windows))]
+    let cmd = "echo key=$NEKKO_TEST_TOKEN; echo len-ok";
+    let res = bash(&ctx, cmd).await;
+    assert!(!res.is_error, "{}", res.output);
+    assert!(res.output.contains("key=[secret NEKKO_TEST_TOKEN]"), "{}", res.output);
+    assert!(!res.output.contains("sk-test"), "{}", res.output);
+    let shown = log.0.lock().unwrap().clone();
+    assert!(shown.contains("[secret NEKKO_TEST_TOKEN]") && shown.contains("len-ok"), "{shown}");
+    assert!(!shown.contains("sk-test"), "{shown}");
+}
+
 #[tokio::test]
 async fn cancelling_stops_the_command() {
     let mut ctx = context(BashLimits::default());

@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ChatMode, McpServerStatus, Session } from '@nekko-agent/shared';
-import { getExecutionMode, groupToolsByCategory, toolAllowedOffline } from '@nekko-agent/shared';
+import { CLAUDE_CODE_PROVIDER_KIND, getExecutionMode, groupToolsByCategory, toolAllowedOffline } from '@nekko-agent/shared';
 import { ModePanel, modeButtonLabel } from './ModePanel.js';
 import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
@@ -327,25 +327,34 @@ export function InternetToggle({ session, onToggle, cloudModel = false }: { sess
   // an already-blocked chat can always be allowed again.
   const locked = cloudModel && !blocked;
   const hint = locked
-    ? 'Internet allowed: this agent uses a cloud model, so it needs internet connectivity. Pick a local model to block internet access.'
+    ? INTERNET_LOCKED_HINT
     : blocked
       ? 'Internet blocked for this agent: online tools are off, local tools still work. Click to allow internet connectivity.'
       : 'Internet allowed for this agent. Click to block internet connectivity (local tools keep working).';
+  // `aria-disabled`, not `disabled`: a disabled button takes no hover, so it
+  // could neither show it is locked nor say why.
   return (
     <button
       type="button"
       className="agent-internet-toggle inline-flex h-6 w-6 items-center justify-center rounded-md"
       data-internet={blocked ? 'blocked' : 'allowed'}
-      aria-label={blocked ? 'Allow internet connectivity for this agent' : 'Block internet connectivity for this agent'}
+      aria-label={locked ? `Internet allowed. ${INTERNET_LOCKED_HINT}` : blocked ? 'Allow internet connectivity for this agent' : 'Block internet connectivity for this agent'}
       aria-pressed={!blocked}
+      aria-disabled={locked || undefined}
       title={hint}
-      disabled={locked}
-      onClick={onToggle}
+      onClick={() => { if (!locked) onToggle(); }}
     >
       {blocked ? <GlobeOffIcon className="h-3.5 w-3.5" /> : <GlobeIcon className="h-3.5 w-3.5" />}
     </button>
   );
 }
+
+/** Why the internet toggle cannot be switched off for a cloud model. */
+export const INTERNET_LOCKED_HINT = 'This cloud model needs an internet connection, so internet stays on. Pick a local model to block it.';
+
+/** Incognito's hover text, on and off. It never carries over to a new chat. */
+export const INCOGNITO_ON_HINT = 'Incognito is on: this chat is not saved and memory is not updated. Turn it off to keep this chat. New chats start without it.';
+export const INCOGNITO_OFF_HINT = "Incognito: don't save this chat or update memory. For this chat only.";
 
 /** A tiny shield glyph for the Hypergate recommendation row. */
 function ShieldSmall() {
@@ -402,6 +411,8 @@ export function ChatControls({
   only?: 'mode' | 'privacy';
 }) {
   const settings = useStore((s) => s.settings);
+  // A Claude Agent chat runs Claude Code's tools, never code mode (see ModePanel).
+  const claudeAgent = useStore((s) => !!session && s.providers?.find((p) => p.id === session.providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND);
   const [modeOpen, setModeOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const modeButton = useRef<HTMLButtonElement>(null);
@@ -445,7 +456,7 @@ export function ChatControls({
   if (!session) return null;
 
   const sandbox = getExecutionMode(session) === 'sandbox';
-  const label = modeButtonLabel(session, settings);
+  const label = modeButtonLabel(session, settings, { claudeAgent });
   const mode: ChatMode = sandbox ? 'ask' : session.mode ?? settings?.defaultChatMode ?? 'guardrails';
   const offline = !!session.offline;
   const incognito = !!session.incognito;
@@ -502,9 +513,9 @@ export function ChatControls({
         {!toolsInWindow && <button
           className="ctl-toggle whitespace-nowrap"
           onClick={() => !isCloudModel && patch({ offline: !offline })}
-          disabled={isCloudModel}
+          aria-disabled={isCloudModel || undefined}
           aria-pressed={offline}
-          title={isCloudModel ? 'Offline mode is only for local models' : 'No internet: local tools only, no online tools, connectors or MCP'}
+          title={isCloudModel ? INTERNET_LOCKED_HINT : 'No internet: local tools only, no online tools, connectors or MCP'}
         >
           <span className="ctl-dot" />
           <PlaneIcon className="h-3 w-3" /> Offline
@@ -513,12 +524,13 @@ export function ChatControls({
         {/* Privacy Shield: what a cloud model may read. */}
         {session.chatType !== 'image' && !hidePrivacy && <PrivacyShieldMenu session={session} draft={draft} onChange={onChange} />}
 
-        {/* Incognito */}
+        {/* Incognito: a warning when on, and for this chat only. */}
         <button
-          className="ctl-toggle ctl-toggle-neutral whitespace-nowrap"
+          className="ctl-toggle ctl-toggle-warning whitespace-nowrap"
+          data-incognito-toggle
           onClick={() => patch({ incognito: !incognito })}
           aria-pressed={incognito}
-          title="Don't save this chat or update memory"
+          title={incognito ? INCOGNITO_ON_HINT : INCOGNITO_OFF_HINT}
         >
           <span className="ctl-dot" />
           <IncognitoIcon className="h-3.5 w-3.5" /> <span className="foot-label">Incognito</span>

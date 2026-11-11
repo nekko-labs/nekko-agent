@@ -1,14 +1,14 @@
 # Automations
 
 An automation is a scheduled task that runs on its own: on a schedule, when something happens in a
-connected app, or when you start it. They live in the **Scheduled Tasks** tab. This page covers the
+connected app, or when you start it. They live in the **Automations** tab, under **Scheduled tasks**. This page covers the
 ready-made ones, how you hear about their runs, and how to stop them all at once. For building
-your own step by step, see the Scheduled Tasks tab's **How scheduled tasks work** strip; for running a repo's
+your own step by step, see the Automations tab's **How scheduled tasks work** strip; for running a repo's
 CI on your machine, see [Local CI runner](git-runner.md).
 
 ## Turn on a ready-made automation
 
-**Scheduled Tasks → New scheduled task** opens on a gallery. If this is your first task, the guide includes a 42-second overview video and a readable transcript: choose an idea, review access, try a manual run, inspect the result, then add a schedule when ready. Watching the video never creates or runs a task. An empty Scheduled Tasks tab shows the same cards.
+**Automations → New scheduled task** opens on a gallery. If this is your first task, the guide includes a 42-second overview video and a readable transcript: choose an idea, review access, try a manual run, inspect the result, then add a schedule when ready. Watching the video never creates or runs a task. An empty Automations tab shows the same cards.
 
 | Automation | When it runs | What it needs |
 |---|---|---|
@@ -85,15 +85,15 @@ Each scheduled task's **Notify me** setting decides when a finished run tells yo
 - **After every run**, for digests, or
 - **Never**.
 
-Clicking a notification opens the Scheduled Tasks tab on that run. Notifications follow
-**Settings → Notifications → Desktop notifications**, and stay quiet while the Scheduled Tasks tab is on
+Clicking a notification opens the Automations tab on that run. Notifications follow
+**Settings → Notifications → Desktop notifications**, and stay quiet while the Automations tab is on
 screen. A run cut short because the app quit is reported as a failure the next time it starts.
 
 Phone notifications for failed runs are not available yet.
 
 ## Pause all automations
 
-The **Pause all automations** switch in the Scheduled Tasks header is the kill switch:
+The **Pause all automations** switch in the Automations header is the kill switch:
 
 - schedules, pull request and push events, Slack messages, connector polls and webhooks start no
   runs, and scheduled tasks (from a chat's **⚡ Automate** menu) wait;
