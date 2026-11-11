@@ -240,5 +240,8 @@ describe('saved modes', () => {
     expect(modeButtonLabel({ ...session, cloudOnly: true }, store.settings)).toMatchObject({ name: 'Cloud only', summary: 'worktree · cloud models' });
     expect(modeButtonLabel({ ...session, cloudOnly: true, disabledTools: ['grep'] }, store.settings).name).toBe('Custom');
     expect(modeButtonLabel(session, store.settings)).toMatchObject({ name: 'Custom', summary: 'worktree' });
+    // A Claude Agent chat never runs in code mode, so its label doesn't claim it.
+    expect(modeButtonLabel({ ...session, toolApproach: 'code' }, store.settings).summary).toContain('code mode');
+    expect(modeButtonLabel({ ...session, toolApproach: 'code' }, store.settings, { claudeAgent: true }).summary).not.toContain('code mode');
   });
 });

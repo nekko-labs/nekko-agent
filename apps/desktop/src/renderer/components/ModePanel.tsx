@@ -517,8 +517,12 @@ export function ToolApproachPicker({ approach, locked = null, onPick }: { approa
   );
 }
 
-/** The Mode button's label: the saved mode this chat is in, or Custom. */
-export function modeButtonLabel(session: Session, settings: Parameters<typeof chatModeState>[1]) {
+/**
+ * The Mode button's label: the saved mode this chat is in, or Custom. A Claude
+ * Agent chat never runs in code mode, so its summary leaves it out.
+ */
+export function modeButtonLabel(session: Session, settings: Parameters<typeof chatModeState>[1], opts: { claudeAgent?: boolean } = {}) {
   const { active, current } = chatModeState(session, settings);
-  return { name: active?.name ?? 'Custom', icon: active ? SAVED_MODE_GLYPH[active.icon] : SparkleIcon, summary: savedModeSummary(current) };
+  const summary = savedModeSummary(opts.claudeAgent ? { ...current, toolApproach: undefined } : current);
+  return { name: active?.name ?? 'Custom', icon: active ? SAVED_MODE_GLYPH[active.icon] : SparkleIcon, summary };
 }
