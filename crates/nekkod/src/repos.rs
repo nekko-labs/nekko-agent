@@ -384,7 +384,7 @@ fn git_clone(plan: &Plan, shallow: bool) -> Result<(), String> {
 
 /// A git failure in plain words, keeping git's own last line.
 fn explain(stderr: &str, origin: &str) -> String {
-    let last = stderr.lines().map(str::trim).filter(|l| !l.is_empty()).last().unwrap_or("git clone failed");
+    let last = stderr.lines().map(str::trim).filter(|l| !l.is_empty()).next_back().unwrap_or("git clone failed");
     let lower = stderr.to_lowercase();
     if lower.contains("authentication failed") || lower.contains("could not read username") || lower.contains("403") {
         format!("{origin} refused the clone: the connector's token may lack access to this repository. ({last})")
