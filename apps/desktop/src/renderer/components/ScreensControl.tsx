@@ -176,6 +176,8 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
   });
   const expanded = useMultiple || state.displays.some(d => !d.main && d.enabled);
   const spaces = state.spaces;
+  // Once the desktop mode is chosen it is a second group of options under "Open new agents".
+  const spacesChosen = !!spaces && spaces.mode !== 'ask';
   const mainDisplay = state.displays.find((d) => d.main) ?? state.displays[0];
   const deskW = 64, deskH = Math.max(36, Math.round(deskW * (mainDisplay ? mainDisplay.bounds.height / mainDisplay.bounds.width : 0.625)));
   const askingDesktop = spaces?.desktops.find((d) => d.id === asking);
@@ -239,6 +241,8 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
       <hr className="screens-picker__divider" />
       <p className="screens-picker__title">Open new agents</p>
       {embedded && state.displays.length < 2 && !spaces && <p className="screens-picker__note screens-placement-note">For when you connect more screens.</p>}
+      {/* Two separate choices: each gets a group label, and a group gap between them. */}
+      {spacesChosen && <p className="quiet-group-label screens-group-label">Across screens</p>}
       <div role="radiogroup" aria-label="Where new agent windows open" className="screens-options">
         {PLACEMENT_OPTIONS.map((o) => <label key={o.key} className="screens-option">
           <input type="radio" name="screens-placement" checked={state.placement === o.key} onChange={() => onPlacement(o.key)} />
@@ -246,11 +250,14 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
         </label>)}
       </div>
       </div></div>
-      {spaces && spaces.mode !== 'ask' && <div role="radiogroup" aria-label="How a desktop is reached" className="screens-options mt-2">
-        {SPACES_OPTIONS.map((o) => <label key={o.key} className="screens-option">
-          <input type="radio" name="screens-spaces-mode" checked={spaces.mode === o.key} onChange={() => onSpacesMode?.(o.key)} />
-          <span><strong>{o.label}</strong><span>{o.hint}</span></span>
-        </label>)}
+      {spacesChosen && <div className="screens-group" data-spaces-group>
+        <p className="quiet-group-label screens-group-label">On another desktop</p>
+        <div role="radiogroup" aria-label="How a desktop is reached" className="screens-options">
+          {SPACES_OPTIONS.map((o) => <label key={o.key} className="screens-option">
+            <input type="radio" name="screens-spaces-mode" checked={spaces.mode === o.key} onChange={() => onSpacesMode?.(o.key)} />
+            <span><strong>{o.label}</strong><span>{o.hint}</span></span>
+          </label>)}
+        </div>
       </div>}
     </div>}
   </div>;
