@@ -148,9 +148,9 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       const rowMenu = async (id: string) => {
         await expandCompleted();
         const row = page.locator(`[data-completed-row=${id}]`);
-        // At the row's centre: the fixed mascot covers the sidebar's bottom-left
-        // corner, where x: 40 lands when the row is the list's last (#1131).
-        await row.click({ button: 'right' });
+        // The sticky group heading intercepts pointer events at narrow widths;
+        // dispatch contextmenu directly (the mascot covered x:40 at #1131).
+        await row.evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
       };
       await rowMenu('project-completed');
       await shot(`completed-menu-${theme}-${width}`);
