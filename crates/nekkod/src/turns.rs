@@ -1751,11 +1751,25 @@ impl Turns {
                 sub_rx,
             ))
         });
+        // Attached files go in the user message: Claude Code builds its own
+        // system prompt, so the engine's context block never reaches it.
+        let command = user.as_ref().and_then(|u| str_at(u, "content")).is_some_and(|s| s.trim_start().starts_with('/'));
+        let (attachments, attached_seen) = if wake || command {
+            (None, Vec::new())
+        } else {
+            claude_attachments(&lock(session), child.spec.session.id())
+        };
         let input = TurnInput {
             content: if wake {
                 None
             } else {
-                user.as_ref().map(|u| claude_turn_content(u, tools.iter().any(|t| t == crate::harness::BRIDGE_TITLE)))
+                user.as_ref().map(|u| {
+                    claude_turn_content(
+                        u,
+                        tools.iter().any(|t| t == crate::harness::BRIDGE_TITLE),
+                        attachments.as_deref(),
+                    )
+                })
             },
             cancel: &shared.cancel,
             steering: &shared.steering,
@@ -1820,6 +1834,17 @@ impl Turns {
                     None => obj.shift_remove("claudeCodeSessionId"),
                 };
                 set_account(obj);
+            }
+            changed = true;
+        }
+        // Remember the files this Claude Code session now holds. A new session
+        // (none, or another id) gets them again on its first turn.
+        if attachments.is_some() {
+            if let Some(obj) = lock(session).as_object_mut() {
+                match &next {
+                    Some(id) => obj.insert(CLAUDE_ATTACHED.into(), json!({ "session": id, "paths": attached_seen })),
+                    None => obj.shift_remove(CLAUDE_ATTACHED),
+                };
             }
             changed = true;
         }
@@ -1914,10 +1939,57 @@ fn claude_title_eligible(session: &Value) -> bool {
 
 /// A context note on the existing user message, not a system flag, extra
 /// message or persisted user edit. Both policy capabilities gate `name_chat`.
-fn claude_turn_content(user: &Value, name_chat: bool) -> Value {
+/// The session key recording which attached files a Claude Code session has
+/// already been given: `{ "session": <Claude Code session id>, "paths": [...] }`.
+const CLAUDE_ATTACHED: &str = "claudeCodeAttached";
+
+/// The chat's attached files that the Claude Code session `cc_session` has not
+/// been given yet, rendered as the engine's context block renders them (same
+/// read limit, same Context Inspector exclusions), and every path that session
+/// will have seen once this block is sent. An engine turn resends attached
+/// files in its system prompt each turn; Claude Code keeps its own history, so
+/// each file goes once per Claude Code session.
+fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec<String>) {
+    let strings = |v: Option<&Value>| -> Vec<String> {
+        v.and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default()
+    };
+    let tracker = session.get(CLAUDE_ATTACHED).filter(|t| str_at(t, "session") == Some(cc_session));
+    let mut seen = strings(tracker.and_then(|t| t.get("paths")));
+    let fresh: Vec<String> = strings(session.get("attachedPaths")).into_iter().filter(|p| !seen.contains(p)).collect();
+    if fresh.is_empty() {
+        return (None, seen);
+    }
+    let excluded = strings(session.pointer("/contextPrefs/excluded")).into_iter().collect();
+    let block = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
+        attached: nekko_context::collect_attached(&fresh),
+        excluded,
+        ..Default::default()
+    }));
+    seen.extend(fresh);
+    (Some(block).filter(|b| !b.trim().is_empty()), seen)
+}
+
+fn claude_turn_content(user: &Value, name_chat: bool, attachments: Option<&str>) -> Value {
     let mut content = nekko_harness::user_content(user);
     // Leave CLI commands such as /compact intact.
-    if !name_chat || str_at(user, "content").is_some_and(|s| s.trim_start().starts_with('/')) {
+    if str_at(user, "content").is_some_and(|s| s.trim_start().starts_with('/')) {
+        return content;
+    }
+    if let Some(block) = attachments {
+        let files = format!("Files the user attached to this chat:\n\n{block}");
+        match &mut content {
+            Value::String(text) if text.trim().is_empty() => *text = files,
+            Value::String(text) => *text = format!("{files}\n\n---\n\n{text}"),
+            Value::Array(blocks) => {
+                let at = blocks.iter().position(|b| str_at(b, "type") == Some("text")).unwrap_or(blocks.len());
+                blocks.insert(at, json!({ "type": "text", "text": files }));
+            }
+            _ => {}
+        }
+    }
+    if !name_chat {
         return content;
     }
     const NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a concise, specific 3-6 word title describing the user's task. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
@@ -3439,8 +3511,8 @@ mod tests {
     #[test]
     fn claude_naming_note_uses_only_the_existing_user_content() {
         let user = json!({ "content": "Fix the login form" });
-        assert_eq!(claude_turn_content(&user, false), user["content"]);
-        let named = claude_turn_content(&user, true);
+        assert_eq!(claude_turn_content(&user, false, None), user["content"]);
+        let named = claude_turn_content(&user, true, None);
         let text = named.as_str().unwrap();
         assert!(text.starts_with("Fix the login form\n\n"));
         assert!(text.contains("mcp__nekko_bridge__set_chat_title"));
@@ -3449,11 +3521,65 @@ mod tests {
         assert_eq!(user["content"], "Fix the login form");
         let image = json!({ "content": "Fix this", "images": ["data:image/png;base64,AAAA"] });
         let original = nekko_harness::user_content(&image);
-        let named = claude_turn_content(&image, true);
+        let named = claude_turn_content(&image, true, None);
         assert_eq!(named[0], original[0]);
         assert_eq!(named[1], original[1]);
         assert!(named[2]["text"].as_str().unwrap().contains("Nekko chat naming note"));
-        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true), json!("/compact"));
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true, None), json!("/compact"));
+    }
+
+    #[test]
+    fn claude_turns_carry_attached_files_once_per_claude_code_session() {
+        let dir = std::env::temp_dir().join(format!("nekkod-claude-attach-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let notes = dir.join("notes.txt");
+        let other = dir.join("other.md");
+        std::fs::write(&notes, "the quarterly numbers").unwrap();
+        std::fs::write(&other, "second file").unwrap();
+        let (notes, other) = (notes.to_string_lossy().to_string(), other.to_string_lossy().to_string());
+
+        // A first turn gets the file's contents ahead of what the user typed.
+        let mut session = json!({ "attachedPaths": [notes] });
+        let (block, seen) = claude_attachments(&session, "cc1");
+        let block = block.expect("a new attachment is sent");
+        assert!(block.contains("the quarterly numbers"));
+        assert_eq!(seen, vec![notes.clone()]);
+        let text = claude_turn_content(&json!({ "content": "Summarize it" }), false, Some(&block));
+        let text = text.as_str().unwrap();
+        assert!(text.starts_with("Files the user attached to this chat:"));
+        assert!(text.ends_with("Summarize it"));
+
+        // A file-only message still says something.
+        let alone = claude_turn_content(&json!({ "content": "" }), false, Some(&block));
+        assert!(alone.as_str().unwrap().contains("the quarterly numbers"));
+
+        // With a photo, the files sit before the user's text, after the image.
+        let image = json!({ "content": "And this", "images": ["data:image/png;base64,AAAA"] });
+        let with_image = claude_turn_content(&image, false, Some(&block));
+        assert_eq!(with_image[0]["type"], "image");
+        assert!(with_image[1]["text"].as_str().unwrap().contains("the quarterly numbers"));
+        assert_eq!(with_image[2]["text"], "And this");
+
+        // A CLI command is left alone.
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), false, Some(&block)), json!("/compact"));
+
+        // The same Claude Code session is not sent it again; only the new file goes.
+        session["claudeCodeAttached"] = json!({ "session": "cc1", "paths": seen });
+        assert_eq!(claude_attachments(&session, "cc1").0, None);
+        session["attachedPaths"] = json!([notes, other]);
+        let (block, seen) = claude_attachments(&session, "cc1");
+        let block = block.unwrap();
+        assert!(block.contains("second file") && !block.contains("the quarterly numbers"));
+        assert_eq!(seen, vec![notes.clone(), other.clone()]);
+
+        // A different Claude Code session (a fresh start) gets everything again.
+        let (block, _) = claude_attachments(&session, "cc2");
+        assert!(block.unwrap().contains("the quarterly numbers"));
+
+        // A file excluded in the Context Inspector is not sent.
+        session["contextPrefs"] = json!({ "excluded": [format!("file:{notes}"), format!("file:{other}")] });
+        assert_eq!(claude_attachments(&session, "cc2").0, None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

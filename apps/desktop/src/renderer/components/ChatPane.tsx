@@ -15,7 +15,7 @@ import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
 import { chatPaneSettings, initialChatBrain } from './ChatPane.settings.js';
 import { BranchIcon, ChevronDownIcon, ChevronUpIcon, CopyIcon, ControlPanelIcon, PhotoIcon, FileIcon, FolderIcon, WandIcon } from '../icons.js';
-import { attachmentName, pastedFileName, planAttachment, unreadableNote } from '../composerAttachments.js';
+import { attachmentName, attachmentOnlyText, pastedFileName, planAttachment, unreadableNote } from '../composerAttachments.js';
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
 import { revealEditorCaret } from './agent-console/editorCaret.js';
@@ -646,7 +646,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const setVoiceDraft = (next: string) => { voiceDraft.current = next; setDraft(next); };
   const voiceSend = useRef<(text: string, admitted: () => void) => Promise<unknown>>(async () => false);
   // Attachments go with the voice send, so they are cleared once it really sent.
-  const [voice] = useState(() => voiceComposer({ get: () => voiceDraft.current, set: setVoiceDraft, send: (text, admitted) => voiceSend.current(text, admitted), sent: () => { setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); } }));
+  const [voice] = useState(() => voiceComposer({ get: () => voiceDraft.current, set: setVoiceDraft, send: (text, admitted) => voiceSend.current(text, admitted), sent: () => { setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); setFreshPaths([]); } }));
   // What the draft implies (the analyzer, Auto's pick, the gauge's draft
   // count) renders from this, one step behind the keystroke, so
   // a keypress paints the textarea before any of that work runs.
@@ -698,6 +698,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Files pasted or picked whose bytes the model will not read (a PDF, a photo
   // for a text-only model) still show in the strip, with the reason.
   const [attachmentNotes, setAttachmentNotes] = useState<Record<string, string>>({});
+  // Files attached since the last send. The chat keeps every attached file as
+  // context, but only these make a message worth sending on their own.
+  const [freshPaths, setFreshPaths] = useState<string[]>([]);
   // The context panel toggle lives in the store so the ⌘\ shortcut and the
   // command palette's "Toggle context panel" act on this pane too.
   const ctxOpen = useStore((s) => s.contextPanelOpen);
@@ -1730,9 +1733,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const input = override ?? draft;
     if (imageMode) return input.trim() ? sendImage(input.trim(), override === undefined, admitted) : false;
     const skill = activeSkill;
-    const text = wrap([skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n'));
     const images = pendingImages;
     const videos = pendingVideos;
+    // A file sent on its own still says what it is.
+    const typed = input.trim() || (images.length || videos.length || override !== undefined ? '' : attachmentOnlyText(freshPaths));
+    const text = wrap([skill ? skill.template.trimEnd() : '', typed].filter(Boolean).join('\n\n'));
     if (!text.trim() && images.length === 0 && videos.length === 0 && !skill) return false;
     // A follow-up never interrupts work by accident. Queue the same payload the
     // turn would have sent so attachments and skills run when their turn arrives.
@@ -1779,7 +1784,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       // the reason is shown once per turn that actually moves providers.
       useStore.getState().pushToast('info', pick.reason);
     }
-    if (override === undefined) { setDraft(''); setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); clearDraft(sessionId); }
+    if (override === undefined) { setDraft(''); setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); setFreshPaths([]); clearDraft(sessionId); }
     setActiveSkill(null);
     beginTurn(true);
     setSession((prev) =>
@@ -1831,11 +1836,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Queue the draft to run after the current reply (and any earlier queued
   // items). Useful for lining up follow-ups while an agent is working.
   const queueDraft = async (wrap: (text: string) => string = (t) => t) => {
-    const typed = draft.trim();
-    const text = typed ? wrap(typed) : typed;
     const images = pendingImages;
     const videos = pendingVideos;
     const skill = activeSkill;
+    const typed = draft.trim() || (images.length || videos.length ? '' : attachmentOnlyText(freshPaths));
+    const text = typed ? wrap(typed) : typed;
     if (!text && images.length === 0 && videos.length === 0 && !skill) return;
     const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(text, images, skill, videos));
     if (!updated) return;
@@ -1843,6 +1848,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     setPendingImages([]);
     setPendingVideos([]);
     setAttachmentNotes({});
+    setFreshPaths([]);
     setActiveSkill(null);
     clearDraft(sessionId);
     setSession(updated);
@@ -2288,6 +2294,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       for (const p of paths) if (p.note) out[p.path] = p.note;
       return out;
     });
+    setFreshPaths((cur) => Array.from(new Set([...cur, ...paths.map((p) => p.path)])));
     setSession(await window.nekko.getSession(session.id));
     refreshCtx();
   };
@@ -2383,6 +2390,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const chat = useStore.getState().sessions.find((x) => x.id === sessionId) ?? session;
     await window.nekko.setSessionAttachments(session.id, (chat.attachedPaths ?? []).filter((p) => p !== path));
     setAttachmentNotes((cur) => { const out = { ...cur }; delete out[path]; return out; });
+    setFreshPaths((cur) => cur.filter((p) => p !== path));
     setSession(await window.nekko.getSession(session.id));
     refreshCtx();
   };
@@ -2474,7 +2482,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Auto mode: the model the next message will actually run on. Shown whether or
   // not anything is typed yet - "Auto" alone tells you nothing, and the pick
   // moves as you type, which is exactly what's worth watching.
-  const hasComposerPayload = !!draft.trim() || pendingImages.length > 0 || pendingVideos.length > 0 || !!activeSkill;
+  const hasComposerPayload = !!draft.trim() || pendingImages.length > 0 || pendingVideos.length > 0 || freshPaths.length > 0 || !!activeSkill;
   const composerStops = streaming && !hasComposerPayload;
 
   // Read from the deferred draft, like the analyzer and the plan rail below:
