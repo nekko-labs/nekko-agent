@@ -33,6 +33,7 @@ pub const RUN_CODE: &str = "run_code";
 /// Tools that stay direct calls in code mode.
 pub const DIRECT: &[&str] = &[
     "ask_user",
+    "request_secret",
     "update_plan",
     "set_chat_title",
     "complete_session",

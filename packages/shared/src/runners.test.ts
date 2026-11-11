@@ -108,7 +108,7 @@ describe('runner helpers', () => {
     const job = { repo: 'nekko-labs/nekko-agent', runId: 1, jobId: 2, workflow: 'ios-native', job: 'PR #904' };
     const v = view({ available: 1, limit: 'otherApps', state: 'running', slots: [slot('running', { job, since: now - 360 })] }, { macosSlots: 2, maxJobMinutes: 120 });
     expect(slotLines(v, now)).toEqual([
-      { title: 'Slot 1 · macOS', text: 'ios-native · PR #904 · 6 min', active: true, dim: false },
+      { title: 'Slot 1 · macOS', text: 'ios-native · PR #904 · 6 min', active: true, dim: false, busy: true },
       { title: 'Slot 2 · macOS', text: 'Not available: Another app is running a macOS VM.', active: false, dim: true },
     ]);
 

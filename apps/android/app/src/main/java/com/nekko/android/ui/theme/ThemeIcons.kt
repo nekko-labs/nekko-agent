@@ -2,6 +2,7 @@ package com.nekko.android.ui.theme
 
 import androidx.annotation.DrawableRes
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import com.nekko.android.R
 
 /**
@@ -55,12 +56,25 @@ object ThemeIcons {
     fun of(preset: ThemePreset?): Int? = preset?.let { p -> p.family?.let(byFamily::get) ?: byId[p.id] }
 
     /**
-     * The icon's colour: the theme's accent (or the computer's, for that row)
-     * when it reads on [background] at 3:1, else the theme's own page colour
-     * when that does (a dark theme's light accent on a light phone), else [fallback].
+     * The icon's colour: the theme's accent (or the computer's, for that row) when it
+     * reads on [background] at 3:1. A pale accent on a light phone (or a deep one on a
+     * dark phone) gives way to the theme's own page colour when that is a colour of its
+     * own (Blueberry Dark's navy), else to the accent deepened toward black (or lightened
+     * toward white) until it reads, keeping its hue as the desktop's light accents do.
+     * Same rule as ThemeIcons.swift.
      */
-    fun tint(preset: ThemePreset?, accent: Long?, background: Color, fallback: Color): Color =
-        listOfNotNull(accent ?: preset?.accent, preset?.paper)
-            .map { Color(it) }
-            .firstOrNull { contrast(it, background) >= 3f } ?: fallback
+    fun tint(preset: ThemePreset?, accent: Long?, background: Color, fallback: Color): Color {
+        val a = (accent ?: preset?.accent)?.let { Color(it) } ?: return fallback
+        if (contrast(a, background) >= 3f) return a
+        preset?.paper?.let { Color(it) }?.takeIf { it.isChromatic() && contrast(it, background) >= 3f }?.let { return it }
+        val toward = if (background.luminance() > 0.5f) Color.Black else Color.White
+        return (1..10).map { mix(a, toward, it / 10f) }.firstOrNull { contrast(it, background) >= 3f } ?: fallback
+    }
+
+    /** A colour rather than a near-black or near-white: its channels spread at least 0x30. */
+    private fun Color.isChromatic() = maxOf(red, green, blue) - minOf(red, green, blue) >= 0x30 / 255f
+
+    /** Straight sRGB blend, as iOS does it. */
+    private fun mix(a: Color, b: Color, f: Float) =
+        Color(red = a.red + (b.red - a.red) * f, green = a.green + (b.green - a.green) * f, blue = a.blue + (b.blue - a.blue) * f)
 }

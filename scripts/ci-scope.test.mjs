@@ -117,14 +117,15 @@ test('a change only to the native phone apps skips build', () => {
 test('CodeQL analyses the languages a change is in', () => {
   const langs = (files, labels = [], event = 'pull_request') => codeqlLanguages({ event, files, labels });
   assert.deepEqual(langs(['apps/ios/UITests/ComputersTests.swift']), []);
-  assert.deepEqual(langs(['apps/ios/UITests/ComputersTests.swift'], ['deploy:ios']), ['swift']);
+  // Swift runs nightly only (macOS runners are scarce), even with deploy:ios.
+  assert.deepEqual(langs(['apps/ios/UITests/ComputersTests.swift'], ['deploy:ios']), []);
   assert.deepEqual(langs(['apps/desktop/src/renderer/App.tsx', 'scripts/x.mjs']), ['javascript-typescript']);
   assert.deepEqual(langs(['crates/nekkod/src/main.rs', 'Cargo.lock']), ['rust']);
   assert.deepEqual(langs(['scripts/perf/plot.py', '.github/workflows/android-native.yml']), ['actions', 'python']);
   assert.deepEqual(langs(['docs/guide.md', 'spec/README.md']), []);
-  // Unknown or CI changes: every Linux language, Swift too with deploy:ios on a PR.
+  // Unknown or CI changes: every Linux language, never Swift on a PR.
   assert.deepEqual(langs([]), ['actions', 'javascript-typescript', 'python', 'rust']);
-  assert.deepEqual(langs(['.github/workflows/codeql.yml'], ['deploy:ios']), ['actions', 'javascript-typescript', 'python', 'rust', 'swift']);
+  assert.deepEqual(langs(['.github/workflows/codeql.yml'], ['deploy:ios']), ['actions', 'javascript-typescript', 'python', 'rust']);
   assert.deepEqual(langs(['README.md'], [], 'schedule'), ['actions', 'javascript-typescript', 'python', 'rust', 'swift']);
 });
 

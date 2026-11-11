@@ -58,6 +58,8 @@ Each reply made in code mode shows an estimate on its stats line, for example *�
 
 For a sense of scale: with no MCP servers, Nekko Agent's own tools take about 2,660 tokens of definitions on every model call as a list, and about 1,860 in code mode, so a 10-call reply saves about 8,000 tokens on definitions alone. Each MCP server adds its whole schema to the list but only one index line to code mode, so the gap grows with every server you connect. The bigger saving is often results: a script that reads twenty files and returns a count sends the model a number, not twenty files.
 
+For the whole chat, hover the cost chip under the message box: **Saved by code mode · this chat** adds up every code-mode reply's estimate (net, so a reply where code mode cost more counts against the total) and says how many replies it covers. If the total comes out behind, it reads **Code mode cost · this chat** instead.
+
 The figures are estimates at about 4 characters a token, the same rule the Context Inspector uses. They are not your provider's billed counts. If code mode costs more than a tool list on a reply (a very short tool list, or a single small call), the line shows nothing and the hover says by how much.
 
 ## When to use the tool list instead

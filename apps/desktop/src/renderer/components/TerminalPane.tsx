@@ -149,6 +149,9 @@ async function pasteClipboard(term: TermSurface): Promise<void> {
   term.focus();
 }
 
+/** Embedded terminals that have taken focus once (see `TerminalPane`'s `embedded`). */
+const embeddedFocused = new Set<string>();
+
 interface Mounted {
   term: TermSurface;
   fit: { fit(): void };
@@ -219,7 +222,12 @@ function MenuRow({ label, hint }: { label: string; hint?: string }) {
   );
 }
 
-export function TerminalPane({ terminalId }: { terminalId: string }) {
+/**
+ * `embedded`: drawn inside something that names the terminal itself (a chat's
+ * code block, #2595), so no header of its own, and it takes focus only on the
+ * first mount after a Run, never when a scrolled transcript remounts it.
+ */
+export function TerminalPane({ terminalId, embedded = false }: { terminalId: string; embedded?: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [info, setInfo] = useState<TerminalInfo | null>(null);
   const liveInfo = useStore((s) => s.terminals.find((t) => t.id === terminalId));
@@ -244,7 +252,8 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
       termRef.current = term;
       cleanups.push(() => { if (termRef.current === term) termRef.current = null; });
       try { fit.fit(); } catch { /* not laid out yet */ }
-      term.focus();
+      if (!embedded || !embeddedFocused.has(terminalId)) term.focus();
+      if (embedded) embeddedFocused.add(terminalId);
 
       // Clipboard keys (see terminalClipboard.ts). The app has no Edit menu on
       // Windows/Linux, so nothing else copies a terminal selection. The default
@@ -368,7 +377,7 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
       // Last in, first out: listeners and sockets before the terminal itself.
       cleanups.reverse().forEach((fn) => fn());
     };
-  }, [terminalId, prefer]);
+  }, [terminalId, prefer, embedded]);
 
   // Inside a workspace the frame already draws the window's title strip, so the
   // cwd line rides in that one bar instead of stacking a second bar (and a
@@ -400,7 +409,7 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-      {!terminalId.startsWith('agent_') && (liveInfo || info) ? <TerminalContext terminal={liveInfo || info!} /> : framed ? (
+      {embedded ? null : !terminalId.startsWith('agent_') && (liveInfo || info) ? <TerminalContext terminal={liveInfo || info!} /> : framed ? (
         <PaneActions>{status}</PaneActions>
       ) : (
         <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1">{status}</div>

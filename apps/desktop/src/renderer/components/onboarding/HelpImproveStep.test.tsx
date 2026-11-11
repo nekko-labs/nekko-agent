@@ -28,7 +28,7 @@ describe('Help improve Nekko Agent', () => {
     const tree = UsageReportsSection({ settings: {} as never, update });
     const html = renderToStaticMarkup(tree);
     expect(html).toContain('Help improve Nekko Agent');
-    const toggle = (tree.props.children[0].props.children[1]) as React.ReactElement<{ onChange: (v: boolean) => void }>;
+    const toggle = tree.props.actions as React.ReactElement<{ onChange: (v: boolean) => void }>;
     toggle.props.onChange(true);
     expect(update.mock.calls[0][0].telemetry.enabled).toBe(true);
     expect(update.mock.calls[0][0].telemetry.installId).toBeTruthy();

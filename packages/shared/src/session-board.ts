@@ -64,7 +64,8 @@ export function sessionLane(input: {
   messages?: ChatMessage[];
   stalled?: boolean;
 }): { lane: SessionLane; blocked?: BlockedReason } {
-  if (input.pending?.question) return { lane: 'needs-you', blocked: 'question' };
+  // A secret the agent asked for (#2594) waits on the user's answer as a question does.
+  if (input.pending?.question || input.pending?.secret) return { lane: 'needs-you', blocked: 'question' };
   if (input.pending?.approval) return { lane: 'needs-you', blocked: 'approval' };
   // Running outranks a stalled *earlier* turn: a chat that is working again has
   // moved past whatever stopped it, and reading it as blocked would park a live

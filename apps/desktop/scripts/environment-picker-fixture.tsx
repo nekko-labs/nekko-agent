@@ -25,11 +25,14 @@ const repos = [
 ];
 const connected = [{ kind: 'github', connected: true, token: 'synthetic-secret-never-render' }, { kind: 'gitlab', connected: true, token: 'synthetic-secret-never-render' }];
 const calls: unknown[] = [];
+let syncFolder = '';
 
 Object.assign(window, { nekko: {
   listRepos: async (query: string) => { calls.push({ listRepos: query }); return { repos, providers: [{ kind: 'github' }, { kind: 'gitlab' }] }; },
   cloneRepo: async (r: { fullName: string }) => {
     calls.push({ cloneRepo: r.fullName });
+    // #2561: no copy here and no repositories folder yet, so the list asks where they sync.
+    if (!syncFolder) return { needsFolder: true, suggested: '/Users/alex/nekko-repos' };
     await new Promise((resolve) => setTimeout(resolve, 60000));
     return { workspaces, folderId: null, path: '' };
   },
@@ -39,7 +42,7 @@ Object.assign(window, { nekko: {
   addWorkspaceByPath: async () => workspaces,
   removeWorkspace: async () => workspaces,
   getSession: async () => null,
-  updateSettings: async () => ({}),
+  updateSettings: async (patch: { repoCloneDir?: string }) => { calls.push({ updateSettings: patch }); syncFolder = patch.repoCloneDir ?? syncFolder; return {}; },
 } });
 
 const setConnected = (on: boolean) => useStore.setState((s) => ({ settings: { ...(s.settings as object), connectors: on ? connected : [] } as never }));
@@ -81,6 +84,14 @@ function Fixture() {
       <span className="text-xs text-ink-faint">Composer</span>
       <div className="composer-folders min-w-0">
         <FolderPicker sessionId="s1" session={null} onChange={() => {}} selectedSummary />
+      </div>
+    </div>
+    {/* #2561: a sandbox chat whose repository lives in its sandbox. */}
+    <div className="card" data-fixture-sandbox style={{ maxWidth: 640, padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span className="text-xs text-ink-faint">Sandbox chat</span>
+      <div className="composer-folders min-w-0">
+        <FolderPicker sessionId="s1" onChange={() => {}} selectedSummary session={{ id: 's1', title: 'Try the migration', executionMode: 'sandbox', workspaceId: 'ws_notes',
+          sandboxRepos: [{ provider: 'github', fullName: 'acme/billing-service', cloneUrl: 'https://github.com/acme/billing-service.git', webUrl: '' }] } as never} />
       </div>
     </div>
   </main>;
