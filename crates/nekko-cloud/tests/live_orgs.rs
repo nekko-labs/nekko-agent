@@ -128,7 +128,11 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
 
     // A shares this computer: it is listed for B with its name, OS and models.
     let shared = call(&a, "fleet:setSharing", json!([org_id, true])).await.unwrap();
-    assert_eq!((shared["sharing"].as_bool(), shared["state"].as_str()), (Some(true), Some("online")), "fleet sharing state");
+    assert_eq!(
+        (shared["sharing"].as_bool(), shared["state"].as_str()),
+        (Some(true), Some("online")),
+        "fleet sharing state"
+    );
     let list = call(&b, "fleet:list", json!([org_id])).await.unwrap();
     assert_eq!(list["orgKeyId"], 1);
     assert_eq!(list["rejected"], 0);
@@ -239,7 +243,11 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
             .clone();
     let after = call(&b, "org:removeMember", json!([org_id, their_id])).await.unwrap();
     assert!(after.get("keyError").is_none(), "org state after member removal");
-    assert_eq!((after["keyId"].as_u64(), after["hasKey"].as_bool()), (Some(2), Some(true)), "org key after member removal");
+    assert_eq!(
+        (after["keyId"].as_u64(), after["hasKey"].as_bool()),
+        (Some(2), Some(true)),
+        "org key after member removal"
+    );
     assert_eq!(after["members"].as_array().unwrap().len(), 1);
     assert_eq!(call(&cdev, "org:list", json!([])).await.unwrap()["orgs"].as_array().unwrap().len(), 0);
 
