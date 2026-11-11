@@ -22,6 +22,11 @@ app.whenReady().then(async () => {
     await sleep(2500);
     report.rows = JSON.parse(await run(`JSON.stringify([...document.querySelectorAll('[data-method]')].map(r => r.querySelector('.font-medium')?.textContent))`));
     await shot('step-up-names');
+    // Row actions show on hover: renderer input, not OS input.
+    const r = JSON.parse(await run(`JSON.stringify((() => { const b = document.querySelector('[data-method="totp"]').getBoundingClientRect(); return { x: b.left + 40, y: b.top + b.height / 2 }; })())`));
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(r.x), y: Math.round(r.y) });
+    await sleep(400);
+    await shot('step-up-names-hover');
     // A DOM click, not OS input: the base branch has no Rename, so this only opens on the change.
     report.renameOpened = await run(`(() => { const b = [...document.querySelectorAll('[data-method="totp"] button')].find(x => x.textContent.trim() === 'Rename'); if (!b) return false; b.click(); return true; })()`);
     if (report.renameOpened) {
