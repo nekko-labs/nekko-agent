@@ -33,6 +33,15 @@ describe('Settings > Connections', () => {
     expect(html).toContain('no usage or crash reports unless you turn them on');
   });
 
+  it('centres every row switch on its text, like All connections off (#2397)', () => {
+    const html = renderToStaticMarkup(<ConnectionsSettings settings={{} as AppSettings} update={() => {}} />);
+    for (const c of CONNECTIONS) {
+      const row = html.split(`data-connection="${c.id}"`)[1].split('role="switch"')[0];
+      expect(row).toContain('items-center');
+      expect(row).not.toContain('items-start');
+    }
+  });
+
   it('All connections off saves the switch and greys every row', () => {
     const { list, update } = toggles({} as AppSettings);
     list[0].props.onChange(true);
