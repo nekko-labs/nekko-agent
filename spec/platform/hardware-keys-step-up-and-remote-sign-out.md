@@ -47,6 +47,8 @@ The name is typed before the kind is picked, so the field holds what the owner t
 
 At least **two** methods must be registered before step-up can be turned on (a security key and a TOTP, or two keys), so a lost key never locks the owner out of their own computer. The desktop warns, not refuses, when the second method is TOTP on the same phone that is being protected.
 
+Settings → Security on the desktop and Local Web UI says what a step-up is in its one intro line (*a second check before risky actions: a security key, a passkey or a one-time code*), so the term is never used before it is defined (#2392). Until two methods are registered, **Turn on** looks disabled as well as being disabled, the *Require a step-up* title goes faint, and the line under it says how many more methods to add; the button points screen readers at that line (#2393). The phones do not offer the switch (it is turned on at the computer), and their Security screens already say what turning it on does. `[implemented 2026-11-11, #2392 #2393; markup unit-tested, the disabled look checked in screenshots]`
+
 ### Asking for it
 
 A guarded action opens the step-up sheet: *Confirm with your security key* (touch it, or hold it to the top of the phone for NFC), a **Use a code** fallback, and the action's name and target in plain words (*Switch "Refactor auth" to YOLO on Philip's Mac Studio*). One confirmation covers **five minutes** on that surface for the same class of action, the same window the Change signer already uses, so raising three chats to Guardrails is one touch. The desktop sheet says which key answered (by its registered name). Cancel leaves everything as it was.

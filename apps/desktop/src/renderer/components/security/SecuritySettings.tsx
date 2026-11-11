@@ -234,7 +234,9 @@ export function SecuritySettingsView(p: {
           </span>
         )}
       </div>
-      <p className="mt-(--q-tight) text-xs text-ink-faint">Ask for a key, a passkey or a code before risky actions. This computer checks every answer itself.</p>
+      <p className="mt-(--q-tight) text-xs text-ink-faint">
+        A step-up is a second check before risky actions: a security key, a passkey or a one-time code. This computer checks every answer itself.
+      </p>
       <details className="mt-(--q-tight) text-xs text-ink-faint">
         <summary className="w-fit cursor-pointer transition-colors duration-(--dur-fast) hover:text-ink">Which actions</summary>
         <p className="mt-(--q-tight)">
@@ -374,8 +376,9 @@ export function SecuritySettingsView(p: {
           <div className="quiet-group-label mb-(--q-heading)">When to ask</div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium">Require a step-up</div>
-              <p className="mt-(--q-tight) text-xs text-ink-faint">
+              {/* Blocked: the title goes faint and the reason, in words, is the detail (design system; #2393). */}
+              <div className={`text-sm font-medium ${!s.enabled && blocker ? 'text-ink-faint' : ''}`}>Require a step-up</div>
+              <p id="security-step-up-state" className={`mt-(--q-tight) text-xs ${!s.enabled && blocker ? 'text-ink-soft' : 'text-ink-faint'}`}>
                 {s.enabled ? 'On. One confirmation covers the same kind of action for five minutes.' : blocker ?? 'Two methods are registered: you can turn it on.'}
               </p>
               {!s.enabled && !blocker && warning && <p className="mt-(--q-tight) text-xs text-warning-text">{warning}</p>}
@@ -393,7 +396,12 @@ export function SecuritySettingsView(p: {
                 Turn off…
               </button>
             ) : (
-              <button className="btn btn-primary py-1 text-xs" onClick={p.onEnable} disabled={p.busy || !!blocker}>
+              <button
+                className="btn btn-primary py-1 text-xs"
+                onClick={p.onEnable}
+                disabled={p.busy || !!blocker}
+                aria-describedby={blocker ? 'security-step-up-state' : undefined}
+              >
                 Turn on
               </button>
             )}
