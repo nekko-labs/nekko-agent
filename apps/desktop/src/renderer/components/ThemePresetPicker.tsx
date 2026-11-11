@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { AppSettings } from '@nekko-agent/shared';
 import { findThemePreset } from '@nekko-agent/shared';
 import { useT } from '../i18n.js';
-import { MoonIcon, SunIcon } from '../icons.js';
+import { ChevronDownIcon, MoonIcon, SunIcon } from '../icons.js';
 import { resolveThemeAppearance, themeModePatch, themePaletteDefaults, themePalettePatch } from '../themeMode.js';
 import { THEME_ICON, ThemeIcon } from '../theme-icons.js';
 import { ColorWheel } from './ColorWheel.js';
@@ -62,9 +62,9 @@ export function ThemePresetPicker({
   };
 
   return (
-    <div className={`theme-picker${showLabel ? ' mt-4' : ''}`}>
+    <div className={`theme-picker${showLabel ? ' mt-(--q-inline)' : ''}`}>
       <div className="theme-picker-heading">
-        {showLabel && <span className="text-sm">{tr('settings.theme')}</span>}
+        {showLabel && <span className="text-sm font-medium">{tr('settings.theme')}</span>}
         <button
           type="button"
           role="switch"
@@ -80,14 +80,14 @@ export function ThemePresetPicker({
         </button>
       </div>
 
-      <div className="mt-4 space-y-4">
+      <div className="mt-(--q-group) space-y-(--q-group)">
         {/* Setup shows every palette in one row; Settings keeps the seasonal group apart. */}
         {(large
           ? [{ key: 'themes', title: 'Themes', entries: [...THEMES, ...SEASONAL] }]
           : [{ key: 'themes', title: 'Themes', entries: THEMES }, { key: 'seasonal', title: 'Seasonal', entries: SEASONAL }]
         ).map((section) => (
           <div key={section.key}>
-            {!large && <span className="text-xs font-medium text-ink-soft">{section.title}</span>}
+            {!large && <span className="quiet-group-label">{section.title}</span>}
             <div className={`theme-swatch-list${large ? ' theme-swatch-row' : ''}`} role="radiogroup" aria-label={section.title}>
               {section.entries.map((entry) => {
                 const palette = themePaletteDefaults(findThemePreset(entry.id)!, mode);
@@ -125,20 +125,20 @@ export function ThemePresetPicker({
       </div>
 
       {/* Custom colors: the wheel rides on top of the selected preset. */}
-      <div className="theme-custom-colors mt-4">
+      <div className="theme-custom-colors mt-(--q-group)">
         <button
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           type="button"
-          className="theme-custom-trigger flex w-full items-center gap-3 py-3 text-left"
+          className="theme-custom-trigger quiet-row gap-3 py-(--q-inline)"
         >
           <span
             className="h-8 w-8 shrink-0 rounded-full border border-line"
             style={{ background: WHEEL_SWATCH }}
           />
           <span className="min-w-0 flex-1">
-            <span className="block text-xs font-medium">{tr('settings.customColors')}</span>
-            <span className="block text-2xs text-ink-faint">
+            <span className="block text-sm font-medium">{tr('settings.customColors')}</span>
+            <span className="mt-(--q-tight) block text-xs text-ink-faint">
               {customized ? tr('settings.customColorsOn') : tr('settings.customColorsHint')}
             </span>
           </span>
@@ -147,20 +147,18 @@ export function ThemePresetPicker({
             className="h-5 w-10 shrink-0 rounded-full border border-line"
             style={{ background: `linear-gradient(135deg, ${accent}, ${accent2})` }}
           />
-          <span aria-hidden className="text-2xs text-ink-faint">
-            {open ? '▲' : '▼'}
-          </span>
+          <ChevronDownIcon aria-hidden className={`h-4 w-4 shrink-0 text-ink-soft transition-transform duration-(--dur-med) ${open ? 'rotate-180' : ''}`} />
         </button>
 
         {open && (
-          <div className="flex flex-wrap items-start gap-4 py-3">
+          <div className="flex flex-wrap items-start gap-4 py-(--q-inline)">
             <ColorWheel
               value={editing === 'accent' ? accent : accent2}
               onChange={setColor}
               label={editing === 'accent' ? tr('settings.accent') : tr('settings.accent2')}
             />
-            <div className="min-w-[150px] flex-1 space-y-2">
-              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={tr('settings.customColors')}>
+            <div className="min-w-[150px] flex-1 space-y-(--q-inline)">
+              <div className="flex flex-wrap gap-1" role="radiogroup" aria-label={tr('settings.customColors')}>
                 {(['accent', 'accent2'] as const).map((which) => {
                   const on = editing === which;
                   return (
@@ -169,9 +167,7 @@ export function ThemePresetPicker({
                       role="radio"
                       aria-checked={on}
                       onClick={() => setEditing(which)}
-                      className={`flex items-center gap-2 rounded-lg border px-2 py-1 text-2xs font-medium transition-colors ${
-                        on ? 'border-accent bg-accent-soft' : 'border-line hover:bg-surface-2'
-                      }`}
+                      className="quiet-tab items-center"
                     >
                       <span
                         className="h-4 w-4 shrink-0 rounded-full border border-line"
@@ -186,7 +182,7 @@ export function ThemePresetPicker({
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  className="input py-1 font-mono text-xs"
+                  className="quiet-field py-1.5 font-mono text-xs"
                   aria-label={editing === 'accent' ? tr('settings.accent') : tr('settings.accent2')}
                   value={editing === 'accent' ? accent : accent2}
                   onChange={(e) => {

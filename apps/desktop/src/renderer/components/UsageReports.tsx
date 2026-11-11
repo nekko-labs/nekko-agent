@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { TELEMETRY_PROMISES, telemetryChoice, type AppSettings } from '@nekko-agent/shared';
 import { Toggle } from './primitives/Toggle.js';
+import { SettingsSection } from './SettingsSection.js';
 
 /** Settings > Help out the Nekko Team: the opt-in usage and crash reports, with what they promise. */
 export function UsageReportsSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
@@ -10,18 +11,16 @@ export function UsageReportsSection({ settings, update }: { settings: AppSetting
     window.nekko.telemetryStatus().then((s) => setConfigured(s.configured), () => {});
   }, []);
   return (
-    <section className="card mt-6 p-5" id="usage-reports">
-      <div className="flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="font-semibold">Help improve Nekko Agent</h2>
-          <p className="text-xs text-ink-faint">Send anonymous usage and crash reports. Every send shows in Settings &gt; Connections.</p>
-        </div>
-        <Toggle label="Send anonymous usage and crash reports" value={on} onChange={(v) => update({ telemetry: telemetryChoice(v) })} />
-      </div>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-2xs text-ink-faint">
+    <SettingsSection
+      id="usage-reports"
+      title="Help improve Nekko Agent"
+      help={<>Send anonymous usage and crash reports. Every send shows in Settings &gt; Connections.</>}
+      actions={<Toggle label="Send anonymous usage and crash reports" value={on} onChange={(v) => update({ telemetry: telemetryChoice(v) })} />}
+    >
+      <ul className="mt-(--q-inline) list-disc space-y-1 pl-5 text-xs text-ink-faint">
         {TELEMETRY_PROMISES.map((p) => <li key={p}>{p}</li>)}
       </ul>
-      {on && !configured && <p className="mt-2 text-2xs text-ink-faint" role="status">This build has nowhere to send reports yet, so nothing is sent.</p>}
-    </section>
+      {on && !configured && <p className="mt-(--q-inline) text-xs text-ink-faint" role="status">This build has nowhere to send reports yet, so nothing is sent.</p>}
+    </SettingsSection>
   );
 }

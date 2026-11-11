@@ -6,11 +6,25 @@ import type { AppSettings } from '@nekko-agent/shared';
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => ({}), { getState: () => ({}) }) }));
 vi.mock('../i18n.js', () => ({ useT: () => (key: string) => key === 'settings.mascot' ? 'Show Nekko mascot' : key }));
 vi.mock('./SettingsView.js', () => ({ Toggle: ({ on, onChange, ...props }: any) => <button role="switch" aria-checked={on} onClick={() => onChange(!on)} {...props} /> }));
+/** Every element in a tree, expanding the plain function components (rows, sections) and the controls they are handed. */
+function elements(node: React.ReactNode): React.ReactElement<any>[] {
+  const out: React.ReactElement<any>[] = [];
+  const walk = (n: React.ReactNode) => React.Children.forEach(n, (node) => {
+    if (!React.isValidElement<any>(node)) return;
+    const child = node as React.ReactElement<any>;
+    out.push(child);
+    if (typeof child.type === 'function') walk((child.type as (p: any) => React.ReactNode)(child.props));
+    else walk(child.props.children);
+  });
+  walk(node);
+  return out;
+}
+const byId = (tree: React.ReactNode, id: string) => elements(tree).find((e) => e.props.id === id)!;
 describe('Desktop and Fun settings', () => {
   it('defaults to tray and saves the shutdown choice', () => {
     const update = vi.fn(); const tree = DesktopBehaviorSection({ settings: {} as AppSettings, update });
     const html = renderToStaticMarkup(tree); expect(html).toContain('value="tray" selected');
-    const select = (tree.props.children[1].props.children as React.ReactElement<any>[])[1];
+    const select = byId(tree, 'desktop-close-behavior');
     select.props.onChange({ target: { value: 'shutdown' } }); expect(update).toHaveBeenCalledWith({ desktopCloseBehavior: 'shutdown' });
   });
   it('asks about low memory by default, saves a remembered choice and forgets an app', () => {
@@ -20,10 +34,8 @@ describe('Desktop and Fun settings', () => {
     const tree = DesktopBehaviorSection({ settings: { lowMemoryAction: 'release', lowMemoryCloseApps: ['PioneerGame', 'chrome'] } as AppSettings, update });
     const rows = renderToStaticMarkup(tree);
     expect(rows).toContain('value="release" selected'); expect(rows).toContain('aria-label="Stop closing PioneerGame"');
-    const low = tree.props.children[2];
-    const [choice, list] = (low.type as (p: any) => React.ReactElement<any>)(low.props).props.children;
-    choice.props.children[1].props.onChange({ target: { value: 'ask' } }); expect(update).toHaveBeenLastCalledWith({ lowMemoryAction: undefined });
-    list.props.children[2].props.children[0].props.children[1].props.onClick(); expect(update).toHaveBeenLastCalledWith({ lowMemoryCloseApps: ['chrome'] });
+    byId(tree, 'desktop-low-memory').props.onChange({ target: { value: 'ask' } }); expect(update).toHaveBeenLastCalledWith({ lowMemoryAction: undefined });
+    elements(tree).find((e) => e.props['aria-label'] === 'Stop closing PioneerGame')!.props.onClick(); expect(update).toHaveBeenLastCalledWith({ lowMemoryCloseApps: ['chrome'] });
   });
   it('groups independent mascot and default-on farewell switches under Fun', () => {
     const html = renderToStaticMarkup(<FunSection settings={{ mascotEnabled: false } as AppSettings} update={vi.fn()} />);
