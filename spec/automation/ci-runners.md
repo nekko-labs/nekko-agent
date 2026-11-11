@@ -12,11 +12,26 @@ area: automation
 The Automations panel shows the connected computer's CI runner cards above scheduled
 chat automations, even when no chat automation exists. Each card uses the same live
 runner subscription and controls as Scheduled Tasks: runner on/off and settings,
-VM slots with their actual names and live logs, and Queued, In progress and Completed
-job groups. Queued jobs offer Accept now/Decline/Undo; running jobs keep their
+VM slots with their actual names and live logs, and Queued and In progress job
+groups (Completed stays on the CI runners page since #2601). Queued jobs offer Accept now/Decline/Undo; running jobs keep their
 cancel/re-run confirmation; completed entries retain provider links and logs. Empty
 slots never invent a VM identity or log action. The existing daemon controls remain
 the authority; this adds no direct VM shell, console window, or per-VM stop API.
+
+**Quiet, shorter runner** `[implemented 2026-11-11, #2601; unit tests and hidden renderer capture at 1000px and 390px against synthetic data]`.
+Philip asked (2026-11-11) for the runner monitor to follow the quiet design system
+(docs/design-system.md) and show less. A runner is no longer a bordered card with
+tiles: its header is one row (state dot, the scope's name, the state as a word,
+the on switch, settings), with "This Mac · GitHub", the scope kind, label, priority
+and keep-awake behind the name's tooltip. An error, the image build and missing
+tools are one line each, with no tinted box; meters use the working colour. Slots
+are rows, and a slot running a job is described only under **In progress**, not
+twice. The Mac's facts (VM size per VM, power, network, today's jobs) are one faint
+line. Group labels are sentence case, buttons are ghost, row actions show on hover
+or focus (always on touch), and Cancel reads in the danger colour until its
+confirmation. In the Automations panel the runner is compact: idle slots without a
+VM, the facts line, **Completed** and **Connect to a workflow** are left out (they
+stay on the CI runners page), and a waiting runner shows only its first reason.
 
 **View CI runners** opens Automations, reveals its CI section for that visit,
 and scrolls/focuses it after runner data loads. The panel shows a short empty state
