@@ -138,6 +138,9 @@ struct PendingInner {
     /// per kind. Its payload restores the visible map when a newer one resolves.
     approvals: HashMap<String, (String, oneshot::Sender<bool>, Value)>,
     questions: HashMap<String, (String, oneshot::Sender<Value>, Value)>,
+    /// `request_secret` calls (#2594): the request shows only the name; the
+    /// waiter hears whether the user gave it, never the value.
+    secrets: HashMap<String, (String, oneshot::Sender<bool>, Value)>,
     /// Who answered each approval (`{ via, device? }`), for the chat's audit
     /// trail; taken by the waiting turn.
     answered_by: HashMap<String, Value>,
@@ -162,7 +165,7 @@ impl PendingInner {
                 entry.shift_remove(key);
             }
         }
-        if entry.contains_key("approval") || entry.contains_key("question") {
+        if entry.contains_key("approval") || entry.contains_key("question") || entry.contains_key("secret") {
             self.by_session.insert(session_id.into(), Value::Object(entry));
         } else {
             self.by_session.shift_remove(session_id);
@@ -236,10 +239,52 @@ impl Pending {
         true
     }
 
+    fn park_secret(&self, session_id: &str, request: &Value) -> oneshot::Receiver<bool> {
+        let (tx, rx) = oneshot::channel();
+        let mut p = lock(&self.inner);
+        let id = str_at(request, "callId").unwrap_or_default().to_string();
+        p.secrets.insert(id, (session_id.into(), tx, request.clone()));
+        p.set(session_id, "secret", Some(request.clone()));
+        rx
+    }
+
+    /// The variable a waiting `request_secret` call asked for, if a turn of
+    /// `session_id` waits on `call_id`.
+    pub fn secret_name(&self, session_id: &str, call_id: &str) -> Option<String> {
+        let p = lock(&self.inner);
+        let (sid, _, request) = p.secrets.get(call_id)?;
+        (sid == session_id).then(|| str_at(request, "name").unwrap_or_default().to_string())
+    }
+
+    /// Resolve a waiting `request_secret` call: `provided` once the value is
+    /// in the chat's secrets, false when the user skipped it. False when no
+    /// turn here waits on that call.
+    pub fn resolve_secret(&self, session_id: &str, call_id: &str, provided: bool) -> bool {
+        let mut p = lock(&self.inner);
+        if p.secrets.get(call_id).is_none_or(|(sid, _, _)| sid != session_id) {
+            return false;
+        }
+        let Some((_, tx, _)) = p.secrets.remove(call_id) else { return false };
+        let current = p.by_session.get(session_id).and_then(|e| e.get("secret"));
+        if current.and_then(|q| str_at(q, "callId")) == Some(call_id) {
+            let remaining = p.secrets.values().find(|(sid, _, _)| sid == session_id).map(|(_, _, v)| v.clone());
+            p.set(session_id, "secret", remaining);
+        }
+        let _ = tx.send(provided);
+        true
+    }
+
     /// `releasePending`: nothing a stopped or finished turn waited on can still
     /// be answered, so every waiter of the session hears no.
     pub fn release(&self, session_id: &str) {
         let mut p = lock(&self.inner);
+        let secrets: Vec<String> =
+            p.secrets.iter().filter(|(_, (s, _, _))| s == session_id).map(|(k, _)| k.clone()).collect();
+        for id in secrets {
+            if let Some((_, tx, _)) = p.secrets.remove(&id) {
+                let _ = tx.send(false);
+            }
+        }
         let approvals: Vec<String> =
             p.approvals.iter().filter(|(_, (s, _, _))| s == session_id).map(|(k, _)| k.clone()).collect();
         for id in approvals {
@@ -409,6 +454,8 @@ pub struct Turns {
     /// wake-up of its Claude Code child starts ([`Turns::wake`]).
     wakes: Mutex<HashMap<String, (Value, Hub)>>,
     pub pending: Pending,
+    /// The secrets users gave chats through their secret box (#2594), in memory only.
+    pub secrets: crate::chat_secrets::ChatSecrets,
     /// How each queued turn the daemon started as the next of a chain ends,
     /// for a `chat:send` the daemon admitted, which waits for the whole chain.
     chained: Mutex<HashMap<String, Ended>>,
@@ -470,6 +517,7 @@ impl Turns {
             running: Mutex::default(),
             wakes: Mutex::default(),
             pending: Pending::default(),
+            secrets: crate::chat_secrets::ChatSecrets::default(),
             chained: Mutex::default(),
             watched: Mutex::default(),
             preparer: OnceLock::new(),
@@ -2621,6 +2669,7 @@ fn native_context(
     ctx.changes = Some(turns.changes.clone());
     ctx.processes = Some(turns.processes.clone());
     ctx.command_log = Some(turns.agent_logs.clone() as Arc<dyn CommandLog>);
+    ctx.secrets = Some(turns.secrets.for_chat(session_id));
     // Stop stops a running command too.
     let tools_cancel = ctx.cancel.clone();
     shared.cancel.on_cancel(move || tools_cancel.cancel());
@@ -2841,7 +2890,15 @@ impl TurnTools {
     /// output counts as shown to it.
     async fn attended(&self, call: &Value) -> Result<Value, String> {
         let started = std::time::Instant::now();
-        let out = self.dispatch(call).await;
+        let mut out = self.dispatch(call).await;
+        // #2594: whatever a tool brought back, the chat's secret values reach
+        // neither the model nor the transcript.
+        if let Ok(v) = &mut out
+            && let Some(text) = v.get("output").and_then(Value::as_str)
+            && let Some(clean) = self.turns.secrets.redact(&self.shared.session_id, text)
+        {
+            v["output"] = json!(clean);
+        }
         let name = str_at(call, "name").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(Value::Null);
         if let Ok(v) = &out {
@@ -2884,6 +2941,7 @@ impl TurnTools {
             "remember" => return Ok(self.remember(call, id, &input).await),
             "complete_session" => return Ok(self.complete(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
+            turn::secret::REQUEST_SECRET => return Ok(self.request_secret(call).await),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
             _ => {}
         }
@@ -3551,6 +3609,43 @@ impl TurnTools {
             return if unattended { c.ask_unattended.clone() } else { c.ask_cancelled.clone() };
         }
         turn::format_ask_answers(&request, &answers)
+    }
+
+    /// `request_secret` (#2594): park the turn on the chat's secret box. The
+    /// value never passes through here: `chat:provideSecret` puts it in the
+    /// chat's secrets and only then releases this call, which hears yes or no.
+    async fn request_secret(&self, call: &Value) -> Value {
+        let call_id = str_at(call, "id").unwrap_or_default().to_string();
+        let input = call.get("input").unwrap_or(&Value::Null);
+        let request = match turn::secret::parse_secret_request(&call_id, input, nekko_js::now_ms()) {
+            Ok(r) => r,
+            Err(e) => return error(&call_id, e),
+        };
+        let name = str_at(&request, "name").unwrap_or_default().to_string();
+        let session_id = self.shared.session_id.clone();
+        let rx = self.turns.pending.park_secret(&session_id, &request);
+        self.shared.emit(json!({ "type": "secret_request", "sessionId": session_id, "request": request }));
+        let mut unattended = false;
+        let provided = if self.unattended_ms > 0 {
+            match tokio::time::timeout(Duration::from_millis(self.unattended_ms), rx).await {
+                Ok(a) => a.unwrap_or(false),
+                Err(_) => {
+                    unattended = true;
+                    self.turns.pending.resolve_secret(&session_id, &call_id, false);
+                    false
+                }
+            }
+        } else {
+            rx.await.unwrap_or(false)
+        };
+        self.shared.emit(json!({
+            "type": "secret_resolved", "sessionId": session_id, "callId": call_id, "provided": provided,
+        }));
+        if provided {
+            result(&call_id, turn::secret::provided(&name))
+        } else {
+            result(&call_id, turn::secret::skipped(&name, unattended))
+        }
     }
 }
 

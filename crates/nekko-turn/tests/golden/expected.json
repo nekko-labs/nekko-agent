@@ -27,7 +27,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -60,6 +61,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -93,7 +95,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -129,6 +132,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -164,7 +168,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -202,6 +207,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -259,7 +265,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -319,6 +326,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -350,7 +358,8 @@
     "update_plan",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -384,6 +393,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -418,7 +428,8 @@
     "update_plan",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -455,6 +466,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -491,7 +503,8 @@
     "update_plan",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -530,6 +543,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -588,7 +602,8 @@
     "update_plan",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -649,6 +664,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -681,7 +697,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -716,6 +733,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -751,7 +769,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -789,6 +808,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -826,7 +846,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -866,6 +887,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -925,7 +947,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -987,6 +1010,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -1015,7 +1039,8 @@
     "spawn_agent",
     "update_plan",
     "set_chat_title",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -1046,6 +1071,7 @@
     "update_plan",
     "set_chat_title",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -1078,7 +1104,8 @@
     "fetch_url",
     "update_plan",
     "set_chat_title",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -1113,6 +1140,7 @@
     "update_plan",
     "set_chat_title",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -1146,7 +1174,8 @@
     "spawn_agent",
     "update_plan",
     "set_chat_title",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -1182,6 +1211,7 @@
     "update_plan",
     "set_chat_title",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -1237,7 +1267,8 @@
     "mcp__web__get",
     "update_plan",
     "set_chat_title",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -1295,6 +1326,7 @@
     "update_plan",
     "set_chat_title",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -2568,7 +2600,8 @@
      "disabledTools": [
       "bash",
       "spawn_agent",
-      "ask_user"
+      "ask_user",
+      "request_secret"
      ]
     },
     "offline": false,
@@ -2600,7 +2633,8 @@
      "disabledTools": [
       "bash",
       "spawn_agent",
-      "ask_user"
+      "ask_user",
+      "request_secret"
      ]
     },
     "offline": false,
@@ -2635,7 +2669,8 @@
      "disabledTools": [
       "bash",
       "spawn_agent",
-      "ask_user"
+      "ask_user",
+      "request_secret"
      ]
     },
     "offline": false,
@@ -2672,7 +2707,8 @@
      "disabledTools": [
       "bash",
       "spawn_agent",
-      "ask_user"
+      "ask_user",
+      "request_secret"
      ]
     },
     "offline": false,
@@ -2712,7 +2748,8 @@
      "disabledTools": [
       "bash",
       "spawn_agent",
-      "ask_user"
+      "ask_user",
+      "request_secret"
      ]
     },
     "offline": false,
@@ -2749,7 +2786,8 @@
      "disabledTools": [
       "bash",
       "spawn_agent",
-      "ask_user"
+      "ask_user",
+      "request_secret"
      ]
     },
     "offline": false,
@@ -2789,7 +2827,8 @@
      "disabledTools": [
       "bash",
       "spawn_agent",
-      "ask_user"
+      "ask_user",
+      "request_secret"
      ]
     },
     "offline": false,
@@ -2848,7 +2887,8 @@
      "disabledTools": [
       "bash",
       "spawn_agent",
-      "ask_user"
+      "ask_user",
+      "request_secret"
      ]
     },
     "offline": false,
@@ -2936,7 +2976,8 @@
     "update_plan",
     "set_chat_title",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -2972,7 +3013,8 @@
     "update_plan",
     "set_chat_title",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3011,7 +3053,8 @@
     "update_plan",
     "set_chat_title",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3051,7 +3094,8 @@
     "update_plan",
     "set_chat_title",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3091,7 +3135,8 @@
     "update_plan",
     "set_chat_title",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3132,7 +3177,8 @@
     "update_plan",
     "set_chat_title",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3194,7 +3240,8 @@
     "update_plan",
     "set_chat_title",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3257,7 +3304,8 @@
     "update_plan",
     "set_chat_title",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3293,7 +3341,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3332,6 +3381,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -3371,7 +3421,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3413,6 +3464,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -3454,7 +3506,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3498,6 +3551,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -3560,7 +3614,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -3625,6 +3680,7 @@
     "complete_session",
     "remember",
     "ask_user",
+    "request_secret",
     "decide"
    ]
   },
@@ -3993,7 +4049,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4045,7 +4102,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4100,7 +4158,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4155,7 +4214,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4305,7 +4365,8 @@
     "capture",
     "update_plan",
     "set_chat_title",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4357,7 +4418,8 @@
     "capture",
     "update_plan",
     "set_chat_title",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4417,7 +4479,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4472,7 +4535,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4532,7 +4596,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4588,7 +4653,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4650,7 +4716,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4706,7 +4773,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4765,7 +4833,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4818,7 +4887,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4880,7 +4950,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {
@@ -4938,7 +5009,8 @@
     "set_chat_title",
     "complete_session",
     "remember",
-    "ask_user"
+    "ask_user",
+    "request_secret"
    ]
   },
   {

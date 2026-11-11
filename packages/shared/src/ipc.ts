@@ -165,6 +165,7 @@ export const IpcChannels = {
   chatFillPrompt: 'chat:fillPrompt',
   toolApprove: 'tool:approve',
   chatAnswer: 'chat:answer',
+  chatProvideSecret: 'chat:provideSecret',
   chatPending: 'chat:pending',
   chatRunning: 'chat:running',
 
@@ -908,6 +909,13 @@ export interface NekkoApi {
     callId: string,
     answers: import('./ask.js').AskAnswer[],
   ): Promise<void>;
+  /**
+   * Answer a `request_secret` call from the chat's secret box (#2594): the
+   * value goes to the engine, which sets it for the chat's commands and tells
+   * the agent only that it was given. `null` skips it. Resolves false when
+   * no turn waits on that call any more.
+   */
+  provideSecret(sessionId: string, callId: string, value: string | null): Promise<boolean>;
   /**
    * Every session currently waiting on a person, keyed by session id. The board
    * reads this on mount so a question asked while it was closed is still there.

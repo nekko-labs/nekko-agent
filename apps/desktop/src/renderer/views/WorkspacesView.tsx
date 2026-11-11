@@ -132,8 +132,10 @@ export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): A
     case 'compaction':
     case 'claude_code_background': return undefined;
     case 'tool_approval_required':
-    case 'question': return 'input';
+    case 'question':
+    case 'secret_request': return 'input';
     case 'question_resolved':
+    case 'secret_resolved':
     case 'approval_resolved':
     case 'tool_result': return 'working';
     case 'error': return 'error';

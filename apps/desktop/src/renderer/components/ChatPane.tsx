@@ -25,7 +25,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
-import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
+import type { AgentEvent, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
 import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -87,6 +87,7 @@ import { AgentMonitorButton, PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
 import { ReplyStatsRow } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
+import { SecretBox } from './agent-console/SecretBox.js';
 import { useWallLogs } from '../wallLogs.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import { UsageLimitsChip } from './UsageLimitsChip.js';
@@ -675,6 +676,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * closed is still there when it opens.
    */
   const [question, setQuestion] = useState<AskRequest | null>(null);
+  /** A `request_secret` call waiting on the chat's secret box (#2594). */
+  const [secretAsk, setSecretAsk] = useState<SecretRequest | null>(null);
   const [ctx, setCtx] = useState<ContextBundle | null>(null);
   // Tokens this turn has produced that the last context bundle doesn't include
   // yet. Everything the agent writes (its reply, its tool calls, their results)
@@ -1134,6 +1137,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         if (!live) return;
         const mine = pending[sessionId];
         if (mine?.question) setQuestion(mine.question);
+        if (mine?.secret) setSecretAsk(mine.secret);
         if (mine?.approval) setApproval({ call: mine.approval.call, reason: mine.approval.reason, severity: mine.approval.severity });
       }).catch(() => {});
     });
@@ -1195,6 +1199,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           break;
         case 'question_resolved':
           setQuestion((q) => (q?.callId === e.callId ? null : q));
+          break;
+        case 'secret_request':
+          setErrorNotice(null);
+          setSecretAsk(e.request);
+          setMascotMood('thinking');
+          break;
+        case 'secret_resolved':
+          setSecretAsk((s) => (s?.callId === e.callId ? null : s));
           break;
         case 'approval_resolved':
           setApproval((current) => approvalAfterResult(current, e.callId));
@@ -2008,6 +2020,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     await window.nekko.answerQuestion(sessionId, pending.callId, answers);
     setQuestion((current) => current?.callId === pending.callId ? null : current);
   };
+  /** Hand the secret box's value to the engine, or skip it (`null`). The value
+   *  lives only in this call: nothing in the pane or the store keeps it. */
+  const answerSecret = async (value: string | null) => {
+    const pending = secretAsk;
+    if (!pending) return false;
+    const ok = await window.nekko.provideSecret(sessionId, pending.callId, value);
+    setSecretAsk((current) => current?.callId === pending.callId ? null : current);
+    return ok;
+  };
   const sessionNow = useRef(session);
   sessionNow.current = session;
   // A chat on another computer has no folders here to add.
@@ -2203,7 +2224,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Generated follow-ups own their destination selector; typed drafts use the composer.
   const canDelegateFollowUp = !imageMode && !remoteBlock && hasProvider && !!session
     && canOfferSubagent(session, delegationStrategy);
-  const showFollowUpChoices = !readOnly && !session?.archivedAt && !draft.trim() && !streaming && !held && !errorNotice && !question && !approval
+  const showFollowUpChoices = !readOnly && !session?.archivedAt && !draft.trim() && !streaming && !held && !errorNotice && !question && !secretAsk && !approval
     && !imageMode && !remoteBlock && hasProvider && !!liveSuggestions?.options.length;
 
   const onComposerKeyDown = (e: React.KeyboardEvent<MarkdownEditorElement>) => {
@@ -2901,7 +2922,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   last={lastTurn}
                   done={doneSummary}
                   persisted={!streaming && !![...(session?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.turnStats}
-                  blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : null}
+                  blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : secretAsk ? `Waiting for ${secretAsk.name}` : null}
                 />
                 {!streaming && <ClaudeBackgroundTasks tasks={claudeBackground} />}
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
@@ -2909,10 +2930,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" actions={questionActions} />
                 </div>}
+                {secretAsk && <div className="conversation-question" data-agent-secret>
+                  <SecretBox key={secretAsk.callId} request={secretAsk} onProvide={(v) => answerSecret(v)} onSkip={() => answerSecret(null)} />
+                </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
-                {starAsk && !streaming && !question && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
+                {starAsk && !streaming && !question && !secretAsk && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
-                  eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
+                  eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!secretAsk || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
                 {errorNotice && !question && !streaming && (() => {
                   // A stop the user asked for is not a failure, so it doesn't wear

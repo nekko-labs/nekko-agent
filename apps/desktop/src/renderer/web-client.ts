@@ -520,6 +520,7 @@ function makeWebClient(): NekkoApi {
     fillPromptPart: (sessionId, part, draft) => call(IpcChannels.chatFillPrompt, sessionId, part, draft),
     approveTool: (sessionId, toolCallId, approved) => call(IpcChannels.toolApprove, sessionId, toolCallId, approved),
     answerQuestion: (sessionId, callId, answers) => call(IpcChannels.chatAnswer, sessionId, callId, answers),
+    provideSecret: (sessionId, callId, value) => call(IpcChannels.chatProvideSecret, sessionId, callId, value),
     pendingInput: () => call(IpcChannels.chatPending),
     runningSessions: () => call(IpcChannels.chatRunning),
 
