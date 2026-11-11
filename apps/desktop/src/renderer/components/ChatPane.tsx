@@ -2678,7 +2678,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const toggleIncognito = () => {
     window.nekko.setSessionOptions(sessionId, { incognito: !session?.incognito }).then(setSession).catch((e) => useStore.getState().pushToast('error', String(e)));
   };
-  const asksFirst = showAsks && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} /> : null;
+  const asksFirst = showAsks && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} isCloudModel={isCloudModel} /> : null;
   const effortProps = {
     metadata: selectedModelInfo?.effort,
     session, onSessionChange: setSession, modelId: autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined),
