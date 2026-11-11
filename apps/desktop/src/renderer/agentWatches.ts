@@ -108,6 +108,23 @@ export function watchClock(w: WatchCall, view: AgentWatchView | undefined, now: 
   };
 }
 
+/**
+ * What an armed PR watch last saw, from the host's own polling. Checks
+ * starting or running never wake the chat (that would only buy a "still
+ * waiting" reply), so this is where that progress shows. Null when there is
+ * nothing to say.
+ */
+export function watchProgress(view: AgentWatchView | undefined): string | null {
+  if (!view || view.kind !== 'pr' || view.status !== 'active' || view.pending) return null;
+  switch (view.checks) {
+    case 'pending': return 'checks running';
+    case 'failing': return 'checks failing';
+    case 'passing': return 'checks passed';
+    case 'none': return 'no checks yet';
+    default: return null;
+  }
+}
+
 /** A `[Agent watch <id>]` wake-up the host sent as a user turn. */
 export interface WatchWake { id: string; trigger: string; detail: string; prompt: string; url?: string }
 

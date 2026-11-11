@@ -78,7 +78,7 @@ test('card details exercises each native menu toggle without changing other fiel
   for (const line of [
     'marker: "Pull request 42, open"',
     'for field in fields { XCTAssertTrue(row(app).label.contains(field.marker), field.marker) }',
-    'let control = app.buttons[fields[index].setting].firstMatch',
+    'let control = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", fields[index].setting, fields[index].title)).firstMatch',
     'XCTAssertTrue(control.isHittable, fields[index].setting)',
     'control.tap()',
     'control.waitForExistence(timeout: 3)',

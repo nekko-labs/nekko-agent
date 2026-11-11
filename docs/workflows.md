@@ -8,8 +8,8 @@ editor, decide which model it uses and what its agent steps may do.
 
 If you have no scheduled tasks yet, the Scheduled Tasks tab walks you through your first one:
 
-1. Expand **Shopping & web browsing**, **Developer**, **Research**, or **Email &
-   productivity** and pick an idea, such as checking product stock, reviewing
+1. Pick an idea under **Shopping & web browsing**, **Developer**, **Research**, or
+   **Email & productivity**, such as checking product stock, reviewing
    new GitHub PRs, or summarizing email.
 2. Enter the page, repository, topic, or email source. Read the requirements:
    you may need web tools, a project folder, or a connected service.
@@ -24,9 +24,7 @@ The starter drafts reports and does not ask to buy products, send email, or post
 reviews. Review tool permissions, since prompt instructions do not enforce access.
 
 Use **Back to ideas** to choose something else, or **Browse all templates or start
-from scratch** to use the existing template gallery. Travis's overview and example
-videos are labeled **coming soon**; the placeholders do not play or load videos.
-The guide currently appears in desktop and responsive web, not the native phone
+from scratch** to use the existing template gallery. The guide currently appears in desktop and responsive web, not the native phone
 apps.
 
 ## Model

@@ -4,6 +4,7 @@ import { findThemePreset } from '@nekko-agent/shared';
 import { useT } from '../i18n.js';
 import { MoonIcon, SunIcon } from '../icons.js';
 import { resolveThemeAppearance, themeModePatch, themePaletteDefaults, themePalettePatch } from '../themeMode.js';
+import { THEME_ICON, ThemeIcon } from '../theme-icons.js';
 import { ColorWheel } from './ColorWheel.js';
 import './ThemePresetPicker.css';
 
@@ -23,7 +24,8 @@ export function slicedSwatch(colors: readonly string[]): string {
 const WHEEL_SWATCH = slicedSwatch(['#f87171', '#fbbf24', '#4ade80', '#22d3ee', '#818cf8', '#e879f9']);
 
 /**
- * Mode-independent palette circles plus a color wheel, shared by Settings → Appearance and
+ * One icon per palette (a cat for Nekko, a blueberry for Blueberry, a wizard hat
+ * for Spooky...), drawn in that palette's accent, plus a color wheel, shared by Settings → Appearance and
  * the onboarding theme step. Selecting a preset writes theme + themePreset +
  * accent + accent2 in one patch; the caller's `update` persists and applies it,
  * so a click previews live.
@@ -110,7 +112,9 @@ export function ThemePresetPicker({
                     tabIndex={active || (entry === section.entries[0] && !section.entries.some((item) => themePaletteDefaults(findThemePreset(item.id)!, mode).id === activeId)) ? 0 : -1}
                     className={`theme-swatch-button${large ? ' theme-swatch-large' : ''}`}
                   >
-                    <span className="theme-swatch" style={{ background: slicedSwatch([palette.accent, palette.accent2, palette.preset?.mode === mode ? palette.preset.paper ?? (mode === 'dark' ? '#0c0c11' : '#fbfbfd') : '#fbfbfd']) }} />
+                    <span className="theme-swatch" style={{ color: palette.accent }}>
+                      <ThemeIcon name={THEME_ICON[entry.id]} />
+                    </span>
                     <span className="text-2xs font-medium">{entry.label}</span>
                   </button>
                 );

@@ -1,4 +1,9 @@
-// The version a build carries: MAJOR.MINOR.BUILD (docs/decisions/0055).
+// The version a build carries: MAJOR.MINOR.BUILD (docs/decisions/0055), written
+// at a fixed width, x.xx.xxxx, from the 0.10 line on (docs/decisions/0080):
+// MINOR runs 10-99 and BUILD 1000-9999, so every version has the same shape
+// without the leading zeros npm and the stores refuse. The release is
+// vMAJOR.MINOR.1000 and the nightlies count on from 1001. Lines before 0.10
+// keep their old one-digit numbers.
 //
 // MAJOR.MINOR come from the newest release tag (`vMAJOR.MINOR` or
 // `vMAJOR.MINOR.PATCH`, no suffix), which a person creates by hand: that is the
@@ -10,13 +15,13 @@
 //
 // The store builds (Android versionCode, iOS CFBundleVersion) need one
 // increasing integer: MAJOR*10000000 + MINOR*10000 + BUILD, which keeps
-// MINOR to 0-999 and BUILD to 0-9999 and stays under Android's 2100000000 cap.
+// MINOR to 0-99 and BUILD to 0-9999 and stays under Android's 2100000000 cap.
 //
 // Usage:
 //   node scripts/nightly-version.mjs --platform ios              # dry run: print the next version
 //   node scripts/nightly-version.mjs --platform ios --reserve    # create and push the counter tag
 //   node scripts/nightly-version.mjs --platform desktop --reserve --reuse-same-commit
-//   node scripts/nightly-version.mjs --release-tag v0.9          # prints v0.9.0
+//   node scripts/nightly-version.mjs --release-tag v0.10         # prints v0.10.1000
 //
 // --reuse-same-commit: when the commit being built already carries this
 // platform's counter tag in the current line, use that version instead of a new
@@ -31,8 +36,12 @@ import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export const PLATFORMS = ['desktop', 'ios', 'android'];
-export const MAX_MINOR = 999;
+export const MAX_MINOR = 99;
 export const MAX_BUILD = 9999;
+// The fixed-width lines (x.xx.xxxx): from MINOR 10, with BUILD from 1000.
+export const WIDE_MINOR = 10;
+export const BUILD_FLOOR = 1000;
+const isWide = ({ minor }) => minor >= WIDE_MINOR;
 // Google Play's versionCode ceiling; iOS takes any 32-bit value.
 export const MAX_CODE = 2_100_000_000;
 
@@ -43,11 +52,24 @@ export function parseReleaseTag(name) {
   return { major: Number(m[1]), minor: Number(m[2]), patch: m[3] === undefined ? null : Number(m[3]) };
 }
 
-/** The tag release.yml builds from a manual bump: `v0.9` -> `v0.9.0`; a full tag is unchanged. */
+/**
+ * The tag release.yml builds from a manual bump: `v0.10` -> `v0.10.1000`; a
+ * full tag is unchanged. Refuses a tag off the x.xx.xxxx shape: a fixed-width
+ * line released below 1000 (`v0.10.0`), or a new MAJOR below MINOR 10
+ * (`v1.0`; start it at `v1.10`). The old 0.x lines (`v0.9.5`) still pass, so
+ * an existing tag can be rebuilt.
+ */
 export function canonicalReleaseTag(name) {
   const r = parseReleaseTag(name);
   if (!r) throw new Error(`${name} is not a release tag (vMAJOR.MINOR or vMAJOR.MINOR.PATCH).`);
-  return `v${r.major}.${r.minor}.${r.patch ?? 0}`;
+  if (r.minor > MAX_MINOR) throw new Error(`${name}: MINOR is over ${MAX_MINOR}; start the next MAJOR at v${r.major + 1}.${WIDE_MINOR}.`);
+  if (!isWide(r)) {
+    if (r.major > 0) throw new Error(`${name} is not x.xx.xxxx; a new MAJOR starts at MINOR ${WIDE_MINOR} (v${r.major}.${WIDE_MINOR}).`);
+    return `v${r.major}.${r.minor}.${r.patch ?? 0}`;
+  }
+  const patch = r.patch ?? BUILD_FLOOR;
+  if (patch < BUILD_FLOOR) throw new Error(`${name} is not x.xx.xxxx; release it as v${r.major}.${r.minor}.${BUILD_FLOOR} (or the short v${r.major}.${r.minor}).`);
+  return `v${r.major}.${r.minor}.${patch}`;
 }
 
 /** `nightly/ios/v0.9.12` -> { platform, major, minor, build }, else null. */
@@ -84,6 +106,7 @@ export function storeCode({ major, minor, build }) {
  * Desktop shares its number space with the releases (installers, npm), so its
  * BUILD also starts above any release tag's PATCH in the line: a nightly never
  * reuses a released number (v0.8.2 shipped, so the first 0.8 nightly is 0.8.3).
+ * In a fixed-width line every platform counts from above 1000 (0.10.1001).
  */
 export function planVersion({ tags, platform, tagsAtCommit = [], reuseSameCommit = false }) {
   if (!PLATFORMS.includes(platform)) throw new Error(`Unknown platform ${platform}; one of ${PLATFORMS.join(', ')}.`);
@@ -93,7 +116,7 @@ export function planVersion({ tags, platform, tagsAtCommit = [], reuseSameCommit
     const here = tagsAtCommit.map(parseNightlyTag).filter(inLine).sort((a, b) => b.build - a.build)[0];
     if (here) return finish(platform, { ...line, build: here.build }, true);
   }
-  let last = 0;
+  let last = isWide(line) ? BUILD_FLOOR : 0;
   for (const t of tags) {
     const n = parseNightlyTag(t);
     if (inLine(n)) last = Math.max(last, n.build);
