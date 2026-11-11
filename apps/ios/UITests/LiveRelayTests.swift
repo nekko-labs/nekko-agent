@@ -458,8 +458,10 @@ final class LiveRelayTests: XCTestCase {
         // end, which cancels a long press (no menu after two presses, run 40447057708).
         XCTAssertTrue(waitGone(app.buttons["Stop"].firstMatch, computerWait), "the edited prompt's reply finished")
 
-        // IO-23: fork from the first prompt; the new chat has it in its message box.
-        let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
+        // IO-23: fork from a prompt; the new chat has it in its message box. The second prompt,
+        // not the first: at the top of this transcript the first bubble is drawn but missing from
+        // the accessibility tree (runs 42914771556 and 42923097159, #2547), so XCTest can't press it.
+        let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: a long run please")).firstMatch
         // The transcript only draws what is near the screen, and the message box (taller since
         // #1250) and keyboard leave it a strip: scroll back up to the first prompt. Drag near
         // the top, where the transcript is; the middle of the screen is the message box.
@@ -478,7 +480,7 @@ final class LiveRelayTests: XCTestCase {
             }
             settle()
         }
-        XCTAssertTrue(first.waitForExistence(timeout: 10), "the first prompt is on screen")
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "the prompt to fork from is on screen")
         // The menu item carries the identifier `chat.fork` (#868); XCTest matches
         // an element's identifier, not its label, once one is set.
         let fork = app.buttons["chat.fork"].firstMatch
@@ -486,7 +488,7 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "beyond-4-fork-menu")
         fork.tap()
         let forkedBox = app.input("chat.message")
-        let seeded = expectation(for: NSPredicate(format: "value == %@", "Say hello"), evaluatedWith: forkedBox)
+        let seeded = expectation(for: NSPredicate(format: "value == %@", "a long run please"), evaluatedWith: forkedBox)
         wait(for: [seeded], timeout: computerWait)
         attach(app, "beyond-5-forked")
 
