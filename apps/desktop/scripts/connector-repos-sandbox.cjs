@@ -43,35 +43,46 @@ app.whenReady().then(async () => {
     await sleep(800);
     await run(`(() => {
       const b = layoutFixture.bridge;
-      window.saved = [{ kind: 'github', connected: true, settings: {} }]; window.calls = [];
+      window.saved = [{ kind: 'github', connected: true, settings: {} }, { kind: 'linear', connected: true }]; window.calls = [];
       const list = async () => window.saved.map(c => ({ ...c, settings: { ...c.settings } }));
       const names = ['nekko-labs/nekko-agent', 'nekko-labs/floop', 'nekko-labs/hypergate', 'ermish/dotfiles', 'ermish/notes', 'acme-corp/site', 'acme-corp/api'];
       const repos = names.map((fullName, i) => ({ provider: 'github', id: String(i), fullName, cloneUrl: 'https://github.com/' + fullName + '.git', webUrl: 'https://github.com/' + fullName, defaultBranch: 'main', private: fullName.startsWith('ermish/notes') || fullName.startsWith('acme'), description: '', updatedAt: '' }));
       b.listConnectors = list;
       b.getMessagingStatus = async () => ({ telegram: {}, discord: {}, slack: {} });
       b.detectConnectors = async () => ({});
-      b.fetchConnector = async () => repos.slice(0, 3).map(r => ({ id: r.id, title: r.fullName, subtitle: 'repo' }));
+      b.fetchConnector = async (kind) => kind === 'linear'
+        ? [{ id: 'l1', title: 'Fix the login redirect', subtitle: 'NEK-12 · In Progress' }, { id: 'l2', title: 'Group repositories by org', subtitle: 'NEK-14 · Todo' }]
+        : repos.slice(0, 3).map(r => ({ id: r.id, title: r.fullName, subtitle: 'repo' }));
       b.connectorRepos = async () => ({ repos, providers: [{ kind: 'github' }] });
       b.excludeConnectorRepos = async (kind, choice) => { window.calls.push(JSON.stringify(choice)); window.saved = window.saved.map(c => c.kind === kind ? { ...c, settings: { ...c.settings, ...choice } } : c); return list(); };
     })()`);
     await run(`layoutFixture.store.getState().setView('connectors')`);
     await sleep(1200);
-    // The sample fetch the row shows after connecting, on both sides of the change.
-    await click('Fetch sample'); await sleep(400);
-    await shot('github-connected');
+    // The sample fetch the row shows after connecting. GitHub's own Fetch
+    // sample exists only before the change; Linear's on both sides.
+    const clickIn = (kind, label) => run(`[...document.querySelector('[data-connector=${kind}]').querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)}).click()`);
+    if (baseline) await click('Fetch sample');
+    await clickIn('linear', 'Fetch sample'); await sleep(400);
+    await shot(baseline ? 'repos-before-v2' : 'repos-closed-v2');
     if (baseline) return;
+
+    await check('GitHub has no Fetch sample beside its repository list', `![...${gh}.querySelectorAll('button')].some(b => b.textContent.trim() === 'Fetch sample')`);
+    await check('the sample starts closed with a count', `document.querySelector('[data-connector=linear] [data-connector-sample] button[aria-expanded=false]').textContent.includes('Sample2') && !document.querySelector('[data-connector=linear]').textContent.includes('Fix the login')`);
+    await clickIn('linear', 'Sample2'); await sleep(400);
+    await check('the sample opens', `document.querySelector('[data-connector=linear]').textContent.includes('Fix the login redirect')`);
 
     await check('Repositories starts closed with a count', `${gh}.querySelector('[data-connector-repos] button[aria-expanded=false]').textContent.includes('Repositories7')`);
     await click('Repositories'); await sleep(400);
     await check('three owner groups, A to Z', `[...${gh}.querySelectorAll('[data-repo-group]')].map(g => g.dataset.repoGroup).join() === 'acme-corp,ermish,nekko-labs'`);
     await click('nekko-labs'); await sleep(350);
     await check('a group opens to its repositories', `${gh}.textContent.includes('hypergate')`);
-    await shot('repos-open');
+    await check('no repository shows twice', `!${gh}.textContent.includes('nekko-labs/nekko-agent')`);
+    await shot('repos-open-v2');
 
     const hover = await run(`(() => { const r = ${gh}.querySelector('[aria-label="Remove nekko-labs/hypergate"]').closest('[data-quiet-row]').getBoundingClientRect(); return { x: Math.round(r.left + 40), y: Math.round(r.top + r.height / 2) }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', x: hover.x, y: hover.y }); await sleep(300);
     await check('a row shows Remove on hover', `getComputedStyle(${gh}.querySelector('[aria-label="Remove nekko-labs/hypergate"]')).opacity === '1'`);
-    await shot('repos-hover');
+    await shot('repos-hover-v2');
     win.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 });
 
     await click('Remove nekko-labs/floop'); await sleep(350);
@@ -81,12 +92,12 @@ app.whenReady().then(async () => {
     await check('the count shows what is kept', `${gh}.querySelector('[data-connector-repos]').textContent.includes('4 of 7')`);
     await click('Removed'); await sleep(350);
     await check('removed items can be added back', `!!${gh}.querySelector('[aria-label="Add back acme-corp"]') && !!${gh}.querySelector('[aria-label="Add back nekko-labs/floop"]')`);
-    await shot('repos-removed');
+    await shot('repos-removed-v2');
 
     await click('Add back acme-corp'); await sleep(350);
     await check('adding an org back saves it', `window.calls.at(-1) === JSON.stringify({ excludedRepos: ['nekko-labs/floop'], excludedOwners: [] })`);
     win.setContentSize(390, 844); await sleep(400);
-    await shot('repos-narrow');
+    await shot('repos-narrow-v2');
     await check('narrow width does not overflow', 'document.documentElement.scrollWidth <= innerWidth');
   } catch (e) {
     report.errors.push(String((e && e.stack) || e));

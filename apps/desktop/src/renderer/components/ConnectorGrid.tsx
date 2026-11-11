@@ -4,7 +4,7 @@ import { CONNECTOR_CATALOG } from '@nekko-agent/shared';
 import { ConnectorIcon } from '../connectorIcons.js';
 import { CheckIcon } from '../icons.js';
 import { StatusDot } from './primitives/index.js';
-import { ConnectorRepos } from './ConnectorRepos.js';
+import { ConnectorRepos, Disclosure } from './ConnectorRepos.js';
 import { exclusionsOf } from '../connectorRepos.js';
 import { useStore } from '../store.js';
 
@@ -377,7 +377,8 @@ export function ConnectorRow({
         </span>
         {connected ? (
           <span className="flex shrink-0 items-center gap-1">
-            {!compact && (
+            {/* A git connector's Repositories list already shows what a sample would. */}
+            {!compact && !exclusions && (
               <button className="btn btn-ghost py-1 text-xs" onClick={onFetch}>
                 Fetch sample
               </button>
@@ -479,24 +480,47 @@ export function ConnectorRow({
 
       {!compact && connected && exclusions && onExclude && <ConnectorRepos kind={kind} exclusions={exclusions} onChange={onExclude} />}
 
-      {!compact && connected && data && (
-        <div className="mb-2 max-h-40 space-y-1 overflow-y-auto" style={{ paddingLeft: 48 }}>
-          {typeof data === 'string' ? (
-            <p className="text-xs" style={{ color: 'var(--danger-text)' }}>
-              {data}
-            </p>
-          ) : data.length === 0 ? (
-            <p className="text-xs text-ink-faint">No results.</p>
-          ) : (
-            data.map((r) => (
-              <div key={r.id} className="truncate text-xs">
-                <span className="font-medium">{r.title}</span>
-                {r.subtitle && <span className="text-ink-faint"> · {r.subtitle}</span>}
-              </div>
-            ))
+      {!compact && connected && data !== undefined && <Sample data={data} hideRepos={Boolean(exclusions)} />}
+    </div>
+  );
+}
+
+/** How the sample fetch labels a repository (GitHub) or project (GitLab). */
+const REPO_SUBTITLES: ReadonlySet<string> = new Set(['repo', 'private repo', 'GitLab project']);
+
+/**
+ * What a fetch returned, behind a disclosure closed by default with a count.
+ * An error shows at once. With `hideRepos` (the row lists its repositories
+ * already) repositories are left out, so nothing shows twice.
+ */
+export function Sample({ data, hideRepos = false, startOpen = false }: { data: ConnectorResource[] | string; hideRepos?: boolean; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
+  if (typeof data === 'string') {
+    return (
+      <p className="pb-2 text-xs" style={{ color: 'var(--danger-text)', paddingLeft: 48 }} role="alert">
+        {data}
+      </p>
+    );
+  }
+  const items = hideRepos ? data.filter((r) => !REPO_SUBTITLES.has(r.subtitle ?? '')) : data;
+  if (items.length === 0) return hideRepos ? null : <p className="pb-2 text-xs text-ink-faint" style={{ paddingLeft: 48 }}>No results.</p>;
+  return (
+    <div className="pb-2" style={{ paddingLeft: 48 }} data-connector-sample>
+      <Disclosure open={open} onToggle={() => setOpen(!open)} label="Sample" meta={`${items.length}`} strong />
+      <div className={`collapse-wrap ${open ? '' : 'collapsed'}`} aria-hidden={!open}>
+        <div className="min-h-0 overflow-hidden">
+          {open && (
+            <div className="max-h-40 space-y-1 overflow-y-auto fade-in" style={{ paddingLeft: 20 }}>
+              {items.map((r) => (
+                <div key={r.id} className="truncate text-xs">
+                  <span className="font-medium">{r.title}</span>
+                  {r.subtitle && <span className="text-ink-faint"> · {r.subtitle}</span>}
+                </div>
+              ))}
+            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

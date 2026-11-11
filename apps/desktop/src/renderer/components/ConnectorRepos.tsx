@@ -119,7 +119,8 @@ export function RepoChoice({
   );
 }
 
-function Disclosure({ open, onToggle, label, meta, action, strong = false }: { open: boolean; onToggle: () => void; label: string; meta: string; action?: React.ReactNode; strong?: boolean }) {
+/** A quiet disclosure line: chevron, label, count, and an optional action at the right. */
+export function Disclosure({ open, onToggle, label, meta, action, strong = false }: { open: boolean; onToggle: () => void; label: string; meta: string; action?: React.ReactNode; strong?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-2" data-quiet-row>
       <button type="button" className="flex min-w-0 items-center gap-2 py-1 text-left text-xs" aria-expanded={open} onClick={onToggle}>

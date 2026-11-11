@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.hoisted(() => { Object.assign(globalThis, { window: {}, localStorage: { getItem: () => null } }); });
 import { CONNECTOR_CATALOG, type ConnectorKind } from '@nekko-agent/shared';
 import { RepoChoice } from './ConnectorRepos.js';
-import { ConnectorGrid, ConnectorRow, type SetupStage, canConnect, firstStage, githubTokenUrl, gitlabTokenUrl, recognizesToken } from './ConnectorGrid.js';
+import { ConnectorGrid, ConnectorRow, Sample, type SetupStage, canConnect, firstStage, githubTokenUrl, gitlabTokenUrl, recognizesToken } from './ConnectorGrid.js';
 
 const meta = (kind: ConnectorKind) => CONNECTOR_CATALOG.find((c) => c.kind === kind)!;
 const noop = () => {};
@@ -111,5 +111,45 @@ describe('choosing GitHub repositories (#2562)', () => {
     );
     expect(html).toContain('Reconnect GitHub');
     expect(html).not.toContain('No repositories reachable');
+  });
+});
+
+describe('a connected row keeps its details collapsed (#2562)', () => {
+  const items = [
+    { id: '1', title: 'nekko-labs/nekko-agent', subtitle: 'repo' },
+    { id: '2', title: 'Fix login', subtitle: 'Issue nekko-labs/nekko-agent #3' },
+    { id: '3', title: 'grp/tool', subtitle: 'GitLab project' },
+  ];
+
+  it('puts the sample behind a closed disclosure with a count', () => {
+    const html = renderToStaticMarkup(<Sample data={items} />);
+    expect(html).toContain('Sample');
+    expect(html).toContain('>3<');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('Fix login');
+    expect(renderToStaticMarkup(<Sample data={items} startOpen />)).toContain('Fix login');
+  });
+
+  it('leaves repositories out of a git connector sample, and shows nothing when only they remain', () => {
+    const html = renderToStaticMarkup(<Sample data={items} hideRepos startOpen />);
+    expect(html).toContain('>1<');
+    expect(html).toContain('Fix login');
+    expect(html).not.toContain('nekko-labs/nekko-agent<');
+    expect(html).not.toContain('grp/tool');
+    expect(renderToStaticMarkup(<Sample data={[items[0]]} hideRepos />)).toBe('');
+  });
+
+  it('shows a fetch error at once', () => {
+    const html = renderToStaticMarkup(<Sample data="GitHub 401" />);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('GitHub 401');
+  });
+
+  it('offers Fetch sample only where no repository list replaces it', () => {
+    const none = { excludedRepos: [], excludedOwners: [] };
+    expect(row('linear', 'closed', { connected: true, data: items })).toContain('Fetch sample');
+    const gh = row('github', 'closed', { connected: true, data: items, exclusions: none, onExclude: noop });
+    expect(gh).not.toContain('Fetch sample');
+    expect(gh).not.toContain('nekko-labs/nekko-agent');
   });
 });
