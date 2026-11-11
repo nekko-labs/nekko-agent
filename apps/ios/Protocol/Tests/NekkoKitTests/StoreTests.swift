@@ -687,7 +687,7 @@ final class ChatModelTests: XCTestCase {
         c.pendingReply = { [weak chat] in
             var p: [String: JSONValue] = [:]
             if let a = chat?.turn.approval {
-                p["approval"] = ["call": ["id": .string(a.call.id), "name": .string(a.call.name), "input": a.call.input],
+                p["approval"] = ["call": ["id": .string(a.call.id), "name": .string(a.call.name), "input": .object(a.call.input)],
                                  "reason": .string(a.reason), "severity": .string(a.severity.rawValue)]
             }
             if let q = chat?.turn.question { p["question"] = PendingResponses.request(q) }
@@ -750,7 +750,7 @@ final class ChatModelTests: XCTestCase {
         c.pendingReply = { [weak chat] in
             var p: [String: JSONValue] = [:]
             if let a = chat?.turn.approval {
-                p["approval"] = ["call": ["id": .string(a.call.id), "name": .string(a.call.name), "input": a.call.input],
+                p["approval"] = ["call": ["id": .string(a.call.id), "name": .string(a.call.name), "input": .object(a.call.input)],
                                  "reason": .string(a.reason), "severity": .string(a.severity.rawValue)]
             }
             if let q = chat?.turn.question { p["question"] = PendingResponses.request(q) }

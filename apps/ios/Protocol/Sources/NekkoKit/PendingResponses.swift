@@ -170,7 +170,7 @@ public final class PendingResponses {
     }
 
     static func request(_ approval: Approval) -> JSONValue {
-        ["callId": .string(approval.call.id), "name": .string(approval.call.name), "input": approval.call.input,
+        ["callId": .string(approval.call.id), "name": .string(approval.call.name), "input": .object(approval.call.input),
          "reason": .string(approval.reason), "severity": .string(approval.severity.rawValue)]
     }
 }
