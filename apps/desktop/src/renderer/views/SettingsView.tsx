@@ -6,13 +6,13 @@ import { CHAT_MODE_LABEL, AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, aut
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
-import { Badge } from '../components/primitives/index.js';
+import { QuietTabs, StatusDot } from '../components/primitives/index.js';
 import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -41,6 +41,7 @@ import { StyleSection } from './StyleSection.js';
 import { openCustomize } from '../components/CustomizeExperience.js';
 import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
 import { useExpertMode, useShown } from '../simpleMode.js';
+import { ChoiceList, SettingRow, SettingsLabel, SettingsSection } from '../components/SettingsSection.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -49,7 +50,7 @@ const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> =
   { value: 'off', label: 'Off', desc: 'Nothing is confined (power users).' },
 ];
 
-const ACTION_COLORS: Record<GuardrailAction, string> = { allow: 'var(--success)', ask: 'var(--warning)', deny: 'var(--danger)' };
+const ACTION_TEXT: Record<GuardrailAction, string> = { allow: 'text-success-text', ask: 'text-warning-text', deny: 'text-danger-text' };
 
 const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
   { value: 'ask', label: CHAT_MODE_LABEL.ask, desc: 'Confirm every file write and command before it runs.' },
@@ -91,9 +92,9 @@ function AdvancedFold({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   if (shown || open) return <>{children}</>;
   return (
-    <section className="card mt-6 flex flex-wrap items-center gap-3 p-5" data-advanced-fold>
+    <section className="settings-section flex flex-wrap items-center gap-4" data-advanced-fold>
       <p className="min-w-0 flex-1 text-xs text-ink-soft">Git management, project management, pull requests, the terminal and MCP servers are kept for Detailed.</p>
-      <button type="button" className="btn btn-outline px-3 py-1 text-xs" onClick={() => setOpen(true)}>Show advanced settings</button>
+      <button type="button" className="btn btn-ghost py-1 text-xs" onClick={() => setOpen(true)}>Show advanced settings</button>
     </section>
   );
 }
@@ -215,11 +216,57 @@ export function SettingsView() {
           <div className="min-w-0">
             <SettingsGroup id="support">
               <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
-              <div className="mt-4"><ErrorBoundary label="GitHub support"><GitHubStarSupport /></ErrorBoundary></div>
+              <ErrorBoundary label="GitHub support"><GitHubStarSupport /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="general">
-              <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
+              <SettingsSection id="chats" title="Chats">
+                <SettingRow
+                  htmlFor="chat-pane-action"
+                  title="Chat pane top-right action"
+                  detail="Complete keeps the chat under Completed until you delete it."
+                  control={
+                    <select id="chat-pane-action" className="quiet-field w-[180px] py-1" value={settings.chatPaneAction ?? 'complete'} onChange={(e) => update({ chatPaneAction: e.target.value === 'delete' ? 'delete' : 'complete' })}>
+                      <option value="complete">Complete (default)</option>
+                      <option value="delete">Delete</option>
+                    </select>
+                  }
+                />
+                <SettingRow
+                  htmlFor="auto-complete-after"
+                  title="Complete idle agents after"
+                  detail="Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show completed."
+                  control={
+                    <select id="auto-complete-after" className="quiet-field w-[180px] py-1" value={autoCompleteDays(settings.autoCompleteAfterDays)} onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}>
+                      {AUTO_COMPLETE_CHOICES.map((c) => (
+                        <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_COMPLETE_DEFAULT_DAYS ? ' (default)' : ''}</option>
+                      ))}
+                    </select>
+                  }
+                />
+                <SettingRow title="Confirm deletions" control={<Toggle aria-label="Confirm deletions" on={settings.skipDeleteConfirmation !== true} onChange={(v) => update({ skipDeleteConfirmation: !v })} />} />
+              </SettingsSection>
+              <ErrorBoundary label="Desktop behavior"><DesktopBehaviorSection settings={settings} update={update} /></ErrorBoundary>
+              <SettingsSection id="language-and-help" title="Language and help">
+                <SettingRow
+                  htmlFor="settings-language"
+                  title={tr('settings.language')}
+                  detail={tr('settings.languageHint')}
+                  control={
+                    <select id="settings-language" className="quiet-field w-[180px] py-1" value={settings.language ?? ''} onChange={(e) => update({ language: e.target.value || undefined })}>
+                      <option value="">{tr('settings.systemDefault')}</option>
+                      {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+                    </select>
+                  }
+                />
+                <SettingRow title="Show tips" control={<Toggle aria-label="Show tips" on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />} />
+                <SettingRow
+                  title="Setup wizard"
+                  detail="Reopen the first-run walkthrough."
+                  control={<button className="btn btn-ghost py-1 text-xs" onClick={() => void replaySetup()}>Replay setup</button>}
+                />
+              </SettingsSection>
+              <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
               <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
               <section className="card mt-5 p-5" data-repo-folder>
                 <h2 className="font-semibold">Repositories folder</h2>
@@ -244,125 +291,17 @@ export function SettingsView() {
             <SettingsGroup id="customize">
               {/* Personal: how Nekko addresses you belongs with the rest of personalization (#2102). */}
               <AboutYouSection settings={settings} update={update} />
-              <section className="card mt-5 p-5">
-                <h2 className="font-semibold">View settings</h2>
-                <p className="mt-1 text-xs text-ink-faint">Optional sidebar shortcuts. Skills and Connectors are always available at the top of Settings.</p>
-                {(['skills', 'connectors'] as const).map((view) => (
-                  <div key={view} className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-                    <span className="text-sm">Show {tr(`nav.${view}`)} in sidebar</span>
-                    <Toggle aria-label={`Show ${view === 'skills' ? 'Skills' : 'Connectors'} in sidebar`} on={settings.sidebarViews?.[view] === true} onChange={(v) => update({ sidebarViews: { ...settings.sidebarViews, [view]: v } })} />
-                  </div>
-                ))}
-              </section>
-              {/* Appearance */}
-              <section className="card mt-6 p-5">
-                <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2></div>
+              <SettingsSection id="appearance" title={tr('settings.appearance')}>
                 <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
-
-                <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="text-sm">Background animation</span>
-                    <p id="background-animation-hint" className="text-2xs text-ink-faint">
-                      {pixelWaveFor(wavePreset)
-                        ? 'Moving pixel dots only in empty new-agent windows. Turn off for lower power use.'
-                        : 'Pixel dots in empty new-agent windows with Lilac, Lavender and Experimental themes. This theme has none.'}
-                    </p>
-                  </div>
-                  <Toggle
-                    aria-label="Background animation"
-                    aria-describedby="background-animation-hint"
-                    on={settings.backgroundAnimation !== false}
-                    onChange={(v) => update({ backgroundAnimation: v })}
-                  />
-                </div>
-
-                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="text-sm">{tr('settings.language')}</span>
-                    <p className="text-2xs text-ink-faint">{tr('settings.languageHint')}</p>
-                  </div>
-                  <select
-                    className="input max-w-[180px] py-1"
-                    value={settings.language ?? ''}
-                    onChange={(e) => update({ language: e.target.value || undefined })}
-                  >
-                    <option value="">{tr('settings.systemDefault')}</option>
-                    {LANGUAGES.map((l) => (
-                      <option key={l.code} value={l.code}>{l.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <label htmlFor="chat-pane-action" className="text-sm">Chat pane top-right action</label>
-                    <p className="text-2xs text-ink-faint">The X completes a chat and keeps it under Completed until you delete it. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
-                  </div>
-                  <select
-                    id="chat-pane-action"
-                    className="input max-w-[180px] py-1"
-                    value={settings.chatPaneAction ?? 'complete'}
-                    onChange={(e) => update({ chatPaneAction: e.target.value === 'delete' ? 'delete' : 'complete' })}
-                  >
-                    <option value="complete">Complete (default)</option>
-                    <option value="delete">Delete</option>
-                  </select>
-                </div>
-                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <label htmlFor="auto-complete-after" className="text-sm">Complete idle agents after</label>
-                    <p className="text-2xs text-ink-faint">Agents with no activity for this long are completed, like pressing their X. Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show completed.</p>
-                  </div>
-                  <select
-                    id="auto-complete-after"
-                    className="input max-w-[180px] py-1"
-                    value={autoCompleteDays(settings.autoCompleteAfterDays)}
-                    onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}
-                  >
-                    {AUTO_COMPLETE_CHOICES.map((c) => (
-                      <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_COMPLETE_DEFAULT_DAYS ? ' (default)' : ''}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="mt-2 flex min-h-[40px] items-center justify-between">
-                  <span className="text-sm">Show tips</span>
-                  <Toggle aria-label="Show tips" on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />
-                </div>
-                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-                  <span className="text-sm">Confirm deletions</span>
-                  <Toggle aria-label="Confirm deletions" on={settings.skipDeleteConfirmation !== true} onChange={(v) => update({ skipDeleteConfirmation: !v })} />
-                </div>
-                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="text-sm">Warn before No restrictions</span>
-                    <p className="text-2xs text-ink-faint">Explain what No restrictions lets through before a chat or the default switches to it.</p>
-                  </div>
-                  <Toggle aria-label="Warn before No restrictions" on={settings.skipYoloWarning !== true} onChange={(v) => update({ skipYoloWarning: !v })} />
-                </div>
-                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3 border-t border-line pt-3">
-                  <div className="min-w-0">
-                    <span className="text-sm">Setup wizard</span>
-                    <p className="text-2xs text-ink-faint">Reopen the first-run walkthrough (you, detail, look, providers, integrations).</p>
-                  </div>
-                  <button className="btn btn-outline shrink-0 py-1 text-xs" onClick={() => void replaySetup()}>
-                    Replay setup
-                  </button>
-                </div>
-              </section>
-              <DesktopBehaviorSection settings={settings} update={update} />
-              <FunSection settings={settings} update={update} />
-              <section className="card mt-5 p-5">
-                <h2 className="font-semibold">Agents wall</h2>
-                <WallLayoutSettings settings={settings} update={update} />
-                <label className="mt-3 flex items-center justify-between gap-3 text-sm">Auto-add new agents
-                  <input type="checkbox" checked={loadWallState(localStorage, settings.commandWall).autoAdd} onChange={async (e) => {
-                    const wall = { ...loadWallState(localStorage, settings.commandWall), autoAdd: e.target.checked };
-                    await update({ commandWall: toWallSetting(wall) });
-                    saveWallState(localStorage, wall);
-                  }} />
-                </label>
-                <p className="mt-1 text-xs text-ink-faint">Add newly created top-level agents to the wall automatically.</p>
-              </section>
-              <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
+                <SettingRow
+                  title="Background animation"
+                  detailId="background-animation-hint"
+                  detail={pixelWaveFor(wavePreset)
+                    ? 'Moving pixel dots only in empty new-agent windows. Turn off for lower power use.'
+                    : 'Pixel dots in empty new-agent windows with Lilac, Lavender and Experimental themes. This theme has none.'}
+                  control={<Toggle aria-label="Background animation" aria-describedby="background-animation-hint" on={settings.backgroundAnimation !== false} onChange={(v) => update({ backgroundAnimation: v })} />}
+                />
+              </SettingsSection>
               {/* Keep existing subsection anchors while the rail groups them under Customize. */}
               <div id="settings-style">
                 <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
@@ -370,123 +309,105 @@ export function SettingsView() {
               <div id="settings-animations">
                 <AnimationsSection settings={settings} update={update} />
               </div>
+              <SettingsSection id="agents-wall" title="Agents wall">
+                <WallLayoutSettings settings={settings} update={update} />
+                <SettingRow
+                  title="Auto-add new agents"
+                  detail="Add newly created top-level agents to the wall automatically."
+                  control={<Toggle aria-label="Auto-add new agents" on={loadWallState(localStorage, settings.commandWall).autoAdd} onChange={async (v) => {
+                    const wall = { ...loadWallState(localStorage, settings.commandWall), autoAdd: v };
+                    await update({ commandWall: toWallSetting(wall) });
+                    saveWallState(localStorage, wall);
+                  }} />}
+                />
+              </SettingsSection>
+              <SettingsSection id="view-settings" title="View settings" help="Optional sidebar shortcuts. Skills and Connectors are always at the top of Settings.">
+                {(['skills', 'connectors'] as const).map((view) => (
+                  <SettingRow key={view} title={`Show ${tr(`nav.${view}`)} in sidebar`} control={<Toggle aria-label={`Show ${view === 'skills' ? 'Skills' : 'Connectors'} in sidebar`} on={settings.sidebarViews?.[view] === true} onChange={(v) => update({ sidebarViews: { ...settings.sidebarViews, [view]: v } })} />} />
+                ))}
+              </SettingsSection>
               <div id="settings-simple">
                 <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
               </div>
+              <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
+              <FunSection settings={settings} update={update} />
             </SettingsGroup>
             <SettingsGroup id="agents">
-              {/* Chat modes */}
-              <section className="card mt-5 p-5">
-                <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.chatModes')}</h2></div>
-                <p className="mt-1 text-xs text-ink-faint">
-                  How chats run tools. Pick the default for new chats, each chat can override it from the composer.
-                </p>
-                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-                  {CHAT_MODES.map((m) => {
-                    const active = (settings.defaultChatMode ?? 'guardrails') === m.value;
-                    return (
-                      <button key={m.value} onClick={() => void allowModeChange(settings.defaultChatMode, m.value).then((ok) => { if (ok) update({ defaultChatMode: m.value }); })} className={`card p-3 text-left ${active ? 'border-accent' : ''}`}>
-                        <div className="flex items-center gap-1.5 text-sm font-medium">{React.createElement(CHAT_MODE_ICON[m.value], { className: 'h-3.5 w-3.5 shrink-0 text-ink-faint' })}{m.label}</div>
-                        <div className="mt-0.5 text-2xs text-ink-faint">{m.desc}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-              {/* Agent loop */}
               <ErrorBoundary label="Agent loop"><AgentLoopSection settings={settings} update={update} /></ErrorBoundary>
+              <SettingsSection id="spec-driven" title="Spec-driven development" help="The default workflow for building a spec and tasks from a conversation. Each chat can override it in the Context panel.">
+                <ChoiceList
+                  label="Spec-driven development"
+                  value={settings.specMethodology ?? DEFAULT_SPEC_METHODOLOGY}
+                  onChange={(id) => update({ specMethodology: id })}
+                  items={SPEC_METHODOLOGIES.map((m) => ({ value: m.id, label: m.label, detail: m.description }))}
+                />
+              </SettingsSection>
+              <SettingsSection id="orchestration" title="Agent orchestration" help={<>How agents delegate to sub-agents: the system prompt and whether <code className="text-2xs">spawn_agent</code> is offered.</>}>
+                <ChoiceList
+                  label="Agent orchestration"
+                  value={(settings.orchestration ?? DEFAULT_ORCHESTRATION).strategy}
+                  onChange={(strategy) => update({ orchestration: { ...(settings.orchestration ?? DEFAULT_ORCHESTRATION), strategy } })}
+                  items={ORCHESTRATION_STRATEGIES.map((st) => ({ value: st.id, label: st.label, detail: st.description }))}
+                />
+                {(settings.orchestration ?? DEFAULT_ORCHESTRATION).strategy !== 'solo' && ([
+                  { key: 'maxDepth', label: 'Max nesting depth', min: 1, max: 4 },
+                  { key: 'maxParallel', label: 'Parallel sub-agents (advisory)', min: 1, max: 12 },
+                ] as const).map((f) => {
+                  const cur = settings.orchestration ?? DEFAULT_ORCHESTRATION;
+                  return (
+                    <SettingRow
+                      key={f.key}
+                      htmlFor={`orchestration-${f.key}`}
+                      title={f.label}
+                      control={
+                        <input
+                          id={`orchestration-${f.key}`}
+                          type="number"
+                          min={f.min}
+                          max={f.max}
+                          value={cur[f.key]}
+                          onChange={(e) => {
+                            const n = Math.max(f.min, Math.min(f.max, Number(e.target.value) || f.min));
+                            update({ orchestration: { ...cur, [f.key]: n } });
+                          }}
+                          className="quiet-field w-20 py-1 tabular-nums"
+                        />
+                      }
+                    />
+                  );
+                })}
+              </SettingsSection>
+              <SettingsSection id="delegation-routes" title="Delegation routes"><div className="mt-(--q-inline)"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
               <ErrorBoundary label="Hooks"><HooksSection settings={settings} update={update} /></ErrorBoundary>
-              {/* Spec-driven development */}
-              <section className="card mt-5 p-5">
-                <div className="flex items-center gap-2"><h2 className="font-semibold">Spec-driven development</h2></div>
-                <p className="mt-1 text-xs text-ink-faint">
-                  Default workflow for building a spec and tasks from a conversation. Each chat can override it in the Context panel.
-                </p>
-                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-                  {SPEC_METHODOLOGIES.map((m) => {
-                    const active = (settings.specMethodology ?? DEFAULT_SPEC_METHODOLOGY) === m.id;
-                    return (
-                      <button key={m.id} onClick={() => update({ specMethodology: m.id })} className={`card p-3 text-left ${active ? 'border-accent' : ''}`}>
-                        <div className="text-sm font-medium">{m.label}</div>
-                        <div className="mt-0.5 text-2xs text-ink-faint">{m.description}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-
-              {/* Agent orchestration */}
-              <section className="card mt-5 p-5">
-                <div className="flex items-center gap-2"><RobotIcon className="h-4 w-4" /><h2 className="font-semibold">Agent orchestration</h2></div>
-                <p className="mt-1 text-xs text-ink-faint">
-                  How agents delegate to sub-agents. Shapes the system prompt and whether the <code className="text-2xs">spawn_agent</code> tool is offered.
-                </p>
-                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-                  {ORCHESTRATION_STRATEGIES.map((st) => {
-                    const cur = settings.orchestration ?? DEFAULT_ORCHESTRATION;
-                    const active = cur.strategy === st.id;
-                    return (
-                      <button
-                        key={st.id}
-                        onClick={() => update({ orchestration: { ...cur, strategy: st.id } })}
-                        className={`card p-3 text-left ${active ? 'border-accent' : ''}`}
-                      >
-                        <div className="text-sm font-medium">{st.label}</div>
-                        <div className="mt-0.5 text-2xs text-ink-faint">{st.description}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-                {(settings.orchestration ?? DEFAULT_ORCHESTRATION).strategy !== 'solo' && (
-                  <div className="mt-3 flex flex-wrap gap-4">
-                    {([
-                      { key: 'maxDepth', label: 'Max nesting depth', min: 1, max: 4 },
-                      { key: 'maxParallel', label: 'Parallel sub-agents (advisory)', min: 1, max: 12 },
-                    ] as const).map((f) => {
-                      const cur = settings.orchestration ?? DEFAULT_ORCHESTRATION;
-                      return (
-                        <label key={f.key} className="flex items-center gap-2 text-xs">
-                          <span className="text-ink-faint">{f.label}</span>
-                          <input
-                            type="number"
-                            min={f.min}
-                            max={f.max}
-                            value={cur[f.key]}
-                            onChange={(e) => {
-                              const n = Math.max(f.min, Math.min(f.max, Number(e.target.value) || f.min));
-                              update({ orchestration: { ...cur, [f.key]: n } });
-                            }}
-                            className="input w-16 text-xs"
-                          />
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-
-              <section className="card mt-6 p-5"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></section>
               <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Claude plan features"><ClaudePlanFeaturesSection settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="safety">
+              {/* The default chat mode is the first safety decision, so it leads (moved from Agents). */}
+              <SettingsSection id="chat-modes" title={tr('settings.chatModes')} help="How chats run tools. New chats start here; each chat can change it from the composer.">
+                <ChoiceList
+                  label={tr('settings.chatModes')}
+                  value={settings.defaultChatMode ?? 'guardrails'}
+                  onChange={(mode) => void allowModeChange(settings.defaultChatMode, mode).then((ok) => { if (ok) update({ defaultChatMode: mode }); })}
+                  items={CHAT_MODES.map((m) => ({ value: m.value, label: m.label, detail: m.desc, icon: React.createElement(CHAT_MODE_ICON[m.value], { className: 'h-3.5 w-3.5' }) }))}
+                />
+                <SettingRow
+                  title="Warn before No restrictions"
+                  detail="Explain what No restrictions lets through before a chat or the default switches to it."
+                  control={<Toggle aria-label="Warn before No restrictions" on={settings.skipYoloWarning !== true} onChange={(v) => update({ skipYoloWarning: !v })} />}
+                />
+              </SettingsSection>
+              <SettingsSection id="sandbox" title={tr('settings.sandbox')} help="How Nekko Agent is allowed to touch your machine.">
+                <ChoiceList
+                  label={tr('settings.sandbox')}
+                  value={settings.sandboxMode}
+                  onChange={(sandboxMode) => update({ sandboxMode })}
+                  items={SANDBOX_OPTS.map((o) => ({ value: o.value, label: o.label, detail: o.desc }))}
+                />
+              </SettingsSection>
+              <ErrorBoundary label="Guardrails"><GuardrailsSection settings={settings} update={update} updateGuardrail={updateGuardrail} /></ErrorBoundary>
               {/* Security: hardware keys and step-up (SK-4) */}
               <ErrorBoundary label="Security"><SecuritySettings /></ErrorBoundary>
-              {/* Sandbox */}
-              <section className="card mt-5 p-5">
-                <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.sandbox')}</h2></div>
-                <p className="mt-1 text-xs text-ink-faint">How Nekko Agent is allowed to touch your machine.</p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {SANDBOX_OPTS.map((o) => (
-                    <button key={o.value} onClick={() => update({ sandboxMode: o.value })} className={`card p-3 text-left ${settings.sandboxMode === o.value ? 'border-accent' : ''}`}>
-                      <div className="text-sm font-medium">{o.label}</div>
-                      <div className="mt-0.5 text-2xs text-ink-faint">{o.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-              {/* Guardrails */}
-              <ErrorBoundary label="Guardrails"><GuardrailsSection settings={settings} update={update} updateGuardrail={updateGuardrail} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="connections">
               <ErrorBoundary label="Connections"><ConnectionsSettings settings={settings} update={update} /></ErrorBoundary>
@@ -496,61 +417,39 @@ export function SettingsView() {
               <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Project management"><ProjectManagementSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Pull requests"><PullRequestsSection settings={settings} update={update} /></ErrorBoundary>
-              {/* Terminal */}
               <ErrorBoundary label="Terminal"><TerminalSection settings={settings} update={update} /></ErrorBoundary>
-              {/* MCP servers */}
               <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
               </AdvancedFold>
             </SettingsGroup>
             <SettingsGroup id="system">
               <ErrorBoundary label="Nekko Agent service"><ServiceManagement settings={settings} update={update} /></ErrorBoundary>
-              {/* Updates */}
               <ErrorBoundary label="Updates"><UpdatesSection settings={settings} update={update} /></ErrorBoundary>
-              <section className="card mt-5 p-5">
-                <h2 className="font-semibold">Developer</h2>
-                <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-                  <div><span className="text-sm">Show server controls</span>
-                    <p className="text-2xs text-ink-faint">Desktop only. Show agent and model server toggles and Restart server in the top-right title bar. Off by default.</p></div>
-                  <Toggle aria-label="Show server controls" on={settings.developer?.serverControls === true} onChange={(v) => update({ developer: { ...settings.developer, serverControls: v } })} />
-                </div>
-                <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-                  <div><span className="text-sm">Show model-switch token notice</span>
-                    <p className="text-2xs text-ink-faint">Explain estimated input tokens for the next turn when you change the model or effort in an existing chat. On by default.</p></div>
-                  <Toggle aria-label="Show model-switch token notice" on={settings.developer?.showContextChangeNotice !== false} onChange={(v) => update({ developer: { ...settings.developer, showContextChangeNotice: v } })} />
-                </div>
-              </section>
-
-              {/* Experimental */}
-              <section className="card mt-5 p-5">
-                <div className="flex items-center gap-2"><WandIcon className="h-4 w-4" /><h2 className="font-semibold">Experimental</h2></div>
-                <p className="mt-1 text-xs text-ink-faint">
-                  In-progress surfaces, kept out of the sidebar until you switch them on here. Off by default; turning one off hides the tab again.
-                </p>
-                <div className="mt-3">
-                  {EXPERIMENTAL_FLAGS.map((f) => (
-                    <div key={f.key} className="flex min-h-[40px] items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <span className="text-sm">{f.label}</span>
-                        <p className="text-2xs text-ink-faint">{f.desc}</p>
-                      </div>
-                      <Toggle
-                        aria-label={f.label}
-                        on={settings.experimental?.[f.key] === true}
-                        onChange={(v) => update({ experimental: { ...settings.experimental, [f.key]: v } })}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Backup & restore */}
+              <SettingsSection id="developer" title="Developer">
+                <SettingRow
+                  title="Show server controls"
+                  detail="Desktop only. Agent and model server toggles and Restart server in the title bar."
+                  control={<Toggle aria-label="Show server controls" on={settings.developer?.serverControls === true} onChange={(v) => update({ developer: { ...settings.developer, serverControls: v } })} />}
+                />
+                <SettingRow
+                  title="Show model-switch token notice"
+                  detail="Estimate the next turn's input tokens when you change the model or effort in a chat."
+                  control={<Toggle aria-label="Show model-switch token notice" on={settings.developer?.showContextChangeNotice !== false} onChange={(v) => update({ developer: { ...settings.developer, showContextChangeNotice: v } })} />}
+                />
+              </SettingsSection>
+              <SettingsSection id="experimental" title="Experimental" help="In-progress surfaces, kept out of the sidebar until you switch them on.">
+                {EXPERIMENTAL_FLAGS.map((f) => (
+                  <SettingRow
+                    key={f.key}
+                    title={f.label}
+                    detail={f.desc}
+                    control={<Toggle aria-label={f.label} on={settings.experimental?.[f.key] === true} onChange={(v) => update({ experimental: { ...settings.experimental, [f.key]: v } })} />}
+                  />
+                ))}
+              </SettingsSection>
               <ErrorBoundary label="Backup"><BackupSection settings={settings} onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
-
-
-              {/* Data & privacy */}
               <ErrorBoundary label="Data and privacy"><DataSection onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
             </SettingsGroup>
-            <p className="mt-6 text-center text-2xs text-ink-faint">Nekko Agent · open source · MIT</p>
+            <p className="mt-(--q-section) text-center text-2xs text-ink-faint">Nekko Agent · open source · MIT</p>
           </div>
         </div>
       </div>
@@ -583,38 +482,20 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
   };
 
   return (
-    <section className="card mt-5 p-5">
-      <div className="flex items-center gap-2"><RobotIcon className="h-4 w-4" /><h2 className="font-semibold">Agent loop</h2></div>
-      <p className="mt-1 text-xs text-ink-faint">
-        Nekko Agent keeps working until the task is finished or you press Stop. Loop detection catches repeated tool
-        calls and error streaks; output safeguards remain active.
-      </p>
+    <SettingsSection id="agent-loop" title="Agent loop" help="Agents keep working until the task is finished or you press Stop. Loop detection catches repeated calls and error streaks.">
       <InternetRecoverySetting settings={settings} update={update} />
-      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-sm">Prompt caching</span>
-          <p id="prompt-caching-hint" className="text-2xs text-ink-faint">
-            On by default. Always sends the full context. Uses native caching on supported cloud providers and
-            local KV cache reuse where supported; unsupported remote providers are not treated as cached.
-            Off disables Nekko's cache requests and managed reuse, but providers may still cache automatically.
-            For managed local models, the launch policy takes effect when you reload the model.
-          </p>
-        </div>
-        <Toggle on={promptCachingEnabled(settings)} onChange={(v) => update({ promptCaching: v })} aria-label="Prompt caching" aria-describedby="prompt-caching-hint" />
-      </div>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-sm">Output cap per response, local models</span>
-          <p className="text-2xs text-ink-faint">
-            Tokens one response from a local server (Ollama, LM Studio, vLLM, llama.cpp) may generate. Stops a model
-            that gets stuck repeating itself from streaming until its context fills. Cloud providers run to their own
-            limits and are not capped. {MAX_OUTPUT_TOKENS_RANGE.min}–{MAX_OUTPUT_TOKENS_RANGE.max.toLocaleString()}.
-            Default {MAX_OUTPUT_TOKENS_DEFAULT.toLocaleString()}.
-          </p>
-        </div>
-        <input
+      <SettingRow
+        title="Prompt caching"
+        detailId="prompt-caching-hint"
+        detail="On by default. Native caching on supported cloud providers and local KV cache reuse where supported. Off stops Nekko's own cache requests; providers may still cache. Local models pick up a change when reloaded."
+        control={<Toggle on={promptCachingEnabled(settings)} onChange={(v) => update({ promptCaching: v })} aria-label="Prompt caching" aria-describedby="prompt-caching-hint" />}
+      />
+      <SettingRow
+        title="Output cap per response, local models"
+        detail={<>Stops a local model that repeats itself from streaming until its context fills. Cloud providers are not capped. {MAX_OUTPUT_TOKENS_RANGE.min}–{MAX_OUTPUT_TOKENS_RANGE.max.toLocaleString()}, default {MAX_OUTPUT_TOKENS_DEFAULT.toLocaleString()}.</>}
+        control={<input
           type="number"
-          className="input max-w-[110px] py-1 tabular-nums"
+          className="quiet-field w-[110px] py-1 tabular-nums"
           min={MAX_OUTPUT_TOKENS_RANGE.min}
           max={MAX_OUTPUT_TOKENS_RANGE.max}
           step={256}
@@ -623,21 +504,15 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
           onChange={(e) => setOut(e.target.value)}
           onBlur={commitOut}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        />
-      </div>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-sm">Unattended questions: decide after</span>
-          <p className="text-2xs text-ink-faint">
-            Minutes a question from the agent waits for you before it is told nobody answered and to choose the most
-            reasonable option itself, stating the assumption. For chats you leave running. 0 waits for ever. Approvals
-            of risky commands never time out.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+        />}
+      />
+      <SettingRow
+        title="Unattended questions: decide after"
+        detail="Minutes an agent's question waits before the agent picks the most reasonable option itself and says so. 0 waits for ever. Approvals of risky commands never time out."
+        control={<>
           <input
             type="number"
-            className="input max-w-[90px] py-1 tabular-nums"
+            className="quiet-field w-[90px] py-1 tabular-nums"
             min={0}
             max={1440}
             step={5}
@@ -648,10 +523,9 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
           />
           <span className="text-xs text-ink-faint">min</span>
-        </div>
-      </div>
-
-    </section>
+        </>}
+      />
+    </SettingsSection>
   );
 }
 
@@ -670,40 +544,41 @@ function HooksSection({ settings, update }: { settings: AppSettings; update: (pa
   const edit = (id: string, patch: Partial<HookRule>) => save(hooks.map((h) => (h.id === id ? { ...h, ...patch } : h)));
   const add = () => save([...hooks, { id: `hook_${Date.now().toString(36)}`, event: 'PreToolUse', matcher: '', command: '', enabled: true }]);
   return (
-    <section className="card mt-5 p-5">
-      <div className="flex items-center gap-2"><WandIcon className="h-4 w-4" /><h2 className="font-semibold">Hooks</h2></div>
-      <p className="mt-1 text-xs text-ink-faint">
-        Your own commands around the agent's actions. Each gets the event as JSON on stdin (event, tool name and input,
-        the result for post-hooks) and runs in the chat's workspace with <code>NEKKO_HOOK_EVENT</code> set; the tool name
-        matcher is a regular expression, empty for every tool. While a tool hook is on, every tool runs in the host so the
-        hook sees it.
-      </p>
-      <div className="mt-3 space-y-2">
+    <SettingsSection id="hooks" title="Hooks" help="Your own commands around the agent's actions." actions={<button className="btn btn-ghost py-1 text-xs" onClick={add}>Add hook</button>}>
+      <details className="mt-(--q-tight) text-xs text-ink-faint">
+        <summary className="w-fit cursor-pointer transition-colors duration-(--dur-fast) hover:text-ink">How hooks run</summary>
+        <p className="mt-(--q-tight)">
+          Each gets the event as JSON on stdin (event, tool name and input, the result for post-hooks) and runs in the chat's
+          workspace with <code>NEKKO_HOOK_EVENT</code> set; the tool name matcher is a regular expression, empty for every tool.
+          While a tool hook is on, every tool runs in the host so the hook sees it.
+        </p>
+      </details>
+      <div className="mt-(--q-inline)">
         {hooks.map((h) => {
           const ev = HOOK_EVENTS.find((e) => e.value === h.event) ?? HOOK_EVENTS[0];
           return (
-            <div key={h.id} className="rounded-lg border border-line p-3">
+            <div key={h.id} className="mt-(--q-group) first:mt-(--q-inline)" data-quiet-row>
               <div className="flex flex-wrap items-center gap-2">
-                <select className="input max-w-[170px] py-1" value={h.event} aria-label="Hook event" onChange={(e) => edit(h.id, { event: e.target.value as HookEvent })}>
+                <select className="quiet-field max-w-[170px] py-1" value={h.event} aria-label="Hook event" onChange={(e) => edit(h.id, { event: e.target.value as HookEvent })}>
                   {HOOK_EVENTS.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}
                 </select>
-                <input className="input max-w-[150px] py-1 text-xs" placeholder="Name" aria-label="Hook name" defaultValue={h.name ?? ''} onBlur={(e) => edit(h.id, { name: e.target.value.trim() || undefined })} />
+                <input className="quiet-field max-w-[150px] py-1 text-xs" placeholder="Name" aria-label="Hook name" defaultValue={h.name ?? ''} onBlur={(e) => edit(h.id, { name: e.target.value.trim() || undefined })} />
                 {h.event !== 'TurnEnd' && (
-                  <input className="input max-w-[170px] py-1 font-mono text-xs" placeholder="Tools (regex), empty = all" aria-label="Hook tool matcher" defaultValue={h.matcher ?? ''} onBlur={(e) => edit(h.id, { matcher: e.target.value.trim() })} />
+                  <input className="quiet-field max-w-[170px] py-1 font-mono text-xs" placeholder="Tools (regex), empty = all" aria-label="Hook tool matcher" defaultValue={h.matcher ?? ''} onBlur={(e) => edit(h.id, { matcher: e.target.value.trim() })} />
                 )}
                 <div className="ml-auto flex items-center gap-2">
                   <Toggle aria-label={`Hook ${h.name || 'enabled'}`} on={h.enabled !== false} onChange={(v) => edit(h.id, { enabled: v })} />
-                  <button className="btn btn-ghost px-2 py-1 text-ink-faint hover:text-(--danger)" title="Remove hook" aria-label="Remove hook" onClick={() => save(hooks.filter((x) => x.id !== h.id))}><TrashIcon className="h-3.5 w-3.5" /></button>
+                  <button className="btn btn-ghost quiet-row-action py-1 text-xs text-danger-text" aria-label="Remove hook" onClick={() => save(hooks.filter((x) => x.id !== h.id))}>Remove</button>
                 </div>
               </div>
-              <input className="input mt-2 w-full py-1 font-mono text-xs" placeholder="Command, e.g. node scripts/check-tool.js" aria-label="Hook command" defaultValue={h.command} onBlur={(e) => edit(h.id, { command: e.target.value })} />
-              <p className="mt-1 text-2xs text-ink-faint">{ev.hint}</p>
+              <input className="quiet-field mt-(--q-inline) w-full py-1 font-mono text-xs" placeholder="Command, e.g. node scripts/check-tool.js" aria-label="Hook command" defaultValue={h.command} onBlur={(e) => edit(h.id, { command: e.target.value })} />
+              <p className="mt-(--q-tight) text-xs text-ink-faint">{ev.hint}</p>
             </div>
           );
         })}
+        {hooks.length === 0 && <p className="py-(--q-inline) text-xs text-ink-faint">No hooks yet.</p>}
       </div>
-      <button className="btn btn-outline mt-3 px-3 py-1 text-xs" onClick={add}>Add hook</button>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -716,26 +591,17 @@ function TerminalSection({ settings, update }: { settings: AppSettings; update: 
   const [shells, setShells] = useState<ShellOption[]>([]);
   useEffect(() => { window.nekko.listShells().then(setShells).catch(() => {}); }, []);
   return (
-    <section className="card mt-5 p-5">
-      <div className="flex items-center gap-2"><h2 className="font-semibold">Terminal</h2></div>
-      <label className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-        <span className="text-sm">Default shell</span>
-        <select className="input max-w-[180px] py-1" aria-label="Default shell" value={settings.defaultShellPath ?? ''} onChange={(e) => update({ defaultShellPath: e.target.value || undefined })}>
+    <SettingsSection id="terminal" title="Terminal">
+      <SettingRow htmlFor="terminal-shell" title="Default shell" control={
+        <select id="terminal-shell" className="quiet-field w-[180px] py-1" aria-label="Default shell" value={settings.defaultShellPath ?? ''} onChange={(e) => update({ defaultShellPath: e.target.value || undefined })}>
           <option value="">Auto-detect</option>
           {settings.defaultShellPath && !shells.some((shell) => shell.path === settings.defaultShellPath) && <option value={settings.defaultShellPath}>{settings.defaultShellPath} (unavailable)</option>}
           {shells.map((shell) => <option key={shell.id} value={shell.path}>{shell.label}</option>)}
         </select>
-      </label>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-sm">Renderer</span>
-          <p className="text-2xs text-ink-faint">
-            xterm.js draws on the GPU and stays smooth under heavy output. Ghostty uses the same terminal core as
-            the Ghostty app, but can lag while a command prints a lot. Open terminals redraw when you switch.
-          </p>
-        </div>
+      } />
+      <SettingRow title="Renderer" detail="xterm.js stays smooth under heavy output. Ghostty uses the Ghostty app's terminal core but can lag on a lot of output." control={
         <select
-          className="input max-w-[180px] py-1"
+          className="quiet-field w-[180px] py-1"
           aria-label="Terminal renderer"
           value={settings.terminal?.renderer ?? 'xterm'}
           onChange={(e) => update({ terminal: { ...settings.terminal, renderer: e.target.value as TerminalRenderer } })}
@@ -743,8 +609,8 @@ function TerminalSection({ settings, update }: { settings: AppSettings; update: 
           <option value="xterm">xterm.js</option>
           <option value="ghostty">Ghostty (experimental)</option>
         </select>
-      </div>
-    </section>
+      } />
+    </SettingsSection>
   );
 }
 
@@ -785,14 +651,12 @@ function BackupSection({ settings, onSettings }: { settings: AppSettings; onSett
   };
 
   return (
-    <section className="card mt-5 p-5">
-      <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">Backup &amp; restore</h2></div>
-      <p className="mt-1 text-xs text-ink-faint">Export your configuration (providers, guardrails, prompts, MCP servers…) to a JSON file, or restore it on another machine. The file leaves out API keys and tokens: they stay in this computer's keystore, so add them again on a new machine. Importing here keeps the keys you already have.</p>
-      <div className="mt-3 flex gap-2">
-        <button className="btn btn-outline py-1 text-xs" onClick={exportSettings}>Export settings</button>
-        <button className="btn btn-outline py-1 text-xs" onClick={importSettings}>Import settings…</button>
+    <SettingsSection id="backup" title="Backup &amp; restore" help="Your configuration as a JSON file, without API keys or tokens: those stay in this computer's keystore. Importing keeps the keys you already have.">
+      <div className="mt-(--q-inline) flex gap-2">
+        <button className="btn btn-ghost py-1 text-xs" onClick={exportSettings}>Export settings</button>
+        <button className="btn btn-ghost py-1 text-xs" onClick={importSettings}>Import settings…</button>
       </div>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -845,41 +709,23 @@ function DataSection({ onSettings }: { onSettings: (s: AppSettings) => void }) {
   };
 
   return (
-    <section className="card mt-5 p-5" style={{ borderColor: 'color-mix(in srgb, var(--danger) 35%, var(--line))' }}>
-      <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">Data &amp; privacy</h2></div>
-      <p className="mt-1 text-xs text-ink-faint">Everything stays on your machine. Clean it up here whenever you want.</p>
-
-      <div className="mt-3 flex min-h-[36px] flex-wrap items-center justify-between gap-2">
-        <span className="text-sm">Delete chats</span>
-        <div className="flex flex-wrap gap-2">
-          <button className="btn btn-outline py-1 text-xs" disabled={busy} onClick={() => clear('today', "today's chats")}>Today</button>
-          <button className="btn btn-outline py-1 text-xs" disabled={busy} onClick={() => clear('month', "this month's chats")}>This month</button>
-          <button className="btn btn-outline py-1 text-xs" disabled={busy} onClick={() => clear('all', 'all chats')}>All chats</button>
+    <SettingsSection id="data-privacy" title="Data &amp; privacy" help="Everything stays on your machine. Clean it up here whenever you want.">
+      <SettingRow title="Delete chats" control={
+        <div className="flex flex-wrap gap-1">
+          <button className="btn btn-ghost py-1 text-xs" disabled={busy} onClick={() => clear('today', "today's chats")}>Today</button>
+          <button className="btn btn-ghost py-1 text-xs" disabled={busy} onClick={() => clear('month', "this month's chats")}>This month</button>
+          <button className="btn btn-ghost py-1 text-xs" disabled={busy} onClick={() => clear('all', 'all chats')}>All chats</button>
         </div>
-      </div>
-
-      <div className="mt-2 flex min-h-[36px] items-center justify-between gap-2">
-        <span className="text-sm">Reset settings to defaults</span>
-        <button className="btn btn-outline py-1 text-xs" disabled={busy} onClick={reset}>Reset configs</button>
-      </div>
-
-      <div className="mt-2 flex min-h-[36px] items-center justify-between gap-2">
-        <div>
-          <span className="text-sm">Delete everything</span>
-          <p className="text-2xs text-ink-faint">Chats, settings, sign-ins, keys, tasks, remote access and logs. Downloaded models only if you choose.</p>
-        </div>
-        <button
-          className="btn py-1 text-xs text-white!"
-          style={{ background: 'var(--danger)' }}
-          disabled={busy}
-          data-wipe
-          onClick={() => setWiping(true)}
-        >
-          Delete everything
-        </button>
-      </div>
+      } />
+      <SettingRow title="Reset settings to defaults" control={<button className="btn btn-ghost py-1 text-xs" disabled={busy} onClick={reset}>Reset configs</button>} />
+      {/* Destructive is words in danger ink until the confirmation dialog (design system). */}
+      <SettingRow
+        title="Delete everything"
+        detail="Chats, settings, sign-ins, keys, tasks, remote access and logs. Downloaded models only if you choose."
+        control={<button className="btn btn-ghost py-1 text-xs text-danger-text" disabled={busy} data-wipe onClick={() => setWiping(true)}>Delete everything</button>}
+      />
       {wiping && <DeleteEverythingDialog busy={busy} onCancel={() => setWiping(false)} onConfirm={(models) => void wipe(models)} />}
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -941,34 +787,31 @@ function McpSection({
   const stOf = (id: string) => status.find((s) => s.id === id);
 
   return (
-    <section className="card mt-5 p-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">MCP servers</h2></div>
-        <div className="flex gap-2">
-          <button className="btn btn-outline py-1 text-xs" onClick={connect} disabled={busy || servers.length === 0}>
-            {busy ? 'Connecting…' : 'Connect & refresh'}
-          </button>
-          <button className="btn btn-outline py-1 text-xs" onClick={add}>+ Add</button>
-          <button className="btn btn-outline py-1 text-xs" onClick={addUrl} title="A streamable-HTTP MCP endpoint (URL + optional bearer token)">+ Add URL</button>
-        </div>
-      </div>
-      <p className="mt-1 text-xs text-ink-faint">
-        Model Context Protocol servers extend the agent with extra tools. Enabled servers' tools are offered in every chat.
-      </p>
+    <SettingsSection
+      id="mcp-servers"
+      title="MCP servers"
+      help="Extra tools for the agent. Enabled servers' tools are offered in every chat."
+      actions={<>
+        <button className="btn btn-ghost py-1 text-xs" onClick={connect} disabled={busy || servers.length === 0}>
+          {busy ? 'Connecting…' : 'Connect & refresh'}
+        </button>
+        <button className="btn btn-ghost py-1 text-xs" onClick={add}>+ Add</button>
+        <button className="btn btn-ghost py-1 text-xs" onClick={addUrl} title="A streamable-HTTP MCP endpoint (URL + optional bearer token)">+ Add URL</button>
+      </>}
+    >
       {hypergate && (
-        <div className="card mt-3 p-3" style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, transparent)' }}>
-          <div className="flex items-center gap-2">
-            <ShieldIcon className="h-5 w-5 shrink-0 text-accent" />
-            {/* min-w-0 so the prose is what gives way when the card narrows;
+        <div className="mt-(--q-group)">
+          <div className="flex items-center gap-4">
+            {/* min-w-0 so the prose is what gives way when the row narrows;
                 without it the buttons are squeezed and their labels wrap. */}
             <div className="min-w-0">
-              <p className="text-xs font-semibold">
+              <p className="text-sm font-medium">
                 Hypergate detected{' '}
-                <span className="font-normal text-ink-faint">
+                <span className="text-xs font-normal text-ink-faint">
                   · v{hypergate.version} · {hypergate.servers} managed server{hypergate.servers === 1 ? '' : 's'} · port {hypergate.port}
                 </span>
               </p>
-              <p className="text-xs text-ink-faint">
+              <p className="mt-(--q-tight) text-xs text-ink-faint">
                 {connected
                   ? `Connected${hypergate.agent ? ` as ${hypergate.agent}` : ''}. Every server it manages is one entry here, and its tools are in every chat.`
                   : 'One click registers Nekko Agent with it, adds the gateway below, and opens Hypergate as a tab in this window.'}
@@ -976,7 +819,7 @@ function McpSection({
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap">
               {connected && (
-                <button className="btn btn-outline py-1 text-xs" onClick={openHypergatePane}>Open tab</button>
+                <button className="btn btn-ghost py-1 text-xs" onClick={openHypergatePane}>Open tab</button>
               )}
               <button className="btn btn-primary py-1 text-xs" disabled={linking} onClick={() => void link()}>
                 {linking ? 'Connecting…' : connected ? 'Reconnect' : 'Connect Hypergate'}
@@ -986,76 +829,72 @@ function McpSection({
         </div>
       )}
       {hypergate === null && (
-        <div className="mt-3 flex items-center gap-2 rounded-xl border border-line px-3 py-2">
-          <ShieldIcon className="h-5 w-5 shrink-0 text-ink-faint" />
-          <p className="text-xs text-ink-faint">
+        <div className="mt-(--q-inline) flex items-center gap-2">
+          <p className="min-w-0 text-xs text-ink-faint">
             Optional: <span className="font-medium text-ink-soft">Hypergate</span> runs and supervises local MCP servers behind one
             endpoint. Start its daemon and a one-click Connect appears here{connected ? ' (the saved gateway reconnects on its own)' : ''}.
           </p>
           <button
-            className="btn btn-ghost ml-auto shrink-0 px-2! py-0.5! text-2xs text-accent"
+            className="btn btn-ghost ml-auto shrink-0 py-1 text-xs text-accent"
             onClick={() => window.nekko.openPath('https://hypergate.app')}
           >
             Get Hypergate ↗
           </button>
         </div>
       )}
-      <div className="mt-3 space-y-2">
+      <div className="mt-(--q-group)">
         {servers.length === 0 && <p className="text-xs text-ink-faint">No MCP servers. Add one (e.g. <code>npx -y @modelcontextprotocol/server-filesystem .</code>).</p>}
         {servers.map((s) => {
           const st = stOf(s.id);
           return (
-            <div key={s.id} className={`card p-3 ${s.enabled ? '' : 'opacity-60'}`}>
+            <div key={s.id} className="mt-(--q-group) first:mt-0" data-quiet-row>
               <div className="flex items-center gap-2">
-                <input className="input py-1 text-xs" style={{ maxWidth: 160 }} value={s.name} onChange={(e) => edit(s.id, { name: e.target.value })} />
-                <span className="chip">{s.url != null ? 'http' : 'stdio'}</span>
+                <input className={`quiet-field py-1 text-sm font-medium ${s.enabled ? '' : 'text-ink-faint'}`} style={{ maxWidth: 160 }} aria-label="MCP server name" value={s.name} onChange={(e) => edit(s.id, { name: e.target.value })} />
+                <span className="text-xs text-ink-faint">{s.url != null ? 'http' : 'stdio'}</span>
                 {st && (
-                  <Badge tone={st.connected ? 'success' : 'danger'} variant="solid" title={st.error}>
+                  <span className={`inline-flex items-center gap-1.5 text-xs ${st.connected ? 'text-ink-soft' : 'text-danger-text'}`} title={st.error}>
+                    <StatusDot tone={st.connected ? 'success' : 'danger'} size={7} />
                     {st.connected ? `${st.tools.length} tools` : 'offline'}
-                  </Badge>
+                  </span>
                 )}
                 <div className="ml-auto flex items-center gap-2">
+                  <button className="btn btn-ghost quiet-row-action py-1 text-xs text-danger-text" onClick={() => remove(s.id)}>Remove</button>
                   <Toggle aria-label={`MCP server ${s.name}`} on={s.enabled} onChange={(v) => edit(s.id, { enabled: v })} />
-                  <button className="btn btn-ghost px-2 py-1" title="Remove" onClick={() => remove(s.id)}><TrashIcon className="h-4 w-4" /></button>
                 </div>
               </div>
               {s.url != null ? (
-                <div className="mt-2 flex gap-2">
-                  <input className="input py-1 font-mono text-xs" value={s.url} onChange={(e) => edit(s.id, { url: e.target.value })} placeholder="http://localhost:7777/mcp" />
-                  <input className="input py-1 font-mono text-xs" style={{ maxWidth: 200 }} type="password" value={s.token ?? ''} onChange={(e) => edit(s.id, { token: e.target.value })} placeholder="bearer token (optional)" />
+                <div className="mt-(--q-inline) flex gap-2">
+                  <input className="quiet-field py-1 font-mono text-xs" value={s.url} onChange={(e) => edit(s.id, { url: e.target.value })} placeholder="http://localhost:7777/mcp" />
+                  <input className="quiet-field py-1 font-mono text-xs" style={{ maxWidth: 200 }} type="password" value={s.token ?? ''} onChange={(e) => edit(s.id, { token: e.target.value })} placeholder="bearer token (optional)" />
                 </div>
               ) : (
-                <div className="mt-2 flex gap-2">
-                  <input className="input py-1 font-mono text-xs" style={{ maxWidth: 110 }} value={s.command} onChange={(e) => edit(s.id, { command: e.target.value })} placeholder="npx" />
-                  <input className="input py-1 font-mono text-xs" value={s.args.join(' ')} onChange={(e) => edit(s.id, { args: e.target.value.split(/\s+/).filter(Boolean) })} placeholder="-y @modelcontextprotocol/server-filesystem ." />
+                <div className="mt-(--q-inline) flex gap-2">
+                  <input className="quiet-field py-1 font-mono text-xs" style={{ maxWidth: 110 }} value={s.command} onChange={(e) => edit(s.id, { command: e.target.value })} placeholder="npx" />
+                  <input className="quiet-field py-1 font-mono text-xs" value={s.args.join(' ')} onChange={(e) => edit(s.id, { args: e.target.value.split(/\s+/).filter(Boolean) })} placeholder="-y @modelcontextprotocol/server-filesystem ." />
                 </div>
               )}
-              {st?.error && <p className="mt-1 text-2xs" style={{ color: 'var(--danger)' }}>{st.error}</p>}
+              {st?.error && <p className="mt-(--q-tight) text-xs text-danger-text">{st.error}</p>}
             </div>
           );
         })}
       </div>
-    </section>
+    </SettingsSection>
   );
 }
 
 export function ProjectManagementSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   return (
-    <section className="card mt-5 p-5">
-      <h2 className="font-semibold">Project management</h2>
-      <p className="mt-1 text-xs text-ink-faint">How agent chats track their work. A change bound for a PR gets an issue first, and the PR links to it.</p>
+    <SettingsSection id="project-management" title="Project management" help="How agent chats track their work. A change bound for a PR gets an issue first, and the PR links to it.">
       <ProjectManagementToggles value={settings.projectManagement} onChange={(projectManagement) => update({ projectManagement })} />
-    </section>
+    </SettingsSection>
   );
 }
 
 export function PullRequestsSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   return (
-    <section className="card mt-5 p-5">
-      <h2 className="font-semibold">Pull requests</h2>
-      <p className="mt-1 text-xs text-ink-faint">What goes into the PRs agent chats open. Secrets and unrelated images are never included.</p>
+    <SettingsSection id="pull-requests" title="Pull requests" help="What goes into the PRs agent chats open. Secrets and unrelated images are never included.">
       <PullRequestToggles value={settings.pullRequests} onChange={(pullRequests) => update({ pullRequests })} />
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -1093,141 +932,89 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
     update({ workspaces: settings.workspaces.map((w) => (w.id === id ? { ...w, worktreeSetup: value.trim() || undefined } : w)) });
   };
   return (
-    <section className="card mt-5 p-5">
-      <h2 className="font-semibold">Git management</h2>
-      <p className="mt-1 text-xs text-ink-faint">New chats get their own branch and worktree, so several agents can work on one repository at once without touching each other's files or your checkout. Existing chats and delegated sub-agents keep their current checkout.</p>
-      <label className="mt-3 flex items-center justify-between gap-3 text-sm">
-        New chat checkout
-        <select className="input max-w-[230px]" value={settings.gitManagement?.mode ?? 'worktree'} onChange={(e) => update({ gitManagement: { ...settings.gitManagement, mode: e.target.value as 'worktree' | 'shared' } })}>
+    <SettingsSection id="git-management" title="Git management" help="New chats get their own branch and worktree, so several agents can share a repository without touching each other's files or your checkout.">
+      <SettingRow htmlFor="git-mode" title="New chat checkout" control={
+        <select id="git-mode" className="quiet-field w-[230px] py-1" value={settings.gitManagement?.mode ?? 'worktree'} onChange={(e) => update({ gitManagement: { ...settings.gitManagement, mode: e.target.value as 'worktree' | 'shared' } })}>
           <option value="worktree">Isolated worktree (recommended)</option>
           <option value="shared">Shared project checkout</option>
         </select>
-      </label>
-      <label className="mt-3 flex items-center justify-between gap-3 text-sm">
-        Worktree baseline
-        <select className="input max-w-[230px]" value={settings.gitManagement?.baseline ?? 'head'} onChange={(e) => update({ gitManagement: { ...settings.gitManagement, baseline: e.target.value as 'head' | 'local-changes' } })}>
+      } />
+      <SettingRow htmlFor="git-baseline" title="Worktree baseline" detail="Copying local edits takes tracked changes only, never untracked files, secrets or build output." control={
+        <select id="git-baseline" className="quiet-field w-[230px] py-1" value={settings.gitManagement?.baseline ?? 'head'} onChange={(e) => update({ gitManagement: { ...settings.gitManagement, baseline: e.target.value as 'head' | 'local-changes' } })}>
           <option value="head">Committed HEAD (recommended)</option>
           <option value="local-changes">HEAD plus tracked local edits</option>
         </select>
-      </label>
-      <p className="mt-2 text-2xs text-ink-faint">Committed HEAD excludes local edits and shows a notice at startup. Copying local edits includes tracked changes only, not untracked files, secrets, or build artifacts.</p>
-      <label className="mt-3 flex items-center justify-between gap-3 text-sm">
-        <span>
-          Remove worktrees after their PR merges
-          <span className="mt-0.5 block text-2xs text-ink-faint">Checked hourly. A worktree with uncommitted or untracked files, or whose chat is running, is kept. Continuing the chat later restores its checkout.</span>
-        </span>
-        <input type="checkbox" className="h-4 w-4 shrink-0" checked={settings.gitManagement?.removeMerged !== false} onChange={(e) => update({ gitManagement: { ...settings.gitManagement, removeMerged: e.target.checked } })} />
-      </label>
+      } />
+      <SettingRow
+        title="Remove worktrees after their PR merges"
+        detail="Checked hourly. One with uncommitted or untracked files, or a running chat, is kept."
+        control={<Toggle aria-label="Remove worktrees after their PR merges" on={settings.gitManagement?.removeMerged !== false} onChange={(v) => update({ gitManagement: { ...settings.gitManagement, removeMerged: v } })} />}
+      />
 
       {settings.workspaces.length > 0 && (
-        <div className="mt-4 border-t border-line pt-3">
-          <span className="text-sm font-medium">Worktree setup</span>
-          <p className="mt-0.5 text-2xs text-ink-faint">A new worktree has only tracked files. Each project can run a command there before the chat's first turn (for example <code>npm install</code>); its output appears in the chat's Agent commands terminal. To copy ignored local files such as <code>.env</code>, list them in a <code>.worktreeinclude</code> file at the repository root (gitignore syntax).</p>
-          <div className="mt-2 space-y-2">
+        <>
+          <SettingsLabel>Worktree setup</SettingsLabel>
+          <p className="text-xs text-ink-faint">A new worktree has only tracked files. Each project can run a command there before the chat's first turn (for example <code>npm install</code>); its output appears in the chat's Agent commands terminal. To copy ignored local files such as <code>.env</code>, list them in a <code>.worktreeinclude</code> file at the repository root (gitignore syntax).</p>
+          <div className="mt-(--q-inline)">
             {settings.workspaces.map((w) => (
-              <label key={w.id} className="flex items-center justify-between gap-3 text-xs">
-                <span className="min-w-0 truncate" title={w.path}>{w.name}</span>
-                <input key={w.worktreeSetup ?? ''} className="input max-w-[260px] font-mono text-xs" placeholder="No setup command" aria-label={`Worktree setup command for ${w.name}`} defaultValue={w.worktreeSetup ?? ''} onBlur={(e) => setSetup(w.id, e.target.value)} />
+              <label key={w.id} className="flex min-h-(--q-row) items-center justify-between gap-4 py-(--q-inline)">
+                <span className="min-w-0 truncate text-sm font-medium" title={w.path}>{w.name}</span>
+                <input key={w.worktreeSetup ?? ''} className="quiet-field w-[260px] py-1 font-mono text-xs" placeholder="No setup command" aria-label={`Worktree setup command for ${w.name}`} defaultValue={w.worktreeSetup ?? ''} onBlur={(e) => setSetup(w.id, e.target.value)} />
               </label>
             ))}
           </div>
-        </div>
+        </>
       )}
 
-      <div className="mt-4 border-t border-line pt-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-medium">Chat worktrees</span>
-          <button className="btn btn-outline py-1 text-xs" onClick={refresh}>Refresh</button>
+      <div>
+        <div className="mt-(--q-group) mb-(--q-heading) flex items-center justify-between gap-3">
+          <span className="quiet-group-label">Chat worktrees</span>
+          <button className="btn btn-ghost py-1 text-xs" onClick={refresh}>Refresh</button>
         </div>
-        <p className="mt-0.5 text-2xs text-ink-faint">Worktrees are kept when a chat is completed or deleted. Removing one frees the folder: Git refuses if it has uncommitted changes, and its branch is deleted only once merged.</p>
-        <div className="mt-2 space-y-1">
-          {worktrees === null && <p className="text-xs text-ink-faint">Loading...</p>}
-          {worktrees?.length === 0 && <p className="text-xs text-ink-faint">No chat worktrees.</p>}
+        <p className="text-xs text-ink-faint">Worktrees are kept when a chat is completed or deleted. Removing one frees the folder: Git refuses if it has uncommitted changes, and its branch is deleted only once merged.</p>
+        <div className="-mx-3 mt-(--q-inline)">
+          {worktrees === null && <p className="px-3 text-xs text-ink-faint">Loading...</p>}
+          {worktrees?.length === 0 && <p className="px-3 text-xs text-ink-faint">No chat worktrees.</p>}
           {worktrees?.map((w) => {
             const blocked = w.running ? 'Stop the chat first.' : w.dirtyCount ? 'Has uncommitted changes.' : '';
             return (
-              <div key={w.root} className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2">
+              <div key={w.root} className="quiet-row min-h-(--q-row) justify-between gap-4" data-quiet-row>
                 <div className="min-w-0">
-                  <div className="truncate text-xs">{w.sessionTitle ?? <span className="text-ink-faint">Deleted chat</span>}{w.running && <span className="ml-2 text-2xs text-ink-faint">running</span>}</div>
-                  <div className="truncate font-mono text-2xs text-ink-faint" title={w.root}>{w.branch ?? 'detached'} · {w.dirtyCount ? `${w.dirtyCount} uncommitted` : 'clean'} · {w.unmergedCount ? `${w.unmergedCount} unmerged commit${w.unmergedCount === 1 ? '' : 's'}` : 'no new commits'}</div>
+                  <div className="truncate text-sm font-medium">{w.sessionTitle ?? <span className="text-ink-faint">Deleted chat</span>}{w.running && <span className="ml-2 text-xs font-normal text-ink-faint">running</span>}</div>
+                  <div className="mt-(--q-tight) truncate font-mono text-2xs text-ink-faint" title={w.root}>{w.branch ?? 'detached'} · {w.dirtyCount ? `${w.dirtyCount} uncommitted` : 'clean'} · {w.unmergedCount ? `${w.unmergedCount} unmerged commit${w.unmergedCount === 1 ? '' : 's'}` : 'no new commits'}</div>
                 </div>
-                <button className="btn btn-outline shrink-0 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40" disabled={!!blocked || busy === w.root} title={blocked || 'Remove this worktree folder'} onClick={() => void remove(w)}>
+                <button className="btn btn-ghost quiet-row-action shrink-0 py-1 text-xs text-danger-text" disabled={!!blocked || busy === w.root} title={blocked || 'Remove this worktree folder'} onClick={() => void remove(w)}>
                   {busy === w.root ? 'Removing...' : 'Remove'}
                 </button>
               </div>
             );
           })}
         </div>
-        {message && <p role="status" className="mt-2 text-2xs text-ink-soft">{message}</p>}
+        {message && <p role="status" className="mt-(--q-inline) text-xs text-ink-soft">{message}</p>}
       </div>
-    </section>
+    </SettingsSection>
   );
 }
 
 function CustomizationSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   return (
-    <section id="customization" className="card mt-5 p-5">
-      <h2 className="font-semibold">Customization</h2>
-      <p className="mt-1 text-xs text-ink-faint">These preferences are sent to the selected provider on every chat turn. Avoid including secrets. Built-in safety and tool policies still apply.</p>
+    <SettingsSection id="customization" title="Customization" help="Sent to the selected provider on every chat turn, so leave secrets out. Edits save when you leave a field.">
       {([
         { key: 'aboutUser', label: 'About you', hint: 'Your name, role, experience, goals, language, and communication preferences.', fallback: '' },
         { key: 'systemInstructions', label: 'System prompt', hint: 'Additional standing instructions for how Nekko should work with you.', fallback: '' },
         { key: 'turnWrapper', label: 'Server prompt wrapper', hint: 'Applied server-side to each user turn without altering the saved user message. Titles and plans use app tools when available.', fallback: DEFAULT_TURN_WRAPPER },
       ] as const).map((field) => (
-        <label key={field.key} className="mt-4 block text-sm">
-          <span className="font-medium">{field.label}</span>
-          <p className="mt-0.5 text-2xs text-ink-faint">{field.hint}</p>
-          <textarea key={settings[field.key] ?? field.fallback} aria-label={field.label} className="input mt-2 min-h-[100px] resize-y text-xs leading-relaxed" defaultValue={settings[field.key] ?? field.fallback} onBlur={(e) => { if (e.target.value !== (settings[field.key] ?? field.fallback)) update({ [field.key]: e.target.value }); }} />
+        <label key={field.key} className="mt-(--q-group) block">
+          <span className="block text-sm font-medium">{field.label}</span>
+          <p className="mt-(--q-tight) text-xs text-ink-faint">{field.hint}</p>
+          <textarea key={settings[field.key] ?? field.fallback} aria-label={field.label} className="quiet-field mt-(--q-inline) min-h-[100px] resize-y text-xs leading-relaxed" defaultValue={settings[field.key] ?? field.fallback} onBlur={(e) => { if (e.target.value !== (settings[field.key] ?? field.fallback)) update({ [field.key]: e.target.value }); }} />
         </label>
       ))}
-      <p className="mt-2 text-2xs text-ink-faint">Edits save when you leave a field. An empty wrapper disables the extra per-turn instructions.</p>
-      <button className="btn btn-outline mt-3 py-1 text-xs" onClick={() => update({ turnWrapper: DEFAULT_TURN_WRAPPER })}>Reset wrapper to recommended points</button>
-    </section>
-  );
-}
-
-function PromptsSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
-  const prompts = settings.prompts ?? [];
-  const setPrompts = (next: typeof prompts) => update({ prompts: next });
-  const add = () =>
-    setPrompts([...prompts, { id: `p_${Date.now().toString(36)}`, name: 'new', body: '' }]);
-  const edit = (id: string, patch: Partial<{ name: string; body: string }>) =>
-    setPrompts(prompts.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  const remove = (id: string) => setPrompts(prompts.filter((p) => p.id !== id));
-
-  return (
-    <section className="card mt-5 p-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">Slash commands</h2></div>
-        <button className="btn btn-outline py-1 text-xs" onClick={add}>+ Add</button>
+      <div className="mt-(--q-inline) flex flex-wrap items-center gap-4">
+        <p className="min-w-0 flex-1 text-xs text-ink-faint">An empty wrapper turns off the extra per-turn instructions.</p>
+        <button className="btn btn-ghost py-1 text-xs" onClick={() => update({ turnWrapper: DEFAULT_TURN_WRAPPER })}>Reset wrapper to recommended points</button>
       </div>
-      <p className="mt-1 text-xs text-ink-faint">Reusable prompts. Type <code>/name</code> in the composer to insert one.</p>
-      <div className="mt-3 space-y-2">
-        {prompts.length === 0 && <p className="text-xs text-ink-faint">No prompts yet.</p>}
-        {prompts.map((p) => (
-          <div key={p.id} className="card p-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-ink-faint">/</span>
-              <input
-                className="input py-1 text-xs"
-                style={{ maxWidth: 180 }}
-                value={p.name}
-                onChange={(e) => edit(p.id, { name: e.target.value.replace(/\s+/g, '-') })}
-              />
-              <button className="btn btn-ghost px-2 py-1" title="Delete" onClick={() => remove(p.id)}>
-                <TrashIcon className="h-4 w-4" />
-              </button>
-            </div>
-            <textarea
-              className="input mt-2 min-h-[56px] resize-none text-xs"
-              value={p.body}
-              placeholder="Prompt text inserted when you pick this command…"
-              onChange={(e) => edit(p.id, { body: e.target.value })}
-            />
-          </div>
-        ))}
-      </div>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -1279,84 +1066,65 @@ function GuardrailsSection({
   };
 
   return (
-    <section className="card mt-5 p-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">Guardrails</h2></div>
-        <button className="btn btn-outline py-1 text-xs" onClick={() => (jsonMode ? setJsonMode(false) : openJson())}>
-          {jsonMode ? 'Visual editor' : 'Edit as JSON'}
-        </button>
-      </div>
-      <p className="mt-1 text-xs text-ink-faint">
-        In {CHAT_MODE_LABEL.guardrails}, only read-only commands (ls, cat, rg, git status and the like) run without asking. These rules add to that: an allow rule lets matching commands run too (your test or build command, say), ask always asks, and deny blocks in every mode. Edit them here or as JSON. The dot marks each rule's default.
-      </p>
+    <SettingsSection
+      id="guardrails"
+      title="Guardrails"
+      help={<>In {CHAT_MODE_LABEL.guardrails}, only read-only commands run without asking. Allow lets a matching command run too, ask always asks, deny blocks in every mode. The dot marks each rule's default.</>}
+      actions={<button className="btn btn-ghost py-1 text-xs" onClick={() => (jsonMode ? setJsonMode(false) : openJson())}>{jsonMode ? 'Visual editor' : 'Edit as JSON'}</button>}
+    >
 
       {jsonMode ? (
-        <div className="mt-3">
+        <div className="mt-(--q-group)">
           <textarea
-            className="input min-h-[260px] font-mono text-xs leading-relaxed"
+            className="quiet-field min-h-[260px] font-mono text-xs leading-relaxed"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             spellCheck={false}
           />
-          {error && <p className="mt-1 text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
-          <div className="mt-2 flex justify-end gap-2">
+          {error && <p className="mt-(--q-tight) text-xs text-danger-text">{error}</p>}
+          <div className="mt-(--q-inline) flex justify-end gap-2">
             <button className="btn btn-ghost" onClick={() => setJsonMode(false)}>Cancel</button>
             <button className="btn btn-primary" onClick={apply}>Apply</button>
           </div>
         </div>
       ) : (
-        <div className="mt-3 space-y-2">
+        <div className="mt-(--q-inline)">
           {settings.guardrails.map((g) => (
-            <div key={g.id} className={`card p-3 ${g.enabled ? '' : 'opacity-50'}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{g.label}</span>
-                    <span className="h-2 w-2 rounded-full" style={{ background: g.severity === 'high' ? 'var(--danger)' : g.severity === 'medium' ? 'var(--warning)' : 'var(--neutral)' }} />
-                  </div>
-                  <p className="truncate text-2xs text-ink-faint">{g.description}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <div className="flex rounded-lg p-0.5" style={{ background: 'var(--surface-2)' }}>
-                    {(['allow', 'ask', 'deny'] as GuardrailAction[]).map((a) => {
-                      const isDefault = defaultById.get(g.id)?.action === a;
-                      return (
-                        <button
-                          key={a}
-                          onClick={() => updateGuardrail({ ...g, action: a })}
-                          title={isDefault ? 'Default' : undefined}
-                          className="relative rounded-md px-2 py-1 text-2xs font-medium"
-                          style={g.action === a ? { background: ACTION_COLORS[a], color: '#fff' } : { color: 'var(--ink-faint)' }}
-                        >
-                          {a}
-                          {isDefault && (
-                            <span
-                              aria-label="default"
-                              className="absolute right-[3px] top-[3px] h-1.5 w-1.5 rounded-full"
-                              style={{ background: 'currentColor', opacity: 0.9 }}
-                            />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <Toggle aria-label={g.label} on={g.enabled} onChange={(v) => updateGuardrail({ ...g, enabled: v })} />
-                </div>
-              </div>
-            </div>
+            <SettingRow
+              key={g.id}
+              disabled={!g.enabled}
+              title={<span className="inline-flex items-center gap-2">{g.label}<StatusDot tone={g.severity === 'high' ? 'danger' : g.severity === 'medium' ? 'warning' : 'neutral'} size={7} title={`${g.severity ?? 'low'} severity`} /></span>}
+              detail={<span className="block truncate">{g.description}</span>}
+              control={<>
+                {/* Each action in its state's words; the dot marks the rule's default. */}
+                <QuietTabs
+                  role="radiogroup"
+                  label={`${g.label} action`}
+                  value={g.action}
+                  onChange={(a) => updateGuardrail({ ...g, action: a })}
+                  items={(['allow', 'ask', 'deny'] as GuardrailAction[]).map((a) => ({
+                    value: a,
+                    title: defaultById.get(g.id)?.action === a ? 'Default' : undefined,
+                    label: <span className={g.action === a ? ACTION_TEXT[a] : undefined}>{a}</span>,
+                    hint: defaultById.get(g.id)?.action === a ? <span aria-label="default" className="inline-block h-1 w-1 rounded-full bg-current align-middle" /> : undefined,
+                  }))}
+                />
+                <Toggle aria-label={g.label} on={g.enabled} onChange={(v) => updateGuardrail({ ...g, enabled: v })} />
+              </>}
+            />
           ))}
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between gap-3">
+      <div className="mt-(--q-inline) flex items-center justify-between gap-4">
         <p className="text-xs text-ink-faint">
           {changedCount === 0 ? 'Using the default rules.' : `${changedCount} ${changedCount === 1 ? 'rule differs' : 'rules differ'} from the defaults.`}
         </p>
-        <button className="btn btn-outline py-1 text-xs" onClick={resetToDefaults} disabled={changedCount === 0 && settings.guardrails.length === DEFAULT_GUARDRAILS.length}>
+        <button className="btn btn-ghost py-1 text-xs" onClick={resetToDefaults} disabled={changedCount === 0 && settings.guardrails.length === DEFAULT_GUARDRAILS.length}>
           Reset to defaults
         </button>
       </div>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -1397,46 +1165,19 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
                 : status?.message ?? '';
 
   return (
-    <section className="card mt-5 p-5">
-      <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">Updates</h2></div>
-      <p className="mt-1 text-xs text-ink-faint">
-        {info ? `Nekko Agent ${info.version} · ${info.edition} edition` : ' '}
-      </p>
-      <p className="mt-1 flex gap-3 text-xs">
-        {hasNotices() && <button className="underline" onClick={() => setLicensesOpen(true)}>Open-source licenses</button>}
-        <a className="underline" href="https://nekkoagent.com/docs/credits" target="_blank" rel="noreferrer">Credits</a>
-      </p>
+    <SettingsSection
+      id="updates"
+      title="Updates"
+      meta={info ? `Nekko Agent ${info.version} · ${info.edition} edition` : undefined}
+      help={<span className="flex gap-3">
+        {hasNotices() && <button className="hover:text-ink hover:underline" onClick={() => setLicensesOpen(true)}>Open-source licenses</button>}
+        <a className="hover:text-ink hover:underline" href="https://nekkoagent.com/docs/credits" target="_blank" rel="noreferrer">Credits</a>
+      </span>}
+    >
       {licensesOpen && <OpenSourceLicenses onClose={() => setLicensesOpen(false)} />}
-      <div className="mt-3 flex min-h-[40px] items-center justify-between">
-        <div>
-          <span className="text-sm">App updates</span>
-          <p className="text-2xs text-ink-faint">Connects to the internet to look for new versions.</p>
-        </div>
-        <Toggle aria-label="App updates" on={checks.app} onChange={(v) => void setCheck('app', v)} />
-      </div>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between border-t border-line pt-3">
-        <div>
-          <span className="text-sm">Provider model lists</span>
-          <p className="text-2xs text-ink-faint">Re-read each configured provider's catalog in the background, so new models appear without an app release.</p>
-        </div>
-        <Toggle aria-label="Provider model lists" on={checks.modelLists} onChange={(v) => void setCheck('modelLists', v)} />
-      </div>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between border-t border-line pt-3">
-        <div>
-          <span className="text-sm">Skills catalog</span>
-          <p className="text-2xs text-ink-faint">Refresh the skills marketplace shelf in the background.</p>
-        </div>
-        <Toggle aria-label="Skills catalog" on={checks.skills} onChange={(v) => void setCheck('skills', v)} />
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1 text-xs" onClick={() => void runCatalogChecks()} disabled={catalogState === 'checking'}>
-          {catalogState === 'checking' ? 'Refreshing…' : 'Refresh catalogs now'}
-        </button>
-        {catalogState === 'done' && <span className="text-xs text-ink-faint" role="status">Model lists and skills checked.</span>}
-        {catalogState === 'failed' && <span className="text-xs text-danger" role="status">Refresh failed; try again.</span>}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1 text-xs" onClick={() => void updater.check(true)} disabled={stage === 'checking' || stage === 'downloading' || stage === 'installing'}>
+      <SettingRow title="App updates" detail="Connects to the internet to look for new versions." control={<Toggle aria-label="App updates" on={checks.app} onChange={(v) => void setCheck('app', v)} />} />
+      <div className="mt-(--q-tight) flex flex-wrap items-center gap-2">
+        <button className="btn btn-ghost py-1 text-xs" onClick={() => void updater.check(true)} disabled={stage === 'checking' || stage === 'downloading' || stage === 'installing'}>
           {stage === 'checking' ? 'Checking…' : 'Check now'}
         </button>
         {stage === 'available' && (isWeb ? (
@@ -1444,7 +1185,7 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
         ) : (
           <>
             <button className="btn btn-primary py-1 text-xs" onClick={() => void updater.downloadAndInstall()}>Download &amp; install</button>
-            <button className="btn btn-outline py-1 text-xs" onClick={() => void updater.downloadOnly()}>Download only</button>
+            <button className="btn btn-ghost py-1 text-xs" onClick={() => void updater.downloadOnly()}>Download only</button>
             <button className="btn btn-ghost py-1 text-xs" onClick={updater.skip}>Skip</button>
           </>
         ))}
@@ -1454,18 +1195,28 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
             <button className="btn btn-ghost py-1 text-xs" onClick={updater.skip}>Skip</button>
           </>
         )}
-        {stage === 'failed' && <button className="btn btn-outline py-1 text-xs" onClick={() => void updater.retry()}>Retry</button>}
-        {statusText && <span className={`text-xs ${stage === 'failed' ? 'text-danger' : 'text-ink-faint'}`} role="status" aria-live="polite">{statusText}</span>}
+        {stage === 'failed' && <button className="btn btn-ghost py-1 text-xs" onClick={() => void updater.retry()}>Retry</button>}
+        {statusText && <span className={`text-xs ${stage === 'failed' ? 'text-danger-text' : 'text-ink-faint'}`} role="status" aria-live="polite">{statusText}</span>}
       </div>
       {(stage === 'downloading' || stage === 'installing') && (
-        <div className="mt-3 flex max-w-md items-center gap-3">
+        <div className="mt-(--q-inline) flex max-w-md items-center gap-3">
           <UpdateProgress percent={status?.percent} installing={stage === 'installing'} />
           <span className="min-w-10 text-right text-2xs tabular-nums text-ink-faint">
             {stage === 'downloading' ? `${status?.percent ?? 0}%` : 'restarting'}
           </span>
         </div>
       )}
-    </section>
+      <SettingsLabel>In the background</SettingsLabel>
+      <SettingRow title="Provider model lists" detail="Re-read each provider's catalog so new models appear without an app release." control={<Toggle aria-label="Provider model lists" on={checks.modelLists} onChange={(v) => void setCheck('modelLists', v)} />} />
+      <SettingRow title="Skills catalog" detail="Refresh the skills marketplace shelf." control={<Toggle aria-label="Skills catalog" on={checks.skills} onChange={(v) => void setCheck('skills', v)} />} />
+      <div className="mt-(--q-tight) flex flex-wrap items-center gap-2">
+        <button className="btn btn-ghost py-1 text-xs" onClick={() => void runCatalogChecks()} disabled={catalogState === 'checking'}>
+          {catalogState === 'checking' ? 'Refreshing…' : 'Refresh catalogs now'}
+        </button>
+        {catalogState === 'done' && <span className="text-xs text-ink-faint" role="status">Model lists and skills checked.</span>}
+        {catalogState === 'failed' && <span className="text-xs text-danger-text" role="status">Refresh failed; try again.</span>}
+      </div>
+    </SettingsSection>
   );
 }
 
@@ -1505,23 +1256,16 @@ export function AutomationsSection({ settings, update }: { settings: AppSettings
   };
   const policy = settings.automationRunPolicy;
   return (
-    <section id="automations" className="card mt-5 p-5" aria-labelledby="automations-heading" data-settings-automations>
-      <h2 id="automations-heading" className="font-semibold">Automations</h2>
-      <p className="mt-1 text-xs text-ink-faint">
-        Scheduled tasks on a model that runs on this computer compete with you for its GPU, memory and fans.
-        Choose when they may start. Each automation can override this in its editor.
-      </p>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-sm">When automations run</span>
-          <p className="text-2xs text-ink-faint" data-settings-run-policy-hint>
-            {policy
-              ? RUN_POLICY_OPTIONS.find((o) => o.id === policy)?.hint
-              : 'On a local model, only when you are away (after 2 hours they run anyway). On a cloud model, on time.'}
-          </p>
-        </div>
-        <select
-          className="input w-56 shrink-0"
+    <SettingsSection id="automations" data-settings-automations title="Automations" help="Scheduled tasks on a local model compete with you for its GPU, memory and fans. Each automation can override this in its editor.">
+      <SettingRow
+        title="When automations run"
+        detail={<span data-settings-run-policy-hint>
+          {policy
+            ? RUN_POLICY_OPTIONS.find((o) => o.id === policy)?.hint
+            : 'On a local model, only when you are away (after 2 hours they run anyway). On a cloud model, on time.'}
+        </span>}
+        control={<select
+          className="quiet-field w-56 shrink-0 py-1"
           aria-label="When automations run"
           data-settings-run-policy
           value={policy ?? ''}
@@ -1529,21 +1273,17 @@ export function AutomationsSection({ settings, update }: { settings: AppSettings
         >
           <option value="">By where the model runs</option>
           {RUN_POLICY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
-      </div>
-      <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-sm">Away after</span>
-          <p className="text-2xs text-ink-faint">
-            Minutes without keyboard, mouse or touch input, with no chat of yours replying, before you count as away.
-          </p>
-        </div>
-        <span className="flex shrink-0 items-center gap-2 text-xs text-ink-faint">
+        </select>}
+      />
+      <SettingRow
+        title="Away after"
+        detail="Minutes without keyboard, mouse or touch input, with no chat of yours replying, before you count as away."
+        control={<span className="flex shrink-0 items-center gap-2 text-xs text-ink-faint">
           <input
             type="number"
             min={1}
             max={240}
-            className="input w-20"
+            className="quiet-field w-20 py-1 tabular-nums"
             aria-label="Away after, in minutes"
             data-settings-idle-minutes
             key={minutes}
@@ -1552,27 +1292,21 @@ export function AutomationsSection({ settings, update }: { settings: AppSettings
             onKeyDown={(e) => { if (e.key === 'Enter') commit(e.currentTarget); }}
           />
           minutes
-        </span>
-      </div>
-    </section>
+        </span>}
+      />
+    </SettingsSection>
   );
 }
 
 export function NotificationsSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   return (
-    <section id="notifications" className="card mt-5 p-5" aria-labelledby="notifications-heading">
-      <h2 id="notifications-heading" className="font-semibold">Notifications</h2>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-sm">Desktop notifications</span>
-          <p className="text-2xs text-ink-faint">
-            A system notification when a chat you are not looking at finishes, fails, or stops to ask you something.
-            Clicking it opens that chat.
-          </p>
-        </div>
-        <Toggle aria-label="Desktop notifications" on={settings.desktopNotifications !== false} onChange={(v) => update({ desktopNotifications: v })} />
-      </div>
-    </section>
+    <SettingsSection id="notifications" title="Notifications">
+      <SettingRow
+        title="Desktop notifications"
+        detail="When a chat you are not looking at finishes, fails, or stops to ask you something. Clicking it opens that chat."
+        control={<Toggle aria-label="Desktop notifications" on={settings.desktopNotifications !== false} onChange={(v) => update({ desktopNotifications: v })} />}
+      />
+    </SettingsSection>
   );
 }
 
@@ -1584,47 +1318,40 @@ export function NotificationsSection({ settings, update }: { settings: AppSettin
 export function ClaudePlanFeaturesSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   const on = settings.claudePlanFeaturesApproved === true;
   return (
-    <section id="claude-plan-features" className="card mt-5 p-5" aria-labelledby="claude-plan-features-heading" data-settings-claude-plan>
-      <h2 id="claude-plan-features-heading" className="font-semibold">Claude plan features</h2>
-      <p className="mt-1 text-xs text-ink-faint">
-        On a Claude plan (Pro, Max or Team) through Claude Code, Nekko keeps these off: scheduled tasks and auto-continue,
-        Nekko's own tools inside a Claude chat, and the project note Nekko adds to a chat.
-        With an Anthropic API key or a cloud account they are always on.
-      </p>
-      <div role="note" id="claude-plan-features-warning" className="mt-3 rounded-lg border border-warning bg-warning-soft p-3 text-xs" data-settings-claude-plan-warning>
-        <p className="font-semibold">Only turn this on if Anthropic has approved it for you in writing.</p>
-        <p className="mt-1">
+    <SettingsSection
+      id="claude-plan-features"
+      data-settings-claude-plan
+      title="Claude plan features"
+      help="On a Claude plan (Pro, Max or Team) through Claude Code, Nekko keeps these off: scheduled tasks and auto-continue, Nekko's own tools inside a Claude chat, and the project note Nekko adds to a chat. With an Anthropic API key or a cloud account they are always on."
+    >
+      {/* Plain words rather than a tinted box: the warning ink carries it (design system). */}
+      <div role="note" id="claude-plan-features-warning" className="mt-(--q-inline) text-xs" data-settings-claude-plan-warning>
+        <p className="font-medium text-warning-text">Only turn this on if Anthropic has approved it for you in writing.</p>
+        <p className="mt-(--q-tight) text-ink-soft">
           Anthropic's terms don't allow third-party apps to use these features on a Claude plan without their approval,
           and Anthropic can limit or suspend an account that breaks them, without notice.
           Nekko can't check whether you have approval: turning this on is your decision and your responsibility.
           If you aren't sure, leave it off and use an API key for these features.
         </p>
       </div>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-sm">Anthropic has approved my use</span>
-          <p className="text-2xs text-ink-faint" data-settings-claude-plan-state>
-            {on ? 'On: these features now run on your Claude plan.' : 'Off: these features need an API key or cloud account.'}
-          </p>
-        </div>
-        <Toggle on={on} onChange={(v) => update({ claudePlanFeaturesApproved: v })}
-          aria-label="Anthropic has approved my use of Claude plan features" aria-describedby="claude-plan-features-warning" />
-      </div>
-    </section>
+      <SettingRow
+        title="Anthropic has approved my use"
+        detail={<span data-settings-claude-plan-state>{on ? 'On: these features now run on your Claude plan.' : 'Off: these features need an API key or cloud account.'}</span>}
+        control={<Toggle on={on} onChange={(v) => update({ claudePlanFeaturesApproved: v })}
+          aria-label="Anthropic has approved my use of Claude plan features" aria-describedby="claude-plan-features-warning" />}
+      />
+    </SettingsSection>
   );
 }
 
 /** Explicit opt-in: unlike ordinary provider retries this can restart a call after an outage. */
 export function InternetRecoverySetting({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
-  return <div id="internet-recovery" className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-    <div className="min-w-0">
-      <span className="text-sm">Automatically resume after internet restoration</span>
-      <p id="internet-recovery-hint" className="text-2xs text-ink-faint">
-        Off by default. Continue the same interrupted online model request when this computer reconnects (up to 30 minutes).
-        Additional provider usage may incur charges. Completed tools are not replayed. Ordinary provider retries are unchanged.
-      </p>
-    </div>
-    <Toggle on={settings.autoResumeOnInternetRestore === true} onChange={(v) => update({ autoResumeOnInternetRestore: v })}
-      aria-label="Automatically resume after internet restoration" aria-describedby="internet-recovery-hint" />
-  </div>;
+  return <SettingRow
+    id="internet-recovery"
+    title="Automatically resume after internet restoration"
+    detailId="internet-recovery-hint"
+    detail="Off by default. Continue the same interrupted online model request when this computer reconnects (up to 30 minutes). Additional provider usage may incur charges. Completed tools are not replayed."
+    control={<Toggle on={settings.autoResumeOnInternetRestore === true} onChange={(v) => update({ autoResumeOnInternetRestore: v })}
+      aria-label="Automatically resume after internet restoration" aria-describedby="internet-recovery-hint" />}
+  />;
 }

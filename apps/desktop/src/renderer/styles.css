@@ -2740,11 +2740,14 @@
 .settings-shortcuts, .settings-nav { display: flex; flex-wrap: wrap; gap: 2px; }
 .settings-shortcuts { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 @media (min-width: 768px) { .settings-shortcuts, .settings-nav { flex-direction: column; flex-wrap: nowrap; } }
-.settings-group { scroll-margin-top: 16px; padding-top: 24px; }
+.settings-group { scroll-margin-top: 16px; padding-top: var(--q-section); }
 .settings-group:first-child { padding-top: 4px; }
-.settings-group + .settings-group { margin-top: 40px; border-top: 1px solid var(--line); }
-/* Matches the selected .settings-nav-item, so a section's heading reads like its rail entry. */
-.settings-group-title { font-size: var(--text-base); font-weight: 500; color: var(--ink); }
+/* The one hairline: between groups, which are of a different kind. Sections inside a group are separated by space alone. */
+.settings-group + .settings-group { margin-top: var(--q-section); border-top: 1px solid var(--line); }
+/* Each rail group reads as a page, so its title is the page title size (design system type ladder). */
+.settings-group-title { font-size: var(--text-xl); font-weight: 600; color: var(--ink); }
+.settings-section { margin-top: var(--q-section); scroll-margin-top: 16px; }
+.settings-group-title + .settings-section, .settings-group-title + * > .settings-section:first-child { margin-top: var(--q-group); }
 /* Pinned over the rail's "Search settings" row: its left edge and width come from the row, so it never spills out of the rail. */
 .settings-search-pop { position: fixed; z-index: 60; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; box-sizing: border-box; padding: 4px 4px 4px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-float); }
 .settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: var(--text-sm); color: var(--ink); }
@@ -4421,8 +4424,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .settings-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .settings-content { flex: 1; min-width: 0; overflow-y: auto; }
 .settings-page, .models-section { max-width: 64rem; margin-inline: auto; }
-.settings-page { padding: 12px 16px 64px; }
-.settings-panel .card h2 { font-size: var(--text-sm); }
+/* The design system's content column: a setting's control stays within reach of its label. */
+.settings-page { max-width: 720px; padding: 12px 20px 64px; }
 .settings-destination { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 /* Bars above the page's scroller reserve its scrollbar, so both centre on the same line. */
 .settings-bar { flex-shrink: 0; overflow: hidden; scrollbar-gutter: stable; }

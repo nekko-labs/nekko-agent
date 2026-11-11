@@ -97,14 +97,6 @@
 .recovery-key { display: grid; grid-template-columns: repeat(4, auto); justify-content: center; gap: 8px 12px; padding: 16px; border-radius: 14px; background: var(--surface-2); }
 .recovery-key span { font: 600 15px/1.2 var(--font-mono); letter-spacing: 0.06em; color: var(--ink); }
 .fingerprint { font: 600 18px/1.2 var(--font-mono); letter-spacing: 0.12em; color: var(--ink); text-align: center; }
-.sync-card { position: relative; overflow: hidden; }
-.sync-card-hero { position: relative; padding: 12px 8px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); background:
-  radial-gradient(60% 90% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
-  radial-gradient(55% 80% at 100% 0%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 70%); }
-.sync-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
-.sync-pill { display: inline-flex; align-items: center; gap: 8px; padding: 2px 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 500; }
-.sync-pill.ok { background: var(--success-soft); color: var(--success); }
-.sync-pill.busy { background: var(--accent-soft); color: var(--accent); }
-.sync-pill.warn { background: var(--warning-soft); color: var(--warning); }
-.sync-pill.bad { background: var(--danger-soft); color: var(--danger); }
-.sync-pill.off { background: var(--neutral-soft); color: var(--ink-soft); }
+/* Settings > Sync on quiet surfaces: the drawing and rows separated by space, no box or rule. */
+.sync-card-hero { position: relative; padding: 12px 8px 16px; }
+.sync-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: var(--q-row); padding: 8px 0; }
