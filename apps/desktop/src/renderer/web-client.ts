@@ -787,10 +787,11 @@ function makeWebClient(): NekkoApi {
     securityRegisterBegin: (kind) => call(IpcChannels.securityRegisterBegin, kind),
     securityRegisterKey: (input) => call(IpcChannels.securityRegisterKey, input),
     securityTotpBegin: () => call(IpcChannels.securityTotpBegin),
-    securityTotpConfirm: (code) => call(IpcChannels.securityTotpConfirm, code),
+    securityTotpConfirm: (code, name) => call(IpcChannels.securityTotpConfirm, code, name),
     securityEnable: () => call(IpcChannels.securityEnable),
     securityDisable: (proof) => call(IpcChannels.securityDisable, proof),
     securityRemoveMethod: (id, proof) => call(IpcChannels.securityRemoveMethod, id, proof),
+    securityRenameMethod: (id, name) => call(IpcChannels.securityRenameMethod, id, name),
     securityRecoveryCodes: () => call(IpcChannels.securityRecoveryCodes),
     // In a browser WebAuthn runs in this page, bound to its own host: it needs a secure context.
     webAuthnCeremony: async (request) => {

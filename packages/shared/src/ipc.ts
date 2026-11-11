@@ -440,6 +440,7 @@ export const IpcChannels = {
   securityEnable: 'security:enable',
   securityDisable: 'security:disable',
   securityRemoveMethod: 'security:removeMethod',
+  securityRenameMethod: 'security:renameMethod',
   securityRecoveryCodes: 'security:recoveryCodes',
   /** SK-3 safety exits, phone only: the daemon's phone gate answers them (phone-access.ts). */
   appQuit: 'app:quit',
@@ -1325,12 +1326,14 @@ export interface NekkoApi {
   securityRegisterBegin?(kind: import('./step-up.js').SecurityCredentialKind): Promise<import('./step-up-desktop.js').SecurityRegisterBegin>;
   securityRegisterKey?(input: import('./step-up-desktop.js').SecurityRegisterKeyInput): Promise<import('./step-up-desktop.js').SecurityMethodAdded>;
   securityTotpBegin?(): Promise<import('./step-up-desktop.js').SecurityTotpBegin>;
-  securityTotpConfirm?(code: string): Promise<import('./step-up-desktop.js').SecurityMethodAdded>;
+  securityTotpConfirm?(code: string, name?: string): Promise<import('./step-up-desktop.js').SecurityMethodAdded>;
   securityEnable?(): Promise<import('./step-up-desktop.js').SecurityStatus>;
   /** Turn step-up off: any registered method, or a recovery code. */
   securityDisable?(proof: import('./step-up-desktop.js').DesktopStepUpProof | null): Promise<import('./step-up-desktop.js').SecurityStatus>;
   /** Remove a key (its id) or the code app (`totp`): with step-up on, a different method or a recovery code. */
   securityRemoveMethod?(id: string, proof: import('./step-up-desktop.js').DesktopStepUpProof | null): Promise<import('./step-up-desktop.js').SecurityStatus>;
+  /** Rename a key (its id) or the code app (`totp`); an empty name goes back to the default. Guarded like adding a method. */
+  securityRenameMethod?(id: string, name: string): Promise<import('./step-up-desktop.js').SecurityStatus>;
   /** Ten new recovery codes, shown once; the old ones stop working. */
   securityRecoveryCodes?(): Promise<string[]>;
   /**
