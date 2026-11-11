@@ -455,12 +455,13 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(edited.waitForExistence(timeout: computerWait), "the edit reached the computer's queue")
         attach(app, "beyond-3-queue-edited")
         auditAccessibility(app, "beyond-queue")
-        // The edited prompt runs after the slow reply, as edited.
-        let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: next one, edited"))
-        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 2 * computerWait), "the edited prompt ran")
         // Its reply streams on, and while it does the transcript keeps scrolling to the
         // end, which cancels a long press (no menu after two presses, run 40447057708).
         XCTAssertTrue(waitGone(app.buttons["Stop"].firstMatch, computerWait), "the edited prompt's reply finished")
+        // After streaming ends the transcript is static; the edited-prompt row is in the
+        // accessibility tree. While streaming, view recycling can remove it (#2547).
+        let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: next one, edited"))
+        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 10), "the edited prompt ran")
 
         // IO-23: fork from a prompt; the new chat has it in its message box. The second prompt,
         // not the first: at the top of this transcript the first bubble is drawn but missing from
