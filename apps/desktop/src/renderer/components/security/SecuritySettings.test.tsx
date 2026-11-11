@@ -63,6 +63,12 @@ describe('Settings → Security', () => {
     expect(out).toContain('Nothing registered yet.');
     expect(out).toContain('Add 2 methods first');
     expect(out).toMatch(/<button[^>]*disabled=""[^>]*>Turn on<\/button>/);
+    // Blocked (#2393): the title goes faint and the button points at the reason.
+    expect(out).toMatch(/text-ink-faint">Require a step-up/);
+    expect(out).toMatch(/<button[^>]*aria-describedby="security-step-up-state"[^>]*>Turn on<\/button>/);
+    expect(out).toMatch(/id="security-step-up-state"[^>]*>Add 2 methods first/);
+    // The term is defined where it first appears (#2392).
+    expect(text(out)).toContain('A step-up is a second check before risky actions');
     expect(text(out)).toContain(SECURITY_KEY_UNTESTED_NOTE);
     expect(out).toContain('href="https://github.com/nekko-labs/nekko-agent/issues/new"');
     expect(out).toContain('Add passkey on this computer');
@@ -78,6 +84,8 @@ describe('Settings → Security', () => {
     expect(out).toContain('9 recovery codes left.');
     expect(out).toMatch(/<button[^>]*>Turn on<\/button>/);
     expect(out).not.toMatch(/disabled=""[^>]*>Turn on/);
+    expect(out).not.toContain('aria-describedby="security-step-up-state"');
+    expect(out).not.toMatch(/text-ink-faint">Require a step-up/);
   });
 
   it('warns, not refuses, when the second method is a code app and phones are paired', () => {

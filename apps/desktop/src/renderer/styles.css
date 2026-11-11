@@ -379,6 +379,11 @@
   &:active:not(:disabled) {
     transform: scale(0.97);
   }
+  /* A disabled button has to look it: a full accent fill read as clickable and did nothing (#2393). */
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 }
 
 /* One flat fill in the accent: no gradient, no resting shadow, no glow. Keep
@@ -387,7 +392,7 @@
   background: var(--accent);
   color: var(--on-accent);
   @media (hover: hover) {
-    &:hover {
+    &:hover:not(:disabled) {
       background: color-mix(in srgb, var(--accent) 88%, var(--ink));
     }
   }
@@ -396,7 +401,7 @@
 @utility btn-ghost {
   @apply text-ink-soft;
   @media (hover: hover) {
-    &:hover {
+    &:hover:not(:disabled) {
       background: var(--surface-2);
       color: var(--ink);
     }
@@ -406,7 +411,7 @@
 @utility btn-outline {
   @apply border border-line text-ink;
   @media (hover: hover) {
-    &:hover {
+    &:hover:not(:disabled) {
       background: var(--surface-2);
       border-color: color-mix(in srgb, var(--ink-faint) 40%, var(--line));
     }
