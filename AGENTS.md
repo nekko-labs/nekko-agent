@@ -49,7 +49,7 @@ Every UI change follows [docs/design-system.md](docs/design-system.md) and passe
 
 Full procedure: [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md).
 
-Before/after screenshots (and a short recording for motion) in the PR description, uploaded with `node scripts/pr-media.mjs <pr>` to the shared `pr-media` pre-releases, never committed. Write "no visual change" when there is none. Verification runs hidden, off-screen and non-focusable, in an isolated profile: never over the user's desktop, never the user's running app.
+Before/after screenshots (and a short recording for motion) in the PR description, uploaded with `node scripts/pr-media.mjs <pr>` to the shared `pr-media` pre-releases, never committed. iPhone evidence and diagnostics run on a Mac with `node scripts/ios-evidence-local.mjs`, not on CI's 5 macOS runners (Native iOS, and so `gate`, queues behind them). Write "no visual change" when there is none. Verification runs hidden, off-screen and non-focusable, in an isolated profile: never over the user's desktop, never the user's running app.
 
 ## No AI attribution in anything we ship
 
