@@ -97,9 +97,28 @@ export const STORAGE_SHIM = "<script>(()=>{const s=()=>{const m=new Map();return
 
 /** The page with the stand-in after its doctype (before it would force quirks mode). */
 export function withStorageShim(html: string): string {
-  const lead = /^﻿?\s*(?:<!--[\s\S]*?-->\s*)*<!doctype[^>]*>/i.exec(html);
-  if (!lead) return STORAGE_SHIM + html;
-  return html.slice(0, lead[0].length) + STORAGE_SHIM + html.slice(lead[0].length);
+  // A single forward scan (no backtracking regex): byte-order mark, then
+  // whitespace and comments, then the doctype.
+  let i = html.charCodeAt(0) === 0xfeff ? 1 : 0;
+  const skipSpace = () => { while (i < html.length && /\s/.test(html[i])) i++; };
+  skipSpace();
+  while (html.startsWith('<!--', i)) {
+    const end = html.indexOf('-->', i + 4);
+    if (end < 0) return STORAGE_SHIM + html;
+    i = end + 3;
+    skipSpace();
+  }
+  if (html.slice(i, i + 9).toLowerCase() !== '<!doctype') return STORAGE_SHIM + html;
+  const close = html.indexOf('>', i);
+  if (close < 0) return STORAGE_SHIM + html;
+  return html.slice(0, close + 1) + STORAGE_SHIM + html.slice(close + 1);
+}
+
+/** The path without separators at its end, by a plain scan. */
+function trimSeparators(path: string): string {
+  let end = path.length;
+  while (end > 0 && (path[end - 1] === '/' || path[end - 1] === '\\')) end--;
+  return path.slice(0, end);
 }
 
 export class HtmlPreviewRefusal extends Error {
@@ -258,7 +277,7 @@ export function createHtmlPreviewServer(options: HtmlPreviewServerOptions = {}):
       const root = parse(folder).root;
       let realHome = home;
       try { realHome = await realpath(home); } catch { /* keep as given */ }
-      if (sameFolder(folder, root) || sameFolder(folder.replace(/[\\/]+$/, ''), realHome.replace(/[\\/]+$/, ''))) {
+      if (sameFolder(folder, root) || sameFolder(trimSeparators(folder), trimSeparators(realHome))) {
         throw new HtmlPreviewRefusal('Pages directly in a disk root or the home folder are not served; move it into a folder of its own.');
       }
       const why = refusedPath(basename(real));

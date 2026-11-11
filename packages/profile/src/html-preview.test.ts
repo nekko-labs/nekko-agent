@@ -126,5 +126,14 @@ describe('storage stand-in', () => {
   it('goes after the doctype so the page keeps standards mode', () => {
     expect(withStorageShim('﻿<!-- a -->\n<!DOCTYPE html><p>x')).toBe(`﻿<!-- a -->\n<!DOCTYPE html>${STORAGE_SHIM}<p>x`);
     expect(withStorageShim('<p>x')).toBe(`${STORAGE_SHIM}<p>x`);
+    expect(withStorageShim('<!-- open <!doctype html>')).toBe(`${STORAGE_SHIM}<!-- open <!doctype html>`);
+    expect(withStorageShim('<!doctype html')).toBe(`${STORAGE_SHIM}<!doctype html`);
+  });
+
+  it('stays linear on hostile input', () => {
+    const hostile = '<!--' + '--><!--'.repeat(200_000);
+    const start = performance.now();
+    expect(withStorageShim(hostile).startsWith(STORAGE_SHIM)).toBe(true);
+    expect(performance.now() - start).toBeLessThan(500);
   });
 });
