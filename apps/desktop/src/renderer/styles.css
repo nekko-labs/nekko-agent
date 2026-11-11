@@ -3684,6 +3684,9 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .screens-option strong { font-size: var(--text-xs); font-weight: 500; color: var(--ink); }
 .screens-option > span > span { font-size: var(--text-2xs); line-height: 1.35; color: var(--ink-faint); }
 .screens-picker__title--sub { margin-top: 12px; }
+/* Separate choices under one heading: a group label each, the group gap between them (#2399). */
+.screens-group-label { margin: 0 0 var(--q-heading); }
+.screens-group { margin-top: var(--q-group); }
 .screens-tile[data-current]::before { content: ''; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .screens-tile[data-waiting] { border-style: dashed; }
 /* Spaces: the Accessibility explainer, with an abstract monitor switching desktops. */
