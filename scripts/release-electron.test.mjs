@@ -79,8 +79,9 @@ test('recovery workflow checks out tag source and retains signing/publication ga
   assert.equal(workflow.env.RELEASE_TAG, '${{ inputs.release_tag || github.ref_name }}');
   const steps = workflow.jobs.release.steps;
   const validation = steps.find(s => s.name === 'Validate release tag').run;
-  for (const tag of ['v0.9.5', 'v1.2.3-rc.1']) assert.equal(spawnSync('bash', ['-c', validation], { env: { ...process.env, RELEASE_TAG: tag } }).status, 0);
-  for (const tag of ['main', '../v0.9.5', 'v0.9', 'v0.9.5;echo bad', 'v0.9.5\nother']) assert.notEqual(spawnSync('bash', ['-c', validation], { env: { ...process.env, RELEASE_TAG: tag } }).status, 0);
+  // x.xx.xxxx from the 0.10 line (docs/decisions/0080); older 0.x tags still rebuild.
+  for (const tag of ['v0.9.5', 'v0.10.1000', 'v0.10.1004', 'v1.12.1003-rc.1']) assert.equal(spawnSync('bash', ['-c', validation], { env: { ...process.env, RELEASE_TAG: tag } }).status, 0, tag);
+  for (const tag of ['main', '../v0.9.5', 'v0.9', 'v0.9.5;echo bad', 'v0.9.5\nother', 'v0.10.0', 'v1.0.0', 'v1.2.3-rc.1', 'v0.100.1000']) assert.notEqual(spawnSync('bash', ['-c', validation], { env: { ...process.env, RELEASE_TAG: tag } }).status, 0, tag);
   assert.equal(steps.find(s => s.uses === 'actions/checkout@v7').with.ref, 'refs/tags/${{ env.RELEASE_TAG }}');
   assert.equal(steps.find(s => s.name === 'Check out release tooling').with.ref, '${{ github.sha }}');
   const build = steps.find(s => s.name === 'Build and publish installers');

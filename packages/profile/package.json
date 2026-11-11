@@ -1,6 +1,6 @@
 {
   "name": "@nekko-agent/profile",
-  "version": "0.1.0",
+  "version": "0.9.8",
   "private": true,
   "type": "module",
   "description": "The user's data folder on this machine: where it lives, moving it, older installs' profiles, and the running app.",

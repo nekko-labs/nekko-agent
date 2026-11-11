@@ -1,4 +1,4 @@
-# 0080. Bind pending phone responses to the original request
+# 0081. Bind pending phone responses to the original request
 
 Status: accepted behavior; native implementation and verification tracked in [#2476](https://github.com/nekko-labs/nekko-agent/issues/2476).
 

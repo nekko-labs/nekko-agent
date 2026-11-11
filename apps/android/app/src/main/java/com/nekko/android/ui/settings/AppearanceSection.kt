@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -43,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -56,6 +55,7 @@ import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.ui.theme.ThemeChoice
+import com.nekko.android.ui.theme.ThemeIcons
 import com.nekko.android.ui.theme.ThemePreset
 import com.nekko.protocol.Appearance
 
@@ -76,6 +76,8 @@ fun AppearanceSection(deps: SettingsDeps) {
     val lock = LocalAppLock.current
     // The app's language, from the configuration so the row follows a change of language.
     val locale = LocalConfiguration.current.locales[0]
+    // The theme in use: the computer's when following it.
+    val current = ThemePreset.find(if (choice == ThemeChoice.COMPUTER) c.appearance?.preset else choice.id)
 
     SectionHeader(stringResource(R.string.appearance_title))
     Column(Modifier.padding(horizontal = 16.dp)) {
@@ -83,7 +85,8 @@ fun AppearanceSection(deps: SettingsDeps) {
             LinkRow(
                 stringResource(R.string.appearance_theme),
                 themeName(choice),
-                swatch = ThemePreset.find(if (choice == ThemeChoice.COMPUTER) c.appearance?.preset else choice.id),
+                theme = current,
+                icon = ThemeIcons.of(current) ?: ThemeIcons.computer.takeIf { choice == ThemeChoice.COMPUTER },
                 accent = if (choice == ThemeChoice.COMPUTER) c.appearance?.accent else null,
                 tag = "settings.theme",
             ) { picking = true }
@@ -131,7 +134,7 @@ private fun themeName(choice: ThemeChoice): String = when (choice) {
 }
 
 @Composable
-private fun LinkRow(title: String, value: String, swatch: ThemePreset? = null, accent: Long? = null, tag: String, onClick: () -> Unit) {
+private fun LinkRow(title: String, value: String, theme: ThemePreset? = null, icon: Int? = null, accent: Long? = null, tag: String, onClick: () -> Unit) {
     val p = Nekko.palette
     Row(
         Modifier
@@ -145,25 +148,22 @@ private fun LinkRow(title: String, value: String, swatch: ThemePreset? = null, a
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(title, style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.weight(1f))
-        if (swatch != null || accent != null) Swatch(swatch, accent)
+        if (icon != null) ThemeGlyph(icon, theme, accent)
         Text(value, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
         Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
     }
 }
 
-/** A preset's paper with its accent on it. */
+/** The theme's icon (ThemeIcons), in its accent, as the desktop's picker shows it. */
 @Composable
-private fun Swatch(preset: ThemePreset?, accent: Long?) {
+private fun ThemeGlyph(icon: Int, preset: ThemePreset?, accent: Long?) {
     val p = Nekko.palette
-    val paper = preset?.paper?.let { Color(it) } ?: when (preset?.mode) {
-        ThemePreset.Mode.DARK -> Color(0xFF0C0C11)
-        ThemePreset.Mode.LIGHT -> Color(0xFFFBFBFD)
-        else -> p.surface2
-    }
-    Box(Modifier.size(22.dp).clip(CircleShape).background(paper).border(1.dp, p.line, CircleShape), contentAlignment = Alignment.Center) {
-        val a = accent ?: preset?.accent
-        if (a != null) Box(Modifier.size(10.dp).clip(CircleShape).background(Color(a)))
-    }
+    Icon(
+        painterResource(icon),
+        contentDescription = null,
+        tint = ThemeIcons.tint(preset, accent, p.surface, p.inkSoft),
+        modifier = Modifier.size(24.dp),
+    )
 }
 
 /** The desktop's themes: following the computer or this phone, Light, Dark, the named presets and the experimental families. */
@@ -175,7 +175,7 @@ private fun ThemeDialog(choice: ThemeChoice, computer: Appearance?, computerName
         title = { Text(stringResource(R.string.appearance_theme)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
-                ChoiceRow(stringResource(R.string.appearance_match_computer), computerDetail(computer, computerName), ThemePreset.find(computer?.preset), computer?.accent, choice == ThemeChoice.COMPUTER, "theme.computer") { onPick(ThemeChoice.COMPUTER) }
+                ChoiceRow(stringResource(R.string.appearance_match_computer), computerDetail(computer, computerName), ThemePreset.find(computer?.preset), computer?.accent, choice == ThemeChoice.COMPUTER, "theme.computer", icon = ThemeIcons.computer) { onPick(ThemeChoice.COMPUTER) }
                 ChoiceRow(stringResource(R.string.appearance_match_phone), stringResource(R.string.appearance_match_phone_detail), ThemePreset.find("system"), null, choice == ThemeChoice.SYSTEM, "theme.system") { onPick(ThemeChoice.SYSTEM) }
                 ChoiceRow(stringResource(R.string.appearance_light), null, ThemePreset.find("light"), null, choice == ThemeChoice.LIGHT, "theme.light") { onPick(ThemeChoice.LIGHT) }
                 ChoiceRow(stringResource(R.string.appearance_dark), null, ThemePreset.find("dark"), null, choice == ThemeChoice.DARK, "theme.dark") { onPick(ThemeChoice.DARK) }
@@ -220,6 +220,7 @@ private fun ChoiceRow(
     selected: Boolean,
     tag: String,
     description: String? = null,
+    icon: Int? = ThemeIcons.of(preset),
     onClick: () -> Unit,
 ) {
     val p = Nekko.palette
@@ -236,7 +237,7 @@ private fun ChoiceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Swatch(preset, accent)
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { if (icon != null) ThemeGlyph(icon, preset, accent) }
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = p.ink)
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }

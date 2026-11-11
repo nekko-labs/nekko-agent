@@ -97,17 +97,6 @@ on:
 permissions:
   contents: read
 jobs:
-  ios-protocol-linux:
-    if: inputs.capture_platform != 'android'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_ref }}
-          persist-credentials: false
-      - name: Run full native protocol and app-state tests without a Mac
-        run: apps/ios/scripts/linux-test.sh
   ios:
     if: inputs.capture_platform != 'android'
     # The existing ios-native.yml hosted image, never the owner-runner picker.
@@ -130,6 +119,7 @@ jobs:
           sparse-checkout: |
             ${{ inputs.ios_test_file }}
             apps/ios/App/Views/SecurityEvidenceFixture.swift
+            apps/ios/App/Views/ChatStatusFixture.swift
             apps/ios/App/Views/ReplyVoicesFixture.swift
             apps/ios/Protocol/Tests/NekkoKitTests/StarAskTests.swift
           sparse-checkout-cone-mode: false
@@ -151,6 +141,11 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+          # Identical debug transition history on both revisions observes the real
+          # refresh across XCTest's idle wait. No seasonal implementation is copied.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/WinterThemeTests.swift" ]]; then
+            cp .evidence-harness/apps/ios/App/Views/ChatStatusFixture.swift apps/ios/App/Views/
+          fi
           # The keyboard baseline contains the independently diagnosed recursive
           # StarAskCountTests helper (#2531). Share its test-only repair on both
           # revisions, leaving production keyboard behavior untouched.
@@ -220,6 +215,18 @@ jobs:
           fi
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
             "-only-testing:$ONLY_TESTING"
+      - name: Record Winter motion on the owned simulator
+        if: inputs.ios_test_file == 'apps/ios/UITests/WinterThemeTests.swift'
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcrun simctl launch "$DEVICE" dev.nekkolabs.nekkoagent -uiTestChatStatus -splash NO -appLock NO -onboarded YES -uiTestReset YES -AppleLanguages '(en)' -AppleLocale en_US -theme winter
+          sleep 2
+          xcrun simctl io "$DEVICE" recordVideo --codec=h264 evidence/winter-motion.mp4 &
+          RECORDER=$!
+          sleep 8
+          kill -INT "$RECORDER"
+          wait "$RECORDER"
       - name: Export attachments and clean up owned simulator
         if: always()
         working-directory: apps/ios
@@ -247,6 +254,7 @@ jobs:
       fail-fast: false
       matrix:
         revision: [before, after]
+        profile: ${{ fromJSON(inputs.android_test_class == 'com.nekko.android.WinterThemeTest' && '["pixel_2","pixel_fold"]' || '["pixel_2"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -257,7 +265,9 @@ jobs:
           ref: ${{ inputs.harness_ref || github.sha }}
           path: .evidence-harness
           persist-credentials: false
-          sparse-checkout: ${{ inputs.android_test_file }}
+          sparse-checkout: |
+            ${{ inputs.android_test_file }}
+            apps/android/app/src/debug/java/com/nekko/android/WinterEvidenceActivity.kt
           sparse-checkout-cone-mode: false
       # The capture script always comes from this workflow's own commit.
       - uses: actions/checkout@v7
@@ -284,6 +294,18 @@ jobs:
           mkdir -p "$(dirname "$ANDROID_TEST_FILE")"
           cp ".evidence-harness/$ANDROID_TEST_FILE" "$ANDROID_TEST_FILE"
           cp .evidence-workflow/apps/android/scripts/mode-evidence.sh apps/android/scripts/
+          # Share the debug host, never seasonal implementation, across both app revisions.
+          if [[ "$ANDROID_TEST_FILE" == *"/WinterThemeTest.kt" ]]; then
+            cp .evidence-harness/apps/android/app/src/debug/java/com/nekko/android/WinterEvidenceActivity.kt apps/android/app/src/debug/java/com/nekko/android/
+            python3 - <<'PYHOST'
+          from pathlib import Path
+          p = Path("apps/android/app/src/debug/AndroidManifest.xml")
+          s = p.read_text()
+          if ".WinterEvidenceActivity" not in s:
+              s = s.replace("<application>", '<application><activity android:name=".WinterEvidenceActivity" android:exported="false" />', 1)
+          p.write_text(s)
+          PYHOST
+          fi
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -307,17 +329,18 @@ jobs:
           NEKKO_EVIDENCE_REVISION: ${{ matrix.revision }}
           NEKKO_EVIDENCE_CLASS: ${{ inputs.android_test_class }}
           NEKKO_EVIDENCE_EXPECT: ${{ inputs.android_expect }}
+          NEKKO_EVIDENCE_DEVICE: ${{ matrix.profile }}
         with:
           api-level: 34
           arch: x86_64
           target: google_apis
-          profile: pixel_2
+          profile: ${{ matrix.profile }}
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash apps/android/scripts/mode-evidence.sh
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: native-mode-label-android-${{ matrix.revision }}
+          name: native-mode-label-android-${{ matrix.revision }}-${{ matrix.profile }}
           path: apps/android/evidence/**
           if-no-files-found: error

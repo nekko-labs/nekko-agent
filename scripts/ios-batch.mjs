@@ -20,6 +20,12 @@
 // A red batch marks every PR in it red: dispatch Native iOS on one branch
 // (`gh workflow run ios-native.yml --ref <branch>`) to see whether it is yours.
 //
+// A PR that changes a file under .github/workflows/ sits out (#2030): the
+// workflow token may not push workflow changes, so GitHub refused the whole
+// batch's push and no PR in it got a status. Such a PR gets Native iOS on its own
+// branch instead (dispatched here once per head), and a red batch status saying
+// so; `gate` passes it on that run (iosVerdict: a green run beats a red status).
+//
 // Usage (ios-batch.yml: a full clone, GH_TOKEN and GITHUB_REPOSITORY set):
 //   node scripts/ios-batch.mjs [--dry-run]
 // --dry-run composes the batch locally and says what it would run, posting nothing.
@@ -38,6 +44,22 @@ export const IOS_PATHS = [/^apps\/ios\//, /^apps\/relay-server\/src\//, /^crates
   /^packages\/shared\/src\/(phone-access|pairing-link)\.ts$/, /^\.github\/workflows\/ios-native\.yml$/];
 
 export const touchesIos = files => files.some(f => IOS_PATHS.some(p => p.test(f)));
+
+/** Whether a PR's change onto main edits a workflow, which the batch's token may not push. */
+export const changesWorkflow = files => files.some(f => /^\.github\/workflows\//.test(f));
+
+/**
+ * What to do with a PR left out for changing a workflow, given the ios-native.yml
+ * runs on its branch: start one on its head unless one is there already.
+ */
+export function workflowHold(pr, runs) {
+  const run = runs.find(r => r.headSha === pr.headRefOid);
+  return {
+    dispatch: !run,
+    run,
+    why: `Changes a workflow, which the batch can't push: Native iOS runs on the PR itself (gh workflow run ios-native.yml --ref ${pr.headRefName}).`,
+  };
+}
 
 const labelsOf = pr => (pr.labels ?? []).map(l => (typeof l === 'string' ? l : l.name));
 
@@ -124,11 +146,29 @@ function setStatus(repo, sha, state, description, url) {
     '-f', `description=${description.slice(0, 140)}`, ...(url ? ['-f', `target_url=${url}`] : [])]);
 }
 
+/** ios-native.yml's recent runs on a branch (PR-level label runs and dispatches alike). */
+function branchRuns(repo, branch) {
+  return JSON.parse(sh('gh', ['run', 'list', '-R', repo, '-w', 'ios-native.yml', '-b', branch, '--limit', '20', '--json', 'databaseId,headSha,status,url']));
+}
+
+/** Starts Native iOS on a PR's branch and returns the new run's URL once it is listed (undefined if it never shows). */
+function dispatchOnBranch(repo, pr) {
+  const out = sh('gh', ['workflow', 'run', 'ios-native.yml', '-R', repo, '--ref', pr.headRefName]);
+  const printed = out.match(/https:\/\/\S+\/actions\/runs\/\d+/)?.[0];
+  if (printed) return printed;
+  for (let tries = 0; tries < 10; tries++) {
+    const run = branchRuns(repo, pr.headRefName).find(r => r.headSha === pr.headRefOid);
+    if (run) return run.url;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
+  }
+  return undefined;
+}
+
 function main({ dryRun }) {
   const repo = process.env.GITHUB_REPOSITORY;
   const runUrl = process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}` : undefined;
   const open = JSON.parse(sh('gh', ['pr', 'list', '-R', repo, '--state', 'open', '--limit', '100',
-    '--json', 'number,headRefOid,isDraft,isCrossRepository,baseRefName,labels,files']));
+    '--json', 'number,headRefName,headRefOid,isDraft,isCrossRepository,baseRefName,labels,files']));
   const candidates = batchCandidates(open).filter(pr => !batchPassed(JSON.parse(sh('gh', ['api', `repos/${repo}/commits/${pr.headRefOid}/status`])).statuses));
   console.log(`Candidates: ${candidates.map(pr => `#${pr.number}`).join(', ') || 'none'}`);
   if (!candidates.length) return;
@@ -136,6 +176,8 @@ function main({ dryRun }) {
   git('fetch', '--quiet', 'origin', 'main', ...candidates.map(pr => `+refs/pull/${pr.number}/head:refs/batch/${pr.number}`));
   const main = git('rev-parse', 'origin/main');
   const skipped = [];
+  // PRs that change a workflow: tested on their own branch, never pushed in a batch.
+  const held = [];
   // Each PR merged onto main alone (in-memory merges: nothing is checked out yet).
   const clean = [];
   for (const pr of candidates) {
@@ -145,6 +187,8 @@ function main({ dryRun }) {
       skipped.push({ pr, why: 'Conflicts with main: merge main to join a batch.', state: 'failure' });
       continue;
     }
+    // What the batch commit would change for this PR is what its push must be allowed to write.
+    if (changesWorkflow(git('diff', '--name-only', main, tree).split('\n').filter(Boolean))) { held.push(pr); continue; }
     if (clean.length >= MAX_WEIGHED) { skipped.push({ pr, why: 'Waits for the next batch (this one is full).', state: 'pending' }); continue; }
     clean.push({ pr, ref, merged: git('commit-tree', tree, '-p', main, '-p', ref, '-m', `#${pr.number} on main`) });
   }
@@ -168,9 +212,19 @@ function main({ dryRun }) {
     }
   }
   for (const { pr, why } of skipped) console.log(`#${pr.number} left out: ${why}`);
+  const holds = held.map(pr => ({ pr, ...workflowHold(pr, branchRuns(repo, pr.headRefName)) }));
+  for (const { pr, dispatch, run } of holds) {
+    console.log(`#${pr.number} left out: changes a workflow. ${dispatch ? 'Native iOS to run on its branch.' : `Native iOS already ran or runs on its head: ${run.url}`}`);
+  }
   if (dryRun) {
     console.log(`Would run Native iOS once on: ${included.map(pr => `#${pr.number}`).join(', ') || 'nothing'}`);
     return;
+  }
+  for (const { pr, dispatch, run, why } of holds) {
+    // Dispatch first and post after: the red status alone would fail `gate`, which
+    // waits instead while the run on the head is going (iosVerdict).
+    const url = dispatch ? dispatchOnBranch(repo, pr) : run.url;
+    setStatus(repo, pr.headRefOid, 'failure', why, url ?? runUrl);
   }
   for (const { pr, why, state } of skipped) setStatus(repo, pr.headRefOid, state, why, runUrl);
   if (!included.length) return;
