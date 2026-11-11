@@ -26,6 +26,8 @@ app.whenReady().then(async () => {
   win.on('focus', () => report.errors.push('Window took focus'));
   win.webContents.on('console-message', (e) => { if (e.level === 'error') report.errors.push(e.message.slice(0, 300)); });
   const run = (s) => win.webContents.executeJavaScript(s, true);
+  // JSON.stringify leaves <, >, / and U+2028/2029 raw; escape them before splicing into evaluated code.
+  const js = (v) => JSON.stringify(v).replace(/[<>/  ]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
   const shot = async (name) => {
     await run('document.getAnimations().forEach(a => { try { a.finish(); } catch {} })');
     await win.capturePage(undefined, { stayHidden: true });
@@ -36,7 +38,7 @@ app.whenReady().then(async () => {
   };
   const check = async (name, code) => { if (!(await run(code))) throw Error('check failed: ' + name); report.checks.push(name); };
   const gh = `document.querySelector('[data-connector=github]')`;
-  const click = (label) => run(`(() => { const b = [...${gh}.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || b.textContent.trim()) === ${JSON.stringify(label)} || b.textContent.trim().startsWith(${JSON.stringify(label)})); if (!b) throw Error('no button ' + ${JSON.stringify(label)}); b.click(); })()`);
+  const click = (label) => run(`(() => { const b = [...${gh}.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || b.textContent.trim()) === ${js(label)} || b.textContent.trim().startsWith(${js(label)})); if (!b) throw Error('no button ' + ${js(label)}); b.click(); })()`);
   try {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 60 && !(await run("!!window.layoutFixture && !!document.querySelector('.rail')")); i++) await sleep(200);
@@ -60,7 +62,7 @@ app.whenReady().then(async () => {
     await sleep(1200);
     // The sample fetch the row shows after connecting. GitHub's own Fetch
     // sample exists only before the change; Linear's on both sides.
-    const clickIn = (kind, label) => run(`[...document.querySelector('[data-connector=${kind}]').querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)}).click()`);
+    const clickIn = (kind, label) => run(`[...document.querySelector('[data-connector=${kind}]').querySelectorAll('button')].find(b => b.textContent.trim() === ${js(label)}).click()`);
     if (baseline) await click('Fetch sample');
     await clickIn('linear', 'Fetch sample'); await sleep(400);
     await shot(baseline ? 'repos-before-v2' : 'repos-closed-v2');
