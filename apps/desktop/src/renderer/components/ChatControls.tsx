@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ChatMode, McpServerStatus, Session } from '@nekko-agent/shared';
-import { getExecutionMode, groupToolsByCategory, toolAllowedOffline } from '@nekko-agent/shared';
+import { CLAUDE_CODE_PROVIDER_KIND, getExecutionMode, groupToolsByCategory, toolAllowedOffline } from '@nekko-agent/shared';
 import { ModePanel, modeButtonLabel } from './ModePanel.js';
 import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
@@ -411,6 +411,8 @@ export function ChatControls({
   only?: 'mode' | 'privacy';
 }) {
   const settings = useStore((s) => s.settings);
+  // A Claude Agent chat runs Claude Code's tools, never code mode (see ModePanel).
+  const claudeAgent = useStore((s) => !!session && s.providers?.find((p) => p.id === session.providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND);
   const [modeOpen, setModeOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const modeButton = useRef<HTMLButtonElement>(null);
@@ -454,7 +456,7 @@ export function ChatControls({
   if (!session) return null;
 
   const sandbox = getExecutionMode(session) === 'sandbox';
-  const label = modeButtonLabel(session, settings);
+  const label = modeButtonLabel(session, settings, { claudeAgent });
   const mode: ChatMode = sandbox ? 'ask' : session.mode ?? settings?.defaultChatMode ?? 'guardrails';
   const offline = !!session.offline;
   const incognito = !!session.incognito;

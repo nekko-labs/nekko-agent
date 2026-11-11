@@ -23,7 +23,7 @@ const B = 500;
 const OUT = 'cubic-bezier(.2,.8,.2,1)';
 const NS = 'http://www.w3.org/2000/svg';
 /** The Nekko theme's main plum, including the first launch before settings load. */
-const DEFAULT = { bg: '#190019', fg: '#ffffff', paper: '#0c0c11' };
+const DEFAULT = { bg: '#190019', fg: '#ffffff', paper: '#0b0c14' };
 const RELOAD_FADE_OUT = 180;
 
 type Colours = { bg: string; fg: string; paper: string };

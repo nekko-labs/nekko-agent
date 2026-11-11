@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ChatMode, Session } from '@nekko-agent/shared';
 import { CHAT_MODE_ICON } from '../gentleface-icons.js';
-import { ASKS_FIRST, ASKS_MENU_WIDTH, PermissionRows, PRIVACY_SHIELD_DOCS, privacyToggles } from './AsksFirstMenu.js';
+import { ASKS_FIRST, ASKS_MENU_WIDTH, permissionMarks, PermissionRows, PRIVACY_SHIELD_DOCS, privacyToggles } from './AsksFirstMenu.js';
 
 describe('the approvals selector', () => {
   it('offers exactly the tool policy values, in plain words', () => {
@@ -42,6 +42,23 @@ describe('the approvals selector', () => {
   });
 });
 
+
+describe('switch marks on the closed menu', () => {
+  const marks = (session: Partial<Session>, shieldOn: boolean) =>
+    permissionMarks(privacyToggles({ id: 's', ...session } as Session, { shieldOn, isCloudModel: false })).map((m) => m.key);
+  it('shows nothing extra for a chat with the defaults', () => {
+    expect(marks({}, false)).toEqual([]);
+  });
+  it('shows Incognito and Privacy Shield when on, and Internet access only when off', () => {
+    expect(marks({ incognito: true }, true)).toEqual(['incognito', 'shield']);
+    expect(marks({ offline: true }, false)).toEqual(['internet']);
+    expect(marks({ incognito: true, offline: true }, true)).toEqual(['incognito', 'shield', 'internet']);
+  });
+  it('names an off internet as off, for the button label', () => {
+    expect(permissionMarks(privacyToggles({ id: 's', offline: true } as Session, { shieldOn: false, isCloudModel: false })))
+      .toEqual([{ key: 'internet', on: false, label: 'Internet access off' }]);
+  });
+});
 
 describe('quiet permission rows', () => {
   const toggles = privacyToggles({ id: 's', incognito: true } as Session, { shieldOn: false, isCloudModel: true });

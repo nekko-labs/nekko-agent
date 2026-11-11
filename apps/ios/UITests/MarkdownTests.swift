@@ -66,7 +66,9 @@ final class MarkdownTests: XCTestCase {
             let keyboard = app.keyboards.firstMatch
             XCTAssertTrue(keyboard.waitForExistence(timeout: 10))
             XCTAssertGreaterThanOrEqual(bullet.frame.minY, box.frame.maxY, "the toolbar sits below the message box")
-            XCTAssertLessThan(abs(bullet.frame.midY - keyboard.frame.minY), 60, "the toolbar sits on the keyboard's top edge")
+            // XCTest's keyboard frame starts under the 44 pt predictive-text row, so measure from
+            // the bar's bottom edge: 46 pt with that row (run 42870809378), about 0 without it.
+            XCTAssertLessThan(abs(keyboard.frame.minY - bullet.frame.maxY), 60, "the toolbar sits on the keyboard's top edge")
             attach(app, "composer-\(theme)-1-toolbar")
 
             bullet.tap()

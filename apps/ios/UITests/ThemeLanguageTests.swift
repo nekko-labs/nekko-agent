@@ -69,12 +69,15 @@ final class ThemeLanguageTests: XCTestCase {
         XCTAssertTrue(view.waitForExistence(timeout: 10))
         view.tap()
         attach(app, "customize-view-options")
-        let mode = app.segmentedControls["mode.switch"]
-        if mode.exists {
-            mode.buttons.element(boundBy: 1).tap()
-            XCTAssertTrue(mode.buttons.element(boundBy: 1).isSelected)
+        // Simple / Detailed is the compact row atop the view menu (#2449); reopen the menu if the pick closed it.
+        let detailed = app.buttons["Detailed"].firstMatch
+        if detailed.waitForExistence(timeout: 5) {
+            detailed.tap()
+            let customize = app.buttons["Customize…"].firstMatch
+            if !customize.waitForExistence(timeout: 2) { view.tap() }
+            XCTAssertTrue(customize.waitForExistence(timeout: 5), "the view menu offers Customize…")
             attach(app, "customize-view-options-detailed")
-            app.buttons["Customize…"].tap()
+            customize.tap()
             XCTAssertTrue(app.buttons["customize.Experience"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["settings.theme"].waitForExistence(timeout: 5), "Customize reuses the existing theme picker")
             attach(app, "customize-experience")
