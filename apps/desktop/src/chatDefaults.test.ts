@@ -8,12 +8,20 @@ const api = () => ({ setSessionOptions: vi.fn(async (_id: string, patch: object)
 describe('desktop mode defaults', () => {
   it('saves every changed mode choice, including effort, but not identity or task data', async () => {
     const client = api();
-    const mode = { effort: 'max', mode: 'ask', executionMode: 'unified', gitIsolation: false, offline: true, incognito: true,
+    const mode = { effort: 'max', mode: 'ask', executionMode: 'unified', gitIsolation: false, offline: true,
       cloudOnly: false, disabledTools: ['bash'], disabledMcpServers: ['fs'], disabledConnectors: ['github'],
       memory: 'off', guidance: 'root', toolApproach: 'code', workMode: 'default', autoModel: true, autoProviderSwitch: true } as const;
-    await setChatOptionsAndDefaults(client, 'chat', { ...mode, disabledTools: ['bash'], disabledMcpServers: ['fs'], disabledConnectors: ['github'], title: 'Private task', providerId: 'p', modelId: 'm' });
+    // Incognito is changed with the rest but stays with this chat: the next one starts without it.
+    await setChatOptionsAndDefaults(client, 'chat', { ...mode, incognito: true, disabledTools: ['bash'], disabledMcpServers: ['fs'], disabledConnectors: ['github'], title: 'Private task', providerId: 'p', modelId: 'm' });
     expect(client.updateSettings).toHaveBeenCalledExactlyOnceWith({ defaultSessionOptions: mode });
     expect(client.setSessionOptions.mock.invocationCallOrder[0]).toBeLessThan(client.updateSettings.mock.invocationCallOrder[0]);
+  });
+
+  it('never makes Incognito the default for the next chat', async () => {
+    const client = api();
+    await setChatOptionsAndDefaults(client, 'chat', { incognito: true });
+    expect(client.setSessionOptions).toHaveBeenCalledWith('chat', { incognito: true });
+    expect(client.updateSettings).not.toHaveBeenCalled();
   });
 
   it('does not copy unrelated choices from an old window', async () => {

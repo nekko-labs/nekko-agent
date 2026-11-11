@@ -177,6 +177,9 @@ pub struct ToolContext {
     /// Background processes (`start_process`, `read_process`, `kill_process`);
     /// those tools are unknown without it.
     pub processes: Option<Arc<crate::process::Processes>>,
+    /// The chat's secrets (#2594): `bash` and `start_process` get them as
+    /// environment variables, and their output has the values redacted.
+    pub secrets: Option<Arc<crate::secrets::Secrets>>,
 }
 
 impl ToolContext {
@@ -199,6 +202,7 @@ impl ToolContext {
             limits: BashLimits::default(),
             cancel: Cancel::new(),
             processes: None,
+            secrets: None,
         }
     }
 }

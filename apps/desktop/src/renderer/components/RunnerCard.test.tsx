@@ -36,7 +36,7 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
   ],
   ...over,
 });
-const render = (v: RunnerView, image: ImageView | null = null, onAddTools?: () => Promise<void>) => renderToStaticMarkup(<RunnerCard view={v} now={now} image={image} onSettings={() => {}} onAddTools={onAddTools} beginReply={() => () => {}} />);
+const render = (v: RunnerView, image: ImageView | null = null, onAddTools?: () => Promise<void>, compact = false) => renderToStaticMarkup(<RunnerCard view={v} now={now} image={image} compact={compact} onSettings={() => {}} onAddTools={onAddTools} beginReply={() => () => {}} />);
 const image = (over: Partial<ImageView> = {}): ImageView => ({
   state: 'none', kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
 });
@@ -59,13 +59,36 @@ describe('RunnerCard', () => {
     expect(html).not.toContain('>Live log<');
   });
 
-  it('running_card_matches_mockup_3', () => {
+  it('a running runner reads as quiet rows', () => {
     const html = render(view());
     for (const s of [
-      'This Mac · GitHub · nekko-labs/nekko-agent', 'Slot 1 · macOS', 'ios-native · PR #904 · 6 min', 'Waiting: you&#x27;re using the Mac',
-      '8 GB · 4 cores', 'On AC', 'Trusted · home', '14 jobs · 2 h 10 min', 'role="switch" aria-checked="true" aria-label="Runner on for nekko-labs/nekko-agent"',
+      '>nekko-labs/nekko-agent</h3>', 'title="This Mac · GitHub · nekko-labs/nekko-agent', 'Slot 2 · macOS', 'Waiting: you&#x27;re using the Mac',
+      '8 GB, 4 cores per VM', 'On AC', 'Trusted · home', 'Today 14 jobs · 2 h 10 min', 'role="switch" aria-checked="true" aria-label="Runner on for nekko-labs/nekko-agent"',
       'data-runner-card="r1"', 'aria-label="Runner settings for nekko-labs/nekko-agent"', 'ci · darwin daemon · stopped after 2 min',
     ]) expect(html).toContain(s);
+    // Quiet surfaces: no card border, no badge pill, no tracked caps.
+    expect(html).not.toMatch(/rounded-xl border|rounded-full px-2|uppercase|tracking-wide|btn-outline/);
+  });
+
+  it('says a running job once: under In progress, not again on its slot', () => {
+    const html = render(view());
+    expect(html).not.toContain('Slot 1 · macOS');
+    expect(html.match(/ios-native · PR #904/g)).toHaveLength(1);
+    expect(html).toContain('Working on ios-native · PR #904');
+  });
+
+  it('the Automations panel shows a compact runner', () => {
+    const html = render(view({ slots: [
+      { state: 'running', vm: 'busy-mac', job: { repo: 'nekko-labs/nekko-agent', runId: 1, jobId: 2, workflow: 'ios-native', job: 'PR #904' }, since: now - 360, drainEndsAt: null },
+      { state: 'ready', vm: 'ready-mac', job: null, since: now, drainEndsAt: null },
+    ], reasons: ['onBattery', 'network'], state: 'waiting' }), image({ state: 'ready' }), undefined, true);
+    expect(html).toContain('data-compact="true"');
+    expect(html).toContain('data-runner-vm="ready-mac"');
+    expect(html).toContain('In progress · 1');
+    expect(html).toContain('This Mac is on battery, below what this mode allows.');
+    for (const gone of ['Completed', 'data-runner-facts', 'Connect to a workflow', 'This network is not one you trust']) expect(html).not.toContain(gone);
+    // An idle slot without a VM says nothing the panel needs.
+    expect(render(view({ slots: [] }), null, undefined, true)).not.toContain('data-runner-slots');
   });
 
   it('groups jobs as queued, in progress and completed', () => {
@@ -123,8 +146,8 @@ describe('RunnerCard', () => {
   it('an unsampled host with an error reads Unavailable', () => {
     const zero = { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false };
     const html = render(view({ state: 'off', host: zero, error: 'VM support unavailable: the nekko-vm helper is not installed.' }));
-    expect(html).toContain('>Unavailable<');
-    expect(html).not.toContain('Not known yet');
+    expect(html).toContain('VM size unavailable');
+    expect(html).not.toContain('not known yet');
   });
 
   it('rounds the battery percent', () => {
@@ -145,7 +168,7 @@ describe('RunnerCard', () => {
   it('says the VM size is not known before the first sample', () => {
     const html = render(view({ host: { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false } }));
     expect(html).not.toContain('0 cores');
-    expect(html).toContain('Not known yet');
+    expect(html).toContain('VM size not known yet');
     expect(html).not.toContain('VM support unavailable');
   });
 

@@ -115,7 +115,7 @@ pub fn title_prompt(messages: &[Value]) -> Option<String> {
         .map(content)
         .unwrap_or_default();
     let mut out = format!(
-        "Give this task a short title, 3 to 6 words, for a workspace card. Answer with only the title: no quotes, no trailing punctuation.\n\nRequest: {}",
+        "Name this chat for a sidebar list in 2 to 4 words, as a label for what the chat is for. If the request names an issue, PR or ticket, lead with it (for example \"Issue #2391\" or \"PR #214 review\"). Never copy the opening words of the request. Answer with only the title: no quotes, no trailing punctuation.\n\nRequest: {}",
         js::slice16(user, 600)
     );
     if !assistant.is_empty() {

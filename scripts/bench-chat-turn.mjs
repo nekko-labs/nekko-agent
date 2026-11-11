@@ -124,7 +124,7 @@ if (args.fake) {
         const file = text.match(/create (\S+) /)?.[1] ?? 'note.txt';
         send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'write_file', arguments: JSON.stringify({ path: file, content: 'hello' }) } }] }, finish_reason: 'tool_calls' }] });
       } else {
-        const n = afterTool ? 3 : text.includes('Give this task a short title') ? 4 : Number(args.tokens ?? 40);
+        const n = afterTool ? 3 : text.includes('Name this chat for a sidebar list') ? 4 : Number(args.tokens ?? 40);
         for (let i = 0; i < n; i++) {
           send({ choices: [{ delta: { content: `tok${i} ` }, finish_reason: null }] });
           await new Promise((r) => setTimeout(r, Number(args['token-ms'] ?? 15)));

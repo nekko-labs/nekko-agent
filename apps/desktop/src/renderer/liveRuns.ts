@@ -251,6 +251,7 @@ const STARTS_RUN = new Set<AgentEvent['type']>([
   'tool_result',
   'tool_approval_required',
   'question',
+  'secret_request',
   'image_status',
   // A first call that fails before its first token is still a turn in flight,
   // and the rail should say it is being retried rather than nothing at all.

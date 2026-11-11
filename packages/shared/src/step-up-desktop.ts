@@ -25,17 +25,18 @@ export const SECURITY_DESKTOP_CHANNELS = {
   enable: 'security:enable',
   disable: 'security:disable',
   removeMethod: 'security:removeMethod',
+  renameMethod: 'security:renameMethod',
   recoveryCodes: 'security:recoveryCodes',
 } as const;
 
 /**
- * Adding a method or new recovery codes while step-up is on needs a step-up
- * too, or anyone at the keyboard could register their own key and answer
- * with it (the daemon's `METHODS_CHANNELS`).
+ * Adding or renaming a method, or new recovery codes, while step-up is on
+ * needs a step-up too, or anyone at the keyboard could register their own
+ * key and answer with it, or relabel the owner's (the daemon's `METHODS_CHANNELS`).
  */
 export const STEP_UP_DESKTOP_METHODS = {
   action: 'securityMethods',
-  channels: ['security:registerBegin', 'security:registerKey', 'security:totpBegin', 'security:totpConfirm', 'security:recoveryCodes'],
+  channels: ['security:registerBegin', 'security:registerKey', 'security:totpBegin', 'security:totpConfirm', 'security:renameMethod', 'security:recoveryCodes'],
 } as const;
 
 /** An action class a desktop confirmation covers. */
@@ -57,7 +58,7 @@ export const STEP_UP_ACTION_LABELS: Record<DesktopStepUpAction | 'stepUpOff', st
   pairing: 'Pair a phone or sign out all phones',
   phoneAccess: 'Change what a phone may do',
   providerKeys: 'Add, show or change a provider key or account',
-  securityMethods: 'Add a sign-in method or new recovery codes',
+  securityMethods: 'Add or rename a sign-in method, or make new recovery codes',
   stepUpOff: 'Turn off step-up or remove a method',
 };
 
@@ -97,7 +98,8 @@ export interface SecurityStatus {
   /** `security.json` exists but cannot be read: every guarded call is refused. */
   damaged?: boolean;
   methods: SecurityMethodInfo[];
-  totp: { addedAt: number; lastUsedAt?: number; lockedUntil?: number | null } | null;
+  /** The code app; `name` is what the owner called it (absent from an older daemon). */
+  totp: { name?: string; addedAt: number; lastUsedAt?: number; lockedUntil?: number | null } | null;
   recoveryLeft: number;
   minMethods: number;
   coverMs: number;

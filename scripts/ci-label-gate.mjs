@@ -33,7 +33,6 @@ export const LABEL_WORKFLOWS = [
   '.github/workflows/android-native.yml',
   '.github/workflows/installers.yml',
   '.github/workflows/dev-identity.yml',
-  '.github/workflows/codeql.yml',
   '.github/workflows/decision-models.yml',
   '.github/workflows/nekkod-npm.yml',
 ];

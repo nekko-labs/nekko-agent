@@ -120,6 +120,8 @@ Archived subagents do not appear. A subagent whose parent is archived stays in s
 
 ## Scheduled Tasks navigation icon (2026-11 panel polish)
 
+Replaced 2026-11-11: the tab is **Automations** again and its rail icon is the Gentleface **bolt** in the rail gold (see [scheduled tasks](../automation/workflows-procedural-automation.md)). The record below is history.
+
 Implemented: the shared desktop/Local Web UI rail uses Gentleface 0.3.0's **workflow-clock**, solid-round on its native 16px grid at 22px. The exact upstream workflow and clock subpaths are colored indigo and amber to match the rail's playful palette, independent of the selected text color. Existing rail hover/active effects and accessible navigation labels remain unchanged. The artwork is bundled locally under the existing MIT notice; there are no runtime downloads, new dependencies or permissions. This changes the navigation icon, not the New scheduled task action's workflow icon or scheduling behavior.
 
 Verification: icon markup/palette regression coverage, desktop typecheck and production build pass. Synthetic full-App checks identify the actual Scheduled Tasks rail icon in both themes. Matching before/after screenshots were inspected in both themes, including the shared renderer’s 760px bottom navigation. Packaged apps and native phone UI are not tested by this renderer-only change.

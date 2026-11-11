@@ -458,7 +458,10 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
             let needs_approval = ctx.mode != ChatMode::Yolo && (asks_everything(ctx) || decision.action == Action::Ask);
             // An auto-run git gets an environment, and options, that keep repo config from running anything.
             let auto_git = !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host());
-            let env = if auto_git { hardened_git_env() } else { Vec::new() };
+            let mut env = ctx.secrets.as_ref().map(|s| s.env()).unwrap_or_default();
+            if auto_git {
+                env.extend(hardened_git_env());
+            }
             let command = if auto_git { harden_git_command(&command, Dialect::host()) } else { command };
             if needs_approval {
                 let reason = if labels.is_empty() { "Start a background process" } else { labels.as_str() };
@@ -485,9 +488,17 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 _ => None,
             };
             let log = ctx.command_log.clone();
+            // Chunk by chunk: a long-running process has no end to flush a
+            // held tail at, so a value split across two reads can slip past
+            // the terminal mirror. What the agent reads (read_process) is
+            // redacted whole by the daemon.
+            let secrets = ctx.secrets.clone().filter(|s| !s.is_empty());
             let mirror: Mirror = Arc::new(move |s: &str, w: Option<&str>, text: &str| {
                 if let Some(log) = &log {
-                    log.append(s, w, text);
+                    match &secrets {
+                        Some(secrets) => log.append(s, w, &secrets.redact(text)),
+                        None => log.append(s, w, text),
+                    }
                 }
             });
             let req = StartRequest {

@@ -102,6 +102,8 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'off-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
   'settings-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
   unavailable: async () => { throw new Error('unknown channel runner:list'); },
+  // A Windows PC: no runner engine yet, so macOS is greyed and Linux and Windows are coming (#2553).
+  'windows-pc': async () => { throw new Error('unknown channel runner:list'); },
   'connect-step-1': async () => [],
   'connect-step-3': async () => [],
   'github-account': async () => [],
@@ -268,6 +270,8 @@ const bridge: any = {
   setForkApproval: async () => ({ done: false, url: 'https://github.com/nekko-labs/nekko-agent/settings/actions' }),
   listWorkflows: async () => ({ workflows: scene === 'with-tasks' ? TASKS : [], runs: [] }),
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
+  // The connected computer, which decides the runner options.
+  machineProfile: async () => (scene === 'windows-pc' ? { platform: 'win32', arch: 'x64' } : { platform: 'darwin', arch: 'arm64' }),
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if (key in target) return target[key]; if (key.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 

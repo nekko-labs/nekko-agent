@@ -138,6 +138,9 @@ struct PendingInner {
     /// per kind. Its payload restores the visible map when a newer one resolves.
     approvals: HashMap<String, (String, oneshot::Sender<bool>, Value)>,
     questions: HashMap<String, (String, oneshot::Sender<Value>, Value)>,
+    /// `request_secret` calls (#2594): the request shows only the name; the
+    /// waiter hears whether the user gave it, never the value.
+    secrets: HashMap<String, (String, oneshot::Sender<bool>, Value)>,
     /// Who answered each approval (`{ via, device? }`), for the chat's audit
     /// trail; taken by the waiting turn.
     answered_by: HashMap<String, Value>,
@@ -162,7 +165,7 @@ impl PendingInner {
                 entry.shift_remove(key);
             }
         }
-        if entry.contains_key("approval") || entry.contains_key("question") {
+        if entry.contains_key("approval") || entry.contains_key("question") || entry.contains_key("secret") {
             self.by_session.insert(session_id.into(), Value::Object(entry));
         } else {
             self.by_session.shift_remove(session_id);
@@ -236,10 +239,52 @@ impl Pending {
         true
     }
 
+    fn park_secret(&self, session_id: &str, request: &Value) -> oneshot::Receiver<bool> {
+        let (tx, rx) = oneshot::channel();
+        let mut p = lock(&self.inner);
+        let id = str_at(request, "callId").unwrap_or_default().to_string();
+        p.secrets.insert(id, (session_id.into(), tx, request.clone()));
+        p.set(session_id, "secret", Some(request.clone()));
+        rx
+    }
+
+    /// The variable a waiting `request_secret` call asked for, if a turn of
+    /// `session_id` waits on `call_id`.
+    pub fn secret_name(&self, session_id: &str, call_id: &str) -> Option<String> {
+        let p = lock(&self.inner);
+        let (sid, _, request) = p.secrets.get(call_id)?;
+        (sid == session_id).then(|| str_at(request, "name").unwrap_or_default().to_string())
+    }
+
+    /// Resolve a waiting `request_secret` call: `provided` once the value is
+    /// in the chat's secrets, false when the user skipped it. False when no
+    /// turn here waits on that call.
+    pub fn resolve_secret(&self, session_id: &str, call_id: &str, provided: bool) -> bool {
+        let mut p = lock(&self.inner);
+        if p.secrets.get(call_id).is_none_or(|(sid, _, _)| sid != session_id) {
+            return false;
+        }
+        let Some((_, tx, _)) = p.secrets.remove(call_id) else { return false };
+        let current = p.by_session.get(session_id).and_then(|e| e.get("secret"));
+        if current.and_then(|q| str_at(q, "callId")) == Some(call_id) {
+            let remaining = p.secrets.values().find(|(sid, _, _)| sid == session_id).map(|(_, _, v)| v.clone());
+            p.set(session_id, "secret", remaining);
+        }
+        let _ = tx.send(provided);
+        true
+    }
+
     /// `releasePending`: nothing a stopped or finished turn waited on can still
     /// be answered, so every waiter of the session hears no.
     pub fn release(&self, session_id: &str) {
         let mut p = lock(&self.inner);
+        let secrets: Vec<String> =
+            p.secrets.iter().filter(|(_, (s, _, _))| s == session_id).map(|(k, _)| k.clone()).collect();
+        for id in secrets {
+            if let Some((_, tx, _)) = p.secrets.remove(&id) {
+                let _ = tx.send(false);
+            }
+        }
         let approvals: Vec<String> =
             p.approvals.iter().filter(|(_, (s, _, _))| s == session_id).map(|(k, _)| k.clone()).collect();
         for id in approvals {
@@ -409,6 +454,8 @@ pub struct Turns {
     /// wake-up of its Claude Code child starts ([`Turns::wake`]).
     wakes: Mutex<HashMap<String, (Value, Hub)>>,
     pub pending: Pending,
+    /// The secrets users gave chats through their secret box (#2594), in memory only.
+    pub secrets: crate::chat_secrets::ChatSecrets,
     /// How each queued turn the daemon started as the next of a chain ends,
     /// for a `chat:send` the daemon admitted, which waits for the whole chain.
     chained: Mutex<HashMap<String, Ended>>,
@@ -470,6 +517,7 @@ impl Turns {
             running: Mutex::default(),
             wakes: Mutex::default(),
             pending: Pending::default(),
+            secrets: crate::chat_secrets::ChatSecrets::default(),
             chained: Mutex::default(),
             watched: Mutex::default(),
             preparer: OnceLock::new(),
@@ -1760,11 +1808,30 @@ impl Turns {
                 sub_rx,
             ))
         });
+        // Attached files go in the user message: Claude Code builds its own
+        // system prompt, so the engine's context block never reaches it.
+        let command = user.as_ref().and_then(|u| str_at(u, "content")).is_some_and(|s| s.trim_start().starts_with('/'));
+        let (attachments, attached_seen) = if wake || command {
+            (None, Vec::new())
+        } else {
+            {
+                // Keyed as the end of the turn saves it: the chat's Claude Code session.
+                let s = lock(session);
+                let id = str_at(&s, "claudeCodeSessionId").unwrap_or(child.spec.session.id()).to_string();
+                claude_attachments(&s, &id)
+            }
+        };
         let input = TurnInput {
             content: if wake {
                 None
             } else {
-                user.as_ref().map(|u| claude_turn_content(u, tools.iter().any(|t| t == crate::harness::BRIDGE_TITLE)))
+                user.as_ref().map(|u| {
+                    claude_turn_content(
+                        u,
+                        tools.iter().any(|t| t == crate::harness::BRIDGE_TITLE),
+                        attachments.as_deref(),
+                    )
+                })
             },
             cancel: &shared.cancel,
             steering: &shared.steering,
@@ -1773,10 +1840,12 @@ impl Turns {
         };
         let mut seen: Option<String> = None;
         let mut model: Option<String> = None;
+        let mut compacted = false;
         let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {
             Mapped::Message(mut message) => {
                 if let Some(compaction) = message.get_mut("compaction") {
                     compaction["summarized"] = json!(summarized_since_last_compaction(&history));
+                    compacted = true;
                 }
                 history.push(message)
             }
@@ -1829,6 +1898,23 @@ impl Turns {
                     None => obj.shift_remove("claudeCodeSessionId"),
                 };
                 set_account(obj);
+            }
+            changed = true;
+        }
+        // Remember the files this Claude Code session now holds. A new session
+        // (none, or another id) gets them again on its first turn. A turn that
+        // died (the bridge never connected, the process crashed) may never have
+        // read them, and a compaction summarizes them away: both send them again.
+        if compacted {
+            if let Some(obj) = lock(session).as_object_mut() {
+                changed |= obj.shift_remove(CLAUDE_ATTACHED).is_some();
+            }
+        } else if attachments.is_some() && exit != TurnExit::Dead {
+            if let Some(obj) = lock(session).as_object_mut() {
+                match &next {
+                    Some(id) => obj.insert(CLAUDE_ATTACHED.into(), json!({ "session": id, "paths": attached_seen })),
+                    None => obj.shift_remove(CLAUDE_ATTACHED),
+                };
             }
             changed = true;
         }
@@ -1921,15 +2007,106 @@ fn claude_title_eligible(session: &Value) -> bool {
         && !js::truthy(session.get("trainingRunId"))
 }
 
+/// The session key recording which attached files a Claude Code session has
+/// already been given: `{ "session": <Claude Code session id>, "paths": [...] }`.
+const CLAUDE_ATTACHED: &str = "claudeCodeAttached";
+
+/// Why an attached file goes to Claude Code by path instead of by contents
+/// (`unreadableNote` and `mediaKindOf` in the renderer), or `None` for text.
+/// Claude Code's own Read tool opens photos and PDFs, so it gets the path.
+fn not_text(path: &str) -> Option<&'static str> {
+    let ext = path.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    match ext.as_str() {
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "heic" | "heif" | "avif" | "tif" | "tiff" => Some("a photo"),
+        "mp4" | "mov" | "webm" | "m4v" | "mkv" | "avi" | "mpeg" | "mpg" => Some("a video"),
+        "pdf" => Some("a PDF"),
+        "doc" | "docx" | "ppt" | "pptx" | "xls" | "xlsx" | "odt" | "ods" | "odp" | "rtf" | "pages" | "numbers"
+        | "key" => Some("an Office document"),
+        "zip" | "7z" | "rar" | "tar" | "gz" | "bz2" | "xz" | "dmg" | "iso" | "exe" | "msi" | "dll" | "so" | "dylib"
+        | "bin" | "wasm" | "class" | "jar" => Some("a binary file"),
+        "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac" | "opus" => Some("an audio file"),
+        _ => None,
+    }
+}
+
+/// The chat's attached files that the Claude Code session `cc_session` has not
+/// been given yet, as a block for the user message, and every path that
+/// session will then hold. Text files are rendered as the engine's context
+/// block renders them (same read limit); anything else is named with its path.
+/// A file excluded in the Context Inspector, or missing, is skipped and not
+/// marked as given, so it goes once it is included or exists. An engine turn
+/// resends attached files in its system prompt every turn; Claude Code keeps
+/// its own history, so each file goes once per Claude Code session.
+fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec<String>) {
+    let strings = |v: Option<&Value>| -> Vec<String> {
+        v.and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default()
+    };
+    let tracker = session.get(CLAUDE_ATTACHED).filter(|t| str_at(t, "session") == Some(cc_session));
+    let mut seen = strings(tracker.and_then(|t| t.get("paths")));
+    let excluded: HashSet<String> = strings(session.pointer("/contextPrefs/excluded")).into_iter().collect();
+    let fresh: Vec<String> = strings(session.get("attachedPaths"))
+        .into_iter()
+        .filter(|p| !seen.contains(p) && !excluded.contains(&format!("file:{p}")))
+        .filter(|p| std::path::Path::new(p).is_file())
+        .collect();
+    if fresh.is_empty() {
+        return (None, seen);
+    }
+    let (other, text): (Vec<String>, Vec<String>) = fresh.into_iter().partition(|p| not_text(p).is_some());
+    let mut parts: Vec<String> = other
+        .iter()
+        .map(|p| {
+            format!(
+                "# File: {p}\n({}: its contents are not included; open it from this path if you need it)",
+                not_text(p).unwrap_or("not text")
+            )
+        })
+        .collect();
+    // Only what was actually read counts as given: an unreadable file goes later.
+    let collected = nekko_context::collect_attached(&text);
+    let read: Vec<String> = collected.iter().map(|(p, _)| p.clone()).collect();
+    let rendered = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
+        attached: collected,
+        ..Default::default()
+    }));
+    if !rendered.trim().is_empty() {
+        parts.insert(0, rendered);
+    }
+    if parts.is_empty() {
+        return (None, seen);
+    }
+    seen.extend(other);
+    seen.extend(read);
+    (Some(parts.join("\n\n---\n\n")), seen)
+}
+
 /// A context note on the existing user message, not a system flag, extra
 /// message or persisted user edit. Both policy capabilities gate `name_chat`.
-fn claude_turn_content(user: &Value, name_chat: bool) -> Value {
+/// Attached files the Claude Code session has not been given yet go first.
+fn claude_turn_content(user: &Value, name_chat: bool, attachments: Option<&str>) -> Value {
     let mut content = nekko_harness::user_content(user);
     // Leave CLI commands such as /compact intact.
-    if !name_chat || str_at(user, "content").is_some_and(|s| s.trim_start().starts_with('/')) {
+    if str_at(user, "content").is_some_and(|s| s.trim_start().starts_with('/')) {
         return content;
     }
-    const NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a concise, specific 3-6 word title describing the user's task. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
+    if let Some(block) = attachments {
+        let files = format!("Files the user attached to this chat:\n\n{block}");
+        match &mut content {
+            Value::String(text) if text.trim().is_empty() => *text = files,
+            Value::String(text) => *text = format!("{files}\n\n---\n\n{text}"),
+            Value::Array(blocks) => {
+                let at = blocks.iter().position(|b| str_at(b, "type") == Some("text")).unwrap_or(blocks.len());
+                blocks.insert(at, json!({ "type": "text", "text": files }));
+            }
+            _ => {}
+        }
+    }
+    if !name_chat {
+        return content;
+    }
+    const NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a short 2-4 word label for what the chat is for, leading with an issue or PR number if the request names one (like \"Issue #2391\"); never copy the opening words of the request. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
     match &mut content {
         Value::String(text) => {
             text.push_str("\n\n");
@@ -2492,6 +2669,7 @@ fn native_context(
     ctx.changes = Some(turns.changes.clone());
     ctx.processes = Some(turns.processes.clone());
     ctx.command_log = Some(turns.agent_logs.clone() as Arc<dyn CommandLog>);
+    ctx.secrets = Some(turns.secrets.for_chat(session_id));
     // Stop stops a running command too.
     let tools_cancel = ctx.cancel.clone();
     shared.cancel.on_cancel(move || tools_cancel.cancel());
@@ -2712,7 +2890,15 @@ impl TurnTools {
     /// output counts as shown to it.
     async fn attended(&self, call: &Value) -> Result<Value, String> {
         let started = std::time::Instant::now();
-        let out = self.dispatch(call).await;
+        let mut out = self.dispatch(call).await;
+        // #2594: whatever a tool brought back, the chat's secret values reach
+        // neither the model nor the transcript.
+        if let Ok(v) = &mut out
+            && let Some(text) = v.get("output").and_then(Value::as_str)
+            && let Some(clean) = self.turns.secrets.redact(&self.shared.session_id, text)
+        {
+            v["output"] = json!(clean);
+        }
         let name = str_at(call, "name").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(Value::Null);
         if let Ok(v) = &out {
@@ -2755,6 +2941,7 @@ impl TurnTools {
             "remember" => return Ok(self.remember(call, id, &input).await),
             "complete_session" => return Ok(self.complete(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
+            turn::secret::REQUEST_SECRET => return Ok(self.request_secret(call).await),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
             _ => {}
         }
@@ -3423,6 +3610,43 @@ impl TurnTools {
         }
         turn::format_ask_answers(&request, &answers)
     }
+
+    /// `request_secret` (#2594): park the turn on the chat's secret box. The
+    /// value never passes through here: `chat:provideSecret` puts it in the
+    /// chat's secrets and only then releases this call, which hears yes or no.
+    async fn request_secret(&self, call: &Value) -> Value {
+        let call_id = str_at(call, "id").unwrap_or_default().to_string();
+        let input = call.get("input").unwrap_or(&Value::Null);
+        let request = match turn::secret::parse_secret_request(&call_id, input, nekko_js::now_ms()) {
+            Ok(r) => r,
+            Err(e) => return error(&call_id, e),
+        };
+        let name = str_at(&request, "name").unwrap_or_default().to_string();
+        let session_id = self.shared.session_id.clone();
+        let rx = self.turns.pending.park_secret(&session_id, &request);
+        self.shared.emit(json!({ "type": "secret_request", "sessionId": session_id, "request": request }));
+        let mut unattended = false;
+        let provided = if self.unattended_ms > 0 {
+            match tokio::time::timeout(Duration::from_millis(self.unattended_ms), rx).await {
+                Ok(a) => a.unwrap_or(false),
+                Err(_) => {
+                    unattended = true;
+                    self.turns.pending.resolve_secret(&session_id, &call_id, false);
+                    false
+                }
+            }
+        } else {
+            rx.await.unwrap_or(false)
+        };
+        self.shared.emit(json!({
+            "type": "secret_resolved", "sessionId": session_id, "callId": call_id, "provided": provided,
+        }));
+        if provided {
+            result(&call_id, turn::secret::provided(&name))
+        } else {
+            result(&call_id, turn::secret::skipped(&name, unattended))
+        }
+    }
 }
 
 /// The turn's options as its usage lines record them (#2494): plus `origin`
@@ -3486,21 +3710,99 @@ mod tests {
     #[test]
     fn claude_naming_note_uses_only_the_existing_user_content() {
         let user = json!({ "content": "Fix the login form" });
-        assert_eq!(claude_turn_content(&user, false), user["content"]);
-        let named = claude_turn_content(&user, true);
+        assert_eq!(claude_turn_content(&user, false, None), user["content"]);
+        let named = claude_turn_content(&user, true, None);
         let text = named.as_str().unwrap();
         assert!(text.starts_with("Fix the login form\n\n"));
         assert!(text.contains("mcp__nekko_bridge__set_chat_title"));
         assert!(text.contains("Never overwrite a user-chosen title"));
+        assert!(text.contains("2-4 word label") && text.contains("never copy the opening words"));
         assert!(text.contains("do not start another turn"));
         assert_eq!(user["content"], "Fix the login form");
         let image = json!({ "content": "Fix this", "images": ["data:image/png;base64,AAAA"] });
         let original = nekko_harness::user_content(&image);
-        let named = claude_turn_content(&image, true);
+        let named = claude_turn_content(&image, true, None);
         assert_eq!(named[0], original[0]);
         assert_eq!(named[1], original[1]);
         assert!(named[2]["text"].as_str().unwrap().contains("Nekko chat naming note"));
-        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true), json!("/compact"));
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true, None), json!("/compact"));
+    }
+
+    #[test]
+    fn claude_turns_carry_attached_files_once_per_claude_code_session() {
+        let dir = std::env::temp_dir().join(format!("nekkod-claude-attach-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let notes = dir.join("notes.txt");
+        let other = dir.join("other.md");
+        std::fs::write(&notes, "the quarterly numbers").unwrap();
+        std::fs::write(&other, "second file").unwrap();
+        let (notes, other) = (notes.to_string_lossy().to_string(), other.to_string_lossy().to_string());
+
+        // A first turn gets the file's contents ahead of what the user typed.
+        let mut session = json!({ "attachedPaths": [notes] });
+        let (block, seen) = claude_attachments(&session, "cc1");
+        let block = block.expect("a new attachment is sent");
+        assert!(block.contains("the quarterly numbers"));
+        assert_eq!(seen, vec![notes.clone()]);
+        let text = claude_turn_content(&json!({ "content": "Summarize it" }), false, Some(&block));
+        let text = text.as_str().unwrap();
+        assert!(text.starts_with("Files the user attached to this chat:"));
+        assert!(text.ends_with("Summarize it"));
+
+        // A file-only message still says something.
+        let alone = claude_turn_content(&json!({ "content": "" }), false, Some(&block));
+        assert!(alone.as_str().unwrap().contains("the quarterly numbers"));
+
+        // With a photo, the files sit before the user's text, after the image.
+        let image = json!({ "content": "And this", "images": ["data:image/png;base64,AAAA"] });
+        let with_image = claude_turn_content(&image, false, Some(&block));
+        assert_eq!(with_image[0]["type"], "image");
+        assert!(with_image[1]["text"].as_str().unwrap().contains("the quarterly numbers"));
+        assert_eq!(with_image[2]["text"], "And this");
+
+        // A CLI command is left alone.
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), false, Some(&block)), json!("/compact"));
+
+        // The same Claude Code session is not sent it again; only the new file goes.
+        session["claudeCodeAttached"] = json!({ "session": "cc1", "paths": seen });
+        assert_eq!(claude_attachments(&session, "cc1").0, None);
+        session["attachedPaths"] = json!([notes, other]);
+        let (block, seen) = claude_attachments(&session, "cc1");
+        let block = block.unwrap();
+        assert!(block.contains("second file") && !block.contains("the quarterly numbers"));
+        assert_eq!(seen, vec![notes.clone(), other.clone()]);
+
+        // A different Claude Code session (a fresh start) gets everything again.
+        let (block, _) = claude_attachments(&session, "cc2");
+        assert!(block.unwrap().contains("the quarterly numbers"));
+
+        // A file excluded in the Context Inspector, or not there yet, is not
+        // sent and not marked as given, so it goes once it is included.
+        let missing = dir.join("later.txt").to_string_lossy().to_string();
+        session["attachedPaths"] = json!([notes, other, missing]);
+        session["contextPrefs"] = json!({ "excluded": [format!("file:{notes}")] });
+        let (block, seen) = claude_attachments(&session, "cc2");
+        assert!(!block.unwrap().contains("the quarterly numbers"));
+        assert_eq!(seen, vec![other.clone()]);
+        session["claudeCodeAttached"] = json!({ "session": "cc2", "paths": seen });
+        session["contextPrefs"] = json!({ "excluded": [] });
+        std::fs::write(&missing, "now here").unwrap();
+        let (block, seen) = claude_attachments(&session, "cc2");
+        let block = block.unwrap();
+        assert!(
+            block.contains("the quarterly numbers") && block.contains("now here") && !block.contains("second file")
+        );
+        assert_eq!(seen.len(), 3);
+
+        // A PDF or photo goes by path, never as its bytes.
+        let pdf = dir.join("report.pdf");
+        std::fs::write(&pdf, b"%PDF-1.7 \x00\x01binary").unwrap();
+        let pdf = pdf.to_string_lossy().to_string();
+        let (block, _) = claude_attachments(&json!({ "attachedPaths": [pdf] }), "cc3");
+        let block = block.unwrap();
+        assert!(block.contains(&format!("# File: {pdf}")) && block.contains("a PDF"));
+        assert!(!block.contains("binary"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

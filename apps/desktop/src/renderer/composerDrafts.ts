@@ -24,6 +24,8 @@ export interface ComposerDraft {
   images: string[];
   /** Pending video attachments, as data URLs. Large, so the first thing evicted. */
   videos: string[];
+  /** Files attached since the last send (paths), so a file-only message can still be sent. */
+  paths: string[];
   savedAt: number;
 }
 
@@ -42,6 +44,7 @@ function readAll(): DraftMap {
         text: d.text,
         images: Array.isArray(d.images) ? d.images.filter((i): i is string => typeof i === 'string') : [],
         videos: Array.isArray(d.videos) ? d.videos.filter((i): i is string => typeof i === 'string') : [],
+        paths: Array.isArray(d.paths) ? d.paths.filter((i): i is string => typeof i === 'string') : [],
         savedAt: typeof d.savedAt === 'number' ? d.savedAt : 0,
       };
     }
@@ -110,10 +113,11 @@ export function loadDraft(sessionId: string): ComposerDraft | null {
   return readAll()[sessionId] ?? null;
 }
 
-/** Park a draft. An empty one (no text, no images) clears the entry instead. */
-export function saveDraft(sessionId: string, draft: { text: string; images: string[]; videos?: string[] }): void {
+/** Park a draft. An empty one (no text, images, videos or files) clears the entry instead. */
+export function saveDraft(sessionId: string, draft: { text: string; images: string[]; videos?: string[]; paths?: string[] }): void {
   const videos = draft.videos ?? [];
-  const empty = !draft.text.trim() && draft.images.length === 0 && videos.length === 0;
+  const paths = draft.paths ?? [];
+  const empty = !draft.text.trim() && draft.images.length === 0 && videos.length === 0 && paths.length === 0;
   const map = readAll();
   if (empty) {
     if (!(sessionId in map)) return;
@@ -127,11 +131,13 @@ export function saveDraft(sessionId: string, draft: { text: string; images: stri
       current.images.length === draft.images.length &&
       current.images.every((image, i) => image === draft.images[i]) &&
       current.videos.length === videos.length &&
-      current.videos.every((video, i) => video === videos[i])
+      current.videos.every((video, i) => video === videos[i]) &&
+      current.paths.length === paths.length &&
+      current.paths.every((path, i) => path === paths[i])
     ) {
       return;
     }
-    map[sessionId] = { text: draft.text, images: [...draft.images], videos: [...videos], savedAt: Date.now() };
+    map[sessionId] = { text: draft.text, images: [...draft.images], videos: [...videos], paths: [...paths], savedAt: Date.now() };
   }
   writeAll(map, sessionId);
 }

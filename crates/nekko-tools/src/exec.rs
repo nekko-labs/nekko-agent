@@ -13,6 +13,7 @@ use crate::js;
 use crate::nodefs;
 use crate::sandbox::{asks_everything, assert_readable, assert_writable, first_workspace, process_cwd, resolve_path};
 use crate::search::{glob_files, grep_files};
+use crate::secrets::{Secrets, StreamRedactor};
 use serde_json::Value;
 
 /// A file tool's read cap, in UTF-16 code units.
@@ -317,7 +318,10 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     let needs_approval = ctx.mode != ChatMode::Yolo && (asks_everything(ctx) || decision.action == Action::Ask);
     // An auto-run git gets an environment, and options, that keep repo config from running anything.
     let auto_git = !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host());
-    let env = if auto_git { hardened_git_env() } else { Vec::new() };
+    let mut env = ctx.secrets.as_ref().map(|s| s.env()).unwrap_or_default();
+    if auto_git {
+        env.extend(hardened_git_env());
+    }
     let hardened = auto_git.then(|| harden_git_command(&command, Dialect::host()));
     if needs_approval {
         let reason = if labels.is_empty() { "Run command" } else { labels.as_str() };
@@ -332,11 +336,17 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     };
 
     let workspace_id = ctx.workspaces.iter().find(|w| w.path == cwd).map(|w| w.id.clone());
-    let mirror = |text: &str| {
-        if let (Some(sid), Some(log)) = (session(ctx), ctx.command_log.as_ref()) {
+    let log_text = |text: &str| {
+        if let (Some(sid), Some(log)) = (session(ctx), ctx.command_log.as_ref())
+            && !text.is_empty()
+        {
             log.append(sid, workspace_id.as_deref(), &sanitize_for_terminal(text));
         }
     };
+    // The chat's secrets never reach the Agent commands terminal (#2594).
+    let no_secrets = Secrets::new();
+    let redactor = StreamRedactor::new(ctx.secrets.as_deref().unwrap_or(&no_secrets));
+    let mirror = |text: &str| log_text(&redactor.push(text));
     mirror(&format!("$ {command}\n"));
 
     let outcome = match raw_command {
@@ -359,6 +369,19 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
         },
     };
 
+    log_text(&redactor.finish());
+    // Redact before the cap, so the cap never cuts a value into a prefix the redaction misses.
+    let outcome = match &ctx.secrets {
+        Some(s) if !s.is_empty() => crate::bash::RunOutcome {
+            stdout: s.redact(&outcome.stdout),
+            stderr: s.redact(&outcome.stderr),
+            failure: match outcome.failure {
+                Some(Failure::Error(message)) => Some(Failure::Error(s.redact(&message))),
+                other => other,
+            },
+        },
+        _ => outcome,
+    };
     let cap = ctx.limits.output_cap;
     Ok(match outcome.failure {
         None => {
@@ -369,18 +392,18 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
             }
             let output = js::slice16(&output, cap);
             if outcome.stdout.is_empty() && outcome.stderr.is_empty() {
-                mirror("(no output)\n");
+                log_text("(no output)\n");
             }
             ToolResult::ok(call, if output.is_empty() { "(no output)" } else { output })
         }
         Some(Failure::Error(message)) => {
             let output = format!("Command failed: {message}\n{}{}", outcome.stdout, outcome.stderr);
-            mirror("[command failed]\n");
+            log_text("[command failed]\n");
             ToolResult::err(call, js::slice16(&output, cap))
         }
         Some(Failure::Cancelled) => {
             let output = format!("Command cancelled.\n{}{}", outcome.stdout, outcome.stderr);
-            mirror("[command cancelled]\n");
+            log_text("[command cancelled]\n");
             ToolResult::err(call, js::slice16(&output, cap))
         }
     })

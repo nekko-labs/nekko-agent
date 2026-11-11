@@ -50,7 +50,7 @@ app.whenReady().then(async () => {
     await run(`document.querySelector('${first}').click()`); await sleep(300);
     await check(`document.querySelector('${first}').getAttribute('aria-expanded') === 'true'`, 'Group still expands');
     if (!process.env.NEKKO_BEFORE) {
-      await check(`(() => { const e = document.querySelector('button[aria-label="Scheduled Tasks"] svg'); return e?.dataset.gentlefaceIcon === 'workflow-clock' && e.querySelectorAll('[fill="#6366f1"]').length === 1 && e.querySelectorAll('[fill="#fbbf24"]').length === 1; })()`, 'Scheduled Tasks uses indigo/amber Gentleface workflow-clock');
+      await check(`(() => { const e = document.querySelector('button[aria-label="Automations"] svg'); return e?.dataset.gentlefaceIcon === 'bolt' && e.querySelectorAll('[fill="#fbbf24"]').length === 1; })()`, 'Automations uses the gold Gentleface bolt');
     }
     cdp.detach(); report.background = { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds() };
   } catch (e) { report.errors.push(String(e.stack || e)); }

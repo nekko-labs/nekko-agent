@@ -32,6 +32,8 @@ app.whenReady().then(async () => {
   const run = s => win.webContents.executeJavaScript(s, true);
   const check = async (name, source) => { report.checks.push({ name, passed: !!await run(source) }); };
   const capture = async name => {
+    // A hidden window hands back its last painted frame: the first capture makes it paint this scene.
+    await win.capturePage(undefined, { stayHidden: true, stayAwake: false }); await sleep(150);
     const image = await win.capturePage(undefined, { stayHidden: true, stayAwake: false });
     if (image.isEmpty()) throw Error('Empty capture: ' + name);
     const file = path.join(dir, name + '.png');
@@ -44,6 +46,8 @@ app.whenReady().then(async () => {
   const field = label => `[...document.querySelectorAll('[role=dialog] label')].find(l=>l.firstChild&&l.firstChild.textContent===${js(label)}).querySelector('input,textarea')`;
   const open = async (scene, theme) => {
     await run(`integration.show(${js(scene)})`); await sleep(400);
+    // CI runners is its own page of Scheduled Tasks since 2026-11-08.
+    await click(`[...document.querySelectorAll('[data-workflows-subnav] button')].find(b=>b.textContent.includes('CI runners'))`); await sleep(300);
     await click(byText('[role=dialog] button', 'Cancel')); // the confirmation a cancel scene left open
     await run(`document.documentElement.dataset.theme=${js(theme)}`);
     await run(`document.querySelector('[data-ci-runners]')?.scrollIntoView()`); await sleep(700);
@@ -71,6 +75,7 @@ app.whenReady().then(async () => {
     'off-no-vm-support': async () => {},
     'settings-no-vm-support': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
     unavailable: async () => {},
+    'windows-pc': async () => {},
     'connect-step-1': async () => { await connect(); await manual(); },
     'connect-step-3': async () => {
       await connect(); await manual();
@@ -144,7 +149,10 @@ app.whenReady().then(async () => {
     'settings-suggested': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
   };
   const checks = {
-    'first-visit': [['both steps, step 2 waits', "(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent==='After step 1');return document.body.innerText.includes('Use this Mac as a CI runner')&&document.querySelectorAll('.runner-step svg').length===2&&b&&b.disabled})()"]],
+    'windows-pc': [['every option listed, macOS disabled with its reason', "(()=>{const o=k=>document.querySelector('[data-runner-option='+k+']');return ['macos','linux','windows'].every(o)&&o('macos').getAttribute('aria-disabled')==='true'&&o('macos').innerText.includes('Needs a Mac with Apple silicon')&&o('windows').innerText.includes('Coming to Windows PCs')&&!document.body.innerText.includes('Available')})()"],
+      ['says where macOS runners live, never the raw error', "document.querySelector('[data-ci-runners-elsewhere]')?.innerText.includes('open Nekko Agent on a Mac with Apple silicon')&&!document.body.innerText.includes('unknown channel')"]],
+    'first-visit': [['an Apple silicon Mac offers macOS and Linux, not Windows', "(()=>{const o=k=>document.querySelector('[data-runner-option='+k+']');return o('macos').dataset.available==='true'&&o('linux').dataset.available==='true'&&o('windows').getAttribute('aria-disabled')==='true'&&o('windows').innerText.includes('Needs a Windows PC')})()"],
+      ['both steps, step 2 waits', "(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent==='After step 1');return document.body.innerText.includes('Use this Mac as a CI runner')&&document.querySelectorAll('.runner-step svg').length===2&&b&&b.disabled})()"]],
     'first-visit-connected': [['step 1 checked, step 2 lit, the card below', "(()=>{const t=document.body.innerText;return t.includes('Connected')&&!t.includes('After step 1')&&!!document.querySelector('[data-runner-card]')&&[...document.querySelectorAll('.runner-step button')].some(e=>e.textContent==='Set up this Mac')})()"],
       ['the off runner reads Off, with no error line', "(()=>{const c=document.querySelector('[data-runner-card]');const leaf=t=>[...c.querySelectorAll('*')].some(e=>!e.children.length&&e.textContent===t);return leaf('Off')&&!leaf('Waiting')&&!c.innerText.includes('No VM image yet.')})()"]],
     running: [['running job and waiting slot', "document.body.innerText.includes('Native iOS · protocol-and-build') && document.body.innerText.includes('Waiting: you\\'re using the Mac') && document.body.innerText.includes('14 jobs')"],
@@ -161,7 +169,7 @@ app.whenReady().then(async () => {
     error: [['missing image error', "document.body.innerText.includes('No VM image yet.')"]],
     'off-no-vm-support': [['off runner shows the daemon error', "document.querySelector('[role=alert]')?.textContent.includes('VM support unavailable') && document.body.innerText.includes('Unavailable')"]],
     'settings-no-vm-support': [['the sheet says why instead of waiting', "document.querySelector('[role=dialog]').innerText.includes('VM support unavailable') && !document.body.innerText.includes('first reading')"]],
-    unavailable: [['no runners section where the daemon has none', "!document.querySelector('[data-ci-runners]') && !document.body.innerText.includes('unknown channel')"]],
+    unavailable: [['a Mac whose service has no runner channels says to update, never the raw error', "(()=>{const o=document.querySelector('[data-runner-option=macos]');return !!document.querySelector('[data-ci-runners-elsewhere]')&&o?.getAttribute('aria-disabled')==='true'&&o.innerText.includes('Update Nekko Agent on this Mac')&&!document.body.innerText.includes('unknown channel')})()"]],
     'with-tasks': [['the runners are a section below the tasks, with no switcher', "(()=>{const r=document.querySelector('[data-ci-runners]');const rows=document.querySelectorAll('[data-workflow-row]');return r&&rows.length===2&&!!(rows[1].compareDocumentPosition(r)&Node.DOCUMENT_POSITION_FOLLOWING)&&!document.querySelector('[aria-label=Section]')})()"]],
     'connect-step-1': [['manual step 1 fields', "document.querySelector('[role=dialog]').innerText.includes('Installation ID')"]],
     'connect-step-3': [['connect step 3 with public callout', "document.querySelector('[role=dialog] [aria-current=step]')?.textContent.includes('How this Mac helps') && document.body.innerText.includes('may be public')"]],
