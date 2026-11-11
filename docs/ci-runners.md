@@ -7,13 +7,16 @@ while you are away and the Mac is plugged in.
 ## Watch runners from Automations
 
 The **Automations** panel on the Agent board shows your connected CI runners even
-when no chat automations are scheduled. VM tiles show their names and state; **Live
-log** opens output from that VM, including while it is starting or ready for a job.
-The card's switch and settings apply to the whole runner, not just one VM.
+when no chat automations are scheduled, in a short form: each runner's name, state,
+switch and settings, then only what is happening now. A VM that is starting or ready
+for a job shows its name, and **Live log** (on hover) opens its output. Jobs appear
+under **Queued** and **In progress**, with Accept now/Decline, Cancel/Re-run and the
+live log. Cancel and restart still ask for confirmation because they affect the
+workflow run on GitHub. Hover the runner's name for its scope, label, mode and keep-awake
+setting.
 
-Jobs appear under **Queued**, **In progress**, and **Completed**. Use the existing
-Accept now/Decline, Cancel/Re-run, and log controls there. Cancel and restart still
-ask for confirmation because they affect the workflow run on GitHub.
+Completed jobs, idle slots and the Mac's facts (VM size, power, network, today's jobs)
+stay on the CI runners page.
 
 Choose **View CI runners** to open the full CI section in Automations, where you
 can also connect GitHub and set up this Mac. With no connected runners the panel
@@ -368,7 +371,7 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 
 Until the runner has read this Mac once, memory and CPU show "Waiting for this Mac's first
 reading." instead of numbers. On a Mac that cannot run VMs they show the reason instead, and the
-runner card's VM size reads "Unavailable".
+runner card reads "VM size unavailable".
 
 Not in this version: Linux slots, a schedule, a switch for fork pull requests and a build cache
 switch. Their stored values are kept as they are.
@@ -426,7 +429,8 @@ A newer version of the runner may add a reason this app does not know yet; it sh
 
 ## Jobs
 
-Below the Mac's facts, the runner card lists its jobs in three groups. A group with nothing in
+Below its slots, the runner card lists its jobs in three groups (the Automations panel
+shows the first two). A running job is listed here and not again on its slot. A group with nothing in
 it is left out.
 
 **Queued** lists jobs waiting on GitHub for a runner with this runner's label, with how long each

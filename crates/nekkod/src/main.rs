@@ -272,6 +272,25 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let machine = Arc::new(nekko_machine::Machine::new(Some(data_dir.clone()), Box::new(engine_bin)));
     let library = library::Library::new(settings.clone(), machine.clone(), engine.clone());
     let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
+    // What this computer tells the organizations it is shared with: its name and the
+    // local models it can serve (the model library, never a cloud provider's models).
+    cloud.set_host(nekko_cloud::HostInfo {
+        app_version: cfg.app_version.clone().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
+        name: {
+            let store = settings.store.clone();
+            Arc::new(move || {
+                let host = gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string();
+                small_services::computer_name(&store.get(), &host)
+            })
+        },
+        models: {
+            let library = library.clone();
+            Arc::new(move || {
+                let library = library.clone();
+                Box::pin(async move { library::shareable_models(&library).await })
+            })
+        },
+    });
     {
         // Abandoned downloads can be GBs each (#1035).
         let dir = std::path::PathBuf::from(library.models_dir());

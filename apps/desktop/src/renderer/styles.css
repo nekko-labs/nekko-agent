@@ -508,6 +508,26 @@
   .quiet-row-action:focus-visible { opacity: 1; }
 }
 
+/* A code block's own actions (Run, Copy, and the inline terminal's): quiet
+   tabs that wash on hover and press in (#2595). */
+.code-action { transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+@media (hover: hover) { .code-action:hover:not(:disabled) { background: var(--q-wash); } }
+.code-action:active:not(:disabled) { transform: scale(0.97); }
+/* A block with no language line keeps its Copy floating, shown on hover. */
+.code-copy-float { position: absolute; right: 6px; top: 6px; transition: opacity var(--dur-fast) var(--ease-out); }
+@media (hover: hover) {
+  .code-copy-float { opacity: 0; }
+  [data-code-block]:hover .code-copy-float, .code-copy-float:focus-within { opacity: 1; }
+}
+/* The chat's terminal under the block that ran it: a hairline, then it opens in. */
+.inline-terminal { border-top: 1px solid var(--line); animation: inline-terminal-in var(--dur-med) var(--ease-out); }
+@keyframes inline-terminal-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .inline-terminal { animation-name: inline-terminal-fade; }
+  .code-action:active:not(:disabled) { transform: none; }
+}
+@keyframes inline-terminal-fade { from { opacity: 0; } }
+
 @utility quiet-group-label {
   @apply text-xs font-medium text-ink-soft;
 }
