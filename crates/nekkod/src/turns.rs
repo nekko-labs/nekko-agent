@@ -1757,7 +1757,12 @@ impl Turns {
         let (attachments, attached_seen) = if wake || command {
             (None, Vec::new())
         } else {
-            claude_attachments(&lock(session), child.spec.session.id())
+            {
+                // Keyed as the end of the turn saves it: the chat's Claude Code session.
+                let s = lock(session);
+                let id = str_at(&s, "claudeCodeSessionId").unwrap_or(child.spec.session.id()).to_string();
+                claude_attachments(&s, &id)
+            }
         };
         let input = TurnInput {
             content: if wake {
@@ -1937,18 +1942,36 @@ fn claude_title_eligible(session: &Value) -> bool {
         && !js::truthy(session.get("trainingRunId"))
 }
 
-/// A context note on the existing user message, not a system flag, extra
-/// message or persisted user edit. Both policy capabilities gate `name_chat`.
 /// The session key recording which attached files a Claude Code session has
 /// already been given: `{ "session": <Claude Code session id>, "paths": [...] }`.
 const CLAUDE_ATTACHED: &str = "claudeCodeAttached";
 
+/// Why an attached file goes to Claude Code by path instead of by contents
+/// (`unreadableNote` and `mediaKindOf` in the renderer), or `None` for text.
+/// Claude Code's own Read tool opens photos and PDFs, so it gets the path.
+fn not_text(path: &str) -> Option<&'static str> {
+    let ext = path.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    match ext.as_str() {
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "heic" | "heif" | "avif" | "tif" | "tiff" => Some("a photo"),
+        "mp4" | "mov" | "webm" | "m4v" | "mkv" | "avi" | "mpeg" | "mpg" => Some("a video"),
+        "pdf" => Some("a PDF"),
+        "doc" | "docx" | "ppt" | "pptx" | "xls" | "xlsx" | "odt" | "ods" | "odp" | "rtf" | "pages" | "numbers"
+        | "key" => Some("an Office document"),
+        "zip" | "7z" | "rar" | "tar" | "gz" | "bz2" | "xz" | "dmg" | "iso" | "exe" | "msi" | "dll" | "so" | "dylib"
+        | "bin" | "wasm" | "class" | "jar" => Some("a binary file"),
+        "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac" | "opus" => Some("an audio file"),
+        _ => None,
+    }
+}
+
 /// The chat's attached files that the Claude Code session `cc_session` has not
-/// been given yet, rendered as the engine's context block renders them (same
-/// read limit, same Context Inspector exclusions), and every path that session
-/// will have seen once this block is sent. An engine turn resends attached
-/// files in its system prompt each turn; Claude Code keeps its own history, so
-/// each file goes once per Claude Code session.
+/// been given yet, as a block for the user message, and every path that
+/// session will then hold. Text files are rendered as the engine's context
+/// block renders them (same read limit); anything else is named with its path.
+/// A file excluded in the Context Inspector, or missing, is skipped and not
+/// marked as given, so it goes once it is included or exists. An engine turn
+/// resends attached files in its system prompt every turn; Claude Code keeps
+/// its own history, so each file goes once per Claude Code session.
 fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec<String>) {
     let strings = |v: Option<&Value>| -> Vec<String> {
         v.and_then(Value::as_array)
@@ -1957,20 +1980,39 @@ fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec
     };
     let tracker = session.get(CLAUDE_ATTACHED).filter(|t| str_at(t, "session") == Some(cc_session));
     let mut seen = strings(tracker.and_then(|t| t.get("paths")));
-    let fresh: Vec<String> = strings(session.get("attachedPaths")).into_iter().filter(|p| !seen.contains(p)).collect();
+    let excluded: HashSet<String> = strings(session.pointer("/contextPrefs/excluded")).into_iter().collect();
+    let fresh: Vec<String> = strings(session.get("attachedPaths"))
+        .into_iter()
+        .filter(|p| !seen.contains(p) && !excluded.contains(&format!("file:{p}")))
+        .filter(|p| std::path::Path::new(p).is_file())
+        .collect();
     if fresh.is_empty() {
         return (None, seen);
     }
-    let excluded = strings(session.pointer("/contextPrefs/excluded")).into_iter().collect();
-    let block = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
-        attached: nekko_context::collect_attached(&fresh),
-        excluded,
+    let (other, text): (Vec<String>, Vec<String>) = fresh.iter().cloned().partition(|p| not_text(p).is_some());
+    let mut parts: Vec<String> = other
+        .iter()
+        .map(|p| {
+            format!(
+                "# File: {p}\n({}: its contents are not included; open it from this path if you need it)",
+                not_text(p).unwrap_or("not text")
+            )
+        })
+        .collect();
+    let rendered = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
+        attached: nekko_context::collect_attached(&text),
         ..Default::default()
     }));
+    if !rendered.trim().is_empty() {
+        parts.insert(0, rendered);
+    }
     seen.extend(fresh);
-    (Some(block).filter(|b| !b.trim().is_empty()), seen)
+    (Some(parts.join("\n\n---\n\n")), seen)
 }
 
+/// A context note on the existing user message, not a system flag, extra
+/// message or persisted user edit. Both policy capabilities gate `name_chat`.
+/// Attached files the Claude Code session has not been given yet go first.
 fn claude_turn_content(user: &Value, name_chat: bool, attachments: Option<&str>) -> Value {
     let mut content = nekko_harness::user_content(user);
     // Leave CLI commands such as /compact intact.
@@ -3576,9 +3618,32 @@ mod tests {
         let (block, _) = claude_attachments(&session, "cc2");
         assert!(block.unwrap().contains("the quarterly numbers"));
 
-        // A file excluded in the Context Inspector is not sent.
-        session["contextPrefs"] = json!({ "excluded": [format!("file:{notes}"), format!("file:{other}")] });
-        assert_eq!(claude_attachments(&session, "cc2").0, None);
+        // A file excluded in the Context Inspector, or not there yet, is not
+        // sent and not marked as given, so it goes once it is included.
+        let missing = dir.join("later.txt").to_string_lossy().to_string();
+        session["attachedPaths"] = json!([notes, other, missing]);
+        session["contextPrefs"] = json!({ "excluded": [format!("file:{notes}")] });
+        let (block, seen) = claude_attachments(&session, "cc2");
+        assert!(!block.unwrap().contains("the quarterly numbers"));
+        assert_eq!(seen, vec![other.clone()]);
+        session["claudeCodeAttached"] = json!({ "session": "cc2", "paths": seen });
+        session["contextPrefs"] = json!({ "excluded": [] });
+        std::fs::write(&missing, "now here").unwrap();
+        let (block, seen) = claude_attachments(&session, "cc2");
+        let block = block.unwrap();
+        assert!(
+            block.contains("the quarterly numbers") && block.contains("now here") && !block.contains("second file")
+        );
+        assert_eq!(seen.len(), 3);
+
+        // A PDF or photo goes by path, never as its bytes.
+        let pdf = dir.join("report.pdf");
+        std::fs::write(&pdf, b"%PDF-1.7 \x00\x01binary").unwrap();
+        let pdf = pdf.to_string_lossy().to_string();
+        let (block, _) = claude_attachments(&json!({ "attachedPaths": [pdf] }), "cc3");
+        let block = block.unwrap();
+        assert!(block.contains(&format!("# File: {pdf}")) && block.contains("a PDF"));
+        assert!(!block.contains("binary"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

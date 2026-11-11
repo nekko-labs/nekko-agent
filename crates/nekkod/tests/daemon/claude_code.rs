@@ -547,6 +547,41 @@ async fn runs_turns_on_one_claude_code_process_and_keeps_its_session() {
     assert_eq!(pid(&replies[0]), pid(&replies[1]), "{replies:?}");
 }
 
+/// Claude Code builds its own system prompt, so the engine's context block
+/// never reaches it: an attached file rides in the user message instead, once
+/// per Claude Code session.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_attached_file_reaches_claude_code_once() {
+    let rig = rig("attached", "guardrails", true);
+    let file = rig.data.join("attachments/s_cc/text-A6CD62CB0B3B-1.txt");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "the attached quarterly numbers").unwrap();
+    let file = file.to_string_lossy().to_string();
+    let chat = json!({ "id": "s_cc", "title": "cc", "messages": [], "mode": "guardrails", "createdAt": 1, "updatedAt": 1, "attachedPaths": [file] });
+    std::fs::write(rig.data.join("sessions/s_cc.json"), chat.to_string()).unwrap();
+
+    let (status, body) =
+        post(rig.d.port, "chat:turn", json!([spec(&rig, "cc1", "Attached text-A6CD62CB0B3B-1.txt")]), Some(TOKEN))
+            .await;
+    assert_eq!(status, 200, "{body}");
+    turn_record(&rig, "cc1", "s_cc").await;
+    let first = saved(&rig);
+    let replies = assistant_texts(&first);
+    assert!(replies[0].contains("the attached quarterly numbers"), "{replies:?}");
+    assert!(replies[0].ends_with("Attached text-A6CD62CB0B3B-1.txt"), "{replies:?}");
+    // The transcript keeps what the user sent, not the inlined file.
+    let users: Vec<&Value> = first["messages"].as_array().unwrap().iter().filter(|m| m["role"] == "user").collect();
+    assert_eq!(users[0]["content"], "Attached text-A6CD62CB0B3B-1.txt");
+    assert_eq!(first["claudeCodeAttached"], json!({ "session": first["claudeCodeSessionId"], "paths": [file] }));
+
+    // The same Claude Code session already has it.
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "cc2", "and now?")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "cc2", "s_cc").await;
+    let replies = assistant_texts(&saved(&rig));
+    assert!(!replies[1].contains("the attached quarterly numbers"), "{replies:?}");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn claude_codes_own_plan_is_the_chats_plan() {
     let rig = rig("plan", "guardrails", true);
