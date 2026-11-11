@@ -22,7 +22,7 @@ import type {
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
-import { AGENT_REPLAY, IpcChannels, IpcEvents } from '@nekko-agent/shared';
+import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
 import { heldWhileHidden, pageHidden } from './hiddenReads.js';
@@ -280,6 +280,9 @@ const api: NekkoApi = {
   removeChatWorktree: (root) => inv(IpcChannels.chatWorktreesRemove, root),
 
   readFile: (path) => inv(IpcChannels.fileRead, path),
+  // The main process serves these on loopback, not the engine (main/htmlPreview.ts).
+  serveHtmlPreview: (path, options) => ipcRenderer.invoke(HTML_PREVIEW_CHANNELS.serve, path, options),
+  releaseHtmlPreview: (id) => ipcRenderer.invoke(HTML_PREVIEW_CHANNELS.release, id),
   writeFile: (path, content) => inv(IpcChannels.fileWrite, path, content),
   listDir: (path) => inv(IpcChannels.dirList, path),
   listScopedFiles: (root, relPath) => inv(IpcChannels.filesList, root, relPath),
