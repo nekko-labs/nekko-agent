@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { LimitWindow, ProviderConfig, SubscriptionLimits } from '@nekko-agent/shared';
+import type { ChatCodeModeSavings, LimitWindow, ProviderConfig, SubscriptionLimits } from '@nekko-agent/shared';
 import { formatUSD, isLocalProvider, limitsKeyFor } from '@nekko-agent/shared';
 import { afterPaint } from '../afterPaint.js';
 
@@ -57,7 +57,10 @@ export function UsageLimitsChip({
   turnCost = 0,
   running = false,
   unpriced = false,
+  codeMode = null,
 }: {
+  /** Code mode's net estimate over this chat's replies, when any reply used it. */
+  codeMode?: ChatCodeModeSavings | null;
   provider?: ProviderConfig;
   session?: { id?: string } | null;
   cost?: number;
@@ -202,6 +205,8 @@ export function UsageLimitsChip({
           </div>
         )}
 
+        {codeMode && <CodeModeTotal savings={codeMode} />}
+
         {unpriced && <p className="mb-2 text-ink-faint">API-equivalent estimate unavailable for some usage. Unpriced tokens are excluded, not free.</p>}
         {avoidedCosts && (
           <div className="mb-2 space-y-1 border-b border-line pb-2">
@@ -269,6 +274,36 @@ export function UsageLimitsChip({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Rounded token count: 950, 12k, 1.2M. */
+function compactTokens(n: number): string {
+  const v = Math.abs(Math.round(n));
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (v >= 10_000) return `${Math.round(v / 1000)}k`;
+  if (v >= 1000) return `${(v / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(v);
+}
+
+/**
+ * Code mode over the whole chat: the net of every code-mode reply's estimate,
+ * so a chat where it came out behind says so rather than hiding the replies
+ * that cost more. Each reply's own breakdown is on its stats line.
+ */
+export function CodeModeTotal({ savings }: { savings: ChatCodeModeSavings }) {
+  const ahead = savings.tokensSaved >= 0;
+  const replies = `${savings.replies} repl${savings.replies === 1 ? 'y' : 'ies'}`;
+  return (
+    <div className="mb-2 border-b border-line pb-2" data-code-mode-total>
+      <div className="flex items-baseline justify-between">
+        <span className="text-ink-soft">{ahead ? 'Saved by code mode · this chat' : 'Code mode cost · this chat'}</span>
+        <span className="text-sm font-semibold tabular-nums">≈{compactTokens(savings.tokensSaved)} tokens</span>
+      </div>
+      <p className="mt-1 text-ink-faint">
+        {ahead ? '' : 'More than a tool list would have. '}Estimated over {replies}, at about 4 characters a token. Each reply's breakdown is on its stats line.
+      </p>
     </div>
   );
 }

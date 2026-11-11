@@ -99,6 +99,7 @@
     { "name": "mcp__claude_ai_Linear__list_issues", "input": {}, "purpose": "other" },
     { "name": "ask_user", "input": { "questions": [] }, "purpose": "other" },
     { "name": "AskUserQuestion", "input": { "questions": [] }, "purpose": "other" },
+    { "name": "request_secret", "input": { "name": "NPM_TOKEN", "reason": "To publish." }, "purpose": "other" },
     { "name": "remember", "input": { "text": "x" }, "purpose": "other" },
     { "name": "capture", "input": {}, "purpose": "other" },
     { "name": "some_new_tool", "input": { "path": "AGENTS.md" }, "purpose": "other" }

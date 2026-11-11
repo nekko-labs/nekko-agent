@@ -193,6 +193,18 @@ fn image_turns_match() {
 }
 
 #[test]
+fn sandbox_repositories_follow_the_folders_named_by_their_repository() {
+    let session = json!({ "sandbox": { "sourceWorkspaceIds": ["w1"], "sourceRepos": [
+        { "provider": "github", "fullName": "me/app", "cloneUrl": "https://github.com/me/app.git", "webUrl": "https://github.com/me/app" }
+    ] } });
+    let w = sandbox_workspaces(&session);
+    assert_eq!(w.len(), 2);
+    assert_eq!(w[1]["path"], "folder-1");
+    assert_eq!(w[1]["repo"]["fullName"], "me/app");
+    assert!(w[1]["repo"].get("cloneUrl").is_none());
+}
+
+#[test]
 fn sandbox_turns_compose_alike() {
     let all = golden();
     for (i, c) in cases(&all, "sandboxTurns").iter().enumerate() {

@@ -162,6 +162,10 @@ struct Themed: ViewModifier {
         let scheme = resolved
         let palette = Palette.make(dark: (scheme ?? system) == .dark, accent: choice == Prefs.matchComputer ? appearance?.accent : nil, preset: preset)
         content
+            .overlay {
+                if SeasonalDecoration(preset: preset) == .winter { WinterSnow().environment(\.palette, palette) }
+            }
+            .environment(\.seasonalDecoration, SeasonalDecoration(preset: preset))
             .environment(\.palette, palette)
             .preferredColorScheme(scheme)
             .tint(palette.accent)

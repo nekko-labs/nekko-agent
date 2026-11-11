@@ -14,6 +14,8 @@ pub struct HttpError {
     /// The API's `error` code (`plan-required`, `conflict`…), when it sent one.
     pub code: String,
     pub message: String,
+    /// The API's whole JSON answer (`currentRevision`, `currentKeyId`...), or null.
+    pub body: Box<Value>,
 }
 
 impl std::fmt::Display for HttpError {
@@ -33,6 +35,7 @@ fn network(e: impl std::fmt::Display) -> HttpError {
         status: 0,
         code: "network".into(),
         message: format!("Couldn't reach Nekko Cloud: {}", short(&e.to_string())),
+        body: Box::new(Value::Null),
     }
 }
 
@@ -64,7 +67,7 @@ async fn answer(res: reqwest::Response) -> Result<Value, HttpError> {
             (_, "") => format!("Nekko Cloud answered {status}."),
             (_, c) => c.to_string(),
         });
-    Err(HttpError { status, code, message: short(&message) })
+    Err(HttpError { status, code, message: short(&message), body: Box::new(body) })
 }
 
 pub fn client() -> reqwest::Client {
@@ -155,6 +158,7 @@ fn access_token(v: &Value) -> Result<String, HttpError> {
         status: 0,
         code: "bad-answer".into(),
         message: "Supabase didn't return a session.".into(),
+        body: Box::new(Value::Null),
     })
 }
 

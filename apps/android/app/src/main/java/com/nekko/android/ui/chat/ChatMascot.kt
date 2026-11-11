@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import com.nekko.android.R
 import com.nekko.android.ui.components.PixelCat
 import com.nekko.android.ui.simple.rememberReduceMotion
+import com.nekko.android.ui.theme.LocalSeasonalDecoration
+import com.nekko.android.ui.theme.MascotHat
+import com.nekko.android.ui.theme.SeasonalDecoration
 import kotlinx.coroutines.delay
 
 /**
@@ -78,7 +81,11 @@ fun ChatMascot(working: Boolean, refreshing: Boolean, onRefresh: () -> Unit, mod
             .testTag("chat.mascot"),
         contentAlignment = Alignment.Center,
     ) {
-        PixelCat(Modifier.size(30.dp).offset(y = if (working && frame < 2) (-2).dp else 0.dp), happy = greeting || refreshing)
+        Box(Modifier.size(30.dp).offset(y = if (working && frame < 2) (-2).dp else 0.dp)) {
+            PixelCat(Modifier.size(30.dp), happy = greeting || refreshing)
+            val decoration = LocalSeasonalDecoration.current
+            if (decoration != SeasonalDecoration.NONE) MascotHat(decoration, Modifier.size(30.dp))
+        }
     }
 }
 

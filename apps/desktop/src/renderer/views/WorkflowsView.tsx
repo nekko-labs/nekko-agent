@@ -40,7 +40,7 @@ import { CiRunnersView, watchRunnerPresence, type RunnerPresence } from './CiRun
 import { useShown } from '../simpleMode.js';
 
 /**
- * The Scheduled Tasks tab (code name: workflows): automation modelled on GitHub Actions, where a step can be
+ * The Automations tab's Scheduled tasks section (code name: workflows): automation modelled on GitHub Actions, where a step can be
  * an agent prompt, a skill, another workflow, or a shell command.
  *
  * Built for an install that accumulates hundreds of these. The left rail filters
@@ -212,28 +212,27 @@ export function WorkflowsView() {
   const ciShown = ciRelevant || section === 'ci';
   const page = ciShown ? section : 'tasks';
   return (
-    <div className="flex h-full min-h-0">
-      {/* Sub-navigation, then the list's filters */}
-      {(workflows.length > 0 || ciShown) && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
-        {ciShown && (
-          <nav aria-label="Scheduled Tasks sections" className="mb-2 flex flex-col gap-0.5" data-workflows-subnav>
-            {([
-              { id: 'tasks', label: 'Scheduled tasks', Icon: WorkflowIcon },
-              { id: 'ci', label: 'CI runners', Icon: GfServerIcon },
-            ] as const).map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                className="settings-nav-item"
-                aria-current={page === id ? 'page' : undefined}
-                onClick={() => setSection(id)}
-              >
-                <Icon className="h-4 w-4 shrink-0" />{label}
-              </button>
-            ))}
-          </nav>
-        )}
-        {page === 'tasks' && workflows.length > 0 && <>
+    <div className="automations-layout">
+      {/* Automations' sections, then the scheduled tasks list's filters */}
+      <aside className="automations-rail">
+        {!hasAppChrome && <h1 className="view-title">Automations</h1>}
+        <nav aria-label="Automations sections" className="models-navigation" data-workflows-subnav>
+          {([
+            { id: 'tasks', label: 'Scheduled tasks', Icon: WorkflowIcon },
+            ...(ciShown ? [{ id: 'ci', label: 'CI runners', Icon: GfServerIcon }] as const : []),
+          ] as const).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className="settings-nav-item models-nav-main"
+              aria-current={page === id ? 'page' : undefined}
+              onClick={() => setSection(id)}
+            >
+              <Icon className="h-4 w-4 shrink-0" />{label}
+            </button>
+          ))}
+        </nav>
+        {page === 'tasks' && workflows.length > 0 && <div className="automations-filters">
         <input
           className="input w-full text-xs"
           placeholder="Search scheduled tasks…"
@@ -315,16 +314,16 @@ export function WorkflowsView() {
             ))}
           </div>
         </FilterGroup>
-        </>}
-      </aside>}
+        </div>}
+      </aside>
 
       {/* List */}
-      <div className="min-w-0 flex-1 overflow-y-auto p-4">
+      <div className="automations-content">
         {page === 'ci' ? <div className="mx-auto max-w-5xl"><CiRunnersView /></div> : !loaded ? <p className="p-4 text-sm text-ink-soft" role="status">{loadFailed ? 'Could not load scheduled tasks. Reopen this tab to try again.' : 'Loading scheduled tasks…'}</p> : workflows.length === 0 ? (<>
           <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
         </>) : <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
-            {!hasAppChrome && <h1 className="view-title">Scheduled Tasks</h1>}
+            {!hasAppChrome && <h2 className="view-title">Scheduled tasks</h2>}
             <span className="text-xs text-ink-faint">
               {visible.length === workflows.length
                 ? `${workflows.length} total`

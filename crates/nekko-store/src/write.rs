@@ -548,6 +548,11 @@ impl SessionStore {
             if s.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
                 s.set("mode", Some(json!("ask")));
             }
+            // Incognito is a choice for one chat: a new chat never starts in it,
+            // even from a saved mode that recorded it.
+            if nekko_js::truthy(s.get("incognito")) {
+                s.set("incognito", Some(json!(false)));
+            }
         }
         if snapshot && parent_id.is_none() {
             if let Some(defaults) = settings.get("defaultSessionOptions").and_then(Value::as_object) {
@@ -557,7 +562,6 @@ impl SessionStore {
                     "mode",
                     "offline",
                     "cloudOnly",
-                    "incognito",
                     "disabledTools",
                     "workMode",
                     "effort",
@@ -1091,12 +1095,39 @@ impl SessionStore {
             // A whole millisecond count is written as an integer, as JSON.stringify does.
             let at =
                 if now.fract() == 0.0 && now.abs() < 9_007_199_254_740_992.0 { json!(now as i64) } else { json!(now) };
-            s.insert(
-                "sandbox".into(),
-                json!({ "image": image, "identity": identity, "configuredAt": at, "sourceWorkspaceIds": ids }),
-            );
+            let mut sandbox =
+                json!({ "image": image, "identity": identity, "configuredAt": at, "sourceWorkspaceIds": ids });
+            // Repositories that are not on this computer go into the sandbox itself (#2561).
+            if let Some(repos) = s.get("sandboxRepos").filter(|r| r.as_array().is_some_and(|a| !a.is_empty())) {
+                sandbox["sourceRepos"] = repos.clone();
+            }
+            s.insert("sandbox".into(), sandbox);
             s.insert("mode".into(), json!("ask"));
             s.shift_remove("gitWorktrees");
+            true
+        })?;
+        if let Some(e) = failure {
+            return Err(e.into());
+        }
+        out.ok_or_else(|| "Session not found".to_string())
+    }
+
+    /// A sandbox chat's repositories that live only in its sandbox (#2561):
+    /// set before the sandbox is made, frozen into its identity after.
+    pub fn set_sandbox_repos(&self, id: &str, repos: &Value) -> Result<Value, String> {
+        let mut failure = None;
+        let out = self.patch(id, |s| {
+            if js::truthy(s.get("sandbox")) {
+                failure = Some(
+                    "This sandbox is already set up with its folders. Start a new sandbox chat to add a repository.",
+                );
+                return false;
+            }
+            if repos.as_array().is_some_and(|a| !a.is_empty()) {
+                s.insert("sandboxRepos".into(), repos.clone());
+            } else {
+                s.shift_remove("sandboxRepos");
+            }
             true
         })?;
         if let Some(e) = failure {

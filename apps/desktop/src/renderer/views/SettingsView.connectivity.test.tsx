@@ -19,8 +19,8 @@ describe('Internet restoration recovery', () => {
   it('writes only the explicit opt-in, without changing provider retry policy', () => {
     const update = vi.fn();
     const tree = InternetRecoverySetting({ settings: {} as AppSettings, update });
-    const children = React.Children.toArray(tree.props.children) as React.ReactElement<any>[];
-    const toggle = children.find((e) => e.type === Toggle)!;
+    const toggle = tree.props.control as React.ReactElement<any>;
+    expect(toggle.type).toBe(Toggle);
     toggle.props.onChange(true);
     expect(update).toHaveBeenLastCalledWith({ autoResumeOnInternetRestore: true });
     toggle.props.onChange(false);

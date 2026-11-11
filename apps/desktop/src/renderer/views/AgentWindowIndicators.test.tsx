@@ -99,8 +99,12 @@ describe('agent window indicators', () => {
     expect(toggle({ offline: false })).toContain('Click to block internet connectivity (local tools keep working).');
     expect(toggle({ offline: true })).toContain('Click to allow internet connectivity.');
     // A cloud model needs the internet: blocking stays local-only, as Offline was; an already-blocked chat can be allowed.
-    expect(toggle({ offline: false }, true)).toContain('disabled=""');
-    expect(toggle({ offline: true }, true)).not.toContain('disabled=""');
+    // Locked with aria-disabled, not disabled, so it still hovers and says why.
+    const locked = toggle({ offline: false }, true);
+    expect(locked).toContain('aria-disabled="true"');
+    expect(locked).not.toContain('disabled=""');
+    expect(locked).toContain('This cloud model needs an internet connection');
+    expect(toggle({ offline: true }, true)).not.toContain('aria-disabled');
   });
 
   it('keeps the Tools menu usable while the internet is blocked, grouped by category', () => {

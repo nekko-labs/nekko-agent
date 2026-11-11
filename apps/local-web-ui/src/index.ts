@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
-import { brandEnv, unsupportedPlatformReason } from '@nekko-agent/shared';
+import { brandEnv, HTML_PREVIEW_CHANNELS, unsupportedPlatformReason } from '@nekko-agent/shared';
+import { localHtmlPreview } from './html-preview.js';
 import { IDLE_STOP_MS, parseCloudScope, runRelayAgent } from './relay-agent.js';
 import { runCli, CliError, EXIT_CODES } from 'nekko-agent/run';
 import { isLoopbackHost, tokenMatches, validateBindSecurity } from './security.js';
@@ -30,6 +31,8 @@ const ALLOW_UNAUTHENTICATED = env('ALLOW_UNAUTHENTICATED') === '1';
 const ALLOWED_HOSTS = (env('ALLOWED_HOSTS') ?? '').split(',').map((v) => v.trim()).filter(Boolean);
 const ALLOWED_ORIGINS = (env('ALLOWED_ORIGINS') ?? '').split(',').map((v) => v.trim()).filter(Boolean);
 const requireAuth = TOKEN !== '';
+/** Port for served HTML previews (Library); unset picks a free one. Set it to publish one port from a container. */
+const PREVIEW_PORT = env('PREVIEW_PORT') ? Number(env('PREVIEW_PORT')) : undefined;
 
 // Find the built renderer: explicit override, then the bundled `web/` (published
 // npx package), then the in-repo desktop build (dev).
@@ -123,6 +126,7 @@ async function main() {
     allowedOrigins: ALLOWED_ORIGINS,
   };
 
+  const htmlPreview = localHtmlPreview({ host: HOST, port: PREVIEW_PORT });
   const app = Fastify({ bodyLimit: 25 * 1024 * 1024 });
   app.addHook('onRequest', createApiSecurityHook(security));
 
@@ -151,6 +155,15 @@ async function main() {
   const reviewRepository = (input: RepositoryReviewInput) => call('repository:review', [input]) as Promise<RepositoryReviewVerdict>;
   app.post<{ Params: { channel: string }; Body: { args?: unknown[] } }>('/api/:channel', async (req, reply) => {
     const channel = req.params.channel;
+    // Served here, not by the engine: an HTML page with its folder (Library, file pane).
+    if (channel === HTML_PREVIEW_CHANNELS.serve || channel === HTML_PREVIEW_CHANNELS.release) {
+      const args = Array.isArray(req.body?.args) ? req.body.args : [];
+      try {
+        return reply.send(await htmlPreview.call(channel, args, req.headers.host));
+      } catch (e) {
+        return reply.code(400).send({ error: (e as Error).message });
+      }
+    }
     let up;
     try {
       up = await daemon.endpoint();
@@ -199,6 +212,7 @@ async function main() {
     } catch {
       /* closing anyway */
     }
+    await htmlPreview.close();
     await daemon.stop();
     process.exit(0);
   };

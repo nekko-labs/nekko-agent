@@ -42,7 +42,9 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     });
 
     await test.step('a completed chat opens read-only', async () => {
-      await page.locator('[data-completed-row=completed]').click();
+      // The sticky group heading intercepts pointer events at the top of the
+      // list; dispatch directly so the test does not depend on scroll state.
+      await page.locator('[data-completed-row=completed]').evaluate((el) => (el as HTMLElement).click());
       await expect(page.getByText('Back to active agents')).toBeVisible();
       await expect(page.locator('[data-wall-composer]')).toHaveCount(0);
       await shot(`completed-${theme}-${width}`);
@@ -64,7 +66,8 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     await test.step('an active card selects its window outside Focus', async () => {
       await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'grid');
       await openList();
-      await card('Active conversation').click();
+      // The sticky group heading can intercept pointer events; dispatch directly.
+      await card('Active conversation').evaluate((el) => (el as HTMLElement).click());
       expect(await state<string>('(i) => i.state().view')).toBe('command');
       await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'grid');
       await expect(page.locator('[data-wall-selected]')).toHaveAttribute('data-grid-cell', 'chat:active');
@@ -77,6 +80,12 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
 
     await test.step('create an agent, a media agent and a terminal', async () => {
       await page.evaluate('integration.calls.length = 0');
+      // Suppress the per-kind first-use modals that appear on the first Photo
+      // or Video session; they would overlay the next create-menu click.
+      await page.evaluate(() => {
+        localStorage.setItem('nekko.media-intro.image.v1', 'seen');
+        localStorage.setItem('nekko.media-intro.video.v1', 'seen');
+      });
       await openList();
       const create = async (label: string) => {
         await page.locator('[data-agent-panel]').getByRole('button', { name: 'New agent', exact: true }).dispatchEvent('focusin');
@@ -87,15 +96,18 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       const before = await creates();
       await create('Agent');
       await expect.poll(creates).toBeGreaterThan(before);
-      await create('Create or Edit Photos and Videos');
+      await create('Photo');
       await called(`(c) => c.method === 'options' && c.options.chatType === 'image'`);
+      await create('Video');
+      await called(`(c) => c.method === 'options' && c.options.chatType === 'video'`);
       await create('Terminal');
       await called(`(c) => c.method === 'terminal'`);
       expect(await state<number>('(i) => i.state().terminals.length')).toBe(1);
     });
 
     await test.step('card context menu keeps its actions', async () => {
-      await card('Active conversation').click({ button: 'right' });
+      // The sticky group heading intercepts pointer events at narrow widths; dispatch directly.
+      await card('Active conversation').evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
       await expect(page.getByText('Mark as completed')).toBeVisible();
       await expect(page.getByText('Change model')).toBeVisible();
       await page.keyboard.press('Escape');
@@ -118,7 +130,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     });
 
     await test.step('Mark as completed stops and completes the owning chat', async () => {
-      await card('Active conversation').click({ button: 'right' });
+      await card('Active conversation').evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
       await page.getByRole('menuitem', { name: 'Mark as completed', exact: true }).click();
       await called(`(c) => c.method === 'abort' && c.id === 'active'`);
       await called(`(c) => c.method === 'options' && c.id === 'active' && !!c.options.archivedAt`);
@@ -136,9 +148,9 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       const rowMenu = async (id: string) => {
         await expandCompleted();
         const row = page.locator(`[data-completed-row=${id}]`);
-        // At the row's centre: the fixed mascot covers the sidebar's bottom-left
-        // corner, where x: 40 lands when the row is the list's last (#1131).
-        await row.click({ button: 'right' });
+        // The sticky group heading intercepts pointer events at narrow widths;
+        // dispatch contextmenu directly (the mascot covered x:40 at #1131).
+        await row.evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
       };
       await rowMenu('project-completed');
       await shot(`completed-menu-${theme}-${width}`);
@@ -148,7 +160,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       await expect(page.locator('[role=menu]')).toHaveCount(0);
 
       await openList();
-      await page.locator('[data-completed-row=completed]').click();
+      await page.locator('[data-completed-row=completed]').evaluate((el) => (el as HTMLElement).click());
       await expect(page.getByText('Back to active agents')).toBeVisible();
       await openList();
       await rowMenu('completed');

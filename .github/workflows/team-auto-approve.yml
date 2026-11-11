@@ -1,0 +1,95 @@
+name: Team auto-approve
+# The main ruleset requires one approving review (decision 0087). PRs from
+# members of the nekkolabs-devs team should still merge on their own once `gate`
+# is green, so this approves them with the repo's GitHub App. Everyone else's PR
+# waits for a person with write access to approve it; auto-merge.yml has already
+# armed auto-merge, so it merges once that review and `gate` are in.
+#
+# pull_request_target, so main's copy of this file runs, with secrets, even for
+# a PR from a fork. It never checks out or runs the PR's code: it reads the PR
+# number from the event and calls the API.
+#
+# Team membership needs the App's organization permission "Members: read".
+# Without it the token step fails, nothing is approved and a warning says why:
+# the PR waits for a person, which is the safe direction.
+#
+# workflow_dispatch walks every open, ready PR into main, for PRs opened before
+# the rule or the permission existed.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: team-auto-approve-${{ github.event.pull_request.number || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.pull_request.base.ref == 'main' && !github.event.pull_request.draft) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Create repository-scoped App token
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RUNTIME_UPDATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RUNTIME_UPDATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-pull-requests: write
+          permission-members: read
+
+      - name: Explain a missing token
+        if: ${{ steps.app-token.outcome != 'success' }}
+        run: echo "::warning::No App token with organization Members read, so no PR was approved. Grant the App that permission (decision 0087)."
+
+      - name: Approve PRs from nekkolabs-devs members
+        if: ${{ steps.app-token.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ORG: ${{ github.repository_owner }}
+          TEAM: nekkolabs-devs
+          APP_BOT: ${{ steps.app-token.outputs.app-slug }}[bot]
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -n "$PR_NUMBER" ]; then
+            prs=$PR_NUMBER
+          else
+            prs=$(gh pr list --base main --state open --limit 200 --json number,isDraft --jq '.[] | select(.isDraft | not) | .number')
+          fi
+
+          for n in $prs; do
+            author=$(gh pr view "$n" --json author --jq .author.login)
+
+            # 404 means not a member. Anything else (403 without the Members
+            # permission, a 5xx) approves nothing and warns.
+            if ! membership=$(gh api "orgs/$ORG/teams/$TEAM/memberships/$author" --jq .state 2>&1); then
+              case "$membership" in
+                *"HTTP 404"*) echo "#$n: $author is not in $TEAM, so it needs a review." ;;
+                *) echo "::warning::#$n: could not read $TEAM membership for $author: $membership" ;;
+              esac
+              continue
+            fi
+            if [ "$membership" != active ]; then
+              echo "#$n: $author's $TEAM membership is $membership, so it needs a review."
+              continue
+            fi
+
+            last=$(gh api "repos/$GH_REPO/pulls/$n/reviews" --paginate \
+              --jq ".[] | select(.user.login == \"$APP_BOT\") | select(.state == \"APPROVED\" or .state == \"DISMISSED\") | .state" | tail -n 1)
+            if [ "$last" = APPROVED ]; then
+              echo "#$n: already approved."
+              continue
+            fi
+
+            gh pr review "$n" --approve \
+              --body "Approved automatically: the author is in $ORG/$TEAM, whose PRs merge once \`gate\` is green (decision 0087)." \
+              || echo "::warning::#$n: approving failed."
+          done

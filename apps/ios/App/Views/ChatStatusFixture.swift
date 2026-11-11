@@ -8,6 +8,8 @@ struct ChatStatusFixture: View {
     @State private var path: [Route] = []
     @State private var feedback = false
     @State private var pull = PawPull()
+    @State private var refreshHistory: [String] = []
+    private var recordRefresh: Bool { ProcessInfo.processInfo.arguments.contains("-uiTestRefreshHistory") }
     var body: some View {
         NavigationStack {
             List {
@@ -29,6 +31,21 @@ struct ChatStatusFixture: View {
             .environment(\.defaultMinListRowHeight, 36)
             .appBackground()
             .pawRefreshable(pull) { try? await Task.sleep(for: .seconds(1.2)) }
+            // XCTest may wait for the entire refresh before returning from a drag.
+            // Keep the real state transitions observable without stretching their timing.
+            .onChange(of: pull.shocked) { old, new in
+                guard recordRefresh else { return }
+                if new { refreshHistory.append("Refreshing") }
+                else if old { refreshHistory.append("Working") }
+            }
+            .overlay(alignment: .bottom) {
+                if recordRefresh {
+                    Text(refreshHistory.isEmpty ? "No refresh yet" : refreshHistory.joined(separator: " → "))
+                        .font(.caption2).foregroundStyle(palette.inkSoft)
+                        .accessibilityIdentifier("seasonal.refreshHistory")
+                        .allowsHitTesting(false)
+                }
+            }
             .navigationTitle("Chats")
             .toolbar {
                 RootMascot(working: true, pull: pull)

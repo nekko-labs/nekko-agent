@@ -64,7 +64,7 @@ object Purpose {
     private val WEB = WEB_SEARCH + setOf("webfetch", "fetchurl", "fetch", "browser", "browse")
     private val PLAN = setOf("updateplan", "todowrite", "todoread", "writetodos", "exitplanmode", "enterplanmode", "decide")
     private val DELEGATE = setOf("spawnagent", "task", "agent", "subagent", "dispatchagent", "delegationtargets")
-    private val ASK = setOf("askuser", "askuserquestion", "askfollowupquestion")
+    private val ASK = setOf("askuser", "askuserquestion", "askfollowupquestion", "requestsecret")
 
     private fun isMcp(name: String) = name.startsWith("mcp__")
 

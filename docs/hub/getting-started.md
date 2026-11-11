@@ -173,6 +173,12 @@ Each terminal has its own Agents-panel row, including terminals opened beside a 
 
 Claude Code users can opt into explicit tool/permission/completion signals using the [terminal hook setup](https://github.com/nekko-labs/nekko-agent/blob/main/docs/terminal-claude-hooks.md). Nekko never installs hooks or approves tools silently. Without integration signals a terminal says **Shell open**, not Working.
 
+### Run a command the agent suggests
+
+When a reply suggests commands for you to run, its shell code blocks (`bash`, `sh`, `zsh`, `powershell`, `console` and the like) show **Run** beside **Copy**. Run opens the chat's own terminal, in the chat's folder, and types the commands there; the terminal appears under the block, live, so you can answer a password prompt or a `y/N`. Run on another block reuses the same terminal and moves it under that block. **Share output** puts the terminal's recent output in your message so the agent can read it once you send; **Open in a panel** shows the terminal in its own window, and **Hide** (×) closes the view while the shell keeps running.
+
+Only your click runs anything: the agent cannot press Run. In a `console` block only the lines that start with a prompt (`$ `, `PS> `) run, without the prompt; output and `#` notes never do. Run is not offered in Sandbox chats, whose work never runs on this computer's shell. The terminal uses your default shell, whatever language the block names.
+
 ### Approvals and delegated work
 
 When a tool needs permission, its approval card appears in that agent's own window, above its composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
@@ -193,7 +199,7 @@ The composer shows the model title without a subscription suffix. Open its menu 
 
 **Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog. On a Claude subscription, the choices are the ones Claude Code takes, and it applies the closest level a model has.
 
-In new and ongoing chats, prompt-writing **Suggestions** appear on the far right of the **Mode** row (Detailed only by default). The **Environment** picker (the folder button) always sits immediately to the right of **+**, in both Simple and Detailed. It lists the chat's local **Folders** and its **Repositories**. Open it to choose or add a folder, set defaults, or remove a folder or repository from this chat without revoking its saved access. **Add repository…** lists the repositories your connected GitHub or GitLab account can reach; pick one and Nekko clones it to `~/nekko-repos/<owner>/<name>` (or reuses a clone already there) and adds it to the chat. With no git provider connected, **Connect repositories** opens Connectors. **+ → Repository** opens the same list. The clone uses the connector's token only for that download; later pulls and pushes use your own git sign-in. Folders no longer live inside Mode. While a reply runs, the picker stays visible and becomes editable again when the reply finishes.
+In new and ongoing chats, prompt-writing **Suggestions** appear on the far right of the **Mode** row (Detailed only by default). The **Environment** picker (the folder button) always sits immediately to the right of **+**, in both Simple and Detailed. It lists the chat's local **Folders** and its **Repositories**. Open it to choose or add a folder, set defaults, or remove a folder or repository from this chat without revoking its saved access. **Add repository…** lists the repositories your connected GitHub or GitLab account can reach; pick one and Nekko uses the copy already on your computer when it finds one (in your saved folders or the usual code folders such as `~/code` or `~/Developer`). Otherwise it clones it into your repositories folder: the first time, it asks where repositories should sync (`~/nekko-repos` or a folder you choose), and **Settings > General > Repositories folder** changes it later. In a **sandbox** chat, a repository that is not on your computer goes into the sandbox instead: it shows as **In the sandbox** and is cloned straight into the sandbox when you set it up, never into your folders. With no git provider connected, **Connect repositories** opens Connectors. **+ → Repository** opens the same list. The clone uses the connector's token only for that download; later pulls and pushes use your own git sign-in. Folders no longer live inside Mode. While a reply runs, the picker stays visible and becomes editable again when the reply finishes.
 
 When you ask the agent to change a project or repository that is not in the chat's environment, it asks before guessing: it can search this computer for it (and then offer **Use this folder** for what it found), let you **choose the folder**, or **add it from GitHub or GitLab** right in the question. Whatever you add joins the environment and the agent carries on there. Model selection and reasoning effort stay in their dedicated composer controls, not in the **Mode** panel. Saved modes remain compatible with their existing model and effort preferences.
 
@@ -348,6 +354,12 @@ Each service in **Connectors** starts as one **Connect** button. Press it and th
 
 - **GitHub**: if the GitHub CLI (`gh`) is signed in on this computer, the row says so and **Connect** uses that sign-in, with nothing to copy. Choose **Use a token** to paste one instead. Otherwise **Open** goes to GitHub's new-token page with the name and access already filled in: press **Generate token**, copy it and paste it.
 - **GitLab**: **Open** goes to the token page with the name and the `api` scope filled in. For your own GitLab, enter its address first.
+
+### Choosing repositories
+
+A connected GitHub or GitLab row has a **Repositories** line with how many repositories it reaches. Open it to see them grouped under their owner (your account, each org, or each top GitLab group); open a group to see its repositories. Hover a repository and press **Remove**, or press **Remove org** beside a group, and Nekko leaves it out of **Add repository** and out of what the connector reads into a chat. A removed org's new repositories stay out too. Everything removed is listed under **Removed**, with **Add back**. This only changes what Nekko uses: the token's own access on GitHub or GitLab stays the same. Disconnecting forgets the choice.
+
+A connected service's sample (from **Fetch sample**, or the check made when it connected) sits behind a **Sample** line with its count; open it to see the items. GitHub and GitLab show their **Repositories** line instead.
 
 ### Download progress in Model Server
 

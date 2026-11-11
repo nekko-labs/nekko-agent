@@ -1,13 +1,22 @@
 name: Card details evidence
+# Manual evidence only, dispatched on the PR branch. It used to run on every PR
+# touching the chat list, and its iPhone half queued for the Team plan's 5 macOS
+# runners that Native iOS (and so `gate`) waits for. On a Mac, capture the iPhone
+# half locally instead: node scripts/ios-evidence-local.mjs --preset groups
+# (docs/runbooks/visual-evidence.md).
 on:
-  pull_request:
-    paths:
-      - 'apps/ios/App/Views/ChatsView.swift'
-      - 'apps/ios/App/Views/ChatGroupActivity.swift'
-      - 'apps/android/app/src/main/java/com/nekko/android/ui/screens/ChatsScreen.kt'
-      - 'apps/ios/scripts/GroupEvidenceTests.swift'
-      - 'apps/android/app/src/androidTest/java/com/nekko/android/CardDetailsDeviceTest.kt'
-      - '.github/workflows/card-details-evidence.yml'
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: 'Before app commit (full SHA, normally the PR merge base); the dispatched branch is the after'
+        required: true
+        type: string
+      platform:
+        description: 'Capture one platform (ios uses a macOS runner: prefer the local script on a Mac)'
+        required: false
+        type: choice
+        options: [both, ios, android]
+        default: android
 permissions:
   contents: read
 concurrency:
@@ -15,10 +24,12 @@ concurrency:
   cancel-in-progress: true
 jobs:
   ios:
+    if: inputs.platform != 'android'
     uses: ./.github/workflows/ios-group-evidence.yml
     with:
-      baseline_ref: ${{ github.event.pull_request.base.sha }}
+      baseline_ref: ${{ inputs.baseline_ref }}
   android:
+    if: inputs.platform != 'ios'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
@@ -28,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ matrix.revision == 'before' && github.event.pull_request.base.sha || github.sha }}
+          ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || github.sha }}
       - uses: actions/checkout@v7
         with:
           path: .card-harness

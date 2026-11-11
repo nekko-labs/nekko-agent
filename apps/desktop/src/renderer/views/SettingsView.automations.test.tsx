@@ -12,7 +12,7 @@ function elements(tree: React.ReactNode): React.ReactElement<Record<string, any>
   const walk = (node: React.ReactNode) => React.Children.forEach(node, (child) => {
     if (!React.isValidElement<Record<string, any>>(child)) return;
     out.push(child);
-    walk(child.props.children);
+    Object.values(child.props).forEach((v) => { if (React.isValidElement(v) || Array.isArray(v)) walk(v as React.ReactNode); });
   });
   walk(tree);
   return out;

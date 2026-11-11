@@ -142,6 +142,11 @@ fn session_workspace_ids(s: &Value) -> Vec<Value> {
     ids
 }
 
+/// The repositories frozen into a sandbox chat's identity (#2561).
+fn source_repos(s: &Value) -> Vec<Value> {
+    s.pointer("/sandbox/sourceRepos").and_then(Value::as_array).cloned().unwrap_or_default()
+}
+
 fn execution_mode(s: &Value) -> &str {
     match s.get("executionMode").and_then(Value::as_str) {
         Some(m) => m,
@@ -165,6 +170,29 @@ impl Sandboxes {
             .flatten()
             .map(nekko_store::Meta::into_value)
             .ok_or_else(|| "Session not found".into())
+    }
+
+    /// Where a sandbox's repositories are cloned before they are copied in:
+    /// beside its state, in app data, never in the user's folders.
+    fn seed_dir(&self, identity: &str) -> PathBuf {
+        self.data_dir.join("sandboxes").join(format!("{identity}.repos"))
+    }
+
+    async fn clone_seeds(&self, ctx: &Ctx, s: &Value, dir: &std::path::Path) -> Result<(), String> {
+        let repos = source_repos(s);
+        if repos.is_empty() {
+            return Ok(());
+        }
+        let settings = crate::settings::current(ctx).await;
+        let dir = dir.to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            for (i, pick) in repos.iter().enumerate() {
+                crate::repos::clone_for_sandbox(&settings, pick, &dir.join(i.to_string()))?;
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
 
     async fn sandbox_session(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
@@ -210,6 +238,9 @@ impl Sandboxes {
             session_id: id.clone(),
             state_directory: self.data_dir.join("sandboxes").join(&identity),
             source_folders: folders,
+            seed_folders: (0..source_repos(s).len())
+                .map(|i| self.seed_dir(&identity).join(i.to_string()).to_string_lossy().into_owned())
+                .collect(),
             image: sb["image"].as_str().unwrap_or_default().to_string(),
             docker_path: None,
             limits: Limits::default(),
@@ -373,7 +404,16 @@ impl Sandboxes {
                 .await
                 .map_err(|e| e.to_string())??;
                 let r = self.runtime(ctx, &s).await?;
-                if let Err(e) = r.sandbox.initialize().await {
+                // Repositories not on this computer: a temporary shallow clone each,
+                // copied in by `initialize` and deleted straight after (#2561).
+                let seeds = self.seed_dir(s["sandbox"]["identity"].as_str().unwrap_or_default());
+                let made = self.clone_seeds(ctx, &s, &seeds).await;
+                let made = match made {
+                    Ok(()) => r.sandbox.initialize().await,
+                    Err(e) => Err(e),
+                };
+                let _ = std::fs::remove_dir_all(&seeds);
+                if let Err(e) = made {
                     lock(&r.state).error = Some(e.clone());
                     return Err(e);
                 }

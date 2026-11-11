@@ -29,6 +29,9 @@ let jwks: { keys: unknown[] } = { keys: [] };
 const app = buildServer({
   db,
   fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1",
+  // Organizations are always on locally; NEKKO_ORGS_ALLOWED_EMAILS can still narrow them.
+  orgsEnabled: true,
+  orgsAllowedEmails: (process.env.NEKKO_ORGS_ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
   allowedOrigins: [],
   logger: false,
   // Tests sign several devices in from one address.

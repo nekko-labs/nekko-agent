@@ -243,6 +243,7 @@ const TOOL_VERBS: Record<string, string> = {
   bash: 'Running',
   spawn_agent: 'Delegating',
   ask_user: 'Asking',
+  request_secret: 'Waiting for',
   web_search: 'Searching',
   fetch_url: 'Fetching',
   update_plan: 'Planning',

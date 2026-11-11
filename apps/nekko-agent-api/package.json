@@ -1,6 +1,6 @@
 {
   "name": "nekko-agent-api",
-  "version": "0.1.0",
+  "version": "0.9.8",
   "private": true,
   "type": "module",
   "description": "Nekko Cloud's API service (Fly app nekko-agent-api): beta signups now; accounts, plans and Relay authorization next. Postgres on Neon.",
