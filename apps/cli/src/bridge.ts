@@ -67,7 +67,7 @@ export const WATCH_TOOL = {
 /** In-turn naming only; nekkod checks both capabilities and title ownership. */
 export const TITLE_TOOL = {
   name: 'set_chat_title',
-  description: 'Give this new chat a concise, specific 3-6 word title. Never overwrite a user-chosen title. This changes only the Nekko chat title, not the Claude Code session name.',
+  description: 'Give this new chat a short 2-4 word label for what it is for, leading with an issue or PR number when the request names one. Do not copy the opening words of the request. Never overwrite a user-chosen title. This changes only the Nekko chat title, not the Claude Code session name.',
   inputSchema: {
     type: 'object',
     properties: { title: { type: 'string', description: 'A concise title describing the user’s task.' } },
