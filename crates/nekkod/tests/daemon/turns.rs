@@ -118,7 +118,7 @@ async fn large_image_reply_completes_and_followup_starts_with_local_provider() {
 }
 
 fn title_requests(model: &ScriptedModel) -> usize {
-    model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("short title")).count()
+    model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("Name this chat for a sidebar list")).count()
 }
 
 async fn wait_for_title_requests(model: &ScriptedModel, count: usize) {
@@ -814,7 +814,7 @@ async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
     );
     assert!(rig.events.lock().unwrap().iter().any(|e| e["sessionId"] == "s_turn_t" && e["type"] == "session_meta"));
     let titles =
-        model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("short title")).count();
+        model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("Name this chat for a sidebar list")).count();
     assert_eq!(titles, 1, "one title, for the first turn only");
 }
 

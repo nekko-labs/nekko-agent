@@ -3621,6 +3621,7 @@ mod tests {
         assert!(text.starts_with("Fix the login form\n\n"));
         assert!(text.contains("mcp__nekko_bridge__set_chat_title"));
         assert!(text.contains("Never overwrite a user-chosen title"));
+        assert!(text.contains("2-4 word label") && text.contains("never copy the opening words"));
         assert!(text.contains("do not start another turn"));
         assert_eq!(user["content"], "Fix the login form");
         let image = json!({ "content": "Fix this", "images": ["data:image/png;base64,AAAA"] });

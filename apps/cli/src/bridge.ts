@@ -70,7 +70,7 @@ export const TITLE_TOOL = {
   description: 'Give this new chat a short 2-4 word label for what it is for, leading with an issue or PR number when the request names one. Do not copy the opening words of the request. Never overwrite a user-chosen title. This changes only the Nekko chat title, not the Claude Code session name.',
   inputSchema: {
     type: 'object',
-    properties: { title: { type: 'string', description: 'A concise title describing the user’s task.' } },
+    properties: { title: { type: 'string', description: 'A 2-4 word label for what the chat is for.' } },
     required: ['title'],
   },
 };
