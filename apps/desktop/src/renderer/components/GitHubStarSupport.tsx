@@ -19,14 +19,16 @@ export function GitHubStarSupport({ feedback = false }: { feedback?: boolean }) 
     setOpenError(false);
     try { await window.nekko.openPath(SUPPORT_REPOSITORY_URL); } catch { setOpenError(true); }
   };
+  // In Settings it is a section like its neighbours: 40 above it and the 16/600 section heading (#2624).
+  const Heading = feedback ? 'h3' : 'h2';
   return (
-    <section className="min-w-0" data-testid="github-star-support">
+    <section className={feedback ? 'min-w-0' : 'settings-section min-w-0'} data-testid="github-star-support">
       <div className="flex flex-wrap items-center gap-3">
         <span className={celebrating ? 'support-star-celebrate' : ''} data-testid="support-star-mascot">
           {starred ? <StarryNekko size={36} /> : <StarIcon className="h-6 w-6 text-ink-soft" />}
         </span>
         <div className="min-w-0 flex-1 basis-48">
-          <h3 className="text-sm font-semibold text-ink">{feedback ? 'Give us a GitHub star!' : 'Support by starring the project on GitHub'}</h3>
+          <Heading className={`${feedback ? 'text-sm' : 'text-base'} font-semibold text-ink`}>{feedback ? 'Give us a GitHub star!' : 'Support by starring the project on GitHub'}</Heading>
           <p className="mt-(--q-tight) text-xs text-ink-faint" role="status">
             {busy ? 'Checking with GitHub…' : starred ? `Thank you, @${status.login}! Nekko is happy you’re here.`
               : status?.state === 'not-starred' ? `Star as @${status.login}. It helps more people find Nekko Agent.`
