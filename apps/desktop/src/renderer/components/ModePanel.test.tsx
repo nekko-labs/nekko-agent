@@ -6,6 +6,7 @@ import { STARTER_MODES } from '@nekko-agent/shared';
 import { CODE_MODE_DOCS, ModePanel, ToolApproachPicker, chatModeState, modeButtonLabel, modePanelActions } from './ModePanel.js';
 
 const store = vi.hoisted(() => ({
+  providers: undefined as undefined | { id: string; kind: string; name: string }[],
   settings: { defaultChatMode: 'guardrails', gitManagement: { mode: 'worktree' }, effort: 'normal', workspaces: [{ id: 'w1', name: 'agent-nekko', path: '/code/agent-nekko', addedAt: 1 }], mcpServers: [] } as Record<string, any>,
   refreshSettings: vi.fn(async () => {}),
   pushToast: vi.fn(),
@@ -64,22 +65,31 @@ describe('Mode panel markup', () => {
     store.settings = { ...store.settings, mcpServers: [], connectors: [] };
   });
   it('offers code mode beside the tool list, marked new, with a link to what it is', () => {
-    const out = renderToStaticMarkup(<ToolApproachPicker approach="list" sandbox={false} onPick={() => {}} />);
+    const out = renderToStaticMarkup(<ToolApproachPicker approach="list" onPick={() => {}} />);
     expect(out).toMatch(/role="radio" aria-checked="true"[^>]*data-tool-approach="list"/);
     expect(out).toMatch(/role="radio" aria-checked="false"[^>]*data-tool-approach="code"/);
     expect(out).toContain('Code mode<span class="mode-badge is-accent">New</span>');
     expect(out).toContain(`href="${CODE_MODE_DOCS}"`);
     // The link sits beside the options, never inside a radio button.
     expect(out).not.toMatch(/<button[^>]*>(?:(?!<\/button>).)*<a /s);
-    const sandboxed = renderToStaticMarkup(<ToolApproachPicker approach="list" sandbox onPick={() => {}} />);
+    const sandboxed = renderToStaticMarkup(<ToolApproachPicker approach="list" locked="sandbox" onPick={() => {}} />);
     expect(sandboxed.match(/disabled=""/g)).toHaveLength(2);
     expect(sandboxed).toContain('Sandbox chats use the tool list');
+    const claude = renderToStaticMarkup(<ToolApproachPicker approach="list" locked="claude-agent" onPick={() => {}} />);
+    expect(claude.match(/disabled=""/g)).toHaveLength(2);
+    expect(claude).toContain("Claude Agent chats run Claude Code&#x27;s own tools");
   });
   it('says on the Tools row when the chat is in code mode', () => {
     session = { ...base, toolApproach: 'code' } as Session;
     expect(html()).toContain('0 of 0 on · code mode');
     session = { ...base, toolApproach: 'code', executionMode: 'sandbox' } as Session;
     expect(html()).not.toContain('on · code mode');
+  });
+  it('never shows code mode as on for a Claude Agent chat, which the engine runs with a tool list', () => {
+    store.providers = [{ id: 'cc', kind: 'claude-code', name: 'Claude' }];
+    session = { ...base, toolApproach: 'code', providerId: 'cc' } as Session;
+    expect(html()).not.toContain('on · code mode');
+    store.providers = undefined;
   });
   it('leaves model and effort controls to the composer', () => {
     session = { ...base, effort: 'low' } as Session;
