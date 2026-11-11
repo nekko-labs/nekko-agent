@@ -33,10 +33,31 @@ enum ThemeIcons {
     }
 
     /// The icon's colour: the theme's accent (or the computer's, for that row) when it
-    /// reads on `background` at 3:1, else the theme's own page colour when that does
-    /// (a dark theme's light accent on a light phone), else nil for the caller's ink.
+    /// reads on `background` at 3:1. A pale accent on a light phone (or a deep one on a
+    /// dark phone) gives way to the theme's own page colour when that is a colour of its
+    /// own (Blueberry Dark's navy), else to the accent deepened toward black (or lightened
+    /// toward white) until it reads, keeping its hue as the desktop's light accents do.
+    /// Nil leaves the caller's ink. Same rule as ThemeIcons.kt.
     static func tint(_ preset: ThemePreset?, accent: Int? = nil, on background: Int) -> Int? {
-        [accent ?? preset?.accent, preset?.paper].compactMap { $0 }.first { Palette.contrast($0, background) >= 3 }
+        guard let a = accent ?? preset?.accent else { return nil }
+        if Palette.contrast(a, background) >= 3 { return a }
+        if let paper = preset?.paper, chromatic(paper), Palette.contrast(paper, background) >= 3 { return paper }
+        let toward = Palette.luminance(background) > 0.5 ? 0x000000 : 0xFFFFFF
+        return (1...10).lazy.map { mix(a, toward, Double($0) / 10) }.first { Palette.contrast($0, background) >= 3 }
+    }
+
+    /// A colour rather than a near-black or near-white: its channels spread at least 0x30.
+    static func chromatic(_ rgb: Int) -> Bool {
+        let ch = [rgb >> 16 & 0xff, rgb >> 8 & 0xff, rgb & 0xff]
+        return ch.max()! - ch.min()! >= 0x30
+    }
+
+    /// Straight sRGB blend, as Android does it.
+    static func mix(_ a: Int, _ b: Int, _ f: Double) -> Int {
+        [16, 8, 0].reduce(0) { out, shift in
+            let x = Double(a >> shift & 0xff), y = Double(b >> shift & 0xff)
+            return out | Int((x + (y - x) * f).rounded()) << shift
+        }
     }
 }
 
