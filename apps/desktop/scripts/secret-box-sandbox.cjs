@@ -19,13 +19,13 @@ const js = v => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.c
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
-  const win = new BrowserWindow({ title: 'Nekko secret box verification (isolated)', width: 1100, height: 820, useContentSize: true, show: false, focusable: false, skipTaskbar: true, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
+  const win = new BrowserWindow({ title: 'Nekko secret box verification (isolated)', width: 1100, height: 820, useContentSize: true, show: false, focusable: false, skipTaskbar: true, x: -5000, y: -5000, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false, offscreen: true } });
   win.on('focus', () => report.errors.push('Window took focus'));
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message); });
   const run = s => win.webContents.executeJavaScript(s, true);
   const check = async (name, expression) => { const value = await run(expression); report.checks.push({ name, value }); if (!baseline && !value) throw Error(name); };
   const frames = [];
-  const shot = async name => { const png = (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG(); fs.writeFileSync(path.join(out, name + '.png'), png); report.captures.push(name + '.png'); return png; };
+  const shot = async name => { win.webContents.invalidate(); await win.capturePage(undefined, { stayHidden: true }); await sleep(120); const png = (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG(); fs.writeFileSync(path.join(out, name + '.png'), png); report.captures.push(name + '.png'); return png; };
   const cdp = async (method, params) => { if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3'); return win.webContents.debugger.sendCommand(method, params); };
   const point = async selector => run(`(() => { const e = document.querySelector(${js(selector)}); if (!e) return null; const r = e.getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }; })()`);
   const click = async selector => {
@@ -51,6 +51,7 @@ app.whenReady().then(async () => {
       if (baseline) continue;
       await check(`box shows the name ${width} ${theme}`, `!!document.querySelector('[data-secret-box]') && document.querySelector('[data-secret-box]').innerText.includes('NPM_TOKEN')`);
       await check(`field is masked ${width} ${theme}`, `document.querySelector('[data-secret-box] input').type === 'password'`);
+      report.pageText ??= await run('document.body.innerText.slice(0, 1500)');
       await check(`status says what it waits for ${width} ${theme}`, `document.body.innerText.includes('Waiting for NPM_TOKEN')`);
       await check(`no horizontal overflow ${width} ${theme}`, `(() => { const r = document.querySelector('[data-secret-box]').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; })()`);
       // Type the value as a user would (renderer input, not OS input).
