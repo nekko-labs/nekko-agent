@@ -167,7 +167,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > The iPhone app has the desktop's themes too: **Settings → Appearance → Theme** offers **Match my
 > computer** (the computer's preset, mode and accent), **Match this iPhone**, **Light**, **Dark** and
-> every desktop preset (Nebula, Terminal, Nord, Solar, Lilac, Lavender, Ember, Spooky and the
+> every desktop preset (Nebula, Terminal, Nord, Solar, Lilac, Lavender, Ember, Spooky, Winter and the
 > experimental families). In October, **Spooky** also switches the app icon to a limited fall
 > version; iOS confirms the change, and the usual icon comes back with any other theme or after
 > Halloween. The iPhone app speaks the desktop's languages (English, Spanish, French, German,
@@ -279,9 +279,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > The iPhone message box writes Markdown: what you type is what is sent, shown with light styling
 > (bold looks bold with its `**` dimmed, headings larger, list markers tinted). While it has the
-> keyboard, a formatting bar sits inside the box above the text: bold, italic, strikethrough, inline
+> keyboard, a formatting bar rides above the keyboard: bold, italic, strikethrough, inline
 > code, link, heading, bulleted, numbered and task lists, indent and outdent, quote, code block and
-> table. **Aa** hides or shows the bar, and the choice is kept. Return continues a list (the next
+> table. A single **Hide keyboard** button at its trailing edge dismisses the keyboard without
+> sending or changing your draft. **Aa** hides or shows formatting, and the choice is kept. Return continues a list (the next
 > number, an empty task box) and ends it on an empty item; inside a table the bar adds **+ Row** and
 > **+ Column**, and Tab moves to the next cell. A normal paste stays plain text; after pasting rich
 > text (from Safari, Notes, Mail or Docs) a chip offers **Use formatting** for a few seconds. Touch
@@ -492,7 +493,8 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >   **This iPhone** for chats that run on the phone. Within each, **Subscriptions** (each plan with
 >   its limit bars, and the models that bill to it) come before **API** (pay-per-token models with
 >   their estimated spend). This iPhone counts tokens only, from each provider's replies, and keeps
->   that count on the phone.
+>   that count on the phone. Android shows the same, with **This phone** for its own chats; recent
+>   days are folded under each place until you tap them.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
@@ -956,3 +958,7 @@ background.
 ### Card details
 
 View options → Card details lets you independently hide model, context window, PRs and update time on iOS and Android. Choices persist on the phone. Empty groups default off; explicit saved choices are preserved. Context uses reported summary counts and never invents an unknown window size. iOS groups are separator-free and use desktop-style chevrons, activity motifs and count capsules.
+
+### Seasonal phone decorations
+
+Choose **Winter** in either native phone app's theme picker for gentle snowflakes and Nekko's cat-ear beanie. **Spooky** gives the chat mascot a wizard hat. Matching your computer also follows its seasonal preset. Switching to another theme removes the decorations. Snow stays still when the phone's Reduce Motion / Remove animations setting is on, and pauses when the app is inactive. The decorations do not change the mascot's greeting or Refresh actions. Winter launcher icons remain planned separately. Native visual verification is pending for this implementation.

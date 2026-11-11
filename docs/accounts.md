@@ -64,7 +64,9 @@ CLAUDE_CONFIG_DIR=~/.claude-work claude
 
 ### Personal and work subscriptions under the same email
 
-Use **+ Another subscription account** and name it `Work`, then sign in through Claude Code and choose your organization in Anthropic's browser flow when offered. Your personal login stays in its own profile. Nekko distinguishes accounts by email **and organization**, not just email, and the model picker shows both as tabs under **Claude** (for example **Personal · Max** and **Acme Inc · Team**), one click apart.
+On the Models page, your Claude login shows as one connection: your email, with each account on it underneath (for example **Personal** · Personal plan · Max, and **Acme Inc** · Organization · Team). To add the other one, choose **+ Add another account on this login** under your email. Claude Code's sign-in opens in your browser; sign in with the same email and pick the other account when Anthropic asks which one to use. Nekko checks it is not an account you already connected, then adds it. You never name a folder: the account names itself from the sign-in.
+
+Nekko distinguishes accounts by email **and organization**, not just email. The model picker shows each as a tab under **Claude** (**Personal · Max**, **Acme Inc · Team**), one click apart, with the account's email and whether it is your personal plan or the organization under the tabs. On iPhone and Android each account is its own group in the model list. Each account keeps its own usage limits and usage totals.
 
 One sign-in does **not** automatically populate every organization associated with your email. Claude Code documents separate configuration directories for simultaneous personal/work logins, not an API to enumerate every membership. Organization policies and Claude Code entitlement still apply. See the [investigation and verification limits](claude-account-selection.md).
 

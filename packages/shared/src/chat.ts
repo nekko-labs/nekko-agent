@@ -43,6 +43,10 @@ export interface AgentWatchView {
   lastError?: string;
   /** Armed by Nekko itself on a PR the chat opened (Settings > Pull requests), not by the agent. */
   auto?: boolean;
+  /** PR watch: the checks as last polled. Progress the host records without waking the chat. */
+  checks?: 'passing' | 'failing' | 'pending' | 'none';
+  /** PR watch: the PR's state as last polled (`open`, `merged`, `closed`). */
+  prState?: string;
 }
 
 export interface ChatMessage {
@@ -311,6 +315,12 @@ export interface Session {
    * chat's alias) to. Trusted only while the chat's `modelId` still matches.
    */
   claudeCodeContext?: ClaudeCodeContext;
+  /**
+   * The attached files a Claude Agent chat's Claude Code session has already
+   * been given, so each goes once per session. Set by nekkod; cleared when
+   * Claude Code compacts, so they are given again.
+   */
+  claudeCodeAttached?: { session: string; paths: string[] };
   messages: ChatMessage[];
   contextPrefs?: ContextPrefs;
   /** Files explicitly attached to this chat's context (absolute paths). */

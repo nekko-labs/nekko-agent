@@ -44,6 +44,15 @@ describe('composerDrafts', () => {
     expect(loadDraft('a')?.images).toEqual(['img']);
   });
 
+  it('keeps files attached since the last send, and forgets them once sent', () => {
+    saveDraft('a', { text: '', images: [], paths: ['/tmp/notes.txt'] });
+    expect(loadDraft('a')?.paths).toEqual(['/tmp/notes.txt']);
+    saveDraft('a', { text: 'hi', images: [] });
+    expect(loadDraft('a')?.paths).toEqual([]);
+    clearDraft('a');
+    expect(loadDraft('a')).toBeNull();
+  });
+
   it('evicts other chats oldest-first when storage is full', () => {
     storage.limit = 400;
     saveDraft('old', { text: 'x'.repeat(120), images: [] });

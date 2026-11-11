@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { ImageView, RunnerView } from '@nekko-agent/shared';
+import { runnerOptions, type ImageView, type RunnerHost, type RunnerOption, type RunnerView } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
-import { EmptyHint } from '../components/primitives/index.js';
 import { RunnerCard } from '../components/RunnerCard.js';
 import { ConnectRunnerSheet } from '../components/ConnectRunnerSheet.js';
 import { RunnerSettingsSheet } from '../components/RunnerSettingsSheet.js';
@@ -9,6 +8,7 @@ import { MacSetupSheet } from '../components/MacSetupSheet.js';
 import { connectToWorkflow } from '../components/RunnerReady.js';
 import { GithubStepArt, MacStepArt } from '../components/RunnerStepArt.js';
 import { CheckIcon, PlugIcon } from '../icons.js';
+import { Group, Row, StatusDot } from '../components/primitives/index.js';
 
 export type RunnersState = { kind: 'loading' } | { kind: 'unavailable'; message: string } | { kind: 'ready'; views: RunnerView[] };
 
@@ -49,20 +49,58 @@ export function CiRunnersFirstVisit({ connected = false, canResume = false, onCo
   );
 }
 
+/**
+ * Every runner kind, judged for the computer this page talks to: what it can
+ * run says what it runs; what it cannot is greyed with the reason.
+ */
+export function RunnerOptions({ options }: { options: readonly RunnerOption[] }) {
+  return (
+    <Group title="What this computer can run" className="mt-2 max-w-170" data-runner-options>
+      {options.map((o) => (
+        <Row
+          key={o.kind}
+          title={o.title}
+          detail={o.detail}
+          disabled={!o.available}
+          aria-disabled={o.available ? undefined : true}
+          data-runner-option={o.kind}
+          data-available={o.available}
+          meta={o.available ? <span className="flex items-center gap-1 text-ink-soft"><StatusDot tone="success" />Available</span> : undefined}
+        />
+      ))}
+    </Group>
+  );
+}
+
+/** On a computer that cannot host a runner yet: the options, then where macOS runners live, in one quiet line. */
+export function CiRunnersElsewhere({ options }: { options?: readonly RunnerOption[] }) {
+  return (
+    <div className="mt-2 flex flex-col gap-2" data-ci-runners-elsewhere>
+      {options && <RunnerOptions options={options} />}
+      <p className="text-xs text-ink-faint">For macOS jobs, open Nekko Agent on a Mac with Apple silicon and go to Scheduled Tasks, CI runners.</p>
+    </div>
+  );
+}
+
 /** The section body for each load state; pure so tests can render it without effects. */
 export function runnersBody(
   state: RunnersState,
-  { now, image = null, onConnect, onSettings, onSetup, onAddTools, beginReply }: { now: number; image?: ImageView | null; onConnect(): void; onSettings(id: string): void; onSetup?(id: string): void; onAddTools?(v: RunnerView): Promise<void>; beginReply(): (v: RunnerView) => void },
+  { now, image = null, host, onConnect, onSettings, onSetup, onAddTools, beginReply }: { now: number; image?: ImageView | null; host?: RunnerHost | null; onConnect(): void; onSettings(id: string): void; onSetup?(id: string): void; onAddTools?(v: RunnerView): Promise<void>; beginReply(): (v: RunnerView) => void },
 ): React.ReactNode {
   if (state.kind === 'loading') return null;
   if (state.kind === 'unavailable') {
-    // A daemon without runners (not macOS, or older) answers "unknown channel runner:list".
-    const text = state.message.startsWith('unknown channel')
-      ? "CI runners aren't available here. They need a Mac with Apple silicon and an up-to-date Nekko service."
-      : `CI runners aren't available here: ${state.message}`;
-    return <EmptyHint className="mt-4">{text}</EmptyHint>;
+    // A daemon without runners (Windows, Linux, or an older Mac service) answers "unknown channel runner:list".
+    if (state.message.startsWith('unknown channel')) return <CiRunnersElsewhere options={host === undefined ? undefined : runnerOptions(host, false)} />;
+    return <p className="mt-2 text-sm text-ink-soft">{`CI runners aren't available here: ${state.message}`}</p>;
   }
-  if (!state.views.length) return <CiRunnersFirstVisit onConnect={onConnect} />;
+  if (!state.views.length) {
+    return (
+      <>
+        {host !== undefined && <RunnerOptions options={runnerOptions(host, true)} />}
+        <CiRunnersFirstVisit onConnect={onConnect} />
+      </>
+    );
+  }
   const first = state.views[0].config.id;
   return (
     <>
@@ -145,6 +183,14 @@ export function CiRunnersView({ now = nowSecs, panel = false }: { now?: () => nu
   const [settingsFor, setSettingsFor] = useState<string | null>(null);
   const [setup, setSetup] = useState<{ id: string; rebuild: boolean } | null>(null);
   const [image, setImage] = useState<ImageView | null>(null);
+  // The connected computer's own platform, so a phone or browser viewing a PC gets the PC's options. Undefined while asked; null when unknown.
+  const [host, setHost] = useState<RunnerHost | null | undefined>(undefined);
+  useEffect(() => {
+    if (panel) return;
+    let live = true;
+    void window.nekko.machineProfile().then((p) => { if (live) setHost(p ? { platform: p.platform, arch: p.arch } : null); }, () => { if (live) setHost(null); });
+    return () => { live = false; };
+  }, [panel]);
 
   const pushes = useRef(0);
   useEffect(() => {
@@ -207,8 +253,9 @@ export function CiRunnersView({ now = nowSecs, panel = false }: { now?: () => nu
   const settingsView = state.kind === 'ready' ? state.views.find((v) => v.config.id === settingsFor) : undefined;
   const setupView = state.kind === 'ready' ? state.views.find((v) => v.config.id === setup?.id) : undefined;
 
-  // A daemon with no runner channel is not a Mac that can host one: leave the section out rather than explain it in every list.
-  if (state.kind === 'unavailable' && state.message.startsWith('unknown channel')) return null;
+  // A daemon with no runner channel is not a Mac that can host one. The Automations panel leaves the section out;
+  // the CI runners page says where runners live instead, so it never looks gone.
+  if (panel && state.kind === 'unavailable' && state.message.startsWith('unknown channel')) return null;
 
   return (
     <section ref={section} tabIndex={-1} data-ci-runners className={panel ? 'mb-3 shrink-0' : undefined}>
@@ -229,6 +276,7 @@ export function CiRunnersView({ now = nowSecs, panel = false }: { now?: () => nu
         : runnersBody(state, {
         now: clock,
         image,
+        host,
         onConnect: () => setConnecting(true),
         onSettings: setSettingsFor,
         onSetup: (id) => setSetup({ id, rebuild: false }),

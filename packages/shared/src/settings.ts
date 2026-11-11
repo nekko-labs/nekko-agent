@@ -576,6 +576,18 @@ export interface AvoidedCosts {
   benchmarkTokens: number;
 }
 
+/** Tokens and spend of one slice of usage. `input` is new input, apart from cache reads and writes. */
+export interface UsageSlice { input: number; cacheRead: number; cacheWrite: number; output: number; cost: number; listCost: number }
+
+/**
+ * Where a day's usage came from (#2494), from records that say so (new ones;
+ * older records count in the day's totals only): a turn the person sent
+ * (`user`) or one that started on its own (`background`: a watch, an
+ * automation, an automatic continue), and the chat's own turns (`parent`)
+ * or a sub-agent's (`subagent`). Each pair covers the same records.
+ */
+export interface UsageAttribution { user: UsageSlice; background: UsageSlice; parent: UsageSlice; subagent: UsageSlice }
+
 export interface UsageSummary {
   avoidedCosts?: AvoidedCosts;
   bySessionAvoidedCosts?: Record<string, AvoidedCosts>;
@@ -611,6 +623,8 @@ export interface UsageSummary {
     localTokens?: number;
     avoidedCosts?: AvoidedCosts;
     modelIds?: string[];
+    /** Absent on a day with no attributed records. */
+    attribution?: UsageAttribution;
   }>;
   /** True if any recorded usage came from a subscription provider. */
   hasSubscriptionUsage?: boolean;

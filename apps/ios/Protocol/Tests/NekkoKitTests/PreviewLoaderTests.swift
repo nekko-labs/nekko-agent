@@ -2,6 +2,8 @@ import XCTest
 @testable import NekkoKit
 import NekkoProtocol
 
+private final class ThumbnailResult { var value = 0 }
+
 @MainActor
 final class PreviewLoaderTests: XCTestCase {
     /// How many loads run at once, and the most that ever did.
@@ -89,6 +91,28 @@ final class PreviewLoaderTests: XCTestCase {
         _ = try await loader.artifact("s", "/b.txt")
         XCTAssertNil(loader.cached(artifact: "s", "/a.txt"), "the oldest is dropped")
         XCTAssertNotNil(loader.cached(artifact: "s", "/b.txt"))
+    }
+
+    func testThumbnailSlotKeepsNonSendableResultOnMainActor() async {
+        let loader = PreviewLoader(read: { _ in .null }, thumbnailSlots: 1)
+        let value = ThumbnailResult()
+        let result = await loader.withThumbnailSlot {
+            MainActor.assertIsolated()
+            await Task.yield()
+            return value
+        }
+        XCTAssertTrue(result === value)
+    }
+
+    func testThumbnailSlotIsReleasedAfterThrowing() async {
+        let loader = PreviewLoader(read: { _ in .null }, thumbnailSlots: 1)
+        do {
+            try await loader.withThumbnailSlot { throw RelayError("read failed") }
+            XCTFail("expected the read error")
+        } catch {
+            let result = await loader.withThumbnailSlot { 42 }
+            XCTAssertEqual(result, 42)
+        }
     }
 
     func testThumbnailSlotsLimitConcurrentLoads() async {

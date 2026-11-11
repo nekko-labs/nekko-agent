@@ -111,7 +111,62 @@ impl<T: Default> Ordered<T> {
     }
 }
 
+/// Tokens and spend of one slice of usage (#2494).
+#[derive(Default, Clone, Copy)]
+struct Slice {
+    input: f64,
+    cache_read: f64,
+    cache_write: f64,
+    output: f64,
+    cost: f64,
+    list_cost: f64,
+}
+
+impl Slice {
+    fn add(&mut self, input: f64, cache_read: f64, cache_write: f64, output: f64, cost: f64, list_cost: f64) {
+        self.input += input;
+        self.cache_read += cache_read;
+        self.cache_write += cache_write;
+        self.output += output;
+        self.cost += cost;
+        self.list_cost += list_cost;
+    }
+    fn value(&self) -> Value {
+        json!({
+            "input": num(self.input),
+            "cacheRead": num(self.cache_read),
+            "cacheWrite": num(self.cache_write),
+            "output": num(self.output),
+            "cost": num(self.cost),
+            "listCost": num(self.list_cost),
+        })
+    }
+}
+
+/// Where a day's attributed usage came from: records that carry an `origin`
+/// (new ones); older records count in the totals only. `input` is new input,
+/// apart from cache reads and writes.
+#[derive(Default, Clone, Copy)]
+struct Attribution {
+    user: Slice,
+    background: Slice,
+    parent: Slice,
+    subagent: Slice,
+}
+
+impl Attribution {
+    fn value(&self) -> Value {
+        json!({
+            "user": self.user.value(),
+            "background": self.background.value(),
+            "parent": self.parent.value(),
+            "subagent": self.subagent.value(),
+        })
+    }
+}
+
 struct Daily {
+    attribution: Option<Attribution>,
     input: f64,
     output: f64,
     cost: f64,
@@ -124,6 +179,7 @@ struct Daily {
 impl Default for Daily {
     fn default() -> Self {
         Self {
+            attribution: None,
             input: 0.0,
             output: 0.0,
             cost: 0.0,
@@ -263,6 +319,16 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
             d.input += total_in;
             d.output += output;
             d.cost += cost;
+            if let Some(origin) = get(&r, "origin").and_then(Value::as_str) {
+                let a = d.attribution.get_or_insert_with(Attribution::default);
+                let (read, write) = (or_zero(get(&r, "cacheReadTokens")), or_zero(get(&r, "cacheWriteTokens")));
+                let new_input = or_zero(get(&r, "inputTokens"));
+                let by_origin = if origin == "background" { &mut a.background } else { &mut a.user };
+                by_origin.add(new_input, read, write, output, cost, list_cost);
+                let sub = get(&r, "parentSessionId").is_some_and(|p| nekko_js::truthy(Some(p)));
+                let by_role = if sub { &mut a.subagent } else { &mut a.parent };
+                by_role.add(new_input, read, write, output, cost, list_cost);
+            }
         }
     }
 
@@ -295,7 +361,7 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
             days.into_iter()
                 .map(|date| {
                     let d = &daily.map[&date];
-                    json!({
+                    let mut day = json!({
                         "date": date,
                         "input": num(d.input),
                         "output": num(d.output),
@@ -304,7 +370,11 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
                         "localTokens": num(d.local_tokens),
                         "avoidedCosts": d.avoided.value(),
                         "modelIds": d.model_ids,
-                    })
+                    });
+                    if let Some(a) = &d.attribution {
+                        day["attribution"] = a.value();
+                    }
+                    day
                 })
                 .collect(),
         ),
@@ -392,4 +462,40 @@ pub fn summarize_replies(records: &[Value]) -> Result<Option<Value>, String> {
         "mostSteps": steps.last().cloned().unwrap_or(json!(0)),
         "recentStops": stops,
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn days_split_attributed_usage_by_origin_role_and_cache() {
+        let day = 1_762_732_800_000_u64; // 2025-11-10 UTC
+        let lines = [
+            // An older record: in the totals, not in the attribution.
+            json!({ "ts": day, "providerId": "a", "modelId": "m", "inputTokens": 5, "outputTokens": 5, "sessionId": "s" }),
+            json!({ "ts": day, "providerId": "a", "modelId": "m", "inputTokens": 100, "cacheReadTokens": 900, "cacheWriteTokens": 50, "outputTokens": 10, "sessionId": "s", "origin": "user" }),
+            json!({ "ts": day, "providerId": "a", "modelId": "m", "inputTokens": 20, "cacheReadTokens": 400, "outputTokens": 4, "sessionId": "s", "origin": "background" }),
+            json!({ "ts": day, "providerId": "a", "modelId": "m", "inputTokens": 30, "outputTokens": 3, "sessionId": "c", "origin": "user", "parentSessionId": "s" }),
+        ]
+        .iter()
+        .map(|l| l.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+        let s = usage_summary(&UsageFiles { settings: None, usage: Some(lines), replies: None }).unwrap();
+        let a = &s["daily"][0]["attribution"];
+        assert_eq!(a["user"]["input"], json!(130));
+        assert_eq!(a["user"]["cacheRead"], json!(900));
+        assert_eq!(a["user"]["cacheWrite"], json!(50));
+        assert_eq!(a["background"]["input"], json!(20));
+        assert_eq!(a["background"]["cacheRead"], json!(400));
+        assert_eq!(a["parent"]["input"], json!(120));
+        assert_eq!(a["subagent"]["input"], json!(30));
+        assert_eq!(a["subagent"]["output"], json!(3));
+        // Older records only: no attribution at all.
+        let old =
+            json!({ "ts": day, "providerId": "a", "modelId": "m", "inputTokens": 5, "outputTokens": 5 }).to_string();
+        let s = usage_summary(&UsageFiles { settings: None, usage: Some(old), replies: None }).unwrap();
+        assert!(s["daily"][0].get("attribution").is_none());
+    }
 }

@@ -8,6 +8,7 @@
 //! Behavior matches the TS functions exactly; `tests/golden.rs` holds these to
 //! outputs the TS functions wrote.
 
+pub mod budget;
 pub mod fit;
 pub mod history;
 pub mod progress;

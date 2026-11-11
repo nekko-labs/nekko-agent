@@ -20,7 +20,7 @@ app.whenReady().then(async () => {
   const run = s => win.webContents.executeJavaScript(s, true);
   const check = async (name, s) => { const passed = !!await run(s); report.checks.push({ name, passed }); if (!passed) throw Error(name); };
   const click = async (text, scope = 'button') => { await run(`[...document.querySelectorAll(${js(scope)})].find(e=>e.textContent.trim()===${js(text)})?.click()`); await sleep(150); };
-  const capture = async name => { const file = path.join(out, name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
+  const capture = async name => { win.webContents.invalidate(); await sleep(150); const file = path.join(out, name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
   try {
     await win.loadFile(path.join(out, 'index.html')); await sleep(700);
     for (const width of [1000, 390]) {
@@ -77,7 +77,13 @@ app.whenReady().then(async () => {
         await check(scene, scene === 'empty' ? "document.body.innerText.includes('No CI runners connected')" : scene === 'error' ? "document.body.innerText.includes('Service disconnected')" : "!document.querySelector('[data-ci-runners]')");
         if (scene === 'unsupported') {
           await run('integration.full()'); await sleep(300);
-          await check('no runner channel leaves the sub-navigation out', "!document.querySelector('[data-workflows-subnav]')");
+          await check('no runner channel keeps the sub-navigation', "!!document.querySelector('[data-workflows-subnav]')");
+          await run("[...document.querySelectorAll('[data-workflows-subnav] button')].find(b=>b.textContent.includes('CI runners')).click()"); await sleep(300);
+          await check('no runner channel explains where runners live', "!!document.querySelector('[data-ci-runners-elsewhere]') && document.body.innerText.includes('Needs a Mac with Apple silicon') && document.querySelector('[data-runner-option=macos]')?.getAttribute('aria-disabled')==='true'");
+          await capture('unsupported-ci-page-1000');
+          await run("localStorage.setItem('nekko.chatMode','simple'); integration.show('unsupported'); integration.full()"); await sleep(400);
+          await check('Simple keeps the explanation too', "!!document.querySelector('[data-workflows-subnav]')");
+          await run("localStorage.setItem('nekko.chatMode','expert'); integration.show('unsupported'); integration.full()"); await sleep(400);
         }
         await check(`${scene} subscriptions cleaned up`, 'integration.listenerCount()===1');
       }

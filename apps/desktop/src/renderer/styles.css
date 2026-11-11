@@ -368,16 +368,31 @@
   flex-shrink: 0;
 }
 
+/* Slim with a mouse or trackpad: 28px tall. A finger still gets the 44px
+   target (#2079), so the Local Web UI on a phone or a touch laptop is unchanged. */
 @utility btn {
-  @apply action-target inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
+  @apply inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-0.5 text-sm font-medium;
+  /* The height comes from here, not the padding, so an outline's border and a
+     compact call site's own padding still land on 28. */
+  min-height: 28px;
+  @media (pointer: coarse) {
+    min-width: 44px;
+    min-height: 44px;
+  }
   transition:
     transform 160ms var(--ease-out),
     background 0.12s ease,
     color 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    opacity 0.12s ease;
   /* Answer the press itself, not the release: half a pixel was below notice. */
   &:active:not(:disabled) {
     transform: scale(0.97);
+  }
+  /* A disabled button has to look it: a full accent fill read as clickable and did nothing (#2393). */
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 }
 
@@ -387,7 +402,7 @@
   background: var(--accent);
   color: var(--on-accent);
   @media (hover: hover) {
-    &:hover {
+    &:hover:not(:disabled) {
       background: color-mix(in srgb, var(--accent) 88%, var(--ink));
     }
   }
@@ -396,7 +411,7 @@
 @utility btn-ghost {
   @apply text-ink-soft;
   @media (hover: hover) {
-    &:hover {
+    &:hover:not(:disabled) {
       background: var(--surface-2);
       color: var(--ink);
     }
@@ -406,7 +421,7 @@
 @utility btn-outline {
   @apply border border-line text-ink;
   @media (hover: hover) {
-    &:hover {
+    &:hover:not(:disabled) {
       background: var(--surface-2);
       border-color: color-mix(in srgb, var(--ink-faint) 40%, var(--line));
     }
@@ -4322,12 +4337,26 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 
 /* One Models workspace, quiet navigation and compact provider actions. */
 .models-add-provider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: 12px 16px 64px; }
+.models-layout { display: flex; gap: 40px; width: 100%; max-width: 112rem; height: 100%; min-height: 0; margin-inline: auto; padding-inline: clamp(20px, 4vw, 80px); }
+.models-rail { flex: 0 0 192px; align-self: center; max-height: calc(100% - 40px); overflow-y: auto; }
+.models-rail .view-title { margin-bottom: 20px; }
+.models-navigation { display: flex; flex-direction: column; gap: 8px; }
+.models-navigation .settings-nav-item { min-height: 40px; font-size: var(--text-sm); }
+.models-navigation .models-nav-main + .models-nav-main { margin-top: 20px; }
+.models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: 20px 0 64px; }
+.models-layout .models-section { max-width: none; }
 /* The biggest heading in its section: titles nested below step down a size. */
 .models-section-heading { display: flex; align-items: center; gap: 8px; font-size: var(--text-2xl); font-weight: 600; margin-bottom: 16px; }
 .models-section h1:not(.view-title) { font-size: var(--text-xl); }
 .models-section-title { font-size: var(--text-sm); font-weight: 600; margin-bottom: 12px; }
-.models-providers { overflow-anchor: none; }
+.models-providers { overflow-anchor: none; container-type: inline-size; }
+.provider-families { display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; align-items: start; }
+@container (min-width: 880px) { .provider-families { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 1320px) {
+  .provider-families { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .provider-families:has(> :last-child:nth-child(2)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.provider-families:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
 .models-provider-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-bottom: 24px; }
 .models-add-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .models-add-provider { position: relative; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: white; }
@@ -4338,21 +4367,29 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-add-more { background: var(--surface-2); color: var(--ink-soft); font-size: var(--text-2xl); letter-spacing: 1px; }
 .models-provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; max-width: 1800px; }
 .models-provider-grid > div { min-width: 0; scroll-margin-top: 20px; }
-.models-local-connections { margin-top: 36px; }
+.models-local-connections { margin-top: 64px; }
 .models-section { min-width: 0; }
 /* Cloud on top, Local below, on one page; the side menu jumps to each and to Local's own sections. */
 [data-models-section] { scroll-margin-top: 12px; }
 .models-section-local { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
-/* Local's own entries hang off a tree line under its icon, their labels in line with its label; the line lights beside the current one. */
-.settings-nav .models-nav-sub { position: relative; margin-left: 15px; width: calc(100% - 15px); padding-left: 17px; border-radius: 0 var(--radius-lg) var(--radius-lg) 0; font-size: var(--text-sm); color: var(--ink-soft); }
-.models-nav-sub::before { content: ''; position: absolute; left: 0; top: -2px; bottom: 0; width: 1px; background: var(--line); }
-.models-nav-sub[aria-current] { color: var(--ink); }
-.models-nav-sub[aria-current]::before { top: 0; width: 2px; background: var(--accent); }
+/* Local's destinations are separate, comfortably spaced targets, not a ruled tree. */
+.models-navigation .models-nav-sub { margin-left: 24px; width: calc(100% - 24px); color: var(--ink-soft); }
+.models-navigation .models-nav-sub + .models-nav-sub { margin-top: 12px; }
+.models-navigation .models-nav-sub[aria-current] { color: var(--ink); }
+@media (max-width: 1000px) {
+  .models-layout { flex-direction: column; gap: 20px; padding-inline: 20px; }
+  .models-rail { flex: none; align-self: stretch; max-height: 40%; padding-top: 12px; }
+  .models-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+  .models-navigation .settings-nav-item { width: 100%; }
+  .models-navigation .models-nav-main + .models-nav-main { margin-top: 0; }
+  .models-navigation .models-nav-sub { margin: 0; width: 100%; }
+  .models-navigation .models-nav-sub + .models-nav-sub { margin-top: 0; }
+  .models-workspace { height: auto; min-height: 0; padding: 0 0 48px; }
+}
 @media (max-width: 767px) {
-  .models-workspace { padding: 16px 16px 48px; }
-  .models-section-local { margin-top: 28px; }
-  .settings-nav .models-nav-sub { margin-left: 0; width: auto; padding-left: 12px; }
-  .models-nav-sub::before { top: 6px; bottom: 6px; }
+  .models-layout { padding-inline: 16px; }
+  .models-section-local { margin-top: 40px; }
+  .models-local-connections { margin-top: 40px; }
   .models-provider-bar { gap: 12px; }
   .models-add-provider { width: 36px; height: 36px; border-radius: 10px; }
 }

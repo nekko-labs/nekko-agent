@@ -106,11 +106,33 @@ describe('CI runners section', () => {
   it('shows_a_sentence_when_runners_are_unavailable', () => {
     const html = renderToStaticMarkup(<>{runnersBody({ kind: 'unavailable', message: 'unknown channel runner:list' }, { now: 0, onConnect() {}, onSettings() {}, beginReply: () => () => {} })}</>);
     // The daemon's own words for a missing channel are not a sentence: say what it needs instead.
-    expect(html).toContain('CI runners aren&#x27;t available here. They need a Mac with Apple silicon and an up-to-date Nekko service.');
+    expect(html).toContain('open Nekko Agent on a Mac with Apple silicon');
+    // The computer is not known yet, so no option is judged.
+    expect(html).not.toContain('data-runner-options');
+    expect(html).toContain('data-ci-runners-elsewhere');
+    expect(html).not.toContain('border-dashed');
     expect(html).not.toContain('unknown channel');
     expect(html).not.toContain('aria-busy="true"');
     const other = renderToStaticMarkup(<>{runnersBody({ kind: 'unavailable', message: 'The Nekko service is not running.' }, { now: 0, onConnect() {}, onSettings() {}, beginReply: () => () => {} })}</>);
     expect(other).toContain('CI runners aren&#x27;t available here: The Nekko service is not running.');
+  });
+
+  it('a_windows_pc_lists_every_option_with_macos_disabled', () => {
+    const html = renderToStaticMarkup(<>{runnersBody({ kind: 'unavailable', message: 'unknown channel runner:list' }, { now: 0, host: { platform: 'win32', arch: 'x64' }, onConnect() {}, onSettings() {}, beginReply: () => () => {} })}</>);
+    expect(html).toContain('What this computer can run');
+    for (const k of ['macos', 'linux', 'windows']) expect(html).toMatch(new RegExp(`aria-disabled="true" data-runner-option="${k}"`));
+    expect(html).toContain('Needs a Mac with Apple silicon');
+    expect(html).toContain('Coming to Windows PCs');
+    expect(html).not.toContain('Available');
+  });
+
+  it('an_apple_silicon_mac_with_no_runner_offers_macos_and_linux_above_the_steps', () => {
+    const html = renderToStaticMarkup(<>{runnersBody({ kind: 'ready', views: [] }, { now: 0, host: { platform: 'darwin', arch: 'arm64' }, onConnect() {}, onSettings() {}, beginReply: () => () => {} })}</>);
+    expect(html).toMatch(/data-runner-option="macos" data-available="true"/);
+    expect(html).toMatch(/data-runner-option="linux" data-available="true"/);
+    expect(html).toMatch(/aria-disabled="true" data-runner-option="windows"/);
+    expect(html).toContain('Needs a Windows PC');
+    expect(html.indexOf('data-runner-options')).toBeLessThan(html.indexOf('STEP 1'));
   });
 
   it('a late list never overwrites a push', () => {

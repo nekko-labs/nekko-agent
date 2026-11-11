@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClaudeCodeStatus, ProviderConfig } from '@nekko-agent/shared';
-import { accountFamilies, accountIdentity, disambiguate, familyOf, identityLine, sharedEmail } from './providerAccounts.js';
+import { accountFamilies, accountIdentity, accountScopeLine, disambiguate, familyOf, identityLine, loginEntries, sharedEmail } from './providerAccounts.js';
 
 const p = (id: string, kind: ProviderConfig['kind'], label: string, extra: Partial<ProviderConfig> = {}): ProviderConfig => ({ id, kind, label, baseUrl: '', enabled: true, ...extra });
 const plan = (subscriptionType: string, orgName?: string): ClaudeCodeStatus => ({
@@ -71,5 +71,42 @@ describe('account identity', () => {
     expect(sharedEmail([{ name: 'a', email: 'x@e.test' }, { name: 'Production', hint: 'API' }])).toBe('x@e.test');
     expect(sharedEmail([{ name: 'a', email: 'x@e.test' }, { name: 'b', email: 'y@e.test' }])).toBeUndefined();
     expect(sharedEmail([{ name: 'a' }, { name: 'b' }])).toBeUndefined();
+  });
+});
+
+describe('one login, one connection', () => {
+  const personal = p('personal', 'claude-code', 'Claude subscription', { account: { signedIn: true, email: 'philip@example.test', scope: 'personal', name: 'Personal', plan: 'max', orgId: 'o1' } });
+  const org = p('org', 'claude-code', 'Claude subscription · account-2', { claudeCode: { account: 'account-2' }, account: { signedIn: true, email: 'Philip@Example.test', scope: 'organization', name: 'Nekko Labs', plan: 'team', orgId: 'o2' } });
+  const key = p('key', 'anthropic', 'Production', { apiKey: 'sk-x' });
+  const out = p('out', 'claude-code', 'Claude subscription · old', { claudeCode: { account: 'old' }, account: { signedIn: false } });
+
+  it('names an account from the identity providers:list carries, before any status read', () => {
+    expect(accountIdentity(personal)).toMatchObject({ name: 'Personal', hint: 'Max', email: 'philip@example.test', organization: false });
+    expect(accountIdentity(org)).toMatchObject({ name: 'Nekko Labs', hint: 'Team', organization: true });
+    expect(accountIdentity(out)).toMatchObject({ signedOut: true });
+  });
+
+  it('says which account on the login it is', () => {
+    expect(accountScopeLine(accountIdentity(personal))).toBe('Personal plan · Max');
+    expect(accountScopeLine(accountIdentity(org))).toBe('Organization · Team');
+    expect(accountScopeLine(accountIdentity(key))).toBe('');
+  });
+
+  it('groups the accounts of one email under that login, case-insensitively; keys and signed-out logins stand alone', () => {
+    const providers = [personal, key, org, out];
+    const ids = Object.fromEntries(providers.map((x) => [x.id, accountIdentity(x)]));
+    expect(loginEntries(providers, ids).map((e) => (e.kind === 'login' ? ['login', e.email, e.providers.map((x) => x.id)] : ['account', e.provider.id]))).toEqual([
+      ['login', 'philip@example.test', ['personal', 'org']],
+      ['account', 'key'],
+      ['account', 'out'],
+    ]);
+  });
+});
+
+describe('an organization seat whose plan Claude Code did not print', () => {
+  it('still reads as the organization, without inventing a plan', () => {
+    const seat = p('s', 'claude-code', 'Claude subscription', { account: { signedIn: true, email: 'a@b.test', scope: 'organization', name: 'Nekko Labs' } });
+    expect(accountIdentity(seat)).toMatchObject({ name: 'Nekko Labs', organization: true, hint: undefined });
+    expect(accountScopeLine(accountIdentity(seat))).toBe('Organization');
   });
 });

@@ -15,7 +15,21 @@ app.whenReady().then(async () => {
   win.on('focus', () => report.errors.push('took focus'));
   const run = s => win.webContents.executeJavaScript(s, true);
   const check = (key, passed) => { report.checks[key] = passed; if (!passed) throw Error(key); };
-  const shot = async name => { fs.writeFileSync(path.join(out, `${name}.png`), (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(name); };
+  // A hidden window paints only when asked. CDP's capture renders a fresh frame where
+  // capturePage can return a stale one, but it can also wait forever for that frame
+  // (mid-press, after a scroll), so it gets 5s before the window capture takes over.
+  const shot = async name => {
+    const dbg = win.webContents.debugger, attached = dbg.isAttached();
+    if (!attached) dbg.attach('1.3');
+    let timer;
+    const cdp = dbg.sendCommand('Page.captureScreenshot', { format: 'png' }).then(r => Buffer.from(r.data, 'base64'));
+    const png = await Promise.race([cdp, new Promise(r => { timer = setTimeout(() => r(null), 5000); })]).catch(() => null);
+    clearTimeout(timer);
+    if (!attached) dbg.detach();
+    win.webContents.invalidate(); await sleep(150);
+    fs.writeFileSync(path.join(out, `${name}.png`), png || (await win.capturePage(undefined, { stayHidden: true })).toPNG());
+    report.captures.push(png ? name : name + ' (window capture)');
+  };
   const click = async selector => { await run(`document.querySelector(${JSON.stringify(selector)}).click()`); await sleep(150); };
   const scroll = async () => { await run(`document.querySelector('[data-nekko-mode], .theme-mode-toggle').closest('section').scrollIntoView({block:'start'})`); await sleep(300); };
   try {
@@ -26,7 +40,8 @@ app.whenReady().then(async () => {
     await run(`(() => {const s=layoutFixture.store; const settings={...s.getState().settings,theme:'dark',themePreset:'x-plum-dark',accent:'#c084b5',accent2:'#c99bb3'};layoutFixture.bridge.updateSettings(settings);s.setState({settings});s.getState().applyTheme();})()`);
     await scroll(); await shot('appearance-desktop');
     if (!process.env.NEKKO_THEME_BASELINE) {
-      check('compact controls', await run(`document.querySelector('.theme-mode-toggle').offsetWidth===76 && document.querySelector('.theme-custom-colors').offsetWidth===420`));
+      check('each theme is its icon, solid only when picked', await run(`(() => {document.getAnimations().forEach(a=>a.finish());const b=[...document.querySelectorAll('.theme-swatch-button')];const on=b.filter(x=>x.getAttribute('aria-checked')==='true');return b.length===9 && b.every(x=>x.querySelector('[data-theme-icon]')) && on.length===1 && on[0].title==='Nekko' && b.every(x=>getComputedStyle(x.querySelector('.theme-icon-solid')).opacity===(x===on[0]?'1':'0'));})()`));
+      check('compact controls',await run(`document.querySelector('.theme-mode-toggle').offsetWidth===76 && document.querySelector('.theme-custom-colors').offsetWidth===420`));
       await click('[title="Nebula"]'); await click('.theme-mode-toggle');
       check('mode keeps palette', await run(`document.documentElement.dataset.theme==='light' && layoutFixture.store.getState().settings.themePreset==='nebula'`));
       await shot('nebula-light');
@@ -90,6 +105,7 @@ app.whenReady().then(async () => {
     }
     win.setContentSize(390, 844); await sleep(400); await scroll(); await shot('appearance-narrow');
     check('no horizontal page overflow', await run('document.documentElement.scrollWidth <= innerWidth'));
+    await run("document.querySelector('.theme-picker').scrollIntoView({block:'center'})"); await sleep(300); await shot('picker-narrow');
     if (!process.env.NEKKO_THEME_BASELINE) {
       await click('.theme-custom-trigger'); await run("document.querySelector('.theme-custom-colors').scrollIntoView({block:'center'})"); await sleep(300); await shot('custom-colors-narrow');
       check('editor fits narrow card', await run(`(() => {const c=document.querySelector('.theme-custom-colors'),b=c.getBoundingClientRect();return c.scrollWidth<=c.clientWidth && b.right<=innerWidth;})()`));

@@ -7,7 +7,7 @@ area: brand
 
 **User intent:** Philip asked (2026-11-09) for a Winter theme, similar to Spooky, with some Easter eggs hidden in it.
 
-**Status `[implemented 2026-11-09 on desktop and the Local Web UI; renderer unit tests, contrast tests and hidden-sandbox screenshots. The iPhone and Android apps get the palette from the shared catalog; Winter's phone extras (a limited app icon like Spooky's) are follow-up work, not claimed here]`**
+**Status `[implemented 2026-11-09 on desktop and the Local Web UI; renderer unit tests, contrast tests and hidden-sandbox screenshots. Native iOS and Android snow and mascot hats are implemented in source with Android builds and unit tests passing; hosted native screenshot, interaction and motion verification are pending. Limited Winter launcher icons remain follow-up work]`**
 
 ## The theme
 
@@ -45,6 +45,15 @@ Dates and hours are the computer's local time. The rules live in `apps/desktop/s
 - Only one hat at a time: the wizard hat is Spooky's, the knitted beanie Winter's, none on any other theme.
 - Reduced motion: no falling, flying or shimmering; everything that remains is still.
 
+## Native phone decorations (issue #2479)
+
+- Both native apps resolve decorations from the same preset as the palette, including Match my computer. Winter shows eight faint, deterministic flakes with one upright cat-shaped flake. Positions scale to compact, unfolded and landscape windows rather than assuming a phone width.
+- The chat/list toolbar mascot wears Winter's cat-ear knitted beanie or Spooky's wizard hat. The hat follows the mascot's existing working and greeting movement without changing its 44-point touch target, greeting action or accessibility Refresh action. Other themes have no hat. Greeting illustrations, launch screens and brand marks remain undressed.
+- Phone hats use the native palette tokens: a muted berry crown, contrasting folded brim and snowflake for Winter; a dark crown and accent brim for Spooky. They are native adaptations, not new image dependencies.
+- Snow and hats have no pointer handlers or accessible copy. Reduced motion holds snow still. The snow clock stops while iOS is inactive or Android is stopped. Leaving Winter removes its snow and replaces/removes the hat immediately.
+- Decoration is local only: no network requests, sounds, persistent particles, notifications or settings writes. No date-based phone extras are added in this change.
+- Verification status (2026-11-10): Android app/instrumentation builds and 592 unit tests passed locally. Eight matched phone/open-fold Winter/Spooky screenshots were inspected and published in PR #2480. Open-fold means the API 34 emulator in OPENED state, not folded, tabletop or hardware coverage. Matched run 42846979879 passed all four phone/open-fold base/head jobs, including greeting, accessible Refresh, theme switching and strict reduced-motion stop/resume pixel equality. Actual phone/open-fold head video playback and baseline frames were inspected, and four movies published with hash and public-URL verification. The earlier Launcher-only interpretation was a review-server bug: unsupported range requests left video seeks at time zero. Older recordings remain unused; no claim that they contain only Launcher survives that correction. An earlier intermittent fold resume mismatch remains unexplained, with strict assertions unchanged and passing on all four latest jobs. Matched iOS run 42854268013 passes both revisions on iPhone 18 Pro / exact iOS 27.2 with harness b13a9378a. Eight matched PNGs and both seven-second native recordings were inspected and published with hash/public-URL verification in PR #2480. Actual playback shows moving snow and the cat flake; baseline is undecorated. DEBUG state history verifies exactly one Refreshing → Working transition after a real gesture at unchanged production timing. Greeting, current Working state, theme switching, reduced motion and lifecycle checks pass. Older full fixtures/pairing runs failed; the repaired combined native batch and protected gate remain pending. No shipped or physical-device-verified claim is made.
+
 ## Not yet
 
-- Winter extras on the phones: a limited Winter app icon (iOS alternate icon, Android activity alias) and the beanie on the phone mascots ([#2411](https://github.com/nekko-labs/nekko-agent/issues/2411)).
+- Winter extras on the phones: a limited Winter app icon (iOS alternate icon, Android activity alias) ([#2411](https://github.com/nekko-labs/nekko-agent/issues/2411)).

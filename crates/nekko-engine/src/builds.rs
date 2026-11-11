@@ -13,8 +13,8 @@ pub const CUDA_FASTER: &str = "Roughly 15-20% faster";
 /// The pinned releases (`RUNTIME_RELEASES`): `(repo, tag)`.
 pub fn release_pin(runtime: &str) -> (&'static str, &'static str) {
     match runtime {
-        "diffusion" => ("leejet/stable-diffusion.cpp", "master-1043-3be2378"),
-        _ => ("ggml-org/llama.cpp", "b12069"),
+        "diffusion" => ("leejet/stable-diffusion.cpp", "master-1046-d308544"),
+        _ => ("ggml-org/llama.cpp", "b12087"),
     }
 }
 
