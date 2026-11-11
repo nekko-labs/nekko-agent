@@ -246,6 +246,27 @@ export interface CodeModeSavings {
   toolCalls: number;
 }
 
+/** Code mode's net savings over a whole chat: every code-mode reply's estimate, summed. */
+export interface ChatCodeModeSavings {
+  /** Net estimated tokens saved; negative when code mode cost more than a tool list. */
+  tokensSaved: number;
+  /** Replies that ran in code mode. */
+  replies: number;
+}
+
+/** Sum the code-mode estimates on a chat's replies; null when no reply used code mode. */
+export function chatCodeModeSavings(messages: readonly { turnStats?: TurnStats }[] | undefined): ChatCodeModeSavings | null {
+  let tokensSaved = 0;
+  let replies = 0;
+  for (const m of messages ?? []) {
+    const c = m.turnStats?.codeMode;
+    if (!c) continue;
+    tokensSaved += c.tokensSaved;
+    replies += 1;
+  }
+  return replies ? { tokensSaved, replies } : null;
+}
+
 /** Display-only engine notices. Never included in model history. */
 export interface ConnectivityNotice {
   id: string;

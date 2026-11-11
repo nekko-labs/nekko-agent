@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatControls } from './ChatControls.js';
+import { ChatControls, INCOGNITO_OFF_HINT } from './ChatControls.js';
 import type { Session } from '@nekko-agent/shared';
 
 const store = vi.hoisted(() => ({ settings: { defaultChatMode: 'guardrails', gitManagement: { mode: 'worktree' } }, refreshSettings: vi.fn(async () => {}), pushToast: vi.fn() }));
@@ -32,7 +32,10 @@ function controls(toolsInWindow = true) {
 describe('privacy switches', () => {
   it('keeps incognito session-only', async () => {
     const view = controls();
-    const toggle = view.nodes.find((n) => n.type === 'button' && n.props.title === "Don't save this chat or update memory")!;
+    const toggle = view.nodes.find((n) => n.type === 'button' && 'data-incognito-toggle' in n.props)!;
+    // A warning, not an accent: Incognito is not a good default.
+    expect(toggle.props.className).toContain('ctl-toggle-warning');
+    expect(toggle.props.title).toBe(INCOGNITO_OFF_HINT);
     await toggle.props.onClick();
     expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { incognito: true });
     expect(window.nekko.updateSettings).not.toHaveBeenCalled();
