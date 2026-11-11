@@ -10,6 +10,7 @@ import { confirmSignup, page, sendConfirmation, unsubscribe, type Mailer } from 
 import { parseSignup, recordSignup } from "./signups.js";
 import type { DeleteAuthUser } from "./supabase.js";
 import { registerFleet } from "./fleet.js";
+import { registerOrgs } from "./orgs.js";
 import { registerSync } from "./sync.js";
 
 export interface ServerOptions {
@@ -34,6 +35,10 @@ export interface ServerOptions {
   machines?: MachinesOptions;
   /** Experimental user-owned computer discovery. No execution or automatic pairing. */
   fleetEnabled?: boolean;
+  /** Organizations and their shared computer fleet (decision 0086); without it the /v1/orgs routes are absent. */
+  orgsEnabled?: boolean;
+  /** Lower-case emails; when non-empty only these accounts may create orgs, accept invites or use the org fleet. */
+  orgsAllowedEmails?: string[];
   /** Sends signup confirmation emails; without it signups still save and the email is skipped. */
   mailer?: Mailer;
   /** This service's public origin, for the links in emails. */
@@ -165,6 +170,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
     registerSync(scope, opts.db);
     if (opts.fleetEnabled) registerFleet(scope, opts.db);
+    if (opts.orgsEnabled) registerOrgs(scope, opts.db, { allowedEmails: opts.orgsAllowedEmails });
     registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs }, { driver: opts.machines?.driver, deleteAuthUser: opts.deleteAuthUser });
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
