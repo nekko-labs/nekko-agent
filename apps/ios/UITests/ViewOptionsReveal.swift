@@ -1,36 +1,39 @@
 import XCTest
 
 extension XCTestCase {
-    /// The Chats view options are a Form in a popover with a minimum height, so
-    /// controls near its end (Show, Done) can sit below the fold. Scroll the Form
-    /// until `element` is fully inside the popover and hittable.
-    @discardableResult
-    func revealViewOption(_ element: XCUIElement, in app: XCUIApplication,
-                          file: StaticString = #filePath, line: UInt = #line) -> Bool {
-        let popover = app.popovers.firstMatch
-        let form = popover.collectionViews.firstMatch
-        guard popover.waitForExistence(timeout: 3), form.exists else {
-            XCTFail("View options exposes its scrollable Form", file: file, line: line)
-            return false
-        }
-        for attempt in 0...4 {
-            if element.exists, !element.frame.isEmpty,
-               popover.frame.contains(element.frame), element.isHittable {
-                return true
-            }
-            if attempt < 4 { form.swipeUp() }
-        }
-        let hierarchy = XCTAttachment(string: app.debugDescription)
-        hierarchy.name = "view-option-not-reachable"
-        hierarchy.lifetime = .keepAlways
-        add(hierarchy)
-        XCTFail("View option is not fully visible and hittable: \(element)", file: file, line: line)
-        return false
+    /// The Chats view options are one native menu (#2449). Group by shows as a
+    /// submenu row whose label carries its value, so match its identifier or label.
+    func viewOptionsGroupBy(_ app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier == %@ OR label BEGINSWITH %@", "chats.view.groupBy", "Group by")).firstMatch
     }
 
-    /// Close the Chats view options with its Done button, scrolled into view first.
+    /// Open a submenu of the view options (Card details, Show) until `element` shows.
+    @discardableResult
+    func openViewOptionsSubmenu(_ name: String, showing element: XCUIElement, in app: XCUIApplication,
+                                file: StaticString = #filePath, line: UInt = #line) -> Bool {
+        let row = app.buttons[name].firstMatch
+        for _ in 0..<3 where !element.exists {
+            if row.waitForExistence(timeout: 3) { row.tap() }
+            _ = element.waitForExistence(timeout: 3)
+        }
+        if !element.exists { XCTFail("\(name) opens its choices", file: file, line: line) }
+        return element.exists
+    }
+
+    /// Close the Chats view options: a tap outside the menu closes it without
+    /// reaching the list behind (the menu has no Done button).
     func closeViewOptions(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
-        let done = app.buttons["chats.view.done"]
-        if revealViewOption(done, in: app, file: file, line: line) { done.tap() }
+        // A choice in Group by or Sort by closes the menu itself: let that finish first,
+        // so the tap below never lands on the list.
+        let settling = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: viewOptionsGroupBy(app))
+        _ = XCTWaiter().wait(for: [settling], timeout: 1.5)
+        guard viewOptionsGroupBy(app).exists || app.buttons["Show"].exists else { return }
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).tap()
+        let closed = [viewOptionsGroupBy(app), app.buttons["Show"].firstMatch].map {
+            XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: $0)
+        }
+        if XCTWaiter().wait(for: closed, timeout: 5) != .completed {
+            XCTFail("a tap outside closes the view options", file: file, line: line)
+        }
     }
 }
