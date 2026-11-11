@@ -5,7 +5,7 @@ area: chat
 
 # Secrets in chat: give the agent a key it uses but never sees
 
-Tracked by [#2594](https://github.com/nekko-labs/nekko-agent/issues/2594). Decision: [0086](../../docs/decisions/0086-chat-secrets-reach-commands-never-the-model.md).
+Tracked by [#2594](https://github.com/nekko-labs/nekko-agent/issues/2594). Decision: [0088](../../docs/decisions/0088-chat-secrets-reach-commands-never-the-model.md).
 
 **User intent (Philip, 2026-11-11):** a secure way to add secrets in the chat, as other agents do: a secrets box where you hit Paste, or paste or type it yourself, and press Enter. The agent never sees it. It belongs in the conversation, like the commands the agent asks to run.
 

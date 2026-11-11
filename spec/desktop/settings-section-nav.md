@@ -11,7 +11,7 @@ User intent: find the QR code that links a phone without hunting through one lon
 - The page is grouped to match, each group under its name at page-title size, with one hairline between groups (see [Quiet Settings](#quiet-settings-and-where-each-setting-lives-2563) for the order inside each):
   - Help out the Nekko Team: Help improve Nekko Agent (usage reports), Support by starring the project on GitHub.
   - General: Notifications, Chats, Desktop behavior, Language and help, Dictation, Chat history.
-  - Phone pairing: Remote access, then Sync.
+  - Phone pairing: Remote access, then Sync, then Organization (only when signed in to Nekko Cloud).
   - Computers: Connected computers and pairing.
   - Customize: About you, Appearance, Fonts and text ([Style](style-fonts-and-text-size.md)), Animations, Agents wall, View settings, Simple mode visibility, Customization (standing instructions), Fun.
   - Agents: Agent loop, Spec-driven development, Agent orchestration, Delegation routes, Hooks, Automations, Claude plan features.
@@ -94,3 +94,7 @@ Placement:
 Privacy and safety: layout and copy only. No setting, default, save path, permission or step-up check changes. The unused Slash commands section, which no page rendered, is removed.
 
 Status: implemented, not yet landed. Checked with the settings, search and palette tests and a hidden renderer capture (see the PR). Not yet checked: the installed app and the Local Web UI.
+
+## Organization section (issue #2588)
+
+Implemented in the desktop renderer; it needs the engine's `org:*` and `fleet:*` channels, so it shows "Organizations are not available in this version of Nekko Agent yet" until a build has them. Where: Settings > Phone pairing > Organization, under Sync. Signed out, the section is not shown. Signed in but not unlocked on this computer, it says to unlock with the recovery key or by approval, in Sync. With no organization it offers to create one and lists invitations to accept. With one it shows your role, the members (owners and admins can invite by email and remove members), the **Share this computer with <Org>** switch (off by default; it lists this computer and its local models for members, uploads no chats and lets nobody run anything yet), and the Computers list: name, OS icon, a This computer tag, an online dot or Last seen, and local models collapsed after three. There is no Connect or Run action. It refreshes on the Nekko Cloud status event and re-reads the Computers list every 15 seconds while the section is on screen. Unverified: the live engine and cloud (the channels are stubbed in the captures), the packaged app and the Local Web UI.

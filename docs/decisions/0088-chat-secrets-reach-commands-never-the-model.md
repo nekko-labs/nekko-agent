@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-11
 ---
 
-# 0086. Chat secrets reach the agent's commands as environment variables, never the model
+# 0088. Chat secrets reach the agent's commands as environment variables, never the model
 
 ## Context
 

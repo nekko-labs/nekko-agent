@@ -396,6 +396,26 @@ struct Rerun {
     next_at: f64,
 }
 
+/// The file a busy VM keeps in its folder, so a daemon that restarts mid-job can audit the job as
+/// lost and re-run it: the VM dies with the daemon and nothing else remembers what it was doing.
+const JOB_JOURNAL: &str = "job.json";
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JobJournal {
+    runner_id: String,
+    busy_since: u64,
+    job: Option<JobRef>,
+    events: Vec<SlotEvent>,
+}
+
+/// A job a restart cut off, found in `vms/` at start.
+struct Recovered {
+    runner_id: String,
+    job: JobRef,
+    first_at: f64,
+}
+
 /// What the owner asked of one runner's jobs from the UI; applied on the next tick.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ask {
@@ -435,11 +455,14 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     host: String,
     install: String,
     runners: Vec<Runner>,
-    // shortcut: queued re-runs live in memory, lost on daemon restart; persist if pilots show it matters.
+    // Queued re-runs live in memory. A restart forgets them, but not the jobs a restart itself cut off
+    // (`job.json` in each busy VM's folder, read by `start`).
     reruns: Vec<Rerun>,
     // shortcut: like `reruns`, lost on a crash. A live record's are swept by `start()`; a removed
     // record is not swept after a restart (its credentials may be gone), so `shutdown` audits them.
     removals: Vec<Removal>,
+    /// Jobs found cut off by a daemon restart, waiting for their runner's record to queue a re-run.
+    recovered: Vec<Recovered>,
     /// (repo, job id) of every job ever queued, so each is re-run at most once.
     rerun_seen: HashSet<(String, u64)>,
     /// The wall clock and the monotonic clock at the last tick: the wall
@@ -554,6 +577,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             runners: Vec::new(),
             reruns: Vec::new(),
             removals: Vec::new(),
+            recovered: Vec::new(),
             rerun_seen: HashSet::new(),
             last_wall: None,
             swept: HashSet::new(),
@@ -579,12 +603,97 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     /// Before the first tick: reaps what a crash or a sleep left under `vms/`,
     /// removes our stale registrations, and loads today's totals.
     pub async fn start(&mut self) {
+        let lost = self.read_journals();
         if let Err(e) = reap(&self.vms_dir()).await {
             eprintln!("runner: cannot clear {}: {e}", self.vms_dir().display());
         }
         self.sweep().await;
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
         self.roll_day(now);
+        for line in lost {
+            self.audit(&line);
+        }
+    }
+
+    /// The jobs a restart cut off: every VM folder with a journal was busy when the daemon
+    /// stopped. Each becomes a `Lost` audit line, and a re-run once its runner's record is known.
+    fn read_journals(&mut self) -> Vec<AuditLine> {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let Ok(entries) = std::fs::read_dir(self.vms_dir()) else { return Vec::new() };
+        let mut found = Vec::new();
+        for e in entries.filter_map(|e| e.ok()) {
+            if !e.file_type().is_ok_and(|t| t.is_dir()) {
+                continue;
+            }
+            let path = e.path().join(JOB_JOURNAL);
+            let Some(j) = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice::<JobJournal>(&b).ok()) else {
+                continue;
+            };
+            found.push(j);
+        }
+        found.sort_by_key(|j| j.busy_since);
+        let mut lines = Vec::new();
+        for j in found {
+            let job = j.job.as_ref();
+            lines.push(AuditLine {
+                ts: now,
+                runner_id: j.runner_id.clone(),
+                repo: job.map(|j| j.repo.clone()),
+                workflow: job.map(|j| j.workflow.clone()),
+                job: job.map(|j| j.job.clone()),
+                result: AuditResult::Lost,
+                seconds: now.saturating_sub(j.busy_since),
+                reason: vec!["daemon restarted".into()],
+                usage: None,
+                job_id: job.map(|j| j.job_id),
+                url: job.map(|j| j.url.clone()).filter(|u| !u.is_empty()),
+                pr: job.and_then(|j| j.pr.clone()),
+                events: j.events,
+                vm: None,
+            });
+            if let Some(job) = j.job {
+                self.recovered.push(Recovered { runner_id: j.runner_id, job, first_at: now as f64 });
+            }
+        }
+        lines
+    }
+
+    /// Queues the re-run of each recovered job whose runner is known.
+    fn adopt_recovered(&mut self, now: f64) {
+        for q in std::mem::take(&mut self.recovered) {
+            let Some(r) = self.runners.iter().find(|r| r.record.config.id == q.runner_id && !r.dropped) else {
+                // The records may not have loaded yet: wait, but not for ever.
+                if now - q.first_at <= RERUN_FOR.as_secs_f64() {
+                    self.recovered.push(q);
+                }
+                continue;
+            };
+            if r.record.config.settings.rerun_lost_jobs && self.rerun_seen.insert((q.job.repo.clone(), q.job.job_id)) {
+                self.reruns.push(Rerun { record: r.record.clone(), job: q.job, first_at: now, next_at: now });
+            }
+        }
+    }
+
+    /// Keeps each busy VM's journal current: its job may become known late.
+    fn write_journals(&self) {
+        for r in &self.runners {
+            for slot in &r.slots {
+                let (Some(busy), None) = (slot.busy_since, &slot.stop) else { continue };
+                let j = JobJournal {
+                    runner_id: r.record.config.id.clone(),
+                    busy_since: busy as u64,
+                    job: slot.job.clone(),
+                    events: slot.events.clone(),
+                };
+                let dir = self.vms_dir().join(&slot.name);
+                if let Ok(b) = serde_json::to_vec(&j)
+                    && dir.is_dir()
+                    && let Err(e) = std::fs::write(dir.join(JOB_JOURNAL), b)
+                {
+                    eprintln!("runner: cannot write the job journal of {}: {e}", slot.name);
+                }
+            }
+        }
     }
 
     /// Whether a runner whose sweep could reach `r`'s registrations has a VM out.
@@ -877,6 +986,8 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         }
         // Also with no runner left: a removed record's registrations still need removing.
         self.retry_removals(now).await;
+        self.write_journals();
+        self.adopt_recovered(now);
         // After this tick's starts and clean-ups, and with no runner left too, so the build never reads a stale count.
         let our_mac = self.runners.iter().map(|r| r.of(Guest::Macos)).sum::<usize>();
         self.build_slot.set_runner_vms(u8::try_from(our_mac).unwrap_or(u8::MAX));

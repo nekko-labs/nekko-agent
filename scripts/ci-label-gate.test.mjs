@@ -24,7 +24,7 @@ test('a failed or cancelled run fails; skipped and neutral pass', () => {
   const state = labelRuns([
     run(1, ios, 'completed', 'failure'),
     run(2, '.github/workflows/nekkod-npm.yml', 'completed', 'cancelled'),
-    run(3, '.github/workflows/codeql.yml', 'completed', 'neutral'),
+    run(3, '.github/workflows/decision-models.yml', 'completed', 'neutral'),
     run(4, '.github/workflows/dev-identity.yml', 'completed', 'skipped'),
   ]);
   assert.deepEqual(state.failed.map(r => r.id), [1, 2]);

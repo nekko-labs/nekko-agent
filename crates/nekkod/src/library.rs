@@ -55,6 +55,25 @@ pub fn engine_settings(settings: &Value) -> Map<String, Value> {
     m
 }
 
+/// The library's models as an organization's computer list shows them: id, name,
+/// runtime and size. No paths, folders or ports.
+pub async fn shareable_models(library: &Arc<Library>) -> Vec<nekko_cloud::LocalModel> {
+    let rows = library.list().await.unwrap_or_default();
+    rows.iter()
+        .filter_map(|m| {
+            let id = m.get("id").map(nekko_js::display).filter(|i| !i.is_empty())?;
+            let label = m.get("name").map(nekko_js::display).filter(|n| !n.is_empty()).unwrap_or_else(|| id.clone());
+            let runtime = if m.get("format").and_then(Value::as_str) == Some("mlx") { "mlx" } else { "llamacpp" };
+            Some(nekko_cloud::LocalModel {
+                id,
+                label,
+                runtime: runtime.into(),
+                size_bytes: m.get("sizeBytes").and_then(Value::as_f64).filter(|s| *s > 0.0).map(|s| s as u64),
+            })
+        })
+        .collect()
+}
+
 pub struct Library {
     settings: Arc<crate::settings::Settings>,
     store: Arc<SettingsStore>,

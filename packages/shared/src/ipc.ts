@@ -25,7 +25,7 @@ import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
 import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, JobAction, LinuxImageView, RunnerSettings, RunnerView } from './runners.js';
-import type { ConnectorConfig, ConnectorKind, ConnectorResource, DetectedConnectors } from './connectors.js';
+import type { ConnectorConfig, ConnectorKind, ConnectorResource, DetectedConnectors, RepoExclusions } from './connectors.js';
 import type {
   AgentToolId,
   AgentToolStatus,
@@ -378,6 +378,10 @@ export const IpcChannels = {
   connectorFetch: 'connector:fetch',
   connectorsDetect: 'connectors:detect',
   connectorImportCli: 'connector:importCli',
+  /** Every repository a git connector reaches, removed ones included (#2562). */
+  connectorRepos: 'connector:repos',
+  /** Save which repositories and owners a git connector leaves out (#2562). */
+  connectorExclude: 'connector:exclude',
 
   integrationsDetect: 'integrations:detect',
   integrationsInstall: 'integrations:install',
@@ -490,6 +494,19 @@ export const IpcChannels = {
   syncSetEnabled: 'sync:setEnabled',
   syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
   syncDeleteAll: 'sync:deleteAll',
+  // Nekko Cloud organizations and the shared computer fleet (crates/nekko-cloud).
+  orgList: 'org:list',
+  orgCreate: 'org:create',
+  orgGet: 'org:get',
+  orgInvite: 'org:invite',
+  orgRevokeInvite: 'org:revokeInvite',
+  orgAcceptInvite: 'org:acceptInvite',
+  orgRemoveMember: 'org:removeMember',
+  orgRename: 'org:rename',
+  orgDelete: 'org:delete',
+  fleetSetSharing: 'fleet:setSharing',
+  fleetList: 'fleet:list',
+  fleetStatus: 'fleet:status',
   // Settings > Connections (crates/nekkod/src/connections.rs).
   connectionsStatus: 'connections:status',
   connectionsEvents: 'connections:events',
@@ -632,6 +649,22 @@ export interface NekkoApi {
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncSetIncludeLocalOnly(on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
+  /** Organizations you belong to and invites waiting for you. */
+  orgList(): Promise<import('./cloud.js').OrgList>;
+  /** Create an organization (needs an unlocked account on Pro or Team); this device creates its key. */
+  orgCreate(name: string): Promise<import('./cloud.js').Org>;
+  orgGet(orgId: string): Promise<import('./cloud.js').OrgDetail>;
+  orgInvite(orgId: string, email: string, role?: 'admin' | 'member'): Promise<unknown>;
+  orgRevokeInvite(orgId: string, inviteId: string): Promise<unknown>;
+  orgAcceptInvite(inviteId: string): Promise<unknown>;
+  orgRemoveMember(orgId: string, userId: string): Promise<unknown>;
+  orgRename(orgId: string, name: string): Promise<unknown>;
+  orgDelete(orgId: string): Promise<unknown>;
+  /** Share this computer with an organization, or stop. Off by default. */
+  fleetSetSharing(orgId: string, on: boolean): Promise<import('./cloud.js').FleetSharingResult>;
+  /** The computers shared with an organization, decrypted on this device. */
+  fleetList(orgId: string): Promise<import('./cloud.js').FleetList>;
+  fleetStatus(): Promise<import('./cloud.js').FleetStatus>;
   onCloudStatus(cb: (s: import('./cloud.js').CloudStatus) => void): () => void;
   voiceStatus(): Promise<import('./voice.js').VoiceStatus>;
   voiceInstall(engine?: import('./voice.js').VoiceEngine): Promise<import('./voice.js').VoiceStatus>;
@@ -1251,6 +1284,10 @@ export interface NekkoApi {
   detectConnectors(): Promise<DetectedConnectors>;
   /** Connect GitHub with the GitHub CLI's sign-in; the daemon reads the token itself. */
   importConnectorCli(kind: ConnectorKind): Promise<ConnectorConfig[]>;
+  /** Every repository GitHub or GitLab reaches, including the ones removed from the app. */
+  connectorRepos(kind: ConnectorKind): Promise<import('./workspace.js').RemoteRepoList>;
+  /** Replace the repositories and owners a git connector leaves out of Add repository and chat context. */
+  excludeConnectorRepos(kind: ConnectorKind, choice: RepoExclusions): Promise<ConnectorConfig[]>;
 
   /** Which agent CLIs are present and whether Nekko is installed as an MCP subagent. */
   detectAgentTools(): Promise<AgentToolStatus[]>;

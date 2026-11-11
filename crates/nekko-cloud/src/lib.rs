@@ -27,6 +27,8 @@
 //! is never overwritten (its local copy is newer by the time it saves).
 
 mod http;
+mod org_records;
+mod orgs;
 pub mod records;
 pub mod state;
 pub use nekko_vault as vault;
@@ -48,6 +50,8 @@ use vault::Vault;
 use zeroize::Zeroize;
 
 pub use http::client;
+pub use org_records::LocalModel;
+pub use orgs::{HEARTBEAT, HostInfo, ModelFuture};
 
 pub const CHANNELS: &[&str] = &[
     "cloud:status",
@@ -68,6 +72,18 @@ pub const CHANNELS: &[&str] = &[
     "sync:setEnabled",
     "sync:setIncludeLocalOnly",
     "sync:deleteAll",
+    "org:list",
+    "org:create",
+    "org:get",
+    "org:invite",
+    "org:revokeInvite",
+    "org:acceptInvite",
+    "org:removeMember",
+    "org:rename",
+    "org:delete",
+    "fleet:setSharing",
+    "fleet:list",
+    "fleet:status",
 ];
 
 /// Pushed whenever the status changes (the animation follows `sync.phase` and `sync.progress`).
@@ -106,6 +122,10 @@ struct Live {
     pulled: usize,
     /// The (token, key epoch) Nekko Cloud last accepted this device's epoch proof for.
     proven: Option<(String, u32)>,
+    /// The last `GET /v1/orgs` list, for the `orgs` summary on the status.
+    orgs: Option<Vec<Value>>,
+    /// How sharing with each org is going.
+    shares: BTreeMap<String, orgs::ShareLive>,
 }
 
 pub struct Cloud {
@@ -119,6 +139,10 @@ pub struct Cloud {
     live: Mutex<Live>,
     supabase: tokio::sync::Mutex<Option<Supabase>>,
     run: tokio::sync::Mutex<()>,
+    /// What the daemon says about this computer (name, models, version) for org descriptors.
+    host: Mutex<Option<Arc<HostInfo>>>,
+    /// One publish, withdrawal or sharing change at a time.
+    share: tokio::sync::Mutex<()>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -149,6 +173,8 @@ impl Cloud {
             live: Mutex::new(Live::default()),
             supabase: tokio::sync::Mutex::new(None),
             run: tokio::sync::Mutex::new(()),
+            host: Mutex::new(None),
+            share: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -161,6 +187,16 @@ impl Cloud {
                     let _ = me.sync_once().await;
                 }
                 tokio::time::sleep(every).await;
+            }
+        });
+        // Sharing with organizations: a beat every 30 seconds (it also picks up after sleep or a lost connection).
+        let me = self.clone();
+        tokio::spawn(async move {
+            let mut beat = tokio::time::interval(HEARTBEAT);
+            beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                beat.tick().await;
+                me.share_tick().await;
             }
         });
     }
@@ -211,6 +247,7 @@ impl Cloud {
                 Ok(self.changed())
             }
             "sync:deleteAll" => self.delete_all().await,
+            c if c.starts_with("org:") || c.starts_with("fleet:") => self.route_org(c, args).await,
             _ => Err(format!("unknown channel {channel}")),
         }
     }
@@ -367,6 +404,7 @@ impl Cloud {
             "account": s.account.as_ref().map(|a| json!({ "email": a.email, "plan": a.plan, "canSync": a.can_sync })),
             "oauthPending": live.oauth.is_some(),
             "keysStoredIn": self.vault.kind(),
+            "orgs": orgs::orgs_summary(&s, &live),
             "sync": {
                 "phase": phase,
                 "enabled": s.enabled,
@@ -533,7 +571,10 @@ impl Cloud {
         };
         let other_account = lock(&self.state).account.as_ref().is_some_and(|old| old.id != account.id);
         if other_account {
-            // Another account's keys never mix with this one's.
+            // This computer leaves the old account's org lists, then another account's keys never mix with this one's.
+            let old = self.vault.get("token");
+            self.withdraw_all(old.as_deref()).await;
+            lock(&self.live).orgs = None;
             self.forget_keys();
         }
         self.vault.set("token", &token)?;
@@ -552,14 +593,21 @@ impl Cloud {
     }
 
     async fn sign_out(&self) -> Result<Value, String> {
-        if let Ok(token) = self.token() {
+        let token = self.token().ok();
+        // This computer stops sharing and leaves every org's list while its token still works.
+        self.withdraw_all(token.as_deref()).await;
+        if let Some(token) = token {
             let _ = self.api.send(&token, reqwest::Method::DELETE, "/v1/auth/session", None).await;
         }
         self.vault.delete("token");
         // The device key and keyrings stay: signing in again to the same account
         // picks sync up where it was. Another account's sign-in clears them.
         self.edit(|s| s.enabled = false)?;
-        lock(&self.live).remote = None;
+        {
+            let mut live = lock(&self.live);
+            live.remote = None;
+            live.orgs = None;
+        }
         Ok(self.changed())
     }
 
@@ -586,6 +634,8 @@ impl Cloud {
     /// keyring and the sync state, from the OS keystore and the cloud folder.
     /// Nothing is sent: [`Self::sign_out`] first to end the session too.
     pub fn forget_this_device(&self) -> Result<(), String> {
+        // Leave the org lists while the token still exists (in the background; nothing waits on the network).
+        self.withdraw_in_background(self.vault.get("token"));
         self.forget_keys();
         self.vault.delete("token");
         let label = lock(&self.state).device_label.clone();
@@ -610,6 +660,7 @@ impl Cloud {
         }
         self.vault.delete("device-key");
         self.vault.delete("join-code");
+        self.forget_org_keys();
         lock(&self.live).proven = None;
     }
 
@@ -1069,6 +1120,8 @@ impl Cloud {
         }
         // Catch up first: a rotation starts from the newest epoch and record.
         self.sync_once().await?;
+        // And hold every org key this account has: they are written again under the new epoch.
+        self.collect_all_org_keys(&token).await;
         let account_id = self.account_id()?;
         let key = self.device_key().ok_or("This device has no sync keys.")?;
         let current = self.key_id();
@@ -1121,6 +1174,10 @@ impl Cloud {
         let oid = Self::account_oid(&new, next)?;
         self.hold_epoch(next, &new, &record, &oid, 0)?;
         self.update_account(&token, |_| {}).await?;
+        // Org keys follow the account to the new epoch, and each org this account can rotate gets a
+        // new key too: the removed device may have held the old one. Best effort; the next list retries.
+        let _ = self.reseal_org_keys(&token).await;
+        let _ = self.rotate_org_keys(&token).await;
         // Every chat is pushed again under the new epoch (Synced.key_id is now behind).
         self.sync_once().await?;
         Ok(self.changed())
@@ -1142,6 +1199,11 @@ impl Cloud {
         })?;
         self.forget_keys();
         self.edit(|s| s.reset_sync())?;
+        {
+            let mut live = lock(&self.live);
+            live.shares.clear();
+            live.orgs = None;
+        }
         let _ = self.refresh().await;
         Ok(self.changed())
     }
@@ -1224,6 +1286,8 @@ impl Cloud {
                 return Ok(());
             }
         }
+        // Org keys written under an older account epoch are written again for the other devices.
+        let _ = self.reseal_org_keys(token).await;
         Ok(())
     }
 
