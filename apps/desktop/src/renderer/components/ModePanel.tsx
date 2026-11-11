@@ -226,6 +226,7 @@ export function ModePanel({
   const [flyStyle, setFlyStyle] = useState<React.CSSProperties>({});
   const anchors = useRef<Partial<Record<Fly, HTMLButtonElement | null>>>({});
   const panel = useRef<HTMLDivElement | null>(null);
+  const flyRef = useRef<HTMLDivElement | null>(null);
   const actions = modePanelActions({ session, isCloudModel, onChange, onSandboxSetup });
   const { modes, current, active, edited } = chatModeState(session, settings);
   const defaultId = defaultSavedMode(settings)?.id;
@@ -240,10 +241,12 @@ export function ModePanel({
     const place = () => {
       const a = anchors.current[fly]?.getBoundingClientRect(), p = panel.current?.getBoundingClientRect();
       if (!a || !p) return;
-      const w = 320, vw = window.innerWidth, vh = window.innerHeight;
+      const w = fly === 'tools' ? 380 : 320, vw = window.innerWidth, vh = window.innerHeight;
       const left = p.right + 8 + w <= vw - 8 ? p.right + 8 : a.right + 6 + w <= vw - 8 ? a.right + 6 : Math.max(8, a.left - w - 6);
-      const maxHeight = Math.min(480, vh - 16);
-      setFlyStyle({ left, width: w, maxHeight, top: Math.max(8, Math.min(a.top - 10, vh - maxHeight - 8)) });
+      const maxHeight = vh - 16;
+      // Sit level with the row; only a tall flyout (the tool list) is pushed up to fit.
+      const h = Math.min(flyRef.current?.scrollHeight ?? 0, maxHeight);
+      setFlyStyle({ left, width: w, maxHeight, top: Math.max(8, Math.min(a.top - 10, vh - h - 8)) });
     };
     place();
     window.addEventListener('resize', place);
@@ -464,7 +467,7 @@ export function ModePanel({
     </div>
 
     {fly && !narrow && createPortal(
-      <div className="mode-fly card fixed z-[101] shadow-(--shadow-float)" style={flyStyle} role="dialog" aria-label={FLY_TITLE[fly][0]} data-mode-panel onKeyDown={onKeyDown}>
+      <div ref={flyRef} className="mode-fly card fixed z-[101] shadow-(--shadow-float)" style={flyStyle} role="dialog" aria-label={FLY_TITLE[fly][0]} data-mode-panel onKeyDown={onKeyDown}>
         <p className="mode-fly-h">{FLY_TITLE[fly][1]} {FLY_TITLE[fly][0]}</p>
         <div className="mode-fly-body">{flyBody(fly)}</div>
       </div>,
