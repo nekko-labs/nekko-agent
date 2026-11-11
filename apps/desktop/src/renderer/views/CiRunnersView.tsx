@@ -77,7 +77,7 @@ export function CiRunnersElsewhere({ options }: { options?: readonly RunnerOptio
   return (
     <div className="mt-2 flex flex-col gap-2" data-ci-runners-elsewhere>
       {options && <RunnerOptions options={options} />}
-      <p className="text-xs text-ink-faint">For macOS jobs, open Nekko Agent on a Mac with Apple silicon and go to Scheduled Tasks, CI runners.</p>
+      <p className="text-xs text-ink-faint">For macOS jobs, open Nekko Agent on a Mac with Apple silicon and go to Automations, CI runners.</p>
     </div>
   );
 }

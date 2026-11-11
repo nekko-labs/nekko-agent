@@ -15,7 +15,7 @@ Jobs appear under **Queued**, **In progress**, and **Completed**. Use the existi
 Accept now/Decline, Cancel/Re-run, and log controls there. Cancel and restart still
 ask for confirmation because they affect the workflow run on GitHub.
 
-Choose **View CI runners** to open the full CI section in Scheduled Tasks, where you
+Choose **View CI runners** to open the full CI section in Automations, where you
 can also connect GitHub and set up this Mac. With no connected runners the panel
 shows a short setup hint. Runners are hidden when the connected service does not
 support them; a temporary service failure shows an error and retries.
@@ -32,7 +32,7 @@ This is not the [Local CI runner](git-runner.md) workflow template. That one run
 directly on the machine and reports a commit status; this one picks up real `runs-on:` jobs from
 the GitHub Actions queue, each in its own VM.
 
-You find it in **Scheduled Tasks > CI runners**, in the menu at the top left of the page. In Simple
+You find it in **Automations > CI runners**, in the menu at the top left of the page. In Simple
 mode that entry appears once this Mac is a runner; before that, switch to Detailed or use **View
 CI runners** on the Automations panel.
 
@@ -57,7 +57,7 @@ and no packaged release has the setup screens yet; both are part of the pilot (T
 
 ## Before you start
 
-- **An Apple silicon Mac.** **Scheduled Tasks > CI runners** lists what this computer can run:
+- **An Apple silicon Mac.** **Automations > CI runners** lists what this computer can run:
   macOS, Linux and Windows, each available or greyed with the reason. A Mac with Apple silicon
   runs macOS and Linux jobs. On another computer macOS reads "Needs a Mac with Apple silicon",
   and the page points you to Nekko Agent on your Mac. Windows and Linux jobs on a Windows PC
@@ -76,7 +76,7 @@ The runner talks to GitHub as a GitHub App you own, so its access is limited to 
 you can revoke it at any time. Nekko creates the app for you with two clicks on GitHub. Nothing is
 copied or pasted.
 
-In **Scheduled Tasks > CI runners**, choose **Connect GitHub**:
+In **Automations > CI runners**, choose **Connect GitHub**:
 
 1. **Where do your repos live?** Nekko checks GitHub first. When `gh` is signed in, pick your
    account or an org from the list. Without it, Nekko goes straight to GitHub for your own
@@ -205,7 +205,7 @@ list workflow runs and re-run a job. See GitHub's
 
 ### Connect this Mac
 
-In **Scheduled Tasks > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
+In **Automations > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
 sheet has three steps:
 
 1. **Install app.** Paste the App ID, the installation ID and the whole private key file. The key

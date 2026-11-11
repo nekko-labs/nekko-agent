@@ -6,7 +6,7 @@ import { PeekNekkoArt } from './GreetingNekko.js';
 export const SCHEDULED_DEMO_FPS = 30;
 export const SCHEDULED_DEMO_SIZE = { width: 960, height: 600 };
 export const SCHEDULED_DEMO_SCENES = [
-  { start: 0, seconds: 6, title: 'Start with one small job', caption: 'Open Scheduled Tasks. Choose an idea, then make it yours.', transcript: 'Choose Watch a web page for updates under Shopping & web browsing. Enter the page URL and continue to the editor.' },
+  { start: 0, seconds: 6, title: 'Start with one small job', caption: 'Open Automations. Choose an idea, then make it yours.', transcript: 'Choose Watch a web page for updates under Shopping & web browsing. Enter the page URL and continue to the editor.' },
   { start: 180, seconds: 8, title: 'Tell Nekko what to check', caption: 'Give it a target and clear instructions. This is only a draft.', transcript: 'For this example, read https://example.com/news, summarize important updates with source links, and do not publish anything. Creating a manual task does not run it.' },
   { start: 420, seconds: 7, title: 'Review before you create', caption: 'Check the model, tools and access. Keep the first trigger manual.', transcript: 'Choose an available model with web tools. Review project access and connected services. Instructions are not a security boundary: tool permissions control access.' },
   { start: 630, seconds: 7, title: 'Try it by hand first', caption: 'Create the task, then choose Run. Open the run to follow its progress.', transcript: 'Create scheduled task saves the draft. Run starts it. This illustrative run uses synthetic data and its progress is sped up.' },
