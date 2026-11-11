@@ -147,7 +147,7 @@ jobs:
           # on both revisions. Never overlay permissions or authorization values.
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/PermissionReturnTimingTests.swift" ]]; then
             node .evidence-harness/scripts/ios-permission-return-fixture.mjs .
-            shasum -a 256 apps/ios/App/AppModel.swift apps/ios/App/NekkoApp.swift >> apps/ios/evidence/revisions.txt
+            shasum -a 256 apps/ios/App/AppModel.swift apps/ios/App/NekkoApp.swift apps/ios/App/Platform/PermissionChecklist.swift >> apps/ios/evidence/revisions.txt
           fi
           # Identical debug transition history on both revisions observes the real
           # refresh across XCTest's idle wait. No seasonal implementation is copied.

@@ -53,6 +53,12 @@ Source: [native comparison 42875392708](https://github.com/nekko-labs/nekko-agen
 
 The next test-only common overlay persists the debug route and original app-owned App lock/theme fixture preferences, never OS authorization or credentials. One <=10-second monotonic clock now starts before the real Settings toggle and includes exit observation, the sole unconditional activation, AX and predicate setup. This is a stricter cold-return experiment, not directly comparable to the old clock origin or proof of warm-resume behavior. Native results are pending. Production permission providers, native-suite deadlines and branch protection are unchanged.
 
+### Common cold-return setup failures and readiness measurement repair (2026-11-11)
+
+[Run 42926857207](https://github.com/nekko-labs/nekko-agent/actions/runs/42926857207), common `84dc0b80`, same original app SHAs and iPhone 18 Pro/iOS 27.0 (24A434)/Xcode 27.1 (27A9275). Both native test builds succeeded. BEFORE: 357 protocol/request tests passed; UI test 59.943 seconds, two setup failures. AFTER: 389 protocol/request tests passed; UI test 31.421 seconds, one setup failure. **These UI test durations are not Allowed latency. No return time was measured on either leg.** BEFORE stayed busy after the real denial; AFTER queried a still-transparent row immediately after Continue appeared. Neither reached the Settings toggle or activation.
+
+The next distinct common harness adds bounded initial-row and completed-denial predicates with stop-on-failure guards, plus DEBUG-only logs of the real request/refresh await boundaries. These do not replace providers or alter authorization; the timed return region stays byte-identical, with logging cost included in its existing ten seconds. This is a setup/measurement repair, not a measured performance improvement. Native compilation/readiness/return and matched media are unverified. Original failures and the stale-process race hypothesis above are not erased.
+
 ## Chat pictures beside the chat, held turn saves (2026-11-09)
 Area: engine daemon
 Result: improvement

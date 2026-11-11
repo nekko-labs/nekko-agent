@@ -12,8 +12,14 @@ final class PermissionReturnTimingTests: XCTestCase {
         app.launch()
         let microphone = app.buttons["permissions.action.microphone"]
         let row = app.descendants(matching: .any)["permissions.row.microphone"].firstMatch
-        XCTAssertTrue(app.buttons["permissions.continue"].waitForExistence(timeout: 15))
-        guard row.exists else {
+        guard app.buttons["permissions.continue"].waitForExistence(timeout: 15) else {
+            attach(app, "permissions-fixture-missing")
+            XCTFail("The permission fixture must be visible before setup")
+            return
+        }
+        // Continue can appear while refresh is pending and rows are still transparent.
+        // Initial setup only: the Settings-return clock below is unchanged.
+        guard row.waitForExistence(timeout: 15) else {
             attach(app, "permissions-microphone-row-missing")
             XCTFail("The permission fixture must contain the microphone row")
             return
@@ -42,7 +48,18 @@ final class PermissionReturnTimingTests: XCTestCase {
         let deny = alert.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Don")).firstMatch
         XCTAssertTrue(deny.exists)
         deny.tap()
-        XCTAssertTrue(microphone.waitForExistence(timeout: 5))
+        // Existence alone matches the disabled Checking control. Require real
+        // denial and its enabled Settings action; stop rather than tap while busy.
+        let denied = NSPredicate { _, _ in
+            let status = app.descendants(matching: .any)["permissions.status.microphone"].firstMatch
+            return microphone.exists && microphone.isEnabled && microphone.label.hasPrefix("Settings:") &&
+                status.exists && status.label == "Off in Settings"
+        }
+        guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: denied, object: nil)], timeout: 15) == .completed else {
+            attach(app, "permissions-microphone-denial-not-ready")
+            XCTFail("Real denial must finish with an enabled Settings action before opening Settings")
+            return
+        }
         XCTAssertTrue(microphone.label.hasPrefix("Settings:"))
         attach(app, "permissions-microphone-denied")
         microphone.tap()

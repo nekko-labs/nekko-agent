@@ -2,18 +2,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { permissionReturnFixture } from './ios-permission-return-fixture.mjs';
+import { permissionReturnFixture, permissionReturnDiagnosticChecklist } from './ios-permission-return-fixture.mjs';
 
 const source = fs.readFileSync(new URL('../apps/ios/UITests/PermissionReturnTimingTests.swift', import.meta.url), 'utf8');
 const workflow = fs.readFileSync(new URL('../.github/workflows/native-mode-evidence.yml', import.meta.url), 'utf8');
 const appModel = fs.readFileSync(new URL('../apps/ios/App/AppModel.swift', import.meta.url), 'utf8');
 const app = fs.readFileSync(new URL('../apps/ios/App/NekkoApp.swift', import.meta.url), 'utf8');
 
+const checklist = fs.readFileSync(new URL('../apps/ios/App/Platform/PermissionChecklist.swift', import.meta.url), 'utf8');
+
 function contract(text) {
   for (const required of [
     'try XCTSkipUnless(ProcessInfo.processInfo.environment["NEKKO_EVIDENCE_BASELINE"] != nil,',
     '"-uiTestPermissionReturnEvidence"',
     'let row = app.descendants(matching: .any)["permissions.row.microphone"].firstMatch',
+    'guard app.buttons["permissions.continue"].waitForExistence(timeout: 15) else',
+    'guard row.waitForExistence(timeout: 15) else',
+    'let denied = NSPredicate { _, _ in',
+    'microphone.exists && microphone.isEnabled && microphone.label.hasPrefix("Settings:")',
+    'status.exists && status.label == "Off in Settings"',
+    'guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: denied, object: nil)], timeout: 15) == .completed else',
     'let expandable = row.elementType == .button',
     'let target = expandable ? row : microphone',
     'if expandable { row.tap() }',
@@ -56,6 +64,13 @@ function contract(text) {
     'hierarchy.name = "permissions-settings-return-accessibility"',
   ]) assert.ok(text.includes(required), required);
   assert.equal((text.match(/let returnStarted =/g) || []).length, 1);
+  const setup = ['guard row.waitForExistence', 'let expandable =', 'deny.tap()', 'let denied =',
+    'guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: denied', 'attach(app, "permissions-microphone-denied")',
+    'let returnStarted ='].map(needle => text.indexOf(needle));
+  assert.ok(setup.every((p, i) => p >= 0 && (i === 0 || p > setup[i - 1])), 'readiness belongs to setup, not the return clock');
+  const denialGuard = text.slice(text.indexOf('guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: denied'),
+    text.indexOf('attach(app, "permissions-microphone-denied")'));
+  assert.ok(denialGuard.includes('return'), 'failed denial readiness must stop before Settings tap');
   const positions = [
     'let returnStarted =', 'toggle.coordinate(', 'let enabled =',
     'app.wait(for: .notRunning, timeout: exitRemaining)', 'app.activate()',
@@ -117,7 +132,7 @@ test('opt-in matched workflow retains common overlay, recording, strict runtime 
 });
 
 test('common overlay changes only the DEBUG fixture route, never permission readers or values', () => {
-  const patched = permissionReturnFixture(appModel, app);
+  const patched = permissionReturnFixture(appModel, app, checklist);
   assert.equal(patched.appModel, appModel.replace(
     'if args.contains("-uiTestNotificationStep") { showNotificationStep = true }',
     'if args.contains("-uiTestNotificationStep") || PermissionReturnEvidenceRoute.active { showNotificationStep = true }'));
@@ -129,7 +144,36 @@ test('common overlay changes only the DEBUG fixture route, never permission read
   assert.ok(patched.app.includes('defaults.set("light", forKey: "theme")'));
   assert.equal((patched.app.slice(app.length).match(/defaults\.set\(/g) || []).length, 3);
   assert.ok(!/authorizationStatus|AVCaptureDevice|grant|microphoneAllowed\s*=/.test(patched.app.slice(app.length)));
-  assert.throws(() => permissionReturnFixture(patched.appModel, patched.app));
-  assert.throws(() => permissionReturnFixture(appModel.replace('-uiTestNotificationStep', '-missing'), app));
-  assert.throws(() => permissionReturnFixture(appModel, app + app));
+  assert.throws(() => permissionReturnFixture(patched.appModel, patched.app, patched.checklist));
+  assert.throws(() => permissionReturnFixture(appModel.replace('-uiTestNotificationStep', '-missing'), app, checklist));
+  assert.throws(() => permissionReturnFixture(appModel, app + app, checklist));
+});
+
+
+test('rejects premature fixture lookup, existence-only denial and continuation after failed setup', () => {
+  for (const needle of ['guard row.waitForExistence(timeout: 15) else',
+    'guard app.buttons["permissions.continue"].waitForExistence(timeout: 15) else',
+    'microphone.isEnabled && ', 'status.exists && status.label == "Off in Settings"',
+    'guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: denied, object: nil)], timeout: 15) == .completed else']) {
+    assert.throws(() => contract(source.replace(needle, '// removed')));
+  }
+  assert.throws(() => contract(source.replace('            return\n        }\n        XCTAssertTrue(microphone.label.hasPrefix("Settings:"))',
+    '        }\n        XCTAssertTrue(microphone.label.hasPrefix("Settings:"))')));
+});
+
+test('DEBUG phase overlay observes async boundaries but exactly preserves original provider calls', () => {
+  const traced = permissionReturnDiagnosticChecklist(checklist);
+  assert.equal(traced.split('NSLog(').length - 1, 7);
+  assert.equal((traced.match(/if PermissionReturnEvidenceRoute.active/g) || []).length, 7);
+  for (const phase of ['refresh.begin', 'refresh.notificationSettings.complete', 'refresh.complete',
+    'request.microphone.begin', 'request.microphone.complete', 'request.refresh.begin', 'request.refresh.complete']) {
+    assert.ok(traced.includes('phase=' + phase));
+  }
+  const stripped = traced.replace(/        #if DEBUG\n[\s\S]*?        #endif\n/g, '')
+    .replace('        case .microphone:\n            _ = await AVAudioApplication.requestRecordPermission()',
+      '        case .microphone: _ = await AVAudioApplication.requestRecordPermission()');
+  assert.equal(stripped, checklist, 'removing diagnostic-only blocks restores the original source byte for byte');
+  assert.throws(() => permissionReturnDiagnosticChecklist(traced));
+  assert.throws(() => permissionReturnDiagnosticChecklist(checklist.replace('func refresh() async', 'func absent() async')));
+  assert.throws(() => permissionReturnDiagnosticChecklist(checklist + checklist));
 });

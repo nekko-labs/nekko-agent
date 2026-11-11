@@ -4,7 +4,28 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export function permissionReturnFixture(appModel, app) {
+
+// Observe real async phases on both revisions; no completion, provider or value is changed.
+export function permissionReturnDiagnosticChecklist(source) {
+  const once = (needle, replacement) => {
+    if (source.split(needle).length !== 2) throw Error(`Expected one diagnostic anchor: ${needle}`);
+    source = source.replace(needle, replacement);
+  };
+  if (source.includes('NEKKO_PERMISSION_RETURN')) throw Error('Diagnostics already overlaid');
+  const phase = name => `        #if DEBUG\n        if PermissionReturnEvidenceRoute.active {\n            NSLog("NEKKO_PERMISSION_RETURN phase=${name} uptime=%.6f pid=%d",\n                  ProcessInfo.processInfo.systemUptime, ProcessInfo.processInfo.processIdentifier)\n        }\n        #endif\n`;
+  once('    func refresh() async {\n', '    func refresh() async {\n' + phase('refresh.begin'));
+  const settings = '        let settings = await UNUserNotificationCenter.current().notificationSettings()\n';
+  once(settings, settings + phase('refresh.notificationSettings.complete'));
+  once('    }\n\n    static func capture(', phase('refresh.complete') + '    }\n\n    static func capture(');
+  once('        case .microphone: _ = await AVAudioApplication.requestRecordPermission()\n',
+    '        case .microphone:\n' + phase('request.microphone.begin') +
+    '            _ = await AVAudioApplication.requestRecordPermission()\n' + phase('request.microphone.complete'));
+  once('        await refresh()\n    }\n\n    func stop()', phase('request.refresh.begin') +
+    '        await refresh()\n' + phase('request.refresh.complete') + '    }\n\n    func stop()');
+  return source;
+}
+
+export function permissionReturnFixture(appModel, app, checklist) {
   const modelNeedle = 'if args.contains("-uiTestNotificationStep") { showNotificationStep = true }';
   const routeNeedle = '        let flags = ["-uiTestPermissionsSettings", "-uiTestNotificationStep",';
   for (const [text, needle] of [[appModel, modelNeedle], [app, routeNeedle]]) {
@@ -12,6 +33,7 @@ export function permissionReturnFixture(appModel, app) {
   }
   if (app.includes('enum PermissionReturnEvidenceRoute')) throw new Error('Fixture already overlaid');
   return {
+    checklist: permissionReturnDiagnosticChecklist(checklist),
     appModel: appModel.replace(modelNeedle,
       'if args.contains("-uiTestNotificationStep") || PermissionReturnEvidenceRoute.active { showNotificationStep = true }'),
     app: app.replace(routeNeedle,
@@ -44,8 +66,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const root = process.argv[2] || '.';
   const modelFile = path.join(root, 'apps/ios/App/AppModel.swift');
   const appFile = path.join(root, 'apps/ios/App/NekkoApp.swift');
-  const result = permissionReturnFixture(fs.readFileSync(modelFile, 'utf8'), fs.readFileSync(appFile, 'utf8'));
+  const checklistFile = path.join(root, 'apps/ios/App/Platform/PermissionChecklist.swift');
+  const result = permissionReturnFixture(fs.readFileSync(modelFile, 'utf8'), fs.readFileSync(appFile, 'utf8'), fs.readFileSync(checklistFile, 'utf8'));
+  fs.writeFileSync(checklistFile, result.checklist);
   fs.writeFileSync(modelFile, result.appModel);
   fs.writeFileSync(appFile, result.app);
-  console.log('Applied common DEBUG permission-return route overlay; real authorization providers unchanged.');
+  console.log('Applied common DEBUG permission-return route overlay; DEBUG phase diagnostics added; real authorization providers unchanged.');
 }
