@@ -16,8 +16,8 @@
 .pixel-skeleton > canvas { display: block; width: 100%; height: 100%; }
 
 /* Context menus remain neutral even when a preset gives the page a vivid tint. */
-.context-menu, .create-menu { background: #ffffff; color: #17191f; }
-[data-theme='dark'] :is(.context-menu, .create-menu) { background: #191c23; color: #f3f4f6; }
+.context-menu, .create-menu, .permissions-menu { background: #ffffff; color: #17191f; }
+[data-theme='dark'] :is(.context-menu, .create-menu, .permissions-menu) { background: #191c23; color: #f3f4f6; }
 /* Hover, checked and open rows are a neutral wash of the menu's own ink: the
    accent is kept for the primary action, focus and data. */
 .context-menu [role^="menuitem"][aria-checked="true"],
@@ -3023,6 +3023,8 @@
 /* The tree line from a parent's card to each of its sub-agent rows: a tee for
    every row, an elbow for the last. It reaches a little above the row so the
    lines join across the gap between rows. */
+/* Parent metadata starts at 24px; its 10px icon is centered at 29px. */
+.subagent-row { margin-left: 15px; width: calc(100% - 15px); }
 .subagent-tree { position: absolute; left: 14px; top: 0; bottom: 0; width: 8px; pointer-events: none; --tree-line: color-mix(in srgb, var(--ink) 32%, transparent); }
 .subagent-tree::before { content: ''; position: absolute; left: 0; top: -4px; bottom: 0; border-left: 1px solid var(--tree-line); }
 .subagent-tree::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; border-top: 1px solid var(--tree-line); }
@@ -4815,3 +4817,39 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
   80% { transform: translateY(0) rotate(-4deg) scale(1.04); }
 }
 @media (prefers-reduced-motion: reduce) { .support-star-celebrate { animation: none; } }
+
+/* Permissions are quiet named rows, not a strip of icon buttons. */
+.permissions-menu { border-radius: 12px; box-shadow: var(--shadow-float); overflow-y: auto; animation: permission-menu-in var(--dur-med) var(--ease-out); }
+.permission-rows { margin-top: var(--q-group); }
+.permission-row { display: flex; align-items: center; gap: var(--q-tight); }
+.permission-choice { display: flex; flex: 1; min-width: 0; align-items: center; gap: var(--q-inline); min-height: var(--q-row-dense); padding: var(--q-inline); border-radius: 8px; text-align: left; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); transition: color var(--dur-med) var(--ease-out), background var(--dur-fast) var(--ease-out); }
+.permission-choice[aria-checked='true'] { color: var(--accent); }
+.permission-choice:disabled { opacity: .55; }
+.permission-check { display: grid; place-items: center; width: 14px; height: 14px; flex-shrink: 0; }
+.permission-glyph { display: inline-flex; flex-shrink: 0; }
+.permission-choice[aria-checked='true'] .permission-check { animation: permission-check-in var(--dur-med) var(--ease-out); }
+.permission-choice[aria-checked='true'] .permission-glyph { animation: permission-enable var(--dur-med) var(--ease-out); }
+.permission-choice[data-asks-toggle='incognito'] { --permission-x: 2px; --permission-scale: 1; --permission-angle: 0deg; }
+.permission-choice[data-asks-toggle='shield'] { --permission-x: 0px; --permission-scale: .9; --permission-angle: 0deg; }
+.permission-choice[data-asks-toggle='internet'] { --permission-x: 0px; --permission-scale: 1; --permission-angle: -12deg; }
+.permission-info { display: grid; place-items: center; flex-shrink: 0; width: var(--q-row-dense); height: var(--q-row-dense); border-radius: 8px; color: var(--ink-faint); transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out); }
+.permission-info[aria-expanded='true'] { color: var(--info); }
+.permission-choice:active:not(:disabled), .permission-info:active { transform: scale(.98); }
+.permission-choice:focus-visible, .permission-info:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.permission-detail { padding: var(--q-inline) var(--q-inline) var(--q-inline) 30px; color: var(--ink-faint); font-size: var(--text-xs); line-height: 1.5; animation: permission-detail-in var(--dur-med) var(--ease-out); }
+@media (hover: hover) {
+  .permission-choice:hover:not(:disabled), .permission-info:hover { background: var(--q-wash); }
+  .permission-info:hover { color: var(--ink); }
+}
+@media (pointer: coarse) {
+  .permission-choice, .permission-info { min-height: 44px; }
+  .permission-info { width: 44px; }
+}
+@keyframes permission-enable { from { opacity: .5; transform: translateX(var(--permission-x)) scale(var(--permission-scale)) rotate(var(--permission-angle)); } to { opacity: 1; transform: none; } }
+@keyframes permission-check-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes permission-detail-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+@keyframes permission-menu-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .permissions-menu, .permission-detail, .permission-choice[aria-checked='true'] .permission-glyph, .permission-choice[aria-checked='true'] .permission-check { animation: none; }
+  .permission-choice:active:not(:disabled), .permission-info:active { transform: none; }
+}

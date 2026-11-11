@@ -6,7 +6,9 @@ Everything happens on your computer. Nothing is sent to another service to decid
 
 ## Turning it on
 
-In the composer's privacy row, next to **Offline** and **Incognito**, click **Shield** and switch on **Shield this chat**. The dot lights up, and the number beside it is how many values are being replaced.
+On desktop and the Local Web UI, open the composer's **Permissions** menu and select the **Privacy Shield** row. A checkmark on the left means it is enabled. The info button on the right explains the limits and links back to this guide; opening info does not change the setting. Incognito and Internet access have their own rows in the same menu.
+
+In Detailed mode, the composer's existing **Shield** panel also offers **Shield this chat**, previews and category controls. The number beside Shield is how many values are being replaced. Native iOS and Android permission pickers have not gained these desktop rows.
 
 The switch applies to that chat. Its sub-agents inherit it. To shield every chat that has no setting of its own, set `"privacyMode": "redact"` in `settings.json` (a Settings page for this is coming).
 
