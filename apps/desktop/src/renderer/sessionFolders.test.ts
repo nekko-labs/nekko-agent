@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.hoisted(() => { Object.assign(globalThis, { window: {}, localStorage: { getItem: () => null } }); });
 import type { WorkspaceFolder } from '@nekko-agent/shared';
 import { useStore } from './store.js';
-import { addFolderToChat, shouldAutoFile, withExcluded, withIncluded, withoutPrimary, withPrimary } from './sessionFolders.js';
+import { addFolderToChat, addRepoToChat, RepoFolderNeeded, shouldAutoFile, withExcluded, withIncluded, withoutPrimary, withPrimary } from './sessionFolders.js';
 
 const folder = (id: string, path = `/code/${id}`): WorkspaceFolder => ({ id, name: id, path, addedAt: 0 });
 
@@ -93,5 +93,16 @@ describe('adding a folder to a chat', () => {
     expect(api.removeWorkspace).not.toHaveBeenCalled();
     expect(api.setSessionWorkspace).toHaveBeenCalledWith('s', 'a');
     expect(api.setSessionSupportingWorkspaces).toHaveBeenCalledWith('s', ['b']);
+  });
+
+  it('asks for the repositories folder instead of adding anything when the daemon needs one (#2561)', async () => {
+    const cloneRepo = vi.fn(async () => ({ needsFolder: true as const, suggested: '/home/me/nekko-repos' }));
+    const setSessionFolders = vi.fn();
+    (globalThis as any).window.nekko = { cloneRepo, setSessionFolders };
+    const err = await addRepoToChat('s1', { workspaceId: null, supportingWorkspaceIds: [] } as any,
+      { provider: 'github', fullName: 'me/app', cloneUrl: 'https://github.com/me/app.git', webUrl: '' }).catch((e) => e);
+    expect(err).toBeInstanceOf(RepoFolderNeeded);
+    expect(err.suggested).toBe('/home/me/nekko-repos');
+    expect(setSessionFolders).not.toHaveBeenCalled();
   });
 });

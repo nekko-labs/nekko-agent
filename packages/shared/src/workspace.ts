@@ -48,12 +48,14 @@ export interface RemoteRepoList {
   providers: { kind: RepoProvider; error?: string }[];
 }
 
-/** `repos:clone`: the saved folders and the one now holding the clone. */
-export interface RepoCloneResult {
-  workspaces: WorkspaceFolder[];
-  folderId: string | null;
-  path: string;
-}
+/**
+ * `repos:clone`: the saved folders and the one now holding the repository,
+ * `reused` when it was already on this computer. With no copy here and no
+ * repositories folder chosen yet, only `needsFolder` and `suggested` come back.
+ */
+export type RepoCloneResult =
+  | { workspaces: WorkspaceFolder[]; folderId: string | null; path: string; reused?: boolean; needsFolder?: undefined }
+  | { needsFolder: true; suggested: string };
 
 /**
  * The comparable form of a folder path: no trailing separator, one kind of

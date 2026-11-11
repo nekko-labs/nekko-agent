@@ -112,12 +112,20 @@ export function hasRepoProvider(connectors: ConnectorConfig[] | undefined): bool
  * Clone a repository (or reuse its existing clone) and wire it into the chat:
  * primary when the chat has none, otherwise supporting.
  */
+/** No copy of the repository is here and no repositories folder is chosen yet. */
+export class RepoFolderNeeded extends Error {
+  constructor(public readonly suggested: string) {
+    super('Choose where repositories sync first.');
+  }
+}
+
 export async function addRepoToChat(
   sessionId: string,
   session: ChatFolders,
   repo: Pick<RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>,
 ): Promise<{ session: Session | null; path: string }> {
   const result = await window.nekko.cloneRepo({ provider: repo.provider, fullName: repo.fullName, cloneUrl: repo.cloneUrl, webUrl: repo.webUrl });
+  if (result.needsFolder) throw new RepoFolderNeeded(result.suggested);
   await useStore.getState().refreshSettings();
   if (!result.folderId) return { session: null, path: result.path };
   return { session: await applyFolderSelection(sessionId, withIncluded(session, result.folderId)), path: result.path };

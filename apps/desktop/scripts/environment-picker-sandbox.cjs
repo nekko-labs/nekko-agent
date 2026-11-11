@@ -45,7 +45,13 @@ app.whenReady().then(async () => {
       await shot('menu-repositories');
       await clickText('acme/billing-service');
       await sleep(300);
-      check('clone in progress shown', await run('document.body.innerText.includes("Cloning…")'));
+      // #2561: the first repository not on this computer asks where repositories sync.
+      check('sync folder asked', await run('document.body.innerText.includes("Where should repositories sync?")'));
+      await shot('menu-sync-folder');
+      await clickText('Use /Users/alex/nekko-repos');
+      await sleep(300);
+      check('sync folder saved', await run('JSON.stringify(window.integration.calls).includes("repoCloneDir")'));
+      check('add in progress shown', await run('document.body.innerText.includes("Adding…")'));
       await shot('menu-cloning');
       check('clone asked for the picked repository', await run('JSON.stringify(window.integration.calls).includes("acme/billing-service")'));
       // No git provider: the section offers to connect one.

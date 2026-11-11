@@ -221,6 +221,16 @@ export function SettingsView() {
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
+              <section className="card mt-5 p-5" data-repo-folder>
+                <h2 className="font-semibold">Repositories folder</h2>
+                <p className="mt-1 text-xs text-ink-soft">Where a repository added to a chat is cloned when no copy is already on this computer. Repositories already added stay where they are.</p>
+                <div className="mt-3 flex min-w-0 items-center gap-3">
+                  <span className="min-w-0 flex-1 truncate text-xs" title={settings.repoCloneDir}>{settings.repoCloneDir || 'Not chosen yet. You are asked the first time a repository needs cloning.'}</span>
+                  <button type="button" className="btn btn-outline shrink-0 text-xs" onClick={async () => { const dir = await window.nekko.pickFolder(); if (dir) update({ repoCloneDir: dir }); }}>
+                    {settings.repoCloneDir ? 'Change…' : 'Choose…'}
+                  </button>
+                </div>
+              </section>
             </SettingsGroup>
             <SettingsGroup id="phone">
               {/* Remote access (relay) */}
