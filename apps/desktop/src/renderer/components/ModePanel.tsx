@@ -236,6 +236,8 @@ export function ModePanel({
   const narrow = typeof window !== 'undefined' && window.innerWidth < 720;
 
   // A flyout sits out the panel's side when there is room, else beside its row.
+  // It is placed from its measured height, so it is re-placed whenever it resizes
+  // (its width lands, the tool list loads, a filter narrows it).
   useLayoutEffect(() => {
     if (!fly || narrow) return;
     const place = () => {
@@ -245,12 +247,16 @@ export function ModePanel({
       const left = p.right + 8 + w <= vw - 8 ? p.right + 8 : a.right + 6 + w <= vw - 8 ? a.right + 6 : Math.max(8, a.left - w - 6);
       const maxHeight = vh - 16;
       // Sit level with the row; only a tall flyout (the tool list) is pushed up to fit.
-      const h = Math.min(flyRef.current?.scrollHeight ?? 0, maxHeight);
-      setFlyStyle({ left, width: w, maxHeight, top: Math.max(8, Math.min(a.top - 10, vh - h - 8)) });
+      if (flyRef.current) flyRef.current.style.width = `${w}px`; // measure at the final width
+      const h = Math.min(flyRef.current?.offsetHeight ?? 0, maxHeight);
+      const top = Math.max(8, Math.min(a.top - 10, vh - h - 8));
+      setFlyStyle((o) => (o.left === left && o.width === w && o.maxHeight === maxHeight && o.top === top ? o : { left, width: w, maxHeight, top }));
     };
     place();
     window.addEventListener('resize', place);
-    return () => window.removeEventListener('resize', place);
+    const ro = typeof ResizeObserver !== 'undefined' && flyRef.current ? new ResizeObserver(place) : null;
+    if (ro && flyRef.current) ro.observe(flyRef.current);
+    return () => { window.removeEventListener('resize', place); ro?.disconnect(); };
   }, [fly, narrow]);
 
   const toggleFly = (f: Fly) => setFly((o) => (o === f ? null : f));
