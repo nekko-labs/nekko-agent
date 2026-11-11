@@ -11,7 +11,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::{Error, VERSION, b64, hkdf, pad};
 
 const BLOB_VERSION: u8 = 1;
-const SALT_LEN: usize = 32;
+pub(crate) const SALT_LEN: usize = 32;
 const TAG_LEN: usize = 16;
 
 /// The length of an object id: base64url of an HMAC-SHA256.
@@ -144,16 +144,7 @@ pub fn seal_record_with(
 ) -> Result<String, Error> {
     check(collection, object_id, revision)?;
     let aad = record_aad(account_id, key_id, collection, object_id, revision);
-    let (mut key, nonce) = hkdf::key_and_nonce(&keyring.enc, &salt, format!("{VERSION} record").as_bytes());
-    let mut framed = pad::frame(plaintext);
-    let ct = hkdf::seal(&key, &nonce, aad.as_bytes(), &framed);
-    key.zeroize();
-    framed.zeroize();
-    let mut blob = Vec::with_capacity(1 + SALT_LEN + ct.len());
-    blob.push(BLOB_VERSION);
-    blob.extend_from_slice(&salt);
-    blob.extend_from_slice(&ct);
-    Ok(b64::encode(&blob))
+    Ok(seal_with_aad(keyring, &aad, plaintext, salt))
 }
 
 /// Open a record. Fails unless every field matches what it was sealed with.
@@ -167,11 +158,29 @@ pub fn open_record(
     blob: &str,
 ) -> Result<Vec<u8>, Error> {
     check(collection, object_id, revision)?;
+    let aad = record_aad(account_id, key_id, collection, object_id, revision);
+    open_with_aad(keyring, &aad, blob)
+}
+
+/// The envelope for any associated data: shared by records and fleet descriptors.
+pub(crate) fn seal_with_aad(keyring: &Keyring, aad: &str, plaintext: &[u8], salt: [u8; SALT_LEN]) -> String {
+    let (mut key, nonce) = hkdf::key_and_nonce(&keyring.enc, &salt, format!("{VERSION} record").as_bytes());
+    let mut framed = pad::frame(plaintext);
+    let ct = hkdf::seal(&key, &nonce, aad.as_bytes(), &framed);
+    key.zeroize();
+    framed.zeroize();
+    let mut blob = Vec::with_capacity(1 + SALT_LEN + ct.len());
+    blob.push(BLOB_VERSION);
+    blob.extend_from_slice(&salt);
+    blob.extend_from_slice(&ct);
+    b64::encode(&blob)
+}
+
+pub(crate) fn open_with_aad(keyring: &Keyring, aad: &str, blob: &str) -> Result<Vec<u8>, Error> {
     let raw = b64::decode(blob)?;
     if raw.len() < 1 + SALT_LEN + TAG_LEN || raw[0] != BLOB_VERSION {
         return Err(Error::Malformed);
     }
-    let aad = record_aad(account_id, key_id, collection, object_id, revision);
     let (mut key, nonce) =
         hkdf::key_and_nonce(&keyring.enc, &raw[1..1 + SALT_LEN], format!("{VERSION} record").as_bytes());
     let opened = hkdf::open(&key, &nonce, aad.as_bytes(), &raw[1 + SALT_LEN..]);
