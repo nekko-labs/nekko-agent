@@ -278,9 +278,13 @@ final class LiveRelayTests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         }
         XCTAssertTrue(result.exists, "the test reports which path it took")
-        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
         let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Test notification")).firstMatch
-        XCTAssertTrue(banner.waitForExistence(timeout: 10), "the test notification shows over the app")
+        // Check the banner immediately after the result appears: system banners auto-dismiss in
+        // a few seconds, and reading result.label takes an accessibility round-trip that can
+        // push the banner out of its display window on a slow runner.
+        let bannerSeenEarly = banner.exists
+        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
+        XCTAssertTrue(bannerSeenEarly || banner.waitForExistence(timeout: 10), "the test notification shows over the app")
         let bannerShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         bannerShot.name = "\(theme)-7e-test-notification"
         bannerShot.lifetime = .keepAlways
