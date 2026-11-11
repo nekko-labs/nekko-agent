@@ -318,7 +318,8 @@ you). A ready VM still waits for the mode: with Do not disturb it boots only whi
 ## Keep awake
 
 - **System default**. The Mac follows its own Energy settings. If it sleeps mid-job, the job is
-  lost and re-run (when **Re-run jobs lost to sleep** is on).
+  lost and re-run (when **Re-run jobs lost to sleep** is on). A job cut off because Nekko
+  quit or restarted is audited as lost and re-run the same way when Nekko starts again.
 - **While a runner is active** (default). Keeps the Mac from sleeping while a job runs and lets
   it sleep when the last one ends. The display can still sleep.
 - **Always**. Keeps the Mac awake whenever the runner is on and allowed to take jobs.
@@ -349,7 +350,8 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **Memory per VM**: 4 to 64 GB, for macOS and Linux VMs alike.
 - **Total runner memory**: **Use the recommendation** (the sheet shows
   `Recommended: N GB for this Mac`), or your own figure from 4 GB up to 75% of the Mac's memory.
-- **CPU per VM**: **Mode default**, or 2 up to the Mac's cores minus 2.
+- **CPU per VM**: **Mode default**, or 2 up to the Mac's cores minus 2. The mode default is
+  shared between your macOS slots, so two slots on a 10-core Mac get 4 vCPUs each.
 - **Disk**: an image budget of 50 to 4000 GB, and a free-disk floor of 10 to 1000 GB below which
   no new VM starts.
 - **Only when**: **On power**, **Trusted networks**, **Never on hotspots**, and
@@ -477,7 +479,8 @@ The two logs have different sources:
   boot to finish before checking a job in a newly started VM. This updates future VMs, not a VM
   already running or a log lost when its VM was deleted. Empty output or a collection failure
   can also leave no saved log; the message alone does not prove the image is old. This Mac
-  keeps the last 20 nonempty VM logs, up to 1 MB each.
+  keeps the last 20 nonempty VM logs, up to 1 MB each: the first 256 KB and the latest output,
+  with a note between them of how much was dropped.
 
 Runner settings **Save** shows **Saving runner settings…**, prevents edits and dismissal while
 saving, and closes with a confirmation after the service accepts the change. On failure, the

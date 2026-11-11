@@ -21,6 +21,12 @@ Any PR that changes what the app looks like ships the proof in its description:
   identifier (for example `com.apple.CoreSimulator.SimRuntime.iOS-27-0`) and compare
   both `revisions.txt` manifests. Hosted images can have different runtime inventories;
   an unavailable explicit runtime must fail rather than fall back silently.
+- **Capture iPhone evidence locally on a Mac, not on CI.** The org has 5 macOS
+  runners and Native iOS, which `gate` waits for, queues behind every evidence run. See
+  [iPhone evidence on a Mac](#iphone-evidence-on-a-mac). Dispatch an evidence workflow
+  only from a machine without Xcode, and never add a workflow (diagnostic ones on a
+  branch included) that starts macOS jobs on `pull_request`, `push` or `schedule`:
+  `scripts/mac-workflows.test.mjs` fails the build.
 - Media belongs in the PR description, not in git. Use the shared `pr-media`
   pre-release series for all screenshots and recordings; never create a release
   per PR. GitHub caps a release at 1,000 assets, so when the newest release cannot
@@ -42,6 +48,39 @@ Any PR that changes what the app looks like ships the proof in its description:
 - If a change has no visual delta (refactor, types, tests, docs, build config), write
   "no visual change" rather than silently omitting the screenshots. A new screen has no
   "before": say so instead of skipping the table.
+
+## iPhone evidence on a Mac
+
+`scripts/ios-evidence-local.mjs` runs the evidence workflows' steps on this Mac: a
+detached worktree per revision, the harness files from the harness commit (default the
+source), a simulator it creates, boots headless and deletes, `build-for-testing`, then
+`test-without-building -only-testing`. Before and after run one at a time. Output, with
+`revisions.txt`, `build.log`, the `.xcresult`, `shots/` and any video, goes to
+`.shots/ios-evidence/<label>/<before|after>/`. It needs Xcode, `xcodegen` and the
+simulator runtime (default iOS 27.0, the one CI pins); a missing runtime fails rather
+than comparing different OS versions.
+
+```
+# native-mode-evidence.yml's iOS half
+node scripts/ios-evidence-local.mjs --preset mode --baseline <merge-base sha> --source <head sha> \
+  --test-file apps/ios/UITests/ThemeLanguageTests.swift \
+  --only-testing NekkoNativeUITests/ThemeLanguageTests/testSimpleModeLabelEvidence
+# ios-group-evidence.yml (Card details evidence's iPhone half)
+node scripts/ios-evidence-local.mjs --preset groups --baseline <sha> --source <sha>
+# ios-computer-settings-evidence.yml
+node scripts/ios-evidence-local.mjs --preset computer-settings --baseline <sha> --source <sha>
+# anything else: overlay files from the harness and name the tests
+node scripts/ios-evidence-local.mjs --preset custom --baseline <sha> --source <sha> \
+  --overlay apps/ios/UITests/MyEvidenceTests.swift --only-testing NekkoNativeUITests/MyEvidenceTests
+```
+
+`--label` names the output folder, `--harness` and `--runtime` match the workflow
+inputs, `--only before|after` reruns one side and `--keep` leaves the worktrees for
+inspection. Diagnostics (a timing probe, a matched regression) use `--preset custom`
+on the commits in question instead of a one-off workflow. Android evidence runs on
+Linux runners, which never queue, so its workflows stay as they are. Upload the shots
+with `node scripts/pr-media.mjs <pr>` as usual; say in the PR that the iPhone pair
+was captured locally, with the `revisions.txt` lines.
 
 ## Verification must preserve the user desktop
 
