@@ -114,7 +114,7 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
 
     // Off by default: nothing is listed until sharing is switched on.
     let list = call(&a, "fleet:list", json!([org_id])).await.unwrap();
-    assert_eq!(list["computers"].as_array().unwrap().len(), 0, "{list}");
+    assert_eq!(list["computers"].as_array().unwrap().len(), 0, "fleet list should start empty");
     assert_eq!(call(&a, "fleet:status", json!([])).await.unwrap()["sharing"][0]["state"], "off");
 
     // B (the same account) unlocks with the recovery key, and turns chat sync off too.
@@ -128,11 +128,11 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
 
     // A shares this computer: it is listed for B with its name, OS and models.
     let shared = call(&a, "fleet:setSharing", json!([org_id, true])).await.unwrap();
-    assert_eq!((shared["sharing"].as_bool(), shared["state"].as_str()), (Some(true), Some("online")), "{shared}");
+    assert_eq!((shared["sharing"].as_bool(), shared["state"].as_str()), (Some(true), Some("online")), "fleet sharing state");
     let list = call(&b, "fleet:list", json!([org_id])).await.unwrap();
     assert_eq!(list["orgKeyId"], 1);
     assert_eq!(list["rejected"], 0);
-    assert_eq!(names(&list), ["Desk-PC"], "{list}");
+    assert_eq!(names(&list), ["Desk-PC"], "fleet list names after sharing on");
     let c = &list["computers"][0];
     assert_eq!(
         (c["online"].as_bool(), c["you"].as_bool(), c["verified"].as_bool()),
@@ -196,7 +196,7 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
     .await;
     assert!(status == 200 || status == 201, "{status} {body}");
     let list = call(&a, "fleet:list", json!([org_id])).await.unwrap();
-    assert_eq!(list["rejected"], 1, "{list}");
+    assert_eq!(list["rejected"], 1, "fleet list rejected count");
     assert_eq!(names(&list), ["Desk-PC (office)"]);
 
     // A member of another account sees the org but has no key: it lists nothing and cannot share.
@@ -212,7 +212,7 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
     assert_eq!(joined["orgs"][0]["hasKey"], false);
     call(&cdev, "sync:turnOn", json!([])).await.unwrap();
     let theirs = call(&cdev, "fleet:list", json!([org_id])).await.unwrap();
-    assert_eq!(theirs["hasKey"], false, "{theirs}");
+    assert_eq!(theirs["hasKey"], false, "member without an org key");
     assert!(theirs["error"].as_str().unwrap().contains("org key"));
     assert_eq!(theirs["computers"].as_array().unwrap().len(), 0);
     let err = call(&cdev, "fleet:setSharing", json!([org_id, true])).await.unwrap_err();
@@ -222,7 +222,7 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
     let off = call(&a, "fleet:setSharing", json!([org_id, false])).await.unwrap();
     assert_eq!((off["sharing"].as_bool(), off["state"].as_str()), (Some(false), Some("off")));
     let list = call(&b, "fleet:list", json!([org_id])).await.unwrap();
-    assert!(!names(&list).contains(&"Desk-PC (office)".to_string()), "{list}");
+    assert!(!names(&list).contains(&"Desk-PC (office)".to_string()), "fleet list after sharing off");
     let (status, _) =
         raw(&url, &a, reqwest::Method::POST, &format!("/v1/orgs/{org_id}/fleet/self/heartbeat"), None).await;
     assert_eq!(status, 409, "a withdrawn computer cannot keep its lease");
@@ -230,7 +230,7 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
     // Sharing again recovers from the bumped revision, with no manual step.
     call(&a, "fleet:setSharing", json!([org_id, true])).await.unwrap();
     let list = call(&b, "fleet:list", json!([org_id])).await.unwrap();
-    assert!(names(&list).contains(&"Desk-PC (office)".to_string()), "{list}");
+    assert!(names(&list).contains(&"Desk-PC (office)".to_string()), "fleet list after sharing restored");
 
     // The owner removes the member: the org gets a new key, and the member's view is empty.
     let members = call(&b, "org:get", json!([org_id])).await.unwrap();
@@ -238,8 +238,8 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
         members["members"].as_array().unwrap().iter().find(|m| m["email"] == c_email.to_lowercase()).unwrap()["userId"]
             .clone();
     let after = call(&b, "org:removeMember", json!([org_id, their_id])).await.unwrap();
-    assert!(after.get("keyError").is_none(), "{after}");
-    assert_eq!((after["keyId"].as_u64(), after["hasKey"].as_bool()), (Some(2), Some(true)), "{after}");
+    assert!(after.get("keyError").is_none(), "org state after member removal");
+    assert_eq!((after["keyId"].as_u64(), after["hasKey"].as_bool()), (Some(2), Some(true)), "org key after member removal");
     assert_eq!(after["members"].as_array().unwrap().len(), 1);
     assert_eq!(call(&cdev, "org:list", json!([])).await.unwrap()["orgs"].as_array().unwrap().len(), 0);
 
@@ -248,7 +248,7 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
     a.cloud.share_tick().await;
     let list = call(&b, "fleet:list", json!([org_id])).await.unwrap();
     assert_eq!(list["orgKeyId"], 2);
-    assert!(names(&list).contains(&"Desk-PC (office)".to_string()), "{list}");
+    assert!(names(&list).contains(&"Desk-PC (office)".to_string()), "fleet list after key rotation");
     assert_eq!(call(&a, "fleet:status", json!([])).await.unwrap()["sharing"][0]["state"], "online");
 
     // B removes A from the account: A disappears from the org list, and the org key moves on.
@@ -258,8 +258,8 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
             .clone();
     call(&b, "sync:revoke", json!([a_id])).await.unwrap();
     let list = call(&b, "fleet:list", json!([org_id])).await.unwrap();
-    assert!(!names(&list).contains(&"Desk-PC (office)".to_string()), "{list}");
-    assert_eq!(list["orgKeyId"], 3, "revoking a device rotates the org key: {list}");
+    assert!(!names(&list).contains(&"Desk-PC (office)".to_string()), "fleet list after device revocation");
+    assert_eq!(list["orgKeyId"], 3, "revoking a device rotates the org key");
     let org_now = call(&b, "org:get", json!([org_id])).await.unwrap();
     assert_eq!((org_now["keyId"].as_u64(), org_now["hasKey"].as_bool()), (Some(3), Some(true)));
     assert_eq!(org_now["members"].as_array().unwrap().len(), 1);
@@ -267,20 +267,20 @@ async fn an_org_lists_a_shared_computer_for_an_unlocked_device_without_chat_sync
     // A is signed out of sync now; its sharing can no longer publish.
     a.cloud.share_tick().await;
     let st = call(&a, "fleet:status", json!([])).await.unwrap();
-    assert_eq!(st["sharing"][0]["state"], "error", "{st}");
+    assert_eq!(st["sharing"][0]["state"], "error", "fleet status after revocation");
 
     // B shares too, then signs out: sign-out withdraws and stops sharing.
     call(&b, "fleet:setSharing", json!([org_id, true])).await.unwrap();
     let list = call(&b, "fleet:list", json!([org_id])).await.unwrap();
-    assert_eq!(names(&list), ["Laptop"], "{list}");
+    assert_eq!(names(&list), ["Laptop"], "fleet list names before sign-out");
     assert_eq!(list["orgKeyId"], 3);
     call(&b, "cloud:signOut", json!([])).await.unwrap();
     assert_eq!(b.cloud.status()["orgs"].as_array().unwrap().len(), 0);
     sign_in(&b, &email).await;
     let st = call(&b, "fleet:status", json!([])).await.unwrap();
-    assert!(st["sharing"].as_array().unwrap().iter().all(|s| s["state"] == "off"), "{st}");
+    assert!(st["sharing"].as_array().unwrap().iter().all(|s| s["state"] == "off"), "fleet status after sign-out");
     let list = call(&b, "fleet:list", json!([org_id])).await.unwrap();
-    assert!(names(&list).is_empty(), "the sign-out withdrew this computer: {list}");
+    assert!(names(&list).is_empty(), "the sign-out withdrew this computer");
 
     // Clean up the org.
     call(&b, "org:delete", json!([org_id])).await.unwrap();
