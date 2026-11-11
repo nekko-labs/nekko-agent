@@ -157,7 +157,7 @@ pub fn app_info(facts: &AppFacts) -> Value {
 }
 
 /// Names are display-only, never a computer's identity or a trust decision.
-fn computer_name(settings: &Value, hostname: &str) -> String {
+pub(crate) fn computer_name(settings: &Value, hostname: &str) -> String {
     settings
         .get("machineName")
         .and_then(Value::as_str)

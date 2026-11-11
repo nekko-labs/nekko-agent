@@ -49,6 +49,7 @@
 //!   account that sent it.
 
 mod b64;
+mod descriptor;
 mod donation;
 mod hkdf;
 mod join;
@@ -58,6 +59,9 @@ mod recovery;
 mod wrap;
 
 pub use b64::{decode as b64_decode, encode as b64_encode};
+pub use descriptor::{
+    FLEET_COLLECTION, MAX_REVISION, descriptor_aad, open_descriptor, org_scope, seal_descriptor, seal_descriptor_with,
+};
 pub use donation::{DONATION_VERSION, Donation, seal_donation, seal_donation_with};
 pub use join::{JoinCode, unwrap_join, wrap_for_join, wrap_for_join_with};
 pub use pad::{frame, padme, unframe};
