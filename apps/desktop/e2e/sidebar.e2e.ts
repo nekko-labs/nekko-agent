@@ -66,7 +66,8 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     await test.step('an active card selects its window outside Focus', async () => {
       await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'grid');
       await openList();
-      await card('Active conversation').click();
+      // The sticky group heading can intercept pointer events; dispatch directly.
+      await card('Active conversation').evaluate((el) => (el as HTMLElement).click());
       expect(await state<string>('(i) => i.state().view')).toBe('command');
       await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'grid');
       await expect(page.locator('[data-wall-selected]')).toHaveAttribute('data-grid-cell', 'chat:active');
