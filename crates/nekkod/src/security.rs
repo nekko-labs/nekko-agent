@@ -47,10 +47,11 @@ pub const CHANNELS: &[&str] = &[
     "security:enable",
     "security:disable",
     "security:removeMethod",
+    "security:renameMethod",
     "security:recoveryCodes",
 ];
 
-/// Adding a method or new recovery codes while step-up is on needs a step-up
+/// Adding or renaming a method or new recovery codes while step-up is on needs a step-up
 /// too, or anyone at the keyboard could register their own key and answer
 /// with it. Not in `STEP_UP_DESKTOP_GUARDED` (shared/step-up.ts keeps its
 /// list); the TS twin is `STEP_UP_DESKTOP_METHODS` in step-up-desktop.ts.
@@ -60,6 +61,7 @@ pub const METHODS_CHANNELS: &[&str] = &[
     "security:registerKey",
     "security:totpBegin",
     "security:totpConfirm",
+    "security:renameMethod",
     "security:recoveryCodes",
 ];
 
@@ -141,6 +143,8 @@ const PENDING_TOTP_MS: f64 = 10.0 * 60.0 * 1000.0;
 const PENDING_TOTP_TRIES: u32 = 10;
 /// The longest name a method keeps.
 const NAME_MAX: usize = 60;
+/// What a one-time code app is called when the owner gave it no name.
+const TOTP_NAME: &str = "One-time code app";
 
 fn limits() -> &'static step_up::Limits {
     &nekko_remote::phone::policy().step_up
@@ -255,6 +259,11 @@ impl Security {
             "security:enable" => self.enable(surface),
             "security:disable" => self.disable(surface, arg(args, 0)),
             "security:removeMethod" => self.remove(surface, arg(args, 0).as_str().unwrap_or_default(), arg(args, 1)),
+            "security:renameMethod" => self.rename(
+                surface,
+                arg(args, 0).as_str().unwrap_or_default(),
+                arg(args, 1).as_str().unwrap_or_default(),
+            ),
             "security:recoveryCodes" => self.recovery_codes(),
             _ => Err(format!("unknown channel {channel}")),
         }
@@ -290,7 +299,8 @@ impl Security {
             .collect();
         let totp = state.get("totp").filter(|t| t.is_object()).map(|t| {
             let locked = t.get("lockedUntil").and_then(Value::as_f64).filter(|u| *u > now);
-            json!({ "addedAt": t.get("addedAt"), "lastUsedAt": t.get("lastUsedAt"), "lockedUntil": locked.map(num) })
+            let name = t.get("name").and_then(Value::as_str).unwrap_or(TOTP_NAME);
+            json!({ "name": name, "addedAt": t.get("addedAt"), "lastUsedAt": t.get("lastUsedAt"), "lockedUntil": locked.map(num) })
         });
         json!({
             "available": true,
@@ -531,8 +541,8 @@ impl Security {
         Ok(json!({ "secret": secret, "uri": uri, "account": host }))
     }
 
-    /// `security:totpConfirm(code)`: the first code from the app, proving it holds the secret.
-    fn totp_confirm(&self, surface: Surface, code: &Value, _name: Option<&str>) -> Result<Value, String> {
+    /// `security:totpConfirm(code, name)`: the first code from the app, proving it holds the secret.
+    fn totp_confirm(&self, surface: Surface, code: &Value, name: Option<&str>) -> Result<Value, String> {
         let now = self.now();
         let l = limits();
         let secret = {
@@ -564,12 +574,15 @@ impl Security {
             return Err("A one-time code app is already set up.".into());
         }
         let first = methods(&state) == 0;
-        obj(&mut state)
-            .insert("totp".into(), json!({ "secret": secret, "addedAt": num(now), "lastStep": num(matched as f64) }));
+        let name = clean_name(name.unwrap_or_default(), TOTP_NAME);
+        obj(&mut state).insert(
+            "totp".into(),
+            json!({ "secret": secret, "name": name, "addedAt": num(now), "lastStep": num(matched as f64) }),
+        );
         let codes = first_codes(&mut state, first);
         self.save(&state)?;
         self.lock().pending_totp.remove(surface.as_str());
-        Ok(json!({ "status": self.status(surface), "recoveryCodes": codes }))
+        Ok(json!({ "status": self.status(surface), "recoveryCodes": codes, "name": name }))
     }
 
     /// `security:enable`: only with at least `minMethods` registered.
@@ -643,6 +656,35 @@ impl Security {
         } else if let Some(a) = root.get_mut("credentials").and_then(Value::as_array_mut) {
             a.retain(|c| c.get("id").and_then(Value::as_str) != Some(id));
         }
+        self.save(&state)?;
+        Ok(self.status(surface))
+    }
+
+    /// `security:renameMethod(id | "totp", name)`: a new name for a registered
+    /// method. Guarded like adding one (`METHODS_CHANNELS`), so nobody at the
+    /// keyboard can relabel the owner's keys while step-up is on. An empty
+    /// name goes back to the kind's default.
+    fn rename(&self, surface: Surface, id: &str, name: &str) -> Result<Value, String> {
+        let mut state = self.load_or_new()?;
+        let root = obj(&mut state);
+        let target = if id == "totp" {
+            root.get_mut("totp").filter(|t| t.is_object()).map(|t| (t, TOTP_NAME))
+        } else {
+            root.get_mut("credentials").and_then(Value::as_array_mut).and_then(|a| {
+                a.iter_mut().find(|c| c.get("id").and_then(Value::as_str) == Some(id)).map(|c| {
+                    let fallback = if c.get("kind").and_then(Value::as_str) == Some("passkey") {
+                        "Passkey"
+                    } else {
+                        "Security key"
+                    };
+                    (c, fallback)
+                })
+            })
+        };
+        let Some((method, fallback)) = target else {
+            return Err("That method is not registered on this computer.".into());
+        };
+        obj(method).insert("name".into(), json!(clean_name(name, fallback)));
         self.save(&state)?;
         Ok(self.status(surface))
     }
@@ -1080,5 +1122,56 @@ mod tests {
         for c in ["remote:disable", "remote:status", "app:quit", "remote:stop", "device:signOut"] {
             assert_eq!(action_of(c), None, "{c}: never guarded");
         }
+    }
+
+    #[test]
+    fn a_code_app_keeps_the_name_it_was_given() {
+        let r = rig();
+        let begin = r.d("security:totpBegin", json!([])).unwrap();
+        let secret = step_up::base32_decode(begin["secret"].as_str().unwrap()).unwrap();
+        let code = step_up::totp_at(&secret, step_up::totp_step(r.now(), 30.0), 6);
+        let added = r.d("security:totpConfirm", json!([code, "  Microsoft Authenticator\n"])).unwrap();
+        assert_eq!(added["name"], "Microsoft Authenticator");
+        assert_eq!(added["status"]["totp"]["name"], "Microsoft Authenticator");
+        assert_eq!(r.mem.load().unwrap()["totp"]["name"], "Microsoft Authenticator");
+        let c = r.d("security:challenge", json!([])).unwrap();
+        assert_eq!(c["totp"], true, "the challenge says only that a code app exists, never its name");
+    }
+
+    #[test]
+    fn a_code_app_without_a_name_and_an_older_file_read_as_one_time_code_app() {
+        let r = rig();
+        assert_eq!(r.add_totp()["status"]["totp"]["name"], TOTP_NAME);
+        let mut saved = r.mem.load().unwrap();
+        saved["totp"].as_object_mut().unwrap().remove("name");
+        r.mem.save(&saved).unwrap();
+        assert_eq!(
+            r.d("security:status", json!([])).unwrap()["totp"]["name"],
+            TOTP_NAME,
+            "security.json from before names"
+        );
+    }
+
+    #[test]
+    fn any_method_can_be_renamed_and_an_empty_name_goes_back_to_the_default() {
+        let r = rig();
+        r.register(&key(1), 1, PAGE);
+        r.add_totp();
+        let id1 = step_up::to_b64url(&[1; 16]);
+        let s = r.d("security:renameMethod", json!([id1, "Blue YubiKey"])).unwrap();
+        assert_eq!(s["methods"][0]["name"], "Blue YubiKey");
+        let s = r.d("security:renameMethod", json!(["totp", "Authy"])).unwrap();
+        assert_eq!(s["totp"]["name"], "Authy");
+        let s = r.d("security:renameMethod", json!([id1, "   "])).unwrap();
+        assert_eq!(s["methods"][0]["name"], "Security key");
+        let err = r.d("security:renameMethod", json!(["nope", "x"])).unwrap_err();
+        assert!(err.contains("not registered"), "{err}");
+    }
+
+    #[test]
+    fn renaming_while_step_up_is_on_needs_a_step_up() {
+        let r = on();
+        let err = r.sec.guard(Surface::Desktop, "security:renameMethod").unwrap_err();
+        assert!(err.contains("step-up-required") && err.contains(METHODS_ACTION), "{err}");
     }
 }

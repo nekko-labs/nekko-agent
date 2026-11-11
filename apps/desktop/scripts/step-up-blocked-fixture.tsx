@@ -37,7 +37,7 @@ Promise.all([import('react'), import('react-dom/client'), import('../src/rendere
           onCodesSaved: noop,
           onEnable: noop,
           onDisable: noop,
-          onRemove: noop,
+          onRemove: noop, onRename: () => false,
           onNewCodes: noop,
           onCopyCodes: noop,
         }),

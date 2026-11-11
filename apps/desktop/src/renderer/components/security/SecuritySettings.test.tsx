@@ -40,6 +40,7 @@ const html = (o: Partial<Parameters<typeof SecuritySettingsView>[0]> = {}) =>
       onEnable={vi.fn()}
       onDisable={vi.fn()}
       onRemove={vi.fn()}
+      onRename={vi.fn().mockReturnValue(false)}
       onNewCodes={vi.fn()}
       onCopyCodes={vi.fn()}
       {...o}
@@ -86,6 +87,19 @@ describe('Settings → Security', () => {
     expect(out).not.toMatch(/disabled=""[^>]*>Turn on/);
     expect(out).not.toContain('aria-describedby="security-step-up-state"');
     expect(out).not.toMatch(/text-ink-faint">Require a step-up/);
+  });
+
+  it('shows the code app under the name it was given, and offers Rename on every method', () => {
+    const out = html({ status: status({ methods: [key('a', 'YubiKey 5C')], totp: { name: 'Microsoft Authenticator', addedAt: NOW - 1000 } }) });
+    expect(out).toMatch(/data-method="totp"[^>]*>.*Microsoft Authenticator/);
+    expect(out).toContain('One-time code app · added today');
+    expect((out.match(/>Rename<\/button>/g) ?? []).length).toBe(2);
+    expect(out).toContain('aria-label="Name for the new method"');
+  });
+
+  it('calls a code app from an older computer, with no name, One-time code app', () => {
+    const out = html({ status: status({ totp: { addedAt: NOW - 1000 } }) });
+    expect(out).toMatch(/data-method="totp"[^>]*>.*One-time code app<\/span>/);
   });
 
   it('warns, not refuses, when the second method is a code app and phones are paired', () => {
