@@ -22,7 +22,14 @@ const paint = (text: string, marks: PrivacyMark[]) =>
   renderToStaticMarkup(<>{markPrivacyNodes(composerMarkdownNodes(text), text, marks)}</>);
 
 /** Strip tags: what `textContent` would read. Generated brackets and placeholders are CSS. */
-const textOf = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;/g, "'");
+const textOf = (html: string): string => {
+  // Loop until stable so crafted nested tags do not sneak through (CodeQL js/incomplete-multi-character-sanitization).
+  let s = html;
+  let prev: string;
+  do { prev = s; s = s.replace(/<[^>]+>/g, ''); } while (s !== prev);
+  // Decode named refs last so &amp; never double-unescapes another sequence (CodeQL js/double-escaping).
+  return s.replace(/&#x27;/g, "'").replace(/&amp;/g, '&');
+};
 
 describe('Privacy Shield marks in the composer', () => {
   it('marks only draft values, and only when the shield is on for a cloud model', () => {
