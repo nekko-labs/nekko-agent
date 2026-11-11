@@ -374,7 +374,8 @@
     transform 160ms var(--ease-out),
     background 0.12s ease,
     color 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    opacity 0.12s ease;
   /* Answer the press itself, not the release: half a pixel was below notice. */
   &:active:not(:disabled) {
     transform: scale(0.97);
