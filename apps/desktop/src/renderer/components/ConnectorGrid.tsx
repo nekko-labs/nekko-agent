@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import type { ConnectorConfig, ConnectorKind, ConnectorMeta, ConnectorResource, DetectedConnectors } from '@nekko-agent/shared';
+import type { ConnectorConfig, ConnectorKind, ConnectorMeta, ConnectorResource, DetectedConnectors, RepoExclusions } from '@nekko-agent/shared';
 import { CONNECTOR_CATALOG } from '@nekko-agent/shared';
 import { ConnectorIcon } from '../connectorIcons.js';
 import { CheckIcon } from '../icons.js';
 import { StatusDot } from './primitives/index.js';
+import { ConnectorRepos, Disclosure } from './ConnectorRepos.js';
+import { exclusionsOf } from '../connectorRepos.js';
 import { useStore } from '../store.js';
 
 /** Step one of a setup: where the key comes from, as one button. */
@@ -73,6 +75,9 @@ const EXTRA_FIELDS: Partial<Record<ConnectorKind, ConnectorField[]>> = {
   tasksfile: [{ key: 'path', label: 'File path', placeholder: '/Users/you/project/TASKS.md' }],
   floop: [{ key: 'url', label: 'Server URL', placeholder: 'https://your-team.fly.dev' }],
 };
+
+/** Connectors whose repositories the user can choose (#2562). */
+const GIT_KINDS: ReadonlySet<ConnectorKind> = new Set(['github', 'gitlab']);
 
 /** Connectors that need no secret at all: there is no key step. */
 const NO_TOKEN: ReadonlySet<ConnectorKind> = new Set(['tasksfile']);
@@ -222,6 +227,19 @@ export function ConnectorGrid({ compact = false }: { compact?: boolean }) {
     setPreview((p) => ({ ...p, [k]: undefined }));
   };
 
+  /** Saves which repositories the app leaves out, showing the change at once. */
+  const exclude = async (k: ConnectorKind, next: RepoExclusions) => {
+    setConfigs(configs.map((c) => (c.kind === k ? { ...c, settings: { ...c.settings, ...next } } : c)));
+    // A sample fetched before the change may list what was just removed.
+    setPreview((p) => ({ ...p, [k]: undefined }));
+    try {
+      setConfigs(await window.nekko.excludeConnectorRepos(k, next));
+    } catch (e) {
+      setErrors((er) => ({ ...er, [k]: (e as Error).message || 'Could not save the repositories.' }));
+      setConfigs(await window.nekko.listConnectors());
+    }
+  };
+
   const fetchData = async (k: ConnectorKind) => {
     try {
       const res = await window.nekko.fetchConnector(k);
@@ -244,6 +262,8 @@ export function ConnectorGrid({ compact = false }: { compact?: boolean }) {
           token={tokens[meta.kind] ?? ''}
           fields={fields[meta.kind] ?? {}}
           data={preview[meta.kind]}
+          exclusions={GIT_KINDS.has(meta.kind) ? exclusionsOf(configs.find((c) => c.kind === meta.kind)) : undefined}
+          onExclude={(next) => void exclude(meta.kind, next)}
           busy={busy === meta.kind}
           error={errors[meta.kind]}
           onStart={() => void start(meta.kind)}
@@ -282,6 +302,8 @@ export function ConnectorRow({
   onConnect,
   onDisconnect,
   onFetch,
+  exclusions,
+  onExclude,
 }: {
   meta: ConnectorMeta;
   compact: boolean;
@@ -302,6 +324,9 @@ export function ConnectorRow({
   onConnect: (pasted?: string) => void;
   onDisconnect: () => void;
   onFetch: () => void;
+  /** A git connector's removed repositories; the row then lists its repositories. */
+  exclusions?: RepoExclusions;
+  onExclude?: (next: RepoExclusions) => void;
 }) {
   const kind = meta.kind;
   const open = !connected && stage !== 'closed';
@@ -352,7 +377,8 @@ export function ConnectorRow({
         </span>
         {connected ? (
           <span className="flex shrink-0 items-center gap-1">
-            {!compact && (
+            {/* A git connector's Repositories list already shows what a sample would. */}
+            {!compact && !exclusions && (
               <button className="btn btn-ghost py-1 text-xs" onClick={onFetch}>
                 Fetch sample
               </button>
@@ -452,24 +478,49 @@ export function ConnectorRow({
         </p>
       )}
 
-      {!compact && connected && data && (
-        <div className="mb-2 max-h-40 space-y-1 overflow-y-auto" style={{ paddingLeft: 48 }}>
-          {typeof data === 'string' ? (
-            <p className="text-xs" style={{ color: 'var(--danger-text)' }}>
-              {data}
-            </p>
-          ) : data.length === 0 ? (
-            <p className="text-xs text-ink-faint">No results.</p>
-          ) : (
-            data.map((r) => (
-              <div key={r.id} className="truncate text-xs">
-                <span className="font-medium">{r.title}</span>
-                {r.subtitle && <span className="text-ink-faint"> · {r.subtitle}</span>}
-              </div>
-            ))
+      {!compact && connected && exclusions && onExclude && <ConnectorRepos kind={kind} exclusions={exclusions} onChange={onExclude} />}
+
+      {!compact && connected && data !== undefined && <Sample data={data} hideRepos={Boolean(exclusions)} />}
+    </div>
+  );
+}
+
+/** How the sample fetch labels a repository (GitHub) or project (GitLab). */
+const REPO_SUBTITLES: ReadonlySet<string> = new Set(['repo', 'private repo', 'GitLab project']);
+
+/**
+ * What a fetch returned, behind a disclosure closed by default with a count.
+ * An error shows at once. With `hideRepos` (the row lists its repositories
+ * already) repositories are left out, so nothing shows twice.
+ */
+export function Sample({ data, hideRepos = false, startOpen = false }: { data: ConnectorResource[] | string; hideRepos?: boolean; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
+  if (typeof data === 'string') {
+    return (
+      <p className="pb-2 text-xs" style={{ color: 'var(--danger-text)', paddingLeft: 48 }} role="alert">
+        {data}
+      </p>
+    );
+  }
+  const items = hideRepos ? data.filter((r) => !REPO_SUBTITLES.has(r.subtitle ?? '')) : data;
+  if (items.length === 0) return hideRepos ? null : <p className="pb-2 text-xs text-ink-faint" style={{ paddingLeft: 48 }}>No results.</p>;
+  return (
+    <div className="pb-2" style={{ paddingLeft: 48 }} data-connector-sample>
+      <Disclosure open={open} onToggle={() => setOpen(!open)} label="Sample" meta={`${items.length}`} strong />
+      <div className={`collapse-wrap ${open ? '' : 'collapsed'}`} aria-hidden={!open}>
+        <div className="min-h-0 overflow-hidden">
+          {open && (
+            <div className="max-h-40 space-y-1 overflow-y-auto fade-in" style={{ paddingLeft: 20 }}>
+              {items.map((r) => (
+                <div key={r.id} className="truncate text-xs">
+                  <span className="font-medium">{r.title}</span>
+                  {r.subtitle && <span className="text-ink-faint"> · {r.subtitle}</span>}
+                </div>
+              ))}
+            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

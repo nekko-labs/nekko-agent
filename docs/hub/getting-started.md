@@ -355,6 +355,12 @@ Each service in **Connectors** starts as one **Connect** button. Press it and th
 - **GitHub**: if the GitHub CLI (`gh`) is signed in on this computer, the row says so and **Connect** uses that sign-in, with nothing to copy. Choose **Use a token** to paste one instead. Otherwise **Open** goes to GitHub's new-token page with the name and access already filled in: press **Generate token**, copy it and paste it.
 - **GitLab**: **Open** goes to the token page with the name and the `api` scope filled in. For your own GitLab, enter its address first.
 
+### Choosing repositories
+
+A connected GitHub or GitLab row has a **Repositories** line with how many repositories it reaches. Open it to see them grouped under their owner (your account, each org, or each top GitLab group); open a group to see its repositories. Hover a repository and press **Remove**, or press **Remove org** beside a group, and Nekko leaves it out of **Add repository** and out of what the connector reads into a chat. A removed org's new repositories stay out too. Everything removed is listed under **Removed**, with **Add back**. This only changes what Nekko uses: the token's own access on GitHub or GitLab stays the same. Disconnecting forgets the choice.
+
+A connected service's sample (from **Fetch sample**, or the check made when it connected) sits behind a **Sample** line with its count; open it to see the items. GitHub and GitLab show their **Repositories** line instead.
+
 ### Download progress in Model Server
 
 When you download a model or install a managed runtime, its button immediately
