@@ -86,6 +86,14 @@ function Fixture() {
         <FolderPicker sessionId="s1" session={null} onChange={() => {}} selectedSummary />
       </div>
     </div>
+    {/* #2561: a sandbox chat whose repository lives in its sandbox. */}
+    <div className="card" data-fixture-sandbox style={{ maxWidth: 640, padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span className="text-xs text-ink-faint">Sandbox chat</span>
+      <div className="composer-folders min-w-0">
+        <FolderPicker sessionId="s1" onChange={() => {}} selectedSummary session={{ id: 's1', title: 'Try the migration', executionMode: 'sandbox', workspaceId: 'ws_notes',
+          sandboxRepos: [{ provider: 'github', fullName: 'acme/billing-service', cloneUrl: 'https://github.com/acme/billing-service.git', webUrl: '' }] } as never} />
+      </div>
+    </div>
   </main>;
 }
 

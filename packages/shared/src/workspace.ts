@@ -54,8 +54,10 @@ export interface RemoteRepoList {
  * repositories folder chosen yet, only `needsFolder` and `suggested` come back.
  */
 export type RepoCloneResult =
-  | { workspaces: WorkspaceFolder[]; folderId: string | null; path: string; reused?: boolean; needsFolder?: undefined }
-  | { needsFolder: true; suggested: string };
+  | { workspaces: WorkspaceFolder[]; folderId: string | null; path: string; reused?: boolean; needsFolder?: undefined; sandbox?: undefined }
+  | { needsFolder: true; suggested: string; sandbox?: undefined }
+  /** A sandbox chat: recorded for its sandbox, cloned there when it is set up (#2561). */
+  | { sandbox: true; session: import('./chat.js').Session; needsFolder?: undefined };
 
 /**
  * The comparable form of a folder path: no trailing separator, one kind of

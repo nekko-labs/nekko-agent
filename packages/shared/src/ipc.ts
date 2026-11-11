@@ -221,6 +221,7 @@ export const IpcChannels = {
   workspaceAddByPath: 'workspace:addByPath',
   reposList: 'repos:list',
   reposClone: 'repos:clone',
+  reposSetSandbox: 'repos:setSandbox',
   workspaceRemove: 'workspace:remove',
   workspaceIndex: 'workspace:index',
   workspaceIndexStatus: 'workspace:indexStatus',
@@ -1009,8 +1010,13 @@ export interface NekkoApi {
   removeWorkspace(id: string): Promise<WorkspaceFolder[]>;
   /** Repositories the connected GitHub/GitLab accounts can reach, matching `query`. */
   listRepos(query?: string): Promise<import('./workspace.js').RemoteRepoList>;
-  /** Clone a listed repository onto this computer and save it as a folder. */
-  cloneRepo(repo: Pick<import('./workspace.js').RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>): Promise<import('./workspace.js').RepoCloneResult>;
+  /**
+   * Add a listed repository: the copy already on this computer, else a clone
+   * into the repositories folder; for a sandbox chat (`sessionId`), its sandbox.
+   */
+  cloneRepo(repo: Pick<import('./workspace.js').RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>, opts?: { sessionId?: string }): Promise<import('./workspace.js').RepoCloneResult>;
+  /** A sandbox chat's sandbox repositories, before the sandbox is set up (#2561). */
+  setSandboxRepos(sessionId: string, repos: import('./chat.js').SandboxRepo[]): Promise<Session>;
   indexWorkspace(id: string): Promise<IndexStatus>;
   getIndexStatus(id: string): Promise<IndexStatus | null>;
   searchWorkspace(id: string, query: string): Promise<SearchHit[]>;

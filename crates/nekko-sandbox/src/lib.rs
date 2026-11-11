@@ -58,6 +58,10 @@ pub struct Config {
     pub session_id: String,
     pub state_directory: PathBuf,
     pub source_folders: Vec<String>,
+    /// Folders copied in only when the sandbox is first made, after the source
+    /// folders, and never read again (a repository's temporary clone, #2561).
+    /// A resumed sandbox ignores them, so they may be gone by then.
+    pub seed_folders: Vec<String>,
     /// A locally installed Linux image with python3 and /bin/sh, pinned by sha256 digest.
     pub image: String,
     pub docker_path: Option<String>,
@@ -534,7 +538,7 @@ impl ContainerSandbox {
             .map(|p| std::path::absolute(p).map(|a| a.to_string_lossy().into_owned()).unwrap_or_else(|_| p.clone()))
             .collect();
         let unique: std::collections::HashSet<String> = roots.iter().map(|p| p.to_lowercase()).collect();
-        if roots.is_empty() || unique.len() != roots.len() {
+        if (roots.is_empty() && self.config.seed_folders.is_empty()) || unique.len() != roots.len() {
             return Err("Select unique source folders".into());
         }
         for root in &roots {
@@ -597,6 +601,14 @@ impl ContainerSandbox {
         }
         for (i, root) in roots.iter().enumerate() {
             walk(Path::new(root), Path::new(""), i, &mut files, &mut bytes, &limits)?;
+        }
+        for (i, seed) in self.config.seed_folders.iter().enumerate() {
+            let seed = Path::new(seed);
+            assert_plain(seed)?;
+            if !seed.is_dir() {
+                return Err("Source must be a folder".into());
+            }
+            walk(seed, Path::new(""), roots.len() + i, &mut files, &mut bytes, &limits)?;
         }
         let token = nekko_js::uuid();
         let mut baseline = Map::new();

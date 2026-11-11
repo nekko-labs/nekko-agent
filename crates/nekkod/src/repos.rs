@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-pub const CHANNELS: &[&str] = &["repos:list", "repos:clone"];
+pub const CHANNELS: &[&str] = &["repos:list", "repos:clone", "repos:setSandbox"];
 
 /// A first clone of a large repository can take a while.
 const CLONE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -47,6 +47,15 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             let local = tokio::task::spawn_blocking(move || find_local(&url, &saved, &scan_roots()))
                 .await
                 .map_err(|e| format!("search failed: {e}"))?;
+            // A sandbox chat keeps a repository that isn't here inside its sandbox (#2561).
+            let chat = args.get(1).and_then(|o| o.get("sessionId")).and_then(Value::as_str);
+            if local.is_none()
+                && let Some(id) = chat
+                && let Some(s) = session(ctx, id).await
+                && s.get("executionMode").and_then(Value::as_str) == Some("sandbox")
+            {
+                return add_to_sandbox(ctx, id, &s, &pick).await;
+            }
             let reused = local.is_some();
             let path = match local {
                 Some(p) => p,
@@ -78,8 +87,47 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 .unwrap_or(Value::Null);
             Ok(json!({ "workspaces": workspaces, "folderId": id, "path": path, "reused": reused }))
         }
+        "repos:setSandbox" => {
+            let id = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
+            let repos = args.get(1).cloned().unwrap_or(json!([]));
+            if !repos.as_array().is_some_and(|a| a.iter().all(|r| r.get("fullName").is_some_and(Value::is_string))) {
+                return Err("Expected a list of repositories.".into());
+            }
+            let store = ctx.sessions.clone();
+            tokio::task::spawn_blocking(move || store.set_sandbox_repos(&id, &repos))
+                .await
+                .map_err(|e| e.to_string())?
+        }
         other => Err(format!("unknown channel {other}")),
     }
+}
+
+async fn session(ctx: &Ctx, id: &str) -> Option<Value> {
+    let (store, id) = (ctx.sessions.clone(), id.to_string());
+    tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten().map(nekko_store::Meta::into_value)
+}
+
+/// Records `pick` on the sandbox chat; the sandbox clones it when it is made.
+async fn add_to_sandbox(ctx: &Ctx, id: &str, s: &Value, pick: &Value) -> Result<Value, String> {
+    let full = pick.get("fullName").and_then(Value::as_str).unwrap_or_default();
+    let mut repos = s.get("sandboxRepos").and_then(Value::as_array).cloned().unwrap_or_default();
+    let same = |r: &Value| {
+        r.get("provider") == pick.get("provider")
+            && r.get("fullName").and_then(Value::as_str).is_some_and(|f| f.eq_ignore_ascii_case(full))
+    };
+    if !repos.iter().any(same) {
+        repos.push(json!({
+            "provider": pick["provider"],
+            "fullName": full,
+            "cloneUrl": pick.get("cloneUrl").cloned().unwrap_or(json!("")),
+            "webUrl": pick.get("webUrl").cloned().unwrap_or(json!("")),
+        }));
+    }
+    let (store, id) = (ctx.sessions.clone(), id.to_string());
+    let session = tokio::task::spawn_blocking(move || store.set_sandbox_repos(&id, &json!(repos)))
+        .await
+        .map_err(|e| e.to_string())??;
+    Ok(json!({ "sandbox": true, "session": session }))
 }
 
 /// What a clone needs, checked before anything runs.
@@ -283,12 +331,35 @@ fn clone(plan: &Plan) -> Result<String, String> {
             plan.url
         ));
     }
+    git_clone(plan, false)?;
+    Ok(shown)
+}
+
+/// A sandbox chat's repository (#2561): a shallow clone into `target`, a
+/// temporary folder in the sandbox's own state, copied into the container and
+/// then deleted by the caller. Same token scoping and checks as any clone.
+pub fn clone_for_sandbox(settings: &Value, pick: &Value, target: &Path) -> Result<(), String> {
+    let mut plan = plan(settings, pick)?;
+    plan.target = target.to_path_buf();
+    if plan.target.exists() {
+        std::fs::remove_dir_all(&plan.target).map_err(|e| format!("Couldn't clear {}: {e}", plan.target.display()))?;
+    }
+    git_clone(&plan, true)
+}
+
+fn git_clone(plan: &Plan, shallow: bool) -> Result<(), String> {
+    let shown = plan.target.to_string_lossy().into_owned();
     let parent = plan.target.parent().ok_or("no folder to clone into")?;
     std::fs::create_dir_all(parent).map_err(|e| format!("Couldn't create {}: {e}", parent.display()))?;
     nekko_net::check("connectors", &plan.host)?;
     let ev = nekko_net::Event::new("request").host(&plan.host);
     let cwd = parent.to_string_lossy().into_owned();
-    let ran = run_with_env("git", &["clone", "--", &plan.url, &shown], &cwd, None, CLONE_TIMEOUT, &plan.env);
+    let mut args = vec!["clone"];
+    if shallow {
+        args.extend(["--depth", "1"]);
+    }
+    args.extend(["--", &plan.url, &shown]);
+    let ran = run_with_env("git", &args, &cwd, None, CLONE_TIMEOUT, &plan.env);
     let failure = match ran {
         Ok((0, _, _)) => None,
         Ok((_, _, err)) => Some(explain(&String::from_utf8_lossy(&err), &plan.origin)),
@@ -302,7 +373,7 @@ fn clone(plan: &Plan) -> Result<String, String> {
     match failure {
         None => {
             nekko_net::record("connectors", ev);
-            Ok(shown)
+            Ok(())
         }
         Some(e) => {
             nekko_net::record("connectors", ev.error(&e));

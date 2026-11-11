@@ -179,6 +179,7 @@ fn config(dir: &Path, source: &Path) -> Config {
         session_id: "session".into(),
         state_directory: dir.join("state"),
         source_folders: vec![source.to_string_lossy().into_owned()],
+        seed_folders: vec![],
         image: IMAGE.into(),
         docker_path: Some("docker".into()),
         limits: Limits::default(),
@@ -256,6 +257,38 @@ async fn copies_only_selected_plain_files_and_reuses_identity_without_pulling() 
     assert!(f.calls().iter().all(|c| c[0] != "pull" && c[0] != "service"));
     resumed.destroy().await.unwrap();
     assert!(f.called("rm", None));
+}
+
+#[tokio::test]
+async fn seed_folders_are_copied_once_after_the_sources_and_not_needed_to_resume() {
+    let f = fixture("seed");
+    let seed = f.dir.join("seed");
+    std::fs::create_dir_all(seed.join(".git")).unwrap();
+    std::fs::write(seed.join(".git/config"), "token").unwrap();
+    std::fs::write(seed.join("README.md"), "repo").unwrap();
+    let mut c = config(&f.dir, &f.source);
+    c.seed_folders = vec![seed.to_string_lossy().into_owned()];
+    let sandbox = ContainerSandbox::new(c.clone(), f.fake.clone()).unwrap();
+    sandbox.initialize().await.unwrap();
+    let keys: Vec<String> = f.fake.0.lock().unwrap().files.iter().map(|(k, _)| k.clone()).collect();
+    assert_eq!(keys, ["folder-0/a.txt", "folder-1/README.md"]);
+    // The temporary clone is deleted after creation; resuming never reads it.
+    std::fs::remove_dir_all(&seed).unwrap();
+    let count = f.calls().len();
+    let resumed = ContainerSandbox::new(c, f.fake.clone()).unwrap();
+    resumed.initialize().await.unwrap();
+    assert!(!f.calls()[count..].iter().any(|c| c[0] == "create"));
+    // A sandbox of only a repository needs no host folder.
+    let g = fixture("seed-only");
+    let seed = g.dir.join("seed");
+    std::fs::create_dir_all(&seed).unwrap();
+    std::fs::write(seed.join("main.rs"), "fn main() {}").unwrap();
+    let mut c = config(&g.dir, &g.source);
+    c.source_folders = vec![];
+    c.seed_folders = vec![seed.to_string_lossy().into_owned()];
+    ContainerSandbox::new(c, g.fake.clone()).unwrap().initialize().await.unwrap();
+    let keys: Vec<String> = g.fake.0.lock().unwrap().files.iter().map(|(k, _)| k.clone()).collect();
+    assert_eq!(keys, ["folder-0/main.rs"]);
 }
 
 #[tokio::test]
