@@ -384,7 +384,7 @@ fn git_clone(plan: &Plan, shallow: bool) -> Result<(), String> {
 
 /// A git failure in plain words, keeping git's own last line.
 fn explain(stderr: &str, origin: &str) -> String {
-    let last = stderr.lines().map(str::trim).filter(|l| !l.is_empty()).next_back().unwrap_or("git clone failed");
+    let last = stderr.lines().map(str::trim).rfind(|l| !l.is_empty()).unwrap_or("git clone failed");
     let lower = stderr.to_lowercase();
     if lower.contains("authentication failed") || lower.contains("could not read username") || lower.contains("403") {
         format!("{origin} refused the clone: the connector's token may lack access to this repository. ({last})")
@@ -498,11 +498,11 @@ mod tests {
         .unwrap();
         let url = "https://github.com/me/app.git";
         // Found two levels under a code folder.
-        assert_eq!(find_local(url, &[], &[root.clone()]).as_deref(), Some(clone.to_str().unwrap()));
+        assert_eq!(find_local(url, &[], std::slice::from_ref(&root)).as_deref(), Some(clone.to_str().unwrap()));
         // And as a saved folder, with no code folders searched.
-        assert_eq!(find_local(url, &[clone.clone()], &[]).as_deref(), Some(clone.to_str().unwrap()));
+        assert_eq!(find_local(url, std::slice::from_ref(&clone), &[]).as_deref(), Some(clone.to_str().unwrap()));
         // Only `origin` counts.
-        assert_eq!(find_local("https://github.com/other/app", &[], &[root.clone()]), None);
+        assert_eq!(find_local("https://github.com/other/app", &[], std::slice::from_ref(&root)), None);
         let _ = std::fs::remove_dir_all(&root);
     }
 
