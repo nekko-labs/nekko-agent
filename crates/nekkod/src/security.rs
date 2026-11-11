@@ -494,8 +494,7 @@ impl Security {
             return Err("That key is already registered on this computer.".into());
         }
         let first = methods(&state) == 0;
-        let fallback = if kind == "passkey" { "Passkey" } else { "Security key" };
-        let name = clean_name(s("name"), fallback);
+        let name = clean_name(s("name"), default_name(kind));
         let credential = json!({
             "id": reg.id, "publicKey": reg.public_key, "counter": reg.counter, "name": name, "kind": kind,
             "addedAt": num(now), "rpId": rp_id,
@@ -672,11 +671,7 @@ impl Security {
         } else {
             root.get_mut("credentials").and_then(Value::as_array_mut).and_then(|a| {
                 a.iter_mut().find(|c| c.get("id").and_then(Value::as_str) == Some(id)).map(|c| {
-                    let fallback = if c.get("kind").and_then(Value::as_str) == Some("passkey") {
-                        "Passkey"
-                    } else {
-                        "Security key"
-                    };
+                    let fallback = default_name(c.get("kind").and_then(Value::as_str).unwrap_or_default());
                     (c, fallback)
                 })
             })
@@ -751,6 +746,11 @@ fn loopback_answer(state: &Value, proof: &Value) -> Option<String> {
     let client: Value = serde_json::from_slice(&cdj).ok()?;
     let origin = client.get("origin")?.as_str()?;
     loopback_origin(origin).then(|| origin.to_string())
+}
+
+/// What a key or passkey is called when the owner gave it no name.
+fn default_name(kind: &str) -> &'static str {
+    if kind == "passkey" { "Passkey" } else { "Security key" }
 }
 
 fn clean_name(name: &str, fallback: &str) -> String {
