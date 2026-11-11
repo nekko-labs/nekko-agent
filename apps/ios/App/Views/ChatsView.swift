@@ -961,7 +961,9 @@ struct ComputerMenu: View {
                     // The menu's Show chats from still says All computers.
                     // A long computer name (a CI Mac's is 40 characters with no spaces) widened the
                     // pill until iOS 26 folded the whole toolbar, New chat included, into More.
-                    Text(showsPhone ? ChatPlace.phoneName : shown?.name ?? String(localized: "Computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                    // The phone reads "iPhone", not the full device name, for the same reason: the
+                    // iphone icon plus "This iPhone" pushes Nekko off-centre (ChatStatusTests, 2026-11).
+                    Text(showsPhone ? String(localized: "iPhone") : shown?.name ?? String(localized: "Computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                         .truncationMode(.middle)
                         .frame(maxWidth: 150, alignment: .leading)
                     if shown == nil, !showsPhone, let online = Self.online(states.filter { $0 == .online }.count, of: states.count) {
