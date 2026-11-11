@@ -45,7 +45,7 @@ export function PixelSkeleton({ className, style, label }: { className?: string;
       cvs.height = Math.round(height * scale);
       const ctx = cvs.getContext('2d')!;
       const css = getComputedStyle(document.documentElement);
-      const paper = css.getPropertyValue('--paper').trim() || '#0c0c11';
+      const paper = css.getPropertyValue('--paper').trim() || '#0b0c14';
       const accent = css.getPropertyValue('--accent').trim() || '#8b7dff';
       const cell = Math.max(4, Math.round(PIXEL_SKELETON.cell * scale));
       const gap = cell / 8;
