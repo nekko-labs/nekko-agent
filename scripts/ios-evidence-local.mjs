@@ -133,6 +133,38 @@ export function patchSecurity(source) {
     .replace(needle, `        if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") { SecurityEvidenceFixture() } else\n${needle}`);
 }
 
+/**
+ * The name an exported attachment should get: XCTest's suggested name without its
+ * `_<index>_<UUID>` suffix (`card-details-menu_0_DEAD...png` -> `card-details-menu.png`),
+ * numbered when two attachments share a name.
+ */
+export function readableName(suggested, taken) {
+  const ext = path.extname(suggested);
+  const base = path.basename(suggested, ext).replace(/_\d+_[0-9A-F-]{36}$/i, '').replace(/[^A-Za-z0-9_.-]/g, '-') || 'attachment';
+  let name = `${base}${ext}`;
+  for (let n = 2; taken.has(name); n++) name = `${base}-${n}${ext}`;
+  taken.add(name);
+  return name;
+}
+
+/** Renames xcresulttool's UUID file names after manifest.json, which keeps the mapping. */
+function readableNames(dir) {
+  const manifest = path.join(dir, 'manifest.json');
+  if (!fs.existsSync(manifest)) return;
+  const taken = new Set();
+  const tests = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+  for (const test of tests) {
+    for (const a of test.attachments ?? []) {
+      if (!a.exportedFileName || !a.suggestedHumanReadableName) continue;
+      const from = path.join(dir, a.exportedFileName);
+      if (!fs.existsSync(from)) continue;
+      a.exportedFileName = readableName(a.suggestedHumanReadableName, taken);
+      fs.renameSync(from, path.join(dir, a.exportedFileName));
+    }
+  }
+  fs.writeFileSync(manifest, `${JSON.stringify(tests, null, 2)}\n`);
+}
+
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
 function run(cmd, args, { cwd, log, env } = {}) {
@@ -219,7 +251,9 @@ async function capture(opts, revision, repo) {
     }
     const result = path.join(out, 'evidence.xcresult');
     if (fs.existsSync(result)) {
-      execFileSync('xcrun', ['xcresulttool', 'export', 'attachments', '--path', result, '--output-path', path.join(out, 'shots')], { stdio: 'ignore' });
+      const shots = path.join(out, 'shots');
+      execFileSync('xcrun', ['xcresulttool', 'export', 'attachments', '--path', result, '--output-path', shots], { stdio: 'ignore' });
+      readableNames(shots);
     }
     if (!opts.keep) git(repo, 'worktree', 'remove', '--force', tree);
   }

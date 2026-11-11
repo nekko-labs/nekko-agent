@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { patchSecurity, plan, testArgs, DEFAULT_RUNTIME } from './ios-evidence-local.mjs';
+import { patchSecurity, plan, readableName, testArgs, DEFAULT_RUNTIME } from './ios-evidence-local.mjs';
+
+test('exported attachments get readable, unique names', () => {
+  const taken = new Set();
+  assert.equal(readableName('card-details-menu_0_DEADDC03-9A36-4CF6-A006-E3F85B7C6CF2.png', taken), 'card-details-menu.png');
+  assert.equal(readableName('card-details-menu_1_0A7E37B8-E186-4B9D-9710-EBB69548520F.png', taken), 'card-details-menu-2.png');
+  assert.equal(readableName('tree_0_EA8B8712-8FA5-4DC8-B836-30A14FC471ED.txt', taken), 'tree.txt');
+  assert.equal(readableName('Screen Shot.png', taken), 'Screen-Shot.png');
+});
 
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
