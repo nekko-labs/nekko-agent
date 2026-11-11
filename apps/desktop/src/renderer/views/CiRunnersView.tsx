@@ -85,7 +85,7 @@ export function CiRunnersElsewhere({ options }: { options?: readonly RunnerOptio
 /** The section body for each load state; pure so tests can render it without effects. */
 export function runnersBody(
   state: RunnersState,
-  { now, image = null, host, onConnect, onSettings, onSetup, onAddTools, beginReply }: { now: number; image?: ImageView | null; host?: RunnerHost | null; onConnect(): void; onSettings(id: string): void; onSetup?(id: string): void; onAddTools?(v: RunnerView): Promise<void>; beginReply(): (v: RunnerView) => void },
+  { now, image = null, host, compact = false, onConnect, onSettings, onSetup, onAddTools, beginReply }: { now: number; compact?: boolean; image?: ImageView | null; host?: RunnerHost | null; onConnect(): void; onSettings(id: string): void; onSetup?(id: string): void; onAddTools?(v: RunnerView): Promise<void>; beginReply(): (v: RunnerView) => void },
 ): React.ReactNode {
   if (state.kind === 'loading') return null;
   if (state.kind === 'unavailable') {
@@ -106,7 +106,7 @@ export function runnersBody(
     <>
       {image?.state === 'none' && <CiRunnersFirstVisit connected canResume={image.canResume} onConnect={onConnect} onSetup={() => onSetup?.(first)} />}
       {state.views.map((v) => (
-        <RunnerCard key={v.config.id} view={v} now={now} image={image} onSettings={() => onSettings(v.config.id)} onSetup={() => onSetup?.(v.config.id)} onAddTools={onAddTools && (() => onAddTools(v))} beginReply={beginReply} />
+        <RunnerCard key={v.config.id} view={v} now={now} image={image} compact={compact} onSettings={() => onSettings(v.config.id)} onSetup={() => onSetup?.(v.config.id)} onAddTools={onAddTools && (() => onAddTools(v))} beginReply={beginReply} />
       ))}
     </>
   );
@@ -258,15 +258,15 @@ export function CiRunnersView({ now = nowSecs, panel = false }: { now?: () => nu
   if (panel && state.kind === 'unavailable' && state.message.startsWith('unknown channel')) return null;
 
   return (
-    <section ref={section} tabIndex={-1} data-ci-runners className={panel ? 'mb-3 shrink-0' : undefined}>
+    <section ref={section} tabIndex={-1} data-ci-runners className={panel ? 'mb-5 shrink-0' : undefined}>
       <div className="flex flex-wrap items-baseline gap-2 py-1">
         <h2 className="text-sm font-semibold">CI runners</h2>
-        {panel && <button className="btn btn-outline ml-auto py-1! text-xs" onClick={() => {
+        {panel && <button className="btn btn-ghost ml-auto" onClick={() => {
           useStore.setState({ ciRunnersFocus: true });
           useStore.getState().setView('workflows');
         }}>View CI runners</button>}
         {!panel && hasRunners && (
-          <button className="btn btn-outline ml-auto py-1!" onClick={() => setConnecting(true)}>
+          <button className="btn btn-ghost ml-auto" onClick={() => setConnecting(true)}>
             <PlugIcon className="h-3.5 w-3.5" /> Connect GitHub
           </button>
         )}
@@ -277,6 +277,7 @@ export function CiRunnersView({ now = nowSecs, panel = false }: { now?: () => nu
         now: clock,
         image,
         host,
+        compact: panel,
         onConnect: () => setConnecting(true),
         onSettings: setSettingsFor,
         onSetup: (id) => setSetup({ id, rebuild: false }),
