@@ -1783,10 +1783,12 @@ impl Turns {
         };
         let mut seen: Option<String> = None;
         let mut model: Option<String> = None;
+        let mut compacted = false;
         let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {
             Mapped::Message(mut message) => {
                 if let Some(compaction) = message.get_mut("compaction") {
                     compaction["summarized"] = json!(summarized_since_last_compaction(&history));
+                    compacted = true;
                 }
                 history.push(message)
             }
@@ -1843,8 +1845,14 @@ impl Turns {
             changed = true;
         }
         // Remember the files this Claude Code session now holds. A new session
-        // (none, or another id) gets them again on its first turn.
-        if attachments.is_some() {
+        // (none, or another id) gets them again on its first turn. A turn that
+        // died (the bridge never connected, the process crashed) may never have
+        // read them, and a compaction summarizes them away: both send them again.
+        if compacted {
+            if let Some(obj) = lock(session).as_object_mut() {
+                changed |= obj.shift_remove(CLAUDE_ATTACHED).is_some();
+            }
+        } else if attachments.is_some() && exit != TurnExit::Dead {
             if let Some(obj) = lock(session).as_object_mut() {
                 match &next {
                     Some(id) => obj.insert(CLAUDE_ATTACHED.into(), json!({ "session": id, "paths": attached_seen })),
@@ -1989,7 +1997,7 @@ fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec
     if fresh.is_empty() {
         return (None, seen);
     }
-    let (other, text): (Vec<String>, Vec<String>) = fresh.iter().cloned().partition(|p| not_text(p).is_some());
+    let (other, text): (Vec<String>, Vec<String>) = fresh.into_iter().partition(|p| not_text(p).is_some());
     let mut parts: Vec<String> = other
         .iter()
         .map(|p| {
@@ -1999,14 +2007,21 @@ fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec
             )
         })
         .collect();
+    // Only what was actually read counts as given: an unreadable file goes later.
+    let collected = nekko_context::collect_attached(&text);
+    let read: Vec<String> = collected.iter().map(|(p, _)| p.clone()).collect();
     let rendered = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
-        attached: nekko_context::collect_attached(&text),
+        attached: collected,
         ..Default::default()
     }));
     if !rendered.trim().is_empty() {
         parts.insert(0, rendered);
     }
-    seen.extend(fresh);
+    if parts.is_empty() {
+        return (None, seen);
+    }
+    seen.extend(other);
+    seen.extend(read);
     (Some(parts.join("\n\n---\n\n")), seen)
 }
 

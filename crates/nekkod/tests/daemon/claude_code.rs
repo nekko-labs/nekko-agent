@@ -995,6 +995,11 @@ async fn without_the_bridge_claude_code_never_starts() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_bridge_that_does_not_connect_stops_claude_code_before_it_acts() {
     let rig = rig_env("bridgedown", "guardrails", true, &[("NEKKOD_TEST_BRIDGE_DOWN", Some("1"))]);
+    // An attached file is not counted as given when nothing ran.
+    let file = rig.data.join("notes.txt");
+    std::fs::write(&file, "notes").unwrap();
+    let chat = json!({ "id": "s_cc", "title": "cc", "messages": [], "mode": "guardrails", "createdAt": 1, "updatedAt": 1, "attachedPaths": [file.to_string_lossy()] });
+    std::fs::write(rig.data.join("sessions/s_cc.json"), chat.to_string()).unwrap();
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccD", "run rm")]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     let (events, _) = turn_record(&rig, "ccD", "s_cc").await;
@@ -1003,6 +1008,7 @@ async fn a_bridge_that_does_not_connect_stops_claude_code_before_it_acts() {
     assert!(!k.contains(&"tool_call"), "nothing ran: {k:?}");
     let error = all.iter().find(|e| e["type"] == "error").expect("an error");
     assert!(error["message"].as_str().unwrap().contains("did not connect"), "{error}");
+    assert!(saved(&rig).get("claudeCodeAttached").is_none(), "{}", saved(&rig));
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -700,7 +700,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const [attachmentNotes, setAttachmentNotes] = useState<Record<string, string>>({});
   // Files attached since the last send. The chat keeps every attached file as
   // context, but only these make a message worth sending on their own.
-  const [freshPaths, setFreshPaths] = useState<string[]>([]);
+  const [freshPaths, setFreshPaths] = useState<string[]>(() => loadDraft(sessionId)?.paths ?? []);
   // The context panel toggle lives in the store so the ⌘\ shortcut and the
   // command palette's "Toggle context panel" act on this pane too.
   const ctxOpen = useStore((s) => s.contextPanelOpen);
@@ -1503,8 +1503,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // --- Draft persistence ---
   // The workbench only mounts the pane you're looking at, so a tab switch (or
   // quitting) tears this composer down. Park what's unsent and restore it.
-  const latestDraft = useRef({ text: draft, images: pendingImages, videos: pendingVideos });
-  latestDraft.current = { text: draft, images: pendingImages, videos: pendingVideos };
+  const latestDraft = useRef({ text: draft, images: pendingImages, videos: pendingVideos, paths: freshPaths });
+  latestDraft.current = { text: draft, images: pendingImages, videos: pendingVideos, paths: freshPaths };
 
   // The pane is keyed by session today, so this only matters if the component is
   // ever reused for another chat. Without it, the save below would write one
@@ -1533,7 +1533,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (readOnly || surface === 'transcript') return;
     const t = setTimeout(() => saveDraft(sessionId, latestDraft.current), 400);
     return () => clearTimeout(t);
-  }, [sessionId, draft, pendingImages, pendingVideos, readOnly, surface]);
+  }, [sessionId, draft, pendingImages, pendingVideos, freshPaths, readOnly, surface]);
 
   // Mirror the draft into the store so the Context Inspector on the right
   // counts what you're typing. Trailing by DRAFT_MIRROR_MS, so a keystroke
@@ -1558,6 +1558,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     setDraft(parked?.text ?? '');
     setPendingImages((current) => restoredDraftImages(current, parked?.images));
     setPendingVideos((current) => restoredDraftImages(current, parked?.videos));
+    setFreshPaths(parked?.paths ?? []);
     const flush = () => saveDraft(sessionId, latestDraft.current);
     window.addEventListener('beforeunload', flush);
     return () => { window.removeEventListener('beforeunload', flush); flush(); };
@@ -1769,7 +1770,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         intervalMs: 5 * 60_000,
       });
       useStore.getState().pushToast('success', 'Goal started as a background task, track it on the Agents wall.');
-      if (override === undefined) { setDraft(''); clearDraft(sessionId); }
+      if (override === undefined) { setDraft(''); setFreshPaths([]); clearDraft(sessionId); }
       return;
     }
 

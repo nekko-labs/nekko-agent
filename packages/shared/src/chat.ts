@@ -311,6 +311,12 @@ export interface Session {
    * chat's alias) to. Trusted only while the chat's `modelId` still matches.
    */
   claudeCodeContext?: ClaudeCodeContext;
+  /**
+   * The attached files a Claude Agent chat's Claude Code session has already
+   * been given, so each goes once per session. Set by nekkod; cleared when
+   * Claude Code compacts, so they are given again.
+   */
+  claudeCodeAttached?: { session: string; paths: string[] };
   messages: ChatMessage[];
   contextPrefs?: ContextPrefs;
   /** Files explicitly attached to this chat's context (absolute paths). */
