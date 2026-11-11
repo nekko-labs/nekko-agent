@@ -1737,7 +1737,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const images = pendingImages;
     const videos = pendingVideos;
     // A file sent on its own still says what it is.
-    const typed = input.trim() || (images.length || videos.length || override !== undefined ? '' : attachmentOnlyText(freshPaths));
+    const typed = input.trim() || (images.length || videos.length || override !== undefined ? '' : attachmentOnlyText(sendablePaths));
     const text = wrap([skill ? skill.template.trimEnd() : '', typed].filter(Boolean).join('\n\n'));
     if (!text.trim() && images.length === 0 && videos.length === 0 && !skill) return false;
     // A follow-up never interrupts work by accident. Queue the same payload the
@@ -1840,7 +1840,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const images = pendingImages;
     const videos = pendingVideos;
     const skill = activeSkill;
-    const typed = draft.trim() || (images.length || videos.length ? '' : attachmentOnlyText(freshPaths));
+    const typed = draft.trim() || (images.length || videos.length ? '' : attachmentOnlyText(sendablePaths));
     const text = typed ? wrap(typed) : typed;
     if (!text && images.length === 0 && videos.length === 0 && !skill) return;
     const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(text, images, skill, videos));
@@ -2483,7 +2483,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Auto mode: the model the next message will actually run on. Shown whether or
   // not anything is typed yet - "Auto" alone tells you nothing, and the pick
   // moves as you type, which is exactly what's worth watching.
-  const hasComposerPayload = !!draft.trim() || pendingImages.length > 0 || pendingVideos.length > 0 || freshPaths.length > 0 || !!activeSkill;
+  // Fresh files the chat still has: one removed elsewhere meanwhile is gone.
+  const sendablePaths = freshPaths.filter((p) => session?.attachedPaths?.includes(p) ?? true);
+  const hasComposerPayload = !!draft.trim() || pendingImages.length > 0 || pendingVideos.length > 0 || sendablePaths.length > 0 || !!activeSkill;
   const composerStops = streaming && !hasComposerPayload;
 
   // Read from the deferred draft, like the analyzer and the plan rail below:
