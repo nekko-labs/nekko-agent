@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-pub const CHANNELS: &[&str] = &["repos:list", "repos:clone"];
+pub const CHANNELS: &[&str] = &["repos:list", "repos:clone", "repos:setSandbox"];
 
 /// A first clone of a large repository can take a while.
 const CLONE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -41,8 +41,33 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "repos:clone" => {
             let pick = args.first().cloned().unwrap_or(Value::Null);
             let plan = plan(&settings, &pick)?;
-            let path =
-                tokio::task::spawn_blocking(move || clone(&plan)).await.map_err(|e| format!("clone failed: {e}"))??;
+            // A copy already on this computer wins over a new clone.
+            let saved = saved_paths(&settings);
+            let (url, chosen) = (plan.url.clone(), clone_dir_set(&settings));
+            let local = tokio::task::spawn_blocking(move || find_local(&url, &saved, &scan_roots()))
+                .await
+                .map_err(|e| format!("search failed: {e}"))?;
+            // A sandbox chat keeps a repository that isn't here inside its sandbox (#2561).
+            let chat = args.get(1).and_then(|o| o.get("sessionId")).and_then(Value::as_str);
+            if local.is_none()
+                && let Some(id) = chat
+                && let Some(s) = session(ctx, id).await
+                && s.get("executionMode").and_then(Value::as_str) == Some("sandbox")
+            {
+                return add_to_sandbox(ctx, id, &s, &pick).await;
+            }
+            let reused = local.is_some();
+            let path = match local {
+                Some(p) => p,
+                // No copy and no repositories folder yet: the user picks one first.
+                None if !chosen => {
+                    let suggested = nekko_js::home_dir().unwrap_or_default().join(DEFAULT_DIR);
+                    return Ok(json!({ "needsFolder": true, "suggested": suggested.to_string_lossy() }));
+                }
+                None => tokio::task::spawn_blocking(move || clone(&plan))
+                    .await
+                    .map_err(|e| format!("clone failed: {e}"))??,
+            };
             let tag = json!({
                 "provider": pick["provider"],
                 "fullName": pick["fullName"],
@@ -60,10 +85,49 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 })
                 .and_then(|w| w.get("id").cloned())
                 .unwrap_or(Value::Null);
-            Ok(json!({ "workspaces": workspaces, "folderId": id, "path": path }))
+            Ok(json!({ "workspaces": workspaces, "folderId": id, "path": path, "reused": reused }))
+        }
+        "repos:setSandbox" => {
+            let id = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
+            let repos = args.get(1).cloned().unwrap_or(json!([]));
+            if !repos.as_array().is_some_and(|a| a.iter().all(|r| r.get("fullName").is_some_and(Value::is_string))) {
+                return Err("Expected a list of repositories.".into());
+            }
+            let store = ctx.sessions.clone();
+            tokio::task::spawn_blocking(move || store.set_sandbox_repos(&id, &repos))
+                .await
+                .map_err(|e| e.to_string())?
         }
         other => Err(format!("unknown channel {other}")),
     }
+}
+
+async fn session(ctx: &Ctx, id: &str) -> Option<Value> {
+    let (store, id) = (ctx.sessions.clone(), id.to_string());
+    tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten().map(nekko_store::Meta::into_value)
+}
+
+/// Records `pick` on the sandbox chat; the sandbox clones it when it is made.
+async fn add_to_sandbox(ctx: &Ctx, id: &str, s: &Value, pick: &Value) -> Result<Value, String> {
+    let full = pick.get("fullName").and_then(Value::as_str).unwrap_or_default();
+    let mut repos = s.get("sandboxRepos").and_then(Value::as_array).cloned().unwrap_or_default();
+    let same = |r: &Value| {
+        r.get("provider") == pick.get("provider")
+            && r.get("fullName").and_then(Value::as_str).is_some_and(|f| f.eq_ignore_ascii_case(full))
+    };
+    if !repos.iter().any(same) {
+        repos.push(json!({
+            "provider": pick["provider"],
+            "fullName": full,
+            "cloneUrl": pick.get("cloneUrl").cloned().unwrap_or(json!("")),
+            "webUrl": pick.get("webUrl").cloned().unwrap_or(json!("")),
+        }));
+    }
+    let (store, id) = (ctx.sessions.clone(), id.to_string());
+    let session = tokio::task::spawn_blocking(move || store.set_sandbox_repos(&id, &json!(repos)))
+        .await
+        .map_err(|e| e.to_string())??;
+    Ok(json!({ "sandbox": true, "session": session }))
 }
 
 /// What a clone needs, checked before anything runs.
@@ -91,6 +155,116 @@ fn segments(full: &str) -> Result<Vec<&str>, String> {
         return Err(format!("\"{full}\" isn't a repository name this app can clone."));
     }
     Ok(parts)
+}
+
+fn clone_dir_set(settings: &Value) -> bool {
+    settings.get("repoCloneDir").and_then(Value::as_str).is_some_and(|d| !d.trim().is_empty())
+}
+
+fn saved_paths(settings: &Value) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = settings
+        .get("workspaces")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|w| w.get("path").and_then(Value::as_str).map(PathBuf::from))
+        .collect();
+    if clone_dir_set(settings) {
+        out.push(clone_root(settings));
+    }
+    out
+}
+
+/// Where people usually keep code, searched (two levels deep) for a clone
+/// that is already here.
+fn scan_roots() -> Vec<PathBuf> {
+    let Some(home) = nekko_js::home_dir() else { return vec![] };
+    [
+        DEFAULT_DIR,
+        "code",
+        "Code",
+        "src",
+        "dev",
+        "Developer",
+        "projects",
+        "Projects",
+        "repos",
+        "git",
+        "GitHub",
+        "Documents/GitHub",
+        "source/repos",
+        "workspace",
+    ]
+    .iter()
+    .map(|d| home.join(d))
+    .collect()
+}
+
+/// `https://u@Host/a/b.git`, `git@host:a/b` and `ssh://git@host/a/b` all become `host/a/b`.
+fn remote_key(url: &str) -> String {
+    let s = url.trim();
+    let s = s.split_once("://").map_or(s, |(_, rest)| rest);
+    let s = s.rsplit_once('@').map_or(s, |(_, rest)| rest);
+    // scp-like `host:path` (not a `host:port/` URL, which `://` already handled).
+    let s = s.replacen(':', "/", 1);
+    s.trim_end_matches('/').trim_end_matches(".git").to_lowercase()
+}
+
+/// The `origin` url in a clone's `.git/config`, read without running git.
+fn origin_url(dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join(".git").join("config")).ok()?;
+    let mut in_origin = false;
+    for line in text.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_origin = line.replace(' ', "").eq_ignore_ascii_case("[remote\"origin\"]");
+        } else if in_origin
+            && let Some((k, v)) = line.split_once('=')
+            && k.trim().eq_ignore_ascii_case("url")
+        {
+            return Some(v.trim().to_string());
+        }
+    }
+    None
+}
+
+/// A folder on this computer whose `origin` is `url`: the saved folders
+/// first, then the usual code folders, two levels deep.
+fn find_local(url: &str, saved: &[PathBuf], roots: &[PathBuf]) -> Option<String> {
+    let want = remote_key(url);
+    let is_it = |d: &Path| d.join(".git").is_dir() && origin_url(d).is_some_and(|o| remote_key(&o) == want);
+    if let Some(p) = saved.iter().find(|p| is_it(p)) {
+        return Some(p.to_string_lossy().into_owned());
+    }
+    let children = |d: &Path| -> Vec<PathBuf> {
+        let Ok(rd) = std::fs::read_dir(d) else { return vec![] };
+        let mut v: Vec<PathBuf> = rd
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+            .filter(|e| !e.file_name().to_string_lossy().starts_with('.') && e.file_name() != "node_modules")
+            .map(|e| e.path())
+            .collect();
+        v.sort();
+        v
+    };
+    // shortcut: bounded scan of the usual folders; a clone elsewhere can still be added with Add folder.
+    let mut budget = 4000usize;
+    for root in roots {
+        for a in children(root) {
+            if is_it(&a) {
+                return Some(a.to_string_lossy().into_owned());
+            }
+            if a.join(".git").exists() {
+                continue;
+            }
+            for b in children(&a) {
+                budget = budget.checked_sub(1)?;
+                if is_it(&b) {
+                    return Some(b.to_string_lossy().into_owned());
+                }
+            }
+        }
+    }
+    None
 }
 
 fn clone_root(settings: &Value) -> PathBuf {
@@ -157,12 +331,35 @@ fn clone(plan: &Plan) -> Result<String, String> {
             plan.url
         ));
     }
+    git_clone(plan, false)?;
+    Ok(shown)
+}
+
+/// A sandbox chat's repository (#2561): a shallow clone into `target`, a
+/// temporary folder in the sandbox's own state, copied into the container and
+/// then deleted by the caller. Same token scoping and checks as any clone.
+pub fn clone_for_sandbox(settings: &Value, pick: &Value, target: &Path) -> Result<(), String> {
+    let mut plan = plan(settings, pick)?;
+    plan.target = target.to_path_buf();
+    if plan.target.exists() {
+        std::fs::remove_dir_all(&plan.target).map_err(|e| format!("Couldn't clear {}: {e}", plan.target.display()))?;
+    }
+    git_clone(&plan, true)
+}
+
+fn git_clone(plan: &Plan, shallow: bool) -> Result<(), String> {
+    let shown = plan.target.to_string_lossy().into_owned();
     let parent = plan.target.parent().ok_or("no folder to clone into")?;
     std::fs::create_dir_all(parent).map_err(|e| format!("Couldn't create {}: {e}", parent.display()))?;
     nekko_net::check("connectors", &plan.host)?;
     let ev = nekko_net::Event::new("request").host(&plan.host);
     let cwd = parent.to_string_lossy().into_owned();
-    let ran = run_with_env("git", &["clone", "--", &plan.url, &shown], &cwd, None, CLONE_TIMEOUT, &plan.env);
+    let mut args = vec!["clone"];
+    if shallow {
+        args.extend(["--depth", "1"]);
+    }
+    args.extend(["--", &plan.url, &shown]);
+    let ran = run_with_env("git", &args, &cwd, None, CLONE_TIMEOUT, &plan.env);
     let failure = match ran {
         Ok((0, _, _)) => None,
         Ok((_, _, err)) => Some(explain(&String::from_utf8_lossy(&err), &plan.origin)),
@@ -176,7 +373,7 @@ fn clone(plan: &Plan) -> Result<String, String> {
     match failure {
         None => {
             nekko_net::record("connectors", ev);
-            Ok(shown)
+            Ok(())
         }
         Some(e) => {
             nekko_net::record("connectors", ev.error(&e));
@@ -278,6 +475,35 @@ mod tests {
         assert!(err.contains("already exists"));
         assert_eq!(std::fs::read_to_string(dir.join("me").join("app").join("notes.txt")).unwrap(), "mine");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn remote_forms_match() {
+        let k = remote_key("https://github.com/me/app");
+        for u in ["https://x@GitHub.com/me/app.git", "git@github.com:me/app.git", "ssh://git@github.com/me/app/"] {
+            assert_eq!(remote_key(u), k, "{u}");
+        }
+        assert_ne!(remote_key("git@github.com:me/apps"), k);
+    }
+
+    #[test]
+    fn an_existing_clone_is_found_and_reused() {
+        let root = std::env::temp_dir().join(format!("nekko-find-local-{}", std::process::id()));
+        let clone = root.join("work").join("app");
+        std::fs::create_dir_all(clone.join(".git")).unwrap();
+        std::fs::write(
+            clone.join(".git").join("config"),
+            "[core]\n\tbare = false\n[remote \"upstream\"]\n\turl = https://github.com/other/app\n[remote \"origin\"]\n\turl = git@github.com:me/app.git\n",
+        )
+        .unwrap();
+        let url = "https://github.com/me/app.git";
+        // Found two levels under a code folder.
+        assert_eq!(find_local(url, &[], &[root.clone()]).as_deref(), Some(clone.to_str().unwrap()));
+        // And as a saved folder, with no code folders searched.
+        assert_eq!(find_local(url, &[clone.clone()], &[]).as_deref(), Some(clone.to_str().unwrap()));
+        // Only `origin` counts.
+        assert_eq!(find_local("https://github.com/other/app", &[], &[root.clone()]), None);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

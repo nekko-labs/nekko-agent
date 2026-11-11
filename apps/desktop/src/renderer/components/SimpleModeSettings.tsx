@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SIMPLE_ITEMS, simpleAreas, simpleOptions, simpleShown, simpleVisibility, type SimpleChoices, type SimpleItem, type SimpleVisibility } from '@nekko-agent/shared';
 import { useExpertMode, useSimpleChoices } from '../simpleMode.js';
 import { ChatIcon, CodeIcon, FolderIcon, GlobeIcon, PlusIcon } from '../icons.js';
+import { SettingsSection } from './SettingsSection.js';
 
 /*
  * Settings > Customize > Simple mode: per control, Show (both modes, when it applies),
@@ -91,51 +92,52 @@ export function SimpleModeSettings() {
   const hiddenInSimple = desktop.filter((i) => !simpleShown(i.id, false, choices, PREVIEW_CONTEXT)).length;
   const changed = Object.keys(choices).length > 0;
   return (
-    <section className="card mt-6 p-5" data-simple-mode-settings>
-      <div className="flex flex-wrap items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold">What Simple shows</h3>
-          <p className="mt-1 max-w-prose text-xs text-ink-soft">
-            Simple is a cleaner, more focused view, and details show only when they matter. Everything still works.{' '}
-            <b>Show</b> puts a control in both modes whenever it applies, <b>Detailed only</b> keeps it for Detailed, and <b>Hide</b> puts it away in both.{' '}
-            The hardware gauges wait for a local model to run: choose <b>Always</b> to pin them on. The Monitors panel's own Configure menu picks its monitors for both modes.
-          </p>
-          <p className="mt-1 text-xs text-ink-faint">{hiddenInSimple} of {desktop.length} controls are out of sight in Simple. Kept on this computer.</p>
+    <SettingsSection
+      data-simple-mode-settings
+      title="What Simple shows"
+      help="Simple is a cleaner, more focused view, and details show only when they matter. Everything still works."
+      actions={<>
+        <span className="text-xs text-ink-faint">Preview</span>
+        <div className="flex items-center gap-1" role="radiogroup" aria-label="Preview mode">
+          {([false, true] as const).map((on) => (
+            <button key={String(on)} type="button" role="radio" aria-checked={previewExpert === on} className="quiet-tab items-center" onClick={() => setPreviewExpert(on)} aria-label={on ? 'Preview Detailed' : 'Preview Simple'} title={on ? 'Preview Detailed' : 'Preview Simple'}>
+              {on ? <CodeIcon className="h-3.5 w-3.5" /> : <ChatIcon className="h-3.5 w-3.5" />}
+            </button>
+          ))}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-2xs text-ink-faint">Preview</span>
-          <div className="mode-seg" role="radiogroup" aria-label="Preview mode">
-            {([false, true] as const).map((on) => (
-              <button key={String(on)} type="button" role="radio" aria-checked={previewExpert === on} className={previewExpert === on ? 'on' : ''} onClick={() => setPreviewExpert(on)} aria-label={on ? 'Preview Detailed' : 'Preview Simple'} title={on ? 'Preview Detailed' : 'Preview Simple'}>
-                {on ? <CodeIcon className="h-3.5 w-3.5" /> : <ChatIcon className="h-3.5 w-3.5" />}
-              </button>
-            ))}
-          </div>
-          <button type="button" className="btn btn-ghost px-2 py-1 text-xs" disabled={!changed} onClick={() => { for (const id of Object.keys(choices)) setChoice(id, null); }}>Reset to defaults</button>
-        </div>
-      </div>
+        <button type="button" className="btn btn-ghost py-1 text-xs" disabled={!changed} onClick={() => { for (const id of Object.keys(choices)) setChoice(id, null); }}>Reset to defaults</button>
+      </>}
+    >
+      <p className="mt-(--q-tight) text-xs text-ink-faint">{hiddenInSimple} of {desktop.length} controls are out of sight in Simple. Kept on this computer.</p>
+      <details className="mt-(--q-tight) max-w-prose text-xs text-ink-faint">
+        <summary className="w-fit cursor-pointer transition-colors duration-(--dur-fast) hover:text-ink">What the choices mean</summary>
+        <p className="mt-(--q-tight)">
+          <b>Show</b> puts a control in both modes whenever it applies, <b>Detailed only</b> keeps it for Detailed, and <b>Hide</b> puts it away in both.{' '}
+          The hardware gauges wait for a local model to run: choose <b>Always</b> to pin them on. The Monitors panel's own Configure menu picks its monitors for both modes.
+        </p>
+      </details>
       <PreviewCtx.Provider value={{ expert: previewExpert, choices, hot }}>
         {areas.map(({ area, items }) => {
           const Preview = PREVIEWS[area];
           return (
-            <div key={area} className="sm-area" data-simple-area={area}>
+            <div key={area} className="mt-(--q-section) grid grid-cols-1 gap-5 min-[901px]:grid-cols-2" data-simple-area={area}>
               <div className="min-w-0">
-                <h4 className="sm-area-title">{area}</h4>
+                <h4 className="quiet-group-label mb-(--q-heading)">{area}</h4>
                 {Preview && <Preview />}
-                <p className="mt-1.5 text-2xs text-ink-faint">{previewExpert ? 'In Detailed.' : 'In Simple.'} Dashed controls are out of sight.</p>
+                <p className="mt-(--q-inline) text-2xs text-ink-faint">{previewExpert ? 'In Detailed.' : 'In Simple.'} Dashed controls are out of sight.</p>
               </div>
               <ul className="min-w-0" onMouseLeave={() => setHot(null)}>
                 {items.map((item) => {
                   const v = simpleVisibility(item.id, choices);
                   return (
-                    <li key={item.id} className="sm-item" onMouseEnter={() => setHot(item.id)} onFocus={() => setHot(item.id)} data-simple-item={item.id}>
+                    <li key={item.id} className="quiet-row flex-wrap" onMouseEnter={() => setHot(item.id)} onFocus={() => setHot(item.id)} data-simple-item={item.id}>
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium">{item.label}{item.default === v ? '' : <span className="ml-1.5 text-2xs font-normal text-accent">changed</span>}</div>
-                        <div className="text-2xs text-ink-faint">{item.hint}</div>
+                        <div className="text-sm font-medium">{item.label}{item.default === v ? '' : <span className="ml-1.5 text-xs font-normal text-ink-soft">changed</span>}</div>
+                        <div className="mt-(--q-tight) text-xs text-ink-faint">{item.hint}</div>
                       </div>
-                      <div className="sm-choice" role="radiogroup" aria-label={item.label}>
+                      <div className="flex shrink-0 items-center gap-1" role="radiogroup" aria-label={item.label}>
                         {simpleOptions(item).map((c) => (
-                          <button key={c} type="button" role="radio" aria-checked={v === c} className={v === c ? 'on' : ''} onClick={() => setChoice(item.id, c === item.default ? null : c)}>
+                          <button key={c} type="button" role="radio" aria-checked={v === c} className="quiet-tab" onClick={() => setChoice(item.id, c === item.default ? null : c)}>
                             {choiceLabel(item, c)}
                           </button>
                         ))}
@@ -148,6 +150,6 @@ export function SimpleModeSettings() {
           );
         })}
       </PreviewCtx.Provider>
-    </section>
+    </SettingsSection>
   );
 }

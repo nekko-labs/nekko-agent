@@ -128,11 +128,18 @@ pub fn usual_memory_mb(samples_mb: &[u64]) -> Option<u64> {
 /// and never more than leaves 2 cores to the host.
 pub fn cpus_per_vm(s: &RunnerSettings, host: &HostFacts) -> u8 {
     let ceiling = host.cores.saturating_sub(HOST_CORES);
-    let want = s.cpus_per_vm.unwrap_or(match s.priority {
-        Priority::DoNotDisturb => 4,
-        Priority::Balanced => 6,
-        Priority::RunnerFirst => ceiling,
-    });
+    // A default is shared out: two macOS VMs of 6 vCPUs on a 10-core Mac ask for more cores than
+    // exist, and a CPU-bound Xcode job then loses its runner while the host starves. An explicit
+    // setting is the owner's choice and only meets the ceiling.
+    let share = ceiling / macos_slots_available(s, host).max(1);
+    let want = s.cpus_per_vm.unwrap_or(
+        match s.priority {
+            Priority::DoNotDisturb => 4,
+            Priority::Balanced => 6,
+            Priority::RunnerFirst => ceiling,
+        }
+        .min(share),
+    );
     want.min(ceiling).max(2)
 }
 

@@ -22,7 +22,7 @@ import type {
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
-import { AGENT_REPLAY, IpcChannels, IpcEvents } from '@nekko-agent/shared';
+import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
 import { heldWhileHidden, pageHidden } from './hiddenReads.js';
@@ -121,6 +121,18 @@ const api: NekkoApi = {
   syncSetEnabled: (on) => inv(IpcChannels.syncSetEnabled, on),
   syncSetIncludeLocalOnly: (on) => inv(IpcChannels.syncSetIncludeLocalOnly, on),
   syncDeleteAll: () => inv(IpcChannels.syncDeleteAll),
+  orgList: () => inv(IpcChannels.orgList),
+  orgCreate: (name) => inv(IpcChannels.orgCreate, name),
+  orgGet: (orgId) => inv(IpcChannels.orgGet, orgId),
+  orgInvite: (orgId, email, role) => inv(IpcChannels.orgInvite, ...(role ? [orgId, email, role] : [orgId, email])),
+  orgRevokeInvite: (orgId, inviteId) => inv(IpcChannels.orgRevokeInvite, orgId, inviteId),
+  orgAcceptInvite: (inviteId) => inv(IpcChannels.orgAcceptInvite, inviteId),
+  orgRemoveMember: (orgId, userId) => inv(IpcChannels.orgRemoveMember, orgId, userId),
+  orgRename: (orgId, name) => inv(IpcChannels.orgRename, orgId, name),
+  orgDelete: (orgId) => inv(IpcChannels.orgDelete, orgId),
+  fleetSetSharing: (orgId, on) => inv(IpcChannels.fleetSetSharing, orgId, on),
+  fleetList: (orgId) => inv(IpcChannels.fleetList, orgId),
+  fleetStatus: () => inv(IpcChannels.fleetStatus),
   voiceStatus: () => inv(IpcChannels.voiceStatus),
   voiceInstall: (engine) => inv(IpcChannels.voiceInstall, engine),
   voiceCancelInstall: () => inv(IpcChannels.voiceCancelInstall),
@@ -269,7 +281,8 @@ const api: NekkoApi = {
   addWorkspaceByPath: (path) => inv(IpcChannels.workspaceAddByPath, path),
   removeWorkspace: (id) => inv(IpcChannels.workspaceRemove, id),
   listRepos: (query) => inv(IpcChannels.reposList, query ?? ''),
-  cloneRepo: (repo) => inv(IpcChannels.reposClone, repo),
+  cloneRepo: (repo, opts) => inv(IpcChannels.reposClone, repo, opts ?? {}),
+  setSandboxRepos: (id, repos) => inv(IpcChannels.reposSetSandbox, id, repos),
   indexWorkspace: (id) => inv(IpcChannels.workspaceIndex, id),
   getIndexStatus: (id) => inv(IpcChannels.workspaceIndexStatus, id),
   searchWorkspace: (id, query) => inv(IpcChannels.workspaceSearch, id, query),
@@ -279,6 +292,9 @@ const api: NekkoApi = {
   removeChatWorktree: (root) => inv(IpcChannels.chatWorktreesRemove, root),
 
   readFile: (path) => inv(IpcChannels.fileRead, path),
+  // The main process serves these on loopback, not the engine (main/htmlPreview.ts).
+  serveHtmlPreview: (path, options) => ipcRenderer.invoke(HTML_PREVIEW_CHANNELS.serve, path, options),
+  releaseHtmlPreview: (id) => ipcRenderer.invoke(HTML_PREVIEW_CHANNELS.release, id),
   writeFile: (path, content) => inv(IpcChannels.fileWrite, path, content),
   listDir: (path) => inv(IpcChannels.dirList, path),
   listScopedFiles: (root, relPath) => inv(IpcChannels.filesList, root, relPath),

@@ -12,6 +12,7 @@ import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
 import { ChatArtifacts } from './ChatArtifacts.js';
 import { MarkdownSession } from './Markdown.js';
+import { ChatCodeRun, type ChatCodeRunTarget } from './ChatCodeRun.js';
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
 import { chatPaneSettings, initialChatBrain } from './ChatPane.settings.js';
@@ -2592,6 +2593,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const onDelete = useCallback((id: string) => { void takeBack('delete', id); }, [takeBack]);
   const onRestart = useCallback((id: string) => { void takeBack('restart', id); }, [takeBack]);
   const artifactBasePath = session?.workspaceId ? session.gitWorktrees?.[session.workspaceId]?.path ?? settings?.workspaces.find((w) => w.id === session.workspaceId)?.path : undefined;
+  // Run on a suggested command (#2595): a local chat the user can write in.
+  // Sandbox work never runs on this computer's shell, so it gets no Run.
+  const sandboxChat = session?.executionMode === 'sandbox';
+  const codeRun = useMemo<ChatCodeRunTarget | null>(() => (readOnly || sandboxChat ? null : {
+    sessionId,
+    cwd: artifactBasePath,
+    workspaceId: session?.workspaceId,
+    share: (text: string) => {
+      setDraft((d) => (d.trim() ? `${d}\n\n${text}` : text));
+      composerRef.current?.focus();
+    },
+  }), [readOnly, sandboxChat, sessionId, artifactBasePath, session?.workspaceId]);
   const renderRow = useCallback(
     (row: TranscriptRow) => (
       <TranscriptRowView
@@ -2678,7 +2691,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const toggleIncognito = () => {
     window.nekko.setSessionOptions(sessionId, { incognito: !session?.incognito }).then(setSession).catch((e) => useStore.getState().pushToast('error', String(e)));
   };
-  const asksFirst = showAsks && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} /> : null;
+  const asksFirst = showAsks && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} isCloudModel={isCloudModel} /> : null;
   const effortProps = {
     metadata: selectedModelInfo?.effort,
     session, onSessionChange: setSession, modelId: autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined),
@@ -2770,6 +2783,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   return (
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
+    <ChatCodeRun.Provider value={codeRun}>
     <ChatImages.Provider value={chatImages}>
     <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <ContextChangeNotice tokens={ctx ? ctxUsed : undefined} onClose={closeContextNotice} />}
@@ -3705,6 +3719,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       )}
     </div>
     </ChatImages.Provider>
+    </ChatCodeRun.Provider>
     </MarkdownSandbox.Provider>
   );
 }
