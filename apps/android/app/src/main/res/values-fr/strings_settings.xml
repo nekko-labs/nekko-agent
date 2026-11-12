@@ -389,4 +389,29 @@
     <string name="settings_card_footer_text">Les noms et étapes des discussions s’affichent quand le téléphone est déverrouillé ; un téléphone verrouillé qui masque les contenus sensibles affiche les textes de Minimal. Autoriser demande d’abord de déverrouiller.</string>
     <string name="settings_warn_yolo">Avertir avant YOLO</string>
     <string name="settings_warn_yolo_detail">Expliquer ce que YOLO laisse passer avant qu’une discussion ou le mode par défaut d’un ordinateur y passe</string>
+    <!-- Customize (#2426), the iPhone's page. -->
+    <string name="customize_title">Personnaliser</string>
+    <string name="customize_menu">Personnaliser…</string>
+    <string name="customize_settings_detail">Affichage, ton des modèles de ce téléphone, skills</string>
+    <string name="customize_tab_experience">Expérience</string>
+    <string name="customize_tab_skills">Skills</string>
+    <string name="customize_intro_title">Faites travailler Nekko à votre façon</string>
+    <string name="customize_intro">Choisissez ce que vous voyez et comment vos agents travaillent.</string>
+    <string name="customize_output">Sortie des agents</string>
+    <string name="customize_visible_controls">Commandes et moniteurs visibles</string>
+    <string name="customize_output_footer">Simple masque les étapes de travail. Détaillé les affiche. Les deux ont les mêmes capacités et autorisations. Ce choix reste sur ce téléphone.</string>
+    <string name="customize_phone_chats">Chats sur le téléphone</string>
+    <string name="customize_tone">Ton</string>
+    <string name="customize_tone_footer">S’applique à la prochaine réponse des modèles qui tournent sur ce téléphone. Les agents d’un ordinateur gardent le ton et les instructions de cet ordinateur.</string>
+    <string name="tone_default">Par défaut</string>
+    <string name="tone_friendly">Amical</string>
+    <string name="tone_professional">Professionnel</string>
+    <string name="tone_concise">Concis</string>
+    <string name="tone_explanatory">Explicatif</string>
+    <string name="customize_how_agents_work">Comment travaillent les agents</string>
+    <string name="customize_behavior">Comportement et autorisations des agents</string>
+    <string name="customize_how_footer">Le ton et les instructions permanentes des agents d’un ordinateur se règlent dans Personnaliser sur cet ordinateur. Changer cet affichage ne donne jamais accès aux outils.</string>
+    <string name="customize_skills_intro">Des façons de travailler réutilisables, depuis votre ordinateur connecté. Tapez /nom dans un chat pour lancer un skill.</string>
+    <string name="customize_skills_offline">Connectez votre ordinateur pour voir ses skills.</string>
+    <string name="customize_skills_none">Aucun skill disponible. Installez des skills dans Personnaliser sur votre ordinateur.</string>
 </resources>

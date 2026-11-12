@@ -389,4 +389,29 @@
     <string name="settings_card_footer_text">Os nomes e as etapas dos chats aparecem com o telefone desbloqueado; um telefone bloqueado que oculta conteúdo sensível mostra os textos do Mínimo. Permitir pede para desbloquear antes.</string>
     <string name="settings_warn_yolo">Avisar antes do YOLO</string>
     <string name="settings_warn_yolo_detail">Explicar o que o YOLO deixa passar antes que um chat ou o padrão de um computador mude para ele</string>
+    <!-- Customize (#2426), the iPhone's page. -->
+    <string name="customize_title">Personalizar</string>
+    <string name="customize_menu">Personalizar…</string>
+    <string name="customize_settings_detail">Visualização, tom dos modelos deste telefone, skills</string>
+    <string name="customize_tab_experience">Experiência</string>
+    <string name="customize_tab_skills">Skills</string>
+    <string name="customize_intro_title">Faça o Nekko trabalhar do seu jeito</string>
+    <string name="customize_intro">Escolha o que você vê e como seus agentes trabalham.</string>
+    <string name="customize_output">Saída dos agentes</string>
+    <string name="customize_visible_controls">Controles e monitores visíveis</string>
+    <string name="customize_output_footer">Simples oculta as etapas de trabalho. Detalhado as mostra. Os dois têm os mesmos recursos e permissões. Esta escolha fica neste telefone.</string>
+    <string name="customize_phone_chats">Chats no telefone</string>
+    <string name="customize_tone">Tom</string>
+    <string name="customize_tone_footer">Vale a partir da próxima resposta dos modelos que rodam neste telefone. Agentes de um computador mantêm o tom e as instruções desse computador.</string>
+    <string name="tone_default">Padrão</string>
+    <string name="tone_friendly">Amigável</string>
+    <string name="tone_professional">Profissional</string>
+    <string name="tone_concise">Conciso</string>
+    <string name="tone_explanatory">Explicativo</string>
+    <string name="customize_how_agents_work">Como os agentes trabalham</string>
+    <string name="customize_behavior">Comportamento e permissões dos agentes</string>
+    <string name="customize_how_footer">O tom e as instruções permanentes dos agentes de um computador são definidos em Personalizar nesse computador. Mudar esta visualização nunca dá acesso a ferramentas.</string>
+    <string name="customize_skills_intro">Formas reutilizáveis de trabalhar, do seu computador conectado. Digite /nome em um chat para executar um skill.</string>
+    <string name="customize_skills_offline">Conecte seu computador para ver os skills dele.</string>
+    <string name="customize_skills_none">Nenhum skill disponível. Instale skills em Personalizar no seu computador.</string>
 </resources>

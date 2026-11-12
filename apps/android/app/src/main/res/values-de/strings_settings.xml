@@ -389,4 +389,29 @@
     <string name="settings_card_footer_text">Chat-Namen und Schritte erscheinen, wenn das Telefon entsperrt ist; ein gesperrtes Telefon, das vertrauliche Inhalte ausblendet, zeigt die Minimal-Texte. Erlauben fragt zuerst nach dem Entsperren.</string>
     <string name="settings_warn_yolo">Vor YOLO warnen</string>
     <string name="settings_warn_yolo_detail">Erklären, was YOLO durchlässt, bevor ein Chat oder der Standard eines Computers dorthin wechselt</string>
+    <!-- Customize (#2426), the iPhone's page. -->
+    <string name="customize_title">Anpassen</string>
+    <string name="customize_menu">Anpassen…</string>
+    <string name="customize_settings_detail">Ansicht, Ton der Modelle auf diesem Telefon, Skills</string>
+    <string name="customize_tab_experience">Erlebnis</string>
+    <string name="customize_tab_skills">Skills</string>
+    <string name="customize_intro_title">Nekko nach deinen Wünschen</string>
+    <string name="customize_intro">Wähle, was du siehst und wie deine Agenten arbeiten.</string>
+    <string name="customize_output">Agentenausgabe</string>
+    <string name="customize_visible_controls">Sichtbare Steuerelemente und Monitore</string>
+    <string name="customize_output_footer">Einfach blendet Arbeitsschritte aus, Detailliert zeigt sie. Beide können dasselbe und haben dieselben Berechtigungen. Diese Wahl bleibt auf diesem Telefon.</string>
+    <string name="customize_phone_chats">Chats auf dem Telefon</string>
+    <string name="customize_tone">Ton</string>
+    <string name="customize_tone_footer">Gilt ab der nächsten Antwort der Modelle auf diesem Telefon. Agenten auf einem Computer behalten den Ton und die Anweisungen dieses Computers.</string>
+    <string name="tone_default">Standard</string>
+    <string name="tone_friendly">Freundlich</string>
+    <string name="tone_professional">Professionell</string>
+    <string name="tone_concise">Knapp</string>
+    <string name="tone_explanatory">Erklärend</string>
+    <string name="customize_how_agents_work">Wie Agenten arbeiten</string>
+    <string name="customize_behavior">Verhalten und Berechtigungen der Agenten</string>
+    <string name="customize_how_footer">Ton und dauerhafte Anweisungen der Agenten auf einem Computer legst du dort unter Anpassen fest. Diese Ansicht zu ändern gibt nie Zugriff auf Werkzeuge.</string>
+    <string name="customize_skills_intro">Wiederverwendbare Arbeitsweisen von deinem verbundenen Computer. Schreib /name in einem Chat, um einen Skill auszuführen.</string>
+    <string name="customize_skills_offline">Verbinde deinen Computer, um seine Skills zu sehen.</string>
+    <string name="customize_skills_none">Keine Skills verfügbar. Installiere Skills auf deinem Computer unter Anpassen.</string>
 </resources>

@@ -435,4 +435,29 @@
     <string name="settings_mode_yolo">YOLO</string>
     <string name="settings_warn_yolo">Warn before YOLO</string>
     <string name="settings_warn_yolo_detail">Explain what YOLO lets through before a chat or a computer\'s default switches to it</string>
+    <!-- Customize (#2426), the iPhone's page. -->
+    <string name="customize_title">Customize</string>
+    <string name="customize_menu">Customize…</string>
+    <string name="customize_settings_detail">View, tone of this phone’s models, skills</string>
+    <string name="customize_tab_experience">Experience</string>
+    <string name="customize_tab_skills">Skills</string>
+    <string name="customize_intro_title">Make Nekko work your way</string>
+    <string name="customize_intro">Choose what you see and how your agents work.</string>
+    <string name="customize_output">Agent output</string>
+    <string name="customize_visible_controls">Visible controls and monitors</string>
+    <string name="customize_output_footer">Simple folds working steps away. Detailed shows them. Both have the same capabilities and permissions. This choice stays on this phone.</string>
+    <string name="customize_phone_chats">Phone-hosted chats</string>
+    <string name="customize_tone">Tone</string>
+    <string name="customize_tone_footer">Applies to the next reply from models running on this phone. Computer-hosted agents keep that computer’s tone and standing instructions.</string>
+    <string name="tone_default">Default</string>
+    <string name="tone_friendly">Friendly</string>
+    <string name="tone_professional">Professional</string>
+    <string name="tone_concise">Concise</string>
+    <string name="tone_explanatory">Explanatory</string>
+    <string name="customize_how_agents_work">How agents work</string>
+    <string name="customize_behavior">Agent behavior and permissions</string>
+    <string name="customize_how_footer">Tone and standing instructions for computer-hosted agents are managed in Customize on that computer. Changing this view never grants tool access.</string>
+    <string name="customize_skills_intro">Reusable ways to work, from your connected computer. Use /name in a chat to run a skill.</string>
+    <string name="customize_skills_offline">Connect your computer to see its skills.</string>
+    <string name="customize_skills_none">No skills available. Install skills in Customize on your computer.</string>
 </resources>

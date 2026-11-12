@@ -366,6 +366,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > with the shared text or link. You can edit it on the New chat screen; after you start the chat it
 > waits in the message box and you send it yourself. Nekko never sends shared text on its own, and
 > it is kept only in memory until then. Text and links only for now, up to 20,000 characters.
+> **Customize** (Android): **Settings → Customize**, or **Customize…** at the bottom of the chat
+> list's view menu. **Experience** picks Simple or Detailed, the **Tone** of models running on this
+> phone (Default, Friendly, Professional, Concise or Explanatory; agents on your computer keep its
+> own tone) and the look. **Skills** lists your computer's skills: type `/name` in a chat to run one.
+>
 > **Vibration** (Android): while the app is open, the phone vibrates when the agent needs your
 > approval (two pulses) or asks you a question (one long pulse). In **Settings → Vibration** you can
 > also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them

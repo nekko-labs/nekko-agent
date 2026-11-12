@@ -389,4 +389,29 @@
     <string name="settings_card_footer_text">手机解锁时显示聊天名称和步骤；锁定且隐藏敏感内容的手机只显示“简洁”文字。允许前需要先解锁。</string>
     <string name="settings_warn_yolo">开启 YOLO 前提醒</string>
     <string name="settings_warn_yolo_detail">在聊天或电脑的默认模式切换到 YOLO 之前，说明 YOLO 会放行什么</string>
+    <!-- Customize (#2426), the iPhone's page. -->
+    <string name="customize_title">自定义</string>
+    <string name="customize_menu">自定义…</string>
+    <string name="customize_settings_detail">视图、此手机上模型的语气、技能</string>
+    <string name="customize_tab_experience">体验</string>
+    <string name="customize_tab_skills">技能</string>
+    <string name="customize_intro_title">让 Nekko 按你的方式工作</string>
+    <string name="customize_intro">选择你看到的内容以及代理的工作方式。</string>
+    <string name="customize_output">代理输出</string>
+    <string name="customize_visible_controls">显示的控件和监视器</string>
+    <string name="customize_output_footer">简洁模式会折叠工作步骤，详细模式会显示它们。两者功能和权限相同。此选择仅保存在这台手机上。</string>
+    <string name="customize_phone_chats">手机上的聊天</string>
+    <string name="customize_tone">语气</string>
+    <string name="customize_tone_footer">从此手机上运行的模型的下一条回复开始生效。电脑上的代理保留该电脑的语气和常设指令。</string>
+    <string name="tone_default">默认</string>
+    <string name="tone_friendly">友好</string>
+    <string name="tone_professional">专业</string>
+    <string name="tone_concise">简洁</string>
+    <string name="tone_explanatory">详解</string>
+    <string name="customize_how_agents_work">代理如何工作</string>
+    <string name="customize_behavior">代理行为和权限</string>
+    <string name="customize_how_footer">电脑上代理的语气和常设指令在该电脑的“自定义”中管理。更改此视图不会授予任何工具访问权限。</string>
+    <string name="customize_skills_intro">来自已连接电脑的可复用工作方式。在聊天中输入 /名称 即可运行技能。</string>
+    <string name="customize_skills_offline">连接电脑以查看其技能。</string>
+    <string name="customize_skills_none">没有可用的技能。请在电脑的“自定义”中安装技能。</string>
 </resources>

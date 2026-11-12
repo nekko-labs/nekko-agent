@@ -115,6 +115,7 @@ object Routes {
     const val LOGS = "settings/logs"
     const val PROVIDERS = "settings/providers"
     const val SIMPLE_MODE = "settings/simple"
+    const val CUSTOMIZE = "settings/customize"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     /** This phone's chats, opened on [chat] when one is given (a row of the chat list, #2108). */
@@ -299,6 +300,18 @@ fun NekkoNavHost(
                 }
                 SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
             }
+            composable(Routes.CUSTOMIZE) {
+                // Customize (#2426): Settings is opened by going back to it when it is underneath.
+                val deps = remember(nav) {
+                    SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route ->
+                        nav.navigate(route) {
+                            if (route == Routes.SETTINGS) popUpTo(Routes.SETTINGS)
+                            launchSingleTop = true
+                        }
+                    })
+                }
+                com.nekko.android.ui.screens.CustomizeScreen(deps, phoneChats(), onBack = { nav.popBackStack() })
+            }
             composable(Routes.SIMPLE_MODE) {
                 SimpleModeScreen(prefs = phonePrefs, onBack = { nav.popBackStack() })
             }
@@ -415,6 +428,7 @@ private fun Panes(
                 phonePrefs = phonePrefs,
                 phone = phoneChats(),
                 onOpenPhone = { nav.navigate(Routes.phone(it)) },
+                onCustomize = { nav.navigate(Routes.CUSTOMIZE) { launchSingleTop = true } },
             )
             PaneContent.Monitors -> {
                 val vm = viewModel(viewModelStoreOwner = panes.stores.owner(c.key), key = c.key) { MonitorsViewModel(repo) }
@@ -569,6 +583,7 @@ private fun PhoneComputerHome(
         phonePrefs = phonePrefs,
         phone = phoneChats(),
         onOpenPhone = { nav.navigate(Routes.phone(it)) },
+        onCustomize = { nav.navigate(Routes.CUSTOMIZE) { launchSingleTop = true } },
     )
 
 }
