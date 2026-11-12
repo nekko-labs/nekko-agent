@@ -306,7 +306,7 @@ fn git_in(dir: &std::path::Path, args: &[&str]) -> String {
 }
 
 /// A loopback GitHub REST API with the pull and stack endpoints, recording what it was sent.
-async fn fake_github_stacks(pulls: Value) -> (u16, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
+pub(crate) async fn fake_github_stacks(pulls: Value) -> (u16, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
     use axum::extract::{Path as AxPath, RawQuery};
     let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
     let (log_get, log_post) = (seen.clone(), seen.clone());

@@ -192,6 +192,36 @@ fn signed_out_reads_as_a_sign_in_prompt() {
 }
 
 #[test]
+fn a_sub_agent_claude_code_moved_to_the_background_outlives_the_turn() {
+    // No `run_in_background` in the call: sub-agents run in the background by
+    // default, and Claude Code says so with `task_started` (#2645).
+    let items = map_all(&fixture("synthetic/background-by-default.jsonl"));
+    let sub: Vec<&Subagent> =
+        items.iter().filter_map(|m| if let Mapped::Subagent(s) = m { Some(s) } else { None }).collect();
+    assert!(matches!(sub[0], Subagent::Started { background: false, .. }), "{:?}", sub[0]);
+    assert_eq!(sub[1], &Subagent::Backgrounded { call_id: "toolu_bg".into() });
+    assert_eq!(sub.iter().filter(|s| matches!(s, Subagent::Line { .. })).count(), 2);
+    // "Async agent launched" ends nothing; the notification after the turn does.
+    assert_eq!(sub[4], &Subagent::Ended { call_id: "toolu_bg".into(), outcome: Outcome::Completed });
+    assert_eq!(sub.len(), 5);
+    let first_end = items.iter().position(|m| matches!(m, Mapped::End(_))).unwrap();
+    let ended = items.iter().position(|m| matches!(m, Mapped::Subagent(Subagent::Ended { .. }))).unwrap();
+    assert!(ended > first_end, "it ends after the turn that started it");
+}
+
+#[test]
+fn an_async_launch_result_alone_also_backgrounds_it() {
+    let mut lines = fixture("synthetic/background-by-default.jsonl");
+    lines.retain(|l| !l.contains("\"task_started\""));
+    let items = map_all(&lines);
+    let sub: Vec<&Subagent> =
+        items.iter().filter_map(|m| if let Mapped::Subagent(s) = m { Some(s) } else { None }).collect();
+    assert_eq!(sub[1], &Subagent::Backgrounded { call_id: "toolu_bg".into() });
+    assert_eq!(sub.iter().filter(|s| matches!(s, Subagent::Ended { .. })).count(), 1);
+    assert!(matches!(sub.last().unwrap(), Subagent::Ended { outcome: Outcome::Completed, .. }));
+}
+
+#[test]
 fn tools_subagents_and_retries() {
     let items = map_all(&fixture("synthetic/tools-subagent-retry.jsonl"));
     let ev = events(&items);
