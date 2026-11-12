@@ -317,6 +317,8 @@ impl SessionStore {
         cache.retain(|k, _| present.contains(k));
         drop(cache);
         newest_first(&mut out);
+        // After the cache, which keeps each chat's own PRs: a chat also lists its sub-agents'.
+        pr::roll_up_child_pr_urls(&mut out);
         out
     }
 
@@ -390,6 +392,44 @@ mod tests {
         assert_eq!(first["firstUserText"], "changed, and longer");
         assert!(first.get("messages").is_none());
         assert_eq!(s.list().len(), 2);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_chat_summary_lists_the_prs_its_sub_agent_chats_created() {
+        let (s, dir) = store();
+        // A Claude Code sub-agent's child chat, as subagents.rs saves it: its own transcript, `parentSessionId` set.
+        let write = |id: &str, parent: Option<&str>, updated: u64, url: &str, failed: bool| {
+            let mut v = json!({ "id": id, "title": id, "updatedAt": updated, "messages": [
+                { "id": "u", "role": "user", "content": "do it", "createdAt": 1 },
+                { "id": "a", "role": "assistant", "content": "", "toolCalls": [{ "id": format!("t_{id}"), "name": "PowerShell", "input": { "command": "$u = gh pr create --fill; $u" } }] },
+                { "id": "r", "role": "tool", "toolResult": { "toolCallId": format!("t_{id}"), "output": url, "isError": failed } },
+            ] });
+            if let Some(p) = parent {
+                v["parentSessionId"] = json!(p);
+            }
+            std::fs::write(dir.join("sessions").join(format!("{id}.json")), serde_json::to_vec_pretty(&v).unwrap())
+                .unwrap();
+        };
+        let url = |n: u32| format!("https://github.com/o/r/pull/{n}");
+        write("s_parent", None, 1, "no PR here", false);
+        write("s_child", Some("s_parent"), 2, &url(2), false);
+        write("s_failed", Some("s_parent"), 3, &url(3), true);
+        write("s_grandchild", Some("s_child"), 4, &url(4), false);
+        // Sub-agents' PRs follow the chat's own in list order (newest chat first); the chip sorts them itself.
+        let by_id = |id: &str| {
+            let mut urls: Vec<String> =
+                serde_json::from_value(s.summaries().into_iter().find(|v| v["id"] == id).unwrap()["prUrls"].clone())
+                    .unwrap();
+            urls.sort();
+            json!(urls)
+        };
+        assert_eq!(by_id("s_parent"), json!([url(2), url(4)]));
+        assert_eq!(by_id("s_child"), json!([url(2), url(4)]));
+        assert_eq!(by_id("s_failed"), json!([]));
+        assert_eq!(by_id("s_grandchild"), json!([url(4)]));
+        // The cache keeps each chat's own PRs: a second read does not add them twice.
+        assert_eq!(by_id("s_parent"), json!([url(2), url(4)]));
         std::fs::remove_dir_all(dir).ok();
     }
 

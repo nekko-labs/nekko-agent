@@ -338,6 +338,59 @@ async fn fake_github_stacks(pulls: Value) -> (u16, std::sync::Arc<std::sync::Mut
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_chat_lists_the_prs_its_sub_agents_opened() {
+    let data = std::env::temp_dir().join(format!("nekkod-subagent-prs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // A sub-agent's child chat (Claude Code's Agent tool or spawn_agent): its own
+    // transcript, linked to the chat that started it by `parentSessionId`.
+    let chat = |id: &str, parent: Option<&str>, url: &str, failed: bool| {
+        let mut c = json!({ "id": id, "title": id, "createdAt": 1, "updatedAt": 1, "messages": [
+            { "id": "u", "role": "user", "content": "open the PR", "createdAt": 1 },
+            { "id": "a", "role": "assistant", "content": "", "toolCalls": [{ "id": format!("t_{id}"), "name": "Bash", "input": { "command": "gh pr create --fill" } }] },
+            { "id": "r", "role": "tool", "toolResult": { "toolCallId": format!("t_{id}"), "output": url, "isError": failed } },
+        ] });
+        if let Some(p) = parent {
+            c["parentSessionId"] = json!(p);
+        }
+        std::fs::write(data.join(format!("sessions/{id}.json")), c.to_string()).unwrap();
+    };
+    let url = |n: u32| format!("https://github.com/owner/repo/pull/{n}");
+    chat("s_parent", None, "nothing opened here", false);
+    chat("s_child", Some("s_parent"), &url(12), false);
+    chat("s_failed", Some("s_parent"), &url(13), true);
+    let pr = |n: u32| {
+        json!({ "number": n, "state": "open", "title": format!("PR {n}"), "html_url": url(n),
+        "head": { "ref": "b", "sha": "a".repeat(40), "repo": { "full_name": "owner/repo" } },
+        "base": { "ref": "main", "repo": { "full_name": "owner/repo" } } })
+    };
+    let (gh, seen) =
+        fake_github_stacks(json!({ "repos/owner/repo/pulls/12": pr(12), "repos/owner/repo/pulls/13": pr(13) })).await;
+    let d = start_with_env(
+        &data,
+        json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
+        &[("NEKKO_GH_PATH", Some("nekko-no-such-gh")), ("GH_TOKEN", None), ("GITHUB_TOKEN", None)],
+    );
+
+    // The card's summary and the plan sheet's live list agree: the child's PR is the parent's too.
+    let (_, list) = post(d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    let urls = |id: &str| list.as_array().unwrap().iter().find(|s| s["id"] == id).unwrap()["prUrls"].clone();
+    assert_eq!(urls("s_parent"), json!([url(12)]));
+    assert_eq!(urls("s_child"), json!([url(12)]));
+    assert_eq!(urls("s_failed"), json!([]), "a failed create attaches nothing");
+    let (status, prs) = post(d.port, "pr:sessionList", json!(["s_parent", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{prs}");
+    let listed: Vec<&str> = prs.as_array().unwrap().iter().filter_map(|p| p["url"].as_str()).collect();
+    assert_eq!(listed, vec![url(12).as_str()], "{prs}");
+    assert!(
+        !seen.lock().unwrap().iter().any(|c| c[1] == "repos/owner/repo/pulls/13"),
+        "the failed create is never read"
+    );
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn continues_and_links_pr_stacks_itself() {
     let data = std::env::temp_dir().join(format!("nekkod-stacks-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
