@@ -502,9 +502,12 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
-> first, then one group per project folder. Tap a group's name to fold it, and again to open it:
-> the phone remembers each group's choice, also after you leave the list or restart the app (it
-> isn't synced to your computer). Search shows every match whatever is folded. Each group lists its
+> first, then one group per project folder. Groups start folded, as on the iPhone, with a count of
+> their chats; tap a group's name to open it, and again to fold it. The phone remembers each group's
+> choice, also after you leave the list or restart the app (it isn't synced to your computer).
+> Grouped by status, the list uses the iPhone's groups (Needs input, Draft, Building, Verifying,
+> Watching, Done), and a group with a chat running or watching shows the cat with a green dot in
+> its heading. Search shows every match whatever is folded. Each group lists its
 > active chats, then **Show completed (N)**, which opens the chats completed there (struck through,
 > newest first). Tap a completed chat to read it; its message box is replaced by **Restore**, and a
 > long-press on it offers Restore or Delete. Completing or restoring a chat on the computer shows up

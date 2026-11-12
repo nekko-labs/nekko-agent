@@ -97,6 +97,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.contentDescription
@@ -216,14 +217,15 @@ fun ChatsScreen(
     var pressedDone by remember { mutableStateOf<SessionSummary?>(null) }
     // Groups showing all their chats; kept while a chat is open.
     var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
-    // The view menu (group by, sort by, what is shown), the project groups' order and the closed groups, kept on this phone.
+    // The view menu (group by, sort by, what is shown), the project groups' order and the opened groups, kept on this phone.
     val localView = remember { MutableStateFlow(ChatListView.STANDARD) }
     val localOrder = remember { MutableStateFlow(emptyMap<String, List<String>>()) }
-    val localCollapsed = remember { MutableStateFlow(emptySet<String>()) }
-    val collapsed by (phonePrefs?.flow(ChatListPrefs.COLLAPSED_GROUPS) ?: localCollapsed).collectAsStateWithLifecycle()
+    val localOpened = remember { MutableStateFlow(emptySet<String>()) }
+    // Groups start folded, as on the iPhone (#2107); each one's last choice is kept.
+    val opened by (phonePrefs?.flow(ChatListPrefs.OPENED_GROUPS) ?: localOpened).collectAsStateWithLifecycle()
     val toggleGroup: (String) -> Unit = { key ->
-        if (phonePrefs != null) phonePrefs.set(ChatListPrefs.COLLAPSED_GROUPS, ChatListPrefs.toggled(phonePrefs.get(ChatListPrefs.COLLAPSED_GROUPS), key))
-        else localCollapsed.value = ChatListPrefs.toggled(localCollapsed.value, key)
+        if (phonePrefs != null) phonePrefs.set(ChatListPrefs.OPENED_GROUPS, ChatListPrefs.toggled(phonePrefs.get(ChatListPrefs.OPENED_GROUPS), key))
+        else localOpened.value = ChatListPrefs.toggled(localOpened.value, key)
     }
     val view by (phonePrefs?.flow(ChatListPrefs.VIEW) ?: localView).collectAsStateWithLifecycle()
     val orders by (phonePrefs?.flow(ChatListPrefs.GROUP_ORDER) ?: localOrder).collectAsStateWithLifecycle()
@@ -501,14 +503,18 @@ fun ChatsScreen(
                             // The desktop's agent sidebar as the view menu arranges it: by project (General, then each
                             // folder, in the order arranged here), status, date or none; the recent few, then Show more.
                             if (query.isBlank()) sections.forEach { g ->
-                                val open = g.key !in collapsed
+                                val open = g.isOpen(opened)
                                 val all = g.key in expanded
                                 val (shown, hidden) = ChatSections.split(g, s.activity, now)
+                                // General and All chats have no fold, as on the iPhone.
+                                val folds = g.key != ChatGroup.GENERAL && g.key != "all"
                                 item(key = "group:${g.key}") {
                                     GroupHeader(
                                         groupTitle(g.key, g.name), open, groupCounts(g),
                                         onReorder = if (view.canReorderGroups && sections.size > 1) ({ reordering = true }) else null,
-                                    ) { toggleGroup(g.key) }
+                                        live = g.live(s.activity), total = g.chats.size, groupKey = g.key,
+                                        onToggle = if (folds) ({ toggleGroup(g.key) }) else null,
+                                    )
                                 }
                                 if (!open) return@forEach
                                 if (g.chats.isEmpty()) {
@@ -895,7 +901,18 @@ private fun MonitorsRow(onClick: () -> Unit) {
  * press (and as an accessibility action).
  */
 @Composable
-private fun GroupHeader(name: String, open: Boolean, count: String, onReorder: (() -> Unit)? = null, onToggle: (() -> Unit)?) {
+private fun GroupHeader(
+    name: String,
+    open: Boolean,
+    count: String,
+    onReorder: (() -> Unit)? = null,
+    /** Building or Verifying with a chat running, Watching with a watch armed (#2107, the iPhone's #1918). */
+    live: Boolean = false,
+    /** The group's chats, shown as a count when it is live or folded. */
+    total: Int = 0,
+    groupKey: String? = null,
+    onToggle: (() -> Unit)?,
+) {
     val p = Nekko.palette
     val toggleLabel = stringResource(if (open) R.string.chats_collapse_group else R.string.chats_expand_group, name)
     val reorderLabel = if (onReorder != null) stringResource(R.string.chats_reorder_groups) else null
@@ -934,7 +951,21 @@ private fun GroupHeader(name: String, open: Boolean, count: String, onReorder: (
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
-        if (count.isNotEmpty()) Text(count, style = MaterialTheme.typography.labelSmall, color = p.inkFaint, maxLines = 1)
+        // Its activity at a glance, folded or not: Nekko with a green light while it works or watches.
+        if (live) Box(Modifier.testTag("chats.group.live.${groupKey.orEmpty()}")) {
+            com.nekko.android.ui.components.PixelCat(Modifier.size(16.dp))
+            Box(Modifier.align(Alignment.BottomEnd).size(6.dp).clip(CircleShape).background(p.success))
+        }
+        if (live || (!open && onToggle != null)) {
+            val tint = if (live) p.success else p.inkFaint
+            Text(
+                "$total",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (live) FontWeight.SemiBold else FontWeight.Normal,
+                color = tint,
+                modifier = Modifier.clip(CircleShape).background(tint.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        } else if (count.isNotEmpty()) Text(count, style = MaterialTheme.typography.labelSmall, color = p.inkFaint, maxLines = 1)
     }
 }
 
@@ -1278,9 +1309,12 @@ private fun groupTitle(key: String, name: String): String = when (key) {
     ChatGroup.GENERAL -> stringResource(R.string.chats_group_general)
     ChatSection.COMPLETED -> stringResource(R.string.chats_group_completed)
     "all" -> stringResource(R.string.chats_group_all)
-    "status:input" -> stringResource(R.string.chats_group_needs_you)
-    "status:working" -> stringResource(R.string.chats_group_working)
-    "status:idle" -> stringResource(R.string.chats_group_idle)
+    "status:input" -> stringResource(R.string.chats_group_input)
+    "status:draft" -> stringResource(R.string.chats_group_draft)
+    "status:building" -> stringResource(R.string.chats_group_building)
+    "status:verifying" -> stringResource(R.string.chats_group_verifying)
+    "status:watching" -> stringResource(R.string.chats_group_watching)
+    "status:done" -> stringResource(R.string.chats_group_done)
     "date:today" -> stringResource(R.string.chats_group_today)
     "date:yesterday" -> stringResource(R.string.chats_group_yesterday)
     "date:week" -> stringResource(R.string.chats_group_week)

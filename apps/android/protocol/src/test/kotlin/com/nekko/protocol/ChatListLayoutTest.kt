@@ -64,7 +64,8 @@ class ChatListLayoutTest {
         )
         val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.STATUS, showEmptyGroups = false)
         val status = ChatSections.make(list, emptyList(), v, mapOf("c" to Activity.NEEDS_YOU, "a" to Activity.RUNNING), now = now, zone = utc)
-        assertEquals(listOf("Needs you", "Working", "Idle", "Completed"), status.map { it.name })
+        // #2107: the iPhone's status groups; stopped chats with no watch and no count from the computer are Done.
+        assertEquals(listOf("Needs input", "Building", "Done", "Completed"), status.map { it.name })
         assertEquals(listOf(listOf("c"), listOf("a"), listOf("b", "d"), listOf("e")), status.map { s -> s.chats.map { it.id } })
 
         val date = ChatSections.make(list, emptyList(), v.copy(groupBy = ChatListView.GroupBy.DATE), emptyMap(), now = now, zone = utc)
@@ -112,5 +113,42 @@ class ChatListLayoutTest {
         assertTrue(ChatSections.naturalCompare("gamma 9", "gamma 10") < 0)
         assertTrue(ChatSections.naturalCompare("Alpha", "beta") < 0)
         assertEquals(0, ChatSections.naturalCompare("Éclair", "eclair"))
+    }
+
+    @Test fun `status groups split running, drafts, watching and done as the iPhone does`() {
+        val list = chats(
+            """[{"id":"run","title":"R","updatedAt":$now},
+               {"id":"ver","title":"V","updatedAt":$now,"activeRun":{"id":"r1"},"phase":"verifying"},
+               {"id":"ship","title":"S","updatedAt":$now,"activeRun":{"id":"r2"},"phase":"shipping"},
+               {"id":"draft","title":"D","updatedAt":$now,"exchangeCount":0},
+               {"id":"watch","title":"W","updatedAt":$now,"exchangeCount":3,"activeWatchCount":2},
+               {"id":"done","title":"F","updatedAt":$now,"exchangeCount":3},
+               {"id":"ask","title":"A","updatedAt":$now,"activeRun":{"id":"r3"}}]""",
+        )
+        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.STATUS, showEmptyGroups = false)
+        val activity = mapOf("run" to Activity.RUNNING, "ask" to Activity.NEEDS_YOU)
+        val groups = ChatSections.make(list, emptyList(), v, activity, now = now, zone = utc).associate { g -> g.key to g.chats.map { it.id } }
+        assertEquals(listOf("ask"), groups["status:input"])
+        assertEquals(listOf("draft"), groups["status:draft"])
+        assertEquals(listOf("run"), groups["status:building"])
+        assertEquals(listOf("ver", "ship").sorted(), groups["status:verifying"]?.sorted())
+        assertEquals(listOf("watch"), groups["status:watching"])
+        assertEquals(listOf("done"), groups["status:done"])
+
+        val sections = ChatSections.make(list, emptyList(), v, activity, now = now, zone = utc).associateBy { it.key }
+        assertTrue(sections.getValue("status:building").live(activity))
+        assertFalse("Verifying runs on the computer, but the phone saw no event: not live", sections.getValue("status:verifying").live(activity))
+        assertTrue(sections.getValue("status:watching").live(activity))
+        assertEquals(2L, sections.getValue("status:watching").watchingCount)
+        assertFalse(sections.getValue("status:done").live(activity))
+        assertEquals(Activity.NEEDS_YOU, sections.getValue("status:input").headerActivity(activity))
+    }
+
+    @Test fun `groups start folded, ungrouped chats have no fold`() {
+        val g = ChatSection("status:done", "Done", emptyList(), 0, 0)
+        assertFalse(g.isOpen(emptySet()))
+        assertTrue(g.isOpen(setOf("status:done")))
+        assertTrue(ChatSection(ChatGroup.GENERAL, "General", emptyList(), 0, 0).isOpen(emptySet()))
+        assertTrue(ChatSection("all", "All chats", emptyList(), 0, 0).isOpen(emptySet()))
     }
 }
