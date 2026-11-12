@@ -98,10 +98,10 @@ test('marketing preview serves only static website files and read requests', asy
   assert.equal(head.body, '');
 });
 
-// The pillar tour's timing, run in a small stand-in DOM: the video is the only
-// clock. The tour advances on the video's `ended`, the progress line is drawn
-// from currentTime / duration, the hold pauses the video, and a picked pillar
-// starts from 0.
+// The pillar tour's timing, run in a small stand-in DOM: the visible video is
+// the only clock. The tour advances on its `ended`, the progress line is drawn
+// from its currentTime / duration, the hold pauses it, a picked pillar starts
+// from 0, and two stacked videos swap only once the incoming one is playing.
 function pillarTour({ reduced = false } = {}) {
   const src = readFileSync(fileURLToPath(new URL('../apps/website/site.js', import.meta.url)), 'utf8');
   const from = src.indexOf('// ---- why Nekko: the pillar tour.');
@@ -115,9 +115,12 @@ function pillarTour({ reduced = false } = {}) {
   };
   const classes = (init = []) => {
     const set = new Set(init);
-    return { add: (c) => set.add(c), toggle: (c, v) => (v ? set.add(c) : set.delete(c)), contains: (c) => set.has(c) };
+    return { add: (c) => set.add(c), remove: (c) => set.delete(c), toggle: (c, v) => (v ? set.add(c) : set.delete(c)), contains: (c) => set.has(c) };
   };
-  const attrs = () => { const a = {}; return { setAttribute: (k, v) => { a[k] = String(v); }, getAttribute: (k) => a[k] ?? null }; };
+  const attrs = () => {
+    const a = {};
+    return { setAttribute: (k, v) => { a[k] = String(v); }, getAttribute: (k) => a[k] ?? null, removeAttribute: (k) => { delete a[k]; } };
+  };
   const ids = ['local', 'speed', 'privacy', 'fleet', 'anywhere'];
   const items = ids.map((id, i) => {
     const bar = { style: {} };
@@ -125,23 +128,37 @@ function pillarTour({ reduced = false } = {}) {
     item.tab = { ...target(), ...attrs(), id: `pillar-tab-${id}`, dataset: { pillar: id, alt: id }, closest: () => item, focus() {}, tabIndex: 0 };
     return item;
   });
-  const video = {
-    ...target(), ...attrs(), poster: '', currentTime: 0, duration: NaN, paused: true, ended: false,
-    set src(v) { this.setAttribute('src', v); this.currentTime = 0; this.duration = NaN; this.ended = false; this.paused = true; },
-    play() { if (this.paused) { this.paused = false; this.fire('play'); } return Promise.resolve(); },
-    pause() { if (!this.paused) { this.paused = true; this.fire('pause'); } },
-    load() {},
-    // Test helpers: metadata arrives, time passes, the file ends.
-    ready() { this.duration = 8; this.fire('loadedmetadata'); if (!this.paused) this.fire('playing'); },
-    advance(s) { if (!this.paused) { this.currentTime = Math.min(8, this.currentTime + s); this.fire('timeupdate'); } },
-    end() { this.currentTime = 8; this.ended = true; this.paused = true; this.fire('pause'); this.fire('ended'); },
+  const makeVideo = (shown) => {
+    const v = {
+      ...target(), ...attrs(), classList: classes(shown ? ['is-shown'] : []),
+      poster: '', preload: 'none', readyState: 0, duration: NaN, paused: true, ended: false, t: 0, seek: false,
+      get currentTime() { return this.t; },
+      set currentTime(x) { this.t = x; this.ended = false; this.seek = true; },
+      set src(x) { this.setAttribute('src', x); this.t = 0; this.readyState = 0; this.duration = NaN; this.ended = false; this.paused = true; },
+      play() {
+        if (this.paused) { this.paused = false; this.fire('play'); if (this.readyState >= 1) this.fire('playing'); }
+        return Promise.resolve();
+      },
+      pause() { if (!this.paused) { this.paused = true; this.fire('pause'); } },
+      load() {},
+      // Test helpers: the file's metadata and first frame arrive, time passes, it ends.
+      ready() {
+        this.readyState = 4; this.duration = 8; this.fire('loadedmetadata');
+        if (this.seek) { this.seek = false; this.fire('seeked'); }
+        if (!this.paused) this.fire('playing');
+      },
+      advance(s) { if (!this.paused) { this.t = Math.min(8, this.t + s); this.fire('timeupdate'); } },
+      end() { this.t = 8; this.ended = true; this.paused = true; this.fire('pause'); this.fire('ended'); },
+    };
+    return v;
   };
+  const vids = [makeVideo(true), makeVideo(false)];
   const pauseBtn = { ...target(), ...attrs(), hidden: true };
   const panel = attrs();
   const tour = {
     ...target(), classList: classes(),
-    querySelectorAll: () => items.map((i) => i.tab),
-    querySelector: (s) => ({ '[role="tabpanel"]': panel, '.pillar-video': video, '[data-pillar-pause]': pauseBtn })[s],
+    querySelectorAll: (s) => (s === '.pillar-video' ? vids : items.map((i) => i.tab)),
+    querySelector: (s) => ({ '[role="tabpanel"]': panel, '[data-pillar-pause]': pauseBtn })[s],
     contains: () => false,
   };
   const doc = { ...target(), hidden: false, documentElement: { dataset: { theme: 'dark' } }, querySelector: (s) => (s === '[data-pillar-tour]' ? tour : null) };
@@ -158,95 +175,145 @@ function pillarTour({ reduced = false } = {}) {
   new Function(...Object.keys(env), code)(...Object.values(env));
   const active = () => items.findIndex((i) => i.classList.contains('is-active'));
   const line = () => Number(/scaleX\(([\d.]+)\)/.exec(items[active()].bar.style.transform)?.[1] ?? 0);
+  const shown = () => {
+    const s = vids.filter((v) => v.classList.contains('is-shown'));
+    assert.equal(s.length, 1, 'exactly one video is shown');
+    return s[0];
+  };
+  const hidden = () => vids.find((v) => v !== shown());
   return {
-    tour, video, items, pauseBtn, doc, line, active,
+    tour, vids, items, pauseBtn, doc, line, active, shown, hidden,
     show: (on = true) => io([{ isIntersecting: on }]),
     theme: (name) => { doc.documentElement.dataset.theme = name; mo(); },
   };
 }
 
-test('pillar tour: the line tracks the video and the tour advances only on ended', () => {
+test('pillar tour: the line tracks the visible video and the tour advances only on ended', () => {
   const t = pillarTour();
+  assert.equal(t.vids[0].getAttribute('src'), null, 'nothing loads before the tour is on screen');
   t.show();
-  assert.equal(t.video.getAttribute('src'), 'media/pillar-local.mp4');
+  const first = t.shown();
+  assert.equal(first.getAttribute('src'), 'media/pillar-local.mp4');
+  assert.equal(t.hidden().getAttribute('src'), 'media/pillar-speed.mp4', 'the next pillar preloads into the hidden video');
   assert.equal(t.line(), 0, 'the line waits while the file loads');
-  t.video.ready();
-  t.video.advance(2);
+  first.ready();
+  first.advance(2);
   assert.equal(t.line(), 0.25);
-  t.video.advance(5.9);
+  first.advance(5.9);
   assert.equal(t.active(), 0, 'no timer of its own: still on the first pillar near the end');
-  t.video.end();
+  first.end();
   assert.equal(t.active(), 1);
-  assert.equal(t.video.getAttribute('src'), 'media/pillar-speed.mp4');
-  assert.equal(t.video.currentTime, 0);
+  assert.equal(t.shown(), first, 'the old video stays shown until the next one plays');
   assert.equal(t.line(), 0);
+  const second = t.hidden();
+  second.ready();
+  assert.equal(t.shown(), second);
+  assert.equal(second.currentTime, 0);
+  assert.equal(second.paused, false);
+  assert.equal(first.paused, true);
+  assert.equal(first.getAttribute('src'), 'media/pillar-privacy.mp4', 'then the pillar after preloads behind it');
 });
 
 test('pillar tour: hover, keyboard focus, Pause, off screen and a hidden tab pause the video', () => {
   const t = pillarTour();
-  t.show(); t.video.ready(); t.video.advance(3);
+  t.show();
+  const v = t.shown();
+  v.ready(); v.advance(3);
   t.tour.fire('pointerenter', { pointerType: 'mouse' });
-  assert.equal(t.video.paused, true);
-  t.video.advance(4);
-  assert.equal(t.video.currentTime, 3);
+  assert.equal(v.paused, true);
+  v.advance(4);
+  assert.equal(v.currentTime, 3);
   assert.equal(t.line(), 3 / 8);
   t.tour.fire('pointerleave');
-  assert.equal(t.video.paused, false);
-  assert.equal(t.video.currentTime, 3, 'resumes where it stopped, not from the top');
+  assert.equal(v.paused, false);
+  assert.equal(v.currentTime, 3, 'resumes where it stopped, not from the top');
   t.tour.fire('focusin', { target: { matches: () => true } });
-  assert.equal(t.video.paused, true);
+  assert.equal(v.paused, true);
   t.tour.fire('focusout', { relatedTarget: null });
-  assert.equal(t.video.paused, false);
+  assert.equal(v.paused, false);
   t.pauseBtn.fire('click');
-  assert.equal(t.video.paused, true);
+  assert.equal(v.paused, true);
   t.pauseBtn.fire('click');
   t.show(false);
-  assert.equal(t.video.paused, true);
+  assert.equal(v.paused, true);
   t.show(true);
   t.doc.hidden = true; t.doc.fire('visibilitychange');
-  assert.equal(t.video.paused, true);
+  assert.equal(v.paused, true);
   t.doc.hidden = false; t.doc.fire('visibilitychange');
-  assert.equal(t.video.paused, false);
-  assert.equal(t.video.currentTime, 3);
+  assert.equal(v.paused, false);
+  assert.equal(v.currentTime, 3);
+  assert.equal(t.hidden().paused, true, 'the hidden video never plays on its own');
 });
 
-test('pillar tour: clicking a pillar starts its video from 0; a demo ending under the hold waits', () => {
+test('pillar tour: clicking a pillar starts its video from 0 and the line waits for playing', () => {
   const t = pillarTour();
-  t.show(); t.video.ready(); t.video.advance(5);
+  t.show();
+  const first = t.shown();
+  first.ready(); first.advance(5);
   t.tour.fire('pointerenter', { pointerType: 'mouse' });
   t.items[3].tab.fire('click');
   assert.equal(t.active(), 3);
-  assert.equal(t.video.getAttribute('src'), 'media/pillar-fleet.mp4');
-  assert.equal(t.video.currentTime, 0);
-  assert.equal(t.video.paused, false, 'a picked pillar plays under the pointer');
-  t.video.ready(); t.video.advance(4);
+  assert.equal(t.shown(), first, 'the old demo stays visible while the new file loads');
+  assert.equal(t.line(), 0, 'the line does not move before the new video plays');
+  const fleet = t.hidden();
+  assert.equal(fleet.getAttribute('src'), 'media/pillar-fleet.mp4');
+  fleet.ready();
+  assert.equal(t.shown(), fleet);
+  assert.equal(fleet.currentTime, 0);
+  assert.equal(fleet.paused, false, 'a picked pillar plays under the pointer');
+  fleet.advance(4);
+  assert.equal(t.line(), 0.5);
   t.items[3].tab.fire('click');
-  assert.equal(t.video.currentTime, 0, 'picking the same pillar again restarts it');
-  t.video.end();
+  t.hidden().ready();
+  assert.equal(t.shown().currentTime, 0, 'picking the same pillar again restarts it');
+  t.shown().end();
   assert.equal(t.active(), 3, 'still under the pointer: wait on the last frame');
   assert.equal(t.line(), 1);
   t.tour.fire('pointerleave');
   assert.equal(t.active(), 4);
 });
 
-test('pillar tour: a look change swaps the file at the same time without resetting the line', () => {
+test('pillar tour: changing pillars never leaves both videos hidden', () => {
   const t = pillarTour();
-  t.show(); t.video.ready(); t.video.advance(5);
+  t.show(); t.shown().ready();
+  for (const i of [2, 4, 1]) { t.items[i].tab.fire('click'); t.shown(); }
+  t.hidden().ready();
+  assert.equal(t.shown().getAttribute('src'), 'media/pillar-speed.mp4', 'only the last pick is shown');
+  t.pauseBtn.fire('click');
+  t.items[0].tab.fire('click');
+  t.shown();
+  t.hidden().ready();
+  assert.equal(t.shown().getAttribute('src'), 'media/pillar-local.mp4', 'paused: swaps once the frame is ready');
+  assert.equal(t.shown().paused, true);
+  t.shown();
+});
+
+test('pillar tour: a look change swaps in the other file at the same time', () => {
+  const t = pillarTour();
+  t.show();
+  const dark = t.shown();
+  dark.ready(); dark.advance(5);
   t.theme('light');
-  assert.equal(t.video.getAttribute('src'), 'media/pillar-local-light.mp4');
-  assert.equal(t.line(), 5 / 8, 'the line holds while the new file loads');
-  t.video.ready();
-  assert.equal(t.video.currentTime, 5);
-  assert.equal(t.video.paused, false);
+  assert.equal(t.shown(), dark, 'the dark file stays shown while the light one loads');
+  assert.equal(dark.paused, false, 'and keeps playing meanwhile');
+  assert.equal(t.line(), 5 / 8, 'the line holds');
+  const light = t.hidden();
+  assert.equal(light.getAttribute('src'), 'media/pillar-local-light.mp4');
+  light.ready();
+  assert.equal(t.shown(), light);
+  assert.equal(light.currentTime, 5);
+  assert.equal(light.paused, false);
 });
 
 test('pillar tour: reduced motion loads posters only and never advances', () => {
   const t = pillarTour({ reduced: true });
   t.show();
-  assert.equal(t.video.getAttribute('src'), null);
-  assert.equal(t.video.poster, 'media/pillar-local-poster.jpg');
+  assert.equal(t.vids[0].getAttribute('src'), null);
+  assert.equal(t.vids[1].getAttribute('src'), null);
   assert.equal(t.pauseBtn.hidden, true);
   assert.equal(t.tour.classList.contains('is-timed'), false);
-  t.video.fire('ended');
-  assert.equal(t.active(), 0);
+  t.items[2].tab.fire('click');
+  assert.equal(t.shown().poster, 'media/pillar-privacy-poster.jpg');
+  t.vids[0].fire('ended');
+  assert.equal(t.active(), 2);
 });
