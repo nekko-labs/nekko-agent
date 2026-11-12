@@ -44,10 +44,11 @@ app.whenReady().then(async () => {
     }
     await run('integration.show()'); await sleep(250);
     if (!baseline) {
-      await check('compact runner: idle VM, queued and in progress jobs', "['nekko-mac-02','Queued','In progress','View CI runners'].every(s=>document.body.textContent.includes(s)) && !!document.querySelector('[data-running-job=\"nekko-mac-01\"]')");
+      await check('compact runner: idle VM as a count, queued and running jobs as rows', "['1 idle','View CI runners'].every(s=>document.body.textContent.includes(s)) && !document.querySelector('[data-runner-vm=\"nekko-mac-02\"]') && !!document.querySelector('[data-running-job=\"nekko-mac-01\"]') && !!document.querySelector('[data-queued-job]')");
       await check('compact runner leaves page detail out', "!!document.querySelector('[data-runner-card][data-compact]') && !document.querySelector('[data-runner-facts]') && !document.body.textContent.includes('Completed')");
-      await click('Live log', '[data-runner-vm="nekko-mac-02"] button');
-      await check('ready VM log uses its identity', "integration.calls.some(c=>c[0]==='log'&&c[2]==='nekko-mac-02') && document.body.innerText.includes('Listening for jobs')");
+      await check('hidden row actions take no width', "[...document.querySelectorAll('[data-compact] [data-queued-job] .quiet-row-action')].every(b=>b.getBoundingClientRect().width<=1)");
+      await click('Live log', '[data-running-job="nekko-mac-01"] button');
+      await check('running VM log uses its identity', "integration.calls.some(c=>c[0]==='log'&&c[2]==='nekko-mac-01') && document.body.innerText.includes('Listening for jobs')");
       await click('Accept now');
       await check('accept targets queued job', "integration.calls.some(c=>c[0]==='r1'&&c[1]==='accept'&&c[3]===43)");
       await click('Cancel', '[data-running-job] button');

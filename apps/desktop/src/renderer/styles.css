@@ -506,6 +506,11 @@
   [data-quiet-row]:hover .quiet-row-action,
   [data-quiet-row]:focus-within .quiet-row-action,
   .quiet-row-action:focus-visible { opacity: 1; }
+  /* The narrow runner panel: hidden actions take no width, so names are not cut for buttons nobody sees.
+     Clipped rather than display:none, so Tab still reaches them and focus brings the row's actions back. */
+  [data-compact] [data-quiet-row]:not(:hover):not(:focus-within) .quiet-row-action {
+    position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%);
+  }
 }
 
 /* A code block's own actions (Run, Copy, and the inline terminal's): quiet

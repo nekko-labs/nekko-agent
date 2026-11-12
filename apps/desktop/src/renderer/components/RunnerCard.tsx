@@ -205,7 +205,7 @@ function LiveLog({ runnerId, vm }: { runnerId: string; vm: string }) {
 const LIVE_LOG_EVERY_MS = 3000;
 
 /** The job a slot is running: its link, how far it has got, its live log, and Re-run or Cancel. */
-function RunningJob({ slot, runnerId, now }: { slot: SlotView; runnerId: string; now: number }) {
+function RunningJob({ slot, runnerId, now, compact = false }: { slot: SlotView; runnerId: string; now: number; compact?: boolean }) {
   const [showLog, setShowLog] = useState(false);
   const [confirm, setConfirm] = useState<'cancel' | 'restart' | null>(null);
   const act = useJobAction(runnerId);
@@ -233,7 +233,7 @@ function RunningJob({ slot, runnerId, now }: { slot: SlotView; runnerId: string;
       <div className="flex min-w-0 items-center gap-2">
         <StatusDot tone="running" pulse size={6} />
         <span className="min-w-0 truncate text-ink">
-          Working on {j?.url ? <ExternalLink url={j.url}>{name}</ExternalLink> : name}
+          {compact ? '' : 'Working on '}{j?.url ? <ExternalLink url={j.url}>{name}</ExternalLink> : name}
         </span>
         <span className="shrink-0 text-ink-faint tabular-nums">
           {formatMinutes(Math.max(0, now - slot.since))}{slot.boosted ? ' · accepted now' : ''}{finishing ? ` · ${finishing}` : ''}
@@ -315,6 +315,15 @@ function Jobs({ view, now, compact }: { view: RunnerView; now: number; compact: 
   const running = view.slots.filter((s) => s.state === 'running' || s.state === 'draining');
   const recent = compact ? [] : view.recent;
   if (!queue.length && !running.length && !recent.length) return null;
+  // The panel is one flat list: each row's dot already says queued or running.
+  if (compact) {
+    return (
+      <ul className="text-xs text-ink-soft" data-runner-jobs>
+        {running.map((s, i) => <RunningJob key={s.vm ?? i} slot={s} runnerId={view.config.id} now={now} compact />)}
+        {queue.map((q) => <QueuedRow key={`${q.repo}-${q.jobId}`} job={q} view={view} now={now} />)}
+      </ul>
+    );
+  }
   return (
     <div className="flex flex-col gap-4 text-xs text-ink-soft" data-runner-jobs>
       {queue.length > 0 && (
@@ -344,14 +353,14 @@ function Jobs({ view, now, compact }: { view: RunnerView; now: number; compact: 
 }
 
 /** One slot that is not running a job: what it does, and its VM's name and live log once it has one. */
-function SlotRow({ slot: s, runnerId }: { slot: SlotLine; runnerId: string }) {
+function SlotRow({ slot: s, runnerId, compact }: { slot: SlotLine; runnerId: string; compact: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <li data-runner-vm={s.vm} data-quiet-row className="py-1">
       <div className="flex min-w-0 items-baseline gap-2">
-        <span className={`shrink-0 font-medium ${s.dim ? 'text-ink-faint' : 'text-ink'}`}>{s.title}</span>
+        {!compact && <span className={`shrink-0 font-medium ${s.dim ? 'text-ink-faint' : 'text-ink'}`}>{s.title}</span>}
         <span className={`min-w-0 shrink truncate ${s.active ? 'text-ink-soft' : 'text-ink-faint'}`}>{s.text}</span>
-        {s.vm && <code className="min-w-0 truncate font-mono text-2xs text-ink-faint">{s.vm}</code>}
+        {s.vm && !compact && <code className="min-w-0 truncate font-mono text-2xs text-ink-faint">{s.vm}</code>}
         {s.vm && <><span className="flex-1" /><button className={ROW_ACTION} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide live log' : 'Live log'}</button></>}
       </div>
       {open && s.vm && <div className="mt-1"><LiveLog runnerId={runnerId} vm={s.vm} /></div>}
@@ -427,8 +436,11 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
     host.networkId === null ? 'Network unknown' : networkText(host),
     today.jobs ? `Today ${todayText(today)}` : 'No jobs today',
   ];
-  // A running slot is told under In progress; the panel also leaves out slots with nothing to show.
-  const slots = slotLines(view, now).filter((s) => !s.busy && (!compact || s.vm));
+  // A running slot is told under In progress. The panel shows only VMs doing something (starting, cleaning up):
+  // a VM ready for a job is a count beside the state, and a slot without a VM says nothing.
+  const idleVms = new Set(view.slots.filter((s) => s.state === 'ready' && s.vm).map((s) => s.vm));
+  const slots = slotLines(view, now).filter((s) => !s.busy && (!compact || (s.vm && !idleVms.has(s.vm))));
+  const stateLabel = `${STATE_LABELS[state] ?? state}${compact && idleVms.size ? ` · ${idleVms.size} idle` : ''}`;
   const reasons = (state === 'waiting' || state === 'draining') ? view.reasons.slice(0, compact ? 1 : undefined) : [];
 
   const setEnabled = async (enabled: boolean) => {
@@ -444,15 +456,15 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
   };
 
   return (
-    <section className={`quiet-group mt-2 flex min-w-0 flex-col ${compact ? 'gap-3' : 'gap-5'}`} data-runner-card={config.id} data-compact={compact || undefined}>
+    <section className={`quiet-group mt-2 flex min-w-0 flex-col ${compact ? 'gap-2' : 'gap-5'}`} data-runner-card={config.id} data-compact={compact || undefined}>
       <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2" data-quiet-row={compact || undefined}>
           <StatusDot tone={TONE[state] ?? 'neutral'} />
           <h3 className="min-w-0 truncate text-sm font-semibold" title={`${runnerTitle(view)}\n${runnerSubtitle(view)}`}>{name}</h3>
-          <span className="shrink-0 text-xs transition-colors" style={{ color: state === 'error' ? 'var(--danger-text)' : 'var(--ink-soft)' }} data-runner-state>{STATE_LABELS[state] ?? state}</span>
+          <span className="shrink-0 text-xs transition-colors" style={{ color: state === 'error' ? 'var(--danger-text)' : 'var(--ink-soft)' }} data-runner-state>{stateLabel}</span>
           <span className="ml-auto flex shrink-0 items-center gap-1">
             <Toggle value={config.settings.enabled} disabled={busy} onChange={(v) => void setEnabled(v)} label={`Runner on for ${name}`} />
-            <button className="btn btn-ghost px-1.5!" aria-label={`Runner settings for ${name}`} title="Runner settings" onClick={onSettings}>
+            <button className={`btn btn-ghost px-1.5!${compact ? ' quiet-row-action' : ''}`} aria-label={`Runner settings for ${name}`} title="Runner settings" onClick={onSettings}>
               <GearIcon className="h-3.5 w-3.5" />
             </button>
           </span>
@@ -471,8 +483,8 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
 
       {slots.length > 0 && (
         <section className="text-xs" data-runner-slots>
-          <GroupLabel title="Slots" />
-          <ul>{slots.map((s) => <SlotRow key={s.vm ?? s.title} slot={s} runnerId={config.id} />)}</ul>
+          {!compact && <GroupLabel title="Slots" />}
+          <ul>{slots.map((s) => <SlotRow key={s.vm ?? s.title} slot={s} runnerId={config.id} compact={compact} />)}</ul>
         </section>
       )}
 

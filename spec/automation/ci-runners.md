@@ -33,6 +33,17 @@ confirmation. In the Automations panel the runner is compact: idle slots without
 VM, the facts line, **Completed** and **Connect to a workflow** are left out (they
 stay on the CI runners page), and a waiting runner shows only its first reason.
 
+**Panel shows only what is happening now** `[implemented 2026-11-12; unit tests and hidden renderer capture at 1000px and 390px against synthetic data]`.
+Philip asked (2026-11-12) to fit more into the panel and show only what is relevant
+(the contextual-relevance rule). The compact runner is now one line (state dot, name,
+state, switch) and then one flat list with no **Slots**, **Queued** or **In progress**
+labels: a running job (without "Working on", with its step and meter), a queued job,
+and a VM that is starting or being deleted. A VM ready for a job is a count beside the
+state ("Running · 1 idle"), not a row, and no VM name is shown in the panel. Row actions
+and the settings gear appear on hover or focus and, until then, are clipped to no width
+(still reachable by Tab), so names are not cut for buttons nobody sees. On touch they
+always show. The CI runners page is unchanged.
+
 **View CI runners** opens Automations, reveals its CI section for that visit,
 and scrolls/focuses it after runner data loads. The panel shows a short empty state
 instead of the setup wizard. Loading and service failures are explicit; unsupported

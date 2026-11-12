@@ -81,10 +81,16 @@ describe('RunnerCard', () => {
     const html = render(view({ slots: [
       { state: 'running', vm: 'busy-mac', job: { repo: 'nekko-labs/nekko-agent', runId: 1, jobId: 2, workflow: 'ios-native', job: 'PR #904' }, since: now - 360, drainEndsAt: null },
       { state: 'ready', vm: 'ready-mac', job: null, since: now, drainEndsAt: null },
-    ], reasons: ['onBattery', 'network'], state: 'waiting' }), image({ state: 'ready' }), undefined, true);
+      { state: 'starting', vm: 'new-mac', job: null, since: now, drainEndsAt: null },
+    ], reasons: ['onBattery', 'network'], state: 'waiting', config: { ...view().config, settings: { ...view().config.settings, macosSlots: 3 } } }), image({ state: 'ready' }), undefined, true);
     expect(html).toContain('data-compact="true"');
-    expect(html).toContain('data-runner-vm="ready-mac"');
-    expect(html).toContain('In progress · 1');
+    // An idle VM is a count beside the state, not a row; a VM that is starting is a row, without its name.
+    expect(html).toContain('Waiting · 1 idle');
+    expect(html).not.toContain('data-runner-vm="ready-mac"');
+    expect(html).toContain('data-runner-vm="new-mac"');
+    expect(html).toContain('Starting a VM');
+    expect(html).toContain('data-running-job="busy-mac"');
+    for (const label of ['In progress', 'Queued', 'Slots', 'Working on', '<code']) expect(html).not.toContain(label);
     expect(html).toContain('This Mac is on battery, below what this mode allows.');
     for (const gone of ['Completed', 'data-runner-facts', 'Connect to a workflow', 'This network is not one you trust']) expect(html).not.toContain(gone);
     // An idle slot without a VM says nothing the panel needs.
