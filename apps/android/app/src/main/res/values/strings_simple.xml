@@ -19,7 +19,6 @@
     <string name="simple_asks_detail_first">Checks with you before it changes a file or runs a command.</string>
     <string name="simple_asks_detail_matters">Reads and looks around freely, and asks before anything else.</string>
     <string name="simple_asks_detail_own">Runs everything, except what your rules block.</string>
-    <string name="simple_paired">%1$d paired</string>
     <string name="simple_computer_menu">Computer menu</string>
     <string name="simple_conn_idle">Not connected</string>
     <string name="simple_conn_connecting">Connecting</string>
@@ -28,7 +27,6 @@
     <string name="simple_conn_denied">Refused</string>
     <string name="simple_sign_out_or_disconnect">Sign out or disconnect</string>
     <string name="simple_back_to_menu">Back to the menu</string>
-    <string name="simple_connect">Connect</string>
     <string name="simple_search_chats">Search chats</string>
     <string name="simple_cancel_search">Cancel search</string>
     <string name="simple_logs_on_phone">On this phone</string>

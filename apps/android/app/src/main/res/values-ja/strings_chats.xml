@@ -265,4 +265,15 @@
     <string name="chats_group_verifying">確認中</string>
     <string name="chats_group_watching">監視中</string>
     <string name="chats_group_done">完了</string>
+    <!-- One chat list across every computer and this phone (#2108). -->
+    <string name="chats_this_phone">このスマートフォン</string>
+    <string name="chats_show_chats_from">表示するチャット</string>
+    <string name="chats_all_computers">すべてのコンピュータ</string>
+    <string name="chats_phone_own_models">独自のモデル</string>
+    <string name="chats_n_of_m_online">%2$d 台中 %1$d 台オンライン</string>
+    <string name="chats_group_computer">コンピュータ</string>
+    <string name="chats_computer_icons">コンピュータのアイコン</string>
+    <string name="chats_phone_forget_title">このチャットを削除しますか？</string>
+    <string name="chats_phone_forget_body">メッセージはこのスマートフォンから削除されます。プロバイダ側の記録は残ります。</string>
+    <string name="chats_phone_forget">削除</string>
 </resources>

@@ -281,4 +281,15 @@
     <string name="chats_group_verifying">Verifying</string>
     <string name="chats_group_watching">Watching</string>
     <string name="chats_group_done">Done</string>
+    <!-- One chat list across every computer and this phone (#2108). -->
+    <string name="chats_this_phone">This phone</string>
+    <string name="chats_show_chats_from">Show chats from</string>
+    <string name="chats_all_computers">All computers</string>
+    <string name="chats_phone_own_models">Its own models</string>
+    <string name="chats_n_of_m_online">%1$d of %2$d online</string>
+    <string name="chats_group_computer">Computer</string>
+    <string name="chats_computer_icons">Computer icons</string>
+    <string name="chats_phone_forget_title">Forget this chat?</string>
+    <string name="chats_phone_forget_body">Its messages are removed from this phone. Your provider’s own records stay.</string>
+    <string name="chats_phone_forget">Forget</string>
 </resources>

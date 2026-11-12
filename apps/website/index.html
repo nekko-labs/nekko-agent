@@ -36,7 +36,7 @@
       content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=plum-white-2" />
-    <link rel="stylesheet" href="styles.css?v=15" />
+    <link rel="stylesheet" href="styles.css?v=17" />
     <link rel="stylesheet" href="fonts.css?v=1" />
     <!-- Structured data: so search and answer engines describe Nekko Agent accurately -->
     <script type="application/ld+json">
@@ -288,9 +288,15 @@
           </ol>
 
           <div class="pillar-stage">
-            <div class="pillar-media" id="pillar-panel" role="tabpanel" aria-labelledby="pillar-tab-local">
-              <video class="pillar-video" muted playsinline preload="none" width="1280" height="720" poster="media/pillar-local-poster.jpg"
-                     aria-label="Picking a local model in Nekko Agent, then Claude Code using it over MCP"></video>
+            <!-- Nekko peeks over the demo box. Her drawing is cloned from the beta
+                 card's peek by site.js, so both stay identical. Decorative. -->
+            <div class="pillar-frame">
+              <div class="nekko-peek pillar-peek" data-mood="idle" data-pillar-peek aria-hidden="true"></div>
+              <div class="pillar-media" id="pillar-panel" role="tabpanel" aria-labelledby="pillar-tab-local">
+                <video class="pillar-video is-shown" muted playsinline preload="none" width="1280" height="720" poster="media/pillar-local-poster.jpg"
+                       aria-label="Picking a local model in Nekko Agent, then Claude Code using it over MCP"></video>
+                <video class="pillar-video" muted playsinline preload="none" width="1280" height="720" aria-hidden="true"></video>
+              </div>
             </div>
             <div class="pillar-controls">
               <button class="pillar-enlarge" type="button" data-pillar-enlarge aria-label="Enlarge the demo" title="Enlarge" hidden>
@@ -683,7 +689,7 @@
       <button class="lightbox-close btn btn-ghost btn-sm" type="button" aria-label="Close">Close ✕</button>
       <div class="lightbox-stage"></div>
     </div>
-    <script src="site.js?v=17"></script>
+    <script src="site.js?v=19"></script>
     <script src="contributors.js?v=2" defer></script>
     <script src="/analytics.js?v=2" defer></script>
     <script>

@@ -23,5 +23,4 @@
     <string name="image_reply_n">Erzeugtes Bild %1$d</string>
     <string name="image_open">Bild öffnen</string>
     <string name="image_close">Schließen</string>
-    <string name="image_unavailable">Dieses Bild konnte nicht geladen werden. Verbinde dich erneut und versuche es noch einmal.</string>
 </resources>

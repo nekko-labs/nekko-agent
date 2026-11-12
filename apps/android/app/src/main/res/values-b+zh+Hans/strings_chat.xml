@@ -289,4 +289,7 @@
     <string name="chat_star_never">不再询问</string>
     <string name="chat_star_thanks">谢谢！Nekko 很高兴有你在。</string>
     <string name="chat_star_thanks_detail">已在浏览器中打开 GitHub。在那里点一下即可加星标。</string>
+    <!-- The full-screen photo viewer (#2111). -->
+    <string name="photo_n_of_m">第 %1$d 张，共 %2$d 张</string>
+    <string name="photo_actions">照片操作</string>
 </resources>
