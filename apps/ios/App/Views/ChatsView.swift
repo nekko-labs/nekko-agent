@@ -107,13 +107,10 @@ struct ChatsView: View {
     }
 
     @ViewBuilder private var rows: some View {
-            if !store.computers.isEmpty && (filter == nil || filter == store.activeId) {
-                ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-                ProtocolBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-            }
-            // The other computers in view that can't be reached now, each with Reconnect.
-            if filter != PhoneProviders.computerId {
-                FleetBanner(computer: filter).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            if computersInView {
+                // Every paired computer and its connection, in one slim row; a problem opens to its fix.
+                ConnectionStrip(details: { open(.connection) })
+                    .listRowSeparator(.hidden).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             }
             if filter == nil || filter == store.activeId, let at = store.savedListAt {
                 Label(SavedListNote.text(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
@@ -634,15 +631,15 @@ struct ChatsView: View {
     }
 }
 
-/// One chat in the list, in the quiet style (docs/design-system.md): two lines
-/// at most, kept apart from its neighbours by space, never a rule.
+/// One chat in the list, in the quiet style (docs/design-system.md): the title
+/// and one line of facts, kept apart from its neighbours by space, never a rule.
 ///
-/// 1. Our status glyph, the title, and when it last moved.
+/// 1. Our status glyph and the title, over the full width and wrapping to a
+///    second line rather than cutting a long task title short (#2413).
 /// 2. The desktop card's facts (`WorkspaceCard`): where it runs, the provider's
 ///    mark and the model, how full the context is while the chat is in
-///    progress, prompts waiting on the phone. The PR chip rides the end of the
-///    last line, its bottom right, as on the desktop: on the title line when
-///    there is no second line, just before the time.
+///    progress, prompts waiting on the phone. At its end, bottom right as on
+///    the desktop, the PR chip and then when the chat last moved.
 ///
 /// No preview of the transcript: the title says what the chat is, and the reply
 /// is one tap away. No "Working" / "Needs you" chip either: the glyph says it once.
@@ -677,12 +674,10 @@ struct ChatRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.inkSoft).accessibilityLabel("Pinned") }
-                    Text(title).font(.body.weight(.medium)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
-                    Spacer(minLength: 6)
-                    if prsOnTitleLine { RowPrChip(prs: prs) }
-                    if showUpdated { updated }
+                    Text(title).font(.body.weight(.medium)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink)
+                        .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(minHeight: 22)
+                .frame(minHeight: 22, alignment: .leading)
                 if factsLine {
                     HStack(spacing: 6) {
                         if let place { PlaceChip(place: place, showIcon: showPlaceIcon) }
@@ -700,6 +695,7 @@ struct ChatRow: View {
                         }
                         Spacer(minLength: 4)
                         if !prs.isEmpty { RowPrChip(prs: prs) }
+                        if showUpdated { updated }
                     }
                 }
             }
@@ -716,7 +712,11 @@ struct ChatRow: View {
         }
     }
 
-    private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }
+    /// Embedded line breaks and runs of spaces read as one space; the saved title is untouched.
+    private var title: String {
+        let text = summary.title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return text.isEmpty ? "New chat" : text
+    }
 
     /// An image chat shows the image model it draws with, not the chat model.
     private var shownModelId: String? { summary.chatType == "image" ? summary.imageParams?.modelId : summary.modelId }
@@ -728,14 +728,13 @@ struct ChatRow: View {
         return ChatCard.context(summary)
     }
 
-    /// The second line, when it has something to say.
+    /// The second line: the facts, then the PR chip and the time at its end.
+    /// Each card detail hides only itself (GroupEvidenceTests), so the line
+    /// stays while any of them is shown.
     private var factsLine: Bool {
         place != nil || summary.chatType == "image" || modelShown || contextShown != nil || waiting > 0
+            || !prs.isEmpty || showUpdated
     }
-
-    /// A row cut down to its title still shows its PR, before the time: hiding
-    /// one card detail never hides another (GroupEvidenceTests).
-    private var prsOnTitleLine: Bool { !factsLine && !prs.isEmpty }
 }
 
 /// A sub-agent a chat spawned, one line under it as the desktop sidebar's

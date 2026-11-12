@@ -14,7 +14,7 @@ struct ChatStatusFixture: View {
         NavigationStack {
             List {
                 Section("General") {
-                    fixtureRow("Working", activity: .running, model: "claude-opus-5-5", provider: "claude-code", tokens: 45_000,
+                    fixtureRow(ProcessInfo.processInfo.arguments.contains("-uiTestLongTitles") ? "Fix automatic chat titles and make composer options compact" : "Working", activity: .running, model: "claude-opus-5-5", provider: "claude-code", tokens: 45_000,
                                prs: [Self.pr(41, .open, draft: true)],
                                subagents: [("Survey the call sites", .running, "claude-haiku-5-5", "claude-code"),
                                            ("Write the migration", nil, "gpt-5-mini", "chatgpt")])

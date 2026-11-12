@@ -65,20 +65,22 @@ function Row({ c, st, on, disabled, onChange, now }: {
   now: number;
 }) {
   const [open, setOpen] = useState(false);
+  // The shared SettingRow, like All connections off above it, so every switch
+  // sits centred on its row's text (#2397).
   return (
-    <div className="py-(--q-inline)" data-connection={c.id}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <span className={`text-sm font-medium ${disabled ? 'text-ink-faint' : ''}`}>{c.label}</span>
-          <span className="ml-2 text-xs text-ink-faint">{c.where}</span>
-          <p className="mt-(--q-tight) text-xs text-ink-faint">{c.desc}</p>
-          <p className="mt-(--q-tight) text-2xs text-ink-faint">
+    <div data-connection={c.id}>
+      <SettingRow
+        disabled={disabled}
+        title={<>{c.label}<span className="ml-2 text-xs font-normal text-ink-faint">{c.where}</span></>}
+        detail={<>
+          {c.desc}
+          <span className="mt-(--q-tight) block text-2xs text-ink-faint">
             {statusLine(st, now)}
             <button className="ml-2 underline underline-offset-2 transition-colors duration-(--dur-fast) hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide log' : 'Show log'}</button>
-          </p>
-        </div>
-        <Toggle label={c.label} value={on} disabled={disabled} onChange={onChange} />
-      </div>
+          </span>
+        </>}
+        control={<Toggle label={c.label} value={on} disabled={disabled} onChange={onChange} />}
+      />
       {open && <EventLog id={c.id} />}
     </div>
   );
