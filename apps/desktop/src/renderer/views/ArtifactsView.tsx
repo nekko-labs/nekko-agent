@@ -15,7 +15,10 @@ import {
   type LibraryLayout,
 } from '../components/library/libraryPrefs.js';
 import { ChevronDownIcon, CloseIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
-import { ARTIFACT_KINDS, artifactCandidates, groupArtifacts, mergeArtifacts, sessionArtifacts, type ArtifactEntry, type ArtifactKind } from '../artifactsIndex.js';
+import {
+  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, mergeArtifacts, readDesignsFolder, sessionArtifacts, withFolderDesigns,
+  type ArtifactEntry, type ArtifactKind,
+} from '../artifactsIndex.js';
 
 /** Where a chat's relative links resolve: its checkout of the primary folder, else that folder. */
 function basePathOf(session: { workspaceId?: string; gitWorktrees?: Record<string, { path?: string }> }, workspaces: Array<{ id: string; path: string }>): string | undefined {
@@ -25,8 +28,11 @@ function basePathOf(session: { workspaceId?: string; gitWorktrees?: Record<strin
 
 const when = (at: number) => {
   const d = new Date(at);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return at <= 0 || Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
+/** Where a file came from: its chat, or for a design found in a project's designs folder, that project. */
+const cameFrom = (e: ArtifactEntry) => (e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
+const fromAndWhen = (e: ArtifactEntry) => [cameFrom(e), when(e.at)].filter(Boolean).join(' · ');
 const extOf = (filename: string) => (filename.includes('.') ? filename.split('.').pop() ?? '' : '');
 
 type Group = { kind: (typeof ARTIFACT_KINDS)[number]; items: ArtifactEntry[] };
@@ -131,9 +137,11 @@ export function ArtifactsView() {
   })));
   const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen());
   const closeIntro = () => { dismissLibraryIntro(); setShowIntro(false); };
-  const [entries, setEntries] = useState<ArtifactEntry[] | null>(null);
+  const [fromChats, setFromChats] = useState<ArtifactEntry[] | null>(null);
+  // The designs sitting in each project's designs folder, whoever put them there.
+  const [fromFolders, setFromFolders] = useState<ArtifactEntry[] | null>(null);
   // Every candidate chat has been read, so an empty index really means no files yet.
-  const [indexed, setIndexed] = useState(false);
+  const [chatsRead, setChatsRead] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ArtifactEntry | null>(null);
   const [includeCompleted, setIncludeCompleted] = useState(true);
@@ -152,7 +160,7 @@ export function ArtifactsView() {
   const key = candidates.map((s) => `${s.id}:${s.updatedAt}`).join('|');
   useEffect(() => {
     let live = true;
-    setIndexed(false);
+    setChatsRead(false);
     (async () => {
       const lists: ArtifactEntry[][] = [];
       for (let i = 0; i < candidates.length; i += 6) {
@@ -163,14 +171,30 @@ export function ArtifactsView() {
         }));
         if (!live) return;
         lists.push(...batch);
-        setEntries(mergeArtifacts(lists));
+        setFromChats(mergeArtifacts(lists));
       }
-      if (live && candidates.length === 0) setEntries([]);
-      if (live) setIndexed(true);
+      if (live && candidates.length === 0) setFromChats([]);
+      if (live) setChatsRead(true);
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, workspaces]);
+
+  // Only the folders' listings are read (names, no contents), again whenever a chat changes.
+  const folders = workspaces.map((w) => `${w.id}:${w.path}`).join('|');
+  useEffect(() => {
+    let live = true;
+    Promise.all(workspaces.map(async (w) => folderDesigns(w.name, await readDesignsFolder((path) => window.nekko.listDir(path), w.path))))
+      .then((lists) => { if (live) setFromFolders(lists.flat()); });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folders, key]);
+
+  const entries = useMemo(
+    () => (fromChats || fromFolders ? withFolderDesigns(fromChats ?? [], fromFolders ?? []) : null),
+    [fromChats, fromFolders],
+  );
+  const indexed = chatsRead && fromFolders !== null;
 
   // The kinds that have files lead the slider; the setup answer's kind comes first.
   const kinds = useMemo(() => orderForProfile(groupArtifacts(entries ?? []), profile), [entries, profile]);
@@ -217,11 +241,11 @@ export function ArtifactsView() {
           <ArtifactPreview kind={e.kind} path={e.path} ext={extOf(e.filename)} icon className="h-7 w-7 shrink-0 rounded-md" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
-            {!listWide && <span className="block truncate text-2xs text-ink-faint">{e.sessionTitle} · {when(e.at)}</span>}
+            {!listWide && <span className="block truncate text-2xs text-ink-faint">{fromAndWhen(e)}</span>}
           </span>
           {listWide && <>
             <span className="hidden w-48 truncate font-mono text-2xs text-ink-faint lg:block">{e.filename}</span>
-            <span className="hidden w-56 truncate text-2xs text-ink-faint sm:block">{e.sessionTitle}</span>
+            <span className="hidden w-56 truncate text-2xs text-ink-faint sm:block">{cameFrom(e)}</span>
             <span className="w-16 shrink-0 text-right text-2xs tabular-nums text-ink-faint">{when(e.at)}</span>
           </>}
         </button>
@@ -237,14 +261,16 @@ export function ArtifactsView() {
         <ArtifactPreview kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
-          <span className="library-tile-meta">{e.sessionTitle} · {when(e.at)}</span>
+          <span className="library-tile-meta">{fromAndWhen(e)}</span>
         </span>
       </button>
       {layout === 'cards' && (
         <div className="library-tile-actions">
-          <button type="button" className="btn btn-ghost gap-1.5 px-2 py-0.5 text-2xs text-ink-soft" onClick={() => focusChatOnWall(e.sessionId)} title={`Open “${e.sessionTitle}” on the Agents wall in Single agent view`}>
-            <FocusLayoutIcon className="h-3 w-3" /> Open chat
-          </button>
+          {e.sessionId && (
+            <button type="button" className="btn btn-ghost gap-1.5 px-2 py-0.5 text-2xs text-ink-soft" onClick={() => focusChatOnWall(e.sessionId)} title={`Open “${e.sessionTitle}” on the Agents wall in Single agent view`}>
+              <FocusLayoutIcon className="h-3 w-3" /> Open chat
+            </button>
+          )}
           <button type="button" className="btn btn-ghost gap-1.5 px-2 py-0.5 text-2xs text-ink-soft" onClick={() => window.nekko.openPath(e.path)} title="Open with the system's default app">
             <ExternalIcon className="h-3 w-3" /> Open file
           </button>
@@ -317,10 +343,12 @@ export function ArtifactsView() {
                   <p className="truncate text-sm font-semibold">{selected.title}</p>
                   <p className="truncate font-mono text-2xs text-ink-faint" title={selected.path}>{selected.path}</p>
                 </div>
-                <button type="button" className="btn btn-primary gap-2 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Single agent view`}>
-                  <FocusLayoutIcon className="h-3.5 w-3.5" /> Open chat
-                </button>
-                <button type="button" className="btn btn-outline gap-2 py-1 text-xs" onClick={() => window.nekko.openPath(selected.path)} title="Open with the system's default app">
+                {selected.sessionId && (
+                  <button type="button" className="btn btn-primary gap-2 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Single agent view`}>
+                    <FocusLayoutIcon className="h-3.5 w-3.5" /> Open chat
+                  </button>
+                )}
+                <button type="button" className={`btn ${selected.sessionId ? 'btn-outline' : 'btn-primary'} gap-2 py-1 text-xs`} onClick={() => window.nekko.openPath(selected.path)} title="Open with the system's default app">
                   <ExternalIcon className="h-3.5 w-3.5" /> Open file
                 </button>
                 <button type="button" className="btn-icon hidden md:inline-flex" aria-label="Close preview" title="Back to Library" onClick={() => select(null)}>
