@@ -292,4 +292,6 @@
     <!-- The full-screen photo viewer (#2111). -->
     <string name="photo_n_of_m">第 %1$d 张，共 %2$d 张</string>
     <string name="photo_actions">照片操作</string>
+    <!-- Save to Photos on Android 9, when storage access was refused. -->
+    <string name="chat_save_needs_storage">请允许访问存储空间，以便保存到照片。</string>
 </resources>

@@ -292,4 +292,6 @@
     <!-- The full-screen photo viewer (#2111). -->
     <string name="photo_n_of_m">%1$d de %2$d</string>
     <string name="photo_actions">Ações da foto</string>
+    <!-- Save to Photos on Android 9, when storage access was refused. -->
+    <string name="chat_save_needs_storage">Permita o acesso ao armazenamento para salvar em Fotos.</string>
 </resources>
