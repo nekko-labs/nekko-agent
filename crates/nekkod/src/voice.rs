@@ -545,7 +545,9 @@ impl Voice {
             }
             st.busy = true;
         }
-        if self.engine().await == "apple" {
+        let engine = self.engine().await;
+        crate::telemetry::capture("voice_used", &json!({ "engine": engine }));
+        if engine == "apple" {
             let result = self.transcribe_apple(audio).await;
             lock(&self.state).busy = false;
             return result;
