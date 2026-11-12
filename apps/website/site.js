@@ -816,16 +816,23 @@
 
 // ---- why Nekko: the pillar tour. A vertical tablist; the active pillar's 8 s
 //      demo plays beside it (files follow the look: -light for White and
-//      Colourful). The progress line is a CSS animation; when it ends the next
-//      pillar becomes active. It holds while the pointer is over the tour, while
-//      keyboard focus is in it, while it is off screen or the tab is hidden, and
-//      after Pause. Under reduced motion nothing advances and only posters load.
-//      Video loads only once the tour is first on screen. ----
+//      Colourful). The video is the only clock: the progress line is drawn from
+//      currentTime / duration, and the next pillar becomes active on the video's
+//      `ended`. The video pauses (and the line with it) while the pointer is
+//      over the tour, while keyboard focus is in it, while it is off screen or
+//      the tab is hidden, and after Pause; resuming continues from the same
+//      frame. A pillar the visitor picks starts from 0 and plays even under the
+//      pointer or keyboard hold; a demo that ends during a hold waits on its
+//      last frame and the tour moves on once the hold lifts. A look change
+//      swaps the file at the same currentTime. Under reduced motion nothing
+//      advances and only posters load. Video loads only once the tour is first
+//      on screen. ----
 (() => {
   const tour = document.querySelector('[data-pillar-tour]');
   if (!tour) return;
   const tabs = [...tour.querySelectorAll('.pillar-tab')];
   const items = tabs.map((t) => t.closest('.pillar-item'));
+  const bars = items.map((item) => item.querySelector('.pillar-line i'));
   const panel = tour.querySelector('[role="tabpanel"]');
   const video = tour.querySelector('.pillar-video');
   const pauseBtn = tour.querySelector('[data-pillar-pause]');
@@ -838,6 +845,10 @@
   let keyboard = false;
   let onScreen = false;
   let seen = false;
+  let chosen = false; // the visitor picked this pillar: it plays through the pointer/keyboard hold
+  let waiting = false; // ended during a hold: advance once the hold lifts
+  let swapAt = null; // a look change is reloading the file at this time; the line stays here
+  let frame = 0;
 
   tour.classList.add('is-js');
   if (!reduced) {
@@ -845,24 +856,63 @@
     pauseBtn.hidden = false;
   }
 
+  const held = () => pointer || keyboard;
   const running = () => !reduced && !userPaused && onScreen && !document.hidden;
+  const shouldPlay = () => running() && (!held() || chosen);
+
+  const draw = () => {
+    const d = video.duration;
+    const t = swapAt ?? video.currentTime;
+    const p = video.ended ? 1 : d > 0 && Number.isFinite(d) ? Math.min(1, t / d) : 0;
+    bars.forEach((bar, j) => { bar.style.transform = `scaleX(${j === active ? p : 0})`; });
+  };
+  const tick = () => {
+    draw();
+    frame = video.paused ? 0 : requestAnimationFrame(tick);
+  };
+  video.addEventListener('playing', () => { if (!frame) frame = requestAnimationFrame(tick); });
+  for (const e of ['pause', 'timeupdate', 'seeked', 'loadedmetadata', 'emptied']) video.addEventListener(e, draw);
+
   const sync = () => {
-    tour.classList.toggle('is-held', !running() || pointer || keyboard);
+    tour.classList.toggle('is-held', !shouldPlay());
     tour.classList.toggle('is-paused', userPaused);
-    if (!video.getAttribute('src')) return;
-    if (running()) video.play().catch(() => { /* autoplay blocked: the poster stays */ });
+    if (reduced || !video.getAttribute('src')) return;
+    if (waiting && running() && !held()) { select(active + 1); return; }
+    if (shouldPlay() && !video.ended && swapAt === null) video.play().catch(() => { /* autoplay blocked: the poster stays */ });
     else video.pause();
   };
-  const load = () => {
+  // Put the active pillar's file in the player: from the top for a newly
+  // selected pillar, at the same time for a look change.
+  const load = (keepTime) => {
     const id = tabs[active].dataset.pillar;
     video.poster = file(id, true);
     video.setAttribute('aria-label', tabs[active].dataset.alt);
-    if (reduced || !seen) return;
-    video.src = file(id, false);
+    if (reduced || !seen) { draw(); return; }
+    const src = file(id, false);
+    const current = video.getAttribute('src');
+    if (keepTime && current && current !== src && video.currentTime > 0) {
+      const at = video.currentTime;
+      swapAt = at;
+      video.addEventListener('loadedmetadata', () => {
+        video.currentTime = at;
+        swapAt = null;
+        draw();
+        sync();
+      }, { once: true });
+      video.src = src;
+      video.load();
+      return;
+    }
+    swapAt = null;
+    if (current !== src) video.src = src;
+    else if (!keepTime) video.currentTime = 0;
+    draw();
     sync();
   };
-  const select = (i, focus) => {
+  function select(i, focus, byUser) {
     active = (i + tabs.length) % tabs.length;
+    chosen = Boolean(byUser);
+    waiting = false;
     tabs.forEach((t, j) => {
       const on = j === active;
       t.setAttribute('aria-selected', String(on));
@@ -871,25 +921,31 @@
     });
     panel.setAttribute('aria-labelledby', tabs[active].id);
     if (focus) tabs[active].focus();
-    load();
-  };
+    load(false);
+  }
+
+  video.addEventListener('ended', () => {
+    if (reduced) return;
+    draw();
+    if (running() && !held()) select(active + 1);
+    else waiting = true;
+  });
 
   tabs.forEach((tab, i) => {
-    tab.addEventListener('click', () => select(i));
+    tab.addEventListener('click', () => select(i, false, true));
     tab.addEventListener('keydown', (e) => {
       const to = { ArrowDown: active + 1, ArrowRight: active + 1, ArrowUp: active - 1, ArrowLeft: active - 1, Home: 0, End: tabs.length - 1 }[e.key];
       if (to === undefined) return;
       e.preventDefault();
-      select(to, true);
+      select(to, true, true);
     });
   });
-  items.forEach((item) => item.querySelector('.pillar-line i').addEventListener('animationend', () => select(active + 1)));
 
   tour.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { pointer = true; sync(); } });
-  tour.addEventListener('pointerleave', () => { pointer = false; sync(); });
+  tour.addEventListener('pointerleave', () => { pointer = false; if (!keyboard) chosen = false; sync(); });
   // Only keyboard focus holds the tour: a mouse click leaves its button focused.
   tour.addEventListener('focusin', (e) => { keyboard = e.target.matches(':focus-visible'); sync(); });
-  tour.addEventListener('focusout', (e) => { if (!tour.contains(e.relatedTarget)) { keyboard = false; sync(); } });
+  tour.addEventListener('focusout', (e) => { if (!tour.contains(e.relatedTarget)) { keyboard = false; if (!pointer) chosen = false; sync(); } });
   pauseBtn.addEventListener('click', () => {
     userPaused = !userPaused;
     pauseBtn.setAttribute('aria-label', userPaused ? 'Play the tour' : 'Pause the tour');
@@ -900,13 +956,12 @@
   if ('IntersectionObserver' in window) {
     new IntersectionObserver(([entry]) => {
       onScreen = entry.isIntersecting;
-      if (onScreen && !seen) { seen = true; load(); }
+      if (onScreen && !seen) { seen = true; load(false); }
       sync();
     }, { threshold: 0.35 }).observe(tour);
   } else {
     onScreen = seen = true;
-    load();
   }
-  new MutationObserver(load).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  load();
+  new MutationObserver(() => load(true)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  load(false);
 })();
