@@ -342,7 +342,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Every computer stays connected** (Android): the app keeps a connection to every paired
 > computer, not only the one you are using, so switching to another (in Computers, or **New chat →
 > Run on**) is instant and needs no new connection. **Run on** shows whether each one is online.
-> The chat list still shows one computer's chats at a time.
+> The chat list shows every computer's chats at once, and the chats on this phone: each row says
+> where its chat runs, and **Group by → Computer** gives each computer its own group. Tap the
+> pill at the top left (*Computers, 1 of 2 online*) and use **Show chats from** to see only one
+> computer or this phone. Opening a chat on another computer switches to it.
 >
 > **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
 > different phone protocol versions, the side to update is named: on the iPhone, *update* beside

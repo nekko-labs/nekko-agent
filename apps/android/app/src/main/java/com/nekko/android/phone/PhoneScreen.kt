@@ -31,14 +31,15 @@ import kotlinx.coroutines.launch
 /** A separate native destination: no remote controllers, tools, attachments or sync. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneScreen(phone: PhoneChats, onBack: () -> Unit) {
+fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit) {
     val s by phone.state.collectAsStateWithLifecycle()
     if (!s.ready) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Opening phone chats…") }
         return
     }
     val scope = rememberCoroutineScope()
-    var chatId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Opened from a row of the chat list (#2108): that chat, and Back returns to the list.
+    var chatId by rememberSaveable { mutableStateOf(startChat) }
     var providers by rememberSaveable { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
@@ -55,7 +56,7 @@ fun PhoneScreen(phone: PhoneChats, onBack: () -> Unit) {
     }; Unit }
     Scaffold(containerColor = p.paper, topBar = {
         TopAppBar(title = { Text(if (providers) "Phone providers" else "This phone") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper), navigationIcon = {
-            TextButton(onClick = { if (providers) providers = false else if (chatId != null) chatId = null else onBack() }) { Text("Back") }
+            TextButton(onClick = { if (providers) providers = false else if (chatId != null && chatId != startChat) chatId = null else onBack() }) { Text("Back") }
         }, actions = { if (!providers) TextButton(onClick = { providers = true }, modifier = Modifier.testTag("phone.providers")) { Text("Providers") } })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {

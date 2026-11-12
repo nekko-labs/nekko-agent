@@ -35,8 +35,13 @@ data class ChatListView(
     val showContext: Boolean = true,
     val showPullRequests: Boolean = true,
     val showUpdated: Boolean = true,
+    /** Where each chat runs, on its row, when the list holds more than one place (the iPhone's #1741). */
+    val showComputer: Boolean = true,
+    /** The computer's own icon (or the phone's) beside that name, else a dot. */
+    val showComputerIcons: Boolean = true,
 ) {
-    enum class GroupBy(val wire: String) { PROJECT("project"), STATUS("status"), DATE("date"), NONE("none") }
+    /** By computer is offered only when the list holds more than one place. */
+    enum class GroupBy(val wire: String) { PROJECT("project"), STATUS("status"), DATE("date"), COMPUTER("computer"), NONE("none") }
 
     /** No "Date created" as on the desktop: the phone's summaries carry only the last update. */
     enum class SortBy(val wire: String) { MANUAL("manual"), UPDATED("updated"), NAME("name") }
@@ -61,6 +66,8 @@ data class ChatListView(
         put("showContext", showContext)
         put("showPullRequests", showPullRequests)
         put("showUpdated", showUpdated)
+        put("showComputer", showComputer)
+        put("showComputerIcons", showComputerIcons)
     }.toString()
 
     companion object {
@@ -81,6 +88,8 @@ data class ChatListView(
                 showContext = flag("showContext", STANDARD.showContext),
                 showPullRequests = flag("showPullRequests", STANDARD.showPullRequests),
                 showUpdated = flag("showUpdated", STANDARD.showUpdated),
+                showComputer = flag("showComputer", STANDARD.showComputer),
+                showComputerIcons = flag("showComputerIcons", STANDARD.showComputerIcons),
             )
         }
     }
@@ -144,7 +153,9 @@ object ChatSections {
     /**
      * The list's groups for [view]. Project groups follow [groupOrder] (folder
      * ids and [ChatGroup.GENERAL], as arranged on the phone); folders it doesn't
-     * name keep the computer's order after the ones it does.
+     * name keep the computer's order after the ones it does. By computer, one
+     * group per [places] (in their order), [placeOf] saying where a chat runs;
+     * with fewer than two places it is one list, as Group by none.
      */
     fun make(
         chats: List<SessionSummary>,
@@ -154,6 +165,8 @@ object ChatSections {
         groupOrder: List<String> = emptyList(),
         now: Long,
         zone: ZoneId = ZoneId.systemDefault(),
+        places: List<ChatPlace> = emptyList(),
+        placeOf: (SessionSummary) -> String? = { null },
     ): List<ChatSection> {
         val sort = comparator(view)
         fun done(list: List<SessionSummary>) =
@@ -171,10 +184,20 @@ object ChatSections {
             return ChatGroupOrder.apply(groups.map { it.key }, groupOrder).mapNotNull { k -> groups.firstOrNull { it.key == k } }
         }
 
+        if (view.groupBy == ChatListView.GroupBy.COMPUTER && places.size > 1) {
+            // A chat whose place is unknown joins the first group, as on the iPhone.
+            val byPlace = chats.groupBy { c -> placeOf(c)?.takeIf { id -> places.any { it.id == id } } ?: places.first().id }
+            return places.mapNotNull { place ->
+                val mine = byPlace[place.id].orEmpty()
+                val s = section(ChatPlace.groupKey(place.id), place.name, mine.filter { !it.archived }.sortedWith(sort), done(mine))
+                if (s.chats.isEmpty() && !view.showEmptyGroups) null else s
+            }
+        }
+
         val active = chats.filter { !it.archived }.sortedWith(sort)
         val completedAll = done(chats)
         val completed = if (completedAll.isEmpty()) emptyList() else listOf(section(ChatSection.COMPLETED, "Completed", emptyList(), completedAll))
-        if (view.groupBy == ChatListView.GroupBy.NONE) {
+        if (view.groupBy == ChatListView.GroupBy.NONE || view.groupBy == ChatListView.GroupBy.COMPUTER) {
             return (if (active.isEmpty()) emptyList() else listOf(section("all", "All chats", active, emptyList()))) + completed
         }
         val defs = if (view.groupBy == ChatListView.GroupBy.STATUS) STATUS_GROUPS else DATE_GROUPS

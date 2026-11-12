@@ -265,4 +265,15 @@
     <string name="chats_group_verifying">验证中</string>
     <string name="chats_group_watching">关注中</string>
     <string name="chats_group_done">已完成</string>
+    <!-- One chat list across every computer and this phone (#2108). -->
+    <string name="chats_this_phone">此手机</string>
+    <string name="chats_show_chats_from">显示以下来源的聊天</string>
+    <string name="chats_all_computers">所有电脑</string>
+    <string name="chats_phone_own_models">自带模型</string>
+    <string name="chats_n_of_m_online">%2$d 台中 %1$d 台在线</string>
+    <string name="chats_group_computer">电脑</string>
+    <string name="chats_computer_icons">电脑图标</string>
+    <string name="chats_phone_forget_title">忘记此聊天？</string>
+    <string name="chats_phone_forget_body">其消息将从此手机删除。服务商的记录仍会保留。</string>
+    <string name="chats_phone_forget">忘记</string>
 </resources>

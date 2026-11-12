@@ -244,6 +244,111 @@ class ChatListViewTest {
         shot("8-by-status")
     }
 
+    /**
+     * #2108: two paired computers and a chat on this phone, in one list. Studio Mac answers with
+     * the chats above; Office PC (its own room and key) with one of its own.
+     */
+    private fun showFleet(): Pair<ComputersRepository, String> {
+        val officeRoom = "b2c3d4e5f6071829"
+        val officeKey = "BE4Fn5F4K5mkw+MBYHvdQT/kC5NZN9rHpVgZBu5TJjT8ZDQi5gfJoAAZUNSiXhFQAHF+CVRUTY3F9l4HofyGWbA="
+        val office = """[{"id":"o1","title":"Back up the photos","updatedAt":${now - day / 6},"exchangeCount":3,"lastReplyText":"Copied 2,140 photos to the NAS."}]"""
+        val repo = ComputersRepository(
+            store = object : SecureStore {
+                private val map = HashMap<String, String>()
+                override suspend fun get(key: String) = map[key]
+                override suspend fun set(key: String, value: String?) { if (value == null) map.remove(key) else map[key] = value }
+            },
+            remotes = { config, _ ->
+                if (config.room != officeRoom) remote(config)
+                else object : Remote by remote(config) {
+                    override val status = MutableStateFlow(RelayStatus(RelayState.IDLE))
+                    override fun connect() { status.value = RelayStatus(RelayState.ONLINE) }
+                    override fun close() { status.value = RelayStatus(RelayState.IDLE) }
+                    override suspend fun call(channel: String, vararg args: JsonElement) =
+                        if (channel == Channels.SESSIONS_SUMMARIES) WireJson.parseToJsonElement(office) else JsonNull
+                    override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) = call(channel, *args)
+                }
+            },
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+            deviceName = { "Pixel" },
+            deriveKey = { _, _ -> ByteArray(32) },
+            stayConnected = true,
+        )
+        // A chat on this phone, with its own provider: no computer involved.
+        val phoneStore = HashMap<String, String>()
+        phoneStore["phone.chats.v1"] = """[{"id":"phone:q1","title":"Quick question","providerId":"p1","modelId":"claude-haiku-5-5","createdAt":$now,"updatedAt":${now - day / 8},
+            "messages":[{"id":"u","role":"user","text":"What rhymes with orange?","at":$now},{"id":"a","role":"assistant","text":"Nothing quite does: door hinge is close.","at":$now}]}]"""
+        val phone = com.nekko.android.phone.PhoneChats(
+            object : SecureStore {
+                override suspend fun get(key: String) = phoneStore[key]
+                override suspend fun set(key: String, value: String?) { if (value == null) phoneStore.remove(key) else phoneStore[key] = value }
+            },
+            object : com.nekko.android.phone.PhoneHTTP { override suspend fun send(request: com.nekko.protocol.PhoneRequest, line: ((String) -> Boolean)?) = error("offline") },
+            CoroutineScope(SupervisorJob()),
+        )
+        val officeId = runBlocking {
+            val mac = repo.pair(testPairing())
+            repo.rename(mac, "Studio Mac")
+            val pc = repo.pair(com.nekko.protocol.PairingLink("wss://relay.example.dev", officeRoom, "00112233445566778899aabbccddeeff", hostKey = officeKey))
+            repo.rename(pc, "Office PC")
+            // The Mac is the one used last.
+            repo.connect(mac)
+            repo.load(mac)
+            phone.load()
+            pc
+        }
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {}, phonePrefs = prefs, phone = phone)
+            }
+        }
+        compose.waitUntil(10_000) { repo.state.value.summaries.isNotEmpty() && repo.state.value.peers[officeId]?.summaries?.isNotEmpty() == true }
+        settle()
+        return repo to officeId
+    }
+
+    /** #2108: every computer's chats and this phone's in one list; each row says where it runs. */
+    @Test fun oneListAcrossComputersAndThisPhone() {
+        val (repo, officeId) = showFleet()
+        compose.onNodeWithText("Computers", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("2 of 2 online", useUnmergedTree = true).assertExists()
+        // General holds chats from both computers and the phone, each row naming its place.
+        compose.onNodeWithText("Back up the photos", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Quick question", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Office PC", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("This phone", useUnmergedTree = true).assertExists()
+        shot("9-all-computers")
+
+        // Group by computer: one group per place, the phone last.
+        compose.onNodeWithTag("chats.view").performClick()
+        settle()
+        compose.onNodeWithTag("chats.view.groupBy").performClick()
+        settle()
+        compose.onNodeWithText("Computer").performClick()
+        settle()
+        compose.onNodeWithText("STUDIO MAC", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("OFFICE PC", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("THIS PHONE", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("OFFICE PC", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("THIS PHONE", useUnmergedTree = true).performClick()
+        settle()
+        compose.onNodeWithText("Back up the photos", useUnmergedTree = true).assertExists()
+        shot("10-by-computer")
+        assertEquals(ChatListView.GroupBy.COMPUTER, prefs.get(ChatListPrefs.VIEW).groupBy)
+
+        // Show chats from one computer: only its chats, and it becomes the active one.
+        compose.onNodeWithTag("chats.menu").performClick()
+        settle()
+        shot("11-show-chats-from")
+        compose.onNodeWithTag("chats.from.$officeId").performClick()
+        settle()
+        compose.waitUntil(5_000) { repo.state.value.activeId == officeId }
+        compose.onNodeWithText("Plan the week", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Back up the photos", useUnmergedTree = true).assertExists()
+        assertEquals(officeId, prefs.get(ChatListPrefs.FILTER))
+        shot("12-office-only")
+    }
+
     private fun settle() {
         compose.waitForIdle()
         Thread.sleep(500)
