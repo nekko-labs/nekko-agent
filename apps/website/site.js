@@ -1093,3 +1093,37 @@
   front.setAttribute('aria-label', tabs[active].dataset.alt);
   draw();
 })();
+
+// ---- why Nekko: Nekko peeks over the pillar demos. One Nekko for the whole
+//      tour: her drawing is cloned from the beta card's peek so the two stay
+//      identical. She blinks now and then; when the active pillar changes she
+//      blinks once and glances toward the list (left, or down when the demo is
+//      stacked above it). Under reduced motion she stays still. Only her eyes
+//      change: the frame and the videos around her are never touched. ----
+(() => {
+  const host = document.querySelector('[data-pillar-peek]');
+  const art = document.querySelector('[data-beta] .nekko-peek-svg');
+  if (!host || !art) return;
+  const svg = art.cloneNode(true);
+  svg.querySelector('.np-look')?.removeAttribute('transform');
+  host.appendChild(svg);
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const look = svg.querySelector('.np-look');
+  const stacked = window.matchMedia('(max-width: 900px)');
+  const blink = () => {
+    host.classList.add('blink');
+    setTimeout(() => host.classList.remove('blink'), 160);
+  };
+  setInterval(blink, 4100);
+  let back = 0;
+  const glance = () => {
+    blink();
+    look.setAttribute('transform', stacked.matches ? 'translate(0 1)' : 'translate(-1 0)');
+    clearTimeout(back);
+    back = setTimeout(() => look.removeAttribute('transform'), 700);
+  };
+  const seen = new MutationObserver((records) => {
+    if (records.some((r) => r.target.getAttribute('aria-selected') === 'true')) glance();
+  });
+  document.querySelectorAll('[data-pillar-tour] .pillar-tab').forEach((tab) => seen.observe(tab, { attributes: true, attributeFilter: ['aria-selected'] }));
+})();

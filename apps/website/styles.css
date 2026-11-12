@@ -1315,6 +1315,14 @@ video { filter: brightness(1.0001); }
 .pillar-tour.is-js .pillar-item:not(.is-active) .pillar-detail { display: none; }
 .pillar-tour.is-timed .pillar-item.is-active .pillar-line { display: block; }
 .pillar-stage { display: flex; flex-direction: column; }
+/* Nekko peeks over the top-right corner of the demo box, paws on its edge, like
+   over the beta card. She sits on .pillar-frame (outside .pillar-media, which
+   clips), and the frame keeps her headroom whether or not she has loaded, so
+   nothing moves when she appears. Her drawing, colours, moods and the phone
+   size are the beta peek's (.nekko-peek). */
+.pillar-frame { position: relative; padding-top: 80px; }
+.pillar-peek { top: -2px; }
+@media (max-width: 560px) { .pillar-frame { padding-top: 72px; } .pillar-peek { top: 3px; } } /* the smaller phone peek: paws back on the edge */
 .pillar-media { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 14px; border: 1px solid var(--line); background: var(--media-bg); box-shadow: var(--shadow); }
 /* Two stacked videos double-buffer the demos. The incoming one fades in on top
    (400 ms, eased; keep in step with FADE in site.js); the outgoing one stays
