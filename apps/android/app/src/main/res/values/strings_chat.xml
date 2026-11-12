@@ -289,4 +289,7 @@
     <string name="chat_star_never">Don’t ask again</string>
     <string name="chat_star_thanks">Thank you! Nekko is happy you’re here.</string>
     <string name="chat_star_thanks_detail">GitHub opened in your browser. Starring there takes one click.</string>
+    <!-- The full-screen photo viewer (#2111). -->
+    <string name="photo_n_of_m">%1$d of %2$d</string>
+    <string name="photo_actions">Photo actions</string>
 </resources>

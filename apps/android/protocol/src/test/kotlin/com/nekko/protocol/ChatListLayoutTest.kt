@@ -64,7 +64,8 @@ class ChatListLayoutTest {
         )
         val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.STATUS, showEmptyGroups = false)
         val status = ChatSections.make(list, emptyList(), v, mapOf("c" to Activity.NEEDS_YOU, "a" to Activity.RUNNING), now = now, zone = utc)
-        assertEquals(listOf("Needs you", "Working", "Idle", "Completed"), status.map { it.name })
+        // #2107: the iPhone's status groups; stopped chats with no watch and no count from the computer are Done.
+        assertEquals(listOf("Needs input", "Building", "Done", "Completed"), status.map { it.name })
         assertEquals(listOf(listOf("c"), listOf("a"), listOf("b", "d"), listOf("e")), status.map { s -> s.chats.map { it.id } })
 
         val date = ChatSections.make(list, emptyList(), v.copy(groupBy = ChatListView.GroupBy.DATE), emptyMap(), now = now, zone = utc)
@@ -112,5 +113,80 @@ class ChatListLayoutTest {
         assertTrue(ChatSections.naturalCompare("gamma 9", "gamma 10") < 0)
         assertTrue(ChatSections.naturalCompare("Alpha", "beta") < 0)
         assertEquals(0, ChatSections.naturalCompare("Éclair", "eclair"))
+    }
+
+    @Test fun `status groups split running, drafts, watching and done as the iPhone does`() {
+        val list = chats(
+            """[{"id":"run","title":"R","updatedAt":$now},
+               {"id":"ver","title":"V","updatedAt":$now,"activeRun":{"id":"r1"},"phase":"verifying"},
+               {"id":"ship","title":"S","updatedAt":$now,"activeRun":{"id":"r2"},"phase":"shipping"},
+               {"id":"draft","title":"D","updatedAt":$now,"exchangeCount":0},
+               {"id":"watch","title":"W","updatedAt":$now,"exchangeCount":3,"activeWatchCount":2},
+               {"id":"done","title":"F","updatedAt":$now,"exchangeCount":3},
+               {"id":"ask","title":"A","updatedAt":$now,"activeRun":{"id":"r3"}}]""",
+        )
+        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.STATUS, showEmptyGroups = false)
+        val activity = mapOf("run" to Activity.RUNNING, "ask" to Activity.NEEDS_YOU)
+        val groups = ChatSections.make(list, emptyList(), v, activity, now = now, zone = utc).associate { g -> g.key to g.chats.map { it.id } }
+        assertEquals(listOf("ask"), groups["status:input"])
+        assertEquals(listOf("draft"), groups["status:draft"])
+        assertEquals(listOf("run"), groups["status:building"])
+        assertEquals(listOf("ver", "ship").sorted(), groups["status:verifying"]?.sorted())
+        assertEquals(listOf("watch"), groups["status:watching"])
+        assertEquals(listOf("done"), groups["status:done"])
+
+        val sections = ChatSections.make(list, emptyList(), v, activity, now = now, zone = utc).associateBy { it.key }
+        assertTrue(sections.getValue("status:building").live(activity))
+        assertFalse("Verifying runs on the computer, but the phone saw no event: not live", sections.getValue("status:verifying").live(activity))
+        assertTrue(sections.getValue("status:watching").live(activity))
+        assertEquals(2L, sections.getValue("status:watching").watchingCount)
+        assertFalse(sections.getValue("status:done").live(activity))
+        assertEquals(Activity.NEEDS_YOU, sections.getValue("status:input").headerActivity(activity))
+    }
+
+    @Test fun `groups start folded, ungrouped chats have no fold`() {
+        val g = ChatSection("status:done", "Done", emptyList(), 0, 0)
+        assertFalse(g.isOpen(emptySet()))
+        assertTrue(g.isOpen(setOf("status:done")))
+        assertTrue(ChatSection(ChatGroup.GENERAL, "General", emptyList(), 0, 0).isOpen(emptySet()))
+        assertTrue(ChatSection("all", "All chats", emptyList(), 0, 0).isOpen(emptySet()))
+    }
+
+    @Test fun `groups by computer, one group per place in its order, each with its own completed chats`() {
+        val list = chats(
+            """[{"id":"a","title":"A","updatedAt":5},
+               {"id":"b","title":"B","updatedAt":9},
+               {"id":"c","title":"C","updatedAt":3,"archivedAt":100},
+               {"id":"phone:1","title":"P","updatedAt":7},
+               {"id":"x","title":"X","updatedAt":1}]""",
+        )
+        val owners = mapOf("a" to "mac", "b" to "pc", "c" to "pc", "phone:1" to ChatPlace.PHONE)
+        val places = listOf(ChatPlace("mac", "Studio Mac"), ChatPlace("pc", "Office PC"), ChatPlace("empty", "Spare"), ChatPlace(ChatPlace.PHONE, "This phone"))
+        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.COMPUTER, sortBy = ChatListView.SortBy.UPDATED)
+        val s = ChatSections.make(list, emptyList(), v, emptyMap(), now = now, places = places, placeOf = { owners[it.id] })
+        assertEquals(listOf("computer:mac", "computer:pc", "computer:this-phone"), s.map { it.key })
+        assertEquals(listOf("Studio Mac", "Office PC", "This phone"), s.map { it.name })
+        assertEquals("a chat with no known place joins the first group", listOf("a", "x"), s[0].chats.map { it.id })
+        assertEquals("active, then its own completed", listOf("b", "c"), s[1].chats.map { it.id })
+        assertEquals(1, s[1].doneCount)
+        val withEmpty = ChatSections.make(list, emptyList(), v.copy(showEmptyGroups = true), emptyMap(), now = now, places = places, placeOf = { owners[it.id] })
+        assertEquals("Spare", withEmpty[2].name)
+        assertFalse("computer groups start folded", s[0].isOpen(emptySet()))
+
+        // One place only: one list, as Group by none.
+        val one = ChatSections.make(list, emptyList(), v, emptyMap(), now = now, places = places.take(1), placeOf = { owners[it.id] })
+        assertEquals(listOf("All chats", "Completed"), one.map { it.name })
+    }
+
+    @Test fun `the place on rows is a saved choice, on by default`() {
+        assertTrue(ChatListView.STANDARD.showComputer)
+        assertTrue(ChatListView.STANDARD.showComputerIcons)
+        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.COMPUTER, showComputer = false, showComputerIcons = false)
+        assertEquals(v, ChatListView.parse(v.encoded()))
+        assertEquals(ChatListView.GroupBy.COMPUTER, ChatListView.parse("""{"groupBy":"computer"}""").groupBy)
+        assertEquals(0x5b8defL, ComputerColors.computer(0))
+        assertEquals("the phone's colour is never a computer's", 0x5b8defL, ComputerColors.computer(5))
+        assertTrue(ChatPlace.isPhoneChat("phone:abc"))
+        assertFalse(ChatPlace.isPhoneChat("abc"))
     }
 }

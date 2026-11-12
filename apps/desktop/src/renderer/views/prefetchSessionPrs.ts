@@ -1,3 +1,24 @@
+import type { PrInfo } from '@nekko-agent/shared';
+import { LIVE_STATE_FRESH_MS, isLiveState } from '../liveStateTicker.js';
+
+/**
+ * The cards whose PRs need no read: every PR merged or closed (final), or an
+ * open/draft one read less than half a tick ago. A card with a live PR that was
+ * never read here, or was read longer ago, drops out, so the next prefetch run
+ * re-reads it.
+ */
+export function freshSessionPrs(
+  prsBySession: Record<string, PrInfo[]>,
+  readAt: ReadonlyMap<string, number>,
+  now = Date.now(),
+): Record<string, PrInfo[]> {
+  const fresh: Record<string, PrInfo[]> = {};
+  for (const [id, prs] of Object.entries(prsBySession)) {
+    if (!prs.some(isLiveState) || now - (readAt.get(id) ?? 0) < LIVE_STATE_FRESH_MS / 2) fresh[id] = prs;
+  }
+  return fresh;
+}
+
 /** Hydrate every visible card, with bounded concurrency rather than a one-shot slice. */
 export async function prefetchSessionPrs(
   ids: string[],

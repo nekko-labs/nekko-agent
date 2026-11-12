@@ -1,5 +1,9 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.testTag
+
+import androidx.compose.foundation.clickable
+
 import com.nekko.android.R
 import androidx.compose.ui.res.stringResource
 import android.graphics.BitmapFactory
@@ -40,7 +44,7 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PromptPhotos(thumbs: List<String>, tint: Color, tile: Color) {
+fun PromptPhotos(thumbs: List<String>, tint: Color, tile: Color, onOpen: ((Int) -> Unit)? = null) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         thumbs.forEachIndexed { i, url ->
             val bitmap by produceState<ImageBitmap?>(null, url) { value = PhotoDecoder.decode(url) }
@@ -52,11 +56,11 @@ fun PromptPhotos(thumbs: List<String>, tint: Color, tile: Color) {
                     b,
                     contentDescription = label,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(SIDE.dp).clip(shape),
+                    modifier = Modifier.size(SIDE.dp).clip(shape).then(open(onOpen, i)),
                 )
             } else {
                 Box(
-                    Modifier.size(SIDE.dp).clip(shape).background(tile).semantics { contentDescription = label },
+                    Modifier.size(SIDE.dp).clip(shape).background(tile).then(open(onOpen, i)).semantics { contentDescription = label },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Outlined.Image, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
@@ -67,6 +71,10 @@ fun PromptPhotos(thumbs: List<String>, tint: Color, tile: Color) {
 }
 
 private const val SIDE = 96
+
+/** A tap opens the photo full screen (#2111). */
+private fun open(onOpen: ((Int) -> Unit)?, i: Int): Modifier =
+    if (onOpen == null) Modifier else Modifier.clickable(role = androidx.compose.ui.semantics.Role.Image) { onOpen(i) }.testTag("photo.thumb.$i")
 
 /** Image data URLs → small bitmaps, off the main thread, remembered by URL. */
 object PhotoDecoder {

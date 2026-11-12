@@ -20,6 +20,12 @@ Photos added with **+ → Photos** or **Paste image** appear inside the message 
 
 The primary Home Screen icon follows iOS icon appearance: the light version keeps the white Nekko outline on plum, and the dark version uses the brand-plum outline on charcoal. Choose **Dark** or **Automatic** in the Home Screen customization controls. The seasonal alternate icon is unchanged.
 
+## Reconnecting and reading replies on iPhone and iPad
+
+When a paired computer is unavailable, New chat separates its reconnecting status from the drafting hint. You can write your message and choose Send while waiting; the queued text stays on this device until the computer reconnects. Drafting without choosing Send does not queue a message. Image chats and supporting folders that require confirmation retain their specific reconnect instructions.
+
+On iOS 18 and later, an open computer chat follows the measured growth of the reply while you are at the end. Scroll into history to stop following, then tap **Jump to latest** to resume. iOS 17 retains the previous scrolling implementation. The reconnect ellipsis stays still with Reduce Motion enabled.
+
 ## Groups on iPhone
 
 New chat-list groups start folded. Tap a heading to reveal its chats or fold it again. Your last choice for each group is remembered on this iPhone or iPad, including after leaving the list or restarting the app; it does not sync to your computer. Its activity icon stays visible while folded, showing attention, working, watching or done. Search temporarily reveals matching chats without changing your saved group choices. General and ungrouped chats stay visible, as does the separate Needs you section.
@@ -336,7 +342,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Every computer stays connected** (Android): the app keeps a connection to every paired
 > computer, not only the one you are using, so switching to another (in Computers, or **New chat →
 > Run on**) is instant and needs no new connection. **Run on** shows whether each one is online.
-> The chat list still shows one computer's chats at a time.
+> The chat list shows every computer's chats at once, and the chats on this phone: each row says
+> where its chat runs, and **Group by → Computer** gives each computer its own group. Tap the
+> pill at the top left (*Computers, 1 of 2 online*) and use **Show chats from** to see only one
+> computer or this phone. Opening a chat on another computer switches to it.
 >
 > **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
 > different phone protocol versions, the side to update is named: on the iPhone, *update* beside
@@ -427,6 +436,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
 > - **Photos:** selected photos appear as thumbnails in the iPhone's message box and **New chat**, before you send. Tap one to inspect it full screen, or use its **Remove photo** button to remove just that photo. Sent photos stay visible in the message bubble; tap one to open the same viewer. It sharpens as the computer sends the photo at full size (a spinner shows while it loads). **⋯** saves it to Photos, copies it or shares it, and swiping up or down closes the viewer. **+ → Paste image** adds photos from the clipboard. Chats carry small previews; the viewer asks for one full-size photo at a time (`session:photo`). Older or unavailable photos may show a placeholder. Offline saved transcripts keep only photo counts.
+> - **Photos on Android:** tap a photo in the message box, in a sent message or in an image chat's reply to open it full screen. Pinch or double-tap to zoom, swipe sideways for the next photo, and drag up or down to close. It sharpens when the computer sends the full photo. **⋮** offers **Save to Photos** (into *Pictures/Nekko*, Android 10 and later), **Copy** and **Share**.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
@@ -496,9 +506,12 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
-> first, then one group per project folder. Tap a group's name to fold it, and again to open it:
-> the phone remembers each group's choice, also after you leave the list or restart the app (it
-> isn't synced to your computer). Search shows every match whatever is folded. Each group lists its
+> first, then one group per project folder. Groups start folded, as on the iPhone, with a count of
+> their chats; tap a group's name to open it, and again to fold it. The phone remembers each group's
+> choice, also after you leave the list or restart the app (it isn't synced to your computer).
+> Grouped by status, the list uses the iPhone's groups (Needs input, Draft, Building, Verifying,
+> Watching, Done), and a group with a chat running or watching shows the cat with a green dot in
+> its heading. Search shows every match whatever is folded. Each group lists its
 > active chats, then **Show completed (N)**, which opens the chats completed there (struck through,
 > newest first). Tap a completed chat to read it; its message box is replaced by **Restore**, and a
 > long-press on it offers Restore or Delete. Completing or restoring a chat on the computer shows up

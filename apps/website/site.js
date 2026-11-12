@@ -816,28 +816,55 @@
 
 // ---- why Nekko: the pillar tour. A vertical tablist; the active pillar's 8 s
 //      demo plays beside it (files follow the look: -light for White and
-//      Colourful). The progress line is a CSS animation; when it ends the next
-//      pillar becomes active. It holds while the pointer is over the tour, while
-//      keyboard focus is in it, while it is off screen or the tab is hidden, and
-//      after Pause. Under reduced motion nothing advances and only posters load.
-//      Video loads only once the tour is first on screen. ----
+//      Colourful). The visible video is the only clock: the progress line is
+//      drawn from its currentTime / duration, and the next pillar becomes active
+//      on its `ended`. Two stacked videos double-buffer the demos: the visible
+//      one plays while the next file loads into the hidden one, and they swap
+//      (a short crossfade) only once the hidden one is playing, so a change
+//      never blanks the box. While a demo plays the next pillar's file preloads
+//      into the hidden video; a look change loads the other look's file there at
+//      the same time. Only the videos' sources change: .pillar-media and
+//      everything around it stay the same nodes. The video pauses (and the line
+//      with it) while the pointer is over the tour, while keyboard focus is in
+//      it, while it is off screen or the tab is hidden, and after Pause;
+//      resuming continues from the same frame. A pillar the visitor picks
+//      starts from 0 and plays even under the pointer or keyboard hold; a demo
+//      that ends during a hold waits on its last frame and the tour moves on
+//      once the hold lifts. Under reduced motion nothing advances and only
+//      posters load. Video loads only once the tour is first on screen. ----
 (() => {
   const tour = document.querySelector('[data-pillar-tour]');
   if (!tour) return;
   const tabs = [...tour.querySelectorAll('.pillar-tab')];
   const items = tabs.map((t) => t.closest('.pillar-item'));
+  const bars = items.map((item) => item.querySelector('.pillar-line i'));
   const panel = tour.querySelector('[role="tabpanel"]');
-  const video = tour.querySelector('.pillar-video');
+  const vids = [...tour.querySelectorAll('.pillar-video')];
   const pauseBtn = tour.querySelector('[data-pillar-pause]');
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const tone = () => (document.documentElement.dataset.theme === 'dark' ? '' : '-light');
-  const file = (id, poster) => `media/pillar-${id}${tone()}${poster ? '-poster.jpg' : '.mp4'}`;
+  const file = (i, poster) => `media/pillar-${tabs[i].dataset.pillar}${tone()}${poster ? '-poster.jpg' : '.mp4'}`;
+  const next = () => (active + 1) % tabs.length;
+  let front = vids[0]; // the visible video: the clock
+  let back = vids[1]; // hidden: preloads or loads the next file
   let active = 0;
   let userPaused = false;
   let pointer = false;
   let keyboard = false;
   let onScreen = false;
   let seen = false;
+  let chosen = false; // the visitor picked this pillar: it plays through the pointer/keyboard hold
+  let waiting = false; // ended during a hold: advance once the hold lifts
+  let pending = null; // { at, follow } while the back video loads the file that will replace the front
+  let frame = 0;
+  let gen = 0; // bumps on each new load, so a slow file's late events are ignored
+  // The crossfade (keep in step with .pillar-video in styles.css). The outgoing
+  // video stays visible under the incoming one until it ends, so nothing loads
+  // into it before then.
+  const FADE = 400;
+  let fadeEnds = 0; // performance.now() when the current crossfade is over
+  let settle = 0; // the fallback timer for the end of a fade
+  let settleId = 0; // which fade the pending preload belongs to
 
   tour.classList.add('is-js');
   if (!reduced) {
@@ -845,24 +872,152 @@
     pauseBtn.hidden = false;
   }
 
+  const held = () => pointer || keyboard;
   const running = () => !reduced && !userPaused && onScreen && !document.hidden;
-  const sync = () => {
-    tour.classList.toggle('is-held', !running() || pointer || keyboard);
-    tour.classList.toggle('is-paused', userPaused);
-    if (!video.getAttribute('src')) return;
-    if (running()) video.play().catch(() => { /* autoplay blocked: the poster stays */ });
-    else video.pause();
+  const shouldPlay = () => running() && (!held() || chosen);
+
+  const draw = () => {
+    const d = front.duration;
+    // While the next file loads the line waits: at 0 for a new pillar, at the
+    // swap time for a look change.
+    const t = pending && !pending.follow ? pending.at : front.currentTime;
+    const p = (!pending || pending.follow) && front.ended ? 1 : d > 0 && Number.isFinite(d) ? Math.min(1, t / d) : 0;
+    bars.forEach((bar, j) => { bar.style.transform = `scaleX(${j === active ? p : 0})`; });
   };
-  const load = () => {
-    const id = tabs[active].dataset.pillar;
-    video.poster = file(id, true);
-    video.setAttribute('aria-label', tabs[active].dataset.alt);
-    if (reduced || !seen) return;
-    video.src = file(id, false);
+  const tick = () => {
+    draw();
+    frame = front.paused ? 0 : requestAnimationFrame(tick);
+  };
+  const play = (v) => v.play().catch(() => { /* autoplay blocked: the poster stays */ });
+
+  // Hidden video: preload the pillar after this one, so an automatic advance is seamless.
+  const preload = () => {
+    if (reduced || !seen || pending) return;
+    const src = file(next(), false);
+    // No poster on the hidden video: a poster is a frame from the middle of
+    // a demo, and it must never show for a pillar that is not active.
+    back.removeAttribute('poster');
+    if (back.getAttribute('src') !== src) { gen++; back.preload = 'auto'; back.src = src; back.load(); }
+  };
+  // Show the back video: one step, so exactly one video is shown at any time.
+  const swap = () => {
+    const old = front;
+    front = back;
+    back = old;
+    pending = null;
+    front.classList.add('is-shown');
+    back.classList.remove('is-shown');
+    front.removeAttribute('aria-hidden');
+    back.setAttribute('aria-hidden', 'true');
+    front.setAttribute('aria-label', tabs[active].dataset.alt);
+    back.pause();
+    fadeEnds = performance.now() + FADE;
+    draw();
+    if (!front.paused && !frame) frame = requestAnimationFrame(tick);
     sync();
+    // Preload only once the outgoing video has really faded out (its own
+    // opacity transition has ended, not a guess at the time): loading into it
+    // earlier shows another demo under the fade. The timer is only a fallback
+    // for when no transition runs.
+    const id = ++settleId;
+    const out = back;
+    const done = (e) => {
+      if (e && (e.target !== out || e.propertyName !== 'opacity')) return;
+      if (id !== settleId) return;
+      settleId++;
+      out.removeEventListener('transitionend', done);
+      clearTimeout(settle);
+      preload();
+    };
+    out.addEventListener('transitionend', done);
+    clearTimeout(settle);
+    settle = setTimeout(done, FADE + 600);
   };
-  const select = (i, focus) => {
+  // A new load needs the back video while it may still be fading out: finish
+  // the fade at once (incoming fully shown, outgoing gone) rather than show the
+  // reload under it.
+  const cutFade = () => {
+    if (performance.now() >= fadeEnds) return;
+    clearTimeout(settle);
+    settleId++; // the cut ends the fade; that fade's preload is dropped
+    tour.classList.add('is-cut');
+    void front.offsetWidth; // apply the end state without a transition
+    tour.classList.remove('is-cut');
+    fadeEnds = 0;
+  };
+  // Load pillar `active` into the back video at `at` seconds, then swap once it
+  // is playing (or, when it should not play, once its frame is ready). With
+  // `follow` (a look change) the front keeps playing meanwhile and the back
+  // starts from wherever the front has got to.
+  const stage = (at, follow = false) => {
+    const src = file(active, false);
+    const mine = ++gen;
+    cutFade();
+    pending = { at, follow };
+    back.poster = file(active, true);
+    const ready = () => {
+      if (mine !== gen || !pending) return;
+      // Playing: swap on `playing`. Held or paused: swap once the frame at
+      // `at` is decoded, so the box never shows an empty video.
+      back.addEventListener('seeked', () => { if (mine === gen && pending && !shouldPlay()) swap(); }, { once: true });
+      back.currentTime = follow ? front.currentTime : at;
+      if (shouldPlay()) play(back);
+    };
+    if (back.getAttribute('src') === src && back.readyState >= 1) ready();
+    else {
+      back.preload = 'auto';
+      back.src = src;
+      back.addEventListener('loadedmetadata', ready, { once: true });
+      back.load();
+    }
+    draw();
+  };
+
+  vids.forEach((v) => {
+    v.addEventListener('playing', () => {
+      if (v === back && pending) {
+        // Swap once the incoming video has painted its first frame, not just
+        // started: otherwise the fade can begin over an empty video.
+        const mine = gen;
+        const go = () => { if (mine === gen && pending && v === back) swap(); };
+        if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(go);
+        else go();
+      }
+      else if (v === front && !frame) frame = requestAnimationFrame(tick);
+    });
+    for (const e of ['pause', 'timeupdate', 'seeked', 'loadedmetadata']) v.addEventListener(e, () => { if (v === front) draw(); });
+    v.addEventListener('ended', () => {
+      if (v !== front || reduced) return;
+      if (pending && !pending.follow) return;
+      if (pending) { gen++; pending = null; back.pause(); } // the look change lost the race: just move on
+      draw();
+      if (running() && !held()) select(next());
+      else waiting = true;
+    });
+  });
+
+  const sync = () => {
+    tour.classList.toggle('is-held', !shouldPlay());
+    tour.classList.toggle('is-paused', userPaused);
+    if (reduced || !seen) return;
+    if (waiting && running() && !held()) { select(next()); return; }
+    if (pending && !pending.follow) {
+      // Loading a new file: the front stays paused on its frame; the back plays
+      // into the swap when it may.
+      front.pause();
+      if (shouldPlay() && back.readyState >= 1) play(back);
+      else back.pause();
+      return;
+    }
+    if (pending && shouldPlay() && back.readyState >= 1) play(back);
+    else if (pending) back.pause();
+    if (shouldPlay() && !front.ended) play(front);
+    else front.pause();
+  };
+  function select(i, focus, byUser) {
     active = (i + tabs.length) % tabs.length;
+    chosen = Boolean(byUser);
+    waiting = false;
     tabs.forEach((t, j) => {
       const on = j === active;
       t.setAttribute('aria-selected', String(on));
@@ -871,25 +1026,32 @@
     });
     panel.setAttribute('aria-labelledby', tabs[active].id);
     if (focus) tabs[active].focus();
-    load();
-  };
+    if (reduced || !seen) {
+      front.poster = file(active, true);
+      front.setAttribute('aria-label', tabs[active].dataset.alt);
+      draw();
+      return;
+    }
+    front.pause();
+    stage(0);
+    sync();
+  }
 
   tabs.forEach((tab, i) => {
-    tab.addEventListener('click', () => select(i));
+    tab.addEventListener('click', () => select(i, false, true));
     tab.addEventListener('keydown', (e) => {
       const to = { ArrowDown: active + 1, ArrowRight: active + 1, ArrowUp: active - 1, ArrowLeft: active - 1, Home: 0, End: tabs.length - 1 }[e.key];
       if (to === undefined) return;
       e.preventDefault();
-      select(to, true);
+      select(to, true, true);
     });
   });
-  items.forEach((item) => item.querySelector('.pillar-line i').addEventListener('animationend', () => select(active + 1)));
 
   tour.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { pointer = true; sync(); } });
-  tour.addEventListener('pointerleave', () => { pointer = false; sync(); });
+  tour.addEventListener('pointerleave', () => { pointer = false; if (!keyboard) chosen = false; sync(); });
   // Only keyboard focus holds the tour: a mouse click leaves its button focused.
   tour.addEventListener('focusin', (e) => { keyboard = e.target.matches(':focus-visible'); sync(); });
-  tour.addEventListener('focusout', (e) => { if (!tour.contains(e.relatedTarget)) { keyboard = false; sync(); } });
+  tour.addEventListener('focusout', (e) => { if (!tour.contains(e.relatedTarget)) { keyboard = false; if (!pointer) chosen = false; sync(); } });
   pauseBtn.addEventListener('click', () => {
     userPaused = !userPaused;
     pauseBtn.setAttribute('aria-label', userPaused ? 'Play the tour' : 'Pause the tour');
@@ -897,16 +1059,71 @@
   });
   document.addEventListener('visibilitychange', sync);
 
+  // First time on screen: the active file goes straight into the visible video.
+  const start = () => {
+    seen = true;
+    front.poster = file(active, true);
+    if (reduced) return; // posters only
+    front.preload = 'auto';
+    front.src = file(active, false);
+    front.poster = file(active, true);
+    sync();
+    preload();
+  };
   if ('IntersectionObserver' in window) {
     new IntersectionObserver(([entry]) => {
       onScreen = entry.isIntersecting;
-      if (onScreen && !seen) { seen = true; load(); }
-      sync();
+      if (onScreen && !seen) start();
+      else sync();
     }, { threshold: 0.35 }).observe(tour);
   } else {
-    onScreen = seen = true;
-    load();
+    onScreen = true;
+    start();
   }
-  new MutationObserver(load).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  load();
+  // A look change: posters follow at once; the playing file is replaced by the
+  // other look's at the same time, through the back video.
+  new MutationObserver(() => {
+    front.poster = file(active, true);
+    if (reduced || !seen) return;
+    const at = front.currentTime;
+    if (pending && !pending.follow) { stage(pending.at); return; }
+    if (front.getAttribute('src') !== file(active, false)) stage(at, true);
+    sync();
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  front.setAttribute('aria-label', tabs[active].dataset.alt);
+  draw();
+})();
+
+// ---- why Nekko: Nekko peeks over the pillar demos. One Nekko for the whole
+//      tour: her drawing is cloned from the beta card's peek so the two stay
+//      identical. She blinks now and then; when the active pillar changes she
+//      blinks once and glances toward the list (left, or down when the demo is
+//      stacked above it). Under reduced motion she stays still. Only her eyes
+//      change: the frame and the videos around her are never touched. ----
+(() => {
+  const host = document.querySelector('[data-pillar-peek]');
+  const art = document.querySelector('[data-beta] .nekko-peek-svg');
+  if (!host || !art) return;
+  const svg = art.cloneNode(true);
+  svg.querySelector('.np-look')?.removeAttribute('transform');
+  host.appendChild(svg);
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const look = svg.querySelector('.np-look');
+  const stacked = window.matchMedia('(max-width: 900px)');
+  const blink = () => {
+    host.classList.add('blink');
+    setTimeout(() => host.classList.remove('blink'), 160);
+  };
+  setInterval(blink, 4100);
+  let back = 0;
+  const glance = () => {
+    blink();
+    look.setAttribute('transform', stacked.matches ? 'translate(0 1)' : 'translate(-1 0)');
+    clearTimeout(back);
+    back = setTimeout(() => look.removeAttribute('transform'), 700);
+  };
+  const seen = new MutationObserver((records) => {
+    if (records.some((r) => r.target.getAttribute('aria-selected') === 'true')) glance();
+  });
+  document.querySelectorAll('[data-pillar-tour] .pillar-tab').forEach((tab) => seen.observe(tab, { attributes: true, attributeFilter: ['aria-selected'] }));
 })();

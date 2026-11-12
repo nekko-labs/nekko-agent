@@ -373,6 +373,10 @@ data class SessionSummary(
     val imageParams: ImageChatParams? = null,
     /** Prompts sent in the chat; null when the computer doesn't say (an older one). The first-chat intro reads it. */
     val exchangeCount: Long? = null,
+    /** A run is under way there (`activeRun` is set), whatever the phone saw of it. */
+    val running: Boolean = false,
+    /** What the chat's latest telling tool call says it is doing (`phase`: building, verifying, shipping…). */
+    val phase: String? = null,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -403,6 +407,8 @@ data class SessionSummary(
                 prUrls = o["prUrls"].arr()?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList(),
                 transcriptTokens = o.long("transcriptTokens")?.takeIf { it > 0 },
                 exchangeCount = o.long("exchangeCount")?.takeIf { it >= 0 },
+                running = o["activeRun"].let { it != null && it !is JsonNull },
+                phase = o.str("phase"),
                 contextUsed = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
                 contextWindow = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )
