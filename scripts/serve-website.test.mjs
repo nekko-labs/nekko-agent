@@ -466,7 +466,7 @@ test('the beta and status pages are linked, and status.json is well formed', () 
   assert.match(index, /href="\/status" data-cta="footer-status"/);
   assert.match(read('beta.html'), /href="\/status#known-issues"/);
   assert.match(read('privacy.html'), /href="\/status">status page<\/a>/, 'the privacy policy names the status page’s requests');
-  for (const p of ['beta', 'status']) assert.match(read('sitemap.xml'), new RegExp(`nekkoagent\.com/${p}<`));
+  for (const p of ['beta', 'status']) assert.ok(read('sitemap.xml').includes(`https://nekkoagent.com/${p}<`), p);
   const status = JSON.parse(read('status.json'));
   assert.match(status.updated, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(Array.isArray(status.incidents) && Array.isArray(status.knownIssues));
