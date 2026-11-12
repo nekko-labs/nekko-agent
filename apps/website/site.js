@@ -820,7 +820,7 @@
   start();
 })();
 
-// ---- why Nekko: the pillar tour. A vertical tablist; the active pillar's 8 s
+// ---- why Nekko: the pillar tour. A vertical carousel; the active pillar's 8 s
 //      demo plays beside it (files follow the look: -light for White and
 //      Colourful). The visible video is the only clock: the progress line is
 //      drawn from its currentTime / duration, and the next pillar becomes active
@@ -847,7 +847,7 @@
   const tabs = [...tour.querySelectorAll('.pillar-tab')];
   const items = tabs.map((t) => t.closest('.pillar-item'));
   const bars = items.map((item) => item.querySelector('.pillar-line i'));
-  const panel = tour.querySelector('[role="tabpanel"]');
+  const panel = tour.querySelector('#pillar-panel');
   const vids = [...tour.querySelectorAll('.pillar-video')];
   const pauseBtn = tour.querySelector('[data-pillar-pause]');
   const enlargeBtn = tour.querySelector('[data-pillar-enlarge]');
@@ -1033,7 +1033,7 @@
     waiting = false;
     tabs.forEach((t, j) => {
       const on = j === active;
-      t.setAttribute('aria-selected', String(on));
+      if (on) t.setAttribute('aria-current', 'step'); else t.removeAttribute('aria-current');
       t.tabIndex = on ? 0 : -1;
       items[j].classList.toggle('is-active', on);
     });
@@ -1153,7 +1153,7 @@
     back = setTimeout(() => look.removeAttribute('transform'), 700);
   };
   const seen = new MutationObserver((records) => {
-    if (records.some((r) => r.target.getAttribute('aria-selected') === 'true')) glance();
+    if (records.some((r) => r.target.getAttribute('aria-current') === 'step')) glance();
   });
-  document.querySelectorAll('[data-pillar-tour] .pillar-tab').forEach((tab) => seen.observe(tab, { attributes: true, attributeFilter: ['aria-selected'] }));
+  document.querySelectorAll('[data-pillar-tour] .pillar-tab').forEach((tab) => seen.observe(tab, { attributes: true, attributeFilter: ['aria-current'] }));
 })();
