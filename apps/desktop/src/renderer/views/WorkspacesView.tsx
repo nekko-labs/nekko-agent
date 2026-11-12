@@ -27,7 +27,8 @@ import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
 import { agentGroupRows } from './agentGroupRows.js';
-import { prefetchSessionPrs } from './prefetchSessionPrs.js';
+import { freshSessionPrs, prefetchSessionPrs } from './prefetchSessionPrs.js';
+import { isLiveState, onLiveStateTick } from '../liveStateTicker.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
@@ -571,12 +572,19 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const visiblePrIds = groups.filter((g) => !collapsed.has(g.key)).flatMap((g) =>
     visibleItems(g).flatMap((e) => e.s && e.s.prUrls.length > 0 ? [e.s.id] : [])).join('\0');
   const prReadsInFlight = useRef(new Map<string, Promise<void>>());
+  const prReadAt = useRef(new Map<string, number>());
+  // A card showing an open or draft PR re-reads it on the shared live-state tick
+  // (every minute while visible, and on focus); merged and closed are final.
+  const liveCardPrs = useStore((s) => visiblePrIds.split('\0').some((id) => s.prsBySession[id]?.some(isLiveState)));
+  const [prTick, setPrTick] = useState(0);
+  useEffect(() => (liveCardPrs ? onLiveStateTick(() => setPrTick((t) => t + 1)) : undefined), [liveCardPrs]);
   useEffect(() => {
     let cancelled = false;
-    void prefetchSessionPrs(visiblePrIds.split('\0'), () => useStore.getState().prsBySession,
-      (id) => useStore.getState().refreshSessionPrs(id), prReadsInFlight.current, () => cancelled);
+    void prefetchSessionPrs(visiblePrIds.split('\0'), () => freshSessionPrs(useStore.getState().prsBySession, prReadAt.current),
+      (id) => { prReadAt.current.set(id, Date.now()); return useStore.getState().refreshSessionPrs(id); },
+      prReadsInFlight.current, () => cancelled);
     return () => { cancelled = true; };
-  }, [sessions, visiblePrIds]);
+  }, [sessions, visiblePrIds, prTick]);
 
   // When a card changes group (Building to Verifying), note where every card was
   // before this render commits, then fly the movers from there. Not when the
