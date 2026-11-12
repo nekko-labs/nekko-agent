@@ -3471,7 +3471,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         >
                           <PhotoIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="flex-1">Photo / Video</span>
-                          {!mediaDisabled && mediaSupport.video === 'no' && <span className="text-2xs text-ink-faint">photos only</span>}
+                          {!mediaDisabled && mediaSupport.video === 'no' && <span className="text-2xs text-ink-faint">videos as files</span>}
                         </button>
                         {(mediaDisabled || (mediaSupport.image !== 'yes' || mediaSupport.video !== 'yes')) && (
                           <p className="px-3 pb-1 text-2xs leading-snug text-ink-faint" role="note" data-composer-media-note>
@@ -3605,7 +3605,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       ref={imageInputRef}
                       className="hidden"
                       type="file"
-                      accept={mediaSupport.video === 'no' ? 'image/*' : 'image/*,video/*'}
+                      // Videos are always offered: one the model can't watch is attached as a file
+                      // (planAttachment), so the agent can still work with it.
+                      accept="image/*,video/*"
                       multiple
                       onChange={(e) => {
                         const files = Array.from(e.target.files ?? []);
