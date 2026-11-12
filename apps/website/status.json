@@ -1,0 +1,23 @@
+{
+  "updated": "2026-11-12",
+  "services": [
+    {
+      "id": "api",
+      "name": "Nekko Cloud",
+      "what": "Sign-in, sync, cloud machines, Send feedback and the beta sign-up.",
+      "check": "https://nekko-agent-api.fly.dev/healthz",
+      "state": "ok",
+      "note": ""
+    },
+    {
+      "id": "relay",
+      "name": "Phone access",
+      "what": "The Relay that connects the iOS and Android apps to your computer.",
+      "check": "https://nekko-agent-relay.fly.dev/healthz",
+      "state": "ok",
+      "note": ""
+    }
+  ],
+  "incidents": [],
+  "knownIssues": []
+}
