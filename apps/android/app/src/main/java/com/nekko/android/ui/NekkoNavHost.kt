@@ -98,7 +98,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 object Routes {
     const val CHATS = "chats"
-    const val PHONE = "phone"
+    const val PHONE = "phone?chat={chat}"
     const val VOICE = "voice"
     const val CHAT = "chat/{id}"
     const val NEW = "new"
@@ -117,6 +117,8 @@ object Routes {
     const val SIMPLE_MODE = "settings/simple"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
+    /** This phone's chats, opened on [chat] when one is given (a row of the chat list, #2108). */
+    fun phone(chat: String? = null) = if (chat == null) "phone" else "phone?chat=${Uri.encode(chat)}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
 }
 
@@ -188,13 +190,16 @@ fun NekkoNavHost(
                     nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
                 }
             }
-            composable(Routes.PHONE) {
+            composable(
+                Routes.PHONE,
+                arguments = listOf(androidx.navigation.navArgument("chat") { type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null }),
+            ) { entry ->
                 val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
-                com.nekko.android.phone.PhoneScreen(app.phoneChats) { nav.popBackStack() }
+                com.nekko.android.phone.PhoneScreen(app.phoneChats, startChat = entry.arguments?.getString("chat")) { nav.popBackStack() }
             }
             composable(Routes.CHATS) {
                 Column(Modifier.fillMaxSize()) {
-                    androidx.compose.material3.TextButton(onClick = { nav.navigate(Routes.PHONE) }, modifier = Modifier.padding(top = 24.dp)) { Text("This phone") }
+                    androidx.compose.material3.TextButton(onClick = { nav.navigate(Routes.phone()) }, modifier = Modifier.padding(top = 24.dp)) { Text("This phone") }
                     Box(Modifier.weight(1f)) {
                         PhoneComputerHome(repo, phonePrefs, mode, window, panes, shareInbox, nav, startFresh)
                     }
@@ -408,6 +413,8 @@ private fun Panes(
                 onMonitors = { panes.update(running) { l -> if (l[slot.side.other] == PaneContent.Monitors) l else l.replace(slot.side.other, PaneContent.Monitors) } },
                 pane = slot,
                 phonePrefs = phonePrefs,
+                phone = phoneChats(),
+                onOpenPhone = { nav.navigate(Routes.phone(it)) },
             )
             PaneContent.Monitors -> {
                 val vm = viewModel(viewModelStoreOwner = panes.stores.owner(c.key), key = c.key) { MonitorsViewModel(repo) }
@@ -560,6 +567,13 @@ private fun PhoneComputerHome(
         onMonitors = { nav.navigate(Routes.MONITORS) },
         onSkipFirstRun = firstRunSkip(phonePrefs),
         phonePrefs = phonePrefs,
+        phone = phoneChats(),
+        onOpenPhone = { nav.navigate(Routes.phone(it)) },
     )
 
 }
+
+/** This phone's own chats, listed with the computers' (#2108); none in previews and tests without the app. */
+@Composable
+private fun phoneChats(): com.nekko.android.phone.PhoneChats? =
+    (LocalContext.current.applicationContext as? com.nekko.android.NekkoApp)?.phoneChats

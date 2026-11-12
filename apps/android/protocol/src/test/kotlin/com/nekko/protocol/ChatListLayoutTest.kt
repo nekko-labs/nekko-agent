@@ -151,4 +151,42 @@ class ChatListLayoutTest {
         assertTrue(ChatSection(ChatGroup.GENERAL, "General", emptyList(), 0, 0).isOpen(emptySet()))
         assertTrue(ChatSection("all", "All chats", emptyList(), 0, 0).isOpen(emptySet()))
     }
+
+    @Test fun `groups by computer, one group per place in its order, each with its own completed chats`() {
+        val list = chats(
+            """[{"id":"a","title":"A","updatedAt":5},
+               {"id":"b","title":"B","updatedAt":9},
+               {"id":"c","title":"C","updatedAt":3,"archivedAt":100},
+               {"id":"phone:1","title":"P","updatedAt":7},
+               {"id":"x","title":"X","updatedAt":1}]""",
+        )
+        val owners = mapOf("a" to "mac", "b" to "pc", "c" to "pc", "phone:1" to ChatPlace.PHONE)
+        val places = listOf(ChatPlace("mac", "Studio Mac"), ChatPlace("pc", "Office PC"), ChatPlace("empty", "Spare"), ChatPlace(ChatPlace.PHONE, "This phone"))
+        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.COMPUTER, sortBy = ChatListView.SortBy.UPDATED)
+        val s = ChatSections.make(list, emptyList(), v, emptyMap(), now = now, places = places, placeOf = { owners[it.id] })
+        assertEquals(listOf("computer:mac", "computer:pc", "computer:this-phone"), s.map { it.key })
+        assertEquals(listOf("Studio Mac", "Office PC", "This phone"), s.map { it.name })
+        assertEquals("a chat with no known place joins the first group", listOf("a", "x"), s[0].chats.map { it.id })
+        assertEquals("active, then its own completed", listOf("b", "c"), s[1].chats.map { it.id })
+        assertEquals(1, s[1].doneCount)
+        val withEmpty = ChatSections.make(list, emptyList(), v.copy(showEmptyGroups = true), emptyMap(), now = now, places = places, placeOf = { owners[it.id] })
+        assertEquals("Spare", withEmpty[2].name)
+        assertFalse("computer groups start folded", s[0].isOpen(emptySet()))
+
+        // One place only: one list, as Group by none.
+        val one = ChatSections.make(list, emptyList(), v, emptyMap(), now = now, places = places.take(1), placeOf = { owners[it.id] })
+        assertEquals(listOf("All chats", "Completed"), one.map { it.name })
+    }
+
+    @Test fun `the place on rows is a saved choice, on by default`() {
+        assertTrue(ChatListView.STANDARD.showComputer)
+        assertTrue(ChatListView.STANDARD.showComputerIcons)
+        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.COMPUTER, showComputer = false, showComputerIcons = false)
+        assertEquals(v, ChatListView.parse(v.encoded()))
+        assertEquals(ChatListView.GroupBy.COMPUTER, ChatListView.parse("""{"groupBy":"computer"}""").groupBy)
+        assertEquals(0x5b8defL, ComputerColors.computer(0))
+        assertEquals("the phone's colour is never a computer's", 0x5b8defL, ComputerColors.computer(5))
+        assertTrue(ChatPlace.isPhoneChat("phone:abc"))
+        assertFalse(ChatPlace.isPhoneChat("abc"))
+    }
 }

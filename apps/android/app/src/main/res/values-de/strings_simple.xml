@@ -18,7 +18,6 @@
     <string name="simple_asks_detail_first">Fragt dich, bevor eine Datei geändert oder ein Befehl ausgeführt wird.</string>
     <string name="simple_asks_detail_matters">Liest und sieht sich frei um und fragt vor allem anderen.</string>
     <string name="simple_asks_detail_own">Führt alles aus, außer was deine Regeln blockieren.</string>
-    <string name="simple_paired">%1$d gekoppelt</string>
     <string name="simple_computer_menu">Computermenü</string>
     <string name="simple_conn_idle">Nicht verbunden</string>
     <string name="simple_conn_connecting">Verbindet</string>
@@ -27,7 +26,6 @@
     <string name="simple_conn_denied">Abgelehnt</string>
     <string name="simple_sign_out_or_disconnect">Abmelden oder trennen</string>
     <string name="simple_back_to_menu">Zurück zum Menü</string>
-    <string name="simple_connect">Verbinden</string>
     <string name="simple_search_chats">Chats suchen</string>
     <string name="simple_cancel_search">Suche abbrechen</string>
     <string name="simple_logs_on_phone">Auf diesem Telefon</string>

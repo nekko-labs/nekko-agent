@@ -41,6 +41,18 @@ object ChatListPrefs {
         },
     )
 
+    /**
+     * The one place the list shows (a computer id, or `ChatPlace.PHONE`), or "" for every place (#2108,
+     * the iPhone's `chatsFilter`). A place that is no longer there reads as every place.
+     */
+    val FILTER: PhonePrefs.Key<String> = PhonePrefs.string("chatList.filter", "")
+
+    /**
+     * Which saved group order applies to the places shown: a single place keeps its own (a single
+     * computer's order from before #2108 still applies); every place at once shares "*", as on the iPhone.
+     */
+    fun orderKey(shown: List<String>): String = shown.singleOrNull() ?: "*"
+
     /** [keys] after a tap on [key]'s header. */
     fun toggled(keys: Set<String>, key: String): Set<String> = if (key in keys) keys - key else keys + key
 }
