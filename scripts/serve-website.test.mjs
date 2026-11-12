@@ -164,6 +164,7 @@ function pillarTour({ reduced = false } = {}) {
   const doc = { ...target(), hidden: false, documentElement: { dataset: { theme: 'dark' } }, querySelector: (s) => (s === '[data-pillar-tour]' ? tour : null) };
   let io;
   let mo;
+  const timers = [];
   const IntersectionObserver = class { constructor(cb) { io = cb; } observe() {} };
   const env = {
     document: doc,
@@ -171,6 +172,8 @@ function pillarTour({ reduced = false } = {}) {
     IntersectionObserver,
     MutationObserver: class { constructor(cb) { mo = cb; } observe() {} },
     requestAnimationFrame: () => 1,
+    setTimeout: (f) => { timers.push(f); return timers.length; },
+    clearTimeout: (id) => { if (id) timers[id - 1] = null; },
   };
   new Function(...Object.keys(env), code)(...Object.values(env));
   const active = () => items.findIndex((i) => i.classList.contains('is-active'));
@@ -183,6 +186,8 @@ function pillarTour({ reduced = false } = {}) {
   const hidden = () => vids.find((v) => v !== shown());
   return {
     tour, vids, items, pauseBtn, doc, line, active, shown, hidden,
+    // Run the timers that are due (the end of a crossfade).
+    runTimers: () => { const due = timers.splice(0); for (const f of due) if (f) f(); },
     show: (on = true) => io([{ isIntersecting: on }]),
     theme: (name) => { doc.documentElement.dataset.theme = name; mo(); },
   };
@@ -211,6 +216,8 @@ test('pillar tour: the line tracks the visible video and the tour advances only 
   assert.equal(second.currentTime, 0);
   assert.equal(second.paused, false);
   assert.equal(first.paused, true);
+  assert.equal(first.getAttribute('src'), 'media/pillar-local.mp4', 'the outgoing video is left alone while it fades out');
+  t.runTimers();
   assert.equal(first.getAttribute('src'), 'media/pillar-privacy.mp4', 'then the pillar after preloads behind it');
 });
 
@@ -316,4 +323,22 @@ test('pillar tour: reduced motion loads posters only and never advances', () => 
   assert.equal(t.shown().poster, 'media/pillar-privacy-poster.jpg');
   t.vids[0].fire('ended');
   assert.equal(t.active(), 2);
+});
+
+test('pillar tour: nothing loads into the outgoing video while it is still fading out', () => {
+  const t = pillarTour();
+  t.show(); t.shown().ready(); t.shown().advance(2);
+  const local = t.shown();
+  t.items[2].tab.fire('click');
+  t.hidden().ready();
+  assert.notEqual(t.shown(), local);
+  assert.equal(local.getAttribute('src'), 'media/pillar-local.mp4', 'still the demo that is fading out, not another one');
+  assert.equal(local.currentTime, 2);
+  // A second pick during the fade ends the fade at once before reusing that video.
+  t.items[4].tab.fire('click');
+  assert.equal(t.tour.classList.contains('is-cut'), false, 'the cut is only for one frame');
+  assert.equal(local.getAttribute('src'), 'media/pillar-anywhere.mp4');
+  t.hidden().ready();
+  t.runTimers();
+  assert.equal(t.hidden().getAttribute('src'), 'media/pillar-local.mp4', 'after the fade, the next pillar preloads');
 });

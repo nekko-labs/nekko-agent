@@ -858,6 +858,12 @@
   let pending = null; // { at, follow } while the back video loads the file that will replace the front
   let frame = 0;
   let gen = 0; // bumps on each new load, so a slow file's late events are ignored
+  // The crossfade (keep in step with .pillar-video in styles.css). The outgoing
+  // video stays visible under the incoming one until it ends, so nothing loads
+  // into it before then.
+  const FADE = 400;
+  let fadeEnds = 0; // performance.now() when the current crossfade is over
+  let settle = 0;
 
   tour.classList.add('is-js');
   if (!reduced) {
@@ -902,10 +908,25 @@
     back.setAttribute('aria-hidden', 'true');
     front.setAttribute('aria-label', tabs[active].dataset.alt);
     back.pause();
+    fadeEnds = performance.now() + FADE;
     draw();
     if (!front.paused && !frame) frame = requestAnimationFrame(tick);
     sync();
-    preload();
+    // Preload only once the outgoing video has faded out: loading into it
+    // earlier would flash another demo's frame under the fade.
+    clearTimeout(settle);
+    settle = setTimeout(preload, FADE + 50);
+  };
+  // A new load needs the back video while it may still be fading out: finish
+  // the fade at once (incoming fully shown, outgoing gone) rather than show the
+  // reload under it.
+  const cutFade = () => {
+    if (performance.now() >= fadeEnds) return;
+    clearTimeout(settle);
+    tour.classList.add('is-cut');
+    void front.offsetWidth; // apply the end state without a transition
+    tour.classList.remove('is-cut');
+    fadeEnds = 0;
   };
   // Load pillar `active` into the back video at `at` seconds, then swap once it
   // is playing (or, when it should not play, once its frame is ready). With
@@ -914,6 +935,7 @@
   const stage = (at, follow = false) => {
     const src = file(active, false);
     const mine = ++gen;
+    cutFade();
     pending = { at, follow };
     back.poster = file(active, true);
     const ready = () => {
@@ -936,7 +958,14 @@
 
   vids.forEach((v) => {
     v.addEventListener('playing', () => {
-      if (v === back && pending) swap();
+      if (v === back && pending) {
+        // Swap once the incoming video has painted its first frame, not just
+        // started: otherwise the fade can begin over an empty video.
+        const mine = gen;
+        const go = () => { if (mine === gen && pending && v === back) swap(); };
+        if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(go);
+        else go();
+      }
       else if (v === front && !frame) frame = requestAnimationFrame(tick);
     });
     for (const e of ['pause', 'timeupdate', 'seeked', 'loadedmetadata']) v.addEventListener(e, () => { if (v === front) draw(); });
