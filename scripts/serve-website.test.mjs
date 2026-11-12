@@ -51,11 +51,21 @@ test('marketing preview serves only static website files and read requests', asy
   }
   // Profiles: the spot claims separation of chats, notes and connectors, and
   // its footnote keeps the two things a profile is not.
-  const profiles = page.body.slice(page.body.indexOf('id="profiles"'), page.body.indexOf('id="why"'));
+  const profiles = page.body.slice(page.body.indexOf('id="profiles"'), page.body.indexOf('id="roadmap"'));
   assert.ok(profiles.length > 200, 'profiles spot present');
   assert.match(profiles, /cannot read another profile&rsquo;s chats, notes or connectors/);
   assert.match(profiles, /do not lock the app against someone using your unlocked computer/);
   assert.match(profiles, /a terminal command can still reach files anywhere your computer account can/);
+  // A shorter page (2026-11-12): the harness manifest, the local/online cards and
+  // the editions grid are gone, and nothing links to them. Nekko's intro line now
+  // sits under the MEET NEKKO badge in the hero, word for word.
+  for (const id of ['features', 'why', 'editions']) {
+    assert.doesNotMatch(page.body, new RegExp(`id="${id}"`), `#${id} removed`);
+    assert.doesNotMatch(page.body, new RegExp(`href="[^"]*#${id}"`), `no links to #${id}`);
+  }
+  const hero = page.body.slice(page.body.indexOf('<section class="hero">'), page.body.indexOf('</section>', page.body.indexOf('<section class="hero">')));
+  assert.match(hero, /<span>MEET NEKKO<\/span>\s*<p class="mascot-cap">Meet Nekko: a small pixel cat keeping you company while your agents get to work\.<\/p>/);
+  assert.doesNotMatch(page.body, /class="[^"]*mf-foot/);
   assert.doesNotMatch(profiles, /cannot (read|reach|access) another profile&rsquo;s (files|folders)/);
   // The benchmark summary keeps the result, its conditions, the measured losses
   // and the link to the full method, so the headline never hides them.
