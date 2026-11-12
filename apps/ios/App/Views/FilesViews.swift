@@ -30,7 +30,7 @@ struct FoldersView: View {
 
     var body: some View {
         List {
-            ConnectionBanner()
+            ConnectionStrip(problemsOnly: true).listRowInsets(EdgeInsets())
             if store.workspaces.isEmpty {
                 Text("No saved folders on \(store.active?.name ?? "this computer").")
                     .foregroundStyle(palette.inkSoft)
