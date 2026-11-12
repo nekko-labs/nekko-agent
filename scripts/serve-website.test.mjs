@@ -166,11 +166,15 @@ function pillarTour({ reduced = false, peek = false } = {}) {
   };
   const vids = [makeVideo(true), makeVideo(false)];
   const pauseBtn = { ...target(), ...attrs(), hidden: true };
+  // Enlarge: its button and the page's lightbox, which records what it was asked to open.
+  const enlargeBtn = { ...target(), ...attrs(), hidden: true };
+  const box = { ...target(), opened: null, dispatchEvent(e) { this.fire(e.type, e); } };
+  box.addEventListener('lightbox:open', (e) => { box.opened = e.detail; });
   const panel = attrs();
   const tour = {
     ...target(), ...structural, classList: classes(),
     querySelectorAll: (s) => (s === '.pillar-video' ? vids : items.map((i) => i.tab)),
-    querySelector: (s) => ({ '[role="tabpanel"]': panel, '[data-pillar-pause]': pauseBtn })[s],
+    querySelector: (s) => ({ '[role="tabpanel"]': panel, '[data-pillar-pause]': pauseBtn, '[data-pillar-enlarge]': enlargeBtn })[s],
     contains: () => false,
   };
   // The peek: an empty host on the frame, and the beta card's drawing to clone.
@@ -182,6 +186,8 @@ function pillarTour({ reduced = false, peek = false } = {}) {
     ...target(), hidden: false, documentElement: { dataset: { theme: 'dark' } },
     querySelector: (s) => ({ '[data-pillar-tour]': tour, '[data-pillar-peek]': peekHost, '[data-beta] .nekko-peek-svg': art })[s] ?? null,
     querySelectorAll: (s) => (s === '[data-pillar-tour] .pillar-tab' ? items.map((i) => i.tab) : []),
+    getElementById: (id) => (id === 'lightbox' ? box : null),
+    createElement: () => ({ ...target(), ...attrs(), currentTime: 0, play: () => Promise.resolve() }),
   };
   let io;
   let mo;
@@ -199,6 +205,8 @@ function pillarTour({ reduced = false, peek = false } = {}) {
     setTimeout: (f) => { timers.push(f); return timers.length; },
     clearTimeout: (id) => { if (id) timers[id - 1] = null; },
     setInterval: () => 0,
+    Event: class { constructor(type) { this.type = type; } },
+    CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o.detail; } },
   };
   new Function(...Object.keys(env), code)(...Object.values(env));
   const active = () => items.findIndex((i) => i.classList.contains('is-active'));
@@ -210,7 +218,7 @@ function pillarTour({ reduced = false, peek = false } = {}) {
   };
   const hidden = () => vids.find((v) => v !== shown());
   return {
-    tour, vids, items, pauseBtn, doc, line, active, shown, hidden, peekHost, look,
+    tour, vids, items, pauseBtn, enlargeBtn, box, doc, line, active, shown, hidden, peekHost, look,
     domChanges: () => domChanges,
     // Run the timers that are due (the end of a crossfade, Nekko's blinks).
     runTimers: () => { const due = timers.splice(0); for (const f of due) if (f) f(); },
@@ -419,4 +427,24 @@ test('pillar tour: under reduced motion Nekko shows but does not react', () => {
   t.items[2].tab.fire('click');
   assert.equal(t.peekHost.classList.contains('blink'), false);
   assert.equal(t.look.getAttribute('transform'), null);
+});
+
+test('pillar tour: Enlarge opens the active demo in the lightbox at the same frame and holds the tour', () => {
+  const t = pillarTour();
+  assert.equal(t.enlargeBtn.hidden, false);
+  t.show();
+  const v = t.shown();
+  v.ready(); v.advance(3);
+  t.enlargeBtn.fire('click');
+  const big = t.box.opened.node;
+  assert.equal(t.box.opened.opener, t.enlargeBtn);
+  assert.equal(big.src, 'media/pillar-local.mp4');
+  assert.equal(big.controls, true);
+  big.fire('loadedmetadata');
+  assert.equal(big.currentTime, 3);
+  assert.equal(v.paused, true, 'the tour holds while the lightbox is open');
+  assert.equal(t.hidden().paused, true);
+  t.box.fire('lightbox:close');
+  assert.equal(v.paused, false);
+  assert.equal(v.currentTime, 3, 'and carries on from the same frame');
 });

@@ -1334,12 +1334,13 @@ video { filter: brightness(1.0001); }
 .pillar-video.is-shown { z-index: 1; opacity: 1; visibility: visible; transition: opacity 0.4s ease-in-out; }
 .pillar-tour.is-cut .pillar-video { transition: none; }
 @media (prefers-reduced-motion: reduce) { .pillar-video, .pillar-video.is-shown { transition: none; } }
-.pillar-pause {
-  align-self: flex-end; margin-top: 10px; width: 40px; height: 40px; border-radius: 50%;
+.pillar-controls { align-self: flex-end; display: flex; gap: 8px; margin-top: 10px; }
+.pillar-pause, .pillar-enlarge {
+  width: 40px; height: 40px; border-radius: 50%;
   display: grid; place-items: center; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer;
 }
-.pillar-pause[hidden] { display: none; }
-.pillar-pause:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+.pillar-pause[hidden], .pillar-enlarge[hidden] { display: none; }
+.pillar-pause:focus-visible, .pillar-enlarge:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
 .pillar-pause .ic-play, .pillar-tour.is-paused .pillar-pause .ic-pause { display: none; }
 .pillar-tour.is-paused .pillar-pause .ic-play { display: block; }
 @media (max-width: 900px) {
