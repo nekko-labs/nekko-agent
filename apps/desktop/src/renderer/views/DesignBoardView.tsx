@@ -15,7 +15,9 @@ import { hasAppChrome } from '../chrome.js';
  * 2) DESCRIBE: write a prompt and watch a design pop up, then refine it
  *    iteratively with follow-up prompts (a Claude Design-style loop).
  * Generated concepts are mirrored into the workspace's nekko-designs/ folder
- * as real HTML files, so agents (and you) keep iterating on them as code.
+ * as real HTML files, so agents (and you) keep iterating on them as code. The
+ * board follows that folder: a design an agent saves there becomes a card, and
+ * an edit to a card's file shows on the card when the board next loads.
  * The board still holds live snapshots of the app's real pages: each is a
  * scaled read-only preview that reloads as agents edit the UI, with notes and
  * comments that feed the prompt (Add to prompt / Run now).
@@ -222,6 +224,13 @@ export function DesignBoardView() {
   );
 }
 
+/** Where a concept came from: drawn, described, or found in the project's designs folder. */
+export function conceptOrigin(page: Pick<DesignPage, 'origin'>, glyph = true): string {
+  if (page.origin === 'file') return 'from the designs folder';
+  const text = page.origin === 'sketch' ? 'from a sketch' : 'from a prompt';
+  return glyph ? `${page.origin === 'sketch' ? '✏️' : '✨'} ${text}` : text;
+}
+
 /** First-run hero: the two ways to create, front and center. */
 function EmptyBoard({ onSketch, onPrompt, onLive }: { onSketch: () => void; onPrompt: () => void; onLive: () => void }) {
   return (
@@ -326,7 +335,7 @@ function PageCard({
         <button className="min-w-0 flex-1 text-left" onClick={onOpen}>
           <div className="truncate text-xs font-medium">{page.label}</div>
           <div className="truncate text-2xs text-ink-faint">
-            {concept ? `${page.origin === 'sketch' ? '✏️ from a sketch' : '✨ from a prompt'}` : page.url}
+            {concept ? conceptOrigin(page) : page.url}
           </div>
         </button>
         {page.notes.length > 0 && <span className="chip text-2xs" title={`${page.notes.length} note(s)`}>📌 {page.notes.length}</span>}
@@ -608,7 +617,7 @@ function PageSheet({
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">{page.label}</div>
-          <div className="truncate text-2xs text-ink-faint">{concept ? (page.origin === 'sketch' ? 'concept · from a sketch' : 'concept · from a prompt') : page.url}</div>
+          <div className="truncate text-2xs text-ink-faint">{concept ? `concept · ${conceptOrigin(page, false)}` : page.url}</div>
         </div>
         {concept && onOpenFile && (
           <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Open the prototype file" onClick={onOpenFile}><ExternalIcon className="h-3.5 w-3.5" /></button>

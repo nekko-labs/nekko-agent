@@ -459,6 +459,17 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 .await?
         }
         "design:generate" => generate_design(ctx, ws.data_dir.clone(), args).await,
+        // The board follows the project's designs folder; a folder that cannot
+        // be read still opens the board as it was saved.
+        "design:get" => {
+            let dir = ws.data_dir.clone();
+            let folder = folder_path(&folders(ctx).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
+            blocking(move || {
+                design::follow_folder(&dir, arg(&args, 0), folder.as_deref())
+                    .unwrap_or_else(|_| design::get(&dir, arg(&args, 0)))
+            })
+            .await
+        }
         _ => data_route(ws.data_dir.clone(), channel, args).await,
     }
 }
@@ -472,7 +483,6 @@ async fn data_route(dir: PathBuf, channel: &str, args: Vec<Value>) -> Result<Val
         "comments:list" => Ok(comments::list(&dir, arg(&args, 0))),
         "comment:add" => comments::add(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2), arg(&args, 3)),
         "comment:resolve" => comments::resolve(&dir, arg(&args, 0), arg(&args, 1)),
-        "design:get" => Ok(design::get(&dir, arg(&args, 0))),
         "design:updatePage" => {
             design::update_page(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2).unwrap_or(&Value::Null))
         }
