@@ -240,9 +240,6 @@
     <string name="chats_group_general">通用</string>
     <string name="chats_group_completed">已完成</string>
     <string name="chats_group_all">所有聊天</string>
-    <string name="chats_group_needs_you">需要你</string>
-    <string name="chats_group_working">工作中</string>
-    <string name="chats_group_idle">空闲</string>
     <string name="chats_group_today">今天</string>
     <string name="chats_group_yesterday">昨天</string>
     <string name="chats_group_week">过去 7 天</string>
@@ -261,4 +258,11 @@
     <string name="chats_pr_draft">草稿</string>
     <string name="chats_pr_merged">已合并</string>
     <string name="chats_pr_closed">已关闭</string>
+
+    <string name="chats_group_input">需要输入</string>
+    <string name="chats_group_draft">草稿</string>
+    <string name="chats_group_building">进行中</string>
+    <string name="chats_group_verifying">验证中</string>
+    <string name="chats_group_watching">关注中</string>
+    <string name="chats_group_done">已完成</string>
 </resources>

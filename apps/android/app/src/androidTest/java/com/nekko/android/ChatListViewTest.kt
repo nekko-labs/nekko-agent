@@ -69,7 +69,10 @@ class ChatListViewTest {
         val app = (0 until 10).joinToString(",") { i ->
             """{"id":"a$i","title":"App task ${i + 1}","updatedAt":${now - i * day / 2},"workspaceId":"w1","lastReplyText":"Reply ${i + 1} in App."}"""
         }
-        return """[{"id":"g1","title":"Plan the week","updatedAt":${now - 2 * day},"lastReplyText":"Three goals for Monday."},
+        // exchangeCount, activeWatchCount and activeRun feed the status groups (#2107).
+        return """[{"id":"g1","title":"Plan the week","updatedAt":${now - 2 * day},"lastReplyText":"Three goals for Monday.","exchangeCount":2},
+            {"id":"w9","title":"Ship the release","updatedAt":${now - day / 2},"workspaceId":"w2","exchangeCount":6,"activeWatchCount":1,"lastReplyText":"Watching PR #555."},
+            {"id":"n0","title":"Notes for later","updatedAt":${now - day / 3},"exchangeCount":0},
             {"id":"d1","title":"Write the docs page","updatedAt":${now - day / 4},"workspaceId":"w2","lastReplyText":"The page is drafted."},
             {"id":"d2","title":"Old notes","updatedAt":${now - 3 * day},"workspaceId":"w2","archivedAt":${now - day}},
             $app]"""
@@ -126,6 +129,9 @@ class ChatListViewTest {
     @Test fun projectGroupsShowTheRecentFewAndReorderOnThePhone() {
         show()
         shot("1-default")
+        // Groups start folded (#2107): open App first.
+        compose.onNodeWithText("APP", useUnmergedTree = true).performClick()
+        settle()
         // App has 10 chats from the last five days: 8 shown, then Show 2 more.
         compose.onNodeWithTag("chats.list").performScrollToNode(hasTestTag("chats.showMore"))
         compose.onNode(hasTestTag("chats.showMore"), useUnmergedTree = true).assertExists()
@@ -192,14 +198,16 @@ class ChatListViewTest {
     }
 
     /** #2133: a closed group stays closed after the list is rebuilt from the saved preferences, as on a cold launch. */
-    @Test fun closedGroupsSurviveARelaunch() {
+    @Test fun groupsStartFoldedAndOpenedOnesSurviveARelaunch() {
         show()
-        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
+        // #2107: groups start folded, as on the iPhone; General has no fold.
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Plan the week", useUnmergedTree = true).assertExists()
+        shot("6-folded")
         compose.onNodeWithText("APP", useUnmergedTree = true).performClick()
         settle()
-        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
-        assertEquals(setOf("w1"), prefs.get(ChatListPrefs.COLLAPSED_GROUPS))
-        shot("6-app-closed")
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
+        assertEquals(setOf("w1"), prefs.get(ChatListPrefs.OPENED_GROUPS))
 
         // Cold launch: a fresh read of the same preferences file and a new list.
         screenPrefs = PhonePrefs(object : PrefStore {
@@ -207,16 +215,33 @@ class ChatListViewTest {
             override fun putString(name: String, value: String?) { if (value == null) store.remove(name) else store[name] = value }
         })
         settle()
-        compose.onNodeWithText("APP", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithText("Plan the week", useUnmergedTree = true).assertExists()
-        shot("7-app-closed-after-relaunch")
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
+        shot("7-app-open-after-relaunch")
 
-        // Opening it again is saved too.
+        // Folding it again is saved too.
         compose.onNodeWithText("APP", useUnmergedTree = true).performClick()
         settle()
-        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
-        assertEquals(emptySet<String>(), screenPrefs.get(ChatListPrefs.COLLAPSED_GROUPS))
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
+        assertEquals(emptySet<String>(), screenPrefs.get(ChatListPrefs.OPENED_GROUPS))
+    }
+
+    /** #2107: by status, the iPhone's groups; Watching is live while a watch is armed. */
+    @Test fun statusGroupsLikeTheIphone() {
+        show()
+        compose.onNodeWithTag("chats.view").performClick()
+        settle()
+        compose.onNodeWithText("Group by").performClick()
+        settle()
+        compose.onNodeWithText("Status").performClick()
+        settle()
+        compose.onNodeWithText("WATCHING", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("DRAFT", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("DONE", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("chats.group.live.status:watching", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("WATCHING", useUnmergedTree = true).performClick()
+        settle()
+        compose.onNodeWithText("Ship the release", useUnmergedTree = true).assertExists()
+        shot("8-by-status")
     }
 
     private fun settle() {

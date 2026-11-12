@@ -240,9 +240,6 @@
     <string name="chats_group_general">Allgemein</string>
     <string name="chats_group_completed">Abgeschlossen</string>
     <string name="chats_group_all">Alle Chats</string>
-    <string name="chats_group_needs_you">Braucht dich</string>
-    <string name="chats_group_working">Aktiv</string>
-    <string name="chats_group_idle">Inaktiv</string>
     <string name="chats_group_today">Heute</string>
     <string name="chats_group_yesterday">Gestern</string>
     <string name="chats_group_week">Letzte 7 Tage</string>
@@ -261,4 +258,11 @@
     <string name="chats_pr_draft">Entwurf</string>
     <string name="chats_pr_merged">gemergt</string>
     <string name="chats_pr_closed">geschlossen</string>
+
+    <string name="chats_group_input">Braucht Eingabe</string>
+    <string name="chats_group_draft">Entwurf</string>
+    <string name="chats_group_building">In Arbeit</string>
+    <string name="chats_group_verifying">Prüft</string>
+    <string name="chats_group_watching">Beobachtet</string>
+    <string name="chats_group_done">Fertig</string>
 </resources>

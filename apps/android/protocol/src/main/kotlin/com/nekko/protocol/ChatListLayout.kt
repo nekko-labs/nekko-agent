@@ -95,6 +95,25 @@ data class ChatSection(
     val activeCount: Int,
     val doneCount: Int,
 ) {
+    /** Ungrouped chats have no disclosure; every other group opens only when chosen (the iPhone's, #2107). */
+    fun isOpen(opened: Set<String>): Boolean = key == ChatGroup.GENERAL || key == "all" || key in opened
+
+    /** Attention wins over work; completed chats never make a group look busy. */
+    fun headerActivity(activity: Map<String, Activity>): Activity? {
+        val active = chats.filter { !it.archived }
+        if (active.any { activity[it.id] == Activity.NEEDS_YOU }) return Activity.NEEDS_YOU
+        if (active.any { activity[it.id] == Activity.RUNNING }) return Activity.RUNNING
+        return null
+    }
+
+    /** Watches armed across the group's active chats. */
+    val watchingCount: Long get() = chats.filter { !it.archived }.sumOf { it.activeWatchCount }
+
+    /** Whether the heading shows the group live: Building or Verifying with a chat running, Watching with a watch armed. */
+    fun live(activity: Map<String, Activity>): Boolean =
+        if (key == "status:watching") watchingCount > 0
+        else key in setOf("status:building", "status:verifying") && headerActivity(activity) == Activity.RUNNING
+
     companion object {
         const val COMPLETED = "__completed"
     }
@@ -107,8 +126,14 @@ object ChatSections {
     /** ...and only those touched in this window (ms). */
     const val RECENT_WINDOW: Long = 14L * 24 * 60 * 60 * 1000
 
-    /** The status groups, most urgent first. */
-    val STATUS_GROUPS = listOf("status:input" to "Needs you", "status:working" to "Working", "status:idle" to "Idle")
+    /**
+     * The status groups, most urgent first (the iPhone's, #1838). A stopped chat is Watching while a
+     * watch is armed on it, otherwise Done, as the desktop's Agents panel splits them.
+     */
+    val STATUS_GROUPS = listOf(
+        "status:input" to "Needs input", "status:draft" to "Draft", "status:building" to "Building",
+        "status:verifying" to "Verifying", "status:watching" to "Watching", "status:done" to "Done",
+    )
 
     /** The date groups, newest first, counted in local calendar days. */
     val DATE_GROUPS = listOf(
@@ -154,7 +179,7 @@ object ChatSections {
         }
         val defs = if (view.groupBy == ChatListView.GroupBy.STATUS) STATUS_GROUPS else DATE_GROUPS
         val grouped = active.groupBy { s ->
-            if (view.groupBy == ChatListView.GroupBy.STATUS) statusKey(activity[s.id]) else dateKey(s.updatedAt, now, zone)
+            if (view.groupBy == ChatListView.GroupBy.STATUS) statusKey(activity[s.id], s) else dateKey(s.updatedAt, now, zone)
         }
         return defs.mapNotNull { (key, name) ->
             val items = grouped[key].orEmpty()
@@ -179,10 +204,13 @@ object ChatSections {
         return shown to hidden
     }
 
-    fun statusKey(a: Activity?): String = when (a) {
-        Activity.NEEDS_YOU -> "status:input"
-        Activity.RUNNING -> "status:working"
-        null -> "status:idle"
+    /** The iPhone's `statusKey`: needs you, then running (verifying or shipping, else building), a draft, watching, done. */
+    fun statusKey(a: Activity?, chat: SessionSummary? = null): String = when {
+        a == Activity.NEEDS_YOU -> "status:input"
+        a == Activity.RUNNING || chat?.running == true -> if (chat?.phase == "verifying" || chat?.phase == "shipping") "status:verifying" else "status:building"
+        chat?.exchangeCount == 0L -> "status:draft"
+        (chat?.activeWatchCount ?: 0) > 0 -> "status:watching"
+        else -> "status:done"
     }
 
     fun dateKey(at: Long, now: Long, zone: ZoneId = ZoneId.systemDefault()): String {

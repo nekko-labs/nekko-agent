@@ -240,9 +240,6 @@
     <string name="chats_group_general">Geral</string>
     <string name="chats_group_completed">Concluídas</string>
     <string name="chats_group_all">Todas as conversas</string>
-    <string name="chats_group_needs_you">Precisa de você</string>
-    <string name="chats_group_working">Em andamento</string>
-    <string name="chats_group_idle">Inativo</string>
     <string name="chats_group_today">Hoje</string>
     <string name="chats_group_yesterday">Ontem</string>
     <string name="chats_group_week">Últimos 7 dias</string>
@@ -261,4 +258,11 @@
     <string name="chats_pr_draft">rascunho</string>
     <string name="chats_pr_merged">mesclado</string>
     <string name="chats_pr_closed">fechado</string>
+
+    <string name="chats_group_input">Precisa de resposta</string>
+    <string name="chats_group_draft">Rascunho</string>
+    <string name="chats_group_building">Em andamento</string>
+    <string name="chats_group_verifying">Verificando</string>
+    <string name="chats_group_watching">Acompanhando</string>
+    <string name="chats_group_done">Concluídos</string>
 </resources>
