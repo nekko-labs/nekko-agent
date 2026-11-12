@@ -1317,12 +1317,13 @@ video { filter: brightness(1.0001); }
 .pillar-stage { display: flex; flex-direction: column; }
 .pillar-media { aspect-ratio: 16 / 9; overflow: hidden; border-radius: 14px; border: 1px solid var(--line); background: var(--media-bg); box-shadow: var(--shadow); }
 .pillar-video { display: block; width: 100%; height: 100%; object-fit: cover; }
-.pillar-pause {
-  align-self: flex-end; margin-top: 10px; width: 40px; height: 40px; border-radius: 50%;
+.pillar-controls { align-self: flex-end; display: flex; gap: 8px; margin-top: 10px; }
+.pillar-pause, .pillar-enlarge {
+  width: 40px; height: 40px; border-radius: 50%;
   display: grid; place-items: center; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer;
 }
-.pillar-pause[hidden] { display: none; }
-.pillar-pause:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+.pillar-pause[hidden], .pillar-enlarge[hidden] { display: none; }
+.pillar-pause:focus-visible, .pillar-enlarge:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
 .pillar-pause .ic-play, .pillar-tour.is-paused .pillar-pause .ic-pause { display: none; }
 .pillar-tour.is-paused .pillar-pause .ic-play { display: block; }
 @media (max-width: 900px) {

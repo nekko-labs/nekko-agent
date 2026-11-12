@@ -137,14 +137,18 @@ function pillarTour({ reduced = false } = {}) {
     end() { this.currentTime = 8; this.ended = true; this.paused = true; this.fire('pause'); this.fire('ended'); },
   };
   const pauseBtn = { ...target(), ...attrs(), hidden: true };
+  const enlargeBtn = { ...target(), ...attrs(), hidden: true };
+  const box = { ...target(), opened: null, dispatchEvent(e) { this.fire(e.type, e); } };
+  box.addEventListener('lightbox:open', (e) => { box.opened = e.detail; });
   const panel = attrs();
   const tour = {
     ...target(), classList: classes(),
     querySelectorAll: () => items.map((i) => i.tab),
-    querySelector: (s) => ({ '[role="tabpanel"]': panel, '.pillar-video': video, '[data-pillar-pause]': pauseBtn })[s],
+    querySelector: (s) => ({ '[role="tabpanel"]': panel, '.pillar-video': video, '[data-pillar-pause]': pauseBtn, '[data-pillar-enlarge]': enlargeBtn })[s],
     contains: () => false,
   };
-  const doc = { ...target(), hidden: false, documentElement: { dataset: { theme: 'dark' } }, querySelector: (s) => (s === '[data-pillar-tour]' ? tour : null) };
+  const doc = { ...target(), hidden: false, documentElement: { dataset: { theme: 'dark' } }, querySelector: (s) => (s === '[data-pillar-tour]' ? tour : null), getElementById: (id) => (id === 'lightbox' ? box : null),
+    createElement: () => ({ ...target(), ...attrs(), currentTime: 0, play: () => Promise.resolve() }) };
   let io;
   let mo;
   const IntersectionObserver = class { constructor(cb) { io = cb; } observe() {} };
@@ -154,12 +158,14 @@ function pillarTour({ reduced = false } = {}) {
     IntersectionObserver,
     MutationObserver: class { constructor(cb) { mo = cb; } observe() {} },
     requestAnimationFrame: () => 1,
+    Event: class { constructor(type) { this.type = type; } },
+    CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o.detail; } },
   };
   new Function(...Object.keys(env), code)(...Object.values(env));
   const active = () => items.findIndex((i) => i.classList.contains('is-active'));
   const line = () => Number(/scaleX\(([\d.]+)\)/.exec(items[active()].bar.style.transform)?.[1] ?? 0);
   return {
-    tour, video, items, pauseBtn, doc, line, active,
+    tour, video, items, pauseBtn, enlargeBtn, box, doc, line, active,
     show: (on = true) => io([{ isIntersecting: on }]),
     theme: (name) => { doc.documentElement.dataset.theme = name; mo(); },
   };
@@ -249,4 +255,21 @@ test('pillar tour: reduced motion loads posters only and never advances', () => 
   assert.equal(t.tour.classList.contains('is-timed'), false);
   t.video.fire('ended');
   assert.equal(t.active(), 0);
+});
+
+test('pillar tour: Enlarge opens the active demo in the lightbox at the same frame and holds the tour', () => {
+  const t = pillarTour();
+  assert.equal(t.enlargeBtn.hidden, false);
+  t.show(); t.video.ready(); t.video.advance(3);
+  t.enlargeBtn.fire('click');
+  const big = t.box.opened.node;
+  assert.equal(t.box.opened.opener, t.enlargeBtn);
+  assert.equal(big.src, 'media/pillar-local.mp4');
+  assert.equal(big.controls, true);
+  big.fire('loadedmetadata');
+  assert.equal(big.currentTime, 3);
+  assert.equal(t.video.paused, true, 'the tour holds while the lightbox is open');
+  t.box.fire('lightbox:close');
+  assert.equal(t.video.paused, false);
+  assert.equal(t.video.currentTime, 3);
 });

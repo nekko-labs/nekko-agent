@@ -477,10 +477,18 @@
   const shut = () => {
     box.hidden = true; stage.replaceChildren(); document.body.style.overflow = '';
     if (opener) opener.focus();
+    box.dispatchEvent(new Event('lightbox:close'));
   };
+  const show = (big, from) => {
+    opener = from;
+    stage.replaceChildren(big);
+    box.hidden = false; document.body.style.overflow = 'hidden';
+    close.focus();
+  };
+  // Other parts of the page open it with their own content (the pillar tour).
+  box.addEventListener('lightbox:open', (e) => show(e.detail.node, e.detail.opener));
   document.querySelectorAll('.media').forEach((el) => {
     el.addEventListener('click', () => {
-      opener = el;
       // the visible one: the hero holds a dark and a light shot, one hidden per look
       const src = [...el.querySelectorAll('img, video')].find((m) => m.getClientRects().length);
       let big;
@@ -493,9 +501,7 @@
         big.className = 'media-placeholder';
         big.textContent = el.querySelector('.media-joke')?.textContent || 'Coming soon';
       }
-      stage.replaceChildren(big);
-      box.hidden = false; document.body.style.overflow = 'hidden';
-      close.focus();
+      show(big, el);
     });
   });
   close.addEventListener('click', shut);
@@ -826,7 +832,9 @@
 //      last frame and the tour moves on once the hold lifts. A look change
 //      swaps the file at the same currentTime. Under reduced motion nothing
 //      advances and only posters load. Video loads only once the tour is first
-//      on screen. ----
+//      on screen. Enlarge opens the active demo in the lightbox with controls,
+//      from the same frame; the tour holds while it is open and carries on
+//      from there when it closes. ----
 (() => {
   const tour = document.querySelector('[data-pillar-tour]');
   if (!tour) return;
@@ -836,6 +844,8 @@
   const panel = tour.querySelector('[role="tabpanel"]');
   const video = tour.querySelector('.pillar-video');
   const pauseBtn = tour.querySelector('[data-pillar-pause]');
+  const enlargeBtn = tour.querySelector('[data-pillar-enlarge]');
+  const box = document.getElementById('lightbox');
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const tone = () => (document.documentElement.dataset.theme === 'dark' ? '' : '-light');
   const file = (id, poster) => `media/pillar-${id}${tone()}${poster ? '-poster.jpg' : '.mp4'}`;
@@ -849,15 +859,17 @@
   let waiting = false; // ended during a hold: advance once the hold lifts
   let swapAt = null; // a look change is reloading the file at this time; the line stays here
   let frame = 0;
+  let enlarged = false; // the demo is open in the lightbox
 
   tour.classList.add('is-js');
   if (!reduced) {
     tour.classList.add('is-timed');
     pauseBtn.hidden = false;
   }
+  if (enlargeBtn && box) enlargeBtn.hidden = false;
 
   const held = () => pointer || keyboard;
-  const running = () => !reduced && !userPaused && onScreen && !document.hidden;
+  const running = () => !reduced && !userPaused && !enlarged && onScreen && !document.hidden;
   const shouldPlay = () => running() && (!held() || chosen);
 
   const draw = () => {
@@ -952,6 +964,22 @@
     sync();
   });
   document.addEventListener('visibilitychange', sync);
+  if (enlargeBtn && box) {
+    enlargeBtn.addEventListener('click', () => {
+      const big = document.createElement('video');
+      big.src = file(tabs[active].dataset.pillar, false);
+      big.poster = file(tabs[active].dataset.pillar, true);
+      big.setAttribute('aria-label', tabs[active].dataset.alt);
+      big.controls = big.muted = big.playsInline = true;
+      const at = swapAt ?? video.currentTime;
+      if (!video.ended && at > 0) big.addEventListener('loadedmetadata', () => { big.currentTime = at; }, { once: true });
+      big.play().catch(() => { /* blocked: the controls are there */ });
+      enlarged = true;
+      sync();
+      box.addEventListener('lightbox:close', () => { enlarged = false; sync(); }, { once: true });
+      box.dispatchEvent(new CustomEvent('lightbox:open', { detail: { node: big, opener: enlargeBtn } }));
+    });
+  }
 
   if ('IntersectionObserver' in window) {
     new IntersectionObserver(([entry]) => {
