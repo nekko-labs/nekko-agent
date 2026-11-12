@@ -33,7 +33,8 @@ describe('artifacts index', () => {
 
   it('counts files Claude Code wrote, which name their path file_path', () => {
     const session = { id: 'c1', title: 'Connection strip', messages: [
-      msg('a1', 'Design mock is done (`reports/ios-connection-strip-design.html`).', 10, { toolCalls: [
+      // The reply names neither file, so only the Write calls can list them.
+      msg('a1', 'The design mock is done, and the idea is in the notes.', 10, { toolCalls: [
         claudeWrite('/proj/reports/ios-connection-strip-design.html'),
         claudeWrite('/proj/apps/ios/App/Views/ConnectionStrip.swift'),
         claudeWrite('/Users/me/.claude/projects/-proj/memory/note.md'),
@@ -50,6 +51,14 @@ describe('artifacts index', () => {
       ['/proj/notes/future-ideas.md', 'doc', 'written'],
     ]);
     expect(out[0]).toMatchObject({ title: 'Ios connection strip design', sessionId: 'c1', sessionTitle: 'Connection strip', at: 10 });
+
+    // A design the reply names in code formatting is a link (its newer mention wins), and still a design by its name.
+    const named = sessionArtifacts({ id: 'c2', title: 'Strip', messages: [
+      msg('a1', '', 10, { toolCalls: [claudeWrite('/proj/reports/strip-design.html')] }),
+      msg('a2', 'Design mock is done (`reports/strip-design.html`).', 20),
+    ] }, '/proj');
+    expect(named).toHaveLength(1);
+    expect(named[0]).toMatchObject({ path: '/proj/reports/strip-design.html', kind: 'design', source: 'linked', at: 20 });
   });
 
   it('lists the designs in a project folder, keeping the chat for any a chat already produced', () => {

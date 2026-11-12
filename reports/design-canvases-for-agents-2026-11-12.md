@@ -19,7 +19,7 @@ Checked against the 299 chats saved on one Mac (39 of them Claude Code chats).
 | # | Cause | Evidence |
 | --- | --- | --- |
 | 1 | Library only counted `write_file` calls with a `path`. Claude Code records `Write` with a `file_path`. | 33 `Write` calls in the Claude Code chats, 0 listed. Two were HTML designs: `reports/ios-connection-strip-design.html`, `.scratch/provider-import-mockup.html`. |
-| 2 | Library's other source is Markdown links in replies. Claude Code names files in code formatting instead. | "Design mock is done (\`reports/ios-connection-strip-design.html\`)". Tracked for chat cards in #2674. |
+| 2 | Library's other source is Markdown links in replies. Claude Code names files in code formatting instead. | "Design mock is done (\`reports/ios-connection-strip-design.html\`)". #2675 landed while this was in review and counts a page, image or PDF named that way as a link, so such a design is now listed, under Web pages. A design the reply never names still was not. |
 | 3 | Only files under `nekko-designs/`, `design(s)/`, `mockup(s)/` or `prototype(s)/` counted as Designs. | Both designs above sit in `reports/` and `.scratch/`, so even once listed they would be Web pages. |
 | 4 | Library only knew chats. | A design saved by the Design tab, a person, or a tool outside the app has no chat, so it never appeared. |
 | 5 | Nothing told an agent where designs are. | The shared prompt said to save designs in `nekko-designs/`, not to look there. Claude Code chats do not get Nekko's prompt at all. |
@@ -31,7 +31,7 @@ flowchart LR
   N[Nekko agent: write_file] --> I[Library index, from transcripts]
   L[Any reply: Markdown link] --> I
   C[Claude Code: Write] -. not counted .-> I
-  K[Claude Code: file in code formatting] -. not a link .-> I
+  K[Claude Code: file in code formatting] -. not a link until #2675 .-> I
   F[Files in nekko-designs/ with no chat] -. never read .-> I
   I --> D{Under a designs folder?}
   D -- yes --> G[Designs]
@@ -67,7 +67,7 @@ After, on the same data:
 ```mermaid
 flowchart LR
   N[Nekko agent: write_file] --> I[Library index]
-  L[Any reply: Markdown link] --> I
+  L[Any reply: Markdown link, or a file named in code formatting] --> I
   C[Claude Code: Write] --> I
   F[nekko-designs/ listing, names only] --> I
   I --> D{Designs folder, or a design name?}
@@ -79,7 +79,7 @@ flowchart LR
 ## What this does not do
 
 - **Claude Code chats are not told about the folder by Nekko.** They follow the project's `AGENTS.md` or `CLAUDE.md`. A project that wants them to use the folder says so there. Fixing it in the app is option 3, or a context note where the Claude policy allows one (#2681).
-- **A file only named in code formatting is still not a link** (#2674). After this change it is listed anyway when the agent wrote it with `write_file` or `Write`.
+- **Files Claude Code changes with `Edit` are not listed**, the same as `edit_file` today.
 - **Designs outside the folder are found through their chat only.** The name rule files them correctly, but another agent will not find `reports/checkout-design.html` unless told.
 - **A design in a chat's own worktree** is found through its chat, not through the folder listing, which looks at the saved project folder.
 - **The Design board does not follow the folder yet** (#2680): an agent's new design does not appear on it, and an agent's edit to a concept's file is not shown.

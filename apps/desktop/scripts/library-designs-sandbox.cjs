@@ -1,5 +1,5 @@
-// Full-App Library journey for designs from every source: a Claude Code chat (Write calls, files named
-// in code formatting), a native chat, and a project's nekko-designs/ folder. Synthetic bridge, isolated
+// Full-App Library journey for designs from every source: a Claude Code chat (Write calls, one file named
+// in code formatting and one not named), a native chat, and a project's nekko-designs/ folder. Synthetic bridge, isolated
 // profile, no network or OS input. NEKKO_LIBRARY_BASELINE=1 captures the same data on an unchanged
 // checkout (via NEKKO_TEST_SOURCE) without the checks.
 const { app, BrowserWindow, session } = require('electron');
@@ -32,8 +32,8 @@ const write = (name, key, file) => ({ id: file, name, input: { [key]: file, cont
 const CHATS = [
   { title: 'Checkout redesign', messages: [
     { role: 'user', content: 'Design the new checkout.' },
-    // As Claude Code chats record it: Write with file_path, and the file named in code formatting, not as a link.
-    { role: 'assistant', content: 'Design mock is done (`reports/checkout-design.html`), with a rougher first pass in `.scratch/pricing-mockup.html`.', toolCalls: [write('Write', 'file_path', '/work/reports/checkout-design.html'), write('Write', 'file_path', '/work/.scratch/pricing-mockup.html'), write('Write', 'file_path', '/work/apps/web/src/Checkout.tsx'), write('Write', 'file_path', '/Users/me/.claude/projects/-work/memory/checkout.md')] },
+    // As Claude Code chats record it: Write with file_path. One design is named in code formatting, the other is not named at all.
+    { role: 'assistant', content: 'Design mock is done (`reports/checkout-design.html`), with a rougher first pass saved beside it.', toolCalls: [write('Write', 'file_path', '/work/reports/checkout-design.html'), write('Write', 'file_path', '/work/.scratch/pricing-mockup.html'), write('Write', 'file_path', '/work/apps/web/src/Checkout.tsx'), write('Write', 'file_path', '/Users/me/.claude/projects/-work/memory/checkout.md')] },
   ] },
   { title: 'Pricing page', messages: [
     { role: 'user', content: 'Draft the pricing page.' },
