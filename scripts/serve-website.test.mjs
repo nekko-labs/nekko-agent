@@ -102,10 +102,16 @@ test('marketing preview serves only static website files and read requests', asy
 // the only clock. The tour advances on its `ended`, the progress line is drawn
 // from its currentTime / duration, the hold pauses it, a picked pillar starts
 // from 0, and two stacked videos swap only once the incoming one is playing.
-function pillarTour({ reduced = false } = {}) {
+function pillarTour({ reduced = false, peek = false } = {}) {
   const src = readFileSync(fileURLToPath(new URL('../apps/website/site.js', import.meta.url)), 'utf8');
   const from = src.indexOf('// ---- why Nekko: the pillar tour.');
-  const code = src.slice(from, src.indexOf('})();', from) + 5);
+  // The tour, and with `peek` also the Nekko peek that follows it.
+  const peekFrom = src.indexOf('// ---- why Nekko: Nekko peeks over the pillar demos.');
+  const code = src.slice(from, src.indexOf('})();', from) + 5) + (peek ? '\n' + src.slice(peekFrom, src.indexOf('})();', peekFrom) + 5) : '');
+  // Every structural DOM change (adding, removing or replacing nodes) is counted.
+  let domChanges = 0;
+  const structural = { appendChild() { domChanges++; }, replaceChildren() { domChanges++; }, replaceWith() { domChanges++; }, remove() { domChanges++; }, insertBefore() { domChanges++; } };
+  const observers = [];
   const target = () => {
     const on = {};
     return {
@@ -126,7 +132,12 @@ function pillarTour({ reduced = false } = {}) {
   const items = ids.map((id, i) => {
     const bar = { style: {} };
     const item = { classList: classes(i === 0 ? ['is-active'] : []), querySelector: () => bar, bar };
-    item.tab = { ...target(), ...attrs(), id: `pillar-tab-${id}`, dataset: { pillar: id, alt: id }, closest: () => item, focus() {}, tabIndex: 0 };
+    item.tab = { ...target(), ...attrs(), ...structural, id: `pillar-tab-${id}`, dataset: { pillar: id, alt: id }, closest: () => item, focus() {}, tabIndex: 0 };
+    const set = item.tab.setAttribute;
+    item.tab.setAttribute = (k, v) => {
+      set(k, v);
+      for (const o of observers) if (o.targets.includes(item.tab) && o.filter.includes(k)) o.cb([{ target: item.tab, attributeName: k }]);
+    };
     return item;
   });
   const makeVideo = (shown) => {
@@ -157,24 +168,37 @@ function pillarTour({ reduced = false } = {}) {
   const pauseBtn = { ...target(), ...attrs(), hidden: true };
   const panel = attrs();
   const tour = {
-    ...target(), classList: classes(),
+    ...target(), ...structural, classList: classes(),
     querySelectorAll: (s) => (s === '.pillar-video' ? vids : items.map((i) => i.tab)),
     querySelector: (s) => ({ '[role="tabpanel"]': panel, '[data-pillar-pause]': pauseBtn })[s],
     contains: () => false,
   };
-  const doc = { ...target(), hidden: false, documentElement: { dataset: { theme: 'dark' } }, querySelector: (s) => (s === '[data-pillar-tour]' ? tour : null) };
+  // The peek: an empty host on the frame, and the beta card's drawing to clone.
+  const look = { ...attrs() };
+  const peekHost = { ...attrs(), ...structural, classList: classes(['nekko-peek']), children: [] };
+  peekHost.appendChild = (n) => { domChanges++; peekHost.children.push(n); };
+  const art = { cloneNode: () => ({ ...structural, querySelector: (q) => (q === '.np-look' ? look : null) }) };
+  const doc = {
+    ...target(), hidden: false, documentElement: { dataset: { theme: 'dark' } },
+    querySelector: (s) => ({ '[data-pillar-tour]': tour, '[data-pillar-peek]': peekHost, '[data-beta] .nekko-peek-svg': art })[s] ?? null,
+    querySelectorAll: (s) => (s === '[data-pillar-tour] .pillar-tab' ? items.map((i) => i.tab) : []),
+  };
   let io;
   let mo;
   const timers = [];
   const IntersectionObserver = class { constructor(cb) { io = cb; } observe() {} };
   const env = {
     document: doc,
-    window: { matchMedia: () => ({ matches: reduced }), IntersectionObserver },
+    window: { matchMedia: (q) => ({ matches: q.includes('reduced-motion') ? reduced : false }), IntersectionObserver },
     IntersectionObserver,
-    MutationObserver: class { constructor(cb) { mo = cb; } observe() {} },
+    MutationObserver: class {
+      constructor(cb) { this.o = { cb, targets: [], filter: [] }; observers.push(this.o); }
+      observe(el, opts) { this.o.targets.push(el); this.o.filter = opts.attributeFilter; if (el === doc.documentElement) mo = this.o.cb; }
+    },
     requestAnimationFrame: () => 1,
     setTimeout: (f) => { timers.push(f); return timers.length; },
     clearTimeout: (id) => { if (id) timers[id - 1] = null; },
+    setInterval: () => 0,
   };
   new Function(...Object.keys(env), code)(...Object.values(env));
   const active = () => items.findIndex((i) => i.classList.contains('is-active'));
@@ -186,8 +210,9 @@ function pillarTour({ reduced = false } = {}) {
   };
   const hidden = () => vids.find((v) => v !== shown());
   return {
-    tour, vids, items, pauseBtn, doc, line, active, shown, hidden,
-    // Run the timers that are due (the end of a crossfade).
+    tour, vids, items, pauseBtn, doc, line, active, shown, hidden, peekHost, look,
+    domChanges: () => domChanges,
+    // Run the timers that are due (the end of a crossfade, Nekko's blinks).
     runTimers: () => { const due = timers.splice(0); for (const f of due) if (f) f(); },
     show: (on = true) => io([{ isIntersecting: on }]),
     theme: (name) => { doc.documentElement.dataset.theme = name; mo(); },
@@ -361,4 +386,37 @@ test('pillar tour: the next demo loads only once the outgoing video has really f
   assert.equal(local.getAttribute('poster'), null, 'and without the fleet poster');
   t.runTimers(); // the fallback timer finds nothing left to do
   assert.equal(local.getAttribute('src'), 'media/pillar-fleet.mp4');
+});
+
+test('pillar tour: Nekko peeks over the demo box, decorative, on a frame the videos never replace', async () => {
+  const html = readFileSync(fileURLToPath(new URL('../apps/website/index.html', import.meta.url)), 'utf8');
+  const stage = html.slice(html.indexOf('<div class="pillar-stage">'), html.indexOf('data-pillar-pause'));
+  // The peek sits on .pillar-frame, beside .pillar-media (which clips), not inside it.
+  assert.match(stage, /<div class="pillar-frame">\s*<div class="nekko-peek pillar-peek" data-mood="idle" data-pillar-peek aria-hidden="true"><\/div>\s*<div class="pillar-media"/);
+
+  const t = pillarTour({ peek: true });
+  assert.equal(t.peekHost.children.length, 1, 'one Nekko, cloned from the beta card');
+  t.show(); t.shown().ready();
+  const before = t.domChanges();
+  for (const i of [3, 1, 4]) { t.items[i].tab.fire('click'); t.hidden().ready(); }
+  t.shown().end(); t.hidden().ready();
+  t.theme('light'); t.hidden().ready();
+  assert.equal(t.domChanges(), before, 'pillar and look changes add, remove or replace no nodes: the frame and Nekko stay put');
+  assert.equal(t.peekHost.children.length, 1);
+  // A pillar change: one blink and a glance toward the list, then back.
+  t.runTimers();
+  t.items[2].tab.fire('click');
+  assert.equal(t.peekHost.classList.contains('blink'), true);
+  assert.equal(t.look.getAttribute('transform'), 'translate(-1 0)');
+  t.runTimers();
+  assert.equal(t.peekHost.classList.contains('blink'), false);
+  assert.equal(t.look.getAttribute('transform'), null);
+});
+
+test('pillar tour: under reduced motion Nekko shows but does not react', () => {
+  const t = pillarTour({ reduced: true, peek: true });
+  assert.equal(t.peekHost.children.length, 1);
+  t.items[2].tab.fire('click');
+  assert.equal(t.peekHost.classList.contains('blink'), false);
+  assert.equal(t.look.getAttribute('transform'), null);
 });
