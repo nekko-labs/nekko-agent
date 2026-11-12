@@ -863,7 +863,8 @@
   // into it before then.
   const FADE = 400;
   let fadeEnds = 0; // performance.now() when the current crossfade is over
-  let settle = 0;
+  let settle = 0; // the fallback timer for the end of a fade
+  let settleId = 0; // which fade the pending preload belongs to
 
   tour.classList.add('is-js');
   if (!reduced) {
@@ -893,7 +894,9 @@
   const preload = () => {
     if (reduced || !seen || pending) return;
     const src = file(next(), false);
-    back.poster = file(next(), true);
+    // No poster on the hidden video: a poster is a frame from the middle of
+    // a demo, and it must never show for a pillar that is not active.
+    back.removeAttribute('poster');
     if (back.getAttribute('src') !== src) { gen++; back.preload = 'auto'; back.src = src; back.load(); }
   };
   // Show the back video: one step, so exactly one video is shown at any time.
@@ -912,10 +915,23 @@
     draw();
     if (!front.paused && !frame) frame = requestAnimationFrame(tick);
     sync();
-    // Preload only once the outgoing video has faded out: loading into it
-    // earlier would flash another demo's frame under the fade.
+    // Preload only once the outgoing video has really faded out (its own
+    // opacity transition has ended, not a guess at the time): loading into it
+    // earlier shows another demo under the fade. The timer is only a fallback
+    // for when no transition runs.
+    const id = ++settleId;
+    const out = back;
+    const done = (e) => {
+      if (e && (e.target !== out || e.propertyName !== 'opacity')) return;
+      if (id !== settleId) return;
+      settleId++;
+      out.removeEventListener('transitionend', done);
+      clearTimeout(settle);
+      preload();
+    };
+    out.addEventListener('transitionend', done);
     clearTimeout(settle);
-    settle = setTimeout(preload, FADE + 50);
+    settle = setTimeout(done, FADE + 600);
   };
   // A new load needs the back video while it may still be fading out: finish
   // the fade at once (incoming fully shown, outgoing gone) rather than show the
@@ -923,6 +939,7 @@
   const cutFade = () => {
     if (performance.now() >= fadeEnds) return;
     clearTimeout(settle);
+    settleId++; // the cut ends the fade; that fade's preload is dropped
     tour.classList.add('is-cut');
     void front.offsetWidth; // apply the end state without a transition
     tour.classList.remove('is-cut');

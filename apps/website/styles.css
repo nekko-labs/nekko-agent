@@ -1319,9 +1319,11 @@ video { filter: brightness(1.0001); }
 /* Two stacked videos double-buffer the demos. The incoming one fades in on top
    (400 ms, eased; keep in step with FADE in site.js); the outgoing one stays
    whole under it until the fade is done, so the box never shows through.
+   Hidden videos are also visibility: hidden, so a slow compositor cannot show
+   the hidden one while site.js loads the next demo into it.
    .is-cut ends a fade at once when a new pillar needs the outgoing video. */
-.pillar-video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0s linear 0.4s; }
-.pillar-video.is-shown { z-index: 1; opacity: 1; transition: opacity 0.4s ease-in-out; }
+.pillar-video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; visibility: hidden; transition: opacity 0s linear 0.4s, visibility 0s linear 0.4s; }
+.pillar-video.is-shown { z-index: 1; opacity: 1; visibility: visible; transition: opacity 0.4s ease-in-out; }
 .pillar-tour.is-cut .pillar-video { transition: none; }
 @media (prefers-reduced-motion: reduce) { .pillar-video, .pillar-video.is-shown { transition: none; } }
 .pillar-pause {

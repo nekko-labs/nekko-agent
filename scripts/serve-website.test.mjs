@@ -110,6 +110,7 @@ function pillarTour({ reduced = false } = {}) {
     const on = {};
     return {
       addEventListener: (e, f, o) => { (on[e] ??= []).push({ f, once: o?.once }); },
+      removeEventListener: (e, f) => { on[e] = (on[e] ?? []).filter((l) => l.f !== f); },
       fire(e, ev = {}) { const list = on[e] ?? []; on[e] = list.filter((l) => !l.once); for (const l of list) l.f(ev); },
     };
   };
@@ -341,4 +342,23 @@ test('pillar tour: nothing loads into the outgoing video while it is still fadin
   t.hidden().ready();
   t.runTimers();
   assert.equal(t.hidden().getAttribute('src'), 'media/pillar-local.mp4', 'after the fade, the next pillar preloads');
+});
+
+test('pillar tour: the next demo loads only once the outgoing video has really faded out, with no stray poster', () => {
+  const t = pillarTour();
+  t.show(); t.shown().ready();
+  const local = t.shown();
+  assert.equal(t.hidden().getAttribute('poster'), null, 'the preloaded video carries no poster of its own');
+  t.items[2].tab.fire('click');
+  assert.equal(t.hidden().poster, 'media/pillar-privacy-poster.jpg', 'a pillar being loaded shows only its own poster');
+  t.hidden().ready();
+  // The fade-in of the new video ending, or a transition on something else, is not the outgoing video hiding.
+  t.shown().fire('transitionend', { target: t.shown(), propertyName: 'opacity' });
+  local.fire('transitionend', { target: local, propertyName: 'transform' });
+  assert.equal(local.getAttribute('src'), 'media/pillar-local.mp4');
+  local.fire('transitionend', { target: local, propertyName: 'opacity' });
+  assert.equal(local.getAttribute('src'), 'media/pillar-fleet.mp4', 'loaded once it is really hidden');
+  assert.equal(local.getAttribute('poster'), null, 'and without the fleet poster');
+  t.runTimers(); // the fallback timer finds nothing left to do
+  assert.equal(local.getAttribute('src'), 'media/pillar-fleet.mp4');
 });
