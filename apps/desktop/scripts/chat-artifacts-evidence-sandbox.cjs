@@ -1,5 +1,6 @@
 // Hidden renderer-only evidence for chat artifact cards: a reply linking an
-// HTML prototype, a localhost preview server and an image, in dark and light.
+// HTML prototype, a localhost preview server and an image, in dark and light
+// (or, with NEKKO_CHAT_ARTIFACTS_REPLY=named, one naming them in code spans).
 // Launch through layout-evidence-integration.cjs with
 // NEKKO_LAYOUT_SANDBOX=chat-artifacts-evidence-sandbox.cjs. Never shows or
 // focuses a window, never reads host files (readFile is stubbed in the page).
@@ -33,6 +34,15 @@ const reply = [
   '',
   '![Hero render](C:/demo/prototypes/pricing/hero.svg)',
 ].join('\n');
+// NEKKO_CHAT_ARTIFACTS_REPLY=named: the reply only names its outputs in code
+// formatting, the way Claude Code reports a design file it wrote (issue #2674).
+const named = [
+  "I made the design and built it. It's up as **PR #2636** (auto-merge is on, so it lands when CI's `gate` check passes).",
+  '',
+  '**Design:** `C:/demo/prototypes/pricing/index.html`. It has the page at desktop width, plus `C:/demo/prototypes/pricing/hero.svg` for the header.',
+  '',
+  'Built in `src/pricing/Page.tsx`.',
+].join('\n');
 
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:|about:)/.test(d.url) }));
@@ -64,7 +74,7 @@ app.whenReady().then(async () => {
       const s = f.records[0];
       s.messages = [
         { id: 'u1', role: 'user', content: 'Build a pricing page prototype and start the dev server.', createdAt: Date.now() - 60000 },
-        { id: 'a1', role: 'assistant', content: ${JSON.stringify(reply)}, createdAt: Date.now() - 30000 },
+        { id: 'a1', role: 'assistant', content: ${JSON.stringify(process.env.NEKKO_CHAT_ARTIFACTS_REPLY === 'named' ? named : reply)}, createdAt: Date.now() - 30000 },
       ];
       f.putCachedSession(s);
       f.store.getState().openChatPane(s.id);

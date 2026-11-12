@@ -38,6 +38,19 @@ Status: implemented on desktop and unit/renderer-tested; captured in the hidden 
 - Privacy: the app never fetches a live preview (the renderer CSP would block it, and we do not auto-load network content), so there is no thumbnail. Live previews stay available in Sandbox, like any web link.
 - They are listed in the reply and in Agent Monitor's Artifacts disclosure (counted once per URL), but not in the global Artifacts index, which lists files.
 
-**Acceptance.** Links inside code spans and fenced blocks never produce cards. A reply with an HTML link, a localhost link and an image shows a rendering card, a live preview card and an image preview, each once. Verified by `chatArtifacts.test.ts` (file URLs, loopback detection, bare URLs, code exclusion, dedupe) and `ChatArtifacts.test.tsx` (lazy read, sandboxed scriptless frame, scaling, actions, size cap, Sandbox, live card, index exclusion); visual evidence from `apps/desktop/scripts/chat-artifacts-evidence-sandbox.cjs`, where the fixture page's inline script is reported as blocked by the frame sandbox.
+**Acceptance.** Links inside code spans and fenced blocks never produce cards (a code span that is itself a page, image or PDF path does; see below). A reply with an HTML link, a localhost link and an image shows a rendering card, a live preview card and an image preview, each once. Verified by `chatArtifacts.test.ts` (file URLs, loopback detection, bare URLs, code exclusion, dedupe) and `ChatArtifacts.test.tsx` (lazy read, sandboxed scriptless frame, scaling, actions, size cap, Sandbox, live card, index exclusion); visual evidence from `apps/desktop/scripts/chat-artifacts-evidence-sandbox.cjs`, where the fixture page's inline script is reported as blocked by the frame sandbox.
 
 ---
+
+## Outputs a reply only names (issue #2674)
+
+Status: implemented on desktop; unit/renderer-tested (`chatArtifacts.test.ts`, `Markdown.test.tsx`) and captured before/after in the hidden isolated Electron fixture (`chat-artifacts-evidence-sandbox.cjs` with `NEKKO_CHAT_ARTIFACTS_REPLY=named`), not yet reviewed in the running app. Native mobile and the Local Web UI chat are unchanged.
+
+**Intent.** Agents, Claude Code above all, usually report a file they made as inline code (`` **Design:** `reports/ios-connection-strip-design.html` ``) rather than a Markdown link. That output should get the same link and preview card as a link would, so a design file shows as a picture of the page, not as dead monospace text.
+
+**Behavior.**
+- A code span whose whole content is one local page, image or PDF path (`.html`, `.htm`, `.svg`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.pdf`; relative, absolute, Windows or `file://`) is an artifact: it renders as an accent link that opens the file pane in the originating chat, and the file gets its card beneath the reply (rendering card for HTML, image card for images, plain card for PDF), in Agent Monitor's Artifacts and in the global Artifacts index.
+- A bare path in prose with those extensions and at least one folder (`Saved to reports/strip.html.`) counts the same way for cards (the prose itself is not turned into a link). A bare filename (`index.html`), a name that continues (`a.html.bak`, `b.html5`) and any part of a URL do not.
+- Not artifacts: code spans with anything else in them (source files, `AGENTS.md`, `package.json`, commands, URLs, anchors), and anything in a fenced code block.
+- Cards follow the order the reply names files in, links and named paths together, and a file named both ways is one card.
+- A relative path with no chat folder, and every named path in Sandbox, stays plain code: no dimmed label, no "unavailable" text, no read. All existing read rules apply unchanged (lazy, sandboxed, no network).
