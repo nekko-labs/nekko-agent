@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iPhone connection strip: quiet banners</title>
+<!-- Design for the iPhone connection strip that replaces ConnectionBanner, FleetBanner and
+     ProtocolBanner on the chat list. Self-contained, no network requests.
+     Colours copied from apps/ios/App/Platform/Theme.swift (Dusk / Light Nekko). -->
+<style>
+[data-theme='dark'] {
+  --paper:#0C0C11; --surface:#16161C; --surface-2:#20202A; --line:#26262F; --ink:#ECEAF3; --ink-soft:#A3A1B0; --ink-faint:#8E8E9B;
+  --accent:#C08AB0; --success:#4CC38A; --danger:#EF6A5B; --warning:#E3A446; --running:#60A5FA; --wash:rgba(255,255,255,.07); --page:#050507;
+}
+[data-theme='light'] {
+  --paper:#FBFBFD; --surface:#FFFFFF; --surface-2:#F2F2F7; --line:#E8E8EF; --ink:#17171D; --ink-soft:#52525E; --ink-faint:#5E5E6A;
+  --accent:#854F6C; --success:#1A7043; --danger:#B42318; --warning:#875709; --running:#1D4ED8; --wash:rgba(0,0,0,.05); --page:#E9E9EF;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--ink); font:400 14px/1.4 -apple-system, system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+button { font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; }
+.deck { position:sticky; top:0; z-index:5; display:flex; gap:8px; align-items:center; padding:12px 20px; background:var(--page); }
+.deck b { margin-right:8px; }
+.deck button { height:28px; padding:0 12px; border-radius:8px; color:var(--ink-soft); font-size:12px; }
+.deck button.on { background:var(--wash); color:var(--ink); }
+.intro { max-width:1100px; margin:8px auto 0; padding:0 20px; color:var(--ink-soft); }
+.intro b { color:var(--ink); }
+.grid { display:flex; flex-wrap:wrap; gap:40px 32px; justify-content:center; padding:32px 20px 60px; }
+figure { margin:0; width:320px; }
+figcaption { margin-top:12px; font-size:12px; color:var(--ink-soft); }
+figcaption b { display:block; color:var(--ink); font-weight:600; font-size:13px; margin-bottom:4px; }
+
+.phone { width:320px; height:600px; border-radius:40px; background:var(--paper); overflow:hidden; position:relative; box-shadow:0 0 0 8px var(--surface-2), 0 20px 50px rgba(0,0,0,.35); }
+.status { height:44px; display:flex; justify-content:space-between; align-items:flex-end; padding:0 28px 6px; font-size:13px; font-weight:600; }
+.nav { display:flex; align-items:center; justify-content:space-between; padding:6px 16px 0; color:var(--ink-soft); font-size:13px; }
+.pill { background:var(--wash); border-radius:14px; padding:4px 10px; color:var(--ink); font-weight:500; font-size:12px; }
+h1 { font-size:30px; font-weight:700; margin:6px 20px 0; letter-spacing:-.4px; }
+
+/* the strip */
+.strip { display:flex; gap:4px; padding:8px 12px 0; overflow:hidden; white-space:nowrap; }
+.item { display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 8px; border-radius:8px; font-size:12px; font-weight:500; color:var(--ink-soft); transition:background .2s; }
+.item.sel { background:var(--wash); color:var(--ink); }
+.dot { width:8px; height:8px; border-radius:50%; flex:none; }
+.dot.ok { background:var(--success); }
+.dot.wait { border:1.5px solid var(--running); }
+.dot.warn { background:var(--warning); }
+.dot.bad { background:var(--danger); }
+.word { font-weight:400; }
+.word.warn { color:var(--warning); }
+.word.bad { color:var(--danger); }
+.word.wait { color:var(--ink-faint); }
+.glyph { width:14px; height:14px; flex:none; }
+.chev { width:10px; height:10px; color:var(--ink-faint); margin-left:-2px; }
+
+/* the detail, opened under the strip */
+.detail { padding:8px 20px 4px; }
+.detail p { margin:0; font-size:13px; color:var(--ink-soft); }
+.detail p .faint { color:var(--ink-faint); }
+.actions { display:flex; gap:16px; align-items:center; margin-top:8px; font-size:13px; font-weight:600; }
+.actions .primary { color:var(--accent); }
+.actions .more { color:var(--ink-soft); margin-left:auto; font-weight:400; }
+
+/* chat list underneath */
+.list { padding:20px 20px 0; }
+.glabel { font-size:12px; font-weight:500; color:var(--ink-soft); margin-bottom:8px; }
+.row { display:flex; gap:10px; padding:8px 0; }
+.row .ic { width:16px; height:16px; border-radius:50%; border:1.5px solid var(--ink-faint); margin-top:2px; flex:none; }
+.row .t { font-size:14px; font-weight:500; }
+.row .m { font-size:12px; color:var(--ink-faint); }
+
+/* old banner, for the before column */
+.old { margin:12px 16px 0; padding:12px; border-radius:12px; display:flex; gap:10px; font-size:13px; }
+.old.w { background:color-mix(in srgb, var(--warning) 12%, transparent); }
+.old.d { background:color-mix(in srgb, var(--danger) 12%, transparent); }
+.old .b { color:var(--accent); font-weight:600; display:block; margin-top:6px; }
+.old .r { color:var(--accent); font-weight:600; white-space:nowrap; }
+
+.spec { max-width:1100px; margin:0 auto 60px; padding:0 20px; color:var(--ink-soft); font-size:13px; }
+.spec h2 { color:var(--ink); font-size:16px; font-weight:600; margin:40px 0 8px; }
+.spec table { border-collapse:collapse; width:100%; }
+.spec td, .spec th { text-align:left; padding:8px 12px 8px 0; vertical-align:top; }
+.spec th { color:var(--ink); font-weight:500; font-size:12px; }
+.spec tr + tr td { border-top:1px solid var(--line); }
+.spec code { font-size:12px; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <b>iPhone connection strip</b>
+  <button data-t="dark" class="on">Dusk</button>
+  <button data-t="light">Light Nekko</button>
+</div>
+<p class="intro">One slim row under the title shows every paired computer with a dot and its name. Healthy computers say nothing more. A problem adds <b>one word</b>; tapping it opens <b>one line</b> and the fix under the row. The three stacked banners (connection, other computers, protocol) are gone from the chat list.</p>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="netslash" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c-1.8 2-1.8 9 0 11M8 2.5c1.8 2 1.8 9 0 11"/><path d="M2 2l12 12"/></g></symbol>
+  <symbol id="chev" viewBox="0 0 10 10"><path d="M2.5 4l2.5 2.5L7.5 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+  <symbol id="up" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 11V5M5.5 7.5L8 5l2.5 2.5"/></g></symbol>
+</svg>
+
+<template id="chrome">
+  <div class="status"><span>9:41</span><span>●●● 100%</span></div>
+  <div class="nav"><span class="pill">Computers ▾</span><span>☰ &nbsp; ✎</span></div>
+  <h1>Chats</h1>
+</template>
+<template id="list">
+  <div class="list">
+    <div class="glabel">nekko-agent</div>
+    <div class="row"><span class="ic"></span><div><div class="t">Fix the relay retry</div><div class="m">Studio · 2m</div></div></div>
+    <div class="row"><span class="ic"></span><div><div class="t">Quiet banners on iOS</div><div class="m">Gomi · 14m</div></div></div>
+    <div class="row"><span class="ic"></span><div><div class="t">Release notes 0.96</div><div class="m">Laptop · 1h</div></div></div>
+  </div>
+</template>
+
+<div class="grid">
+
+  <figure>
+    <div class="phone" data-chrome>
+      <div class="old w"><span>⚠︎</span><span>Tailscale is off on this iPhone. Open the Tailscale app and connect to your tailnet to reach Studio. 2 prompts wait on this iPhone and go when it’s back.<span class="b">Open Tailscale</span></span><span>⋯</span></div>
+      <div class="old w"><span>☾</span><span style="flex:1">Laptop is offline. This phone keeps trying.</span><span class="r">Reconnect</span></div>
+      <div class="old w"><span>⟳</span><span>This app is older than Nekko Agent on Studio. Update Nekko Agent from the App Store to use everything it offers.</span></div>
+      <div data-list></div>
+    </div>
+    <figcaption><b>Before</b>Three tinted cards, 70 words, the list pushed below the fold.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone" data-chrome>
+      <div class="strip">
+        <span class="item"><span class="dot ok"></span>Studio</span>
+        <span class="item"><span class="dot ok"></span>Gomi</span>
+        <span class="item"><span class="dot ok"></span>Laptop</span>
+      </div>
+      <div data-list></div>
+    </div>
+    <figcaption><b>All connected</b>Dots and names only. Tap a name to filter the list to that computer (same as the pill's menu).</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone" data-chrome>
+      <div class="strip">
+        <span class="item"><svg class="glyph" style="color:var(--warning)"><use href="#netslash"/></svg><span class="word warn">Tailscale off</span><svg class="chev"><use href="#chev"/></svg></span>
+        <span class="item"><span class="dot wait"></span>Studio</span>
+        <span class="item"><span class="dot ok"></span>Gomi</span>
+        <span class="item"><span class="dot warn"></span>Laptop <span class="word warn">offline</span></span>
+      </div>
+      <div data-list></div>
+    </div>
+    <figcaption><b>Tailscale off, collapsed</b>Tailscale leads the row because it is the cause; Studio waits on it (hollow dot). Laptop is offline on its own.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone" data-chrome>
+      <div class="strip">
+        <span class="item sel"><svg class="glyph" style="color:var(--warning)"><use href="#netslash"/></svg><span class="word warn">Tailscale off</span><svg class="chev" style="transform:rotate(180deg)"><use href="#chev"/></svg></span>
+        <span class="item"><span class="dot wait"></span>Studio</span>
+        <span class="item"><span class="dot ok"></span>Gomi</span>
+        <span class="item"><span class="dot warn"></span>Laptop <span class="word warn">offline</span></span>
+      </div>
+      <div class="detail">
+        <p>Turn on Tailscale to reach Studio. <span class="faint">2 prompts wait to send.</span></p>
+        <div class="actions"><span class="primary">Open Tailscale</span><span>Details</span></div>
+      </div>
+      <div data-list></div>
+    </div>
+    <figcaption><b>Tailscale off, opened</b>One line, the one fix. <i>Details</i> opens the Connection screen with the full diagnosis.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone" data-chrome>
+      <div class="strip">
+        <span class="item sel"><span class="dot wait"></span>Studio <span class="word wait">no answer</span><svg class="chev" style="transform:rotate(180deg)"><use href="#chev"/></svg></span>
+        <span class="item"><span class="dot ok"></span>Gomi</span>
+      </div>
+      <div class="detail">
+        <p>Studio doesn’t answer on your tailnet. <span class="faint">Is it awake and signed in?</span></p>
+        <div class="actions"><span class="primary">Retry</span><span>Open Tailscale</span><span>Details</span><span class="more">⋯</span></div>
+      </div>
+      <div data-list></div>
+    </div>
+    <figcaption><b>Tailscale on, computer silent</b>The cause is the computer, so the word sits on Studio. ⋯ holds the safety exits.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone" data-chrome>
+      <div class="strip">
+        <span class="item"><span class="dot ok"></span>Studio</span>
+        <span class="item sel"><span class="dot bad"></span>Gomi <span class="word bad">refused</span><svg class="chev" style="transform:rotate(180deg)"><use href="#chev"/></svg></span>
+        <span class="item"><span class="dot warn"></span>Laptop <span class="word warn">offline</span></span>
+      </div>
+      <div class="detail">
+        <p>Gomi doesn’t know this iPhone any more.</p>
+        <div class="actions"><span class="primary">Pair again</span></div>
+      </div>
+      <div data-list></div>
+    </div>
+    <figcaption><b>Refused</b>Danger dot and word. Pair again is the only action, because Retry can't help.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone" data-chrome>
+      <div class="strip">
+        <span class="item sel"><span class="dot ok"></span>Studio <span class="word warn">update</span><svg class="chev" style="transform:rotate(180deg)"><use href="#chev"/></svg></span>
+        <span class="item"><span class="dot ok"></span>Gomi</span>
+      </div>
+      <div class="detail">
+        <p>Studio runs an older Nekko Agent. <span class="faint">Update it there to use everything here.</span></p>
+      </div>
+      <div data-list></div>
+    </div>
+    <figcaption><b>Version mismatch</b>The protocol banner becomes a word on the computer it is about.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone" data-chrome>
+      <div style="height:20px"></div>
+      <div style="padding:0 20px;font-size:20px;font-weight:600">Files</div>
+      <div class="strip" style="padding-top:12px">
+        <span class="item sel"><svg class="glyph" style="color:var(--warning)"><use href="#netslash"/></svg><span class="word warn">Tailscale off</span><svg class="chev" style="transform:rotate(180deg)"><use href="#chev"/></svg></span>
+      </div>
+      <div class="detail">
+        <p>Turn on Tailscale to reach Studio.</p>
+        <div class="actions"><span class="primary">Open Tailscale</span><span>Details</span></div>
+      </div>
+    </div>
+    <figcaption><b>Files and Monitors</b>Only the active computer, only when something is wrong.</figcaption>
+  </figure>
+
+</div>
+
+<div class="spec">
+  <h2>Rules</h2>
+  <table>
+    <tr><th>Part</th><th>Spec</th></tr>
+    <tr><td>Row</td><td>Under the large title, above the list. 28pt items, 8pt padding, 4pt gap, 12pt gutter so the first item's text lines up with the 20pt page gutter. Scrolls sideways when the names don't fit. Shown whenever a computer is paired. No background, no border.</td></tr>
+    <tr><td>Item</td><td>8pt dot, 6pt gap, name 12/500 <code>inkSoft</code>. Healthy: nothing else. A problem adds one word in the state colour and a small chevron.</td></tr>
+    <tr><td>Dots</td><td>Online: <code>success</code>. Connecting: hollow ring in <code>running</code> (no word until it fails). Offline: <code>warning</code>. Refused or pairing key mismatch: <code>danger</code>.</td></tr>
+    <tr><td>Tailscale</td><td>When a computer routed over Tailscale can't connect and Tailscale is off on the phone, a leading item with the network glyph and <i>Tailscale off</i>. When Tailscale is on but the computer is silent, the word moves to the computer (<i>no answer</i>).</td></tr>
+    <tr><td>Open</td><td>Tapping an item with a problem selects it (wash pill slides to it, 200ms) and opens one line under the row (height opens, text fades, 200ms). Tap again or tap another to close or switch. Healthy items filter the list instead.</td></tr>
+    <tr><td>Detail</td><td>One sentence in 13 <code>inkSoft</code>, an optional tail in <code>inkFaint</code> (the outbox count). Then text actions: the fix in the accent, the rest in <code>ink</code>; ⋯ with the safety exits for the active computer.</td></tr>
+    <tr><td>Words</td><td>offline · refused · no answer · not found · update · key changed. Full sentences live only in the opened line.</td></tr>
+    <tr><td>Other screens</td><td>Files and Monitors show only the active computer's item, and only when it has a problem. Settings keeps the version line as one quiet row.</td></tr>
+    <tr><td>VoiceOver</td><td>Each item reads "Studio, offline, button, shows how to fix". The opened line and its actions are ordinary elements.</td></tr>
+  </table>
+</div>
+
+<script>
+const chrome = document.getElementById('chrome').innerHTML, list = document.getElementById('list').innerHTML;
+document.querySelectorAll('[data-chrome]').forEach(p => p.insertAdjacentHTML('afterbegin', chrome));
+document.querySelectorAll('[data-list]').forEach(l => l.outerHTML = list);
+document.querySelectorAll('.deck button').forEach(b => b.onclick = () => {
+  document.documentElement.dataset.theme = b.dataset.t;
+  document.querySelectorAll('.deck button').forEach(x => x.classList.toggle('on', x === b));
+});
+</script>
+</body>
+</html>

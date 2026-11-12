@@ -106,13 +106,10 @@ struct ChatsView: View {
     }
 
     @ViewBuilder private var rows: some View {
-            if !store.computers.isEmpty && (filter == nil || filter == store.activeId) {
-                ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-                ProtocolBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-            }
-            // The other computers in view that can't be reached now, each with Reconnect.
-            if filter != PhoneProviders.computerId {
-                FleetBanner(computer: filter).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            if computersInView {
+                // Every paired computer and its connection, in one slim row; a problem opens to its fix.
+                ConnectionStrip(details: { open(.connection) })
+                    .listRowSeparator(.hidden).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             }
             if filter == nil || filter == store.activeId, let at = store.savedListAt {
                 Label(SavedListNote.text(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
