@@ -23,5 +23,4 @@
     <string name="image_reply_n">Generated image %1$d</string>
     <string name="image_open">Open image</string>
     <string name="image_close">Close</string>
-    <string name="image_unavailable">This image could not be loaded. Reconnect and try again.</string>
 </resources>

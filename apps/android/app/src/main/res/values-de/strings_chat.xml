@@ -289,4 +289,7 @@
     <string name="chat_star_never">Nicht mehr fragen</string>
     <string name="chat_star_thanks">Danke! Nekko freut sich, dass du da bist.</string>
     <string name="chat_star_thanks_detail">GitHub ist in deinem Browser geöffnet. Dort ist der Stern einen Tipp entfernt.</string>
+    <!-- The full-screen photo viewer (#2111). -->
+    <string name="photo_n_of_m">%1$d von %2$d</string>
+    <string name="photo_actions">Fotoaktionen</string>
 </resources>
