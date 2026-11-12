@@ -17,6 +17,21 @@ The rail destination formerly called Artifacts is **Library**. Someone opening i
 - On narrow shared-web/desktop windows the list uses the available width. Selecting a file switches to its preview, with **Back to Library** returning to the list. Wide windows retain the list and preview side by side.
 - The existing index reads up to the 60 most recent eligible top-level chats. It is not a scan of every file on the computer or a backup. Deleted files can remain listed until their source chat changes.
 
+## Designs from every agent, and the designs folder
+
+Requested 2026-11-12 (#2677): designs made in Claude Code chats were missing from Library; design canvases should show whoever made them, and agents should be able to find and use them. Checked against 299 saved chats on one Mac: Claude Code chats record the files they write as `Write` with a `file_path` (33 calls in 39 chats, two of them HTML designs) and name them in code formatting, so neither half of the index saw them. (#2675 has since made a page, image or PDF named in code formatting count as a link, which lists those; a design the reply never names, and every other kind of file, still depends on the `Write` call.)
+
+Implemented, not yet released:
+
+- **Files Claude Code wrote.** A `Write` call in a Claude Code chat counts as a written file, the same as Nekko's own `write_file`, with the same rules for what is an output (no source folders, no project housekeeping files). Reading or editing a file does not list it. An agent's own notes under `.claude/` (Claude Code's memory and plans) are never listed.
+- **Designs by name.** An HTML page or image is filed under **Designs** when its own file name says so: `design`, `mockup` (or `mock-up`, `mock`), `prototype`, `wireframe`, `concept`, `canvas`, `artboard` or their plurals, as a whole word (`checkout-design.html`, `pricing_wireframe.png`, `prototype.html`). The folder rule is unchanged: anything under `nekko-designs/`, `design(s)/`, `mockup(s)/` or `prototype(s)/`. Other kinds keep their kind (`ci-runners-design.md` stays a document).
+- **The designs folder.** Library also lists the pages and images in each saved project's `nekko-designs/` folder and one level of subfolders (`nekko-designs/login/index.html`), whoever put them there: an agent on any provider, the Design tab, a person, or a tool outside Nekko Agent. Up to 40 subfolders and 300 files per project are read. A design a chat also produced keeps its chat; one no chat mentions shows "<project> designs folder" where the chat title would be, has no date, sorts after the chat-made designs, and offers **Open file** as its main action, with no **Open chat**. The folder is listed again whenever a chat changes.
+- **Agents know the folder.** The shared prompt tells Nekko's own agents that the project's `nekko-designs/` folder (or the project's own convention) is where designs live: list it and build from a design that covers the work before designing or building an interface, save each new design there as one self-contained HTML file named for what it shows, with its screens, states or options side by side in that file (a design canvas), and revise a design by editing its file. See [decision 0089](../../docs/decisions/0089-designs-are-files-in-the-projects-designs-folder.md) and the options in [the report](../../reports/design-canvases-for-agents-2026-11-12.md).
+
+Not done: Claude Code chats run on Claude Code's own prompt, so they do not receive this guidance (they follow the project's `AGENTS.md` or `CLAUDE.md`); files Claude Code changes with `Edit` are not listed; a design in a chat's own worktree is found through its chat, not the folder listing; the Design board does not yet pick up designs added to the folder or edits made to a concept's file (#2680).
+
+Verified in the hidden, isolated full-App Electron journey (`library-designs-sandbox.cjs`, 9 checks, matched captures on unchanged `main`) and focused unit tests. Packaged builds, Windows paths in a running app and the Local Web UI in other browsers were not checked.
+
 ## Browsing: kinds, groups and layouts
 
 Requested 2026-11-09: a slider at the top for All and then each kind; collapsible groups under All; groups with their headings and the files as large square previews without a card box; the setup answer's group first (a Developer sees theirs first); previews of the newest files of each kind in the empty space beside the list; a layout slider of icons in the top right (list, small icons, large icons, full cards) with smooth transitions, keeping the list on the left in every layout except List, where the list sweeps across the full width.
@@ -37,7 +52,7 @@ Verified in the hidden, isolated full-App Electron journey (`library-layouts-san
 
 ## Privacy and boundaries
 
-The guide uses original inline artwork and reads no files or external resources. Dismissal saves only a boolean in local storage. File previews retain their existing isolation and permission boundaries. Files remain in their original folders; nothing is published automatically. Hosted publishing remains separate planned work, not a Library action added here. The native phone apps do not have this page and are unchanged.
+The guide uses original inline artwork and reads no files or external resources. Dismissal saves only a boolean in local storage. Listing a project's designs folder reads file and folder names only, in folders the person already saved as projects; no file is opened until it is picked, and nothing outside `nekko-designs/` is listed. File previews retain their existing isolation and permission boundaries. Files remain in their original folders; nothing is published automatically. Hosted publishing remains separate planned work, not a Library action added here. The native phone apps do not have this page and are unchanged.
 
 ## Acceptance and verification
 
