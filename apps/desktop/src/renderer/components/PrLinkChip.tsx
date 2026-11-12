@@ -1,41 +1,79 @@
 import React, { useEffect, useState } from 'react';
 import { parsePrUrl, type IssueInfo, type PrInfo } from '@nekko-agent/shared';
 import { PR_STATUS_LABEL as STATUS_LABEL, PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
+import { LIVE_STATE_FRESH_MS, isLiveState, onLiveStateTick } from '../liveStateTicker.js';
 
 export { prStatus };
 
 /** How long a looked-up PR state is trusted before a chip asks again. */
-const FRESH_MS = 60_000;
+const FRESH_MS = LIVE_STATE_FRESH_MS;
+/**
+ * A re-check reads anything older than this, so with one tick per FRESH_MS a
+ * live chip is at most about a minute behind (plus the engine's own cache).
+ */
+const RECHECK_AFTER_MS = FRESH_MS / 2;
 
 type Info = PrInfo | IssueInfo;
+type Read = (url: string) => Promise<Info | null>;
 type Entry = { info: Info | null; at: number };
 const known = new Map<string, Entry>();
 const inflight = new Map<string, Promise<Info | null>>();
 const listeners = new Map<string, Set<(info: Info | null) => void>>();
+const readers = new Map<string, Read>();
+let stopTicker: (() => void) | null = null;
 
 /** One shared lookup per PR or issue, however many chips name it. */
-function lookup(url: string, read: ((url: string) => Promise<Info | null>) | undefined): void {
+function lookup(url: string, read: Read | undefined, maxAge = FRESH_MS): void {
   const hit = known.get(url);
-  if ((hit && Date.now() - hit.at < FRESH_MS) || inflight.has(url) || !read) return;
+  if ((hit && Date.now() - hit.at < maxAge) || inflight.has(url) || !read) return;
   const pending = read(url).catch(() => hit?.info ?? null);
   inflight.set(url, pending);
   void pending.then((info) => {
     inflight.delete(url);
     known.set(url, { info, at: Date.now() });
     listeners.get(url)?.forEach((notify) => notify(info));
+    syncTicker();
   });
 }
 
-function useInfo(url: string, read: () => ((url: string) => Promise<Info | null>) | undefined): Info | null {
+/** URLs a mounted chip shows in a state that can still change. */
+function watchedLive(): string[] {
+  return [...listeners].flatMap(([url, set]) => set.size > 0 && isLiveState(known.get(url)?.info) ? [url] : []);
+}
+
+function recheck(): void {
+  for (const url of watchedLive()) lookup(url, readers.get(url), RECHECK_AFTER_MS);
+}
+
+/** The shared ticker runs only while some mounted chip shows an open PR or issue. */
+function syncTicker(): void {
+  const watching = watchedLive().length > 0;
+  if (watching && !stopTicker) stopTicker = onLiveStateTick(recheck);
+  else if (!watching && stopTicker) { stopTicker(); stopTicker = null; }
+}
+
+/**
+ * Watch one PR or issue: read it (shared with every other watcher of the URL),
+ * then re-read it while it is open and someone is watching. Returns the stop.
+ */
+export function watchInfo(url: string, read: Read | undefined, notify: (info: Info | null) => void): () => void {
+  let set = listeners.get(url);
+  if (!set) listeners.set(url, (set = new Set()));
+  set.add(notify);
+  if (read) readers.set(url, read);
+  lookup(url, read);
+  syncTicker();
+  return () => {
+    set.delete(notify);
+    if (set.size === 0 && listeners.get(url) === set) listeners.delete(url);
+    syncTicker();
+  };
+}
+
+function useInfo(url: string, read: () => Read | undefined): Info | null {
   const [info, setInfo] = useState<Info | null>(() => known.get(url)?.info ?? null);
-  useEffect(() => {
-    let set = listeners.get(url);
-    if (!set) listeners.set(url, (set = new Set()));
-    set.add(setInfo);
-    lookup(url, read());
-    return () => { set.delete(setInfo); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => watchInfo(url, read(), setInfo), [url]);
   return info;
 }
 
@@ -53,6 +91,10 @@ export function useIssueInfo(url: string): IssueInfo | null {
 export function resetPrInfoCache(): void {
   known.clear();
   inflight.clear();
+  readers.clear();
+  listeners.clear();
+  stopTicker?.();
+  stopTicker = null;
 }
 
 export function isPrUrl(href: string): boolean {
