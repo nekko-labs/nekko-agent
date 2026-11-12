@@ -233,9 +233,9 @@
         <p class="chapter-lede reveal">Private, fast, and on every machine you own.</p>
 
         <div class="pillar-tour reveal" data-pillar-tour aria-roledescription="carousel" aria-label="What makes Nekko Agent different">
-          <ol class="pillar-list" role="tablist" aria-orientation="vertical" aria-label="Five reasons to use Nekko Agent" aria-owns="pillar-tab-local pillar-tab-speed pillar-tab-privacy pillar-tab-fleet pillar-tab-anywhere">
-            <li role="presentation" class="pillar-item is-active">
-              <button class="pillar-tab" role="tab" id="pillar-tab-local" aria-selected="true" aria-controls="pillar-panel" data-pillar="local"
+          <ol class="pillar-list" aria-label="Five reasons to use Nekko Agent">
+            <li class="pillar-item is-active">
+              <button class="pillar-tab" id="pillar-tab-local" aria-current="step" aria-controls="pillar-panel" data-pillar="local"
                       data-alt="Picking a local model in Nekko Agent, then Claude Code using it over MCP">
                 <span class="pillar-num">01</span><span class="pillar-title">Built for local models</span>
               </button>
@@ -245,8 +245,8 @@
                 <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
             </li>
-            <li role="presentation" class="pillar-item">
-              <button class="pillar-tab" role="tab" id="pillar-tab-speed" aria-selected="false" aria-controls="pillar-panel" data-pillar="speed" tabindex="-1"
+            <li class="pillar-item">
+              <button class="pillar-tab" id="pillar-tab-speed" aria-controls="pillar-panel" data-pillar="speed" tabindex="-1"
                       data-alt="Side-by-side replay: Nekko Agent returns the edited file in 2.5 seconds, Ollama in 13.9">
                 <span class="pillar-num">02</span><span class="pillar-title">Fast. Really fast.</span>
               </button>
@@ -256,8 +256,8 @@
                 <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
             </li>
-            <li role="presentation" class="pillar-item">
-              <button class="pillar-tab" role="tab" id="pillar-tab-privacy" aria-selected="false" aria-controls="pillar-panel" data-pillar="privacy" tabindex="-1"
+            <li class="pillar-item">
+              <button class="pillar-tab" id="pillar-tab-privacy" aria-controls="pillar-panel" data-pillar="privacy" tabindex="-1"
                       data-alt="Privacy Shield swapping an email and card number for placeholders, then the encrypted phone relay">
                 <span class="pillar-num">03</span><span class="pillar-title">Your data stays yours</span>
               </button>
@@ -267,8 +267,8 @@
                 <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
             </li>
-            <li role="presentation" class="pillar-item">
-              <button class="pillar-tab" role="tab" id="pillar-tab-fleet" aria-selected="false" aria-controls="pillar-panel" data-pillar="fleet" tabindex="-1"
+            <li class="pillar-item">
+              <button class="pillar-tab" id="pillar-tab-fleet" aria-controls="pillar-panel" data-pillar="fleet" tabindex="-1"
                       data-alt="Three chats running at once on a Studio PC, a Mac mini and a Claude subscription">
                 <span class="pillar-num">04</span><span class="pillar-title">One fleet, every machine</span>
               </button>
@@ -278,8 +278,8 @@
                 <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
             </li>
-            <li role="presentation" class="pillar-item">
-              <button class="pillar-tab" role="tab" id="pillar-tab-anywhere" aria-selected="false" aria-controls="pillar-panel" data-pillar="anywhere" tabindex="-1"
+            <li class="pillar-item">
+              <button class="pillar-tab" id="pillar-tab-anywhere" aria-controls="pillar-panel" data-pillar="anywhere" tabindex="-1"
                       data-alt="A MacBook running Nekko Agent with an iPhone in front of it: the agent asks to run the tests, Allow is tapped on the phone, and both show the tests passing">
                 <span class="pillar-num">05</span><span class="pillar-title">Take it anywhere</span>
               </button>
@@ -296,7 +296,7 @@
                  card's peek by site.js, so both stay identical. Decorative. -->
             <div class="pillar-frame">
               <div class="nekko-peek pillar-peek" data-mood="idle" data-pillar-peek aria-hidden="true"></div>
-              <div class="pillar-media" id="pillar-panel" role="tabpanel" aria-labelledby="pillar-tab-local">
+              <div class="pillar-media" id="pillar-panel" role="region" aria-labelledby="pillar-tab-local">
                 <video class="pillar-video is-shown" muted playsinline preload="none" width="1280" height="720" poster="media/pillar-local-poster.jpg"
                        aria-label="Picking a local model in Nekko Agent, then Claude Code using it over MCP"></video>
                 <video class="pillar-video" muted playsinline preload="none" width="1280" height="720" aria-hidden="true"></video>
