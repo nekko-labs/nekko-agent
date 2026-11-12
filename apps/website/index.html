@@ -12,7 +12,7 @@
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
     <meta name="theme-color" content="#fbf6f8" />
     <!-- White without script. Before first paint the saved look (Dark or White) applies, or, with none saved, the system's light or dark setting, so the page never flashes the wrong look -->
-    <script>(function(){var t=null;try{t=localStorage.getItem('nekko-theme');}catch(e){}if(t!=='white'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'white';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='white'?'#fbf6f8':'#0c0c11';})();</script>
+    <script>(function(){var t=null;try{t=localStorage.getItem('nekko-theme');}catch(e){}if(t!=='white'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'white';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='white'?'#fbf6f8':'#0c0c11';var p=document.createElement('link');p.rel='preload';p.as='image';p.href='media/hero-v2'+(t==='dark'?'':'-light')+'-poster.webp';p.fetchPriority='high';document.head.appendChild(p);})();</script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -232,7 +232,7 @@
         <p class="chapter-lede reveal">Private, fast, and on every machine you own.</p>
 
         <div class="pillar-tour reveal" data-pillar-tour aria-roledescription="carousel" aria-label="What makes Nekko Agent different">
-          <ol class="pillar-list" role="tablist" aria-orientation="vertical" aria-label="Five reasons to use Nekko Agent">
+          <ol class="pillar-list" role="tablist" aria-orientation="vertical" aria-label="Five reasons to use Nekko Agent" aria-owns="pillar-tab-local pillar-tab-speed pillar-tab-privacy pillar-tab-fleet pillar-tab-anywhere">
             <li role="presentation" class="pillar-item is-active">
               <button class="pillar-tab" role="tab" id="pillar-tab-local" aria-selected="true" aria-controls="pillar-panel" data-pillar="local"
                       data-alt="Picking a local model in Nekko Agent, then Claude Code using it over MCP">
