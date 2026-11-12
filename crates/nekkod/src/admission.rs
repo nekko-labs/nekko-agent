@@ -619,10 +619,33 @@ async fn admit(
     if !sandbox {
         facts.insert("hookRules".into(), settings.get("hooks").filter(|h| h.is_array()).cloned().unwrap_or(json!([])));
     }
-    // Opt-in usage reports: the provider's kind only, never its name, model or the prompt.
+    // Opt-in usage reports: the provider's kind (never its name), the model id,
+    // modes and counts. Never the prompt, folders or connector accounts.
+    let connector_kinds: Vec<&str> = settings
+        .get("connectors")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|c| nekko_js::truthy(c.get("connected")))
+        .filter_map(|c| c.get("kind").and_then(Value::as_str))
+        .collect();
+    let permission = session
+        .get("mode")
+        .and_then(Value::as_str)
+        .or_else(|| settings.get("defaultChatMode").and_then(Value::as_str))
+        .unwrap_or("guardrails");
     crate::telemetry::capture(
         "turn_started",
-        &json!({ "provider": kind, "local": is_local(kind), "offline": offline, "mode": mode_name, "sandbox": sandbox }),
+        &json!({
+            "provider": kind, "local": is_local(kind), "offline": offline, "mode": mode_name, "sandbox": sandbox,
+            "model": model_id,
+            "permission": permission,
+            "subagent": session.get("parentSessionId").is_some_and(|p| !p.is_null()),
+            // Other chats with a turn running as this one starts.
+            "running_agents": crate::routes::running_chats(ctx).len(),
+            "connectors": connector_kinds.join(","),
+            "mcp_servers": settings.get("mcpServers").and_then(Value::as_array).map_or(0, Vec::len),
+        }),
     );
     // The turn runs its tools in this daemon's container for the chat (turns.rs).
     facts.insert("sandbox".into(), json!(sandbox));
