@@ -21,3 +21,7 @@ People who want to help should be able to send anonymous usage and crash reports
 ## Consequences
 
 A new event needs an entry in `EVENTS` in `crates/nekkod/src/telemetry.rs` and a row in the spec's table. A crash that kills the process before the next minute's flush is lost; reports are best-effort.
+
+## Update 2026-11-12 (#2678)
+
+Reports now carry the model id, hardware, permission and execution modes, agent counts, connector kinds, voice and CI runner use, local hour and weekday, and clicks. Philip asked for as much as helps decide what to build, anonymous only. The model id was left out at first; it names a public model, not a person, and is scrubbed like every string (a local model's path keeps only its last part). Clicks report only labels that are fixed text in the source (`clickLabels.json`), never one built at runtime, so autocapture stays rejected.
