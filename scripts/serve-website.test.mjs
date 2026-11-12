@@ -458,3 +458,42 @@ test('pillar tour: Enlarge opens the active demo in the lightbox at the same fra
   assert.equal(v.paused, false);
   assert.equal(v.currentTime, 3, 'and carries on from the same frame');
 });
+
+test('the beta and status pages are linked, and status.json is well formed', () => {
+  const read = (f) => readFileSync(fileURLToPath(new URL(`../apps/website/${f}`, import.meta.url)), 'utf8');
+  const index = read('index.html');
+  assert.match(index, /href="\/beta" data-cta="beta-what-beta-means"/, 'the sign-up links to what beta means');
+  assert.match(index, /href="\/status" data-cta="footer-status"/);
+  assert.match(read('beta.html'), /href="\/status#known-issues"/);
+  assert.match(read('privacy.html'), /href="\/status">status page<\/a>/, 'the privacy policy names the status page’s requests');
+  for (const p of ['beta', 'status']) assert.ok(read('sitemap.xml').includes(`https://nekkoagent.com/${p}<`), p);
+  const status = JSON.parse(read('status.json'));
+  assert.match(status.updated, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(Array.isArray(status.incidents) && Array.isArray(status.knownIssues));
+  for (const s of status.services) {
+    assert.ok(s.id && s.name && s.what, s.id);
+    assert.ok(['ok', 'degraded', 'down'].includes(s.state), `${s.id} state`);
+    if (s.check) assert.match(s.check, /^https:\/\/[^/]+\/healthz$/);
+  }
+});
+
+test('status page: a hand-set problem wins, a failed check shows as not answering', async () => {
+  const { runInNewContext } = await import('node:vm');
+  const ctx = { window: {}, setTimeout, clearTimeout, AbortController, Promise };
+  runInNewContext(readFileSync(fileURLToPath(new URL('../apps/website/status.js', import.meta.url)), 'utf8'), ctx);
+  const { combine, overall, check } = ctx.window.NekkoStatus;
+  assert.equal(combine('ok', 'ok'), 'ok');
+  assert.equal(combine('ok', 'fail'), 'unreachable');
+  assert.equal(combine('ok', 'pending'), 'checking');
+  assert.equal(combine('degraded', 'ok'), 'degraded', 'we know more than a ping');
+  assert.equal(combine('down', 'fail'), 'down');
+  assert.equal(overall(['ok', 'ok']).state, 'ok');
+  assert.equal(overall(['ok', 'degraded']).state, 'degraded');
+  assert.equal(overall(['degraded', 'unreachable']).state, 'down');
+  assert.equal(overall(['ok', 'checking']).state, 'checking');
+  const reply = (ok, body) => () => Promise.resolve({ ok, json: () => Promise.resolve(body) });
+  assert.equal(await check('x', reply(true, { ok: true })), 'ok');
+  assert.equal(await check('x', reply(true, { ok: false })), 'fail');
+  assert.equal(await check('x', reply(false, null)), 'fail');
+  assert.equal(await check('x', () => Promise.reject(new Error('offline'))), 'fail');
+});

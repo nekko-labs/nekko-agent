@@ -457,3 +457,15 @@ describe('relay v2 routing', () => {
     expect((await denied.closed).reason).toContain('NEKKO_RELAY_ALLOW_UNAUTHENTICATED');
   });
 });
+
+describe('/healthz', () => {
+  it('lets the website status page read it, and no other site', async () => {
+    const { app } = buildRelay({ allowUnauthenticated: true });
+    apps.push(app as any);
+    const ok = await app.inject({ method: 'GET', url: '/healthz', headers: { origin: 'https://nekkoagent.com' } });
+    expect(ok.json().ok).toBe(true);
+    expect(ok.headers['access-control-allow-origin']).toBe('https://nekkoagent.com');
+    const other = await app.inject({ method: 'GET', url: '/healthz', headers: { origin: 'https://example.com' } });
+    expect(other.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});

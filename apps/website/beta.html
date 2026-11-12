@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en" data-theme="white">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>What beta means · Nekko Agent</title>
+    <meta name="description" content="What to expect from the Nekko Agent beta: what you get, what can go wrong, what happens to your data, and how to tell us when something breaks." />
+    <link rel="canonical" href="https://nekkoagent.com/beta" />
+    <meta name="theme-color" content="#fbf6f8" />
+    <script>(function(){var t=null;try{t=localStorage.getItem('nekko-theme');}catch(e){}if(t!=='white'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'white';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='white'?'#fbf6f8':'#0c0c11';})();</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
+    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="fonts.css?v=1" />
+    <style>
+      .legal { max-width: 720px; margin: 0 auto; padding: 120px 20px 80px; line-height: 1.65; }
+      .legal h1 { font-size: clamp(32px, 5vw, 48px); margin: 0 0 8px; }
+      .legal h2 { font-size: 22px; margin: 40px 0 8px; }
+      .legal p, .legal li { color: var(--muted); }
+      .legal strong { color: var(--ink); }
+      .legal a { color: var(--accent); }
+      .legal ul { padding-left: 20px; }
+    </style>
+  </head>
+  <body>
+    <header class="nav">
+      <a class="brand" href="/" aria-label="Nekko Agent home"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="30" height="23" /> NEKKO AGENT</a>
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="/#contributors">About us</a>
+        <a href="/docs">Docs</a>
+      </nav>
+    </header>
+
+    <main class="legal">
+      <h1>What beta means</h1>
+      <p class="micro">Last updated: 12 November 2026</p>
+
+      <p>The beta is the early version of Nekko Agent, and you're one of the first people using it. Here's what you get, what to expect, and what happens to your data, in plain words.</p>
+
+      <h2>What you get</h2>
+      <ul>
+        <li><strong>The iOS and Android apps</strong> before anyone else, to control Nekko Agent on your computer from your phone.</li>
+        <li><strong>New features as they land</strong>, often before they are finished.</li>
+        <li><strong>A direct line to the team.</strong> We read every note you send, and what you tell us shapes what we build next.</li>
+      </ul>
+
+      <h2>What to expect</h2>
+      <ul>
+        <li><strong>Things will break.</strong> You may hit bugs, crashes or slow moments. We try to catch them first, but not everything gets caught.</li>
+        <li><strong>Things will change.</strong> Features can move, change how they work or be removed while we learn what works. Updates come often.</li>
+        <li><strong>Our services can be down.</strong> Phone access, sync and cloud machines run on our servers, which are new. If one stops answering, the <a href="/status">status page</a> shows it.</li>
+        <li><strong>Some problems we already know about.</strong> They are listed with any workaround on the <a href="/status#known-issues">known issues list</a>, so check there before you spend time on one.</li>
+        <li><strong>Keep your own backups.</strong> Nekko Agent can edit files in the folders you give it. Use it on work you can get back, for example with Git or a backup.</li>
+      </ul>
+
+      <h2>Your data</h2>
+      <ul>
+        <li><strong>Your chats stay on your computer.</strong> The app runs on your own machine, and your local chats never leave it unless you turn on sync.</li>
+        <li><strong>Sync is locked.</strong> If you turn it on, your devices encrypt your chats before they leave, so we store only a copy we can't read.</li>
+        <li><strong>Usage and crash reports are off unless you turn them on.</strong> The app asks once, during setup, and you can change it in Settings at any time. When on, reports say which features get used and what broke, with personal details scrubbed out. They never include your chats, prompts, files, folder names or what the AI wrote.</li>
+        <li><strong>Feedback is yours to send.</strong> We only see what you choose to send us, and your name or email only if you add them.</li>
+        <li><strong>Your sign-up</strong> is kept until the beta ends or you unsubscribe, whichever comes first.</li>
+      </ul>
+      <p>The <a href="/privacy">privacy policy</a> has the full details: exactly what we keep, who handles it, where, for how long, and your rights.</p>
+
+      <h2>When something goes wrong</h2>
+      <ul>
+        <li>Check the <a href="/status">status page</a> to see if it's on our side, and the <a href="/status#known-issues">known issues list</a> to see if we already know.</li>
+        <li>Tell us from inside the app with <a href="/docs/send-feedback">Send feedback</a>. It's the fastest way, it needs no account, and app details are added only if you switch them on.</li>
+        <li>Or open an issue on <a href="https://github.com/nekko-labs/nekko-agent/issues" target="_blank" rel="noopener">GitHub</a>, or email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>.</li>
+      </ul>
+
+      <h2>Leaving the beta</h2>
+      <p>You can leave whenever you like. Click unsubscribe in any of our emails, or email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>, and we'll delete your sign-up. The app keeps working on your computer.</p>
+    </main>
+
+    <footer>
+      <span class="footer-brand"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="26" height="20" /> NEKKO AGENT</span>
+      <span class="micro">MIT · Made with ❤️ by the <a href="https://nekkolabs.com/#team" target="_blank" rel="noopener">Nekko Labs team</a></span>
+      <a href="/docs">Docs</a>
+      <a href="/beta">Beta</a>
+      <a href="/status">Status</a>
+      <a href="/privacy">Privacy</a>
+    </footer>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </body>
+</html>

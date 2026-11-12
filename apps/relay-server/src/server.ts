@@ -186,6 +186,9 @@ export interface RelayOptions {
   pushSender?: PushSender;
 }
 
+/** Sites allowed to read /healthz from a browser: the website's status page. */
+export const STATUS_PAGE_ORIGINS = new Set(['https://nekkoagent.com', 'https://www.nekkoagent.com']);
+
 export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; rooms: Map<string, Room> } {
   const limits: RelayLimits = { ...DEFAULT_LIMITS, ...opts.limits };
   const pushSender = opts.pushSender ?? createPushSender();
@@ -636,7 +639,14 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
     });
   });
 
-  app.get('/healthz', async () => ({ ok: true, rooms: rooms.size }));
+  // The website's status page (nekkoagent.com/status) reads this from the
+  // visitor's browser, so the website may read the answer.
+  app.get('/healthz', async (req, reply) => {
+    if (req.headers.origin && STATUS_PAGE_ORIGINS.has(req.headers.origin)) {
+      reply.header('access-control-allow-origin', req.headers.origin).header('vary', 'Origin');
+    }
+    return { ok: true, rooms: rooms.size };
+  });
 
   return { app, rooms };
 }
