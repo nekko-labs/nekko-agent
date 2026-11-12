@@ -16,7 +16,7 @@ beforeEach(() => {
     return n;
   };
   vi.stubGlobal('document', { documentElement: {}, body: { appendChild() {} }, createElement: make, createElementNS: (_: string, tag: string) => make(tag) });
-  vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: (key: string) => key === '--paper' ? '#0c0c11' : '#c084b5' }));
+  vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: (key: string) => key === '--paper' ? '#0b0c14' : '#c084b5' }));
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -24,7 +24,7 @@ describe('startup splash palette', () => {
   it('starts in deep plum without settings or cached colours', () => expect(paint()).toBe('#190019'));
   it.each([undefined, 'system', 'light', 'dark', 'x-plum-white', 'x-plum-dark'])('uses the main plum fill, not a text accent, for %s', (id) => {
     rememberSplashColours(['#c084b5', '#c99bb3'], id);
-    expect(stored()).toEqual({ version: 1, bg: '#190019', fg: '#ffffff', paper: '#0c0c11' });
+    expect(stored()).toEqual({ version: 1, bg: '#190019', fg: '#ffffff', paper: '#0b0c14' });
     expect(paint()).toBe('#190019');
   });
   it.each(['x-indigo-white', 'x-indigo-dark'])('uses the main indigo fill for %s', (id) => {
@@ -58,7 +58,7 @@ describe('startup splash palette', () => {
   it('uses safe paper when a cached reload colour is invalid', () => {
     cache.set('nekko.splash', JSON.stringify({ paper: 'invalid' }));
     fadeInReloadCover(120);
-    expect(nodes[0].style.cssText).toContain('background:#0c0c11');
+    expect(nodes[0].style.cssText).toContain('background:#0b0c14');
   });
   it('handles unavailable storage', () => {
     vi.stubGlobal('localStorage', { getItem() { throw Error('blocked'); }, setItem() { throw Error('blocked'); } });

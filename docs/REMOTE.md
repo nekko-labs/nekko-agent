@@ -204,8 +204,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > together, each row naming its computer, and the pill above the list filters it to one
 > computer (**Show chats from**). The phone stays connected to every paired computer and
 > reconnects to each by itself, so there is no Connect button: opening a chat on any computer
-> works straight away. A computer that can't be reached gets a line above the list with
-> **Reconnect**, which tries again at once (Computers and the computer's page offer it too).
+> works straight away. A slim row under the title shows every paired computer with a dot and its
+> name (green online, a ring while connecting, amber offline, red refused). A problem adds one word,
+> such as *offline* or *refused*; tap it to read one line and the fix (**Retry**, **Pair again**,
+> **Open Tailscale**). When Tailscale is off on the iPhone and that is what keeps a computer away,
+> **Tailscale off** leads the row. Computers and the computer's page offer **Reconnect** too.
 > Each row shows where its chat runs: the computer's icon in its colour (as on the desktop) and
 > its name. **View → Group by → Computer** puts a heading over each computer's chats, and
 > **View → Show** turns the computer's name and icon off.
@@ -336,8 +339,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > The chat list still shows one computer's chats at a time.
 >
 > **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
-> different phone protocol versions, the chat list and **Settings → About** show a banner naming
-> the side to update: Nekko Agent on the computer, or the app.
+> different phone protocol versions, the side to update is named: on the iPhone, *update* beside
+> the computer in the chat list's connection row and a line in **Settings → About**; on Android, a
+> banner on the chat list and in Settings.
 >
 > **First run** (iPhone and Android): the first time the app opens it shows three steps: what it
 > does, pairing, and, right after the first pairing, what notifications look like with **Allow

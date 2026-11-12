@@ -37,7 +37,8 @@ describe('modelMediaSupport', () => {
 describe('mediaSupportNotice', () => {
   it('says nothing when supported and explains otherwise', () => {
     expect(mediaSupportNotice('image', 'yes', 'GPT-5')).toBeNull();
-    expect(mediaSupportNotice('video', 'no', 'GPT-5')).toBe("GPT-5 can't take videos. Pick a model with vision input to send them.");
+    expect(mediaSupportNotice('image', 'no', 'GPT-3.5')).toBe("GPT-3.5 can't take photos. Pick a model with vision input to send them.");
+    expect(mediaSupportNotice('video', 'no', 'GPT-5')).toBe("GPT-5 can't watch videos, so they're attached as files.");
     expect(mediaSupportNotice('image', 'unknown', 'my-finetune')).toContain('may not accept photos');
   });
 });

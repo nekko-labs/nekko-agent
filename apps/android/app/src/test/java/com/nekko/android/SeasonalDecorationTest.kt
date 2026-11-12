@@ -28,18 +28,30 @@ class SeasonalDecorationTest {
         }
     }
 
-    @Test fun eightSeedsIncludeOneCatAndStayInBoundsOnPhoneOrFold() {
-        assertEquals(8, WinterFlakes.COUNT)
-        assertEquals(3, WinterFlakes.CAT_INDEX)
-        for (seconds in listOf(0.0, 1.0, 30.0, 3600.0)) {
+    @Test fun tenSlowLargeFlakesInEightDesignsStayInBoundsOnPhoneOrFold() {
+        assertEquals(10, WinterFlakes.COUNT)
+        assertEquals(8, WinterFlakes.TYPE_COUNT)
+        val types = mutableSetOf<Int>()
+        for (seed in listOf(1L, 42L, 0xDEADBEEFL)) {
             for (index in 0 until WinterFlakes.COUNT) {
-                val point = WinterFlakes.position(index, seconds)
-                assertTrue(point.x > 0f && point.x < 1f)
-                assertTrue(point.y >= 0f && point.y < 1f)
+                assertEquals(WinterFlakes.flake(index, 0.0, seed), WinterFlakes.flake(index, 0.0, seed))
+                assertNotEquals(WinterFlakes.flake(index, 0.0, seed).position, WinterFlakes.flake(index, 3.0, seed).position)
+                val a = WinterFlakes.flake(index, 0.0, seed).position.y
+                val b = WinterFlakes.flake(index, 1.0, seed).position.y
+                if (b > a) assertTrue(b - a <= 1f / 48 + 1e-6f)
+                for (seconds in listOf(0.0, 1.0, 30.0, 300.0, 3600.0)) {
+                    val flake = WinterFlakes.flake(index, seconds, seed)
+                    assertTrue(flake.position.x > 0f && flake.position.x < 1f)
+                    assertTrue(flake.position.y >= 0f && flake.position.y < 1f)
+                    assertTrue(flake.radius in 8f..14f)
+                    types += flake.type
+                }
             }
         }
-        assertEquals(0.0625f, WinterFlakes.position(0, 0.0).x, 0.00001f)
-        assertEquals(0.06f, WinterFlakes.position(0, 0.0).y, 0.00001f)
-        assertNotEquals(WinterFlakes.position(3, 0.0), WinterFlakes.position(3, 1.0))
+        assertEquals((0 until 8).toSet(), types)
+    }
+
+    @Test fun hashMatchesIos() {
+        assertEquals(0.20620949912738473, WinterFlakes.unit(42L, 3, 7, 4), 1e-12)
     }
 }

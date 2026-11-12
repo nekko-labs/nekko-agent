@@ -278,9 +278,13 @@ final class LiveRelayTests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         }
         XCTAssertTrue(result.exists, "the test reports which path it took")
-        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
         let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Test notification")).firstMatch
-        XCTAssertTrue(banner.waitForExistence(timeout: 10), "the test notification shows over the app")
+        // Check the banner immediately after the result appears: system banners auto-dismiss in
+        // a few seconds, and reading result.label takes an accessibility round-trip that can
+        // push the banner out of its display window on a slow runner.
+        let bannerSeenEarly = banner.exists
+        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
+        XCTAssertTrue(bannerSeenEarly || banner.waitForExistence(timeout: 10), "the test notification shows over the app")
         let bannerShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         bannerShot.name = "\(theme)-7e-test-notification"
         bannerShot.lifetime = .keepAlways
@@ -451,15 +455,18 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(edited.waitForExistence(timeout: computerWait), "the edit reached the computer's queue")
         attach(app, "beyond-3-queue-edited")
         auditAccessibility(app, "beyond-queue")
-        // The edited prompt runs after the slow reply, as edited.
-        let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: next one, edited"))
-        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 2 * computerWait), "the edited prompt ran")
         // Its reply streams on, and while it does the transcript keeps scrolling to the
         // end, which cancels a long press (no menu after two presses, run 40447057708).
         XCTAssertTrue(waitGone(app.buttons["Stop"].firstMatch, computerWait), "the edited prompt's reply finished")
+        // After streaming ends the transcript is static; the edited-prompt row is in the
+        // accessibility tree. While streaming, view recycling can remove it (#2547).
+        let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: next one, edited"))
+        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 10), "the edited prompt ran")
 
-        // IO-23: fork from the first prompt; the new chat has it in its message box.
-        let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
+        // IO-23: fork from a prompt; the new chat has it in its message box. The second prompt,
+        // not the first: at the top of this transcript the first bubble is drawn but missing from
+        // the accessibility tree (runs 42914771556 and 42923097159, #2547), so XCTest can't press it.
+        let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: a long run please")).firstMatch
         // The transcript only draws what is near the screen, and the message box (taller since
         // #1250) and keyboard leave it a strip: scroll back up to the first prompt. Drag near
         // the top, where the transcript is; the middle of the screen is the message box.
@@ -478,7 +485,7 @@ final class LiveRelayTests: XCTestCase {
             }
             settle()
         }
-        XCTAssertTrue(first.waitForExistence(timeout: 10), "the first prompt is on screen")
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "the prompt to fork from is on screen")
         // The menu item carries the identifier `chat.fork` (#868); XCTest matches
         // an element's identifier, not its label, once one is set.
         let fork = app.buttons["chat.fork"].firstMatch
@@ -486,7 +493,7 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "beyond-4-fork-menu")
         fork.tap()
         let forkedBox = app.input("chat.message")
-        let seeded = expectation(for: NSPredicate(format: "value == %@", "Say hello"), evaluatedWith: forkedBox)
+        let seeded = expectation(for: NSPredicate(format: "value == %@", "a long run please"), evaluatedWith: forkedBox)
         wait(for: [seeded], timeout: computerWait)
         attach(app, "beyond-5-forked")
 
@@ -499,7 +506,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(viewMenu.waitForExistence(timeout: 5), "the view menu")
         XCTAssertTrue(waitForFrame(viewMenu, in: app, 10), "the view menu never got a frame")
         viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        XCTAssertTrue(app.buttons["chats.view.groupBy"].waitForExistence(timeout: 5), "Group by")
+        XCTAssertTrue(viewOptionsGroupBy(app).waitForExistence(timeout: 5), "Group by")
         attach(app, "beyond-6-view-menu")
         closeViewOptions(app)
         auditAccessibility(app, "beyond-chats")
@@ -936,7 +943,7 @@ final class LiveRelayTests: XCTestCase {
         let viewMenu = app.buttons["chats.view"].firstMatch
         XCTAssertTrue(waitForFrame(viewMenu, in: app, 10))
         viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        let groupBy = app.buttons["chats.view.groupBy"]
+        let groupBy = viewOptionsGroupBy(app)
         XCTAssertTrue(groupBy.waitForExistence(timeout: 5), "Group by")
         let byComputer = app.buttons["Computer"].firstMatch
         XCTAssertTrue(groupBy.tapUntil { byComputer.exists }, "Group by opens its choices")

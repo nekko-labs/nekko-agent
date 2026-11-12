@@ -7,6 +7,14 @@ area: code
 
 Added 2026-10-23. Every agent chat whose work lands as a PR tracks that work as an issue: before opening the PR it finds the issue for the feature or change, or files one (GitHub Issues through `gh` or the GitHub connector, or the tracker the project already uses, such as Linear or Jira), with a plain-language title and the what and why. The PR then links to it (for example `Closes #123`). Questions and chats that open no PR file nothing.
 
+## Assign the issue while working on it
+
+Added 2026-11-12. So everyone on a project can see what is being worked on, the agent assigns the issue to the account doing the work as soon as it starts on it (`gh issue edit <number> --add-assignee @me` on GitHub, or the tracker's equivalent), whether it found the issue, filed it, or the user named it. This applies to every user and every chat that tracks work as an issue; it is part of the base system prompt, not a setting, and it follows the "file an issue for each change" toggle (off means no issue, so nothing to assign).
+
+- An issue already assigned to someone else is not taken over: the agent tells the user and lets them decide.
+- If the agent stops without opening a PR, it unassigns itself and leaves a short comment saying where the work stands, so the issue does not look taken when it is not.
+- Merging the linked PR closes the issue; the assignee stays as the record of who did it.
+
 ## What goes into the ticket
 
 The user decides, once, whether their own material goes into issues and PR descriptions:
@@ -29,4 +37,4 @@ The first-run wizard asks these as quick toggles on its **Work tracking** step, 
 
 ## Status
 
-Implemented: prompt default, settings, both Settings sections, onboarding step, unit and render tests, hidden-window screenshots. Not verified: a live chat filing an issue end to end against a real repository.
+Implemented: prompt default, settings, both Settings sections, onboarding step, unit and render tests, hidden-window screenshots. Not verified: a live chat filing an issue end to end against a real repository. Issue assignment (2026-11-12): prompt text and golden fixtures only; not yet seen in a live chat.
