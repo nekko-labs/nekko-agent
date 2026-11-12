@@ -39,10 +39,16 @@ test('marketing preview serves only static website files and read requests', asy
   assert.doesNotMatch(page.body, /class="hero-proof/);
   for (const f of ['hero-v2.mp4', 'hero-v2-light.mp4', 'hero-v2-poster.webp', 'hero-v2-light-poster.webp']) assert.equal((await get(`/media/${f}`)).status, 200, f);
   assert.doesNotMatch(page.body, /Time to complete reply/);
-  // Why Nekko is the five-pillar tour: a vertical tablist beside one demo, the
-  // speed pillar titled without a superlative it cannot prove.
+  // Why Nekko is the five-pillar tour: a vertical carousel beside one demo, the
+  // speed pillar titled without a superlative it cannot prove. The tablist /
+  // tab roles were dropped because Google's Agentic Browsing audit rejected
+  // every DOM shape we could give them, including aria-owns (#2672); the
+  // widget is really a carousel whose aria-roledescription already says so.
   assert.match(page.body, /data-pillar-tour/);
-  assert.equal((page.body.match(/role="tab"/g) ?? []).length, 5);
+  assert.equal((page.body.match(/class="pillar-tab"/g) ?? []).length, 5);
+  assert.doesNotMatch(page.body, /role="tablist"/);
+  assert.doesNotMatch(page.body, /role="tab"/);
+  assert.doesNotMatch(page.body, /aria-selected=/);
   assert.match(page.body, /Fast\. Really fast\./);
   for (const id of ['local', 'speed', 'privacy', 'fleet', 'anywhere']) {
     for (const f of [`pillar-${id}.mp4`, `pillar-${id}-light.mp4`, `pillar-${id}-poster.jpg`, `pillar-${id}-light-poster.jpg`]) {
@@ -51,11 +57,21 @@ test('marketing preview serves only static website files and read requests', asy
   }
   // Profiles: the spot claims separation of chats, notes and connectors, and
   // its footnote keeps the two things a profile is not.
-  const profiles = page.body.slice(page.body.indexOf('id="profiles"'), page.body.indexOf('id="why"'));
+  const profiles = page.body.slice(page.body.indexOf('id="profiles"'), page.body.indexOf('id="roadmap"'));
   assert.ok(profiles.length > 200, 'profiles spot present');
   assert.match(profiles, /cannot read another profile&rsquo;s chats, notes or connectors/);
   assert.match(profiles, /do not lock the app against someone using your unlocked computer/);
   assert.match(profiles, /a terminal command can still reach files anywhere your computer account can/);
+  // A shorter page (2026-11-12): the harness manifest, the local/online cards and
+  // the editions grid are gone, and nothing links to them. Nekko's intro line now
+  // sits under the MEET NEKKO badge in the hero, word for word.
+  for (const id of ['features', 'why', 'editions']) {
+    assert.doesNotMatch(page.body, new RegExp(`id="${id}"`), `#${id} removed`);
+    assert.doesNotMatch(page.body, new RegExp(`href="[^"]*#${id}"`), `no links to #${id}`);
+  }
+  const hero = page.body.slice(page.body.indexOf('<section class="hero">'), page.body.indexOf('</section>', page.body.indexOf('<section class="hero">')));
+  assert.match(hero, /<span>MEET NEKKO<\/span>\s*<p class="mascot-cap">Meet Nekko: a small pixel cat keeping you company while your agents get to work\.<\/p>/);
+  assert.doesNotMatch(page.body, /class="[^"]*mf-foot/);
   assert.doesNotMatch(profiles, /cannot (read|reach|access) another profile&rsquo;s (files|folders)/);
   // The benchmark summary keeps the result, its conditions, the measured losses
   // and the link to the full method, so the headline never hides them.
@@ -174,7 +190,7 @@ function pillarTour({ reduced = false, peek = false } = {}) {
   const tour = {
     ...target(), ...structural, classList: classes(),
     querySelectorAll: (s) => (s === '.pillar-video' ? vids : items.map((i) => i.tab)),
-    querySelector: (s) => ({ '[role="tabpanel"]': panel, '[data-pillar-pause]': pauseBtn, '[data-pillar-enlarge]': enlargeBtn })[s],
+    querySelector: (s) => ({ '#pillar-panel': panel, '[data-pillar-pause]': pauseBtn, '[data-pillar-enlarge]': enlargeBtn })[s],
     contains: () => false,
   };
   // The peek: an empty host on the frame, and the beta card's drawing to clone.
@@ -447,4 +463,43 @@ test('pillar tour: Enlarge opens the active demo in the lightbox at the same fra
   t.box.fire('lightbox:close');
   assert.equal(v.paused, false);
   assert.equal(v.currentTime, 3, 'and carries on from the same frame');
+});
+
+test('the beta and status pages are linked, and status.json is well formed', () => {
+  const read = (f) => readFileSync(fileURLToPath(new URL(`../apps/website/${f}`, import.meta.url)), 'utf8');
+  const index = read('index.html');
+  assert.match(index, /href="\/beta" data-cta="beta-what-beta-means"/, 'the sign-up links to what beta means');
+  assert.match(index, /href="\/status" data-cta="footer-status"/);
+  assert.match(read('beta.html'), /href="\/status#known-issues"/);
+  assert.match(read('privacy.html'), /href="\/status">status page<\/a>/, 'the privacy policy names the status page’s requests');
+  for (const p of ['beta', 'status']) assert.ok(read('sitemap.xml').includes(`https://nekkoagent.com/${p}<`), p);
+  const status = JSON.parse(read('status.json'));
+  assert.match(status.updated, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(Array.isArray(status.incidents) && Array.isArray(status.knownIssues));
+  for (const s of status.services) {
+    assert.ok(s.id && s.name && s.what, s.id);
+    assert.ok(['ok', 'degraded', 'down'].includes(s.state), `${s.id} state`);
+    if (s.check) assert.match(s.check, /^https:\/\/[^/]+\/healthz$/);
+  }
+});
+
+test('status page: a hand-set problem wins, a failed check shows as not answering', async () => {
+  const { runInNewContext } = await import('node:vm');
+  const ctx = { window: {}, setTimeout, clearTimeout, AbortController, Promise };
+  runInNewContext(readFileSync(fileURLToPath(new URL('../apps/website/status.js', import.meta.url)), 'utf8'), ctx);
+  const { combine, overall, check } = ctx.window.NekkoStatus;
+  assert.equal(combine('ok', 'ok'), 'ok');
+  assert.equal(combine('ok', 'fail'), 'unreachable');
+  assert.equal(combine('ok', 'pending'), 'checking');
+  assert.equal(combine('degraded', 'ok'), 'degraded', 'we know more than a ping');
+  assert.equal(combine('down', 'fail'), 'down');
+  assert.equal(overall(['ok', 'ok']).state, 'ok');
+  assert.equal(overall(['ok', 'degraded']).state, 'degraded');
+  assert.equal(overall(['degraded', 'unreachable']).state, 'down');
+  assert.equal(overall(['ok', 'checking']).state, 'checking');
+  const reply = (ok, body) => () => Promise.resolve({ ok, json: () => Promise.resolve(body) });
+  assert.equal(await check('x', reply(true, { ok: true })), 'ok');
+  assert.equal(await check('x', reply(true, { ok: false })), 'fail');
+  assert.equal(await check('x', reply(false, null)), 'fail');
+  assert.equal(await check('x', () => Promise.reject(new Error('offline'))), 'fail');
 });

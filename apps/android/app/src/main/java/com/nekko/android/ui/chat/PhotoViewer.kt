@@ -1,11 +1,8 @@
 package com.nekko.android.ui.chat
 
 import android.content.ClipData
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.provider.MediaStore
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -114,6 +111,8 @@ fun PhotoViewer(photos: List<ViewerPhoto>, start: Int, label: (Int) -> String, o
     var menu by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(note) { if (note != null) { delay(2_000); note = null } }
+    // Android 9 asks for storage access the first time; later versions save with no question.
+    val saveToGallery = rememberGallerySave { note = res.getString(R.string.chat_save_needs_storage) }
     val page = pager.currentPage
     val current = urls[page] ?: photos[page].small
     val ready = loading[page] != true && current.isNotEmpty()
@@ -176,17 +175,16 @@ fun PhotoViewer(photos: List<ViewerPhoto>, start: Int, label: (Int) -> String, o
                         Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.photo_actions), tint = if (ready) Color.White else Color.White.copy(alpha = 0.4f))
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_save_to_photos)) },
-                                leadingIcon = { Icon(Icons.Outlined.Save, null) },
-                                onClick = {
-                                    menu = false
-                                    scope.launch { note = res.getString(if (PhotoFiles.save(context, current)) R.string.chat_saved_to_photos else R.string.chat_save_failed) }
-                                },
-                                modifier = Modifier.testTag("photo.save"),
-                            )
-                        }
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_save_to_photos)) },
+                            leadingIcon = { Icon(Icons.Outlined.Save, null) },
+                            onClick = {
+                                menu = false
+                                val url = current
+                                saveToGallery { note = res.getString(if (PhotoFiles.save(context, url)) R.string.chat_saved_to_photos else R.string.chat_save_failed) }
+                            },
+                            modifier = Modifier.testTag("photo.save"),
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.chat_copy)) },
                             leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) },
@@ -349,20 +347,11 @@ internal object PhotoFiles {
         else -> "jpg"
     }
 
-    /** Pictures/Nekko in the phone's gallery, the photo's own bytes (Android 10 and later need no permission). */
-    suspend fun save(context: Context, url: String): Boolean = withContext(Dispatchers.IO) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@withContext false
-        val bytes = PhotoDecoder.bytesOf(url) ?: return@withContext false
+    /** Pictures/Nekko in the phone's gallery, the photo's own bytes ([Gallery]: on Android 9 too). */
+    suspend fun save(context: Context, url: String): Boolean {
+        val bytes = PhotoDecoder.bytesOf(url) ?: return false
         val mime = mime(url)
-        runCatching {
-            val values = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, "Photo ${System.currentTimeMillis()}.${extension(mime)}")
-                put(MediaStore.Images.Media.MIME_TYPE, mime)
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Nekko")
-            }
-            val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return@runCatching false
-            context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } != null
-        }.getOrDefault(false)
+        return Gallery.save(context, bytes, mime, "Photo ${System.currentTimeMillis()}.${extension(mime)}")
     }
 
     /** One file in the cache, shared through the app's FileProvider and replaced by the next one. */

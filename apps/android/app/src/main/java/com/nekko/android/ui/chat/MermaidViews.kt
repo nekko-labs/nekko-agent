@@ -5,11 +5,8 @@ import com.nekko.android.R
 import androidx.compose.ui.res.stringResource
 import android.annotation.SuppressLint
 import android.content.ClipData
-import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Bitmap
-import android.os.Build
-import android.provider.MediaStore
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -226,6 +223,8 @@ private fun MermaidScreen(source: String, drawing: MermaidRenderer.Drawing, dark
                 }
             }
         }
+        // Android 9 asks for storage access the first time; later versions save with no question.
+        val saveToGallery = rememberGallerySave { note = resources.getString(R.string.chat_save_needs_storage) }
         Scaffold(
             containerColor = p.paper,
             topBar = {
@@ -246,12 +245,10 @@ private fun MermaidScreen(source: String, drawing: MermaidRenderer.Drawing, dark
                                     menu = false
                                     scope.launch { shareImage(context, drawing.image) }
                                 })
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.chat_save_to_photos)) }, leadingIcon = { Icon(Icons.Outlined.Save, null) }, onClick = {
-                                        menu = false
-                                        scope.launch { note = if (saveToPhotos(context, drawing.image)) resources.getString(R.string.chat_saved_to_photos) else resources.getString(R.string.chat_save_failed) }
-                                    })
-                                }
+                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_save_to_photos)) }, leadingIcon = { Icon(Icons.Outlined.Save, null) }, onClick = {
+                                    menu = false
+                                    saveToGallery { note = if (saveToPhotos(context, drawing.image)) resources.getString(R.string.chat_saved_to_photos) else resources.getString(R.string.chat_save_failed) }
+                                })
                                 DropdownMenuItem(text = { Text(if (showSource) stringResource(R.string.chat_show_diagram) else stringResource(R.string.chat_show_source)) }, leadingIcon = { Icon(Icons.Outlined.Code, null) }, onClick = {
                                     menu = false
                                     showSource = !showSource
@@ -333,16 +330,8 @@ private suspend fun shareImage(context: android.content.Context, image: Bitmap) 
     context.startActivity(Intent.createChooser(send, null))
 }
 
-/** Pictures/Nekko in the phone's gallery (Android 10 and later need no permission for it). */
-private suspend fun saveToPhotos(context: android.content.Context, image: Bitmap): Boolean = withContext(Dispatchers.IO) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@withContext false
-    runCatching {
-        val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "Diagram ${System.currentTimeMillis()}.png")
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Nekko")
-        }
-        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return@runCatching false
-        context.contentResolver.openOutputStream(uri)?.use { image.compress(Bitmap.CompressFormat.PNG, 100, it) } != null
-    }.getOrDefault(false)
+/** Pictures/Nekko in the phone's gallery, as a PNG ([Gallery]: on Android 9 too). */
+private suspend fun saveToPhotos(context: android.content.Context, image: Bitmap): Boolean {
+    val bytes = withContext(Dispatchers.Default) { java.io.ByteArrayOutputStream().also { image.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray() }
+    return Gallery.save(context, bytes, "image/png", "Diagram ${System.currentTimeMillis()}.png")
 }
