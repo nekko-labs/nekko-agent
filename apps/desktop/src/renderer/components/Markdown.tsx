@@ -3,7 +3,7 @@ import { verificationPairs, type EvidencePair } from '../verificationEvidence.js
 import { VerificationEvidence } from './VerificationEvidence.js';
 import { LocalImageCard } from './LocalImageCard.js';
 import { localImagePath } from '../localImages.js';
-import { fileUrlPath } from '../chatArtifacts.js';
+import { fileUrlPath, namedOutputPath } from '../chatArtifacts.js';
 import { remoteImageUrl } from '../remoteImages.js';
 import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
@@ -546,11 +546,13 @@ function inline(s: string, ctx: Ctx): React.ReactNode {
     } else if (strike !== undefined) {
       nodes.push(<s key={key++} className="text-ink-faint">{inline(strike, ctx)}</s>);
     } else if (code !== undefined) {
-      nodes.push(
+      const span = (
         <code key={key++} className="rounded-sm px-1 py-0.5 font-mono text-sm [overflow-wrap:anywhere]" style={{ background: 'var(--surface-2)' }}>
           {code}
-        </code>,
+        </code>
       );
+      const named = namedOutputPath(code);
+      nodes.push(named ? <CodeRef key={key++} href={named} basePath={ctx.basePath} doc={ctx.doc}>{span}</CodeRef> : span);
     } else if (linkText !== undefined) {
       nodes.push(<Ref key={key++} href={linkHref} basePath={ctx.basePath} doc={ctx.doc}>{linkText}</Ref>);
     } else if (bareUrl !== undefined) {
@@ -604,6 +606,18 @@ function Ref({ href: raw, basePath, doc, children }: { href: string; basePath?: 
       {children}
     </button>
   );
+}
+
+/**
+ * A code span naming a page, image or PDF (`reports/strip.html`) opens it like
+ * a link would; where a link could not open (Sandbox, no folder for a relative
+ * path) it stays plain code rather than a dimmed or "unavailable" label.
+ */
+function CodeRef({ href, basePath, doc, children }: { href: string; basePath?: string; doc?: boolean; children: React.ReactNode }) {
+  const sandbox = React.useContext(MarkdownSandbox);
+  const path = fileUrlPath(href) ?? href;
+  if (sandbox || (!basePath && !/^(?:[A-Za-z]:[\\/]|\/)/.test(path))) return <>{children}</>;
+  return <Ref href={href} basePath={basePath} doc={doc}>{children}</Ref>;
 }
 
 /**

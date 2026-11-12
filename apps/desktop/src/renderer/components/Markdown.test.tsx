@@ -371,3 +371,17 @@ describe('Markdown block split', () => {
     }
   });
 });
+
+describe('code spans naming an output file', () => {
+  it('opens a page, image or PDF named in code, and leaves other code alone', () => {
+    const out = renderToStaticMarkup(<Markdown text={'Design: `reports/strip.html`. Built in `src/App.tsx`.'} basePath="/repo" />);
+    expect(out).toMatch(/<button[^>]*title="Open \/repo\/reports\/strip\.html"[^>]*><code[^>]*>reports\/strip\.html<\/code><\/button>/);
+    expect(out).not.toContain('Open /repo/src/App.tsx');
+    expect(out).toMatch(/<code[^>]*>src\/App\.tsx<\/code>/);
+  });
+  it('stays plain code when a relative path has no folder to resolve against', () => {
+    const out = html('Design: `reports/strip.html`.');
+    expect(out).not.toContain('<button');
+    expect(out).not.toContain('text-ink-soft');
+  });
+});
