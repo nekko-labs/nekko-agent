@@ -17,7 +17,7 @@ final class IconThemeEvidenceTests: XCTestCase {
         }
     }
 
-    /// View options (a popover UIKit presents) and Settings rows, light and dark.
+    /// View options (one native menu, #2449) and Settings rows, light and dark.
     func testTintAndRowIconsEvidence() {
         for theme in ["light", "dark"] {
             let app = XCUIApplication()
@@ -29,7 +29,7 @@ final class IconThemeEvidenceTests: XCTestCase {
             XCTAssertTrue(view.waitForExistence(timeout: 10))
             attach(app, "icons-chats-\(theme)")
             view.tap()
-            XCTAssertTrue(app.popovers.firstMatch.waitForExistence(timeout: 5))
+            XCTAssertTrue(viewOptionsGroupBy(app).waitForExistence(timeout: 5))
             attach(app, "icons-view-options-\(theme)")
             closeViewOptions(app)
             openSettings(app)

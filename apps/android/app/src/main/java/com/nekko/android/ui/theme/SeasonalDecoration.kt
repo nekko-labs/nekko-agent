@@ -17,6 +17,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +35,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
 
 enum class SeasonalDecoration {
@@ -49,35 +52,88 @@ enum class SeasonalDecoration {
 
 val LocalSeasonalDecoration = staticCompositionLocalOf { SeasonalDecoration.NONE }
 
-/** The same eight deterministic seeds and normalized geometry as iOS. */
+/**
+ * Ten flakes in the air at once, each in one of eight designs. Every fall picks a new
+ * design, column and size at random; each flake's (slow) speed and spin are random per
+ * launch. The same model, designs and hash as iOS.
+ */
 internal object WinterFlakes {
-    const val COUNT = 8
-    const val CAT_INDEX = 3
+    const val COUNT = 10
+    /** Radius range (dp) and seconds per fall: large and always slow. */
+    const val MIN_RADIUS = 8.0
+    const val MAX_RADIUS = 14.0
+    const val MIN_FALL = 48.0
+    const val MAX_FALL = 96.0
 
-    fun position(index: Int, seconds: Double): Offset {
-        val seed = index.toDouble()
-        return Offset(
-            ((seed + 0.5) / COUNT + sin(seconds / 7 + seed) * 0.018).toFloat(),
-            ((0.06 + seed * 0.113 + seconds / (24 + seed * 2)) % 1).toFloat(),
+    data class Flake(val position: Offset, val type: Int, val radius: Float, val angle: Float)
+
+    /**
+     * One arm pointing up from the centre of a 24 x 24 box, repeated six times, plus beads
+     * on each arm and an optional centre ring. Matches the desktop's `SNOWFLAKE_TYPES`.
+     */
+    class Design(val lines: List<List<Pair<Double, Double>>>, val beads: List<Triple<Double, Double, Double>> = emptyList(), val ring: Double? = null)
+
+    val designs = listOf(
+        Design(listOf(listOf(12.0 to 12.0, 12.0 to 2.0), listOf(9.6 to 4.4, 12.0 to 6.6, 14.4 to 4.4))),
+        Design(listOf(listOf(12.0 to 12.0, 12.0 to 2.0), listOf(10.5 to 3.5, 12.0 to 5.0, 13.5 to 3.5), listOf(9.9 to 5.9, 12.0 to 7.6, 14.1 to 5.9))),
+        Design(listOf(listOf(12.0 to 12.0, 12.0 to 4.8)), beads = listOf(Triple(12.0, 3.2, 1.2))),
+        Design(listOf(listOf(12.0 to 12.0, 12.0 to 2.0), listOf(10.0 to 4.6, 14.0 to 4.6), listOf(10.6 to 7.6, 13.4 to 7.6))),
+        Design(listOf(listOf(12.0 to 12.0, 12.0 to 6.4), listOf(12.0 to 6.4, 10.4 to 4.0, 12.0 to 1.6, 13.6 to 4.0, 12.0 to 6.4))),
+        Design(listOf(listOf(12.0 to 12.0, 12.0 to 2.0), listOf(10.2 to 3.8, 12.0 to 2.0, 13.8 to 3.8), listOf(10.7 to 6.5, 12.0 to 5.2, 13.3 to 6.5))),
+        Design(listOf(listOf(12.0 to 8.6, 12.0 to 2.4), listOf(10.6 to 4.4, 12.0 to 5.8, 13.4 to 4.4), listOf(12.0 to 8.6, 14.98 to 10.3))),
+        Design(listOf(listOf(12.0 to 9.6, 12.0 to 2.0), listOf(9.4 to 5.6, 12.0 to 7.2, 14.6 to 5.6), listOf(10.4 to 3.6, 12.0 to 4.6, 13.6 to 3.6)), ring = 2.4),
+    )
+    val TYPE_COUNT = designs.size
+
+    /** Where flake [index] is after [seconds], for this launch's [seed]. */
+    fun flake(index: Int, seconds: Double, seed: Long): Flake {
+        val period = MIN_FALL + (MAX_FALL - MIN_FALL) * unit(seed, index, -1, 0)
+        val progress = unit(seed, index, -1, 1) + seconds / period
+        val cycle = floor(progress).toInt()
+        val y = progress - cycle
+        val spin = if (unit(seed, index, -1, 2) < 0.5) -1.0 else 1.0
+        val column = 0.04 + unit(seed, index, cycle, 3) * 0.92
+        return Flake(
+            Offset((column + sin(seconds / 9 + index) * 0.02).toFloat(), y.toFloat()),
+            minOf(TYPE_COUNT - 1, (unit(seed, index, cycle, 4) * TYPE_COUNT).toInt()),
+            (MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * unit(seed, index, cycle, 5)).toFloat(),
+            (spin * y * 2.3).toFloat(),
         )
     }
 
-    fun snowflake() = Path().apply {
+    /** Design [type] at radius 1, centred on the origin. */
+    fun path(type: Int) = Path().apply {
+        val design = designs[type]
         repeat(6) { arm ->
             val angle = arm * Math.PI / 3
-            fun point(radius: Double, offset: Double = 0.0) = Offset((cos(angle + offset) * radius).toFloat(), (sin(angle + offset) * radius).toFloat())
-            moveTo(0f, 0f)
-            point(1.0).let { lineTo(it.x, it.y) }
-            for (offset in listOf(-0.45, 0.45)) {
-                point(0.55).let { moveTo(it.x, it.y) }
-                point(0.82, offset).let { lineTo(it.x, it.y) }
+            fun point(x: Double, y: Double): Offset {
+                val along = (12 - y) / 10
+                val across = (x - 12) / 10
+                return Offset((along * sin(angle) + across * cos(angle)).toFloat(), (-along * cos(angle) + across * sin(angle)).toFloat())
+            }
+            for (line in design.lines) {
+                point(line[0].first, line[0].second).let { moveTo(it.x, it.y) }
+                for ((x, y) in line.drop(1)) point(x, y).let { lineTo(it.x, it.y) }
+            }
+            for ((x, y, r) in design.beads) {
+                val c = point(x, y)
+                val rr = (r / 10).toFloat()
+                addOval(Rect(c.x - rr, c.y - rr, c.x + rr, c.y + rr))
             }
         }
+        design.ring?.let { val rr = (it / 10).toFloat(); addOval(Rect(-rr, -rr, rr, rr)) }
     }
 
-    fun cat() = polygon(-0.85f to -0.85f, -0.35f to -0.35f, 0.35f to -0.35f, 0.85f to -0.85f,
-        0.85f to 0.4f, 0.45f to 0.85f, -0.45f to 0.85f, -0.85f to 0.4f).apply {
-        for (x in listOf(-0.3f, 0.3f)) { moveTo(x, 0f); lineTo(x, 0.2f) }
+    /** The classic design, also stitched on the Winter beanie. */
+    fun snowflake() = path(0)
+
+    /** A repeatable number in 0 until 1 (SplitMix64), the same as iOS. */
+    fun unit(seed: Long, index: Int, cycle: Int, salt: Int): Double {
+        var z = seed + index.toLong() * -0x61c8864680b583ebL + cycle.toLong() * -0x40a7b892e31b1a47L + salt.toLong() * -0x6b2fb644ecceee15L
+        z = (z xor (z ushr 30)) * -0x40a7b892e31b1a47L
+        z = (z xor (z ushr 27)) * -0x6b2fb644ecceee15L
+        z = z xor (z ushr 31)
+        return (z ushr 11).toDouble() / (1L shl 53).toDouble()
     }
 }
 
@@ -114,18 +170,21 @@ fun WinterSnow(modifier: Modifier = Modifier) {
             }
         }
     }
-    val color = Nekko.palette.accent.copy(alpha = 0.24f)
-    val snow = remember { WinterFlakes.snowflake() }
-    val cat = remember { WinterFlakes.cat() }
+    val color = Nekko.palette.accent.copy(alpha = 0.18f)
+    val seed = remember { kotlin.random.Random.nextLong() }
+    val paths = remember { List(WinterFlakes.TYPE_COUNT) { WinterFlakes.path(it) } }
     Canvas(modifier.clearAndSetSemantics { }) {
         val seconds = if (still) 0.0 else elapsed.doubleValue
+        val margin = 2 * WinterFlakes.MAX_RADIUS.toFloat() * density
         repeat(WinterFlakes.COUNT) { index ->
-            val position = WinterFlakes.position(index, seconds)
-            val radius = (if (index == WinterFlakes.CAT_INDEX) 6f else (3 + index % 3).toFloat()) * density
-            translate(position.x * size.width, position.y * (size.height + 24 * density) - 12 * density) {
-                scale(radius, radius, pivot = Offset.Zero) {
-                    drawPath(if (index == WinterFlakes.CAT_INDEX) cat else snow, color,
-                        style = Stroke(0.8f * density / radius, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            val flake = WinterFlakes.flake(index, seconds, seed)
+            val radius = flake.radius * density
+            translate(flake.position.x * size.width, flake.position.y * (size.height + 2 * margin) - margin) {
+                rotate(Math.toDegrees(flake.angle.toDouble()).toFloat(), pivot = Offset.Zero) {
+                    scale(radius, radius, pivot = Offset.Zero) {
+                        drawPath(paths[flake.type], color,
+                            style = Stroke(1.2f * density / radius, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    }
                 }
             }
         }

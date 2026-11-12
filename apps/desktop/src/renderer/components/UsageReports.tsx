@@ -17,7 +17,7 @@ export function UsageReportsSection({ settings, update }: { settings: AppSetting
       help={<>Send anonymous usage and crash reports. Every send shows in Settings &gt; Connections.</>}
       actions={<Toggle label="Send anonymous usage and crash reports" value={on} onChange={(v) => update({ telemetry: telemetryChoice(v) })} />}
     >
-      <ul className="mt-(--q-inline) list-disc space-y-(--q-inline) pl-5 text-xs text-ink-faint">
+      <ul className="mt-(--q-inline) list-disc space-y-2 pl-5 text-xs text-ink-faint">
         {TELEMETRY_PROMISES.map((p) => <li key={p}>{p}</li>)}
       </ul>
       {on && !configured && <p className="mt-(--q-inline) text-xs text-ink-faint" role="status">This build has nowhere to send reports yet, so nothing is sent.</p>}

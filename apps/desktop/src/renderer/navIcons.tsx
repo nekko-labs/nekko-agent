@@ -7,7 +7,7 @@ import React from 'react';
  * Hover / click / active motion is driven by CSS in styles.css (`.nav-item svg`).
  *
  * Each icon uses its native 16×16 or 24×24 grid, rendered at 22px. Colors are mid-saturation so they
- * stay legible on both the light (#fbfbfd) and dark (#0c0c11) rail backgrounds.
+ * stay legible on both the light (#fbfbfd) and dark (#0b0c14) rail backgrounds.
  */
 
 type P = { className?: string };

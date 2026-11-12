@@ -89,6 +89,14 @@ describe('Screens dropdown', () => {
     const chosen = renderToStaticMarkup(<ScreensMenu state={{ ...one, spaces: { ...one.spaces!, mode: 'switch' } }} open onToggle={() => {}} onPlacement={() => {}} />);
     expect(chosen).toContain('aria-label="How a desktop is reached"');
     expect(chosen).toContain('Accessibility is off for Nekko');
+    // Two separate choices: each is a labelled group, the desktop one after the screen one (#2399).
+    expect(chosen.indexOf('Across screens')).toBeLessThan(chosen.indexOf('Balanced'));
+    expect(chosen.indexOf('Balanced')).toBeLessThan(chosen.indexOf('On another desktop'));
+    expect(chosen.indexOf('On another desktop')).toBeLessThan(chosen.indexOf('Switch me there'));
+    expect(chosen).toContain('class="screens-group"');
+    // Not yet chosen (or no desktops), there is one group and no labels.
+    expect(html).not.toContain('Across screens');
+    expect(renderToStaticMarkup(<ScreensMenu state={state} open onToggle={() => {}} onPlacement={() => {}} />)).not.toContain('On another desktop');
     expect(renderToStaticMarkup(<ScreensMenu state={state} open onToggle={() => {}} onPlacement={() => {}} />)).not.toContain('Desktops');
   });
 });

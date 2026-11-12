@@ -19,11 +19,11 @@ export function GitHubStarSupport({ feedback = false }: { feedback?: boolean }) 
     setOpenError(false);
     try { await window.nekko.openPath(SUPPORT_REPOSITORY_URL); } catch { setOpenError(true); }
   };
-  // In Settings it is a section like its neighbours: 40 above it and the 16/600 section heading (#2624).
+  // In Settings it is a section like its neighbours, so its heading is the same level as theirs (#2624).
   const Heading = feedback ? 'h3' : 'h2';
   return (
-    <section className={feedback ? 'min-w-0' : 'settings-section min-w-0'} data-testid="github-star-support">
-      <div className="flex flex-wrap items-center gap-3">
+    <section className={`min-w-0 ${feedback ? '' : 'settings-section'}`} data-testid="github-star-support">
+      <div className="flex flex-wrap items-center gap-4">
         <span className={celebrating ? 'support-star-celebrate' : ''} data-testid="support-star-mascot">
           {starred ? <StarryNekko size={36} /> : <StarIcon className="h-6 w-6 text-ink-soft" />}
         </span>
@@ -40,7 +40,7 @@ export function GitHubStarSupport({ feedback = false }: { feedback?: boolean }) 
           {starred ? <><CheckIcon className="h-4 w-4" /> Starred</> : status?.state === 'not-starred' ? 'Give a star' : 'Open GitHub'}
         </button>
       </div>
-      <div className="mt-(--q-inline) flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-ink-faint">
+      <div className="mt-(--q-inline) flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-ink-faint">
         <span>Starring is public on GitHub. We only add a star when you ask.</span>
         <button type="button" className="underline underline-offset-2" disabled={busy} onClick={() => void refreshSupportStar()}>Check status</button>
         {status?.state !== 'unavailable' && <button type="button" className="underline underline-offset-2" onClick={() => void open()}>View on GitHub</button>}

@@ -27,7 +27,7 @@ struct MonitorsView: View {
 
     var body: some View {
         List {
-            ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
+            ConnectionStrip(problemsOnly: true).listRowSeparator(.hidden).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             if let model { sections(model).listRowBackground(Color.clear) } else { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
         }
         // Flat rows on the coloured ground, like the chat list.

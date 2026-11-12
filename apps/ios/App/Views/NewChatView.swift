@@ -47,7 +47,6 @@ struct NewChatView: View {
     /// "Send your first prompt", over someone's first ever new chat (FirstPromptIntroView.shouldShow).
     @State private var firstPromptIntro = false
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var scheme
     /// Auto (2026-11-05): a chat on a local model starts on a free computer.
     /// Off once a computer is picked by hand, or when New chat opened from one computer's list.
     @State private var autoOn = true
@@ -190,7 +189,7 @@ struct NewChatView: View {
         firstPromptIntro = true
     }
 
-    /// The message, its photos, Add and Start, and below them the chat's options, on frosted glass.
+    /// The message, photos, actions and compact options, without a surrounding card.
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Chat or Image: icons only, at the box's top right (#2448).
@@ -247,14 +246,6 @@ struct NewChatView: View {
             options
         }
         .padding(12)
-        .background {
-            let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-            // The desktop's quiet glass: whiter in light themes, accent-tinted depth, no hard edge.
-            shape.fill(palette.surface.opacity(scheme == .dark ? 0.35 : 0.6))
-                .background(.ultraThinMaterial, in: shape)
-                .shadow(color: palette.accent.opacity(scheme == .dark ? 0.45 : 0.38), radius: 25, y: 18)
-                .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.1), radius: 5, y: 2)
-        }
     }
 
     @ViewBuilder private var startButton: some View {
@@ -305,8 +296,8 @@ struct NewChatView: View {
     }
 
     private var textOptions: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 4) {
                 if onPhone {
                     Button { pickingPhoneModel = true } label: {
                         chip(phoneModel.map { phoneModelName($0) } ?? String(localized: "Choose a model"), icon: "cpu", faint: phoneModel == nil)
@@ -331,11 +322,11 @@ struct NewChatView: View {
                     } label: {
                         HStack(spacing: 6) {
                             EffortGauge(level: Effort.levels(for: model.1).firstIndex(of: selectedEffort),
-                                        count: Effort.levels(for: model.1).count, size: 20)
+                                        count: Effort.levels(for: model.1).count, size: 16)
                             Text(effortName(selectedEffort)).font(.footnote.weight(.medium)).lineLimit(1)
                         }
-                        .foregroundStyle(palette.ink).padding(.horizontal, 10).frame(minHeight: 44)
-                        .background(palette.surface, in: Capsule())
+                        .font(.footnote.weight(.medium)).foregroundStyle(palette.ink)
+                        .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
                     }
                     .accessibilityHint("How hard the model works on each reply. Higher takes longer.")
                     .accessibilityIdentifier("newChat.effort")
@@ -457,7 +448,7 @@ struct NewChatView: View {
             .accessibilityIdentifier("newChat.tools")
     }
 
-    /// A solid, readable control over the decorative ground, as the desktop's clean-start controls.
+    /// Quiet, compact options with the same type and touch target as effort and tools.
     private func chip(_ title: String, icon: String, computerIcon: String? = nil, faint: Bool = false) -> some View {
         Label {
             Text(title)
@@ -466,10 +457,7 @@ struct NewChatView: View {
         }
         .font(.footnote.weight(.medium)).lineLimit(1)
             .foregroundStyle(faint ? palette.inkSoft : palette.ink)
-            .padding(.horizontal, 10).frame(minHeight: 34)
-            .background(palette.surface, in: Capsule())
-            .overlay(Capsule().stroke(palette.line))
-            .frame(minHeight: 44).contentShape(Rectangle())
+            .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
     }
 
     private func note(_ label: Label<Text, Image>, color: Color) -> some View {
