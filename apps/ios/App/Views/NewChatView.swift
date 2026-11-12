@@ -94,9 +94,14 @@ struct NewChatView: View {
         ScrollView {
             VStack(spacing: 14) {
                 if offline {
-                    note(Label(imageChat ? "Reconnect to generate images. Your image-chat draft stays here and will not be queued as text." : supportingFolders.isEmpty ? "\(store.active?.name ?? "Your computer") is \(store.conn == .offline ? "offline" : "reconnecting"). Start now and the chat begins when it’s back; it waits on this iPhone until then." : "Reconnect to start with your starred supporting folders. They require confirmation on this iPhone; your draft stays here.",
-                               systemImage: "tray.and.arrow.up"), color: palette.inkSoft)
-                        .accessibilityIdentifier("newChat.offlineNote")
+                    if !imageChat && supportingFolders.isEmpty {
+                        ReconnectingNotice(name: store.active?.name ?? "Your computer")
+                            .accessibilityIdentifier("newChat.offlineNote")
+                    } else {
+                        note(Label(imageChat ? "Reconnect to generate images. Your image-chat draft stays here and will not be queued as text." : "Reconnect to start with your starred supporting folders. They require confirmation on this iPhone; your draft stays here.",
+                                   systemImage: "tray.and.arrow.up"), color: palette.inkSoft)
+                            .accessibilityIdentifier("newChat.offlineNote")
+                    }
                 }
                 if let refusal { note(Label(refusal, systemImage: "exclamationmark.bubble"), color: palette.danger) }
                 // Above the box, as nothing goes below it (#1599).

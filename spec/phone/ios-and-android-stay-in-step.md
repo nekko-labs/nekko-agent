@@ -91,6 +91,12 @@ Android features the iPhone lacks have not been audited yet.
 
 Nothing is recorded as a true OS exclusive yet.
 
+## Reconnect status wording
+
+| Capability | iPhone / iPad | Android | Gap / follow-up |
+| --- | --- | --- | --- |
+| Two-line reconnect status with fixed-width animated ellipsis | Branch implementation, native verification pending ([spec](ios-streaming-and-reconnect-status.md)) | Existing single-paragraph notice | [#2475](https://github.com/nekko-labs/nekko-agent/issues/2475) |
+
 ## Secret box (desktop first, #2594)
 
 | Feature | iPhone | Android | Follow-up |
