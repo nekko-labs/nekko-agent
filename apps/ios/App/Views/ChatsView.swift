@@ -106,13 +106,10 @@ struct ChatsView: View {
     }
 
     @ViewBuilder private var rows: some View {
-            if !store.computers.isEmpty && (filter == nil || filter == store.activeId) {
-                ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-                ProtocolBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-            }
-            // The other computers in view that can't be reached now, each with Reconnect.
-            if filter != PhoneProviders.computerId {
-                FleetBanner(computer: filter).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            if computersInView {
+                // Every paired computer and its connection, in one slim row; a problem opens to its fix.
+                ConnectionStrip(details: { open(.connection) })
+                    .listRowSeparator(.hidden).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             }
             if filter == nil || filter == store.activeId, let at = store.savedListAt {
                 Label(SavedListNote.text(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
@@ -630,17 +627,25 @@ struct ChatRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
-                    Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
+                    Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink)
+                        .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 }
                 if summary.chatType == "image" {
                     Label("Image", systemImage: "photo").font(.caption2).foregroundStyle(palette.accent)
                 }
-                if modelShown || contextShown != nil {
+                if modelShown || contextShown != nil || showUpdated {
                     HStack(spacing: 6) {
                         if modelShown, let model = shownModelId {
                             ModelFact(model: model, mark: ChatCard.providerMark(kind: providerKind, modelId: model))
                         }
                         if let context = contextShown { ContextFact(context: context) }
+                        if showUpdated {
+                            Spacer(minLength: 4)
+                            TimelineView(.periodic(from: .now, by: 60)) { _ in
+                                Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                                    .font(.caption2).foregroundStyle(palette.inkFaint)
+                            }
+                        }
                     }
                 }
                 if showPreview, let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
@@ -661,18 +666,15 @@ struct ChatRow: View {
                     .padding(.top, 2)
                 }
             }
-            Spacer(minLength: 6)
-            // Re-rendered each minute, so "2m" doesn't stay "2m".
-            if showUpdated { TimelineView(.periodic(from: .now, by: 60)) { _ in
-                Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
-                    .font(.caption2).foregroundStyle(palette.inkFaint).padding(.top, 3)
-            } }
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
     }
 
-    private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }
+    private var title: String {
+        let text = summary.title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return text.isEmpty ? "New chat" : text
+    }
 
     /// An image chat shows the image model it draws with, not the chat model.
     private var shownModelId: String? { summary.chatType == "image" ? summary.imageParams?.modelId : summary.modelId }

@@ -78,27 +78,27 @@
   color: var(--accent);
 }
 .winter-background.is-paused * { animation-play-state: paused; }
+/* Each flake falls once; WinterBackground swaps in a new random flake when it lands. */
 .winter-flake {
   position: absolute;
-  top: -24px;
+  top: -48px;
   opacity: 0;
-  animation: winter-snowfall 36s linear infinite;
+  animation: winter-snowfall 60s linear 1 both;
 }
-.winter-snow-cat { animation-name: winter-snowfall-cat; }
+.winter-flake.is-ccw { animation-name: winter-snowfall-ccw; }
 @keyframes winter-snowfall {
-  0% { transform: translate3d(0, -24px, 0) rotate(0deg); opacity: 0; }
-  8%, 88% { opacity: 0.2; }
-  30% { transform: translate3d(14px, 30vh, 0) rotate(70deg); }
-  60% { transform: translate3d(-10px, 62vh, 0) rotate(150deg); }
-  100% { transform: translate3d(8px, 104vh, 0) rotate(240deg); opacity: 0; }
+  0% { transform: translate3d(0, -48px, 0) rotate(0deg); opacity: 0; }
+  8%, 88% { opacity: 0.18; }
+  30% { transform: translate3d(18px, 30vh, 0) rotate(40deg); }
+  60% { transform: translate3d(-14px, 62vh, 0) rotate(85deg); }
+  100% { transform: translate3d(10px, 108vh, 0) rotate(130deg); opacity: 0; }
 }
-/* The snow cat stays upright so the face reads, and only sways. */
-@keyframes winter-snowfall-cat {
-  0% { transform: translate3d(0, -24px, 0); opacity: 0; }
-  8%, 88% { opacity: 0.22; }
-  30% { transform: translate3d(-12px, 30vh, 0) rotate(-8deg); }
-  60% { transform: translate3d(10px, 62vh, 0) rotate(8deg); }
-  100% { transform: translate3d(-6px, 104vh, 0) rotate(0deg); opacity: 0; }
+@keyframes winter-snowfall-ccw {
+  0% { transform: translate3d(0, -48px, 0) rotate(0deg); opacity: 0; }
+  8%, 88% { opacity: 0.18; }
+  30% { transform: translate3d(-16px, 30vh, 0) rotate(-40deg); }
+  60% { transform: translate3d(12px, 62vh, 0) rotate(-85deg); }
+  100% { transform: translate3d(-8px, 108vh, 0) rotate(-130deg); opacity: 0; }
 }
 .winter-drift {
   position: absolute;
@@ -3684,6 +3684,9 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .screens-option strong { font-size: var(--text-xs); font-weight: 500; color: var(--ink); }
 .screens-option > span > span { font-size: var(--text-2xs); line-height: 1.35; color: var(--ink-faint); }
 .screens-picker__title--sub { margin-top: 12px; }
+/* Separate choices under one heading: a group label each, the group gap between them (#2399). */
+.screens-group-label { margin: 0 0 var(--q-heading); }
+.screens-group { margin-top: var(--q-group); }
 .screens-tile[data-current]::before { content: ''; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .screens-tile[data-waiting] { border-style: dashed; }
 /* Spaces: the Accessibility explainer, with an abstract monitor switching desktops. */

@@ -351,6 +351,58 @@ pub fn fake_claude() {
             }
             out(assistant("m_d3", json!([{ "type": "text", "text": "They say hello." }])));
             out(result("They say hello.", "completed"));
+        } else if text == "delegate by default and open a PR" {
+            // As Claude Code runs an Agent call when sub-agents go to the
+            // background by default (#2645): no `run_in_background`, then
+            // `task_started` backgrounds it. One of its lines streams before the
+            // turn ends; the rest only reach its saved transcript.
+            let call = "toolu_bgpr";
+            let input = json!({ "description": "Open the PR", "prompt": "Open a PR for the fix" });
+            out(assistant("m_b1", json!([{ "type": "tool_use", "id": call, "name": "Agent", "input": input }])));
+            out(
+                json!({ "type": "system", "subtype": "task_started", "task_id": "a9", "tool_use_id": call, "is_backgrounded": true, "session_id": session }),
+            );
+            out(
+                json!({ "type": "user", "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": call,
+                "content": "Async agent launched successfully. agentId: a9" }] }, "parent_tool_use_id": null, "session_id": session }),
+            );
+            let read = json!([{ "type": "tool_use", "id": "toolu_sread", "name": "Read", "input": { "file_path": "notes.txt" } }]);
+            out(
+                json!({ "type": "assistant", "message": { "id": "m_s1", "role": "assistant", "model": "claude-haiku-5-5", "content": read },
+                "parent_tool_use_id": call, "session_id": session }),
+            );
+            out(assistant("m_b2", json!([{ "type": "text", "text": "Started it." }])));
+            out(result("Started it.", "completed"));
+            // Claude Code's own copy of the sub-agent's conversation.
+            let config = PathBuf::from(std::env::var_os("CLAUDE_CONFIG_DIR").unwrap());
+            let dir = config.join("projects").join("C--work-project").join(&session).join("subagents");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("agent-a9.meta.json"), json!({ "toolUseId": call, "finished": true }).to_string())
+                .unwrap();
+            let at = "2026-11-12T03:55:14.000Z";
+            let saved = [
+                json!({ "type": "user", "timestamp": at, "message": { "role": "user", "content": "Open a PR for the fix" } }),
+                json!({ "type": "assistant", "timestamp": at, "message": { "id": "m_s1", "role": "assistant", "content": read } }),
+                json!({ "type": "user", "timestamp": at, "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "toolu_sread", "content": "fix it" }] } }),
+                json!({ "type": "assistant", "timestamp": at, "message": { "id": "m_s2", "role": "assistant", "content": [
+                    { "type": "tool_use", "id": "toolu_spr", "name": "Bash", "input": { "command": "git push -u origin fix && gh pr create --fill" } }] } }),
+                json!({ "type": "user", "timestamp": at, "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "toolu_spr",
+                    "content": "https://github.com/owner/repo/pull/21" }] } }),
+                json!({ "type": "assistant", "timestamp": at, "message": { "id": "m_s3", "role": "assistant", "content": [{ "type": "text", "text": "Opened it." }] } }),
+            ];
+            let body: Vec<String> = saved.iter().map(Value::to_string).collect();
+            std::fs::write(dir.join("agent-a9.jsonl"), body.join("\n") + "\n").unwrap();
+            // The test checks the child still runs after the turn, then says to go on.
+            let gate = std::env::current_dir().unwrap().join("go-on");
+            while !gate.exists() {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            out(
+                json!({ "type": "system", "subtype": "task_notification", "task_id": "a9", "tool_use_id": call, "status": "completed", "summary": "Opened the PR", "session_id": session }),
+            );
+            out(init());
+            out(assistant("m_b3", json!([{ "type": "text", "text": "The PR is open." }])));
+            out(result("The PR is open.", "completed"));
         } else if text == "out of tokens" {
             out(result("You've hit your usage limit.", "model_error"));
         } else if text == "hang" {
@@ -458,6 +510,11 @@ fn rig(name: &str, mode: &str, cli: bool) -> Rig {
 }
 
 fn rig_env(name: &str, mode: &str, cli: bool, extra: &[(&str, Option<&str>)]) -> Rig {
+    rig_with(name, mode, cli, json!({}), extra)
+}
+
+/// [`rig_env`], with config for the daemon (a fake GitHub, say).
+fn rig_with(name: &str, mode: &str, cli: bool, daemon: Value, extra: &[(&str, Option<&str>)]) -> Rig {
     let data = std::env::temp_dir().join(format!("nekkod-cc-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     let workspace = data.join("project");
@@ -471,7 +528,7 @@ fn rig_env(name: &str, mode: &str, cli: bool, extra: &[(&str, Option<&str>)]) ->
     let mut env: Vec<(&str, Option<&str>)> =
         vec![("PATH", Some(&path)), ("CLAUDE_CONFIG_DIR", Some(&config)), ("ANTHROPIC_API_KEY", None)];
     env.extend_from_slice(extra);
-    let d = start_with_env(&data, json!({}), &env);
+    let d = start_with_env(&data, daemon, &env);
     let events = record_events(d.port);
     Rig { t: TurnRig { data, workspace, d, events }, bin }
 }
@@ -960,6 +1017,141 @@ async fn a_background_sub_agent_outlives_the_turn_that_started_it() {
     assert_eq!(done["stop"], "complete");
     let child = children(&rig).remove(0);
     assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "The notes say hello.");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sub_agent_backgrounded_by_default_keeps_recording_and_is_filled_from_its_saved_transcript() {
+    let url = "https://github.com/owner/repo/pull/21";
+    let pr = json!({ "number": 21, "state": "open", "title": "Fix", "html_url": url,
+        "head": { "ref": "fix", "sha": "a".repeat(40), "repo": { "full_name": "owner/repo" } },
+        "base": { "ref": "main", "repo": { "full_name": "owner/repo" } } });
+    let (gh, _) = crate::sessions::fake_github_stacks(json!({ "repos/owner/repo/pulls/21": pr })).await;
+    let rig = rig_with(
+        "subdefault",
+        "guardrails",
+        true,
+        json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
+        &[("NEKKO_GH_PATH", Some("nekko-no-such-gh")), ("GH_TOKEN", None), ("GITHUB_TOKEN", None)],
+    );
+    let (status, _) =
+        post(rig.d.port, "chat:turn", json!([spec(&rig, "ccB", "delegate by default and open a PR")]), Some(TOKEN))
+            .await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccB", "s_cc").await;
+    let child = until("the sub-agent's child chat", Duration::from_secs(30), || async {
+        children(&rig).into_iter().find(|c| c["spawnCallId"] == "toolu_bgpr")
+    })
+    .await;
+    let id = child["id"].as_str().unwrap().to_string();
+    // The turn that started it is over, and it still runs: it was not swept as stopped.
+    let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert!(running.as_array().unwrap().contains(&json!(id)), "still running: {running}");
+    std::fs::write(rig.workspace.join("go-on"), "").unwrap();
+    let done = until("the child to end", Duration::from_secs(30), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == json!(id) && e["type"] == "done").cloned()
+    })
+    .await;
+    assert_eq!(done["stop"], "complete");
+    assert!(
+        !rig.events.lock().unwrap().iter().any(|e| e["sessionId"] == json!(id) && e["type"] == "error"),
+        "never stopped"
+    );
+    // Filled from the saved transcript: every step once, the streamed one too.
+    let child = children(&rig).into_iter().find(|c| c["id"] == json!(id)).unwrap();
+    let messages = child["messages"].as_array().unwrap();
+    let calls: Vec<&str> = messages
+        .iter()
+        .flat_map(|m| m["toolCalls"].as_array().into_iter().flatten())
+        .filter_map(|c| c["id"].as_str())
+        .collect();
+    assert_eq!(calls, ["toolu_sread", "toolu_spr"], "{messages:?}");
+    assert_eq!(messages[0]["content"], "Open a PR for the fix", "its task message stays first");
+    assert_eq!(messages.last().unwrap()["content"], "Opened it.");
+    assert!(child["transcriptFilledAt"].is_u64(), "{child}");
+    // And so the chat that started it lists the PR the sub-agent opened (#2642).
+    let (_, list) = post(rig.d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    let summary = list.as_array().unwrap().iter().find(|s| s["id"] == "s_cc").unwrap().clone();
+    assert_eq!(summary["prUrls"], json!([url]), "{summary}");
+    let (status, prs) = post(rig.d.port, "pr:sessionList", json!(["s_cc", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{prs}");
+    let listed: Vec<&str> = prs.as_array().unwrap().iter().filter_map(|p| p["url"].as_str()).collect();
+    assert_eq!(listed, [url], "{prs}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sub_agent_chats_that_ended_short_are_filled_at_startup() {
+    let data = std::env::temp_dir().join(format!("nekkod-cc-fillshort-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let config = data.join("claude-config");
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+    let write =
+        |id: &str, chat: Value| std::fs::write(data.join(format!("sessions/{id}.json")), chat.to_string()).unwrap();
+    write(
+        "s_parent",
+        json!({ "id": "s_parent", "title": "p", "messages": [], "createdAt": 1, "updatedAt": now,
+        "claudeCodeSessionId": "11111111-2222-4333-8444-555555555555" }),
+    );
+    let task = json!({ "id": "s_short_task", "role": "user", "content": "Open a PR", "createdAt": 1 });
+    let streamed = json!({ "id": "a1", "role": "assistant", "content": "",
+        "toolCalls": [{ "id": "toolu_r", "name": "Read", "input": {}, "executedBy": "claude-code" }], "createdAt": 2 });
+    let child = |id: &str, call: &str| {
+        json!({ "id": id, "title": id, "parentSessionId": "s_parent", "claudeCodeSubagent": true, "spawnCallId": call,
+            "createdAt": 1, "updatedAt": now - 5, "messages": [task.clone(), streamed.clone()] })
+    };
+    write("s_short", child("s_short", "toolu_a"));
+    // Its saved transcript is another sub-agent's: never used.
+    write("s_other", child("s_other", "toolu_b"));
+    let dir = config.join("projects/C--work/11111111-2222-4333-8444-555555555555/subagents");
+    std::fs::create_dir_all(&dir).unwrap();
+    let saved = |calls: &[(&str, &str, &str)]| {
+        let mut lines = Vec::new();
+        for (id, command, output) in calls {
+            lines.push(
+                json!({ "type": "assistant", "message": { "id": format!("m_{id}"), "role": "assistant", "content": [
+                { "type": "tool_use", "id": id, "name": "Bash", "input": { "command": command } }] } }),
+            );
+            lines.push(json!({ "type": "user", "message": { "role": "user", "content": [
+                { "type": "tool_result", "tool_use_id": id, "content": output }] } }));
+        }
+        lines.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")
+    };
+    std::fs::write(dir.join("agent-x1.meta.json"), json!({ "toolUseId": "toolu_a" }).to_string()).unwrap();
+    std::fs::write(
+        dir.join("agent-x1.jsonl"),
+        saved(&[("toolu_r", "cat a", "a"), ("toolu_pr", "gh pr create --fill", "https://github.com/o/r/pull/5")]),
+    )
+    .unwrap();
+    std::fs::write(dir.join("agent-x2.meta.json"), json!({ "toolUseId": "toolu_b" }).to_string()).unwrap();
+    std::fs::write(dir.join("agent-x2.jsonl"), saved(&[("toolu_z", "ls", "x")])).unwrap();
+    let path = config.to_string_lossy().into_owned();
+    let d = start_with_env(&data, json!({}), &[("CLAUDE_CONFIG_DIR", Some(&path))]);
+    let read = |id: &str| -> Value {
+        serde_json::from_str(&std::fs::read_to_string(data.join(format!("sessions/{id}.json"))).unwrap()).unwrap()
+    };
+    let filled = until("the short chat to be filled", Duration::from_secs(30), || async {
+        Some(read("s_short")).filter(|c| c.get("transcriptFilledAt").is_some())
+    })
+    .await;
+    let ids: Vec<&str> = filled["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|m| m["toolCalls"].as_array().into_iter().flatten())
+        .filter_map(|c| c["id"].as_str())
+        .collect();
+    assert_eq!(ids, ["toolu_r", "toolu_pr"]);
+    assert_eq!(filled["messages"][0]["id"], "s_short_task");
+    assert_eq!(filled["updatedAt"], json!(now - 5), "the chat lists do not reorder");
+    let (_, list) = post(d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    let urls = |id: &str| list.as_array().unwrap().iter().find(|s| s["id"] == id).unwrap()["prUrls"].clone();
+    assert_eq!(urls("s_parent"), json!(["https://github.com/o/r/pull/5"]));
+    // A saved transcript missing what the chat shows is the wrong one: left as it was.
+    let other = read("s_other");
+    assert!(other.get("transcriptFilledAt").is_none());
+    assert_eq!(other["messages"].as_array().unwrap().len(), 2);
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
 }
 
 #[tokio::test(flavor = "multi_thread")]

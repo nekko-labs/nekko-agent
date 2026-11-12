@@ -17,3 +17,9 @@
   Claude Code starts on its own when a background command finishes, with the
   shapes a Claude Code 2.1.303 run on macOS printed (`task_notification`, then
   `init` ... `result`, nothing written to it); ids and paths are made up.
+  `background-by-default.jsonl` is an `Agent` call with no
+  `run_in_background` that Claude Code moves to the background anyway
+  (`task_started` `is_backgrounded`, then "Async agent launched"), two of the
+  sub-agent's lines, the end of the turn, and its `task_notification` with the
+  wake-up after it (#2645); the shapes follow a Claude Code session on Windows
+  where sub-agents ran in the background by default.

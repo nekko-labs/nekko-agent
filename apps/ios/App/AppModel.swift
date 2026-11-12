@@ -908,13 +908,6 @@ final class AppModel {
         await Feedback.send(message: message, info: info, api: Self.cloudURL)
     }
 
-    /// Offer *Open Tailscale* (TS-4): the active computer is on the tailnet and
-    /// Tailscale is off on this iPhone, so that is the switch to flip.
-    var offersTailscale: Bool {
-        guard let c = store.active else { return false }
-        return TailscaleApp.shouldOffer(route: c.route, tailscaleOn: Tailnet.isConnected, state: store.conn)
-    }
-
     /// The Tailscale app, or its App Store page when it isn’t installed.
     func openTailscale() {
         Self.openTailscale(canOpen: { UIApplication.shared.canOpenURL($0) }, open: { UIApplication.shared.open($0) })
@@ -924,18 +917,6 @@ final class AppModel {
     @discardableResult
     nonisolated static func openTailscale(canOpen: (URL) -> Bool, open: (URL) -> Void) -> URL {
         TailscaleApp.open(canOpen: canOpen, open: open)
-    }
-
-    /// The Tailscale-specific explanation when a tailnet relay can't be reached, or nil.
-    var tailnetHint: String? {
-        guard let c = store.active, c.route == .tailscale, store.conn == .connecting else { return nil }
-        if !Tailnet.isConnected {
-            return "Tailscale is off on this iPhone. Open the Tailscale app and connect to your tailnet to reach \(c.name)."
-        }
-        if store.connDetail != nil {
-            return "Tailscale is on, but \(c.relayHost) doesn’t answer. Check that \(c.name) is awake, signed in to the same tailnet, and running its relay."
-        }
-        return nil
     }
 }
 
