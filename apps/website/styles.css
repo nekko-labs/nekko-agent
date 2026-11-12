@@ -169,10 +169,18 @@ a { color: var(--accent); }
 }
 @keyframes hint-bob { 0%, 100% { transform: translate(-50%, 0); opacity: 0.7; } 50% { transform: translate(-50%, 6px); opacity: 1; } }
 
-/* mascot drifts at the hero's lower right, in zero-g */
-.mascot { position: absolute; bottom: 24px; right: clamp(16px, 7vw, 120px); color: var(--ink); text-align: center; }
+/* mascot sits at the hero's top right, level with the title, so it stays well
+   clear of the cat peeking over the pillar tour below; its intro line sits
+   under the MEET NEKKO label in the same small mono type */
+.mascot { position: absolute; top: 150px; right: clamp(16px, 6vw, 120px); width: 200px; color: var(--ink); text-align: center; }
 .mascot svg { display: block; margin: 0 auto; }
 .mascot span { font: 9px var(--mono); letter-spacing: 0.13em; color: var(--muted); }
+.mascot-cap { margin: 8px auto 0; max-width: 200px; font: 11px/1.55 var(--mono); letter-spacing: 0.02em; color: var(--muted); text-wrap: balance; }
+/* below 960px there is no room beside the title: it follows the buttons instead */
+@media (max-width: 960px) {
+  .mascot { position: static; margin-top: 22px; width: auto; }
+  .mascot-cap { max-width: 260px; font-size: 12px; }
+}
 .mascot .m-float {
   animation: m-float 4s ease-in-out infinite;
   transform-origin: center; transform-box: fill-box;
@@ -237,13 +245,11 @@ a { color: var(--accent); }
 .pillar-planned .pc-setup { margin-top: 16px; }
 .card-link { display: inline-block; margin-top: 18px; font-size: 13px; text-underline-offset: 4px; }
 .pillars .card-note { font-size: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-#editions .micro { margin-top: 24px; }
 .roadmap .card { border-style: dashed; }
 .roadmap .chip { color: var(--muted); }
 .roadmap h3 { margin-top: 16px; }
 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 34px; }
 .grid.two { grid-template-columns: repeat(2, 1fr); }
-.grid.four { grid-template-columns: repeat(4, 1fr); }
 .card { padding: 22px 20px; transition: transform 0.25s, border-color 0.25s; }
 @media (hover: hover) {
   .card:hover { transform: translateY(-4px); border-color: rgba(133, 79, 108, 0.6); box-shadow: 0 1px 2px rgba(22, 22, 28, 0.04), 0 18px 44px rgba(169, 101, 156, 0.14); }
@@ -252,48 +258,6 @@ a { color: var(--accent); }
 .fi { font-size: 22px; }
 .ok { color: var(--ok); font-size: 12.5px; font-family: var(--mono); }
 .dim { color: var(--muted); font-size: 12.5px; font-family: var(--mono); }
-
-/* ---- the harness manifest: a spec sheet, not a card grid.
-       Groups are full-bleed rows split by hairlines, each with a sticky label
-       column on the left and its capability rows on the right. ---- */
-.manifest { margin-top: 42px; }
-.mf-group {
-  display: grid; grid-template-columns: minmax(190px, 260px) 1fr; gap: clamp(24px, 5vw, 60px);
-  padding: 34px 0; border-top: 1px solid var(--line);
-}
-.manifest .mf-group:last-child { border-bottom: 1px solid var(--line); }
-.mf-head { position: sticky; top: 96px; align-self: start; }
-.mf-num {
-  font-family: var(--mono); font-size: 11px; letter-spacing: 0.3em;
-  color: var(--accent); display: block;
-}
-.mf-head h3 { font-size: clamp(19px, 2vw, 23px); margin: 8px 0 8px; letter-spacing: -0.02em; }
-.mf-head p { font-size: 13px; line-height: 1.55; }
-.mf-rows { list-style: none; counter-reset: mf; }
-.mf-rows li {
-  display: grid; grid-template-columns: minmax(150px, 200px) 1fr; gap: clamp(14px, 2.5vw, 30px);
-  align-items: baseline;
-  padding: 15px 14px 15px 16px; border-bottom: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: inset 2px 0 0 transparent;
-  transition: background 0.22s ease, box-shadow 0.22s ease;
-}
-.mf-rows li:last-child { border-bottom: 0; }
-@media (hover: hover) {
-  .mf-rows li:hover {
-    background: rgba(133, 79, 108, 0.1);
-    box-shadow: inset 2px 0 0 var(--accent);
-  }
-}
-.mf-rows b { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; }
-.mf-rows b::before {
-  counter-increment: mf; content: counter(mf, decimal-leading-zero);
-  font-family: var(--mono); font-size: 10.5px; font-weight: 400; color: var(--muted);
-  margin-right: 10px; vertical-align: 1px;
-}
-.mf-rows span { color: var(--muted); font-size: 13.5px; line-height: 1.62; }
-.mf-rows code { font-size: 0.8em; }
-.mf-foot { margin-top: 26px; }
 
 .split { display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: start; }
 .check { list-style: none; display: flex; flex-direction: column; gap: 12px; }
@@ -462,17 +426,14 @@ footer .micro a { font: inherit; text-decoration: underline; text-underline-offs
 
 /* ---- responsive ---- */
 @media (max-width: 900px) {
-  .grid, .grid.four { grid-template-columns: repeat(2, 1fr); }
+  .grid { grid-template-columns: repeat(2, 1fr); }
   .split { grid-template-columns: 1fr; }
   .wm-body { grid-template-columns: 52px 1fr; }
   .wm-ctx { display: none; }
   .nav-links { display: none; }
-  .mf-group { grid-template-columns: 1fr; gap: 18px; }
-  .mf-head { position: static; }
-  .mf-rows li { grid-template-columns: 1fr; gap: 4px; padding-left: 12px; }
 }
 @media (max-width: 560px) {
-  .grid, .grid.two, .grid.four { grid-template-columns: 1fr; }
+  .grid, .grid.two { grid-template-columns: 1fr; }
   .nav { padding: 14px 16px; gap: 12px; }
   .brand { font-size: 12px; letter-spacing: 0.06em; white-space: nowrap; }
   .brand-mark { margin-right: 4px; }
@@ -484,7 +445,7 @@ footer .micro a { font: inherit; text-decoration: underline; text-underline-offs
   .hero .cta-row { width: 100%; }
   .chapter { padding: 64px 20px; }
   .eyebrow { letter-spacing: 0.16em; line-height: 1.7; }
-  .mascot { position: static; margin-top: 18px; }
+  .mascot { margin-top: 18px; }
   .mascot svg { width: 92px; }
   .scroll-hint { display: none; }
   .pillars .card { padding: 24px; }
@@ -625,7 +586,6 @@ body {
 .chapter + .chapter { border-top: 0; }
 .band-lavender { background: linear-gradient(135deg, rgba(253, 247, 246, 0.9), rgba(255, 255, 255, 0.6)); }
 .band-aqua, .band-peach { background: linear-gradient(135deg, rgba(243, 232, 238, 0.92), rgba(253, 247, 246, 0.7)); }
-.band-blend { background: linear-gradient(120deg, #f3e8ee 0%, #fbf6f8 100%); }
 
 /* cards: light, clean, softly lifted */
 .glass, .card { background: rgba(255, 255, 255, 0.78); border: 1px solid rgba(22, 22, 28, 0.08); backdrop-filter: blur(10px); box-shadow: var(--shadow); }
@@ -809,12 +769,10 @@ body {
    text stay in Inter Tight. ---- */
 :root { --led: 'Handjet', var(--sans); --retro-mono: 'Space Mono', var(--mono); }
 .tagline { font-family: var(--led); font-weight: 500; font-size: clamp(34px, 4.4vw, 56px); letter-spacing: 0.005em; line-height: 1.04; }
-h3, .mf-head h3, .mf-rows b { font-family: var(--led); font-weight: 600; letter-spacing: 0.01em; }
+h3 { font-family: var(--led); font-weight: 600; letter-spacing: 0.01em; }
 h3 { font-size: 21px; }
 .pillars h3 { font-size: 30px; line-height: 1.05; }
-.mf-head h3 { font-size: clamp(24px, 2.4vw, 28px); }
-.mf-rows b { font-size: 18px; }
-.eyebrow, .mf-num, .chip, .dl-group, .dl-term-or, .media span, .mf-rows b::before { font-family: var(--retro-mono); letter-spacing: 0.1em; font-weight: 400; }
+.eyebrow, .chip, .dl-group, .dl-term-or, .media span { font-family: var(--retro-mono); letter-spacing: 0.1em; font-weight: 400; }
 .eyebrow { font-size: 12px; }
 
 /* ---- beta sign-up: one friendly band between "what you can do" and the
@@ -997,8 +955,6 @@ h3 { font-size: 21px; }
   .nav { top: 8px; width: calc(100% - 16px); padding: 8px 8px 8px 14px; border-radius: 18px; }
 }
 
-/* a status chip inside a card's number line (e.g. 08 · ON THE GO  Beta) */
-.mf-num .chip { margin-left: 8px; }
 
 /* ---- why Nekko: five promise panels, each a copy column beside a demo
        slot, sides alternating down the page. ---- */
@@ -1160,7 +1116,6 @@ footer a.with-gh { gap: 7px; }
 :root[data-theme='dark'] .band-lavender { background: linear-gradient(135deg, rgba(133, 79, 108, 0.16), rgba(255, 255, 255, 0.03)); }
 :root[data-theme='dark'] .band-aqua,
 :root[data-theme='dark'] .band-peach { background: linear-gradient(135deg, rgba(133, 79, 108, 0.14), rgba(133, 79, 108, 0.05)); }
-:root[data-theme='dark'] .band-blend { background: linear-gradient(120deg, rgba(133, 79, 108, 0.2) 0%, rgba(133, 79, 108, 0.06) 100%); }
 :root[data-theme='dark'] .window-mock { border-color: rgba(255, 255, 255, 0.18); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(133, 79, 108, 0.18); }
 :root[data-theme='dark'] .media { background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(133, 79, 108, 0.12)); border-color: rgba(255, 255, 255, 0.24); }
 :root[data-theme='dark'] .media-hero { background: linear-gradient(135deg, #16161c, #5a2352); }

@@ -36,7 +36,7 @@
       content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=plum-white-2" />
-    <link rel="stylesheet" href="styles.css?v=17" />
+    <link rel="stylesheet" href="styles.css?v=18" />
     <link rel="stylesheet" href="fonts.css?v=1" />
     <!-- Structured data: so search and answer engines describe Nekko Agent accurately -->
     <script type="application/ld+json">
@@ -188,7 +188,9 @@
         </div>
         <p class="micro reveal">No account needed to use AI on your computer · Works offline after setup · MIT licensed</p>
 
-        <!-- The app icon, reimagined as a playful pixel cat. -->
+        <!-- The app icon, reimagined as a playful pixel cat, with its one-line intro.
+             It sits at the hero's top right on wide screens, clear of the cat that
+             peeks over the pillar tour further down; on phones it follows the buttons. -->
         <div class="mascot" title="Nekko is keeping you company">
           <svg class="pixel-nekko" viewBox="0 0 32 32" width="112" height="112" shape-rendering="crispEdges" role="img" aria-label="Nekko, a pixel cat with blinking eyes">
             <g data-part="pixel-head" stroke-linejoin="miter">
@@ -202,6 +204,7 @@
     </g>
           </svg>
           <span>MEET NEKKO</span>
+          <p class="mascot-cap">Meet Nekko: a small pixel cat keeping you company while your agents get to work.</p>
         </div>
         <div class="scroll-hint" aria-hidden="true">SCROLL<br />▾</div>
       </section>
@@ -443,105 +446,6 @@
         </div>
       </section>
 
-      <!-- ===== the harness: a spec-sheet manifest, deliberately not cards ===== -->
-      <section id="features" class="chapter">
-        <h2 class="reveal">Share only what you choose</h2>
-        <p class="chapter-lede reveal">
-          Letting an AI read a prompt is one thing. Handing it your files, your terminal,
-          your microphone and your network is another. Nekko keeps every one of those
-          behind a control you set, and shows you exactly what it did.
-        </p>
-
-        <div class="manifest reveal">
-          <section class="mf-group">
-            <div class="mf-head">
-              <h3>Choose the information it uses</h3>
-              <p>Context means the information sent with your request. Check what is included and leave out what is not needed.</p>
-            </div>
-            <ol class="mf-rows">
-              <li>
-                <b>Context Inspector</b>
-                <span>See the files, instructions, and saved notes included in your next request. Toggle or pin them and see how much space they take up, measured in tokens, the small pieces of text AI models process.</span>
-              </li>
-              <li>
-                <b>Find relevant files</b>
-                <span>Search across the project folders you choose, so Nekko can find useful code and notes without sending every file to the AI.</span>
-              </li>
-              <li>
-                <b>Guidelines and memory</b>
-                <span>Give Nekko project instructions through <code>AGENTS.md</code> or <code>CLAUDE.md</code>, and keep saved notes for your preferences. Turn individual instructions and notes on or off.</span>
-              </li>
-              <li>
-                <b>Save the plan</b>
-                <span>Turn the conversation into a project description in <code>SPEC.md</code>, plus a plan and task list that can guide later work.</span>
-              </li>
-              <li>
-                <b>Improve your request</b>
-                <span>Get suggestions for making your instructions clearer before you send them. This draft check runs on your computer without an online AI service.</span>
-              </li>
-            </ol>
-          </section>
-
-          <section class="mf-group">
-            <div class="mf-head">
-              <h3>Give it useful tools</h3>
-              <p>Connect the tools and repeatable steps your work needs, rather than copying everything into a chat.</p>
-            </div>
-            <ol class="mf-rows">
-              <li>
-                <b>Split up a task</b>
-                <span>Delegate smaller pieces of work to separate AI sessions, called sub-agents. Each gets its own instructions, with limits on further delegation and a view of the work in progress.</span>
-              </li>
-              <li>
-                <b>Reusable instructions</b>
-                <span>Not sure which skill to reach for? Nekko's library sorts skills by the job they do, from research and planning to code review and testing, and shows every step before you run one. Install more from the marketplace in a click.</span>
-              </li>
-              <li>
-                <b>Connect coding tools</b>
-                <span>MCP is the common language AI tools use to talk to each other. Nekko can use other MCP servers or act as one, so Claude Code, Codex, Cursor or OpenClaw can pass work to your local models through it.</span>
-              </li>
-              <li>
-                <b>Connect your services</b>
-                <span>Bring in what matters from GitHub, Linear, Slack, Discord, Gmail and Drive instead of pasting it by hand. Each connection is one you switch on, and it only reaches the network when you use it.</span>
-              </li>
-              <li>
-                <b>Longer tasks with limits</b>
-                <span>Give Nekko a goal to plan and work through. Set limits on time or steps, and get a request for guidance if it stops making progress.</span>
-              </li>
-            </ol>
-          </section>
-
-          <section class="mf-group">
-            <div class="mf-head">
-              <h3>Review and correct changes</h3>
-              <p>AI can make mistakes. Approval settings, file limits, and change review help you stay involved.</p>
-            </div>
-            <ol class="mf-rows">
-              <li>
-                <b>Command approvals</b>
-                <span>Choose which terminal commands are allowed, need approval, or are blocked. The app checks for risky operations such as deleting files or changing system permissions.</span>
-              </li>
-              <li>
-                <b>Limit file access</b>
-                <span>Nekko only touches the folders you pick. Your microphone is only used when you start dictating, and speech is turned into text on your computer. For extra peace of mind, Docker can wall off terminal commands entirely.</span>
-              </li>
-              <li>
-                <b>Review file changes</b>
-                <span>See edits line by line in the Changes panel. Keep or undo individual lines, whole files, or all changes from the app.</span>
-              </li>
-              <li>
-                <b>Try again from an earlier step</b>
-                <span>If an AI returns an empty reply, Nekko retries and then reports the problem. Use "Reset here" to return to an earlier message and try a different approach.</span>
-              </li>
-            </ol>
-          </section>
-        </div>
-
-        <p class="micro center reveal mf-foot">
-          Meet Nekko: a small pixel cat keeping you company while your agents get to work.
-        </p>
-      </section>
-
       <!-- ===== profiles: one account, separate spaces. The copy claims only what
            the app enforces; the footnote names what a profile is not. ===== -->
       <section id="profiles" class="chapter band band-lavender" aria-labelledby="profiles-title">
@@ -572,34 +476,6 @@
           </div>
         </div>
         <p class="micro center reveal">Example profiles, not a scan of your machine. Profiles separate what agents can reach inside Nekko; they do not lock the app against someone using your unlocked computer, and a terminal command can still reach files anywhere your computer account can.</p>
-      </section>
-
-      <section id="why" class="chapter">
-        <h2 class="reveal">Choose what stays on your computer</h2>
-        <div class="grid two reveal">
-          <div class="card glass">
-            <span class="mf-num">ON YOUR COMPUTER</span>
-            <h3>Work without an internet connection</h3>
-            <p>Once your model is downloaded, local work keeps going without the internet. Read, edit and search your folders with nothing sent to an online AI service.</p>
-          </div>
-          <div class="card glass">
-            <span class="mf-num">ONLINE SERVICES</span>
-            <h3>Connect online AI when you need it</h3>
-            <p>Online AI models, downloads, and connected services need internet access and may send data to the providers you configure. You choose those connections and are responsible for their costs.</p>
-          </div>
-        </div>
-      </section>
-
-      <section id="editions" class="chapter band band-blend">
-        <h2 class="reveal">Choose how to use Nekko</h2>
-        <p class="chapter-lede reveal">Download the desktop app to get started. If you prefer a technical setup, run Nekko in your browser, in Docker, or from a terminal.</p>
-        <div class="grid four reveal">
-          <div class="card glass"><h3>Desktop app</h3><p>Download for macOS, Windows, or Linux.</p><a class="card-link" href="#download" data-cta="editions-desktop">Get the app</a></div>
-          <div class="card glass"><h3>In your browser</h3><p>Run it yourself from a source checkout: <code>npm install</code>, then <code>npm run web</code>. Tasks using AI on your computer can work offline after setup.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent#readme" data-cta="editions-browser">Setup guide</a></div>
-          <div class="card glass"><h3>In Docker</h3><p>For container-based setups, run <code>docker compose up</code> from a source checkout and connect your project folders and model servers.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/docker-compose.yml" data-cta="editions-docker">Compose setup</a></div>
-          <div class="card glass"><h3>From other tools</h3><p>The CLI is Nekko's command-line interface. Run <code>nekko-agent</code>, or <code>nekko-agent mcp</code> to connect tools that support the MCP standard.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/apps/cli/README.md" data-cta="editions-cli">Client setup</a></div>
-        </div>
-        <p class="micro center reveal">The npm package is <code>nekko-agent</code>, publishing with the next release; until then run the CLI from a source checkout (<code>npm run dev</code> or <code>apps/cli</code>). It provides the <code>nekko-agent</code> command.</p>
       </section>
 
       <section id="roadmap" class="chapter roadmap">
