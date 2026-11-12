@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { parsePrUrl, type IssueInfo, type PrInfo } from '@nekko-agent/shared';
 import { PR_STATUS_LABEL as STATUS_LABEL, PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
 import { LIVE_STATE_FRESH_MS, isLiveState, onLiveStateTick } from '../liveStateTicker.js';
+import { GfIcon } from '../gentleface-icons.js';
 
 export { prStatus };
 
@@ -97,6 +98,13 @@ export function resetPrInfoCache(): void {
   stopTicker = null;
 }
 
+/** An issue's state as a glyph, tone and word: open, done, or not planned. */
+export function issueLook(issue: IssueInfo) {
+  if (issue.state === 'open') return { icon: 'record', tone: 'var(--success)', label: 'Open' } as const;
+  if (issue.stateReason === 'not_planned') return { icon: 'ban', tone: 'var(--ink-faint)', label: 'Not planned' } as const;
+  return { icon: 'check-circle', tone: 'var(--merged-ink)', label: 'Done' } as const;
+}
+
 export function isPrUrl(href: string): boolean {
   return /^https?:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+\/?(?:[?#].*)?$/i.test(href) && parsePrUrl(href) !== null;
 }
@@ -124,6 +132,26 @@ export function PrLinkChip({ href, label, onContextMenu }: { href: string; label
       <span style={{ color: pr ? prTone(pr) : 'var(--ink-faint)' }} className="inline-flex"><PrStatusIcon status={status} /></span>
       <span className="min-w-0 truncate text-ink">{label ?? fallback}</span>
       <span className="sr-only"> ({STATUS_LABEL[status]})</span>
+    </a>
+  );
+}
+
+/** A GitHub issue reference drawn like a PR chip, with the issue's live state. */
+export function IssueLinkChip({ href, label }: { href: string; label: React.ReactNode }) {
+  const issue = useIssueInfo(href);
+  const look = issue && issueLook(issue);
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      data-issue-state={look ? look.icon : 'unknown'}
+      title={issue ? `${issue.owner}/${issue.repo}#${issue.number} · ${look!.label} · ${issue.title}` : href}
+      className="pr-link-chip mx-0.5 inline-flex max-w-full cursor-pointer items-center gap-1 rounded-full border border-line px-2 py-px align-[-0.15em] text-sm font-medium leading-5 no-underline hover:bg-surface-2 focus-visible:outline focus-visible:outline-accent"
+    >
+      <span style={{ color: look ? look.tone : 'var(--ink-faint)' }} className="inline-flex"><GfIcon name={look ? look.icon : 'record'} className="h-3.5 w-3.5" /></span>
+      <span className="min-w-0 truncate text-ink">{label}</span>
+      {look && <span className="sr-only"> ({look.label})</span>}
     </a>
   );
 }

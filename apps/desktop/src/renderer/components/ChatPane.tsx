@@ -12,6 +12,8 @@ import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
 import { ChatArtifacts } from './ChatArtifacts.js';
 import { MarkdownSession } from './Markdown.js';
+import { MarkdownRefs } from './ReplyRefChips.js';
+import { onlyRepo, touchedFiles, type ReplyRefs } from '../replyRefs.js';
 import { ChatCodeRun, type ChatCodeRunTarget } from './ChatCodeRun.js';
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
@@ -2512,6 +2514,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   const isCloudModel = !providerKind || !isLocalProvider(providerKind);
   const codeModeTotal = useMemo(() => chatCodeModeSavings(session?.messages), [session?.messages]);
+  // A reply's `#123` and `RootView.swift:164` become chips: the repo this
+  // chat's folder pushes to (or its PRs' one repo) and the files it touched.
+  const gitRepo = git?.github;
+  const replyRefs = useMemo<ReplyRefs>(() => ({
+    repo: gitRepo ? { owner: gitRepo.owner, repo: gitRepo.repo } : onlyRepo(prs),
+    files: touchedFiles(session?.messages),
+  }), [gitRepo?.owner, gitRepo?.repo, prs, session?.messages]);
   // Privacy Shield: while it is on, keep the engine's preview of this draft
   // current, and mark in the composer each value a cloud model reads as a
   // placeholder. The Shield menu reads the same shared preview for its count.
@@ -2814,6 +2823,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   </div>;
 
   return (
+    <MarkdownRefs.Provider value={replyRefs}>
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
     <ChatCodeRun.Provider value={codeRun}>
     <ChatImages.Provider value={chatImages}>
@@ -3760,6 +3770,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     </ChatImages.Provider>
     </ChatCodeRun.Provider>
     </MarkdownSandbox.Provider>
+    </MarkdownRefs.Provider>
   );
 }
 

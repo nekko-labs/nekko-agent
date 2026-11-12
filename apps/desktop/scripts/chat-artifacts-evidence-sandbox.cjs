@@ -1,6 +1,7 @@
 // Hidden renderer-only evidence for chat artifact cards: a reply linking an
 // HTML prototype, a localhost preview server and an image, in dark and light
-// (or, with NEKKO_CHAT_ARTIFACTS_REPLY=named, one naming them in code spans).
+// (or, with NEKKO_CHAT_ARTIFACTS_REPLY=named, one naming them in code spans;
+// with =refs, one citing code files and PRs).
 // Launch through layout-evidence-integration.cjs with
 // NEKKO_LAYOUT_SANDBOX=chat-artifacts-evidence-sandbox.cjs. Never shows or
 // focuses a window, never reads host files (readFile is stubbed in the page).
@@ -43,6 +44,15 @@ const named = [
   '',
   'Built in `src/pricing/Page.tsx`.',
 ].join('\n');
+// NEKKO_CHAT_ARTIFACTS_REPLY=refs: a reply citing code and PRs in prose
+// (issue #2676), after tool calls that read the files it names.
+const refs = [
+  'The cover is built with the same theme setup as the rest of the app (RootView.swift:164-166). Since the Winter snow change (#2480), that theme setup draws snowfall over whatever it wraps (Theme.swift:165-167). So with Winter on, the lock cover gets snow drawn over it. I reproduced this in the simulator.',
+  '',
+  'The tiny cat-shaped flake in your screenshot was replaced by eight snowflake designs in **PR #2640**, which means your build is older than that. The fix goes in `apps/ios/App/Views/LockCover.swift`.',
+].join('\n');
+const variant = process.env.NEKKO_CHAT_ARTIFACTS_REPLY;
+const replyText = variant === 'named' ? named : variant === 'refs' ? refs : reply;
 
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:|about:)/.test(d.url) }));
@@ -71,12 +81,25 @@ app.whenReady().then(async () => {
       // The desktop preload's isolated-preview bridge, stubbed so the Interactive action shows.
       window.nekkoPreview = { open: async () => {} };
       f.bridge.readFile = async p => files[p] != null ? { content: files[p], binary: false, truncated: false } : Promise.reject(new Error('missing'));
+      // The chat's folder pushes to GitHub, and the PRs it names have a state.
+      f.bridge.getGitStatus = async id => ({ workspaceId: id, repo: true, branch: 'main', dirtyCount: 0, ahead: 0, behind: 0, updatedAt: Date.now(), github: { owner: 'nekko-labs', repo: 'nekko-agent' } });
+      f.bridge.getPrInfo = async url => { const n = Number(url.split('/').pop()); return { url, owner: 'nekko-labs', repo: 'nekko-agent', number: n, title: n === 2480 ? 'Winter snow' : 'Eight snowflake designs', state: n === 2480 ? 'merged' : 'open', isDraft: false, additions: 1, deletions: 1, changedFiles: 1 }; };
       const s = f.records[0];
+      const read = ${JSON.stringify(variant === 'refs')} ? [{ id: 'a0', role: 'assistant', content: '', createdAt: Date.now() - 45000, toolCalls: [
+        { id: 't1', name: 'Read', input: { file_path: 'C:/demo/nekko-agent/apps/ios/App/Views/RootView.swift' } },
+        { id: 't2', name: 'Read', input: { file_path: 'C:/demo/nekko-agent/apps/ios/App/Theme.swift' } },
+      ] },
+        { id: 'r1', role: 'tool', content: '', createdAt: Date.now() - 44000, toolResult: { toolCallId: 't1', output: 'struct RootView' } },
+        { id: 'r2', role: 'tool', content: '', createdAt: Date.now() - 44000, toolResult: { toolCallId: 't2', output: 'enum Theme' } }] : [];
       s.messages = [
         { id: 'u1', role: 'user', content: 'Build a pricing page prototype and start the dev server.', createdAt: Date.now() - 60000 },
-        { id: 'a1', role: 'assistant', content: ${JSON.stringify(process.env.NEKKO_CHAT_ARTIFACTS_REPLY === 'named' ? named : reply)}, createdAt: Date.now() - 30000 },
+        ...read,
+        { id: 'a1', role: 'assistant', content: ${JSON.stringify(replyText)}, createdAt: Date.now() - 30000 },
       ];
       f.putCachedSession(s);
+      // A hidden window skips git reads (useGitStatus); this one is only hidden from the user.
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+      setTimeout(() => document.dispatchEvent(new Event('visibilitychange')), 800);
       f.store.getState().openChatPane(s.id);
       // Room for the chat: no Monitors dock beside it.
       const st = f.store.getState();
@@ -104,7 +127,8 @@ app.whenReady().then(async () => {
       report.metrics[theme] = await run(`(() => {
         const cards = [...document.querySelectorAll('[aria-label="Response artifacts"] > *')].map(e => ({ cls: e.className.slice(0, 60), text: e.textContent.slice(0, 80), h: Math.round(e.getBoundingClientRect().height) }));
         const frame = document.querySelector('[data-render-thumb] iframe');
-        return { cards, thumbnail: frame ? { sandbox: frame.getAttribute('sandbox'), w: frame.getBoundingClientRect().width } : null };
+        const chips = { files: [...document.querySelectorAll('[data-file-ref]')].map(e => e.getAttribute('data-file-ref')), prs: [...document.querySelectorAll('.pr-link-chip')].map(e => e.getAttribute('href') + ' ' + (e.getAttribute('data-pr-status') || '')) };
+        return { cards, chips, thumbnail: frame ? { sandbox: frame.getAttribute('sandbox'), w: frame.getBoundingClientRect().width } : null };
       })()`);
       await capture(`chat-artifacts-${theme}`);
     }
