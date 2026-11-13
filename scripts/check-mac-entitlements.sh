@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# Usage: scripts/check-mac-entitlements.sh <path to Nekko Agent.app> [--signed]
+# Usage: scripts/check-mac-entitlements.sh <path to Nekko Agent.app> [--signed | --ad-hoc]
 #
 # Only Contents/Resources/bin/nekko-vm may carry com.apple.security.virtualization
 # (apps/desktop/scripts/sign-mac.cjs signs it with crates/nekkod/vm/nekko-vm.entitlements).
-# No helper app or Resources/bin file may carry a restricted entitlement
-# (keychain-access-groups, com.apple.application-identifier, com.apple.developer.*):
-# only the main executable has a provisioning profile, and macOS refuses to launch
-# a Developer ID binary carrying one without a profile authorizing it (#2688).
-# With --signed (a Developer ID build), the app must embed
-# Contents/embedded.provisionprofile and its main executable must carry the
-# application identifier, team identifier and keychain access group.
+# macOS refuses to launch a binary carrying a restricted entitlement
+# (keychain-access-groups, com.apple.application-identifier, com.apple.developer.*)
+# unless a provisioning profile authorizes it, and codesign --verify, notarization
+# and spctl all pass regardless (#2688). So:
+# - No helper app or Resources/bin file may carry one: only the main executable
+#   has a profile.
+# - If the main executable carries one, the app must embed
+#   Contents/embedded.provisionprofile, and
+#   apps/desktop/scripts/check-provisioning-profile.cjs --app must find that it
+#   authorizes every one and was issued for the signing certificate.
+# With --signed (a Developer ID build), the main executable must carry the
+# application identifier, team identifier and keychain access group, so the
+# profile is required. --ad-hoc is for sign-mac-dry-run.cjs only: an ad-hoc copy
+# signed like a release, never launched and with no profile, so the main
+# executable's restricted entitlements go unchecked.
 #
 # Reads the entitlements of the app, every helper app under Contents/Frameworks and
 # every file under Contents/Resources/bin, except bin/runner-image, which holds only
@@ -19,11 +27,18 @@ set -euo pipefail
 
 app="${1:-}"
 signed=0
+ad_hoc=0
 case "${2:-}" in
   '') ;;
   --signed) signed=1 ;;
+  --ad-hoc) ad_hoc=1 ;;
   *) echo "unknown option $2." >&2; exit 1 ;;
 esac
+if [ "$#" -gt 2 ]; then
+  echo 'at most one option.' >&2
+  exit 1
+fi
+profile_check="$(cd "$(dirname "$0")/.." && pwd)/apps/desktop/scripts/check-provisioning-profile.cjs"
 vm="$app/Contents/Resources/bin/nekko-vm"
 key='<key>com.apple.security.virtualization</key>'
 restricted='<key>(keychain-access-groups|com\.apple\.application-identifier|com\.apple\.developer\.[^<]*)</key>'
@@ -40,6 +55,7 @@ fi
 
 n=0
 saw_vm=0
+main_restricted=''
 while IFS= read -r -d '' path; do
   if ! ents=$(codesign -d --entitlements - --xml "$path" 2>/dev/null); then
     echo "codesign could not read $path." >&2
@@ -58,6 +74,9 @@ while IFS= read -r -d '' path; do
   fi
 
   if [ "$path" = "$app" ]; then
+    if [[ "$ents" =~ $restricted ]]; then
+      main_restricted="${BASH_REMATCH[1]}"
+    fi
     if [ "$signed" -eq 1 ]; then
       for want in keychain-access-groups com.apple.application-identifier com.apple.developer.team-identifier; do
         if [[ "$ents" != *"<key>$want</key>"* ]]; then
@@ -82,12 +101,17 @@ if [ "$saw_vm" -ne 1 ]; then
   exit 1
 fi
 
-if [ "$signed" -eq 1 ] && [ ! -f "$app/Contents/embedded.provisionprofile" ]; then
-  echo "$app embeds no provisioning profile, so macOS will refuse to launch it." >&2
-  exit 1
+profile=''
+if [ -n "$main_restricted" ] && [ "$ad_hoc" -eq 0 ]; then
+  if [ ! -f "$app/Contents/embedded.provisionprofile" ]; then
+    echo "$app carries $main_restricted but embeds no provisioning profile, so macOS will refuse to launch it." >&2
+    exit 1
+  fi
+  if ! node "$profile_check" --app "$app" >&2; then
+    exit 1
+  fi
+  profile=', authorized by the embedded profile'
 fi
 
 echo "virtualization entitlement: nekko-vm only ($n binaries checked)"
-profile=''
-[ "$signed" -eq 0 ] || profile=', profile embedded'
 echo "restricted entitlements: main executable only$profile"
