@@ -9,7 +9,7 @@ export function thumbnailKind(path: string): 'document' | 'image' | null {
 
 /** Source is always text inside an inert image, never HTML in the app's DOM. */
 const xml = (text: string) => text.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
-const inlineText = (text: string) => text.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/<[^>]*>/g, '').replace(/[`*_~]/g, '');
+const inlineText = (text: string) => text.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[`*_~]/g, '');
 
 /** A bounded first page, not a full Markdown viewer: no media, links, scripts or fonts. */
 export function documentThumbnail(path: string, file: FileContent): string | null {

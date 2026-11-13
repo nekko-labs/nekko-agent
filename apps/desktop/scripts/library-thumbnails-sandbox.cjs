@@ -26,7 +26,19 @@ app.whenReady().then(async () => {
   const run = source => win.webContents.executeJavaScript(source);
   const check = async (source, label) => { const value = await run(source); report.checks[label] = value; if (!value) throw Error(label); };
   const shot = async name => { const file = path.join(out, (baseline ? 'before-' : 'after-') + name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
-  const radio = async name => { await run(`(() => { const b = [...document.querySelectorAll('[role="radio"]')].find(b => (b.getAttribute('aria-label') || b.textContent).startsWith(${JSON.stringify(name)})); if (!b) throw Error('Missing ' + ${JSON.stringify(name)}); b.click(); })()`); await sleep(100); for (let i = 0; i < 100; i++) { if (await run(`!document.documentElement.dataset.libraryTransition`)) { await sleep(100); return; } await sleep(80); } throw Error('Library transition did not finish'); };
+  const radio = async name => {
+    const labels = await run(`[...document.querySelectorAll('[role="radio"]')].map(b => b.getAttribute('aria-label') || b.textContent)`);
+    const index = labels.findIndex(label => label.startsWith(name));
+    if (index < 0) throw Error('Missing control: ' + name);
+    // Only a numeric index crosses the evaluation boundary, never label text.
+    await run(`document.querySelectorAll('[role="radio"]')[${Number(index)}].click()`);
+    await sleep(100);
+    for (let i = 0; i < 100; i++) {
+      if (await run(`!document.documentElement.dataset.libraryTransition`)) { await sleep(100); return; }
+      await sleep(80);
+    }
+    throw Error('Library transition did not finish');
+  };
   try {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 80 && !await run('!!window.layoutFixture'); i++) await sleep(100);
