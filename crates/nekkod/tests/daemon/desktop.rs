@@ -44,9 +44,32 @@ impl Desk {
         start_with_env(&self.data, json!({ "native": native, "edition": "desktop" }), &all)
     }
 
+    fn read_link(&self) -> Result<Value, String> {
+        let file = self.link_dir.join("cli-link.json");
+        let text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {:?}: {e}", file.display(), e.kind()))?;
+        serde_json::from_str(&text).map_err(|e| format!("{}: invalid JSON: {e}", file.display()))
+    }
+
     fn link(&self) -> Value {
-        serde_json::from_str(&std::fs::read_to_string(self.link_dir.join("cli-link.json")).unwrap_or_default())
-            .unwrap_or(Value::Null)
+        self.read_link().unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    // Listening and publishing the CLI link are separate startup tasks. Wait
+    // for the promised link, not just the listener or an arbitrary JSON file.
+    async fn wait_link(&self, expected: &Value, limit: Duration) -> Result<Value, String> {
+        let deadline = Instant::now() + limit;
+        loop {
+            let read = self.read_link();
+            if let Ok(link) = &read
+                && expected.as_object().unwrap().iter().all(|(k, v)| link.get(k) == Some(v))
+            {
+                return Ok(link.clone());
+            }
+            if Instant::now() >= deadline {
+                return Err(format!("timed out after {limit:?} waiting for CLI link publication; last read: {read:?}"));
+            }
+            tokio::time::sleep(POLL).await;
+        }
     }
 
     fn saved(&self) -> Value {
@@ -97,6 +120,38 @@ fn quit(mut d: Daemon) {
         std::thread::sleep(Duration::from_millis(50));
     }
     panic!("nekkod did not exit after its stdin closed");
+}
+
+#[tokio::test]
+async fn cli_link_wait_distinguishes_missing_and_incomplete_publication() {
+    let desk = Desk::new("link-diagnostics");
+    let expected = json!({ "url": "http://127.0.0.1:1234", "token": API_TOKEN, "enabled": true, "pid": 42 });
+    let missing = desk.wait_link(&expected, Duration::ZERO).await.unwrap_err();
+    assert!(missing.contains("NotFound") && missing.contains("cli-link.json"), "{missing}");
+    std::fs::write(desk.link_dir.join("cli-link.json"), "{\"url\":").unwrap();
+    let partial = desk.wait_link(&expected, Duration::ZERO).await.unwrap_err();
+    assert!(partial.contains("invalid JSON"), "{partial}");
+    std::fs::write(desk.link_dir.join("cli-link.json"), "{}").unwrap();
+    assert!(desk.wait_link(&expected, Duration::ZERO).await.is_err(), "valid JSON alone is not publication");
+}
+
+#[tokio::test]
+async fn cli_link_wait_accepts_delayed_publication() {
+    let desk = Desk::new("link-delayed");
+    let expected = json!({ "url": "http://127.0.0.1:1234", "token": API_TOKEN, "enabled": true, "pid": 42 });
+    // Deliberately delay this fixture's publisher, not the test's readiness
+    // check. The old immediate read fails before the publisher runs.
+    let publish = async {
+        tokio::time::sleep(POLL * 3).await;
+        let mut link = expected.clone();
+        link["updatedAt"] = json!(123);
+        std::fs::write(desk.link_dir.join("cli-link.json"), link.to_string()).unwrap();
+    };
+    let (link, ()) = tokio::join!(desk.wait_link(&expected, Duration::from_secs(5)), publish);
+    let link = link.unwrap();
+    for (key, value) in expected.as_object().unwrap() {
+        assert_eq!(link.get(key), Some(value));
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -154,8 +209,15 @@ async fn serves_the_local_api_server_and_its_link_with_no_backend() {
     let (s, body) = call(port, "no:such", json!([]), API_TOKEN).await;
     assert_eq!((s, body["error"].as_str()), (500, Some("Unknown channel: no:such")));
 
-    // The CLI's link file names this server, this token and this process.
-    let link = desk.link();
+    // The listener can be ready before refresh_local_access publishes the link.
+    // Keep all four assertions, but synchronize with that publication (#2039).
+    let link = desk
+        .wait_link(
+            &json!({ "url": format!("http://127.0.0.1:{port}"), "token": API_TOKEN, "enabled": true, "pid": d.child.id() }),
+            Duration::from_secs(15),
+        )
+        .await
+        .unwrap();
     assert_eq!(link["url"], format!("http://127.0.0.1:{port}"), "{link}");
     assert_eq!(link["token"], API_TOKEN);
     assert_eq!(link["enabled"], true);
@@ -254,8 +316,9 @@ async fn honours_start_on_launch_and_mints_a_first_token() {
     .await;
     assert_eq!(status["running"], false, "{status}");
     assert_eq!(desk.saved()["apiServer"]["enabled"], false);
-    until("the link written", Duration::from_secs(10), || async { (desk.link()["enabled"] == false).then_some(()) })
-        .await;
+    let link =
+        desk.wait_link(&json!({ "enabled": false, "pid": d.child.id() }), Duration::from_secs(10)).await.unwrap();
+    assert_eq!(link["enabled"], false);
     drop(d);
 
     // A fresh install's server is on and gets a token rather than refusing to listen.
