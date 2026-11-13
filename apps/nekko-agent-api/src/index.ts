@@ -7,6 +7,7 @@ import { FlyDriver } from "./fly.js";
 import { deleteUnusedMachines, sweepMachineHours } from "./machines.js";
 import { resendMailer } from "./confirmations.js";
 import { purgeFeedbackScreenshots, purgeSignups } from "./retention.js";
+import { Stripe } from "./billing.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
 import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
 
@@ -85,7 +86,16 @@ await retryAuth();
 setInterval(retryAuth, 60 * 60 * 1000).unref();
 // Organizations are limited to these accounts while they are proven (comma-separated emails); unset allows everyone.
 const orgsAllowedEmails = (process.env.NEKKO_ORGS_ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-const app = buildServer({ db, fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
+// Plans and billing (issue #2724); Team is "talk to us" until seats exist. Even when configured, nothing shows until a team account switches billing on.
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const stripe = stripeKey && stripeWebhookSecret
+  ? new Stripe({ secretKey: stripeKey, webhookSecret: stripeWebhookSecret, prices: { pro: process.env.STRIPE_PRICE_PRO || undefined } })
+  : undefined;
+if (!stripe) console.warn("STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET not set: billing is off (the /v1/billing routes are absent).");
+// Nekko team accounts (comma-separated); unset uses the four team addresses in features.ts.
+const staffEmails = process.env.NEKKO_STAFF_EMAILS ? process.env.NEKKO_STAFF_EMAILS.split(",") : undefined;
+const app = buildServer({ db, stripe, staffEmails, fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {

@@ -286,6 +286,10 @@
   "Zone name",
   "Zoom in",
   "Zoom out",
+  "billing-manage",
+  "billing-plan",
+  "billing-price",
+  "billing-upgrade",
   "cloud-apple",
   "cloud-email",
   "cloud-github",
@@ -367,6 +371,7 @@
   "sync-settings",
   "sync-sign-in",
   "sync-turn-on",
+  "team-switches",
   "telegram",
   "terminal-viewers-badge"
 ]

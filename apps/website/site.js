@@ -659,7 +659,7 @@
       website: form.elements.website?.value || '',
       // Product updates are their own unticked choice; the API records which policy text was agreed to.
       marketing: Boolean(form.elements.marketing?.checked),
-      policyVersion: '2026-11-08',
+      policyVersion: '2026-11-13',
     };
     button.disabled = true;
     let res;

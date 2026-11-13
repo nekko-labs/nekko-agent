@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-13
 ---
 
-# 0092. Google Gemini connects through a guided key flow, not a Google sign-in
+# 0093. Google Gemini connects through a guided key flow, not a Google sign-in
 
 ## Context
 
