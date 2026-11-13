@@ -52,7 +52,8 @@ h1{color:rgb(255, 122, 89);font-size:40px;margin:16px 0 8px}
 }
 
 app.whenReady().then(async () => {
-  const design = path.join(out, 'design');
+  // A folder name that keeps the page a Web page: a design opens on the design canvas instead of this pane.
+  const design = path.join(out, 'pricing-page');
   writeDesign(design);
   const page = path.join(design, 'index.html');
   const { createHtmlPreviewServer } = await import(pathToFileURL(path.join(repo, 'packages/profile/dist/html-preview.js')).href);

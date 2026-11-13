@@ -50,6 +50,24 @@ Implemented, not yet released:
 
 Verified in the hidden, isolated full-App Electron journey (`library-layouts-sandbox.cjs`, 16 checks) and the existing first-visit journey (18 checks), plus focused unit tests. Packaged builds, the Local Web UI in other browsers, and light-theme captures of the new layouts were not checked. Diagram files linked in a reply are not indexed by the existing artifact index (separate, unchanged behavior), so the Diagrams group appears only for diagrams the agent wrote.
 
+## Designs open on a canvas, with their versions
+
+Requested 2026-11-13 (#2696): treat a design as a canvas with controls, play and pause where the design moves, and versions.
+
+Implemented, not yet released:
+
+- **Versions are one design.** The numbered files of a design (`checkout-design.html`, `checkout-design-v2.html`, `-v3`; also `_v2`, `.v2` and ` v2`) are one Library entry, in the list and the previews. It stands for the newest version (highest number; a file with no number is version 1), is named without the number, keeps the newest version's chat, and says "3 versions". Only designs are grouped, and only files in the same folder. A design saved once is unchanged, whatever its name.
+- **The canvas.** Picking an HTML design opens it on a dotted canvas in place of the file pane. The page is laid out at a desktop width (1440) and at its own full size, up to 8000 by 12000, so a row of screens is seen whole instead of through a narrow frame. It opens fitted to the width, never above 100%.
+- **Moving and zooming.** Drag, or scroll, to move. Pinch, or Ctrl/Cmd+scroll, zooms at the pointer; **−** and **+** zoom in steps between 10% and 400%; the percentage is a button that fits the design again. A fitted design stays fitted when the window changes size, until it is moved.
+- **Play and Pause** appear only when the design is moving: a CSS animation or transition, a Web Animation, a `requestAnimationFrame` loop, a video or a sound. Pause holds all of them where they are, and Play resumes them (media that was not playing stays stopped). A still design shows neither. Motion driven by timers alone is not detected or held.
+- **Versions.** A design with more than one version shows a slider of them (v1, v2, v3); the newest is open first. The path under the title and **Open file** follow the version shown.
+- **Interact** hands the pointer to the design, for a prototype that responds to clicks and hover, and takes it back. Until then the design cannot be clicked, so dragging always moves the canvas.
+- **Source** opens the file itself in the usual pane (source, viewport sizes, Load from internet, Add to design board); **Canvas** in the header returns. A design that is an image, and any design the host cannot serve (a page directly in a disk root or the home folder, a host with no preview server), opens in the file pane as before.
+
+Boundaries: the design runs where every served page does, in a frame with an opaque origin, offline, with no app bridge ([HTML previews run with their folder](html-previews-run-with-their-folder.md)). For the canvas the server adds one small script to the page (`controls`), through which the canvas asks for the page's size and what is moving and tells it to pause or play, over `postMessage`. The script answers only the frame above it. The canvas reads only numbers and one flag from a reply and only from its own frame, so a hostile design can at most misreport its size or show a Play button that does nothing. Pages opened in the file pane do not get the script. Why this and not the alternatives: [decision 0091](../../docs/decisions/0091-the-design-canvas-controls-a-served-design-over-postmessage.md).
+
+Verified in the hidden, isolated full-App Electron journey against the real preview server (`design-canvas-sandbox.cjs`, 24 checks, including the animation's and the frame loop's actual state inside the sandboxed frame) and focused unit tests. Not done or not checked: keyboard panning; frame-by-frame stepping or a timeline; jumping to a named frame; the phone apps; the Design board, which still shows each version file as a card; packaged builds, Windows, the Local Web UI in other browsers, light theme, touch gestures on a real trackpad or screen.
+
 ## Privacy and boundaries
 
 The guide uses original inline artwork and reads no files or external resources. Dismissal saves only a boolean in local storage. Listing a project's designs folder reads file and folder names only, in folders the person already saved as projects; no file is opened until it is picked, and nothing outside `nekko-designs/` is listed. File previews retain their existing isolation and permission boundaries. Files remain in their original folders; nothing is published automatically. Hosted publishing remains separate planned work, not a Library action added here. The native phone apps do not have this page and are unchanged.

@@ -17,7 +17,7 @@ export function localHtmlPreview(options: HtmlPreviewServerOptions) {
         return null;
       }
       const opts = args[1];
-      const internet = typeof opts === 'object' && opts !== null && (opts as { internet?: unknown }).internet === true;
+      const flag = (name: 'internet' | 'controls') => typeof opts === 'object' && opts !== null && (opts as Record<string, unknown>)[name] === true;
       let hostname: string;
       try {
         hostname = new URL(`http://${hostHeader ?? ''}`).hostname;
@@ -26,7 +26,7 @@ export function localHtmlPreview(options: HtmlPreviewServerOptions) {
       }
       if (!hostname) throw new Error('The preview needs the address this page was opened at.');
       try {
-        const served = await server.serve(args[0] as string, { internet });
+        const served = await server.serve(args[0] as string, { internet: flag('internet'), controls: flag('controls') });
         return { id: served.id, url: `http://${hostname}:${served.port}${served.path}` };
       } catch (e) {
         throw new Error(e instanceof HtmlPreviewRefusal ? e.message : 'The preview server could not start.');

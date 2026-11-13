@@ -4544,6 +4544,19 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 }
 .diagram-card { box-shadow: var(--shadow-sm); }
 
+/* The design canvas: a served design at its full size on the dotted surface,
+   placed and scaled from its top-left corner. White is the web's own page
+   colour for a design that sets none, not a theme colour. */
+.design-canvas-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 0;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transform-origin: 0 0;
+}
+
 /* Working is a steady accent fill, never a new animation or GPU layer. */
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-eyes"] { fill: var(--on-accent); }

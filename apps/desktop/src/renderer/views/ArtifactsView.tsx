@@ -10,13 +10,14 @@ import { FilePane } from '../components/FilePane.js';
 import { LibraryArtwork, LibraryIntro, libraryIntroSeen, dismissLibraryIntro } from '../components/LibraryIntro.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
 import { ArtifactPreview } from '../components/library/ArtifactPreview.js';
+import { DesignCanvas } from '../components/library/DesignCanvas.js';
 import {
   LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
   type LibraryLayout,
 } from '../components/library/libraryPrefs.js';
 import { ChevronDownIcon, CloseIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
 import {
-  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, mergeArtifacts, readDesignsFolder, sessionArtifacts, withFolderDesigns,
+  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, readDesignsFolder, sessionArtifacts, withFolderDesigns,
   type ArtifactEntry, type ArtifactKind,
 } from '../artifactsIndex.js';
 
@@ -32,7 +33,9 @@ const when = (at: number) => {
 };
 /** Where a file came from: its chat, or for a design found in a project's designs folder, that project. */
 const cameFrom = (e: ArtifactEntry) => (e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
-const fromAndWhen = (e: ArtifactEntry) => [cameFrom(e), when(e.at)].filter(Boolean).join(' · ');
+const fromAndWhen = (e: ArtifactEntry) => [cameFrom(e), when(e.at), e.versions && `${e.versions.length} versions`].filter(Boolean).join(' · ');
+/** A design the canvas can show: an HTML page. Images and the rest open in the file pane. */
+const isHtml = (path: string) => /\.html?$/i.test(path);
 const extOf = (filename: string) => (filename.includes('.') ? filename.split('.').pop() ?? '' : '');
 
 type Group = { kind: (typeof ARTIFACT_KINDS)[number]; items: ArtifactEntry[] };
@@ -144,6 +147,9 @@ export function ArtifactsView() {
   const [chatsRead, setChatsRead] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ArtifactEntry | null>(null);
+  // Which version of the picked design is open (its newest when null), and whether its file is shown instead of the canvas.
+  const [version, setVersion] = useState<string | null>(null);
+  const [asFile, setAsFile] = useState(false);
   const [includeCompleted, setIncludeCompleted] = useState(true);
   const [show, setShow] = useState<Show>('all');
   const [layout, setLayout] = useState<LibraryLayout>(loadLibraryLayout);
@@ -191,7 +197,7 @@ export function ArtifactsView() {
   }, [folders, key]);
 
   const entries = useMemo(
-    () => (fromChats || fromFolders ? withFolderDesigns(fromChats ?? [], fromFolders ?? []) : null),
+    () => (fromChats || fromFolders ? groupDesignVersions(withFolderDesigns(fromChats ?? [], fromFolders ?? [])) : null),
     [fromChats, fromFolders],
   );
   const indexed = chatsRead && fromFolders !== null;
@@ -231,7 +237,10 @@ export function ArtifactsView() {
     return next;
   });
   // In List the list gives way to the preview, so the change is animated; elsewhere it is a swap.
-  const select = (e: ArtifactEntry | null) => (layout === 'list' ? transition(() => setSelected(e), true) : setSelected(e));
+  const pick = (e: ArtifactEntry | null) => { setSelected(e); setVersion(null); setAsFile(false); };
+  const select = (e: ArtifactEntry | null) => (layout === 'list' ? transition(() => pick(e), true) : pick(e));
+  const openPath = selected ? version ?? selected.path : '';
+  const onCanvas = !!selected && selected.kind === 'design' && isHtml(openPath);
 
   const row = (e: ArtifactEntry) => {
     const active = selected?.path === e.path;
@@ -341,22 +350,25 @@ export function ArtifactsView() {
                 <button type="button" className="btn btn-outline py-1 text-xs md:hidden" onClick={() => select(null)}>Back to Library</button>
                 <div className="order-first min-w-0 flex-1 basis-full md:order-none md:basis-auto">
                   <p className="truncate text-sm font-semibold">{selected.title}</p>
-                  <p className="truncate font-mono text-2xs text-ink-faint" title={selected.path}>{selected.path}</p>
+                  <p className="truncate font-mono text-2xs text-ink-faint" title={openPath}>{openPath}</p>
                 </div>
                 {selected.sessionId && (
                   <button type="button" className="btn btn-primary gap-2 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Single agent view`}>
                     <FocusLayoutIcon className="h-3.5 w-3.5" /> Open chat
                   </button>
                 )}
-                <button type="button" className={`btn ${selected.sessionId ? 'btn-outline' : 'btn-primary'} gap-2 py-1 text-xs`} onClick={() => window.nekko.openPath(selected.path)} title="Open with the system's default app">
+                <button type="button" className={`btn ${selected.sessionId ? 'btn-outline' : 'btn-primary'} gap-2 py-1 text-xs`} onClick={() => window.nekko.openPath(openPath)} title="Open with the system's default app">
                   <ExternalIcon className="h-3.5 w-3.5" /> Open file
                 </button>
+                {onCanvas && asFile && <button type="button" className="btn btn-ghost py-1 text-xs" data-design-back onClick={() => setAsFile(false)} title="Show the design on its canvas again">Canvas</button>}
                 <button type="button" className="btn-icon hidden md:inline-flex" aria-label="Close preview" title="Back to Library" onClick={() => select(null)}>
                   <CloseIcon className="h-4 w-4" />
                 </button>
               </div>
-              <div className="min-h-0 flex-1 overflow-hidden" key={selected.path}>
-                <FilePane path={selected.path} />
+              <div className="min-h-0 flex-1 overflow-hidden" key={onCanvas && !asFile ? `canvas:${selected.path}` : `file:${openPath}`}>
+                {onCanvas && !asFile
+                  ? <DesignCanvas path={openPath} title={selected.title} versions={selected.versions} onVersion={setVersion} onSource={() => setAsFile(true)} />
+                  : <FilePane path={openPath} />}
               </div>
             </>
           ) : browsing ? (
