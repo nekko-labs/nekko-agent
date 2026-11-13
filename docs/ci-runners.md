@@ -344,9 +344,11 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **Linux slots**: 0 to 4 Linux VMs, with no Apple limit (see [Linux jobs](#linux-jobs)).
 - **Suggested size**: what size VM your jobs need, from what they used. A VM holds all its
   memory from boot whether a job needs it or not, so a smaller fit leaves more for you, and a job
-  that swapped or kept every vCPU busy gets more. After 3 jobs at the current size, the row says
+  that swapped or kept every vCPU busy gets more. After 2 jobs at the current size, the row says
   either **Fits your last N jobs** or suggests a size with the reason, and **Apply** saves it at
-  once for the next VM. It never goes over what this Mac can give each slot, and never cuts
+  once for the next VM. A suggested change also shows as one line on the runner card ("Your last
+  2 jobs suggest 6 vCPUs, 14 GB per VM (now 6 vCPUs, 10 GB).") with **Apply**, and **Not now**,
+  which hides that suggestion until the daemon suggests a different size. It never goes over what this Mac can give each slot, and never cuts
   below GitHub's standard hosted Mac (3 vCPUs, 7 GB). Each job's VM samples its own CPU and memory
   every 5 seconds; the samples stay on this Mac and only their summary is kept, on the job's line
   in `runners/audit.jsonl`.

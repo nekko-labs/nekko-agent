@@ -129,6 +129,7 @@ app.whenReady().then(async () => {
     'image-retry': async () => { await run('integration.pushRunners()'); await sleep(300); },
     'card-ready': async () => {},
     'missing-tools': async () => {},
+    'size-notice': async () => {},
     'missing-tools-install': async () => { await click(byText('[data-runner-card] button', 'Install them')); await sleep(400); },
     settings: async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
     // The sheet is taller than the window: the same sheet scrolled to its end shows Max job time.
@@ -206,6 +207,7 @@ app.whenReady().then(async () => {
     'image-retry': [['the card recovers after a refused first status', "document.querySelector('[data-runner-card]').innerText.includes('Set up this Mac')"]],
     'card-ready': [['workflow action on the card', "document.querySelector('[data-runner-card]').innerText.includes('Connect to a workflow')"],
       ['no missing-tools notice on an image that has them', "!document.querySelector('[data-missing-tools]')"]],
+    'size-notice': [['the card suggests the size with Apply and Not now', "(()=>{const n=document.querySelector('[data-runner-card] [data-size-notice]');return n&&n.innerText.includes('Your last 2 jobs suggest 4 vCPUs, 14 GB per VM (now 4 vCPUs, 10 GB).')&&['Apply','Not now'].every(t=>[...n.querySelectorAll('button')].some(b=>b.textContent===t))})()"]],
     'missing-tools': [['the card names the missing tools and offers to install them', "(()=>{const n=document.querySelector('[data-runner-card] [data-missing-tools]');return n&&n.innerText.includes(\"node and gh are missing from this Mac's runner image. Jobs that need them will fail.\")&&[...n.querySelectorAll('button')].some(b=>b.textContent==='Install them')})()"]],
     'missing-tools-install': [['Install them follows the install in the setup sheet', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('Installing the missing tools')&&d.includes('Install the missing tools')&&d.includes('Installing node, gh and jq')&&d.includes('keeps taking jobs')&&!d.includes('Lock the VM down')})()"],
       ['the notice gives way to the progress row', "!document.querySelector('[data-missing-tools]')&&document.querySelector('[data-runner-card]').innerText.includes('Install the missing tools: Installing node, gh and jq')"]],

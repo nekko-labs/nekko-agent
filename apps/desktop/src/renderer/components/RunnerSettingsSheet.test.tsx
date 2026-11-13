@@ -67,7 +67,7 @@ describe('RunnerSettingsSheet', () => {
     const fits = view({ suggestedSize: { jobs: 5, cpus: 4, memoryMb: 8192, reasons: [] } });
     expect(render(fits)).toContain('Fits your last 5 jobs.');
     expect(render(fits)).not.toContain('>Apply<');
-    expect(render(view({ suggestedSize: { jobs: 1, cpus: 4, memoryMb: 8192, reasons: [] } }))).toContain('Suggested size after 3 jobs at this size (1 so far).');
+    expect(render(view({ suggestedSize: { jobs: 1, cpus: 4, memoryMb: 8192, reasons: [] } }))).toContain('Suggested size after 2 jobs at this size (1 so far).');
   });
 
   it('hides_the_recommendation_before_the_first_sample', () => {
