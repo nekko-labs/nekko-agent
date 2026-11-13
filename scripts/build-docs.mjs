@@ -39,6 +39,13 @@ const outDir = join(site, 'docs');
 const ORIGIN = 'https://nekkoagent.com';
 const GITHUB = 'https://github.com/nekko-labs/nekko-agent';
 const ASSET_VERSION = 'docs-1';
+// Bump after re-running scripts/make-og-cards.mjs so link previews refetch.
+const OG_VERSION = '2';
+// A page's own preview card, or the site card until make-og-cards.mjs has drawn one.
+const ogImage = (page) =>
+  existsSync(join(site, 'og', `docs-${pageFile(page.slug)}.jpg`))
+    ? `${ORIGIN}/og/docs-${pageFile(page.slug)}.jpg?v=${OG_VERSION}`
+    : `${ORIGIN}/og.png?v=plum-3`;
 
 export function slugify(text) {
   return text
@@ -254,8 +261,15 @@ function layout({ page, rendered, sections, prev, next }) {
     <meta property="og:url" content="${canonical}" />
     <meta property="og:title" content="${escapeHtml(fullTitle)}" />
     <meta property="og:description" content="${escapeHtml(page.description)}" />
-    <meta property="og:image" content="https://nekkoagent.com/og.png?v=plum-white-2" />
+    <meta property="og:image" content="${ogImage(page)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:alt" content="${escapeHtml(fullTitle)}" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(fullTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(page.description)}" />
+    <meta name="twitter:image" content="${ogImage(page)}" />
     <link rel="stylesheet" href="/docs.css?v=${ASSET_VERSION}" />
     <link rel="stylesheet" href="/fonts.css?v=1" />
     <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
