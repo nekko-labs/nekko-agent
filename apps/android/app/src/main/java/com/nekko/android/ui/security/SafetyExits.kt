@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
 
 /**
  * The phone's safety exits (SK-8, decision 0018), shared by Settings → This
- * computer and the connection banner's menu: *Sign out this phone*, *Stop
+ * computer and the connection row's menu: *Sign out this phone*, *Stop
  * remote access on the computer*, and *Quit Nekko Agent on the computer*
  * (behind a confirm, and only when the computer allows it). None asks for a
  * proof or a step-up: a safety exit must never be harder than the attack.
@@ -155,7 +155,7 @@ fun safetyExits(s: ComputersState, exits: SafetyExits, res: Resources): List<Saf
     }
 }
 
-/** The exits as overflow-menu entries (the connection banner's ⋮). */
+/** The exits as overflow-menu entries (the connection row's ⋮). */
 @Composable
 fun SafetyExitMenuItems(s: ComputersState, exits: SafetyExits, onPicked: () -> Unit) {
     val p = Nekko.palette

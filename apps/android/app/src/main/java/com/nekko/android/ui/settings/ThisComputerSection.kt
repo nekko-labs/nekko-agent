@@ -34,7 +34,7 @@ import com.nekko.android.ui.theme.Nekko
 
 /**
  * Settings → This computer (SK-8): the safety exits for the computer this
- * phone is connected to. Also in the connection banner's menu, so they are
+ * phone is connected to. Also in the connection row's menu, so they are
  * one tap away while a chat runs.
  */
 @Composable

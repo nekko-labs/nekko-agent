@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The connection row under the Chats title (the iPhone's connection strip): words, lines and fixes. -->
+<resources>
+    <string name="conn_tailscale">Tailscale</string>
+    <string name="conn_word_tailscale_off">Tailscale off</string>
+    <string name="conn_word_offline">offline</string>
+    <string name="conn_word_no_answer">no answer</string>
+    <string name="conn_word_not_found">not found</string>
+    <string name="conn_word_refused">refused</string>
+    <string name="conn_word_key_changed">key changed</string>
+    <string name="conn_word_stopped">stopped</string>
+    <string name="conn_word_quit">quit</string>
+    <string name="conn_word_update">update</string>
+
+    <string name="conn_state_online">Online</string>
+    <string name="conn_state_connecting">Connecting</string>
+    <string name="conn_state_off">Off</string>
+    <string name="conn_show_fix">Shows how to fix it</string>
+    <string name="conn_hide_fix">Hides the fix</string>
+
+    <string name="conn_retry">Retry</string>
+    <string name="conn_try_again">Try again</string>
+    <string name="conn_open_tailscale">Open Tailscale</string>
+    <string name="conn_details">Details</string>
+
+    <string name="conn_names_and">%1$s and %2$s</string>
+    <string name="conn_names_list">%1$s, %2$s</string>
+    <string name="conn_tailscale_line">Turn on Tailscale to reach %1$s.</string>
+    <string name="conn_waits_one">1 prompt waits to send.</string>
+    <string name="conn_waits_other">%1$d prompts wait to send.</string>
+    <string name="conn_stopped_line">You stopped remote access here.</string>
+    <string name="conn_stopped_line_at">You stopped remote access here at %1$s.</string>
+    <string name="conn_stopped_fix">Turn it on at %1$s, then try again.</string>
+    <string name="conn_quit_line">You quit Nekko Agent on %1$s.</string>
+    <string name="conn_quit_line_at">You quit Nekko Agent on %1$s at %2$s.</string>
+    <string name="conn_quit_fix">Open it there; this phone keeps trying.</string>
+    <string name="conn_key_line">The pairing key no longer matches %1$s.</string>
+    <string name="conn_key_fix">Pair again with a fresh code.</string>
+    <string name="conn_update_computer_line">%1$s runs an older Nekko Agent.</string>
+    <string name="conn_update_computer_fix">Update it there to use everything here.</string>
+    <string name="conn_update_phone_line">This app is older than Nekko Agent on %1$s.</string>
+    <string name="conn_update_phone_fix">Update it from Google Play.</string>
+    <string name="conn_not_found_line">Can’t find %1$s.</string>
+    <string name="conn_not_found_relay">Can’t find the relay.</string>
+    <string name="conn_not_found_fix">Change how phones connect on %1$s, then pair again.</string>
+    <string name="conn_no_answer_tailnet_line">%1$s doesn’t answer on your tailnet.</string>
+    <string name="conn_no_answer_tailnet_fix">Is it awake and signed in to the same tailnet?</string>
+    <string name="conn_no_answer_line">Can’t reach %1$s right now.</string>
+    <string name="conn_no_answer_fix">This phone keeps trying.</string>
+    <string name="conn_offline_line">%1$s is offline.</string>
+    <string name="conn_offline_fix">Open Nekko Agent on it, with Remote access on.</string>
+    <string name="conn_update_required_line">%1$s no longer accepts this app.</string>
+    <string name="conn_update_required_fix">Update it from Google Play.</string>
+    <string name="conn_removed_line">%1$s removed this phone.</string>
+    <string name="conn_unknown_line">%1$s doesn’t know this phone any more.</string>
+</resources>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_connection.xml. -->
+<resources>
+    <string name="conn_tailscale">Tailscale</string>
+    <string name="conn_word_tailscale_off">Tailscale aus</string>
+    <string name="conn_word_offline">offline</string>
+    <string name="conn_word_no_answer">keine Antwort</string>
+    <string name="conn_word_not_found">nicht gefunden</string>
+    <string name="conn_word_refused">abgelehnt</string>
+    <string name="conn_word_key_changed">Schlüssel geändert</string>
+    <string name="conn_word_stopped">gestoppt</string>
+    <string name="conn_word_quit">beendet</string>
+    <string name="conn_word_update">Update</string>
+    <string name="conn_state_online">Online</string>
+    <string name="conn_state_connecting">Verbindung wird hergestellt</string>
+    <string name="conn_state_off">Aus</string>
+    <string name="conn_show_fix">Zeigt, wie es sich beheben lässt</string>
+    <string name="conn_hide_fix">Blendet die Lösung aus</string>
+    <string name="conn_retry">Erneut versuchen</string>
+    <string name="conn_try_again">Nochmal versuchen</string>
+    <string name="conn_open_tailscale">Tailscale öffnen</string>
+    <string name="conn_details">Details</string>
+    <string name="conn_names_and">%1$s und %2$s</string>
+    <string name="conn_names_list">%1$s, %2$s</string>
+    <string name="conn_tailscale_line">Schalte Tailscale ein, um %1$s zu erreichen.</string>
+    <string name="conn_waits_one">1 Prompt wartet auf das Senden.</string>
+    <string name="conn_waits_other">%1$d Prompts warten auf das Senden.</string>
+    <string name="conn_stopped_line">Du hast den Fernzugriff hier gestoppt.</string>
+    <string name="conn_stopped_line_at">Du hast den Fernzugriff hier um %1$s gestoppt.</string>
+    <string name="conn_stopped_fix">Schalte ihn auf %1$s wieder ein und versuche es dann erneut.</string>
+    <string name="conn_quit_line">Du hast Nekko Agent auf %1$s beendet.</string>
+    <string name="conn_quit_line_at">Du hast Nekko Agent auf %1$s um %2$s beendet.</string>
+    <string name="conn_quit_fix">Öffne es dort; dieses Telefon versucht es weiter.</string>
+    <string name="conn_key_line">Der Kopplungsschlüssel passt nicht mehr zu %1$s.</string>
+    <string name="conn_key_fix">Koppeln mit einem neuen Code.</string>
+    <string name="conn_update_computer_line">Auf %1$s läuft ein älteres Nekko Agent.</string>
+    <string name="conn_update_computer_fix">Aktualisiere es dort, um hier alles zu nutzen.</string>
+    <string name="conn_update_phone_line">Diese App ist älter als Nekko Agent auf %1$s.</string>
+    <string name="conn_update_phone_fix">Aktualisiere sie über Google Play.</string>
+    <string name="conn_not_found_line">%1$s wurde nicht gefunden.</string>
+    <string name="conn_not_found_relay">Das Relay wurde nicht gefunden.</string>
+    <string name="conn_not_found_fix">Ändere auf %1$s, wie Telefone sich verbinden, und koppele dann erneut.</string>
+    <string name="conn_no_answer_tailnet_line">%1$s antwortet in deinem Tailnet nicht.</string>
+    <string name="conn_no_answer_tailnet_fix">Ist es wach und im selben Tailnet angemeldet?</string>
+    <string name="conn_no_answer_line">%1$s ist gerade nicht erreichbar.</string>
+    <string name="conn_no_answer_fix">Dieses Telefon versucht es weiter.</string>
+    <string name="conn_offline_line">%1$s ist offline.</string>
+    <string name="conn_offline_fix">Öffne Nekko Agent dort, mit eingeschaltetem Fernzugriff.</string>
+    <string name="conn_update_required_line">%1$s akzeptiert diese App nicht mehr.</string>
+    <string name="conn_update_required_fix">Aktualisiere sie über Google Play.</string>
+    <string name="conn_removed_line">%1$s hat dieses Telefon entfernt.</string>
+    <string name="conn_unknown_line">%1$s kennt dieses Telefon nicht mehr.</string>
+</resources>

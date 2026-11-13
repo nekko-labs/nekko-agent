@@ -7,23 +7,8 @@
     <string name="chats_cancel">Cancel</string>
     <string name="chats_new_chat">New chat</string>
 
-    <!-- Connection banner -->
-    <string name="chats_denied_revoked">This phone was removed on your computer. There: Settings → Remote access → Pair a device, then scan the new QR here. If it still refuses, use Sign out all phones there first.</string>
-    <string name="chats_denied_bad_code">That pairing code expired or was already used. Scan a fresh QR.</string>
-    <string name="chats_denied_unknown_device">Your computer doesn’t know this phone yet. Scan a pairing QR.</string>
-    <string name="chats_denied_kicked">Your computer disconnected this phone. Pair it again.</string>
-    <string name="chats_denied_bad_key">The pairing key changed on your computer. Scan a fresh QR.</string>
-    <string name="chats_denied_update_required">Your computer only accepts phones on the newest Nekko Agent. Update this app to connect to it.</string>
-    <string name="chats_denied_invalid">Pairing failed. Scan a fresh QR on your computer.</string>
-    <string name="chats_banner_stopped">You stopped remote access on %1$s. Turn it on there (Settings → Remote access), then tap here to reconnect.</string>
-    <string name="chats_banner_online">%1$s is online</string>
-    <string name="chats_banner_offline">%1$s is offline. Open Nekko Agent on it.</string>
-    <string name="chats_banner_connecting">Connecting to %1$s…</string>
-    <string name="chats_banner_host_not_found">Can’t find %1$s, the address this phone was paired with. On %2$s, change how phones connect in Settings → Remote access, then pair again.</string>
-    <string name="chats_reconnect">Reconnect</string>
+    <!-- Connection row -->
     <string name="chats_pair_again">Pair again</string>
-    <string name="chats_manage_computers">Manage computers</string>
-    <string name="chats_encrypted_via">End-to-end encrypted via %1$s</string>
     <string name="chats_safety_options">Safety options for %1$s</string>
 
     <!-- Computers on this network -->

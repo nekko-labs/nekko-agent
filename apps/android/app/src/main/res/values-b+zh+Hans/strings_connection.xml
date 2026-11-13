@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_connection.xml. -->
+<resources>
+    <string name="conn_tailscale">Tailscale</string>
+    <string name="conn_word_tailscale_off">Tailscale 已关闭</string>
+    <string name="conn_word_offline">离线</string>
+    <string name="conn_word_no_answer">无响应</string>
+    <string name="conn_word_not_found">未找到</string>
+    <string name="conn_word_refused">已拒绝</string>
+    <string name="conn_word_key_changed">密钥已变</string>
+    <string name="conn_word_stopped">已停止</string>
+    <string name="conn_word_quit">已退出</string>
+    <string name="conn_word_update">更新</string>
+    <string name="conn_state_online">在线</string>
+    <string name="conn_state_connecting">正在连接</string>
+    <string name="conn_state_off">已关闭</string>
+    <string name="conn_show_fix">显示修复方法</string>
+    <string name="conn_hide_fix">隐藏修复方法</string>
+    <string name="conn_retry">重试</string>
+    <string name="conn_try_again">再试一次</string>
+    <string name="conn_open_tailscale">打开 Tailscale</string>
+    <string name="conn_details">详情</string>
+    <string name="conn_names_and">%1$s 和 %2$s</string>
+    <string name="conn_names_list">%1$s、%2$s</string>
+    <string name="conn_tailscale_line">请打开 Tailscale 以连接 %1$s。</string>
+    <string name="conn_waits_one">有 1 条提示词等待发送。</string>
+    <string name="conn_waits_other">有 %1$d 条提示词等待发送。</string>
+    <string name="conn_stopped_line">你已在此停止远程访问。</string>
+    <string name="conn_stopped_line_at">你已于 %1$s 在此停止远程访问。</string>
+    <string name="conn_stopped_fix">请在 %1$s 上重新开启，然后再试一次。</string>
+    <string name="conn_quit_line">你已退出 %1$s 上的 Nekko Agent。</string>
+    <string name="conn_quit_line_at">你已于 %2$s 退出 %1$s 上的 Nekko Agent。</string>
+    <string name="conn_quit_fix">请在那边打开它，这部手机会继续尝试。</string>
+    <string name="conn_key_line">配对密钥与 %1$s 不再匹配。</string>
+    <string name="conn_key_fix">请用新的代码重新配对。</string>
+    <string name="conn_update_computer_line">%1$s 上的 Nekko Agent 版本较旧。</string>
+    <string name="conn_update_computer_fix">请在那边更新，以使用这里的全部功能。</string>
+    <string name="conn_update_phone_line">此应用比 %1$s 上的 Nekko Agent 旧。</string>
+    <string name="conn_update_phone_fix">请从 Google Play 更新。</string>
+    <string name="conn_not_found_line">找不到 %1$s。</string>
+    <string name="conn_not_found_relay">找不到中继。</string>
+    <string name="conn_not_found_fix">请在 %1$s 上更改手机的连接方式，然后重新配对。</string>
+    <string name="conn_no_answer_tailnet_line">%1$s 在你的 tailnet 上无响应。</string>
+    <string name="conn_no_answer_tailnet_fix">它是否已唤醒并登录了同一个 tailnet？</string>
+    <string name="conn_no_answer_line">暂时无法连接 %1$s。</string>
+    <string name="conn_no_answer_fix">这部手机会继续尝试。</string>
+    <string name="conn_offline_line">%1$s 已离线。</string>
+    <string name="conn_offline_fix">请在上面打开 Nekko Agent，并开启远程访问。</string>
+    <string name="conn_update_required_line">%1$s 不再接受此应用。</string>
+    <string name="conn_update_required_fix">请从 Google Play 更新。</string>
+    <string name="conn_removed_line">%1$s 已移除这部手机。</string>
+    <string name="conn_unknown_line">%1$s 不再认识这部手机。</string>
+</resources>
