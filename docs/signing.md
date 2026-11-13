@@ -196,18 +196,26 @@ So:
   starts the app's binary (`ELECTRON_RUN_AS_NODE=1 ... -e 'process.exit(0)'`),
   the one check that sees what AMFI sees.
 
-**Creating it.** Needs Account Holder or Admin on team `3HM5598S99`, org-admin
-on `nekko-labs`, and a Mac with the Developer ID certificate in the login
-keychain.
+**Creating it.** Needs Account Holder or Admin on team `3HM5598S99` and
+org-admin on `nekko-labs`. Any Mac works: the certificate is read from a
+release, not the keychain.
 
 1. Find the certificate the release signs with, to pick the same one in the
-   portal. If more than one prints, it is the one exported into
-   `MACOS_SIGNING_CERTS_P12` (match the expiry in Keychain Access → My
-   Certificates):
+   portal. Every signed release carries it, so extract it from the latest
+   macOS build (about 190 MB):
 
    ```bash
-   security find-certificate -a -c "Developer ID Application: Nekko Labs LLC" -p | openssl x509 -noout -serial -enddate
+   cd "$(mktemp -d)" && gh release download -R nekko-labs/nekko-agent -p 'NekkoAgent-*-arm64.zip' && ditto -x -k NekkoAgent-*-arm64.zip . && codesign -d --extract-certificates "Nekko Agent.app" && openssl x509 -inform DER -in codesign0 -noout -subject -serial -enddate
    ```
+
+   With a signed Nekko Agent already in `/Applications`, run the last two
+   commands on `/Applications/Nekko Agent.app` instead. In the portal, the
+   **Developer ID Application** certificate whose expiry matches `notAfter` is
+   the one (the portal shows local time, so the date can differ by one day).
+   Ignore Developer ID *Installer* certificates: they sign `.pkg` files, which
+   this release does not ship. This assumes the latest release was signed with
+   the certificate now in `MACOS_SIGNING_CERTS_P12`; after replacing the
+   certificate, read it from the new `.p12` instead.
 
 2. developer.apple.com → Account → Certificates, Identifiers & Profiles →
    **Profiles** → **+** → under Distribution, **Developer ID** → Continue →
