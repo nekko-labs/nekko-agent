@@ -304,8 +304,9 @@ jobs:
           if [ "$SHARD" = fixtures ]; then
             # The first-run suite is the only one split across simulator clones: its tests set all state by
             # launch argument, open no host ports and leave evidence only in the one xcresult. One worker per
-            # 2 vCPUs and 4 GB of the VM, at most 4; a hosted 3-vCPU Mac gets 1, so it stays serial.
-            WORKERS=$(( $(sysctl -n hw.ncpu) / 2 )); MEM=$(( $(sysctl -n hw.memsize) / 4294967296 ))
+            # 2 vCPUs and 6 GB of the VM, at most 4; a hosted 3-vCPU Mac gets 1, so it stays serial. At 4 GB a
+            # worker, the 10 GB nekko-cloud-mac VM ran 2 clones, swapped 17-19 GB and timed out its waits (#2691).
+            WORKERS=$(( $(sysctl -n hw.ncpu) / 2 )); MEM=$(( $(sysctl -n hw.memsize) / 6442450944 ))
             [ "$MEM" -lt "$WORKERS" ] && WORKERS=$MEM; [ "$WORKERS" -gt 4 ] && WORKERS=4
             PARALLEL=(-parallel-testing-enabled NO)
             [ "$WORKERS" -lt 2 ] || PARALLEL=(-parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS")
