@@ -951,6 +951,14 @@ impl Workflows {
         tctx: &Value,
         pr: Option<&PrRun>,
     ) -> StepResult {
+        // The agent's tool allowlist cannot constrain an explicit shell step,
+        // and a nested run starts without this PR's trust context. Neither may
+        // execute repository code on behalf of an untrusted PR checkout.
+        if pr.is_some_and(|p| !p.trusted) && matches!(str_field(step, "kind"), Some("shell" | "workflow")) {
+            return StepResult::fail(
+                "Shell and nested workflow steps cannot run for an untrusted PR. Review by reading the code instead.",
+            );
+        }
         let render = |k: &str| step.get(k).and_then(Value::as_str).map(|s| crate::templates::render_template(s, tctx));
         let run_text = render("run").unwrap_or_else(|| nekko_js::display(step.get("run").unwrap_or(&Value::Null)));
         match str_field(step, "kind") {
