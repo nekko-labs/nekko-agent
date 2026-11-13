@@ -39,6 +39,20 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Library document/image thumbnail cache (#2747, 2026-11-14)
+Area: renderer / memory. Result: improvement in synthetic thumbnail payload size and repeated-read behavior; end-to-end latency unmeasured.
+Conditions: macOS, Electron 45, hidden full-App fixture at 1440x900, one synthetic seven-file Library (three text documents, one refused document, one PDF and two images), one successful final journey. Network disabled, isolated profile. This is not a production workload or a frame-time benchmark.
+
+| Metric | Source / cold | Cached / warm |
+|---|---|---|
+| Solid-color 1600x900 raster data URL, UTF-16 characters | 41,962 (original PNG) | 1,335 (640x360 WebP thumbnail) |
+| Supported document reads per file | 1 at first thumbnail load | 0 additional reads during layout switches and return visit |
+| Image reads per file | 1 | 0 additional reads during image layout switches |
+
+The SVG fixture becomes a 640x480 WebP data URL of 1,511 characters. File opening deliberately performs a separate source read; changing the chat revision causes a new thumbnail read, and refused reads can retry after five seconds. Successful entries expire after 60 seconds on the next request. The LRU holds at most 80 results / 8 MiB of encoded strings and runs three read/decode jobs at once; these are configured bounds, not measured process-heap reductions. Documents become bounded first-page inert SVG images without per-document iframes. HTML keeps its existing live-frame lifecycle. Real photos may compress differently. Not measured: packaged startup, time to first preview, full-app memory/GPU use or disk-cache performance (the cache is renderer-local, not persisted).
+
+Source: `apps/desktop/scripts/library-thumbnails-sandbox.cjs`, final journey report and screenshots in the associated PR; issue [#2747](https://github.com/nekko-labs/nekko-agent/issues/2747). Early verification attempts exposed fixture interference from chat image cards, an incomplete Settings bridge and fixed-delay overlapping transitions; the final fixture uses the neutral Automations view, an explicit empty workflow response and waits for transition completion. These failed fixture runs are not product performance measurements.
+
 ## Chat pictures beside the chat, held turn saves (2026-11-09)
 Area: engine daemon
 Result: improvement
