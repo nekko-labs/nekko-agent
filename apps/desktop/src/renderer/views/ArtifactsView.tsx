@@ -9,7 +9,7 @@ import { prefersReducedMotion } from '../displays.js';
 import { FilePane } from '../components/FilePane.js';
 import { LibraryArtwork, LibraryIntro, libraryIntroSeen, dismissLibraryIntro } from '../components/LibraryIntro.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
-import { ArtifactPreview } from '../components/library/ArtifactPreview.js';
+import { LibraryFileIcon } from '../components/library/LibraryFileIcon.js';
 import { DesignCanvas } from '../components/library/DesignCanvas.js';
 import { TilePreview } from '../components/library/TilePreview.js';
 import {
@@ -261,12 +261,13 @@ export function ArtifactsView() {
   const openPath = selected ? version ?? selected.path : '';
   const onCanvas = !!selected && selected.kind === 'design' && isHtml(openPath);
 
+  const revisions = new Map(sessions.map((s) => [s.id, s.updatedAt]));
   const row = (e: ArtifactEntry) => {
     const active = selected?.path === e.path;
     return (
       <div key={e.path} role="listitem" className={`group rounded-lg ${active ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
         <button type="button" data-artifact-row className="flex w-full min-w-0 items-center gap-3 px-2 py-1 text-left" onClick={() => select(e)} title={e.path}>
-          <ArtifactPreview kind={e.kind} path={e.path} ext={extOf(e.filename)} icon className="h-7 w-7 shrink-0 rounded-md" />
+          <LibraryFileIcon kind={e.kind} className="h-7 w-7 shrink-0 rounded-md" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
             {!listWide && <span className="block truncate text-2xs text-ink-faint">{fromAndWhen(e)}</span>}
@@ -286,7 +287,7 @@ export function ArtifactsView() {
     return (
     <div key={e.path} role="listitem" className="library-tile" data-library-tile>
       <button type="button" className="library-tile-main" onClick={() => select(e)} title={e.path}>
-        <TilePreview kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
+        <TilePreview revision={revisions.get(e.sessionId) ?? e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
           <span className="library-tile-meta">{fromAndWhen(e)}</span>

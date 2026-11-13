@@ -5,6 +5,7 @@ import {
   LIBRARY_COLLAPSED_KEY, LIBRARY_LAYOUT_KEY, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
 } from './libraryPrefs.js';
 import { ArtifactPreview, KIND_COLOR, variantOf } from './ArtifactPreview.js';
+import { LibraryFileIcon } from './LibraryFileIcon.js';
 import { SlideToggle } from './SlideToggle.js';
 import { ARTIFACT_KINDS } from '../../artifactsIndex.js';
 
@@ -86,6 +87,18 @@ describe('Library previews', () => {
   });
   it('has a drawing for every kind', () => {
     for (const { id } of ARTIFACT_KINDS) expect(renderToStaticMarkup(<ArtifactPreview kind={id} path={`/x.${id}`} ext="x" />)).toContain(`data-preview-kind="${id}"`);
+  });
+});
+
+describe('compact Library row icons', () => {
+  it('uses a small shared symbol per kind without reading files or rendering tile art', () => {
+    for (const { id } of ARTIFACT_KINDS) {
+      const html = renderToStaticMarkup(<LibraryFileIcon kind={id} />);
+      expect(html).toContain(`data-library-file-icon="${id}"`);
+      expect(html).toContain('aria-hidden="true"');
+      expect(html).toContain('viewBox="0 0 24 24"');
+      expect(html).not.toMatch(/<image|<iframe|<text|data-preview-kind/);
+    }
   });
 });
 
