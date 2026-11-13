@@ -34,11 +34,11 @@ struct ChatPlace: Equatable {
         return ChatPlace(id: c.id, name: c.name, icon: c.icon, color: Int(ComputerColors.computer(at: i)))
     }
 
-    /// Every place in the list, in order: the paired computers, then this iPhone when it runs chats.
+    /// Every place in the list, in order: the paired computers, then this iPhone, including before provider setup.
     @MainActor
     static func all(store: ComputersStore, phone: PhoneChats) -> [ChatPlace] {
         let computers = store.computers.indices.compactMap { of(store.computers[$0].id, store: store) }
-        return computers + (phone.isSetUp || !phone.chats.isEmpty ? [phonePlace] : [])
+        return computers + [phonePlace]
     }
 }
 
@@ -287,14 +287,22 @@ struct PhoneModelPicker: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var scope = ModelScope.all
+    @State private var adding = false
 
     var body: some View {
         NavigationStack {
             List {
                 if phone.providers.filter(\.enabled).isEmpty {
-                    Text("Add a provider in Settings → Models on \(ChatPlace.phoneName) first.")
-                        .font(.subheadline).foregroundStyle(palette.inkSoft)
-                        .listRowBackground(Color.clear)
+                    VStack(alignment: .leading, spacing: 12) {
+                        PhoneCloudIllustration().frame(height: 100).accessibilityHidden(true)
+                        Text("Chat without a computer").font(.headline)
+                        Text("Connect your own cloud provider. Your key stays in this device’s Keychain. Text chats only, with no tools or computer access.")
+                            .font(.subheadline).foregroundStyle(palette.inkSoft)
+                        Button { adding = true } label: { Label("Add a provider", systemImage: "plus") }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("phoneModel.addProvider")
+                    }
+                    .listRowBackground(Color.clear)
                 } else if scope == .local {
                     Text("Local models run on a computer. Start the chat on a computer to use them.")
                         .font(.subheadline).foregroundStyle(palette.inkSoft)
@@ -310,6 +318,8 @@ struct PhoneModelPicker: View {
                         if list.isEmpty && phone.modelErrors[p.id] == nil {
                             ProgressView().frame(maxWidth: .infinity)
                         }
+                        Button("Reload models") { Task { await phone.loadModels(p.id) } }
+                            .accessibilityIdentifier("phoneModel.reload")
                         ForEach(list) { m in
                             Button {
                                 pick(p.id, m.id)
@@ -338,9 +348,24 @@ struct PhoneModelPicker: View {
             .navigationTitle("Model")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .sheet(isPresented: $adding, onDismiss: { Task { await phone.loadAllModels() } }) { AddPhoneProviderSheet() }
             .task { await phone.loadAllModels() }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// Original, resizable SwiftUI artwork. No downloaded asset or external request.
+private struct PhoneCloudIllustration: View {
+    @Environment(\.palette) private var palette
+    var body: some View {
+        HStack(spacing: 16) {
+            RoundedRectangle(cornerRadius: 12).stroke(palette.accent, lineWidth: 3)
+                .frame(width: 48, height: 80)
+                .overlay(alignment: .bottom) { Capsule().fill(palette.accent).frame(width: 16, height: 3).padding(8) }
+            ForEach(0..<3) { _ in Circle().fill(palette.accent).frame(width: 4, height: 4) }
+            Image(systemName: "cloud").font(.system(size: 52, weight: .light)).foregroundStyle(palette.accent)
+        }.frame(maxWidth: .infinity)
     }
 }
 

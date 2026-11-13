@@ -206,7 +206,7 @@ jobs:
           VIDEO_FILE=""
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/PendingResponsesUITests.swift" ]]; then
             VIDEO_FILE=evidence/native-motion.mp4
-          elif [[ "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then
+          elif [[ "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/PhoneDirectCloudTests.swift" ]]; then
             VIDEO_FILE=evidence/native-comparison.mp4
           elif [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/KeyboardDismissEvidenceTests.swift" ]]; then
             VIDEO_FILE=evidence/quiet-transcript.mp4

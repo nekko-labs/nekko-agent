@@ -38,7 +38,7 @@ final class UsageByPlaceTests: XCTestCase {
     func testOnlyOpenAiAndOpenRouterAreAskedForUsage() async {
         let msgs = [PhoneMessage(id: "1", role: .user, text: "Hi", at: 1)]
         func body(_ kind: String) -> JSONValue? {
-            PhoneProviders.chatRequest(PhoneProvider(id: "x", kind: kind, label: "X", baseUrl: "https://x.example/v1"), key: "k", model: "m", messages: msgs).body
+            try? PhoneProviders.chatRequest(PhoneProvider(id: "x", kind: kind, label: "X", baseUrl: "https://x.example/v1"), key: "k", model: "m", messages: msgs).body
         }
         XCTAssertEqual(body("openai")?["stream_options"]?["include_usage"]?.bool, true)
         XCTAssertEqual(body("openrouter")?["stream_options"]?["include_usage"]?.bool, true)
