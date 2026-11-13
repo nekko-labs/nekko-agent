@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { authenticate, issueToken, type Plan, SYNC_PLANS } from "./auth.js";
+import type { Stripe } from "./billing.js";
 import type { Db } from "./db.js";
+import { featuresFor, type Features } from "./features.js";
 import type { MachineDriver } from "./fly.js";
 import { emailHash } from "./retention.js";
 import { type DeleteAuthUser, InvalidSession, type SupabaseIdentity, type VerifyAccessToken } from "./supabase.js";
@@ -23,6 +25,12 @@ const account = (u: UserRow) => ({ id: u.id, email: u.email, plan: u.plan, canSy
 
 export class AccountConflict extends Error {}
 
+/** Remembered so a Nekko team account (features.ts) can't be claimed with an unproven address. */
+async function markVerified(tx: Db, userId: string, id: SupabaseIdentity): Promise<void> {
+  if (!id.emailVerified) return;
+  await tx.query("update users set email_verified = true where id = $1 and lower(email) = lower($2) and not email_verified", [userId, id.email]);
+}
+
 /**
  * The user for a verified Supabase identity: found by its subject; else a
  * user row with the same email and no subject yet (a beta signup let in) is
@@ -42,6 +50,7 @@ export async function userForIdentity(db: Db, id: SupabaseIdentity): Promise<Use
           u.email = id.email;
         }
       }
+      await markVerified(tx, u.id, id);
       return u;
     }
     const byEmail = await tx.query<UserRow>("select id, email, plan, auth_subject from users where lower(email) = lower($1)", [id.email]);
@@ -64,6 +73,7 @@ export async function userForIdentity(db: Db, id: SupabaseIdentity): Promise<Use
       );
       user = ins.rows[0];
     }
+    await markVerified(tx, user.id, id);
     await tx.query(
       "update signups set user_id = $1, status = 'joined', updated_at = now() where lower(email) = lower($2) and user_id is null",
       [user.id, id.email],
@@ -78,12 +88,17 @@ export interface AccountDeletion {
   driver?: MachineDriver;
   /** Deletes the Supabase Auth user; without it the deletion waits in pending_auth_deletions. */
   deleteAuthUser?: DeleteAuthUser;
+  /** Cancels the Stripe subscription; without it an account that ever paid can't be deleted. */
+  stripe?: Stripe;
 }
 
 export class MachineTeardownFailed extends Error {}
+export class BillingTeardownFailed extends Error {}
 
 /**
- * Deletes an account for good (decision 0043). First every cloud machine the
+ * Deletes an account for good (decision 0043). First its Stripe customer is
+ * deleted, which cancels any subscription (BillingTeardownFailed and nothing
+ * deleted if it can't be). Then every cloud machine the
  * account ever had is destroyed on Fly, so nothing keeps running or billing
  * and the pairing key in its environment goes with it; if one can't be, this
  * throws MachineTeardownFailed and deletes nothing. Then, in one transaction:
@@ -107,6 +122,17 @@ export async function deleteAccount(db: Db, userId: string, del: AccountDeletion
       await del.driver.destroy(m.provider_ref);
     } catch (e) {
       throw new MachineTeardownFailed(String(e).slice(0, 200));
+    }
+  }
+  // Deleting the Stripe customer cancels its subscriptions at once, so a deleted account is never charged again.
+  const { rows: billed } = await db.query<{ stripe_customer_id: string | null }>("select stripe_customer_id from users where id = $1", [userId]);
+  const customer = billed[0]?.stripe_customer_id;
+  if (customer) {
+    if (!del.stripe) throw new BillingTeardownFailed("billing is not configured");
+    try {
+      await del.stripe.deleteCustomer(customer);
+    } catch (e) {
+      throw new BillingTeardownFailed(String(e).slice(0, 200));
     }
   }
   // shortcut: a machine created by another request between the teardown and this transaction is orphaned on Fly; lock creation per user if that ever happens.
@@ -168,6 +194,7 @@ export function registerAccount(
   signIn: SignInConfig | undefined,
   signInLimit: { max: number; timeWindow: number },
   deletion: AccountDeletion = {},
+  features?: Features,
 ): void {
   // What the app needs to start a Supabase sign-in. Both values are public.
   app.get("/v1/auth/config", async (_req, reply) => {
@@ -203,7 +230,9 @@ export function registerAccount(
     const caller = await authenticate(db, req);
     if (!caller) return reply.code(401).send({ error: "unauthenticated" });
     const { rows } = await db.query<UserRow>("select id, email, plan, auth_subject from users where id = $1", [caller.userId]);
-    return { account: account(rows[0]), device: caller.deviceId };
+    // What this account may see of unreleased features, and whether it may switch them (a team account).
+    const seen = features ? await featuresFor(db, features, caller.userId) : { staff: false, features: {} };
+    return { account: { ...account(rows[0]), ...seen }, device: caller.deviceId };
   });
 
   // Sign out this device: its token stops working. Its sync device and wraps
@@ -227,6 +256,10 @@ export function registerAccount(
     try {
       subject = await deleteAccount(db, caller.userId, deletion);
     } catch (e) {
+      if (e instanceof BillingTeardownFailed) {
+        req.log.error({ err: e.message }, "account deletion stopped: the Stripe subscription could not be cancelled");
+        return reply.code(502).send({ error: "billing-teardown-failed" });
+      }
       if (!(e instanceof MachineTeardownFailed)) throw e;
       req.log.error({ err: e.message }, "account deletion stopped: a cloud machine could not be destroyed");
       return reply.code(502).send({ error: "machine-teardown-failed" });

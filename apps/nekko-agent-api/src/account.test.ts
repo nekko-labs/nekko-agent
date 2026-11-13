@@ -125,6 +125,22 @@ describe("sign-in with Supabase", () => {
     expect(oauth.json().account).toMatchObject({ plan: "pro" });
   });
 
+  it("remembers a proven email, which a Nekko team account needs (#2724)", async () => {
+    const a = app();
+    const verified = async () => (await db.query<{ email_verified: boolean }>("select email_verified from users", [])).rows[0].email_verified;
+    // A new account made with an unproven address is created, but not proven.
+    const unproven = await signIn(a, { email: "philip@nekkolabs.com", amr: [{ method: "password" }] });
+    expect(unproven.statusCode).toBe(201);
+    expect(await verified()).toBe(false);
+    const me = await a.inject({ method: "GET", url: "/v1/auth/me", headers: { authorization: `Bearer ${unproven.json().token}` } });
+    expect(me.json().account).toMatchObject({ staff: false, features: { billing: false } });
+    // The emailed code proves it.
+    await signIn(a, { email: "philip@nekkolabs.com" });
+    expect(await verified()).toBe(true);
+    const again = await a.inject({ method: "GET", url: "/v1/auth/me", headers: { authorization: `Bearer ${unproven.json().token}` } });
+    expect(again.json().account).toMatchObject({ staff: true });
+  });
+
   it("refuses an email another sign-in already owns", async () => {
     const a = app();
     await signIn(a);

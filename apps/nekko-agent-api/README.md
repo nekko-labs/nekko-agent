@@ -112,6 +112,32 @@ hostname).
     per org, 20 orgs per user.
 - `GET /v1/auth/config`, `POST /v1/auth/session`, `GET /v1/auth/me`,
   `DELETE /v1/auth/session`: sign-in.
+  `GET /v1/auth/me` also answers `account.staff` (a Nekko team account) and
+  `account.features` (`{billing}`: what this account may see).
+- `/v1/features`, `/v1/staff/features`: **switches for unreleased Cloud features**
+  (decision 0092, [spec](../../spec/platform/plans-and-billing.md)). Each is `off`
+  (the default), `team` (team accounts only) or `on` (everyone). `GET /v1/features`
+  (Bearer optional) -> `{staff, features: {billing}}`; anonymous callers see only
+  what is on for everyone. Team accounts only, 404 for anyone else:
+  `GET /v1/staff/features` -> `{features: {billing: "off"}, available}` and
+  `PUT /v1/staff/features/:key {state}`. A team account is an email on
+  `NEKKO_STAFF_EMAILS` (default philip, davide, travis and matt @nekkolabs.com)
+  whose address was proven at sign-in (`users.email_verified`); an account made
+  before migration `0016` qualifies after signing in again.
+- `/v1/billing/*`: **plans and billing on Stripe**. Present only with
+  `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, and every route but the webhook
+  and the return page answers 404 unless the `billing` switch is on for the caller.
+  `GET /v1/billing/plans` (Bearer optional) -> `{plans: [{id, amount, currency, interval}]}`
+  (prices read from Stripe, cached an hour). `POST /v1/billing/checkout {plan: "pro"}`
+  -> `{url}` of a Stripe Checkout page (409 `already-subscribed` on a paid plan;
+  the first call makes the account's Stripe customer). `POST /v1/billing/portal` ->
+  `{url}` of the Customer Portal (409 `no-billing-account` for a plan set by hand).
+  `GET /v1/billing/return?result=done|canceled|managed`: the page Stripe sends the
+  browser back to. `POST /v1/billing/webhook`: Stripe's signed events (raw body,
+  five-minute window); on `checkout.session.completed` and `customer.subscription.*`
+  the service asks Stripe for the customer's subscriptions and sets `users.plan`
+  from them (active, trialing or past due keep the plan). Team is "talk to us" until
+  seats exist, so only `STRIPE_PRICE_PRO` is read.
 - `DELETE /v1/account` (Bearer `nk_` token): deletes the account for good
   (decision 0043). Destroys every cloud machine it had on Fly first (502
   `machine-teardown-failed` and nothing deleted if one can't be), then in one
@@ -214,6 +240,10 @@ fly secrets set ALERT_EMAIL='<who gets alerts>'
   marketing consent apart from the beta, and the policy version agreed to.
 - `pending_auth_deletions` (migration `0012`): Supabase users still to delete
   after their account was deleted here; only the Supabase user id.
+- `users.stripe_customer_id`, `users.email_verified`, `feature_flags` (migration
+  `0016`): the Stripe customer behind a paid plan, whether the address was ever
+  proven at sign-in, and the switches for unreleased features (no row means off;
+  who switched it last, cleared when that account is deleted).
 
 ## Sign-in: Supabase Auth
 
@@ -250,7 +280,33 @@ fly secrets set SUPABASE_SERVICE_ROLE_KEY='<service_role or secret key>'
 Without it, deleted accounts' Supabase users wait in `pending_auth_deletions`
 and are deleted on the first hourly run after the key is set.
 
-Setting a plan by hand until Stripe writes it: `update users set plan = 'pro' where lower(email) = lower('…');`
+Setting a plan by hand (Team, or before billing is on): `update users set plan = 'pro' where lower(email) = lower('…');`
+
+## Billing: Stripe
+
+Off until all of this is done, and hidden even then until a team account turns
+the `billing` switch on.
+
+1. In Stripe (test mode first): a product **Nekko Cloud Pro** with a monthly
+   recurring price. Copy the price id (`price_…`).
+2. **Settings > Billing > Customer portal**: allow updating the payment method,
+   viewing invoices and cancelling. Leave plan switching off (one plan for now).
+3. **Developers > Webhooks**: an endpoint at `<PUBLIC_URL>/v1/billing/webhook` for
+   `checkout.session.completed` and `customer.subscription.created`, `.updated`,
+   `.deleted`. Copy its signing secret (`whsec_…`).
+4. On the service:
+
+```bash
+fly secrets set STRIPE_SECRET_KEY='sk_…' STRIPE_WEBHOOK_SECRET='whsec_…' STRIPE_PRICE_PRO='price_…'
+```
+
+Then sign in to Nekko Cloud in the app with a team email, set billing to **Team**
+under Settings > Sync, and try a checkout with Stripe's test card. Set it to
+**On** to launch; **Off** hides it again (subscriptions keep running).
+
+Account deletion deletes the Stripe customer first, which cancels the subscription;
+if Stripe can't be reached the deletion answers 502 `billing-teardown-failed` and
+deletes nothing.
 
 ## Local dev stack
 
