@@ -4,6 +4,8 @@ import { VerificationEvidence } from './VerificationEvidence.js';
 import { LocalImageCard } from './LocalImageCard.js';
 import { localImagePath } from '../localImages.js';
 import { fileUrlPath, namedOutputPath } from '../chatArtifacts.js';
+import { FILE_REF, ISSUE_REF_EXACT, parseFileRef } from '../replyRefs.js';
+import { FileRefChip, IssueRefChip } from './ReplyRefChips.js';
 import { remoteImageUrl } from '../remoteImages.js';
 import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
@@ -59,7 +61,9 @@ function DocMarkdown({ text, basePath }: { text: string; basePath?: string }) {
 }
 
 function ChatMarkdown({ text, basePath, topics, askTail, runnable }: { text: string; basePath?: string; topics?: boolean; askTail?: boolean; runnable?: boolean }) {
-  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics, evidence: topics ? verificationPairs(text, basePath) : [] }), [basePath, topics, text]);
+  const sessionId = React.useContext(MarkdownSession);
+  const sandbox = React.useContext(MarkdownSandbox);
+  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics, sessionId, sandbox, evidence: topics ? verificationPairs(text, basePath) : [] }), [basePath, topics, text, sessionId, sandbox]);
   const segments = markdownSegments(text);
   // A closing question gets the header the model did not write.
   const question = askTail && endsOnUnlabelledQuestion(text) ? segments.filter((s) => s.kind === 'text').at(-1) : undefined;
@@ -185,6 +189,10 @@ export interface Ctx {
   basePath?: string;
   topics?: boolean;
   evidence?: EvidencePair[];
+  /** The chat a reply belongs to, so a file chip opens there. */
+  sessionId?: string;
+  /** Sandbox chats read nothing on the host: file references stay text. */
+  sandbox?: boolean;
 }
 
 /**
@@ -522,6 +530,10 @@ const INLINE_RE = new RegExp(
     '`([^`]+)`',
     String.raw`\[([^\]]+)\]\((${LINK_TARGET})\)`,
     String.raw`(https?:\/\/[^\s<>"')\]]+)`,
+    // `#2480` / `owner/repo#5`: not in a URL, an entity (`&#38;`) or a colour (`#2480ff`).
+    String.raw`(?<![\w/#&.-])((?:[A-Za-z0-9][\w.-]*\/[\w.-]+)?#\d+)(?![\w-])`,
+    // `RootView.swift:164-166` in prose, not part of a longer path, name or URL.
+    String.raw`(?<![\w/.@:\\-])(${FILE_REF})(?![\w/\\]|\.\w)`,
   ].map((alt) => `(?:${alt})`).join('|'),
   'g',
 );
@@ -536,7 +548,8 @@ function inline(s: string, ctx: Ctx): React.ReactNode {
   const pattern = new RegExp(INLINE_RE.source, INLINE_RE.flags);
   while ((m = pattern.exec(s))) {
     if (m.index > last) nodes.push(s.slice(last, m.index));
-    const [, imgAlt, imgSrc, bold, italic, strike, code, linkText, linkHref, bareUrl] = m;
+    const [, imgAlt, imgSrc, bold, italic, strike, code, linkText, linkHref, bareUrl, issueRef, fileRef] = m;
+    const where = { basePath: ctx.basePath, sessionId: ctx.sessionId, sandbox: !!ctx.sandbox };
     if (imgSrc !== undefined) {
       nodes.push(<ImageRef key={key++} alt={imgAlt ?? ''} src={imgSrc} basePath={ctx.basePath} />);
     } else if (bold !== undefined) {
@@ -551,12 +564,25 @@ function inline(s: string, ctx: Ctx): React.ReactNode {
           {code}
         </code>
       );
+      // A code span that is exactly a file (`src/App.tsx:12`, `reports/a.html`) or `#123` is a chip.
       const named = namedOutputPath(code);
-      nodes.push(named ? <CodeRef key={key++} href={named} basePath={ctx.basePath} doc={ctx.doc}>{span}</CodeRef> : span);
+      const file = named ? { file: fileUrlPath(named) ?? named } : parseFileRef(code);
+      const ref = ISSUE_REF_EXACT.exec(code.trim());
+      if (file) nodes.push(<FileRefChip key={key++} {...file} output={!!named} where={where}>{span}</FileRefChip>);
+      else if (ref) nodes.push(<IssueRefChip key={key++} number={ref[2]} slug={ref[1]} issue={/\bissues?\s*$/i.test(s.slice(0, m.index))} bare={false}>{span}</IssueRefChip>);
+      else nodes.push(span);
     } else if (linkText !== undefined) {
       nodes.push(<Ref key={key++} href={linkHref} basePath={ctx.basePath} doc={ctx.doc}>{linkText}</Ref>);
     } else if (bareUrl !== undefined) {
       nodes.push(<Link key={key++} href={bareUrl} doc={ctx.doc}>{bareUrl}</Link>);
+    } else if (issueRef !== undefined) {
+      const ref = ISSUE_REF_EXACT.exec(issueRef)!;
+      const before = s.slice(0, m.index);
+      const named = /\b(?:PR|PRs|pull request|issues?)\s*$/i.test(before);
+      nodes.push(ctx.doc ? issueRef : <IssueRefChip key={key++} number={ref[2]} slug={ref[1]} issue={/\bissues?\s*$/i.test(before)} bare={!named}>{issueRef}</IssueRefChip>);
+    } else if (fileRef !== undefined) {
+      const file = parseFileRef(fileRef)!;
+      nodes.push(ctx.doc ? fileRef : <FileRefChip key={key++} {...file} where={where}>{fileRef}</FileRefChip>);
     }
     last = m.index + m[0].length;
   }
@@ -606,18 +632,6 @@ function Ref({ href: raw, basePath, doc, children }: { href: string; basePath?: 
       {children}
     </button>
   );
-}
-
-/**
- * A code span naming a page, image or PDF (`reports/strip.html`) opens it like
- * a link would; where a link could not open (Sandbox, no folder for a relative
- * path) it stays plain code rather than a dimmed or "unavailable" label.
- */
-function CodeRef({ href, basePath, doc, children }: { href: string; basePath?: string; doc?: boolean; children: React.ReactNode }) {
-  const sandbox = React.useContext(MarkdownSandbox);
-  const path = fileUrlPath(href) ?? href;
-  if (sandbox || (!basePath && !/^(?:[A-Za-z]:[\\/]|\/)/.test(path))) return <>{children}</>;
-  return <Ref href={href} basePath={basePath} doc={doc}>{children}</Ref>;
 }
 
 /**
