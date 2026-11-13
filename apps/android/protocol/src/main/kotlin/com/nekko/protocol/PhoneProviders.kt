@@ -51,7 +51,10 @@ object PhoneProviders {
         require(p.baseUrl == p.baseUrl.trim()) { "Invalid provider address." }
         make(p.id, p.kind, p.label, p.baseUrl, key, p.workspaceId)
     }
-    fun chatRequest(p: PhoneProvider, key: String?, model: String, messages: List<PhoneMessage>, system: String? = "You are Nekko Agent on the user's Android phone. You have no tools and cannot see computers, files or the web. Answer in Markdown.", maxTokens: Int = 8192): PhoneRequest {
+    /** What a model running on the phone is told it is; [PhoneTone] adds the person's preferred tone after it. */
+    const val SYSTEM = "You are Nekko Agent on the user's Android phone. You have no tools and cannot see computers, files or the web. Answer in Markdown."
+
+    fun chatRequest(p: PhoneProvider, key: String?, model: String, messages: List<PhoneMessage>, system: String? = SYSTEM, maxTokens: Int = 8192): PhoneRequest {
         validate(p, key)
         require(maxTokens > 0) { "The reply token limit must be positive." }
         require(model.isNotBlank() && model.length <= 1024 && model.none { it.isISOControl() } && (p.kind != "vertex" || model.matches(Regex("[a-zA-Z0-9_-][a-zA-Z0-9@._-]*")))) { "Invalid model id." }

@@ -389,6 +389,31 @@
     <string name="settings_card_footer_text">Los nombres y pasos de los chats se ven con el teléfono desbloqueado; un teléfono bloqueado que oculta el contenido sensible muestra los textos de Mínimo. Permitir te pide desbloquear primero.</string>
     <string name="settings_warn_yolo">Avisar antes de YOLO</string>
     <string name="settings_warn_yolo_detail">Explicar lo que YOLO deja pasar antes de que un chat o el modo predeterminado de una computadora cambie a él</string>
+    <!-- Customize (#2426), the iPhone's page. -->
+    <string name="customize_title">Personalizar</string>
+    <string name="customize_menu">Personalizar…</string>
+    <string name="customize_settings_detail">Vista, tono de los modelos de este teléfono, skills</string>
+    <string name="customize_tab_experience">Experiencia</string>
+    <string name="customize_tab_skills">Skills</string>
+    <string name="customize_intro_title">Haz que Nekko funcione a tu manera</string>
+    <string name="customize_intro">Elige lo que ves y cómo trabajan tus agentes.</string>
+    <string name="customize_output">Salida de los agentes</string>
+    <string name="customize_visible_controls">Controles y monitores visibles</string>
+    <string name="customize_output_footer">Simple oculta los pasos de trabajo. Detallado los muestra. Ambos tienen las mismas capacidades y permisos. Esta elección se queda en este teléfono.</string>
+    <string name="customize_phone_chats">Chats en el teléfono</string>
+    <string name="customize_tone">Tono</string>
+    <string name="customize_tone_footer">Se aplica a la próxima respuesta de los modelos que funcionan en este teléfono. Los agentes de un ordenador conservan el tono y las instrucciones de ese ordenador.</string>
+    <string name="tone_default">Predeterminado</string>
+    <string name="tone_friendly">Cercano</string>
+    <string name="tone_professional">Profesional</string>
+    <string name="tone_concise">Conciso</string>
+    <string name="tone_explanatory">Explicativo</string>
+    <string name="customize_how_agents_work">Cómo trabajan los agentes</string>
+    <string name="customize_behavior">Comportamiento y permisos de los agentes</string>
+    <string name="customize_how_footer">El tono y las instrucciones permanentes de los agentes de un ordenador se gestionan en Personalizar en ese ordenador. Cambiar esta vista nunca da acceso a herramientas.</string>
+    <string name="customize_skills_intro">Formas de trabajar reutilizables, de tu ordenador conectado. Escribe /nombre en un chat para ejecutar un skill.</string>
+    <string name="customize_skills_offline">Conecta tu ordenador para ver sus skills.</string>
+    <string name="customize_skills_none">No hay skills disponibles. Instala skills en Personalizar en tu ordenador.</string>
     <!-- Nekko Agent's service from the phone (#2059), the iPhone's. -->
     <string name="service_title">Servicio de Nekko Agent</string>
     <string name="service_footer">Estos controles gestionan Nekko Agent, no el sistema operativo. Un reinicio o una instalación pueden interrumpir los chats. Que se acepte una solicitud no prueba que haya terminado.</string>

@@ -389,6 +389,31 @@
     <string name="settings_card_footer_text">チャット名とステップは端末のロック解除中に表示されます。機密情報を隠す設定のロック中の端末では、「最小」の表示になります。許可するには先にロックを解除する必要があります。</string>
     <string name="settings_warn_yolo">YOLO の前に警告</string>
     <string name="settings_warn_yolo_detail">チャットやコンピューターの既定が YOLO に切り替わる前に、YOLO で何が通るかを説明します</string>
+    <!-- Customize (#2426), the iPhone's page. -->
+    <string name="customize_title">カスタマイズ</string>
+    <string name="customize_menu">カスタマイズ…</string>
+    <string name="customize_settings_detail">表示、このスマートフォンのモデルの口調、スキル</string>
+    <string name="customize_tab_experience">エクスペリエンス</string>
+    <string name="customize_tab_skills">スキル</string>
+    <string name="customize_intro_title">Nekko を自分好みに</string>
+    <string name="customize_intro">表示する内容とエージェントの働き方を選びます。</string>
+    <string name="customize_output">エージェントの出力</string>
+    <string name="customize_visible_controls">表示するコントロールとモニター</string>
+    <string name="customize_output_footer">シンプルは作業の手順を折りたたみ、詳細は表示します。どちらも機能と権限は同じです。この選択はこのスマートフォンにだけ保存されます。</string>
+    <string name="customize_phone_chats">スマートフォン上のチャット</string>
+    <string name="customize_tone">口調</string>
+    <string name="customize_tone_footer">このスマートフォンで動くモデルの次の返信から適用されます。コンピュータ上のエージェントは、そのコンピュータの口調と常設の指示を使い続けます。</string>
+    <string name="tone_default">デフォルト</string>
+    <string name="tone_friendly">親しみやすい</string>
+    <string name="tone_professional">プロフェッショナル</string>
+    <string name="tone_concise">簡潔</string>
+    <string name="tone_explanatory">説明的</string>
+    <string name="customize_how_agents_work">エージェントの働き方</string>
+    <string name="customize_behavior">エージェントの動作と権限</string>
+    <string name="customize_how_footer">コンピュータ上のエージェントの口調と常設の指示は、そのコンピュータのカスタマイズで設定します。この表示を変えてもツールへのアクセスは許可されません。</string>
+    <string name="customize_skills_intro">接続中のコンピュータにある、再利用できる作業手順です。チャットで /名前 と入力するとスキルを実行できます。</string>
+    <string name="customize_skills_offline">スキルを見るにはコンピュータに接続してください。</string>
+    <string name="customize_skills_none">利用できるスキルはありません。コンピュータのカスタマイズでスキルをインストールしてください。</string>
     <!-- Nekko Agent's service from the phone (#2059), the iPhone's. -->
     <string name="service_title">Nekko Agent サービス</string>
     <string name="service_footer">ここで操作するのは Nekko Agent であり、OS ではありません。再起動やインストールでチャットが中断されることがあります。要求が受け付けられても、完了したとは限りません。</string>
