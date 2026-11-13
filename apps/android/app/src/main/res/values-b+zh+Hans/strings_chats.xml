@@ -213,8 +213,6 @@
     <string name="chats_no_models_match">没有与“%1$s”匹配的模型。</string>
     <string name="chats_loaded">已加载</string>
     <string name="chats_selected">已选择</string>
-    <string name="chats_offline_connecting">%1$s 正在连接… 现在开始，聊天会在它恢复后开始；在此之前会在这部手机上等待。</string>
-    <string name="chats_offline_offline">%1$s 已离线。现在开始，聊天会在它恢复后开始；在此之前会在这部手机上等待。</string>
     <string name="chats_not_started">未开始：%1$s</string>
     <string name="chats_offline_no_model">要在 %1$s 离线时开始聊天，请在 设置 → 新聊天 中为它选择默认模型。</string>
     <string name="chats_model_named">模型 · %1$s</string>
@@ -276,4 +274,8 @@
     <string name="chats_phone_forget_title">忘记此聊天？</string>
     <string name="chats_phone_forget_body">其消息将从此手机删除。服务商的记录仍会保留。</string>
     <string name="chats_phone_forget">忘记</string>
+    <!-- New chat while the computer is away (#2475), the iPhone's two lines. -->
+    <string name="chats_reconnecting">%1$s 正在重新连接</string>
+    <string name="chats_reconnecting_label">%1$s 正在重新连接…</string>
+    <string name="chats_reconnect_draft">现在就写好消息，%1$s 重新连接后会自动发送</string>
 </resources>

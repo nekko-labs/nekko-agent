@@ -213,8 +213,6 @@
     <string name="chats_no_models_match">Aucun modèle ne correspond à « %1$s ».</string>
     <string name="chats_loaded">chargé</string>
     <string name="chats_selected">Sélectionné</string>
-    <string name="chats_offline_connecting">%1$s se connecte… Lancez maintenant et la discussion commencera à son retour ; d’ici là, elle attend sur ce téléphone.</string>
-    <string name="chats_offline_offline">%1$s est hors ligne. Lancez maintenant et la discussion commencera à son retour ; d’ici là, elle attend sur ce téléphone.</string>
     <string name="chats_not_started">Non lancée : %1$s</string>
     <string name="chats_offline_no_model">Pour lancer une discussion pendant que %1$s est hors ligne, choisissez un modèle par défaut pour lui dans Paramètres → Nouvelles discussions.</string>
     <string name="chats_model_named">Modèle · %1$s</string>
@@ -276,4 +274,8 @@
     <string name="chats_phone_forget_title">Oublier ce chat ?</string>
     <string name="chats_phone_forget_body">Ses messages sont supprimés de ce téléphone. Les données du fournisseur restent.</string>
     <string name="chats_phone_forget">Oublier</string>
+    <!-- New chat while the computer is away (#2475), the iPhone's two lines. -->
+    <string name="chats_reconnecting">%1$s se reconnecte</string>
+    <string name="chats_reconnecting_label">%1$s se reconnecte…</string>
+    <string name="chats_reconnect_draft">Rédigez votre message maintenant, il partira quand %1$s sera reconnecté</string>
 </resources>

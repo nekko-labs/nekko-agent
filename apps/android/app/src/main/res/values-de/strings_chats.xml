@@ -213,8 +213,6 @@
     <string name="chats_no_models_match">Keine Modelle passen zu „%1$s“.</string>
     <string name="chats_loaded">geladen</string>
     <string name="chats_selected">Ausgewählt</string>
-    <string name="chats_offline_connecting">%1$s verbindet sich … Starte jetzt, und der Chat beginnt, sobald er wieder da ist; bis dahin wartet er auf diesem Telefon.</string>
-    <string name="chats_offline_offline">%1$s ist offline. Starte jetzt, und der Chat beginnt, sobald er wieder da ist; bis dahin wartet er auf diesem Telefon.</string>
     <string name="chats_not_started">Nicht gestartet: %1$s</string>
     <string name="chats_offline_no_model">Um einen Chat zu starten, während %1$s offline ist, wähle dafür ein Standardmodell unter Einstellungen → Neue Chats.</string>
     <string name="chats_model_named">Modell · %1$s</string>
@@ -276,4 +274,8 @@
     <string name="chats_phone_forget_title">Diesen Chat vergessen?</string>
     <string name="chats_phone_forget_body">Seine Nachrichten werden von diesem Telefon entfernt. Die Daten beim Anbieter bleiben.</string>
     <string name="chats_phone_forget">Vergessen</string>
+    <!-- New chat while the computer is away (#2475), the iPhone's two lines. -->
+    <string name="chats_reconnecting">%1$s verbindet sich neu</string>
+    <string name="chats_reconnecting_label">%1$s verbindet sich neu…</string>
+    <string name="chats_reconnect_draft">Schreib deine Nachricht jetzt, sie wird gesendet, sobald %1$s wieder verbunden ist</string>
 </resources>
