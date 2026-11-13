@@ -22,8 +22,12 @@ export interface HtmlPreviewOptions {
   controls?: boolean;
 }
 
-/** What the design canvas asks a served page, as `{ nekkoPreview: <command> }`. */
-export type PreviewCommand = 'probe' | 'pause' | 'play';
+/**
+ * What the design canvas asks a served page, as `{ nekkoPreview: <command> }`.
+ * `targets` starts reporting where the clickable parts are (again whenever the
+ * page changes) and `untargets` stops it.
+ */
+export type PreviewCommand = 'probe' | 'pause' | 'play' | 'targets' | 'untargets';
 
 /** A served page's answer to a `PreviewCommand`, and its report once loaded. */
 export interface PreviewState {
@@ -52,6 +56,15 @@ export interface PreviewWheel {
   x: number;
   y: number;
   zoom: boolean;
+}
+
+/**
+ * Where the design's clickable parts are (links, buttons, fields, anything with a
+ * pointer cursor), as `[x, y, width, height]` boxes in the page's own CSS pixels.
+ */
+export interface PreviewTargets {
+  nekkoPreview: 'targets';
+  boxes: Array<[number, number, number, number]>;
 }
 
 /** Space pressed or let go inside the design: while it is down the canvas drags. */

@@ -66,7 +66,23 @@ Implemented, not yet released:
 
 Boundaries: the design runs where every served page does, in a frame with an opaque origin, offline, with no app bridge ([HTML previews run with their folder](html-previews-run-with-their-folder.md)). For the canvas the server adds one small script to the page (`controls`), through which the canvas asks for the page's size and what is moving and tells it to pause or play, over `postMessage`. The script answers only the frame above it, and also passes up a scroll or pinch the page has no use for and whether Space is held. The canvas reads only numbers and flags, and only from its own frame: a scroll step is capped at 400 pixels and its pointer held inside the frame, so a hostile design can at most misreport its size, show a Play button that does nothing, nudge or zoom the view within its limits, or hold the canvas in drag mode until Space is pressed and let go in the app. Pages opened in the file pane do not get the script. Why this and not the alternatives: [decision 0091](../../docs/decisions/0091-the-design-canvas-controls-a-served-design-over-postmessage.md).
 
-Verified in the hidden, isolated full-App Electron journey against the real preview server (`design-canvas-sandbox.cjs`, 24 checks, including the animation's and the frame loop's actual state inside the sandboxed frame) and focused unit tests. Not done or not checked: keyboard panning; frame-by-frame stepping or a timeline; jumping to a named frame; the phone apps; the Design board, which still shows each version file as a card; packaged builds, Windows, the Local Web UI in other browsers, light theme, touch gestures on a real trackpad or screen.
+Verified in the hidden, isolated full-App Electron journey against the real preview server (`design-canvas-sandbox.cjs`, 24 checks, including the animation's and the frame loop's actual state inside the sandboxed frame) and focused unit tests. Not done or not checked: frame-by-frame stepping or a timeline; jumping to a named frame; the phone apps; the Design board, which still shows each version file as a card; packaged builds, Windows, the Local Web UI in other browsers, light theme, touch gestures on a real trackpad or screen.
+
+## Smoother canvas, keyboard, and what can be clicked (2026-11-14, #2756)
+
+Requested 2026-11-14: better design canvas controls, smoother and faster panning, highlight the interactive areas.
+
+Implemented, not yet released:
+
+- **Smoother moving.** Dragging, scrolling and pinching paint the design's new place straight onto it once per frame instead of re-rendering the canvas for every pointer event; the zoom figure and buttons catch up when the gesture pauses (120 ms). Measured: script time over a 120-move drag fell from about 113 ms to about 22 ms ([perf history](../../docs/perf-history.md)).
+- **The dots move with the design.** The dotted surface pans with the design and its spacing follows the zoom, kept between 12 and 36 pixels, so the canvas reads as one surface being moved.
+- **Keyboard.** With the keyboard in the app (not in a field, a button or the design itself): the arrows move the canvas 60 pixels, 300 with Shift; `+` and `-` zoom at the middle; `1` shows 100%; `0` fits. With Ctrl, Cmd or Alt held the keys stay the app's.
+- **Double-click** the space around the design to zoom in there; Shift and double-click zooms out.
+- **Highlight clickable** (a toggle in the controls, off by default, remembered in this profile): outlines the design's links, buttons, form fields, elements with a click handler attribute or a button-like role, and anything with a pointer cursor (counted once, not again for the text inside it). The outlines are drawn by the canvas over the design and let the pointer through, so the design still takes clicks; they follow the design when it changes (a quarter-second after the change) and keep the same width at every zoom.
+
+Boundaries: the control script's two new words, `targets` and `untargets`, start and stop the report; until asked, the page measures nothing. It reports at most 400 boxes as numbers; the canvas cuts each to the design's frame and drops anything malformed, so a hostile design can at most draw outlines over itself. Nothing else crosses: no element text, attributes or selectors.
+
+Verified in the hidden, isolated `design-canvas-sandbox.cjs` journey (43 checks: the three clickable parts of a login design outlined and placed with it, a new button outlined after it appears, arrows, `1`, `0`, double-click, the dots following, and every earlier canvas check) and unit tests for the box reader, the keys and the dot spacing. Not checked: a real trackpad, a visible window, Windows, the Local Web UI in other browsers, light theme.
 
 ## Designs first, real previews, and a design you can click (2026-11-13, #2723)
 
