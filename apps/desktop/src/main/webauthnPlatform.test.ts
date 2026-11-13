@@ -32,13 +32,15 @@ describe('the macOS platform authenticator', () => {
     expect(onError).toHaveBeenCalled();
   });
 
-  it('is in the signed entitlements, spelled out: macOS grants the group only when the signature carries it', () => {
+  it('keeps restricted entitlements out of the signed build while no provisioning profile is embedded (#2688, #2703)', () => {
+    // macOS refuses to launch a Developer ID app carrying any of these without a profile that authorizes it.
+    const builder = readFileSync(join(import.meta.dirname, '../../electron-builder.yml'), 'utf8');
+    const hasProfile = /^\s*provisioningProfile:/m.test(builder);
+
     const plist = readFileSync(join(import.meta.dirname, '../../build/entitlements.mac.plist'), 'utf8');
-    expect(plist).toContain('<key>keychain-access-groups</key>');
-    expect(plist).toContain(`<string>${WEBAUTHN_KEYCHAIN_ACCESS_GROUP}</string>`);
-    // codesign expands no build variable, so a placeholder in a value here would ship a group macOS never grants.
-    const group = plist.slice(plist.indexOf('<key>keychain-access-groups</key>')).match(/<string>(.*?)<\/string>/)?.[1];
-    expect(group).toBe(WEBAUTHN_KEYCHAIN_ACCESS_GROUP);
-    expect(group).not.toContain('$(');
+    const keys = [...plist.matchAll(/<key>(.*?)<\/key>/g)].map((m) => m[1]);
+    const restricted = keys.filter((k) => k === 'keychain-access-groups' || k === 'com.apple.application-identifier' || k.startsWith('com.apple.developer.'));
+
+    if (!hasProfile) expect(restricted).toEqual([]);
   });
 });
