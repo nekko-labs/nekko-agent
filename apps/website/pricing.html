@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en" data-theme="white">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pricing · Nekko Agent</title>
+    <meta name="description" content="Nekko Agent is free and open source. Nekko Cloud Pro adds synced chats, cloud machines and organizations." />
+    <!-- Off the index until plans are on sale for everyone (#2724). -->
+    <meta name="robots" content="noindex" />
+    <link rel="canonical" href="https://nekkoagent.com/pricing" />
+    <meta name="theme-color" content="#fbf6f8" />
+    <script>(function(){var t=null;try{t=localStorage.getItem('nekko-theme');}catch(e){}if(t!=='white'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'white';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='white'?'#fbf6f8':'#0c0c11';})();</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
+    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="fonts.css?v=1" />
+    <style>
+      .legal { max-width: 960px; margin: 0 auto; padding: 120px 20px 80px; line-height: 1.65; }
+      .legal h1 { font-size: clamp(32px, 5vw, 48px); margin: 0 0 8px; }
+      .legal p, .legal li { color: var(--muted); }
+      .legal strong { color: var(--ink); }
+      .legal a { color: var(--accent); }
+      .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 40px 0 24px; }
+      .plan h2 { font-size: 22px; margin: 0; color: var(--ink); }
+      .plan-price { font-size: 18px; font-weight: 600; color: var(--ink); margin: 4px 0 12px; }
+      .plan ul { padding-left: 1.1em; margin: 0; }
+      .plan-how { margin-top: 12px; font-size: 14px; }
+      .not-yet { margin: 40px 0; }
+    </style>
+  </head>
+  <body>
+    <header class="nav">
+      <a class="brand" href="/" aria-label="Nekko Agent home"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="30" height="23" /> NEKKO AGENT</a>
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="/#contributors">About us</a>
+        <a href="/docs">Docs</a>
+      </nav>
+    </header>
+
+    <main class="legal">
+      <h1>Pricing</h1>
+      <p>Nekko Agent is free and open source, and everything it does on your computer stays free. Nekko Cloud is the optional paid part.</p>
+
+      <div class="not-yet" data-not-yet>
+        <p><strong>Nekko Cloud plans aren't on sale yet.</strong> During the beta, Nekko Agent is free. <a href="/beta">See what the beta includes</a>, or email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a> if your team wants in early.</p>
+      </div>
+
+      <div data-plans hidden>
+        <div class="plans">
+          <section class="plan" aria-labelledby="plan-free">
+            <h2 id="plan-free">Free</h2>
+            <p class="plan-price">$0</p>
+            <ul>
+              <li>The whole app on your computer: Windows, macOS and Linux</li>
+              <li>Local models and your own provider accounts</li>
+              <li>Pair your phone over your own network</li>
+            </ul>
+          </section>
+          <section class="plan" aria-labelledby="plan-pro">
+            <h2 id="plan-pro">Pro</h2>
+            <p class="plan-price" data-pro-price></p>
+            <ul>
+              <li>Your chats on every device, end-to-end encrypted</li>
+              <li>Nekko Cloud machines your phone can use</li>
+              <li>Organizations: share your computers with a team</li>
+            </ul>
+            <p class="plan-how">Subscribe in the app: <strong>Settings &gt; Sync</strong>, then <strong>Upgrade</strong>. Cancel there any time.</p>
+          </section>
+          <section class="plan" aria-labelledby="plan-team">
+            <h2 id="plan-team">Team</h2>
+            <p class="plan-price">Talk to us</p>
+            <ul>
+              <li>Pro for everyone in your organization</li>
+              <li>One bill for the team</li>
+            </ul>
+            <p class="plan-how">Email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>.</p>
+          </section>
+        </div>
+        <p class="micro">Payments are handled by Stripe. Nekko Labs never sees your card. Chats stay encrypted so Nekko Labs can't read them, on any plan.</p>
+      </div>
+    </main>
+
+    <footer>
+      <span class="footer-brand"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="26" height="20" /> NEKKO AGENT</span>
+      <span class="micro">MIT · Made with ❤️ by the <a href="https://nekkolabs.com/#team" target="_blank" rel="noopener">Nekko Labs team</a></span>
+      <a href="/docs">Docs</a>
+      <a href="/beta">Beta</a>
+      <a href="/status">Status</a>
+      <a href="/privacy">Privacy</a>
+    </footer>
+    <script src="pricing.js?v=1"></script>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </body>
+</html>
