@@ -193,7 +193,7 @@ app.whenReady().then(async () => {
       // An older version, which is still: no Play/Pause.
       await run(`[...document.querySelectorAll('[role="radiogroup"][aria-label="Version"] [role="radio"]')][0].click()`); await sleep(2400);
       await check(`document.querySelector('[data-design-canvas] iframe').src === ${js(urls[`${file('checkout-design.html')}|true`].url)} && !document.querySelector('[data-design-playback]')`, 'older-version-opens-without-playback');
-      await check(`document.querySelector('[aria-label="Close preview"]').parentElement.textContent.includes('checkout-design.html') && ${frameStyle}.width === '1440px'`, 'header-names-the-version-open');
+      await check(`document.querySelector('[data-library-back]').parentElement.textContent.includes('checkout-design.html') && ${frameStyle}.width === '1440px'`, 'header-names-the-version-open');
       await shot('design-v1');
 
       // Source shows the file itself, and Canvas comes back.
