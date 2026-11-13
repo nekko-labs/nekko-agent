@@ -1,4 +1,4 @@
-import type { PreviewState, PreviewWheel } from '@nekko-agent/shared';
+import type { PreviewState, PreviewTargets, PreviewWheel } from '@nekko-agent/shared';
 
 /**
  * The arithmetic of the design canvas, kept apart from the component so it can
@@ -90,4 +90,64 @@ export function zoomAt(view: CanvasView, factor: number, point: { x: number; y: 
 export function isAnimating(previous: PreviewState | null, now: PreviewState): boolean {
   if (now.animations > 0 || now.media > 0) return true;
   return !!previous && now.frames - previous.frames >= LOOP_FRAMES;
+}
+
+/** The most clickable parts the canvas will outline: more is noise, and the page is untrusted. */
+export const TARGETS_MAX = 400;
+
+/**
+ * Where a page says its clickable parts are, or null for anything else. Each box
+ * must be four finite numbers; it is cut to the frame and dropped when nothing
+ * of it is left, so a hostile page can only draw outlines over its own design.
+ */
+export function readPreviewTargets(data: unknown, frame: CanvasSize): PreviewTargets['boxes'] | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  if (d.nekkoPreview !== 'targets' || !Array.isArray(d.boxes)) return null;
+  const boxes: PreviewTargets['boxes'] = [];
+  for (const b of d.boxes.slice(0, TARGETS_MAX)) {
+    if (!Array.isArray(b) || b.length !== 4 || !b.every(finite)) continue;
+    const [x, y, w, h] = b as number[];
+    const left = clamp(x, 0, frame.width), top = clamp(y, 0, frame.height);
+    const right = clamp(x + w, 0, frame.width), bottom = clamp(y + h, 0, frame.height);
+    if (right - left >= 1 && bottom - top >= 1) boxes.push([left, top, right - left, bottom - top]);
+  }
+  return boxes;
+}
+
+/** How far an arrow key moves the canvas, in screen pixels; Shift moves further. */
+export const KEY_STEP = { near: 60, far: 300 };
+
+/**
+ * What a key does on the canvas: arrows move it, + and - zoom at the middle,
+ * 0 fits the design and 1 shows it at 100%. Null for any other key, and for
+ * any key with Ctrl, Cmd or Alt, which belong to the app.
+ */
+export function keyAction(
+  e: { key: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean },
+  view: CanvasView,
+  canvas: CanvasSize,
+): CanvasView | 'fit' | null {
+  if (e.ctrlKey || e.metaKey || e.altKey) return null;
+  const step = e.shiftKey ? KEY_STEP.far : KEY_STEP.near;
+  const middle = { x: canvas.width / 2, y: canvas.height / 2 };
+  switch (e.key) {
+    case 'ArrowLeft': return { ...view, x: view.x + step };
+    case 'ArrowRight': return { ...view, x: view.x - step };
+    case 'ArrowUp': return { ...view, y: view.y + step };
+    case 'ArrowDown': return { ...view, y: view.y - step };
+    case '+': case '=': return zoomAt(view, ZOOM.step, middle);
+    case '-': case '_': return zoomAt(view, 1 / ZOOM.step, middle);
+    case '0': return 'fit';
+    case '1': return zoomAt(view, 1 / view.z, middle);
+    default: return null;
+  }
+}
+
+/** The dotted surface's spacing at this zoom: it moves with the design, kept between 12 and 36 pixels. */
+export function dotSpacing(z: number): number {
+  let s = 18 * z;
+  while (s < 12) s *= 2;
+  while (s > 36) s /= 2;
+  return s;
 }

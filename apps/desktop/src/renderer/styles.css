@@ -4586,6 +4586,24 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   box-shadow: var(--shadow-sm);
   transform-origin: 0 0;
 }
+/* What can be clicked in a design, outlined by the canvas over it. --z is the
+   canvas zoom, so the outline stays the same width on screen at every zoom. */
+.design-canvas-targets {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+.design-canvas-targets > span {
+  position: absolute;
+  border: calc(1.5px / var(--z)) solid var(--accent);
+  border-radius: calc(4px / var(--z));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  animation: design-target-in 180ms ease-out both;
+}
+@keyframes design-target-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .design-canvas-targets > span { animation: none; } }
 
 /* Working is a steady accent fill, never a new animation or GPU layer. */
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }

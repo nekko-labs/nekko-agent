@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { request } from 'node:http';
@@ -193,6 +193,50 @@ describe('viewer control script', () => {
     say('probe');
     expect(sent.at(-1)).toMatchObject({ frames: 3, animations: 1 });
     expect(sent.every((m) => Object.keys(m).sort().join() === 'animations,frames,height,media,nekkoPreview,paused,width')).toBe(true);
+  });
+
+  it('reports where the clickable parts are only once asked, once per element, and stops when told', () => {
+    vi.useFakeTimers();
+    try {
+      const sent: Array<Record<string, unknown>> = [];
+      const listeners: Record<string, (e: unknown) => void> = {};
+      const parent = { postMessage: (m: Record<string, unknown>) => { sent.push(m); } };
+      const box = (left: number, top: number, width: number, height: number) => ({ getBoundingClientRect: () => ({ left, top, width, height }) });
+      const button = { ...box(10, 20, 80, 30), parentElement: null, cursor: 'pointer' };
+      const label = { ...box(12, 22, 40, 10), parentElement: button, cursor: 'pointer' };
+      const card = { ...box(0, 300, 200, 100), parentElement: null, cursor: 'pointer' };
+      const hidden = { ...box(0, 0, 0, 0), parentElement: null, cursor: 'pointer' };
+      const plain = { ...box(0, 0, 50, 50), parentElement: null, cursor: 'auto' };
+      let observed: (() => void) | null = null;
+      const win = {
+        parent, scrollX: 0, scrollY: 100,
+        requestAnimationFrame: () => 1, cancelAnimationFrame: () => {},
+        getComputedStyle: (el: { cursor: string }) => ({ cursor: el.cursor }),
+        MutationObserver: class { constructor(cb: () => void) { observed = cb; } observe() {} },
+      } as Record<string, unknown>;
+      const document = {
+        documentElement: {}, body: { getElementsByTagName: () => [button, label, card, hidden, plain] },
+        getAnimations: () => [],
+        querySelectorAll: (sel: string) => (sel.includes('button') ? [button] : []),
+      };
+      new Function('window', 'document', 'addEventListener', CONTROL_SHIM.slice(8, -9))(win, document, (type: string, fn: (e: unknown) => void) => { listeners[type] = fn; });
+      const say = (nekkoPreview: string) => listeners.message({ source: parent, data: { nekkoPreview } });
+
+      // Nothing is measured until the canvas asks.
+      expect(observed).toBeNull();
+      say('targets');
+      // The button once (its label inherits the pointer), the card, never a zero-size or plain element; page coordinates.
+      expect(sent.at(-1)).toEqual({ nekkoPreview: 'targets', boxes: [[10, 120, 80, 30], [0, 400, 200, 100]] });
+      // A change in the page reports again, a moment later and once for a burst.
+      const count = sent.length;
+      observed!(); observed!();
+      vi.advanceTimersByTime(300);
+      expect(sent.length).toBe(count + 1);
+      say('untargets');
+      observed!();
+      vi.advanceTimersByTime(300);
+      expect(sent.length).toBe(count + 1);
+    } finally { vi.useRealTimers(); }
   });
 
   it('passes the canvas a scroll the page has no scroll box for, any pinch, and Space held outside a field', () => {

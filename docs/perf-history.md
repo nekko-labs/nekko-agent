@@ -39,6 +39,21 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Design canvas paints a drag without re-rendering (#2756, 2026-11-14)
+Area: renderer
+Result: improvement (main-thread work); no effect on frame pacing in this harness
+Conditions: Apple M1 Max, macOS 27.2; the hidden, off-screen `design-canvas-sandbox.cjs` journey (Electron, offscreen rendering at 60 fps) with its 2880-wide, seven-frame `checkout-design-v3.html` (a CSS spinner and a `requestAnimationFrame` counter running) fitted on the canvas; 120 CDP mouse moves on the space around the design, 4 ms apart; Chrome's `Performance.getMetrics` deltas over the drag and the app's own `requestAnimationFrame` gaps. Three alternating runs each: before is `main` at afd98dd4c, after is this branch, same journey script and fixture.
+
+| Metric | Before (3 runs) | After (3 runs) |
+|---|---|---|
+| Script time during the drag | 114.5, 114.5, 110.6 ms | 22.5, 24.0, 20.9 ms |
+| All main-thread task time during the drag | 210.8, 212.6, 204.3 ms | 127.5, 142.5, 117.5 ms |
+| Style recalculations | 122, 122, 122 | 122, 122, 122 |
+| Layouts | 0, 0, 0 | 0, 0, 0 |
+| Frames painted, median / p95 / max gap | 132-133, 16.7 / 16.8 / 16.8 ms | 132, 16.7 / 16.8 / 16.8 ms |
+
+Why: a drag, a scroll or a pinch used to set React state on every pointer event, re-rendering the canvas each time; now it writes the transform straight onto the frame once per animation frame and settles into state 120 ms after the gesture pauses. The frame gaps did not move because this fast machine and hidden 60 fps window drop no frames either way; the saved script time is what slower machines and busier designs would feel. Not measured: a real trackpad, a visible window, a slower machine. Source: the #2756 PR.
+
 ## Chat pictures beside the chat, held turn saves (2026-11-09)
 Area: engine daemon
 Result: improvement
