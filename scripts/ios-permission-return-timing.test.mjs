@@ -125,8 +125,8 @@ test('rejects a microphone target hidden by the pinned footer even when hittable
 test('opt-in matched workflow retains common overlay, recording, strict runtime and no retries', () => {
   assert.ok(workflow.includes('"$IOS_TEST_FILE" == "apps/ios/UITests/PermissionReturnTimingTests.swift"'));
   assert.ok(workflow.includes('node .evidence-harness/scripts/ios-permission-return-fixture.mjs .'));
-  assert.ok(workflow.includes('VIDEO_NAME=permission-return'));
-  assert.ok(workflow.includes('recordVideo --codec=h264 "evidence/$VIDEO_NAME.mp4"'));
+  assert.ok(workflow.includes('RECORDING=evidence/permission-return.mp4'));
+  assert.ok(workflow.includes('recordVideo --codec=h264 "$RECORDING"'));
   assert.ok(workflow.includes('test -n "$RUNTIME" && test -n "$TYPE"'));
   assert.ok(!workflow.includes('-retry-tests-on-failure'));
 });
