@@ -2699,13 +2699,13 @@
 :is(.msg-ai, .msg-user) pre { overflow-wrap: normal; }
 
 /* Who a block of agent text is for (spec/chat/thinking-and-replies.md). Thinking
-   is quiet, with its icon out in the transcript's 30px gutter. A closing reply
+   keeps full ink so it reads clearly; its icon out in the transcript's 30px
+   gutter is what marks it as thinking. A closing reply
    has only a colored left rule; attention mid-turn keeps its panel. Both grow
    into the gutter and keep their right edge on the row's, clear of swipe-left
    times. Neither moves the text column, so settling a voice does not re-wrap. */
 .msg-ai[data-voice='working'] {
   position: relative;
-  color: var(--ink-soft);
 }
 .msg-voice-icon {
   position: absolute;
