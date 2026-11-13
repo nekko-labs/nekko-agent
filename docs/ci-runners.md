@@ -174,7 +174,10 @@ macOS or Xcode still needs **Rebuild image**.
 An image set up by an older Nekko may lack `node`, `gh` or `jq`, and a job that runs one
 before its own setup fails in seconds with `command not found`. The runner card then says, for
 example, "node and gh are missing from this Mac's runner image. Jobs that need them will fail."
-Choose **Install them**: Nekko copies the image, starts the copy once to install them with
+It may also lack `zstd` and `gtar`. Jobs still pass without them, but `actions/cache` falls back
+to gzip and its caches save slower, so the card says "zstd and gtar are missing from this Mac's
+runner image, so caches save slower." An image set up after these two were added still has them
+but no record of them, so it shows the notice once. Either way, choose **Install them**: Nekko copies the image, starts the copy once to install them with
 Homebrew, checks its disk for them and test-boots it: minutes, not a rebuild's half hour. The image in use keeps
 taking jobs until then, and the sheet shows the stages and any failure like setup does.
 

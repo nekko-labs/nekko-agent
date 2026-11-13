@@ -330,16 +330,20 @@ describe('image progress', () => {
   });
 
   it('adding tools lists only its own stages', () => {
-    const v = image({ kind: 'tools', stage: 'tools', doneStages: ['check'], detail: 'Installing node, gh and jq' });
+    const v = image({ kind: 'tools', stage: 'tools', doneStages: ['check'], detail: 'Installing node, gh, jq, zstd and gtar' });
     expect(imageStageRows(v).map((r) => r.label)).toEqual(['Check this Mac', 'Install the missing tools', 'Test a boot']);
     expect(marks(v)).toEqual(['done', 'now', 'todo']);
-    expect(imageLine(v)).toBe('Install the missing tools: Installing node, gh and jq');
+    expect(imageLine(v)).toBe('Install the missing tools: Installing node, gh, jq, zstd and gtar');
   });
 
   it('names the missing tools in a plain sentence', () => {
     expect(missingToolsLine(['node', 'gh'])).toBe("node and gh are missing from this Mac's runner image. Jobs that need them will fail.");
     expect(missingToolsLine(['node', 'gh', 'jq'])).toBe("node, gh and jq are missing from this Mac's runner image. Jobs that need them will fail.");
     expect(missingToolsLine(['gh'])).toBe("gh is missing from this Mac's runner image. Jobs that need it will fail.");
+    // zstd and gtar only slow caches down (#2701).
+    expect(missingToolsLine(['zstd', 'gtar'])).toBe("zstd and gtar are missing from this Mac's runner image, so caches save slower.");
+    expect(missingToolsLine(['zstd'])).toBe("zstd is missing from this Mac's runner image, so caches save slower.");
+    expect(missingToolsLine(['node', 'gh', 'zstd', 'gtar'])).toBe("node and gh are missing from this Mac's runner image. Jobs that need them will fail. Without zstd and gtar, caches also save slower.");
   });
 
   it('marks each stage of a running build', () => {

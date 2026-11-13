@@ -111,8 +111,9 @@ gzip. Hosted images ship both and get zstd.
 | Upload | 34 s, about 11 MB/s, with stalls | 1 s, inside GitHub's network |
 
 A cache's version includes its compression and its paths, so the two kinds never restore each
-other's caches either. Adding `zstd` and `gnu-tar` to the image would cut the compression and the
-size; the upload stays bound by the Mac's own internet connection.
+other's caches either. New image builds install `zstd` and `gnu-tar` since #1643, and an image built before that
+shows them as missing on the runner card, where **Install them** adds them (#2701). That cuts the
+compression and the size; the upload stays bound by the Mac's own internet connection.
 
 ## What the job used, and how big a VM it needs
 

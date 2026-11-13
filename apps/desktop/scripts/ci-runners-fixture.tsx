@@ -167,7 +167,7 @@ const image = (over: Partial<ImageView> = {}): ImageView => ({
 const READY = image({ state: 'ready', info: { macos: '27.2', xcode: '27.2', actionsRunner: '2.330.0', built: '2026-11-01' } });
 const NONE = image();
 const NO_TOOLS = image({ state: 'ready', info: { ...READY.info!, missingTools: ['node', 'gh'] } });
-const ADDING_TOOLS = image({ kind: 'tools', state: 'building', stage: 'tools', doneStages: ['check'], detail: 'Installing node, gh and jq', info: NO_TOOLS.info });
+const ADDING_TOOLS = image({ kind: 'tools', state: 'building', stage: 'tools', doneStages: ['check'], detail: 'Installing node, gh, jq, zstd and gtar', info: NO_TOOLS.info });
 const toXcode: ImageView['doneStages'] = ['check', 'download', 'install'];
 const download = image({ state: 'building', stage: 'download', doneStages: ['check'], bytes: [12_400_000_000, 25_600_000_000] });
 const images: Record<string, ImageView | null> = {
