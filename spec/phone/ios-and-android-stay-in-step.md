@@ -103,4 +103,4 @@ Nothing is recorded as a true OS exclusive yet.
 
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
-| Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Planned | [#2453](https://github.com/nekko-labs/nekko-agent/issues/2453) |
+| Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Same folds (2026-11-13); the system bar hides the keyboard | None |

@@ -294,4 +294,7 @@
     <string name="photo_actions">照片操作</string>
     <!-- Save to Photos on Android 9, when storage access was refused. -->
     <string name="chat_save_needs_storage">请允许访问存储空间，以便保存到照片。</string>
+    <!-- Folded by default in the transcript (#2453). -->
+    <string name="chat_progress_note">进度备注</string>
+    <string name="chat_conversation_summary">对话摘要</string>
 </resources>
