@@ -122,6 +122,7 @@ jobs:
             apps/ios/App/Views/ChatStatusFixture.swift
             apps/ios/App/Views/ReplyVoicesFixture.swift
             apps/ios/Protocol/Tests/NekkoKitTests/StarAskTests.swift
+            scripts/ios-permission-return-fixture.mjs
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -141,6 +142,13 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+          # TCC legitimately kills both permission-return apps. Keep the DEBUG
+          # route/UI configuration across the argument-free relaunch, identically
+          # on both revisions. Never overlay permissions or authorization values.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/PermissionReturnTimingTests.swift" ]]; then
+            node .evidence-harness/scripts/ios-permission-return-fixture.mjs .
+            shasum -a 256 apps/ios/App/AppModel.swift apps/ios/App/NekkoApp.swift apps/ios/App/Platform/PermissionChecklist.swift >> apps/ios/evidence/revisions.txt
+          fi
           # Overlay only deterministic test data: the title comparison, and for the winter
           # comparison an identical debug transition history on both revisions that observes
           # the real refresh across XCTest's idle wait. No seasonal implementation is copied.
@@ -203,9 +211,10 @@ jobs:
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO)
           xcodebuild "${COMMON[@]}" build-for-testing
-          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/KeyboardDismissEvidenceTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then
-            RECORDING=evidence/native-comparison.mp4
-            if [[ "$IOS_TEST_FILE" != "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then RECORDING=evidence/quiet-transcript.mp4; fi
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/KeyboardDismissEvidenceTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/PermissionReturnTimingTests.swift" ]]; then
+            RECORDING=evidence/quiet-transcript.mp4
+            if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then RECORDING=evidence/native-comparison.mp4; fi
+            if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/PermissionReturnTimingTests.swift" ]]; then RECORDING=evidence/permission-return.mp4; fi
             xcrun simctl io "$DEVICE" recordVideo --codec=h264 "$RECORDING" &
             VIDEO_PID=$!
             trap 'kill -INT "$VIDEO_PID" 2>/dev/null || true; wait "$VIDEO_PID" || true' EXIT

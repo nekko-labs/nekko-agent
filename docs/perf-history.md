@@ -39,6 +39,26 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Strict native permission-return comparison (#2518, 2026-11-10)
+
+Area: perf harness. Result: failed acceptance and measurement repair; no product speedup established.
+Conditions: one repaired matched pair, iPhone 18 Pro simulator, iOS 27.0 (24A434), Xcode 27.1 (27A9275), common harness `80d59e99`; apps BEFORE `c01876e6`, AFTER `c1baaf3`.
+
+| Metric | Before | After |
+|---|---|---|
+| Activation, seconds | 8.843671 | Failed after approximately 60 seconds; no completed activation metric |
+| Total through Allowed assertion, seconds | 10.129257 (waiter timeout) | No final Allowed time; app Not Running |
+
+Source: [native comparison 42875392708](https://github.com/nekko-labs/nekko-agent/actions/runs/42875392708), jobs 130037226413 / 130037226936. The earlier AFTER 10.306026-second failure in [42836362940](https://github.com/nekko-labs/nekko-agent/actions/runs/42836362940) remains a failure too. Retained unified logs explicitly identify both initial process deaths as TCC microphone-service changes. BEFORE spawns a replacement PID; AFTER requests return before RunningBoard reports the old PID's death and has no observed new spawn. The stale-process race is a hypothesis supported by that ordering, not a proven app-code cause. The argument-selected fixture is not restored by the argument-free cold launch.
+
+The next test-only common overlay persists the debug route and original app-owned App lock/theme fixture preferences, never OS authorization or credentials. One <=10-second monotonic clock now starts before the real Settings toggle and includes exit observation, the sole unconditional activation, AX and predicate setup. This is a stricter cold-return experiment, not directly comparable to the old clock origin or proof of warm-resume behavior. Native results are pending. Production permission providers, native-suite deadlines and branch protection are unchanged.
+
+### Common cold-return setup failures and readiness measurement repair (2026-11-11)
+
+[Run 42926857207](https://github.com/nekko-labs/nekko-agent/actions/runs/42926857207), common `84dc0b80`, same original app SHAs and iPhone 18 Pro/iOS 27.0 (24A434)/Xcode 27.1 (27A9275). Both native test builds succeeded. BEFORE: 357 protocol/request tests passed; UI test 59.943 seconds, two setup failures. AFTER: 389 protocol/request tests passed; UI test 31.421 seconds, one setup failure. **These UI test durations are not Allowed latency. No return time was measured on either leg.** BEFORE stayed busy after the real denial; AFTER queried a still-transparent row immediately after Continue appeared. Neither reached the Settings toggle or activation.
+
+The next distinct common harness adds bounded initial-row and completed-denial predicates with stop-on-failure guards, plus DEBUG-only logs of the real request/refresh await boundaries. These do not replace providers or alter authorization; the timed return region stays byte-identical, with logging cost included in its existing ten seconds. This is a setup/measurement repair, not a measured performance improvement. Native compilation/readiness/return and matched media are unverified. Original failures and the stale-process race hypothesis above are not erased.
+
 ## Chat pictures beside the chat, held turn saves (2026-11-09)
 Area: engine daemon
 Result: improvement
