@@ -43,16 +43,17 @@ struct ChatsView: View {
     var body: some View {
         Group {
             if let selection {
-                List(selection: selection) { rows }
+                List(selection: selection) { rows.listRowSeparator(.hidden).listSectionSeparator(.hidden) }
             } else {
                 List { rows.listRowSeparator(.hidden).listSectionSeparator(.hidden) }
             }
         }
-        // Flat rows straight on the coloured ground, hairline separated, as the
-        // desktop's Agents panel (2026-10-24; the panels of 2026-10-26 went 2026-10-28).
+        // Quiet surfaces (docs/design-system.md): flat rows straight on the
+        // ground, kept apart by space and type, never a rule, on iPhone and iPad.
         .listStyle(.plain)
+        // Sub-agent rows sit close under their chat, as on the desktop.
+        .environment(\.defaultMinListRowHeight, 36)
         .animation(reduceMovement ? nil : .smooth(duration: 0.35), value: sections)
-        .listRowSeparatorTint(palette.line)
         .appBackground()
         // Room for the floating pill under the large title, while it sits there.
         .contentMargins(.top, searching ? 0 : AgentPillLayer.room(prefs.pillPlacement, gauges: gauges), for: .scrollContent)
@@ -327,9 +328,10 @@ struct ChatsView: View {
                         .accessibilityIdentifier("chats.view.showPullRequests")
                     Toggle("Last updated", isOn: bind(\.showUpdated)).menuActionDismissBehavior(.disabled)
                         .accessibilityIdentifier("chats.view.showUpdated")
+                    Toggle("Sub-agents", isOn: bind(\.showSubagents)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showSubagents")
                 }
                 Menu("Show") {
-                    Toggle("Previews", isOn: bind(\.showPreviews)).menuActionDismissBehavior(.disabled)
                     Toggle("Completed chats", isOn: bind(\.showCompleted)).menuActionDismissBehavior(.disabled)
                     Toggle("Always show groups", isOn: bind(\.showEmptyGroups)).menuActionDismissBehavior(.disabled)
                         .accessibilityIdentifier("chats.view.showEmptyGroups")
@@ -543,18 +545,50 @@ struct ChatsView: View {
         return chats.joined(separator: ",") + "|\(store.conn)|\(store.peers.values.filter { $0.conn == .online }.count)|\(tick)"
     }
 
+    /// The sub-agents listed under a chat: those it spawned and has not completed,
+    /// while the chat itself is active and the view shows them (the desktop sidebar's rule).
+    private func subagents(of s: SessionSummary) -> [SessionSummary] {
+        guard view.showSubagents, !s.archived, !PhoneProviders.isPhoneChat(s.id) else { return [] }
+        return store.subagents(of: s.id)
+    }
+
+    /// A chat, then one row for each sub-agent it spawned, as the desktop sidebar lists them.
+    @ViewBuilder private func row(_ s: SessionSummary) -> some View {
+        let kids = subagents(of: s)
+        chatRow(s, hasSubagents: !kids.isEmpty)
+        ForEach(Array(kids.enumerated()), id: \.element.id) { i, kid in
+            subagentRow(kid, last: i == kids.count - 1)
+        }
+    }
+
+    /// A sub-agent: opens its own chat, on the computer its parent runs on.
+    private func subagentRow(_ kid: SessionSummary, last: Bool) -> some View {
+        NavigationLink(value: Route.chat(kid.id)) {
+            ChatSubagentRow(summary: kid, activity: listActivity[kid.id] ?? (kid.running ? .running : nil), last: last,
+                        providerKind: providerKind(of: kid), showModel: view.showModel)
+        }
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowBackground(RowBackground(needsYou: listActivity[kid.id] == .needsYou,
+                                         selected: selection.map { $0.wrappedValue == .chat(kid.id) } ?? (highlighted == kid.id)))
+        .accessibilityIdentifier("chats.subagent")
+    }
+
     /// A chat on any computer in view. Opening one on another computer makes that
     /// computer active (`ChatView`), over the link the phone already holds to it.
-    private func row(_ s: SessionSummary) -> some View {
+    private func chatRow(_ s: SessionSummary, hasSubagents: Bool) -> some View {
         let on = owner(s)
         return NavigationLink(value: Route.chat(s.id)) {
             ChatRow(summary: s, activity: listActivity[s.id], waiting: on == store.activeId ? store.outbox.count(for: s.id) : 0,
-                    showPreview: view.showPreviews, place: showsComputer ? place(of: s) : nil, showPlaceIcon: view.showComputerIcons,
+                    place: showsComputer ? place(of: s) : nil, showPlaceIcon: view.showComputerIcons,
                     prs: view.showPullRequests ? store.rowPrs[s.id] ?? [] : [], providerKind: providerKind(of: s),
-                    showModel: view.showModel, showContext: view.showContext, showUpdated: view.showUpdated)
+                    showModel: view.showModel, showContext: view.showContext, showUpdated: view.showUpdated,
+                    hasSubagents: hasSubagents)
         }
         // Straight on the ground like the rest of the list, with the attention bar on a chat that needs you.
+        // A chat with sub-agents meets their rows, so its tree line runs on into them.
         .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: hasSubagents ? 0 : 6, trailing: 16))
         .listRowBackground(RowBackground(needsYou: listActivity[s.id] == .needsYou,
                                          selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")
@@ -597,12 +631,23 @@ struct ChatsView: View {
     }
 }
 
+/// One chat in the list, in the quiet style (docs/design-system.md): the title
+/// and one line of facts, kept apart from its neighbours by space, never a rule.
+///
+/// 1. Our status glyph and the title, over the full width and wrapping to a
+///    second line rather than cutting a long task title short (#2413).
+/// 2. The desktop card's facts (`WorkspaceCard`): where it runs, the provider's
+///    mark and the model, how full the context is while the chat is in
+///    progress, prompts waiting on the phone. At its end, bottom right as on
+///    the desktop, the PR chip and then when the chat last moved.
+///
+/// No preview of the transcript: the title says what the chat is, and the reply
+/// is one tap away. No "Working" / "Needs you" chip either: the glyph says it once.
 struct ChatRow: View {
     let summary: SessionSummary
     let activity: Activity?
     /// Prompts for this chat waiting on the phone (the outbox).
     var waiting = 0
-    var showPreview = true
     /// Where it runs, named when the list shows several places (a computer, or this iPhone).
     var place: ChatPlace? = nil
     /// ...with its icon (Show → Computer icons).
@@ -614,63 +659,60 @@ struct ChatRow: View {
     var showModel = true
     var showContext = true
     var showUpdated = true
+    /// Sub-agent rows follow: the glyph column carries the tree line down into them.
+    var hasSubagents = false
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // A glyph column says what the chat is doing before the title is read
-        // (the desktop's StatusIcon). Under the title, the desktop card's line:
-        // the provider's mark and the model, then how full the context is while
-        // the chat is in progress. The PR chip sits at the bottom right.
         HStack(alignment: .top, spacing: 10) {
-            ChatStatusIcon(activity: activity, completed: summary.archived, waiting: waiting > 0, activeWatchCount: summary.activeWatchCount)
-                .frame(width: 22, height: 22).padding(.top, 1)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(spacing: 0) {
+                ChatStatusIcon(activity: activity, completed: summary.archived, waiting: waiting > 0, activeWatchCount: summary.activeWatchCount)
+                    .frame(width: 22, height: 22)
+                if hasSubagents { SubagentTrunk().frame(maxHeight: .infinity) }
+            }
+            .frame(width: 22)
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
-                    Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink)
+                    if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.inkSoft).accessibilityLabel("Pinned") }
+                    Text(title).font(.body.weight(.medium)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink)
                         .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 }
-                if summary.chatType == "image" {
-                    Label("Image", systemImage: "photo").font(.caption2).foregroundStyle(palette.accent)
-                }
-                if modelShown || contextShown != nil || showUpdated {
+                .frame(minHeight: 22, alignment: .leading)
+                if factsLine {
                     HStack(spacing: 6) {
+                        if let place { PlaceChip(place: place, showIcon: showPlaceIcon) }
+                        if summary.chatType == "image" {
+                            Image(systemName: "photo").font(.caption2).foregroundStyle(palette.inkSoft).accessibilityLabel("Image chat")
+                        }
                         if modelShown, let model = shownModelId {
                             ModelFact(model: model, mark: ChatCard.providerMark(kind: providerKind, modelId: model))
                         }
                         if let context = contextShown { ContextFact(context: context) }
-                        if showUpdated {
-                            Spacer(minLength: 4)
-                            TimelineView(.periodic(from: .now, by: 60)) { _ in
-                                Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
-                                    .font(.caption2).foregroundStyle(palette.inkFaint)
-                            }
-                        }
-                    }
-                }
-                if showPreview, let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
-                if activity != nil || waiting > 0 || place != nil || !prs.isEmpty {
-                    HStack(spacing: 6) {
-                        badge
-                        if let place { PlaceChip(place: place, showIcon: showPlaceIcon) }
                         if waiting > 0 {
                             Label("\(waiting) waiting", systemImage: "tray.and.arrow.up")
                                 .font(.caption2).foregroundStyle(palette.inkSoft)
                                 .accessibilityLabel(waiting == 1 ? "1 prompt waiting to send" : "\(waiting) prompts waiting to send")
                         }
-                        if !prs.isEmpty {
-                            Spacer(minLength: 4)
-                            RowPrChip(prs: prs)
-                        }
+                        Spacer(minLength: 4)
+                        if !prs.isEmpty { RowPrChip(prs: prs) }
+                        if showUpdated { updated }
                     }
-                    .padding(.top, 2)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.bottom, hasSubagents ? 4 : 0)
         .accessibilityElement(children: .combine)
     }
 
+    // Re-rendered each minute, so "2m" doesn't stay "2m".
+    private var updated: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { _ in
+            Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                .font(.caption2.monospacedDigit()).foregroundStyle(palette.inkFaint)
+        }
+    }
+
+    /// Embedded line breaks and runs of spaces read as one space; the saved title is untouched.
     private var title: String {
         let text = summary.title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return text.isEmpty ? "New chat" : text
@@ -686,17 +728,88 @@ struct ChatRow: View {
         return ChatCard.context(summary)
     }
 
-    private var preview: String? {
-        let t = (summary.lastReplyText ?? summary.firstUserText ?? "").replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
-        return t.isEmpty ? nil : t
+    /// The second line: the facts, then the PR chip and the time at its end.
+    /// Each card detail hides only itself (GroupEvidenceTests), so the line
+    /// stays while any of them is shown.
+    private var factsLine: Bool {
+        place != nil || summary.chatType == "image" || modelShown || contextShown != nil || waiting > 0
+            || !prs.isEmpty || showUpdated
+    }
+}
+
+/// A sub-agent a chat spawned, one line under it as the desktop sidebar's
+/// `SubAgentRow`: the tree, our status glyph, its title, and at the end the
+/// model it runs on with its provider's mark, so which model did the delegated
+/// work reads at a glance.
+struct ChatSubagentRow: View {
+    let summary: SessionSummary
+    let activity: Activity?
+    /// The last of its chat's sub-agents: the tree turns the corner here.
+    let last: Bool
+    var providerKind: String? = nil
+    var showModel = true
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 8) {
+            SubagentBranch(last: last).frame(width: 12).frame(maxHeight: .infinity)
+            ChatStatusIcon(activity: activity, activeWatchCount: summary.activeWatchCount)
+                .scaleEffect(0.8).frame(width: 16, height: 16)
+            Text(title).font(.subheadline).foregroundStyle(palette.inkSoft).lineLimit(1)
+            Spacer(minLength: 6)
+            if showModel, let model = summary.modelId {
+                ModelFact(model: model, mark: ChatCard.providerMark(kind: providerKind, modelId: model))
+                    .layoutPriority(1)
+            }
+        }
+        // The tree hangs from the centre of the chat's glyph column above.
+        .padding(.leading, 10.5)
+        .frame(minHeight: 36)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
     }
 
-    @ViewBuilder private var badge: some View {
-        switch activity {
-        case .needsYou?: RowChip(text: String(localized: "Needs you"), tone: .warn)
-        case .running?: RowChip(text: String(localized: "Working"), tone: .normal, accent: true)
-        case .failed?: RowChip(text: String(localized: "Error"), tone: .warn)
-        case nil: EmptyView()
+    private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? String(localized: "Sub-agent") : summary.title }
+
+    private var accessibilityText: String {
+        guard showModel, let model = summary.modelId else { return String(localized: "Sub-agent \(title)") }
+        return String(localized: "Sub-agent \(title), on \(ChatCard.modelName(model))")
+    }
+}
+
+/// The line down from a chat's glyph to its first sub-agent, in the desktop's
+/// tree colour (the ink at a third).
+struct SubagentTrunk: View {
+    @Environment(\.palette) private var palette
+    var body: some View {
+        Rectangle().fill(palette.ink.opacity(0.32)).frame(width: 1).padding(.top, 2).accessibilityHidden(true)
+    }
+}
+
+/// One sub-agent's branch: a tee, or for the last one a rounded corner.
+struct SubagentBranch: View {
+    let last: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        BranchShape(last: last).stroke(palette.ink.opacity(0.32), lineWidth: 1).accessibilityHidden(true)
+    }
+
+    private struct BranchShape: Shape {
+        let last: Bool
+        func path(in r: CGRect) -> Path {
+            var p = Path()
+            let x = r.minX + 0.5, mid = r.midY
+            p.move(to: CGPoint(x: x, y: r.minY))
+            if last {
+                p.addLine(to: CGPoint(x: x, y: mid - 5))
+                p.addQuadCurve(to: CGPoint(x: x + 5, y: mid), control: CGPoint(x: x, y: mid))
+            } else {
+                p.addLine(to: CGPoint(x: x, y: r.maxY))
+                p.move(to: CGPoint(x: x, y: mid))
+            }
+            p.addLine(to: CGPoint(x: r.maxX, y: mid))
+            return p
         }
     }
 }
@@ -808,16 +921,35 @@ struct RowPrChip: View {
 
 /// A chat row's ground: the list's paper, the selection on iPad, and for a chat
 /// that needs you a warning bar down its leading edge (the desktop's attention colour).
+/// The tint is a rounded tile inset from the row's edges, the same corner as the
+/// app's cards, so the selection no longer reads as a hard full-width rectangle.
 struct RowBackground: View {
     let needsYou: Bool
     var selected = false
     @Environment(\.palette) private var palette
 
+    static let cornerRadius: CGFloat = 10
+    static let inset = EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8)
+
+    private var tint: Color? {
+        if selected { return palette.accent.opacity(0.12) }
+        if needsYou { return palette.warning.opacity(0.07) }
+        return nil
+    }
+
     var body: some View {
         ZStack(alignment: .leading) {
             Color.clear
-            if selected { palette.accent.opacity(0.12) } else if needsYou { palette.warning.opacity(0.07) }
-            if needsYou { Rectangle().fill(palette.warning).frame(width: 3).accessibilityHidden(true) }
+            if let tint {
+                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                    .fill(tint)
+                    .padding(Self.inset)
+            }
+            if needsYou {
+                Capsule().fill(palette.warning).frame(width: 3)
+                    .padding(.vertical, Self.inset.top + 6).padding(.leading, Self.inset.leading)
+                    .accessibilityHidden(true)
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage, SessionSummary } from '@nekko-agent/shared';
-import { artifactCandidates, artifactKind, folderDesigns, groupArtifacts, mergeArtifacts, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
+import { artifactCandidates, artifactKind, designVersion, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
 
 const msg = (id: string, content: string, createdAt: number, extra: Partial<ChatMessage> = {}): ChatMessage => ({ id, role: 'assistant', content, createdAt, ...extra });
 const write = (path: string) => ({ id: path, name: 'write_file', input: { path, content: 'x' } });
@@ -109,6 +109,33 @@ describe('artifacts index', () => {
     expect(asked.at(-1)).toBe('C:\\other/nekko-designs');
     // A bridge that answers with nothing (a remote or partial one) is an empty folder, not a crash.
     expect(await readDesignsFolder(async () => null as never, '/proj')).toEqual([]);
+  });
+
+  it('reads a design version from its file name', () => {
+    expect(designVersion('/p/nekko-designs/checkout-design.html')).toEqual({ design: '/p/nekko-designs/checkout-design.html', version: 1 });
+    expect(designVersion('/p/nekko-designs/Checkout-Design-v2.html')).toEqual({ design: '/p/nekko-designs/checkout-design.html', version: 2 });
+    for (const name of ['checkout-design_v3.html', 'checkout-design.v3.html', 'checkout-design V3.html']) expect(designVersion(`/p/nekko-designs/${name}`), name).toEqual({ design: '/p/nekko-designs/checkout-design.html', version: 3 });
+    // A number that is part of the name, or another folder, is another design.
+    expect(designVersion('/p/nekko-designs/ipv6.html').version).toBe(1);
+    expect(designVersion('/p/nekko-designs/checkout-v2-draft.html').version).toBe(1);
+    expect(designVersion('/p/other/checkout-design-v2.html').design).toBe('/p/other/checkout-design.html');
+  });
+
+  it('shows the versions of a design as one entry, the newest standing for it', () => {
+    const design = (name: string, at: number, sessionId = 's1') => ({ path: `/p/nekko-designs/${name}`, title: name.replace(/\.html$/, '').replace(/-/g, ' '), filename: name, kind: 'design' as const, sessionId, sessionTitle: 'Checkout', at, source: 'written' as const });
+    const report = { ...design('x', 9), path: '/p/reports/audit-v2.md', filename: 'audit-v2.md', kind: 'doc' as const, title: 'Audit v2' };
+    const entries = [design('checkout-design-v3.html', 30, 's3'), report, design('checkout-design.html', 10), design('login.html', 5), design('checkout-design-v2.html', 40), design('hero-v2.html', 7)];
+    const grouped = groupDesignVersions(entries);
+    expect(grouped.map((e) => e.path)).toEqual(['/p/nekko-designs/checkout-design-v3.html', '/p/reports/audit-v2.md', '/p/nekko-designs/login.html', '/p/nekko-designs/hero-v2.html']);
+    expect(grouped[0]).toMatchObject({ title: 'checkout design', sessionId: 's3', at: 40, filename: 'checkout-design-v3.html' });
+    expect(grouped[0].versions).toEqual([
+      { version: 1, path: '/p/nekko-designs/checkout-design.html' }, { version: 2, path: '/p/nekko-designs/checkout-design-v2.html' }, { version: 3, path: '/p/nekko-designs/checkout-design-v3.html' },
+    ]);
+    // Only designs have versions, and a design saved once is untouched, whatever its number.
+    expect(grouped[1]).toEqual(report);
+    expect(grouped[2].versions).toBeUndefined();
+    expect(grouped[3]).toMatchObject({ title: 'hero v2' });
+    expect(grouped[3].versions).toBeUndefined();
   });
 
   it('collects linked documents and written outputs, not source files', () => {

@@ -15,6 +15,29 @@ export const HTML_PREVIEW_CHANNELS = {
 export interface HtmlPreviewOptions {
   /** Let the page load from the internet (https and wss only). Off by default. */
   internet: boolean;
+  /**
+   * Add the viewer's control script to the page, so the design canvas can ask
+   * its size and pause or resume its motion over `postMessage`. Off by default.
+   */
+  controls?: boolean;
+}
+
+/** What the design canvas asks a served page, as `{ nekkoPreview: <command> }`. */
+export type PreviewCommand = 'probe' | 'pause' | 'play';
+
+/** A served page's answer to a `PreviewCommand`, and its report once loaded. */
+export interface PreviewState {
+  nekkoPreview: 'state';
+  /** Running or paused CSS animations, transitions and Web Animations. */
+  animations: number;
+  /** `<video>` and `<audio>` elements. */
+  media: number;
+  /** `requestAnimationFrame` calls so far: a loop makes this climb. */
+  frames: number;
+  paused: boolean;
+  /** The page's full scroll size, in CSS pixels. */
+  width: number;
+  height: number;
 }
 
 export interface HtmlPreviewServed {

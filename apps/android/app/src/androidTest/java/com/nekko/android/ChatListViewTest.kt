@@ -73,6 +73,7 @@ class ChatListViewTest {
         return """[{"id":"g1","title":"Plan the week","updatedAt":${now - 2 * day},"lastReplyText":"Three goals for Monday.","exchangeCount":2},
             {"id":"w9","title":"Ship the release","updatedAt":${now - day / 2},"workspaceId":"w2","exchangeCount":6,"activeWatchCount":1,"lastReplyText":"Watching PR #555."},
             {"id":"n0","title":"Notes for later","updatedAt":${now - day / 3},"exchangeCount":0},
+            {"id":"t1","title":"Release checklist\n- Fix the flaky sign-in test on the release branch before Friday's build","updatedAt":${now - day / 5},"exchangeCount":2,"modelId":"claude-sonnet-5-5","lastReplyText":"The sign-in test is stable now."},
             {"id":"d1","title":"Write the docs page","updatedAt":${now - day / 4},"workspaceId":"w2","lastReplyText":"The page is drafted."},
             {"id":"d2","title":"Old notes","updatedAt":${now - 3 * day},"workspaceId":"w2","archivedAt":${now - day}},
             $app]"""

@@ -879,28 +879,37 @@ internal fun ChatRow(
             ChatStatusIcon(activity, waiting > 0, s.activeWatchCount)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    plainText(s.title).ifEmpty { stringResource(R.string.chats_new_chat) },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = p.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = stringResource(R.string.chats_pinned), tint = p.warning, modifier = Modifier.size(14.dp))
-                if (details.showUpdated) Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
-            }
-            if (s.chatType == "image") Text(stringResource(R.string.image_kind_image), style = MaterialTheme.typography.bodySmall, color = p.accent, modifier = Modifier.testTag("chats.row.image"))
             // The desktop card's line: the provider's mark and the model, then how
             // full the context is while the chat is in progress. An image chat's
             // badge stands in for the chat model.
             val model = s.modelId?.takeIf { details.showModel && s.chatType != "image" }
             val context = if (details.showContext && ChatCard.showsContext(s, activity)) ChatCard.context(s) else null
-            if (model != null || context != null) {
+            // Readable titles (#2417, the iPhone's #2416): up to two lines and the row's full width,
+            // the time moved down to the model line. With no model line, the time stays beside the
+            // title rather than alone on a line of its own. Spaces and line breaks read as one space.
+            val timeBelow = model != null || context != null
+            val time: @Composable () -> Unit = { Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.testTag("chats.row.time")) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = stringResource(R.string.chats_pinned), tint = p.warning, modifier = Modifier.size(14.dp))
+                Text(
+                    plainText(s.title).ifEmpty { stringResource(R.string.chats_new_chat) },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = p.ink,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).testTag("chats.row.title"),
+                )
+                if (details.showUpdated && !timeBelow) time()
+            }
+            if (s.chatType == "image") Text(stringResource(R.string.image_kind_image), style = MaterialTheme.typography.bodySmall, color = p.accent, modifier = Modifier.testTag("chats.row.image"))
+            if (timeBelow) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     model?.let { ModelFact(it, ChatCard.providerMark(providerKind, it)) }
                     context?.let { ContextFact(it) }
+                    if (details.showUpdated) {
+                        Spacer(Modifier.weight(1f))
+                        time()
+                    }
                 }
             }
             if (showPreview && preview.isNotEmpty()) {
@@ -1346,7 +1355,7 @@ private fun CompletedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: ()
             plainText(s.title).ifEmpty { stringResource(R.string.chats_new_chat) },
             style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.LineThrough),
             color = p.inkFaint,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )

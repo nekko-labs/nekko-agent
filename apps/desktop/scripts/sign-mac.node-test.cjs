@@ -2,7 +2,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { withVmEntitlements, vmEntitlements } = require('./sign-mac.cjs');
+const os = require('node:os');
+const { withVmEntitlements, vmEntitlements, resolveProvisioningProfile } = require('./sign-mac.cjs');
 
 const VIRT = 'com.apple.security.virtualization';
 
@@ -20,12 +21,38 @@ test('vm_entitlements_grant_virtualization_only', () => {
 });
 
 test('app_entitlements_never_grant_virtualization', () => {
-  assert.ok(!fs.readFileSync(path.join(__dirname, '..', 'build', 'entitlements.mac.plist'), 'utf8').includes(VIRT));
+  for (const f of ['entitlements.mac.plist', 'entitlements.mac.inherit.plist'])
+    assert.ok(!fs.readFileSync(path.join(__dirname, '..', 'build', f), 'utf8').includes(VIRT), f);
 });
 
 test('electron_builder_signs_through_the_hook', () => {
   const yml = fs.readFileSync(path.join(__dirname, '..', 'electron-builder.yml'), 'utf8');
   assert.match(yml, /^mac:\n(?:[ #].*\n|\n)*?  sign: scripts\/sign-mac\.cjs$/m);
+});
+
+test('helpers_get_their_own_entitlements_file', () => {
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'electron-builder.yml'), 'utf8');
+  const main = yml.match(/^  entitlements: (\S+)$/m)?.[1];
+  const inherit = yml.match(/^  entitlementsInherit: (\S+)$/m)?.[1];
+  assert.equal(main, 'build/entitlements.mac.plist');
+  assert.equal(inherit, 'build/entitlements.mac.inherit.plist');
+});
+
+test('a_missing_provisioning_profile_fails_the_signed_build', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'profile-'));
+  try {
+    assert.throws(() => resolveProvisioningProfile('build/nekko-agent.provisionprofile', root), (e) => {
+      assert.match(e.message, /^Provisioning profile .*build\/nekko-agent\.provisionprofile not found\./);
+      assert.match(e.message, /docs\/signing\.md, "Provisioning profile"/);
+      return true;
+    });
+    fs.mkdirSync(path.join(root, 'build'));
+    fs.writeFileSync(path.join(root, 'build', 'nekko-agent.provisionprofile'), '');
+    assert.equal(resolveProvisioningProfile('build/nekko-agent.provisionprofile', root), path.join(root, 'build', 'nekko-agent.provisionprofile'));
+    assert.equal(resolveProvisioningProfile(undefined, root), undefined);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('app_builder_lib_is_pinned_with_electron_builder', () => {

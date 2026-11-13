@@ -26,5 +26,5 @@ pub mod rules;
 
 pub use assemble::{AssembleInput, Bundle, Item, assemble, render_block};
 pub use gather::{Guideline, MemoryScope, collect_attached, collect_guidelines, list_memory, parse_memory};
-pub use prompt::{PromptContext, Workspace, build_system_prompt};
+pub use prompt::{DESIGN_RULES, PromptContext, Workspace, build_system_prompt};
 pub use rules::{Guidance, ProjectGuidance, collect_rules, project_guidance};

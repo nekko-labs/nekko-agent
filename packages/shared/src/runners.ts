@@ -563,17 +563,33 @@ export interface ImageInfo {
   built: string;
   /** The job tools found on the image's disk; absent for an image built before Nekko looked. */
   tools?: string[];
-  /** Tools jobs run before their own setup (node, gh, jq) that this image lacks; absent from an older daemon. */
+  /** Job tools (node, gh, jq, zstd, gtar) that this image lacks; absent from an older daemon. */
   missingTools?: string[];
 }
 
 /** "a", "a and b", "a, b and c". */
 const andList = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
 
-/** The runner card's notice for an image without some job tools. */
+/** Tools `actions/cache` uses to compress with zstd; without them it falls back to gzip and jobs still pass. */
+const CACHE_TOOLS = ['zstd', 'gtar'];
+
+/**
+ * The runner card's notice for an image without some job tools. Missing node, gh or jq fails a
+ * job; missing zstd or gtar only makes caches bigger and slower to save, and says so.
+ */
 export function missingToolsLine(tools: string[]): string {
-  const one = tools.length === 1;
-  return `${andList(tools)} ${one ? 'is' : 'are'} missing from this Mac's runner image. Jobs that need ${one ? 'it' : 'them'} will fail.`;
+  const needed = tools.filter((t) => !CACHE_TOOLS.includes(t));
+  const cache = tools.filter((t) => CACHE_TOOLS.includes(t));
+  const are = (list: string[]) => (list.length === 1 ? 'is' : 'are');
+  const fail = needed.length
+    ? `${andList(needed)} ${are(needed)} missing from this Mac's runner image. Jobs that need ${needed.length === 1 ? 'it' : 'them'} will fail.`
+    : '';
+  const slow = cache.length
+    ? needed.length
+      ? `Without ${andList(cache)}, caches also save slower.`
+      : `${andList(cache)} ${are(cache)} missing from this Mac's runner image, so caches save slower.`
+    : '';
+  return [fail, slow].filter(Boolean).join(' ');
 }
 
 export interface ImageView {
