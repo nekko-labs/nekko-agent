@@ -316,8 +316,9 @@ async fn honours_start_on_launch_and_mints_a_first_token() {
     .await;
     assert_eq!(status["running"], false, "{status}");
     assert_eq!(desk.saved()["apiServer"]["enabled"], false);
-    until("the link written", Duration::from_secs(10), || async { (desk.link()["enabled"] == false).then_some(()) })
-        .await;
+    let link =
+        desk.wait_link(&json!({ "enabled": false, "pid": d.child.id() }), Duration::from_secs(10)).await.unwrap();
+    assert_eq!(link["enabled"], false);
     drop(d);
 
     // A fresh install's server is on and gets a token rather than refusing to listen.
