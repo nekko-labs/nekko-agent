@@ -469,7 +469,11 @@ fn info(macos: &str, tools: Option<&[&str]>) -> ImageInfo {
 fn an_image_built_before_the_check_lacks_every_tool_macos_does_not_ship() {
     assert_eq!(missing_tools(&info("27.2", None)), ["node", "gh", "zstd", "gtar"], "macOS 15 and later ship jq");
     assert_eq!(missing_tools(&info("14.6", None)), ["node", "gh", "jq", "zstd", "gtar"]);
-    assert_eq!(missing_tools(&info("", None)), ["node", "gh", "jq", "zstd", "gtar"], "an unreadable version ships nothing");
+    assert_eq!(
+        missing_tools(&info("", None)),
+        ["node", "gh", "jq", "zstd", "gtar"],
+        "an unreadable version ships nothing"
+    );
 }
 
 #[test]
