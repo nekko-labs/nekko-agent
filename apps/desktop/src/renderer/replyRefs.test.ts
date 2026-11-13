@@ -36,6 +36,8 @@ describe('reply references', () => {
     expect(issueRefUrl('5', 'me/app', false, { files: [] })).toBe('https://github.com/me/app/pull/5');
     expect(issueRefUrl('2480', undefined, false, { files: [] })).toBeNull();
     expect(issueRefUrl('0', undefined, false, refs)).toBeNull();
+    expect(issueRefUrl('5', 'evil.com/x"onclick', false, { files: [] })).toBeNull();
+    expect(issueRefUrl('5', '../../x', false, { files: [] })).toBeNull();
   });
   it('falls back to the one repo every PR of the chat is in', () => {
     expect(onlyRepo([{ owner: 'a', repo: 'b' }, { owner: 'A', repo: 'B' }])).toEqual({ owner: 'a', repo: 'b' });

@@ -81,11 +81,12 @@ export function touchedFiles(messages: readonly ChatMessage[] | undefined): stri
 /**
  * The GitHub URL a `#N` names: `issues` when the reply calls it an issue, else
  * `pull` (GitHub redirects a PR number to the issue and back). Null without a
- * repo, so `#3` in a list stays text.
+ * repo, so `#3` in a list stays text. The slug comes from reply text, so
+ * anything that is not a plain `owner/repo` is refused before it becomes an href.
  */
 export function issueRefUrl(number: string, slug: string | undefined, issue: boolean, refs: ReplyRefs): string | null {
   const repo = slug ?? (refs.repo ? `${refs.repo.owner}/${refs.repo.repo}` : undefined);
-  if (!repo || !/^[1-9]\d{0,6}$/.test(number)) return null;
+  if (!repo || !/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(repo) || !/^[1-9]\d{0,6}$/.test(number)) return null;
   return `https://github.com/${repo}/${issue ? 'issues' : 'pull'}/${number}`;
 }
 
