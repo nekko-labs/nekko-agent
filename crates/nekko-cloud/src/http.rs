@@ -64,6 +64,10 @@ async fn answer(res: reqwest::Response) -> Result<Value, HttpError> {
             (402, _) => "Sync needs a Pro or Team plan.".into(),
             (401, _) => "You're signed out of Nekko Cloud. Sign in again.".into(),
             (429, _) => "Too many requests. Try again in a minute.".into(),
+            (_, "already-subscribed") => "You already have a plan. Use Manage billing to change it.".into(),
+            (_, "no-billing-account") => {
+                "The Nekko team set up your plan, so there's nothing to manage here. Email hello@nekkoagent.com to change it.".into()
+            }
             (_, "") => format!("Nekko Cloud answered {status}."),
             (_, c) => c.to_string(),
         });

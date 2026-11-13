@@ -31,7 +31,7 @@ function props(over: Partial<OrgViewProps> = {}): OrgViewProps {
   const detail = over.detail === undefined ? org() : over.detail;
   return {
     gate: 'ready', loading: false, orgs: detail ? [detail as OrgSummary] : [], invites: [], detail, fleet: null, error: '', fleetError: '', busy: '', now: NOW,
-    onSelect: noop, onCreate: noop, onAccept: noop, onInvite: noop, onRevokeInvite: noop, onRemoveMember: noop, onSetSharing: noop, onGoToSync: noop, onSeePlans: noop,
+    onSelect: noop, onCreate: noop, onAccept: noop, onInvite: noop, onRevokeInvite: noop, onRemoveMember: noop, onSetSharing: noop, onGoToSync: noop,
     ...over,
   };
 }
@@ -67,7 +67,9 @@ describe('Organization section gating', () => {
     expect(html(props({ gate: 'needs-setup', detail: null }))).toContain('Turn on sync first');
     const plan = html(props({ gate: 'needs-plan', detail: null }));
     expect(plan).toContain('Pro and Team');
-    expect(plan).toContain('See plans');
+    // Nothing to buy until plans and billing are switched on (#2724).
+    expect(plan).not.toContain('See plans');
+    expect(html(props({ gate: 'needs-plan', detail: null, onSeePlans: noop }))).toContain('See plans');
   });
 
   it('derives the gate from the cloud status', () => {

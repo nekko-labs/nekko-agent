@@ -16,7 +16,7 @@ Someone on the free plan can subscribe to Nekko Cloud Pro, then manage or cancel
 
 - Each unreleased Cloud feature has a switch with three states: **off** (the default, and what an unset switch means), **team** (only Nekko team accounts see it), **on** (everyone, signed in or not).
 - A Nekko team account is one whose email is on the team list (philip, davide, travis and matt @nekkolabs.com; `NEKKO_STAFF_EMAILS` replaces it) **and** whose address was proven at sign-in (an emailed code or a provider's verified email). Typing the address is not enough. An account made before this existed becomes a team account the next time it signs in.
-- To turn billing on: sign in to Nekko Cloud in the app with a team email, then use the team switch (desktop: Settings > Sync, "Nekko team"). Everyone else never sees the switch, and its routes answer 404 to them.
+- To turn billing on: sign in to Nekko Cloud in the app with a team email, then use **Plans and billing** under the account in Settings > Sync. Everyone else never sees the switch, and its routes answer 404 to them.
 - A feature the service can't run stays hidden whatever the switch says: billing needs Stripe keys on the service.
 
 ## Paying
@@ -37,5 +37,6 @@ Someone on the free plan can subscribe to Nekko Cloud Pro, then manage or cancel
 ## Status
 
 - Implemented: switches, team accounts, Checkout, Portal, webhook and account deletion in the Cloud API (`apps/nekko-agent-api`, `src/features.ts`, `src/billing.ts`), with tests against a stand-in Stripe.
-- Planned: Plan & billing in desktop Settings and the team switch; a pricing page on nekkoagent.com shown only when billing is on for everyone; phones; Team seats per organization; yearly prices.
+- Implemented (desktop and Local Web UI): under the account in Settings > Sync, **Upgrade** with the Pro price on Free and **Manage billing** on a paid plan, both opening Stripe in the browser; the plan refreshes when the window comes back. Team accounts also see **Plans and billing: Off, Team only, Everyone** there (Everyone asks first). While billing is off nothing links to plans: the "See plans" buttons in Sync and Organization are gone, since nekkoagent.com/pricing doesn't exist yet; Organization's points to the Upgrade row once billing is on.
+- Planned: a pricing page on nekkoagent.com shown only when billing is on for everyone, and a docs page at launch; phones; Team seats per organization; yearly prices.
 - Not done, needs Philip: a Stripe account, the Pro product and price, the webhook endpoint, and the secrets on Fly. No live charge has been made.
