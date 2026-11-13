@@ -16,11 +16,11 @@ cli-dist/
 npm-nekkod/
 # The CommonJS CLI bundled into the desktop app (apps/cli/scripts/bundle-app.mjs)
 app-dist/
-# runtime artifacts written by training/goal/design runs when this repo is
-# itself used as a Nekko Agent workspace (dogfooding).
+# runtime artifacts written by training/goal runs when this repo is itself
+# used as a Nekko Agent workspace (dogfooding). nekko-designs/ is tracked:
+# a design is committed with the change it belongs to (AGENTS.md).
 nekko-training/
 nekko-goal/
-nekko-designs/
 
 # Local agent tooling (per-machine hooks and critique scratch)
 .codex/

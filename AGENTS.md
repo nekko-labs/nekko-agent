@@ -90,7 +90,9 @@ The docs at nekkoagent.com/docs render from Markdown in this repo (`docs/hub/nav
 
 ## Reports and portable design artifacts
 
-For substantial research, comparisons, architecture, and explanations, provide a concise chat summary plus a linked Markdown report when it improves readability or reuse. Include sources, assumptions, recommendations, and next steps. Use Mermaid for useful diagrams, image links for actual photos/screenshots, and self-contained HTML/CSS/SVG for rich design prototypes. Keep editable source in the project, normally reports/ or nekko-designs/; follow existing conventions. Do not generate artifacts for trivial replies. Never confuse captured evidence with inspected evidence.
+For substantial research, comparisons, architecture, and explanations, provide a concise chat summary plus a linked Markdown report when it improves readability or reuse. Include sources, assumptions, recommendations, and next steps. Use Mermaid for useful diagrams and image links for actual photos/screenshots. Reports go in `reports/`. Do not generate artifacts for trivial replies. Never confuse captured evidence with inspected evidence.
+
+A design is not a report. A report is a document to read; a design is something to look at and build from (the screens, states, options or motion of an interface or a visual). A design is one self-contained HTML file in `nekko-designs/`, never in `reports/`, laid out as a canvas with each screen, state or option as a labelled frame side by side and little prose, named for what it shows (`checkout-design.html`). Look in `nekko-designs/` before designing or building an interface. To change a design someone has already seen, save a new version beside it (`checkout-design-v2.html`, then `-v3`) instead of overwriting it; the highest number is current. A design that belongs to a change is committed with it.
 
 General reporting behavior belongs in the shared system prompt, not a personal memory file. Repository-specific workflow belongs here. Preview changes must retain explicit user consent for local reads, isolate generated HTML from the app, and prevent silent external resource fetching.
 
