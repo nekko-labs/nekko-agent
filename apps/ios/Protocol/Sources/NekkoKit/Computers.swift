@@ -161,6 +161,8 @@ public final class ComputersStore {
     public private(set) var connDetail: String?
     public private(set) var denied: DenyReason?
     public private(set) var summaries: [SessionSummary] = []
+    /// Each chat's sub-agents (`SessionSummary.subagents`), by the parent's id.
+    public private(set) var subagents: [String: [SessionSummary]] = [:]
     public private(set) var summariesLoading = false
     /// The list has been read (or failed to) since connecting: before that an
     /// empty list means "not loaded yet", not "no chats".
@@ -784,6 +786,7 @@ public final class ComputersStore {
             activity = peer.activity
             if peer.loaded {
                 summaries = peer.summaries
+                subagents = peer.subagents
                 workspaces = peer.workspaces
                 summariesLoaded = true
             }
@@ -858,7 +861,7 @@ public final class ComputersStore {
 
     /// What the active computer's link knows, handed to the fleet when another computer becomes active.
     private func leftBehind() -> Peer {
-        Peer(conn: conn, detail: connDetail, denied: denied, summaries: summaries, activity: activity,
+        Peer(conn: conn, detail: connDetail, denied: denied, summaries: summaries, subagents: subagents, activity: activity,
              workspaces: workspaces, loaded: summariesLoaded && savedListAt == nil, hostProtocol: hostProtocol)
     }
 
@@ -1202,6 +1205,7 @@ public final class ComputersStore {
             let r = (try await summaries, try await providers, s, await workspaces, await info, await pending)
             guard client === c else { return }
             self.summaries = SessionSummary.visible(r.0)
+            self.subagents = SessionSummary.subagents(r.0)
             self.providers = PublicProvider.list(r.1)
             // Only public projections leave this block.
             self.defaults = RemoteDefaults.from(r.2)
@@ -1256,6 +1260,7 @@ public final class ComputersStore {
             let list = try await c.call(Channels.sessionsSummaries)
             guard client === c else { return }
             summaries = SessionSummary.visible(list)
+            subagents = SessionSummary.subagents(list)
             saveList()
         }
     }
@@ -1498,6 +1503,7 @@ public final class ComputersStore {
         savedListAt = nil
         summariesLoaded = false
         summaries = []
+        subagents = [:]
         providers = []
         models = [:]
         modelErrors = [:]
@@ -1534,6 +1540,7 @@ public final class ComputersStore {
                 guard self.client === c, !Task.isCancelled else { return }
                 if let list {
                     self.summaries = SessionSummary.visible(list)
+                    self.subagents = SessionSummary.subagents(list)
                     self.saveList()
                 }
                 // Only a new invalidation retries, never a failed call alone.
