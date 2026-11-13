@@ -484,6 +484,11 @@ export const IpcChannels = {
   cloudCancelOAuth: 'cloud:cancelOAuth',
   cloudSignOut: 'cloud:signOut',
   cloudDeleteAccount: 'cloud:deleteAccount',
+  cloudBillingPlans: 'cloud:billingPlans',
+  cloudBillingCheckout: 'cloud:billingCheckout',
+  cloudBillingPortal: 'cloud:billingPortal',
+  cloudTeamFeatures: 'cloud:teamFeatures',
+  cloudSetTeamFeature: 'cloud:setTeamFeature',
   syncTurnOn: 'sync:turnOn',
   syncConfirmRecoveryKey: 'sync:confirmRecoveryKey',
   syncRestore: 'sync:restore',
@@ -620,6 +625,15 @@ export interface NekkoApi {
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
   /** Erase the Nekko Cloud account (`DELETE /v1/account`), then forget it on this device. */
   cloudDeleteAccount(): Promise<import('./cloud.js').CloudStatus>;
+  /** Plans on sale (#2724); refused unless billing is on for this account. */
+  cloudBillingPlans(): Promise<{ plans: import('./cloud.js').BillingPlan[] }>;
+  /** A Stripe Checkout page for `plan`, to open in the browser. */
+  cloudBillingCheckout(plan: 'pro'): Promise<{ url: string }>;
+  /** Stripe's Customer Portal for this account, to open in the browser. */
+  cloudBillingPortal(): Promise<{ url: string }>;
+  /** Nekko team accounts only (decision 0092): each unreleased feature's switch. */
+  cloudTeamFeatures(): Promise<import('./cloud.js').TeamFeatures>;
+  cloudSetTeamFeature(key: import('./cloud.js').TeamFeatureKey, state: import('./cloud.js').TeamFeatureState): Promise<import('./cloud.js').TeamFeatures>;
   /** Settings > Connections: the switch and each connection's counts. */
   connectionsStatus(): Promise<import('./connections.js').ConnectionsStatus>;
   /** A connection's recent events, newest first. */
