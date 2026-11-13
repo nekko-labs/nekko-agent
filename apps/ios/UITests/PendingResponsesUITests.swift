@@ -21,7 +21,9 @@ final class PendingResponsesUITests: XCTestCase {
         let response = app.descendants(matching: .any)["chat.response"].firstMatch
         let retry = app.buttons["response.retry"]
         let cancel = app.buttons["response.cancel"]
-        let originalError = app.staticTexts.containing(NSPredicate(
+        // The question card shows this error as a Label (icon plus text), which XCUI does not
+        // always expose as a StaticText, so match any element type.
+        let originalError = app.descendants(matching: .any).matching(NSPredicate(
             format: "label CONTAINS %@", "Reconnect to answer. Approvals and answers are never sent later."
         )).firstMatch
 
