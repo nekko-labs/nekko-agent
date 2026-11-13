@@ -13,7 +13,7 @@ worked.
 
 | Platform | Mechanism | Wired | Blocked on |
 | --- | --- | --- | --- |
-| macOS | Developer ID codesign + notarization + provisioning profile | ✅ live since v0.6.0; profile secret-required | the `MACOS_PROVISIONING_PROFILE` secret ([below](#provisioning-profile)) |
+| macOS | Developer ID codesign + notarization + provisioning profile | ✅ live since v0.6.0; profile secret-required | nothing; the first signed release with the [profile](#provisioning-profile) is not verified yet |
 | Windows | Authenticode via Azure Artifact Signing | ✅ secret-gated | Azure identity validation + the secrets below |
 | Linux | none (AppImage/deb are unsigned) | n/a | n/a |
 | Update feed (all) | Ed25519 signature beside each `latest*.yml` | ✅ secret-gated | Philip generating the release key ([below](#the-release-signing-key)) |
