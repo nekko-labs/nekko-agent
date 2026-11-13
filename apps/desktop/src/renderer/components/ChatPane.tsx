@@ -1,3 +1,4 @@
+import { fusionEnabled, fusionStrategy } from '@nekko-agent/shared';
 import { ContextChangeNotice, showContextChangeNotice } from './ContextChangeNotice.js';
 import { useClaudePlan } from '../providerAccounts.js';
 import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
@@ -1627,7 +1628,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const autoQuality: AutoQuality = session?.autoQuality ?? 'normal';
   // Opt-in per chat: when this provider is spent, Auto may run the turn on an
   // equivalent model elsewhere. Never in offline chats, which must stay local.
-  const autoSwitch = !!session?.autoProviderSwitch && !session?.offline;
+  const autoSwitch = fusionEnabled(session);
 
   /** Resolve Auto mode against a prompt, with the reasoning for the chip. */
   const autoPickFor = (text: string, cross = crossModels): AutoProviderPick | null => {
@@ -1636,7 +1637,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       const favs = new Set(models.filter((m) => favSet.has(`${providerId}::${m.id}`)).map((m) => m.id));
       // Auto never reaches for a model the plan can't serve right now: picking a
       // capped model is a turn that fails on send rather than a smarter choice.
-      const pick = pickAutoModel(runnableModels, text, { quality: autoQuality, preferred: favs });
+      const pick = pickAutoModel(runnableModels, text, { quality: autoQuality, preferred: favs, tierOverrides: settings?.fusion?.modelTiers });
       return pick ? { ...pick, providerId: providerId ?? '', providerLabel: activeProvider?.label ?? providerId ?? '', switched: false } : null;
     }
     return pickAcrossProviders(buildPools(cross), text, {
@@ -1644,6 +1645,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       preferred: favSet,
       homeProviderId: providerId,
       switchOnCapacity: true,
+      strategy: fusionStrategy(settings?.fusion),
+      tierOverrides: settings?.fusion?.modelTiers,
     });
   };
 
@@ -2451,7 +2454,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         limits: providerLimits,
         auth: activeProvider?.auth,
         tokenKey: activeProvider?.tokenKey,
-        local: providerKind ? isLocalProvider(providerKind) : undefined,
+        local: activeProvider ? !cloudProviderAllowed(activeProvider) : undefined,
       }
     : null;
 
@@ -2472,7 +2475,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (Object.keys(crossModels).length) return crossModels;
     const entries = await Promise.all(
       providers
-        .filter((p) => p.enabled && p.id !== providerId)
+        .filter((p) => p.enabled && p.id !== providerId && p.kind !== CLAUDE_CODE_PROVIDER_KIND && (!session?.cloudOnly || cloudProviderAllowed(p)))
         .map((p) =>
           window.nekko
             .listModels(p.id)
@@ -2507,7 +2510,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           limits: key ? crossLimits[key] : undefined,
           auth: p.auth,
           tokenKey: p.tokenKey,
-          local: isLocalProvider(p.kind),
+          local: !cloudProviderAllowed(p),
         };
       }),
   ];
@@ -2740,6 +2743,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   };
   const autoQualityControl = modelId === AUTO_MODEL_ID ? (
     <AutoQualityMenu
+      strategy={fusionStrategy(settings?.fusion)}
+      onStrategy={(strategy) => { void window.nekko.updateSettings({ fusion: { ...settings?.fusion, strategy } }).then(() => useStore.getState().refreshSettings()).catch((e) => useStore.getState().pushToast('error', String(e))); }}
       quality={autoQuality}
       onPick={(q) => {
         window.nekko
@@ -2747,7 +2752,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .then((s) => { if (s) setSession(s); })
           .catch(() => {});
       }}
-      followCapacity={!!session?.autoProviderSwitch}
+      followCapacity={autoSwitch}
       onFollowCapacity={(v) => {
         window.nekko
           .setSessionOptions(sessionId, { autoProviderSwitch: v })
@@ -2769,9 +2774,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       onOpenChange={openModelMenu}
       needsChoice={needsModel}
       unavailableModel={needsModel ? unavailableModel : null}
+      fusionActive={autoSwitch}
+      onFusion={() => {
+        setModelId(AUTO_MODEL_ID);
+        pickedModel.current = providerId ? { sessionId, providerId, modelId: AUTO_MODEL_ID } : null;
+        void window.nekko.setSessionOptions(sessionId, { autoModel: true, autoProviderSwitch: true }).then((s) => { if (s) setSession(s); }).catch((e) => useStore.getState().pushToast('error', String(e)));
+      }}
       footer={<>
         {!expertMode && autoQualityControl && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1">{autoQualityControl}</div>}
-        {!session?.parentSessionId && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1"><SubagentModelControl /></div>}
+        {!session?.parentSessionId && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1"><SubagentModelControl fusionAllowed={autoSwitch} /></div>}
       </>}
       onProvider={setProviderId}
       onModel={(pid, v) => {
@@ -2791,6 +2802,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         window.nekko
           .setSessionOptions(sessionId, {
             autoModel: auto,
+            autoProviderSwitch: false,
             ...(pid ? { providerId: pid } : {}),
             ...(auto ? {} : { modelId: v }),
           })

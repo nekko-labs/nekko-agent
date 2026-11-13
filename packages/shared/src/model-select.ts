@@ -13,6 +13,8 @@
  */
 
 import type { ModelInfo } from './models.js';
+import { CAPABILITY_RANK, modelCapability } from './fusion.js';
+import type { FusionStrategy, ModelTierOverrides } from './fusion.js';
 import type { LimitWindow, SubscriptionLimits } from './limits.js';
 import { getModelPrice, modelPricing } from './limits.js';
 import { resolveModelAvailability, windowCoversModel } from './model-availability.js';
@@ -64,7 +66,9 @@ export function isChatModel(model: ModelInfo): boolean {
  * Capability tier for a model, inferred from its id/name (higher = stronger).
  * Deliberately coarse, it only needs to rank what a provider offers.
  */
-export function modelTier(model: ModelInfo): number {
+export function modelTier(model: ModelInfo, overrides?: ModelTierOverrides): number {
+  const override = overrides?.[`${model.providerId}::${model.id}`];
+  if (override) return { small: 2, medium: 4, large: 5, frontier: 6 }[override];
   const id = `${model.id} ${model.name}`.toLowerCase();
   if (/opus|gpt-5|o1-pro|405b|70b|72b/.test(id)) return 5;
   if (/sonnet|gpt-4o(?!-mini)|gpt-4\.1(?!-mini)|o3(?!-mini)|o1(?!-mini)|llama-3\.[13]|qwen2?\.?5?-?(32|34)b|mixtral/.test(id)) return 4;
@@ -98,7 +102,7 @@ export interface AutoPick {
 export function pickAutoModel(
   models: ModelInfo[],
   prompt: string,
-  { quality = 'normal', preferred = new Set<string>() }: { quality?: AutoQuality; preferred?: Set<string> } = {},
+  { quality = 'normal', preferred = new Set<string>(), tierOverrides }: { quality?: AutoQuality; preferred?: Set<string>; tierOverrides?: ModelTierOverrides } = {},
 ): AutoPick | null {
   if (models.length === 0) return null;
   // Speech, embedding, and image models can't answer a chat turn. Fall back to
@@ -111,7 +115,7 @@ export function pickAutoModel(
   const wantStrong = quality === 'quality' || (quality === 'normal' && complex);
 
   const ranked = candidates
-    .map((m, i) => ({ m, tier: modelTier(m), i, fav: preferred.has(m.id) ? 0 : 1 }))
+    .map((m, i) => ({ m, tier: modelTier(m, tierOverrides), i, fav: preferred.has(m.id) ? 0 : 1 }))
     .sort((a, b) => {
       const byTier = wantStrong ? b.tier - a.tier : a.tier - b.tier;
       return byTier || a.fav - b.fav || a.i - b.i;
@@ -251,12 +255,16 @@ export function pickAcrossProviders(
     preferred = new Set<string>(),
     homeProviderId,
     switchOnCapacity = false,
+    strategy,
+    tierOverrides,
   }: {
     quality?: AutoQuality;
     /** Favorites as `${providerId}::${modelId}` so a star survives the move. */
     preferred?: Set<string>;
     homeProviderId?: string;
     switchOnCapacity?: boolean;
+    strategy?: FusionStrategy;
+    tierOverrides?: ModelTierOverrides;
   } = {},
 ): AutoProviderPick | null {
   const home = pools.find((p) => p.providerId === homeProviderId) ?? pools[0];
@@ -270,6 +278,7 @@ export function pickAcrossProviders(
   const homePick = pickAutoModel(homeRunnable.length ? homeRunnable : home.models, prompt, {
     quality,
     preferred: favsFor(home),
+    tierOverrides,
   });
   const toPick = (p: ProviderPool, pick: AutoPick, switched: boolean): AutoProviderPick => ({
     ...pick,
@@ -277,6 +286,7 @@ export function pickAcrossProviders(
     providerLabel: p.providerLabel,
     switched,
   });
+  if (strategy && switchOnCapacity) return pickFusion(pools, prompt, home, strategy, preferred, tierOverrides);
   if (!homePick) return null;
   if (!switchOnCapacity) return toPick(home, homePick, false);
 
@@ -289,7 +299,7 @@ export function pickAcrossProviders(
       return runnableModels(p).map((m) => ({
         pool: p,
         m,
-        tier: modelTier(m),
+        tier: modelTier(m, tierOverrides),
         headroom,
         price: turnPrice(p, m),
         measured: !!p.limits,
@@ -351,4 +361,46 @@ export function pickAcrossProviders(
     complex: homePick.complex,
     reason: `${reason}${best.tier > wantedTier ? ', a step up' : ''}.`,
   }, true);
+}
+
+/** Fusion ranks only eligible, classified chat models. It never grants permission. */
+function pickFusion(
+  pools: ProviderPool[], prompt: string, home: ProviderPool, strategy: FusionStrategy,
+  preferred: Set<string>, tierOverrides?: ModelTierOverrides,
+): AutoProviderPick | null {
+  const complex = isComplexPrompt(prompt);
+  const ready = (pool: ProviderPool) => runnableModels(pool).filter((m) => !(pool.limits?.windows ?? []).some((w) =>
+    windowCoversModel(w, m.id) && (w.status === 'rate_limited' || w.usedPercent >= PROVIDER_SPENT_THRESHOLD)));
+  const homeReady = ready(home);
+  const homePick = pickAutoModel(homeReady.length ? homeReady : home.models, prompt, { tierOverrides });
+  if (strategy === 'capacity' && homeReady.length && homePick) {
+    return { ...homePick, providerId: home.providerId, providerLabel: home.providerLabel, switched: false,
+      reason: 'Capacity fallback: this provider can still serve the turn.' };
+  }
+  const homeModel = home.models.find((m) => m.id === homePick?.modelId);
+  const homeCapability = homeModel && modelCapability(homeModel, tierOverrides).tier;
+  const minimum = strategy === 'quality' ? 2 : strategy === 'capacity' ? homeCapability ? CAPABILITY_RANK[homeCapability] : 3 : complex ? 3 : 2;
+  const candidates = pools.flatMap((pool) =>
+    ready(pool).filter((m) => modelCapability(m, tierOverrides).tier).map((m) => ({
+      pool, m, tier: CAPABILITY_RANK[modelCapability(m, tierOverrides).tier!], price: turnPrice(pool, m),
+      favorite: preferred.has(`${pool.providerId}::${m.id}`),
+    })),
+  ).filter((c) => c.tier >= minimum);
+  candidates.sort((a, b) => {
+    const local = strategy === 'local-first' ? Number(!!b.pool.local) - Number(!!a.pool.local) : 0;
+    const tier = strategy === 'quality' ? b.tier - a.tier : a.tier - b.tier;
+    const price = (a.price ?? Number.MAX_SAFE_INTEGER) - (b.price ?? Number.MAX_SAFE_INTEGER);
+    return local || (strategy === 'economical' ? price || tier : tier || price) || Number(b.favorite) - Number(a.favorite)
+      || Number(!!b.m.loaded) - Number(!!a.m.loaded)
+      || Number(b.pool === home) - Number(a.pool === home);
+  });
+  const best = candidates[0];
+  if (!best) return null;
+  const tier = modelCapability(best.m, tierOverrides).tier!;
+  return {
+    providerId: best.pool.providerId, providerLabel: best.pool.providerLabel,
+    modelId: best.m.id, name: best.m.name || best.m.id, tier: best.tier, complex,
+    switched: best.pool !== home,
+    reason: `${strategy}: ${complex ? 'complex task' : 'quick task'} → ${tier} tier → ${best.pool.providerLabel}${best.m.loaded ? ', already loaded' : ''}.`,
+  };
 }

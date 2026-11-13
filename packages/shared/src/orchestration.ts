@@ -57,6 +57,8 @@ export interface OrchestrationSettings {
   delegationRoute?: { providerId: string; modelId: string };
   /** How a sub-agent's model is chosen when no explicit route is saved and the call names none. Unset is `auto`. */
   subagentModel?: SubagentModelChoice;
+  /** Target capability for automatic selection. Unset chooses smaller than the parent. */
+  subagentTier?: import('./fusion.js').ModelCapability | 'smaller';
 }
 
 /**
@@ -68,9 +70,9 @@ export interface OrchestrationSettings {
 export type SubagentModelChoice = 'auto' | 'auto-same-provider' | 'auto-local' | 'inherit';
 
 export const SUBAGENT_MODEL_CHOICES: { id: SubagentModelChoice; label: string; description: string }[] = [
-  { id: 'auto', label: 'Auto', description: 'Lighter than the chat\'s model, on its provider. A chat on ✨ Auto may use a loaded local model.' },
+  { id: 'auto', label: 'Auto', description: 'Lighter than the chat\'s model, on its provider. Only a Fusion chat may use a loaded local model.' },
   { id: 'auto-same-provider', label: 'Auto · same provider', description: 'Lighter than the chat\'s model, never leaving its provider.' },
-  { id: 'auto-local', label: 'Auto · prefer local', description: 'A local model (loaded first), else lighter on the chat\'s provider.' },
+  { id: 'auto-local', label: 'Auto · prefer local', description: 'In Fusion, prefer a local model; otherwise stay on the chat\'s provider.' },
   { id: 'inherit', label: 'Same model as the chat', description: 'Whatever the chat runs on.' },
 ];
 

@@ -188,7 +188,7 @@ pub fn subagent_preference(orchestration: Option<&Value>) -> &'static str {
 fn subagent_preference_text(orchestration: Option<&Value>) -> &'static str {
     match subagent_preference(orchestration) {
         "auto-same-provider" => "a lighter model than this chat's, on this chat's provider",
-        "auto-local" => "a local model when one is set up, else a lighter model on this chat's provider",
+        "auto-local" => "in Fusion, a local model when set up; otherwise a lighter model on this chat's provider",
         "inherit" => "this chat's own provider and model",
         _ => "a lighter model than this chat's, chosen by Nekko",
     }
@@ -224,11 +224,12 @@ pub fn routing_prompt(providers: &[Value], orchestration: Option<&Value>) -> Str
             subagent_preference_text(orchestration)
         ),
         "Use delegation_targets to discover exact chat-model IDs on the intended provider before explicit delegation; never guess. If discovery fails, report the blocker or ask the user, not a different provider. Explicit and user-configured default routes are validated before creating a child.".into(),
+        format!("Subagent capability target: {}. Automatic picks never exceed the parent tier.", orchestration.and_then(|o| o.get("subagentTier")).and_then(Value::as_str).unwrap_or("smaller")),
         format!(
             "User-selected delegation default: {}. When set, omitted routing arguments use this route, not the parent. Explicit arguments override it.",
             safe(&js::stringify(route))
         ),
-        "There is no fallback to another provider or model on failure. Keep sensitive work on the intended provider; do not switch to a cloud provider to bypass a local failure. Incognito delegation is unavailable because child sessions are persisted.".into(),
+        "Only Fusion (both autoModel and autoProviderSwitch enabled on this chat) allows changing provider, including explicit targets and saved routes. Auto alone stays on the chat provider. There is no fallback to another provider or model on failure. Keep sensitive work on the intended provider; do not switch to a cloud provider to bypass a local failure. Incognito delegation is unavailable because child sessions are persisted.".into(),
     ]
     .join("\n")
 }

@@ -1,8 +1,9 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { FusionStrategyControl } from '../FusionSettings.js';
 import { pickerPlacement } from './pickerPlacement.js';
 import { MODEL_LIST_TIMEOUT_MS, filteredModelGroups, isModelPickerEscape, modelRowLabel, nextFavoriteModels, shouldDismissModelPickerPointer, withTimeout } from './modelPickerInteractions.js';
-import type { AutoQuality, ModelInfo, ProviderConfig } from '@nekko-agent/shared';
+import type { AutoQuality, FusionStrategy, ModelInfo, ProviderConfig } from '@nekko-agent/shared';
 import {
   AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, claudeCreditsAvailable, claudePlanNote, claudePlanUsageNotice, formatModelPriceLabel,
   isLocalProvider, limitsKeyFor, modelPricing, resolveModelAvailability, shortModelName,
@@ -44,6 +45,8 @@ export function ModelPicker({
   placeholder,
   resolvedModelId,
   footer,
+  fusionActive = false,
+  onFusion,
 }: {
   providers: ProviderConfig[];
   providerId: string | null;
@@ -78,6 +81,8 @@ export function ModelPicker({
   resolvedModelId?: string;
   /** Under the list, for what belongs with the model (such as Auto quality). */
   footer?: React.ReactNode;
+  fusionActive?: boolean;
+  onFusion?: () => void;
 }) {
   // A provider switched off on the Models page is neither listed nor contacted.
   const providers = useMemo(() => allProviders.filter((p) => p.enabled !== false && (!filterProviders || filterProviders(p))), [allProviders, filterProviders]);
@@ -216,7 +221,7 @@ export function ModelPicker({
     ? shortModelName(resolvedModelId)
     : null;
   const currentName =
-    modelId === AUTO_MODEL_ID ? '✨ Auto'
+    modelId === AUTO_MODEL_ID ? (fusionActive ? 'Fusion' : 'Auto · this provider')
       : claudeCodeResolved
         ? claudeCodeResolved
         : currentModel ? modelRowLabel(currentModel, !!currentProvider && isLocalProvider(currentProvider.kind)).name
@@ -443,7 +448,7 @@ export function ModelPicker({
                 ['cloud', 'Cloud', CloudIcon], ['local', 'Local', LaptopIcon],
               ] as const).map(([value, label, Icon]) => (
                 <button key={value} type="button" aria-pressed={scope === value}
-                  disabled={value === 'fusion' && !allowAuto}
+                  disabled={value === 'fusion' && (!allowAuto || !onFusion)}
                   title={value === 'fusion' ? (allowAuto ? 'Auto routing between models' : 'Auto routing is not available here') : `${label} models`}
                   onClick={() => setScope(value)}
                   className="quiet-tab items-center">
@@ -461,16 +466,20 @@ export function ModelPicker({
               <button
                 type="button"
                 role="option"
-                aria-selected={modelId === AUTO_MODEL_ID}
-                className="quiet-row mb-2 text-xs"
+                aria-selected={modelId === AUTO_MODEL_ID && !fusionActive}
+                className="quiet-row mb-2 shrink-0 text-xs"
                 onClick={() => { onModel(providerId ?? '', AUTO_MODEL_ID); setOpen(false); }}
                 title="Nekko Agent picks the best model for each message"
               >
-                <span className={`font-medium ${modelId === AUTO_MODEL_ID ? 'text-accent' : 'text-ink'}`}>✨ Auto</span>
-                <span className="text-2xs text-ink-faint">Picks the best model for each message</span>
-                {modelId === AUTO_MODEL_ID && <CheckIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />}
+                <span className={`font-medium ${modelId === AUTO_MODEL_ID && !fusionActive ? 'text-accent' : 'text-ink'}`}>Auto · this provider</span>
+                <span className="text-2xs text-ink-faint">Picks models without changing provider</span>
+                {modelId === AUTO_MODEL_ID && !fusionActive && <CheckIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />}
               </button>
             )}
+            {allowAuto && onFusion && !q && (scope === 'all' || scope === 'fusion') && <button type="button" role="option" aria-selected={fusionActive} className="quiet-row mb-2 shrink-0 text-xs" onClick={() => { onFusion(); setOpen(false); }}>
+              <RouteIcon className="h-3.5 w-3.5" aria-hidden="true" /><span className="font-medium">Fusion</span><span className="text-2xs text-ink-faint">Allow routing across providers</span>
+              {fusionActive && <CheckIcon className="ml-auto h-3.5 w-3.5 text-accent" aria-hidden="true" />}
+            </button>}
             <div className={stacked ? 'min-h-0 flex-1 overflow-y-auto overscroll-contain' : `grid min-h-0 flex-1 ${columns.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`} data-model-columns={columns.length}>
               {columns.map((column, index) => (
                 <section key={column.id} aria-label={`${column.label} models`} className={stacked ? 'min-w-0' : 'flex min-h-0 min-w-0 flex-col'} style={index > 0 ? (stacked ? { boxShadow: 'inset 0 1px 0 var(--line)', marginTop: 'var(--q-group)', paddingTop: 16 } : { boxShadow: 'inset 1px 0 0 var(--line)' }) : undefined} data-model-column={column.id}>
@@ -524,12 +533,16 @@ export function AutoQualityMenu({
   onPick,
   followCapacity,
   onFollowCapacity,
+  strategy,
+  onStrategy,
 }: {
   quality: AutoQuality;
   onPick: (q: AutoQuality) => void;
   /** Whether Auto may move a turn to an equivalent model elsewhere. */
   followCapacity?: boolean;
   onFollowCapacity?: (v: boolean) => void;
+  strategy?: FusionStrategy;
+  onStrategy?: (value: FusionStrategy) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -554,7 +567,7 @@ export function AutoQualityMenu({
         aria-expanded={open}
         title={`Auto profile: ${AUTO_QUALITY_META[quality].label} - ${AUTO_QUALITY_META[quality].description}`}
       >
-        <span className="ctl-menu-label">Auto</span>
+        <span className="ctl-menu-label">{followCapacity ? 'Fusion' : 'Auto'}</span>
         {AUTO_QUALITY_META[quality].label}
         <span className="ctl-caret">▾</span>
       </button>
@@ -586,14 +599,15 @@ export function AutoQualityMenu({
                 {followCapacity ? '✓' : ''}
               </span>
               <span>
-                <span className="block text-sm font-medium">Follow capacity &amp; cost</span>
+                <span className="block text-sm font-medium">Fusion · allow provider switching</span>
                 <span className="block text-2xs leading-snug text-ink-faint">
-                  When this provider is spent or an equivalent model elsewhere is much cheaper, run the turn there and say why. Never a downgrade.
+                  Replies and subagents may use other eligible providers. Off means automatic picks stay on this provider.
                 </span>
               </span>
             </button>
           )}
-          <p className="px-3 pb-1 pt-2 text-2xs text-ink-faint">Applies to this chat only.</p>
+          {followCapacity && onStrategy && <div className="px-3 py-2"><FusionStrategyControl value={strategy ?? 'balanced'} onChange={onStrategy} /><p className="mt-1 text-2xs text-ink-faint">Strategy is shared by Fusion chats.</p></div>}
+          <p className="px-3 pb-1 pt-2 text-2xs text-ink-faint">Provider permission applies to this chat only.</p>
         </div>
       )}
     </div>

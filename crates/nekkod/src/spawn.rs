@@ -67,31 +67,30 @@ fn exact(v: &Value) -> bool {
     v.as_str().is_some_and(|t| !js::trim(t).is_empty() && js::trim(t) == t)
 }
 
-/// Check the route before discovery or admission. Auto is the existing Nekko
-/// router opt-in; Fusion also enables autoProviderSwitch; the sub-agent
-/// preference `auto-local` (`local_opt_in`) is the user's opt-in for
-/// sub-agents alone. None overrides cloudOnly. An unknown source fails
-/// closed for local targets.
+/// Auto changes models; only Fusion grants provider switching. Preferences,
+/// caller snapshots and saved routes cannot override the persisted chat scope.
+fn fusion_enabled(parent: &Value) -> bool {
+    parent.get("autoModel") == Some(&Value::Bool(true))
+        && parent.get("autoProviderSwitch") == Some(&Value::Bool(true))
+        && !js::truthy(parent.get("offline"))
+        && !js::truthy(parent.get("incognito"))
+}
+
 fn check_delegation_route(
     parent: &Value,
     source: Option<&Value>,
     target: &Value,
-    local_opt_in: bool,
+    _local_opt_in: bool,
 ) -> Result<(), String> {
-    if crate::admission::cloud_provider_allowed(target) {
-        return Ok(());
-    }
-    if js::truthy(parent.get("cloudOnly")) {
+    if js::truthy(parent.get("cloudOnly")) && !crate::admission::cloud_provider_allowed(target) {
         return Err(
             "This chat runs on cloud models only, so a sub-agent cannot use a local model. No child was started."
                 .into(),
         );
     }
-    if !local_opt_in
-        && !js::truthy(parent.get("autoModel"))
-        && source.is_none_or(crate::admission::cloud_provider_allowed)
-    {
-        return Err("Cloud chats cannot delegate to local models unless Fusion mode or the Nekko router is enabled. Enable one in this chat, or choose a cloud provider. No child was started and no fallback was used.".into());
+    let same = source.is_some_and(|p| p == target || (p.get("id").is_some() && p.get("id") == target.get("id")));
+    if source.is_none() || (!same && !fusion_enabled(parent)) {
+        return Err("Provider switching requires Fusion mode, including local models and saved subagent routes. Auto stays on this provider. No child was started and no fallback was used.".into());
     }
     Ok(())
 }
@@ -107,7 +106,7 @@ async fn auto_target(
     model_id: &Value,
     preference: &str,
 ) -> Option<(Value, Value)> {
-    use crate::subagent_model::{lighter_model, local_model};
+    use crate::subagent_model::tiered_model;
     let parent_model = model_id.as_str().filter(|m| !m.is_empty())?;
     let pid = provider_id.as_str()?;
     // A parent on ✨ Auto already routes per message: its child inherits that,
@@ -123,19 +122,35 @@ async fn auto_target(
         return None;
     }
     let source_is_local = source.is_some_and(nekko_turn::providers::offline_provider_allowed);
-    if !source_is_local && matches!(preference, "auto" | "auto-local") {
+    if !source_is_local && fusion_enabled(parent) && matches!(preference, "auto" | "auto-local") {
         let loaded_only = preference == "auto";
+        let mut best: Option<(i32, bool, Value, String)> = None;
         for p in providers.iter().filter(|p| {
             js::truthy(p.get("enabled"))
                 && nekko_turn::providers::offline_provider_allowed(p)
-                && check_delegation_route(parent, source, p, preference == "auto-local").is_ok()
+                && check_delegation_route(parent, source, p, false).is_ok()
         }) {
             let Some(id) = p.get("id").and_then(Value::as_str) else { continue };
             let listed = crate::providers::list_models_status(ctx, id).await;
-            let models = listed.get("models").and_then(Value::as_array).cloned().unwrap_or_default();
-            if let Some(m) = local_model(&models, loaded_only) {
-                return Some((json!(id), json!(m)));
+            let models: Vec<Value> = listed
+                .get("models")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|m| m.get("providerId").and_then(Value::as_str) == Some(id))
+                .collect();
+            if let Some(model_id) = tiered_model(parent_model, pid, &models, settings, loaded_only, true) {
+                let model = models.iter().find(|m| m.get("id").and_then(Value::as_str) == Some(&model_id))?;
+                let rank = nekko_messaging::auto::tier_with_overrides(model, settings.pointer("/fusion/modelTiers"));
+                let loaded = model.get("loaded") == Some(&Value::Bool(true));
+                if best.as_ref().is_none_or(|(r, l, _, _)| (rank, loaded) > (*r, *l)) {
+                    best = Some((rank, loaded, json!(id), model_id));
+                }
             }
+        }
+        if let Some((_, _, provider, model)) = best {
+            return Some((provider, json!(model)));
         }
     }
     if on_auto {
@@ -143,7 +158,7 @@ async fn auto_target(
     }
     let listed = crate::providers::list_models_status(ctx, pid).await;
     let models = listed.get("models").and_then(Value::as_array).cloned().unwrap_or_default();
-    lighter_model(parent_model, &models).map(|m| (provider_id.clone(), json!(m)))
+    tiered_model(parent_model, pid, &models, settings, false, false).map(|m| (provider_id.clone(), json!(m)))
 }
 
 /// `prepareSubAgent(parent, providerId, modelId, input)`: refused with
@@ -315,8 +330,14 @@ pub async fn prepare(ctx: &Ctx, req: &Value) -> Value {
     if js::truthy(parent.get("incognito")) || js::truthy(parent.get("offline")) {
         return json!({ "error": "Offline or incognito chats cannot start or resume sub-agents." });
     }
-    let (provider_id, model_id) =
-        (req.get("providerId").cloned().unwrap_or(Value::Null), req.get("modelId").cloned().unwrap_or(Value::Null));
+    // A stale or forged caller provider must not redefine a pinned chat's scope.
+    // Fusion may legitimately execute this turn on a provider different from home.
+    let current = |key: &str| {
+        let caller = req.get(key).filter(|v| !v.is_null());
+        let saved = parent.get(key).filter(|v| !v.is_null());
+        if fusion_enabled(&parent) { caller.or(saved) } else { saved.or(caller) }.cloned().unwrap_or(Value::Null)
+    };
+    let (provider_id, model_id) = (current("providerId"), current("modelId"));
     let attempt = req.get("attempt").and_then(Value::as_u64).unwrap_or(0);
     let child = match s(req, "childId") {
         None => {
@@ -402,7 +423,7 @@ mod tests {
                     let parent = json!({"autoModel": auto, "autoProviderSwitch": switch, "cloudOnly": cloud_only});
                     assert_eq!(
                         check_delegation_route(&parent, Some(&cloud), &local, false).is_ok(),
-                        auto && !cloud_only
+                        auto && switch && !cloud_only
                     );
                     assert!(check_delegation_route(&parent, Some(&cloud), &cloud, false).is_ok());
                     assert_eq!(check_delegation_route(&parent, Some(&local), &local, false).is_ok(), !cloud_only);
@@ -425,6 +446,14 @@ mod tests {
             assert!(check_delegation_route(&json!({}), Some(&local), &local, false).is_ok());
         }
         let connected = json!({"kind": "openai-compat", "baseUrl": "http://127.0.0.1:5000/v1", "computerId": "remote"});
-        assert!(check_delegation_route(&json!({"cloudOnly": true}), Some(&cloud), &connected, false).is_ok());
+        assert!(
+            check_delegation_route(
+                &json!({"cloudOnly": true, "autoModel": true, "autoProviderSwitch": true}),
+                Some(&cloud),
+                &connected,
+                false
+            )
+            .is_ok()
+        );
     }
 }

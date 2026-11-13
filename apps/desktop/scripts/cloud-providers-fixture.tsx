@@ -15,9 +15,14 @@ Promise.all([import('../src/renderer/components/providers/AddProvider'), import(
   (window as any).providerFixture = { calls, show: (mode: string) => {
     const before = location.pathname.includes('before-cloud');
     const kind = mode === 'google' ? (before ? 'vertex' : 'gemini') : mode === 'ollama' ? (before ? 'ollama' : 'ollama-cloud') : mode;
+    // A setup renders the way the Models page shows it: the add strip, then the open setup.
+    const setup = (k: string) => <section className="models-providers">
+      <div className="models-provider-bar"><ProviderShortcuts {...{ open: k } as any} onAdd={(choice) => calls.push({ choice })} /></div>
+      <div className="provider-setup"><button type="button" className="provider-setup-close" aria-label="Close provider setup">×</button><AddProvider key={k} fixedKind={k as any} onDone={() => calls.push({ done: true })} /></div>
+    </section>;
     root.render(<main style={{ padding: 20, color: 'var(--ink)', background: 'var(--paper)', minHeight: '100vh' }}>
-      <h1>Cloud providers</h1>
-      {mode === 'chooser' ? <ProviderChoices {...{ scope: 'cloud' } as any} onPick={(choice) => calls.push({ choice })} /> : mode === 'shortcuts' ? <ProviderShortcuts onAdd={(choice) => calls.push({ choice })} /> : <AddProvider key={kind} fixedKind={kind as any} onDone={() => {}} />}
+      <h2 className="models-section-heading">Cloud providers</h2>
+      {mode === 'chooser' ? <ProviderChoices {...{ scope: 'cloud' } as any} onPick={(choice) => calls.push({ choice })} /> : mode === 'shortcuts' ? <ProviderShortcuts onAdd={(choice) => calls.push({ choice })} /> : setup(kind)}
     </main>);
   } };
 });
