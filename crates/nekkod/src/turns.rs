@@ -1299,6 +1299,7 @@ impl Turns {
             "contextBlock": block,
             "platform": facts.get("platform").cloned().unwrap_or(json!(std::env::consts::OS)),
             "workMode": loaded.get("workMode").cloned().unwrap_or(Value::Null),
+            "promptProfile": facts.pointer("/promptProfile/profile").cloned().unwrap_or(Value::Null),
         }));
 
         if shared.cancel.is_cancelled() {

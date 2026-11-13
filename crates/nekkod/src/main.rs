@@ -66,6 +66,7 @@ mod pr_autowatch;
 mod pr_checkouts;
 mod privacy;
 mod procgroup;
+mod prompt_profile;
 mod providers;
 mod remote;
 mod remote_image;
