@@ -228,9 +228,14 @@ impl Cloud {
             "cloud:billingPlans" => self.api.get(&self.token()?, "/v1/billing/plans").await.map_err(e),
             "cloud:billingCheckout" => {
                 let body = json!({ "plan": arg(args, 0) });
-                self.api.send(&self.token()?, reqwest::Method::POST, "/v1/billing/checkout", Some(body)).await.map_err(e)
+                self.api
+                    .send(&self.token()?, reqwest::Method::POST, "/v1/billing/checkout", Some(body))
+                    .await
+                    .map_err(e)
             }
-            "cloud:billingPortal" => self.api.send(&self.token()?, reqwest::Method::POST, "/v1/billing/portal", None).await.map_err(e),
+            "cloud:billingPortal" => {
+                self.api.send(&self.token()?, reqwest::Method::POST, "/v1/billing/portal", None).await.map_err(e)
+            }
             // Team accounts only (decision 0092); the API answers 404 to everyone else.
             "cloud:teamFeatures" => self.api.get(&self.token()?, "/v1/staff/features").await.map_err(e),
             "cloud:setTeamFeature" => {
