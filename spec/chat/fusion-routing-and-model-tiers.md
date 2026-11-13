@@ -5,7 +5,7 @@ area: chat
 
 # Fusion routing and model capability tiers
 
-Implementation and verification in progress for [#2731](https://github.com/nekko-labs/nekko-agent/issues/2731). Design: [editable canvas](../../nekko-designs/fusion-router-design.html).
+Implemented and locally verified in [PR #2737](https://github.com/nekko-labs/nekko-agent/pull/2737), tracking [#2731](https://github.com/nekko-labs/nekko-agent/issues/2731). Design: [editable canvas](../../nekko-designs/fusion-router-design.html).
 
 ## Intent and permission
 
@@ -59,4 +59,4 @@ Legacy default same-provider Auto keeps its established top-family downshift (in
 
 Acceptance includes both-flag truth tables, stale flags, explicit and saved routes, Cloud-only, resume after consent removal, provider-scoped classification/reset, small variants, unknown/non-chat models, all strategies, and local Small versus Medium targets. UI evidence uses synthetic production-component fixtures at matching 1200px/390px light/dark viewports with a disposable profile, denied external network and no real user data.
 
-Focused TypeScript tests, desktop typecheck and the first daemon permission regression pass. Final Rust compatibility suites, visual inspection, documentation regeneration, and published evidence are pending at this revision. No live cloud/local inference or packaged-app verification is claimed. Native phone clients do not expose these controls. Headless messaging continues its same-provider Auto route; the new cross-provider strategy controls belong to the shared renderer, not a new engine-wide headless scheduling service. A model-based classifier and measured latency/benchmark-driven tiering remain planned extensions, not implemented options.
+All 4,611 shared/desktop TypeScript tests, desktop build/typecheck, both daemon permission/tier regressions, six subagent tests and messaging/turn contract suites pass. Thirty-six isolated Electron assertions pass; narrow light/dark and wide layouts plus recorded scroll frames were inspected. Sixteen PNGs and two GIFs are published with verified URLs in PR #2737. One unrelated context-preview token golden fails identically on base, tracked in [#2736](https://github.com/nekko-labs/nekko-agent/issues/2736), with its assertion unchanged. No live cloud/local inference or packaged-app verification is claimed. Native phone clients do not expose these controls. Headless messaging continues its same-provider Auto route; the new cross-provider strategy controls belong to the shared renderer, not a new engine-wide headless scheduling service. A model-based classifier and measured latency/benchmark-driven tiering remain planned extensions, not implemented options.

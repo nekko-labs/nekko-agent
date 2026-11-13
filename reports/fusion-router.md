@@ -38,14 +38,14 @@ The native phone apps do not expose the new controls. Claude Code tier targets m
 
 ## Verification record
 
-- Desktop build and typecheck passed; shared/desktop suites passed 4,608 tests before three additional focused strategy regressions were added. The focused Fusion suite passes those additional cases.
+- Desktop build and typecheck passed; shared/desktop suites passed 4,611 tests in the final aggregate run.
 - Isolated production-component Electron fixtures passed 36 assertions at 1200px/390px in light and dark: provider lock explanation, tier options, Medium preference persistence without consent, explicit Fusion enabling, Auto disabling switching, strategy persistence, manual classification/reset, readable model names, and no overlap between routing rows and the expanded footer.
-- Matching baseline images use frozen renderer/shared source at `4d94c2e22`. Sixteen native renderer PNGs and paired scroll GIFs are captured; they are evidence of the production components with a synthetic bridge, not OS chrome or real inference. Narrow light/dark captures were inspected and initial layout failures fixed. Wide/scroll inspection and final daemon tests are pending at this revision.
+- Matching baseline images use frozen renderer/shared source at `4d94c2e22`. Sixteen native renderer PNGs and paired scroll GIFs are captured; they are evidence of the production components with a synthetic bridge, not OS chrome or real inference. Narrow light/dark, wide settings and first/middle/last scroll frames were inspected; initial layout failures were fixed. Published evidence and all 18 public URLs were verified in [PR #2737](https://github.com/nekko-labs/nekko-agent/pull/2737).
 - A full daemon unit run had 740 passing, 5 ignored and one failing context-preview golden. The identical 4438/4480 versus 4191/4233 token mismatch was reproduced on the unchanged base and filed as [#2736](https://github.com/nekko-labs/nekko-agent/issues/2736). The assertion was not changed or disabled.
-- Final daemon checks use a worktree-private copy-on-write Cargo target after a shared-cache collision with the base comparison. No cached failure is counted as verification.
+- Final daemon checks use a worktree-private copy-on-write Cargo target after a shared-cache collision with the base comparison. Both daemon regressions, six subagent tests, and the complete messaging/turn contract suites passed in that isolated target. No cached failure is counted as verification.
 
 No live provider inference, installed Claude Code compliance, native phone controls, or packaged-app behavior is claimed. The sandbox denies external network and uses synthetic catalogs/settings plus disposable profiles; it does not interact with the user's running app or real chats.
 
 ## Next steps
 
-Finish isolated Rust regressions and evidence inspection, publish and verify media in the linked PR, resolve required checks, and land. A model-based classifier, measured latency/load policies and native phone editors are future extensions, not hidden implemented features.
+Resolve required checks on [PR #2737](https://github.com/nekko-labs/nekko-agent/pull/2737) and land. A model-based classifier, measured latency/load policies and native phone editors are future extensions, not hidden implemented features.
