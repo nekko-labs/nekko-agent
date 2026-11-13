@@ -138,10 +138,10 @@
         "source": "system",
         "label": "System prompt",
         "origin": "Nekko Agent",
-        "tokens": 914,
+        "tokens": 4538,
         "pinned": false,
         "included": true,
-        "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You chat, help with writing and planning, and act on the user's machine th…"
+        "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You unify chat, cowork, and code: you hold normal conversations, help with…"
       },
       {
         "id": "mem:m-global",
@@ -154,7 +154,7 @@
         "preview": "Ship every change as a PR."
       }
     ],
-    "totalTokens": 921,
+    "totalTokens": 4545,
     "contextWindow": 128000
   },
   {

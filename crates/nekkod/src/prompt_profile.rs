@@ -37,7 +37,7 @@ fn window_label(w: f64) -> String {
     if w >= 1000.0 { format!("{}k", (w / 1000.0).round()) } else { format!("{w}") }
 }
 
-/// `settings.promptProfiles`: `{ "models": { "<providerId>::<modelId>": "small" }, "providers": { "<providerId>": "medium" } }`.
+/// `settings.promptProfiles`: `{ "auto": false, "models": { "<providerId>::<modelId>": "small" }, "providers": { "<providerId>": "medium" } }`.
 /// A value that is not small, medium or large (`auto`) counts as unset.
 fn configured(settings: &Value, group: &str, key: &str) -> Option<PromptProfile> {
     settings
@@ -59,6 +59,11 @@ pub fn resolve(
     }
     if let Some(profile) = configured(settings, "providers", provider_id) {
         return Choice { profile, reason: format!("{}: set for this provider", label(profile)) };
+    }
+    // Automatic sizing ships off (decision 0095): until the measurement in #2593
+    // shows Small beats Medium, only an explicit setting changes a prompt.
+    if settings.pointer("/promptProfiles/auto").and_then(Value::as_bool) != Some(true) {
+        return Choice { profile: PromptProfile::Large, reason: "Large: automatic sizing is off".into() };
     }
     if model_id.is_empty() {
         return Choice { profile: PromptProfile::Large, reason: "Large: no model chosen yet".into() };
@@ -87,7 +92,19 @@ mod tests {
     use super::*;
 
     fn auto_pick(kind: &str, model: &str, window: Option<f64>) -> PromptProfile {
-        resolve(&json!({}), "p", kind, model, window).profile
+        resolve(&json!({ "promptProfiles": { "auto": true } }), "p", kind, model, window).profile
+    }
+
+    #[test]
+    fn automatic_sizing_is_off_by_default() {
+        for (kind, model, window) in [("llamacpp", "qwen3-8b", Some(8192.0)), ("anthropic", "claude-sonnet-4-5", None)]
+        {
+            for settings in [json!({}), json!({ "promptProfiles": {} }), json!({ "promptProfiles": { "auto": false } })]
+            {
+                let c = resolve(&settings, "p", kind, model, window);
+                assert_eq!((c.profile, c.reason.as_str()), (PromptProfile::Large, "Large: automatic sizing is off"));
+            }
+        }
     }
 
     #[test]
@@ -109,7 +126,7 @@ mod tests {
 
     #[test]
     fn a_small_window_is_small_whatever_the_model() {
-        let c = resolve(&json!({}), "p", "llamacpp", "llama-3.3-70b", Some(8192.0));
+        let c = resolve(&json!({ "promptProfiles": { "auto": true } }), "p", "llamacpp", "llama-3.3-70b", Some(8192.0));
         assert_eq!(c.profile, PromptProfile::Small);
         assert_eq!(c.reason, "Small: 8k context");
         assert_eq!(auto_pick("llamacpp", "llama-3.3-70b", Some(16_000.0)), PromptProfile::Large);
@@ -131,13 +148,14 @@ mod tests {
             "models": { "p::big": "small", "p::auto-one": "auto" },
             "providers": { "p": "large" },
         } });
+        // Overrides work with automatic sizing off.
         let c = resolve(&settings, "p", "anthropic", "big", Some(200_000.0));
         assert_eq!((c.profile, c.reason.as_str()), (PromptProfile::Small, "Small: set for this model"));
         let c = resolve(&settings, "p", "llamacpp", "qwen3-8b", Some(8192.0));
         assert_eq!((c.profile, c.reason.as_str()), (PromptProfile::Large, "Large: set for this provider"));
         // `auto` falls through to the provider default.
         assert_eq!(resolve(&settings, "p", "llamacpp", "auto-one", None).profile, PromptProfile::Large);
-        // Another provider is untouched.
-        assert_eq!(resolve(&settings, "q", "llamacpp", "qwen3-8b", Some(32_768.0)).profile, PromptProfile::Small);
+        // Another provider is untouched: automatic sizing is off, so it stays Large.
+        assert_eq!(resolve(&settings, "q", "llamacpp", "qwen3-8b", Some(32_768.0)).profile, PromptProfile::Large);
     }
 }
