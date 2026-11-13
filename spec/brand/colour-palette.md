@@ -151,6 +151,7 @@ The previous lavender site is kept at tag `website-lavender-original`.
 `[implemented in the shared desktop/Local Web UI renderer, #2400]`
 
 - **Dusk** replaces the cool black (`#0C0C11`) as the dark neutrals of the base Dark look and of Dark Nekko and Dark Indigo: a hint of blue in panels and lines, almost none in the page. The iPhone and Android theme catalogs (written from `packages/shared/src/themes.ts`) carry Dusk for Dark Nekko and Dark Indigo; their base Dark look keeps its own palette until the phone follow-up.
+- **Cold start** (2026-11-12): the desktop window background, title-bar buttons, dark `theme-color`, splash and skeleton fallbacks also start on Dusk (`#0B0C14`, symbols `#A3A4B6`), so Dark Nekko no longer opens on a frame of the old black.
 - **State words**: each state colour has a `-text` value for words, because the base hues fall under 4.5:1 as text on light surfaces. Light: success `#226F49`, warning `#8A5A0C`, danger `#B23A2D`, attention `#A84C0A`, info `#1F6680`. Dark: the base hues, except danger `#EF6A5D`.
 - **Working is green**: `--running` is the success green (the working rocket); `--highlight` (best so far) is the warning amber. The blue running colour and the third amber are retired.
 - **Status badges** on Nekko (agent windows) use the state tokens: working and done success, needs you attention, error danger, watching neutral. They previously used the iPhone's system tints, including a blue for watching.

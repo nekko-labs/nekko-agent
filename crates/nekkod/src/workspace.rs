@@ -363,11 +363,26 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             Ok(ws.git.status(&id, folder.as_deref(), nekko_js::truthy(arg(&args, 1))).await)
         }
         "pr:sessionList" => {
-            let s = session(ctx, &text(&args, 0)).await;
+            let id = text(&args, 0);
+            let s = session(ctx, &id).await;
             let Some(messages) = s.get("messages").and_then(Value::as_array) else { return Ok(json!([])) };
+            let mut urls = nekko_store::pr::collect_session_pr_urls(messages);
+            // Sub-agents run in child chats (`parentSessionId`); the summaries roll their PRs up to this one.
+            let store = ctx.sessions.clone();
+            let below = blocking(move || {
+                store.summaries().into_iter().find(|v| v.get("id").and_then(Value::as_str) == Some(id.as_str()))
+            })
+            .await
+            .ok()
+            .flatten();
+            for u in below.as_ref().and_then(|v| v.get("prUrls")).and_then(Value::as_array).into_iter().flatten() {
+                if let Some(u) = u.as_str().filter(|u| !urls.iter().any(|x| x == u)) {
+                    urls.push(u.to_string());
+                }
+            }
             let token = github_token(&settings(ctx).await);
             Ok(Value::Array(
-                ws.prs.session_prs(messages, token.as_deref(), arg(&args, 1) == Some(&Value::Bool(true))).await,
+                ws.prs.session_prs(&urls, token.as_deref(), arg(&args, 1) == Some(&Value::Bool(true))).await,
             ))
         }
         "pr:diff" => {
@@ -444,6 +459,17 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 .await?
         }
         "design:generate" => generate_design(ctx, ws.data_dir.clone(), args).await,
+        // The board follows the project's designs folder; a folder that cannot
+        // be read still opens the board as it was saved.
+        "design:get" => {
+            let dir = ws.data_dir.clone();
+            let folder = folder_path(&folders(ctx).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
+            blocking(move || {
+                design::follow_folder(&dir, arg(&args, 0), folder.as_deref())
+                    .unwrap_or_else(|_| design::get(&dir, arg(&args, 0)))
+            })
+            .await
+        }
         _ => data_route(ws.data_dir.clone(), channel, args).await,
     }
 }
@@ -457,7 +483,6 @@ async fn data_route(dir: PathBuf, channel: &str, args: Vec<Value>) -> Result<Val
         "comments:list" => Ok(comments::list(&dir, arg(&args, 0))),
         "comment:add" => comments::add(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2), arg(&args, 3)),
         "comment:resolve" => comments::resolve(&dir, arg(&args, 0), arg(&args, 1)),
-        "design:get" => Ok(design::get(&dir, arg(&args, 0))),
         "design:updatePage" => {
             design::update_page(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2).unwrap_or(&Value::Null))
         }

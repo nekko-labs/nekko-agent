@@ -627,7 +627,7 @@ export interface NekkoApi {
   /** Forget every logged event. */
   connectionsClear(): Promise<import('./connections.js').ConnectionsStatus>;
   /** Opt-in reports: queue a UI event (`screen_viewed`, `feature_used`, `error`); ignored while reports are off. */
-  telemetryCapture(event: 'screen_viewed' | 'feature_used' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
+  telemetryCapture(event: 'screen_viewed' | 'click' | 'feature_used' | 'app_opened' | 'app_closed' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
   /** Whether reports are on, whether this build has a project to send to, and how many events wait. */
   telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */

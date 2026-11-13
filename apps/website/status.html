@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" data-theme="white">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Status · Nekko Agent</title>
+    <meta name="description" content="Whether Nekko Cloud and phone access are working right now, recent incidents, and the problems we already know about in the Nekko Agent beta." />
+    <link rel="canonical" href="https://nekkoagent.com/status" />
+    <meta name="theme-color" content="#fbf6f8" />
+    <script>(function(){var t=null;try{t=localStorage.getItem('nekko-theme');}catch(e){}if(t!=='white'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'white';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='white'?'#fbf6f8':'#0c0c11';})();</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
+    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="fonts.css?v=1" />
+    <style>
+      .legal { max-width: 720px; margin: 0 auto; padding: 120px 20px 80px; line-height: 1.65; }
+      .legal h1 { font-size: clamp(32px, 5vw, 48px); margin: 0 0 8px; }
+      .legal h2 { font-size: 22px; margin: 48px 0 12px; }
+      .legal h3 { font-size: 17px; margin: 0 0 2px; color: var(--ink); }
+      .legal p, .legal li { color: var(--muted); }
+      .legal strong { color: var(--ink); }
+      .legal a { color: var(--accent); }
+      .status-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 24px 0 8px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-2); }
+      .status-banner::before, .status-pill::before { content: ''; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--dot, var(--muted)); }
+      .status-banner-text { flex: 1; min-width: 12em; font-weight: 600; color: var(--ink); font-size: 18px; }
+      [data-state='ok'] { --dot: #2f9e66; }
+      [data-state='degraded'] { --dot: #d98a1c; }
+      [data-state='down'], [data-state='unreachable'] { --dot: #d6455d; }
+      [data-state='checking'] { --dot: var(--muted); }
+      .status-recheck { font: inherit; font-size: 14px; color: var(--ink); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+      .status-recheck:hover { border-color: var(--accent); }
+      .status-checked { margin: 0; }
+      .status-services { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 12px; }
+      .status-service, .status-incident, .status-issue { padding: 16px 20px; border: 1px solid var(--line); border-radius: 14px; }
+      .status-incidents, .status-known { display: grid; gap: 12px; }
+      .status-service-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .status-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); }
+      .status-service p, .status-incident p, .status-issue p { margin: 4px 0 0; }
+      .status-note { color: var(--ink) !important; }
+      .status-empty { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <header class="nav">
+      <a class="brand" href="/" aria-label="Nekko Agent home"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="30" height="23" /> NEKKO AGENT</a>
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="/#contributors">About us</a>
+        <a href="/docs">Docs</a>
+      </nav>
+    </header>
+
+    <main class="legal" id="status-root">
+      <h1>Status</h1>
+      <p>Whether our online services are working right now, and the problems we already know about.</p>
+
+      <div class="status-banner" data-state="checking" role="status" aria-live="polite">
+        <span class="status-banner-text">Checking our services…</span>
+        <button class="status-recheck" type="button" hidden>Check again</button>
+      </div>
+      <p class="micro status-checked"></p>
+      <noscript><p>This page needs JavaScript to check our services. The <a href="status.json">status list</a> is there as plain text.</p></noscript>
+
+      <ul class="status-services" aria-label="Services"></ul>
+      <p class="micro">The Nekko Agent app runs on your own computer, so it keeps working when these are down. Only phone access, sync, cloud machines and sending feedback need them.</p>
+
+      <h2 id="known-issues">Known issues</h2>
+      <p>Problems in the beta we already know about and are working on. If yours is here, there's no need to report it again.</p>
+      <div class="status-known"></div>
+
+      <h2>Recent incidents</h2>
+      <div class="status-incidents"></div>
+
+      <h2>Something not listed?</h2>
+      <p>Tell us with <a href="/docs/send-feedback">Send feedback</a> in the app, open an issue on <a href="https://github.com/nekko-labs/nekko-agent/issues" target="_blank" rel="noopener">GitHub</a>, or email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>. New to the beta? See <a href="/beta">what beta means</a>.</p>
+    </main>
+
+    <footer>
+      <span class="footer-brand"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="26" height="20" /> NEKKO AGENT</span>
+      <span class="micro">MIT · Made with ❤️ by the <a href="https://nekkolabs.com/#team" target="_blank" rel="noopener">Nekko Labs team</a></span>
+      <a href="/docs">Docs</a>
+      <a href="/beta">Beta</a>
+      <a href="/status">Status</a>
+      <a href="/privacy">Privacy</a>
+    </footer>
+    <script src="status.js?v=1"></script>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </body>
+</html>

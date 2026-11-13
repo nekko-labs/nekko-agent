@@ -15,7 +15,7 @@ import { runPrAction } from './PrCard.js';
 import { PlanWorking } from './PlanWorking.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import { PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
-import { useIssueInfo } from './PrLinkChip.js';
+import { issueLook, useIssueInfo } from './PrLinkChip.js';
 import { NO_STATUS, childActivity } from '../subagentActivity.js';
 
 /**
@@ -139,12 +139,6 @@ function Pass({ step }: { step: PlanStep }) {
 }
 
 /** A GitHub issue's glyph and hue, as GitHub draws them: open, done, or closed as not planned. */
-export function issueLook(issue: IssueInfo) {
-  if (issue.state === 'open') return { icon: 'record', tone: 'var(--success)', label: 'Open' } as const;
-  if (issue.stateReason === 'not_planned') return { icon: 'ban', tone: 'var(--ink-faint)', label: 'Not planned' } as const;
-  return { icon: 'check-circle', tone: 'var(--merged-ink)', label: 'Done' } as const;
-}
-
 /** A task link. A GitHub issue wears its live state; other trackers keep the tag. */
 function ProjectChip({ link }: { link: ProjectLink }) {
   const issue = useIssueInfo(link.url);

@@ -748,9 +748,10 @@ impl Prs {
         Some((gh_state(&state, j.get("mergedAt")), head))
     }
 
-    /// `listSessionPrs`: live state for every PR the chat created.
-    pub async fn session_prs(&self, messages: &[Value], token: Option<&str>, force: bool) -> Vec<Value> {
-        let urls = collect_session_pr_urls(messages);
+    /// `listSessionPrs`: live state for every PR in `urls`, the ones the chat
+    /// and its sub-agents created (`collect_session_pr_urls`, rolled up by
+    /// `nekko_store::pr::roll_up_child_pr_urls`).
+    pub async fn session_prs(&self, urls: &[String], token: Option<&str>, force: bool) -> Vec<Value> {
         let reads = urls.iter().map(|u| self.cached_info(u, token, force));
         futures_util::future::join_all(reads).await.into_iter().filter(|v| !v.is_null()).collect()
     }

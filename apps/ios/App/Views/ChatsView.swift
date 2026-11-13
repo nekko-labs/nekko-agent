@@ -34,7 +34,6 @@ struct ChatsView: View {
     @State private var showPanel = false
     /// The search field shows under the title.
     @State private var searching = false
-    @State private var viewOptionsOpen = false
     /// The pill scrolled away.
     @State private var pillHidden = false
     @Environment(Prefs.self) private var prefs
@@ -107,13 +106,10 @@ struct ChatsView: View {
     }
 
     @ViewBuilder private var rows: some View {
-            if !store.computers.isEmpty && (filter == nil || filter == store.activeId) {
-                ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-                ProtocolBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-            }
-            // The other computers in view that can't be reached now, each with Reconnect.
-            if filter != PhoneProviders.computerId {
-                FleetBanner(computer: filter).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            if computersInView {
+                // Every paired computer and its connection, in one slim row; a problem opens to its fix.
+                ConnectionStrip(details: { open(.connection) })
+                    .listRowSeparator(.hidden).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             }
             if filter == nil || filter == store.activeId, let at = store.savedListAt {
                 Label(SavedListNote.text(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
@@ -268,74 +264,109 @@ struct ChatsView: View {
     }
 
     /// Group by, sort by, and what is shown: the desktop Agents panel's view menu.
+    /// One native menu (#2449): each row names a setting and shows its value, Card
+    /// details and Show open the system's own submenus, a tap outside closes it, and
+    /// Reset appears only when the view differs from the defaults.
     private var viewMenu: some View {
-        Button { viewOptionsOpen = true } label: {
+        Menu {
+            // The quick Simple / Detailed switch atop the menu (#2055), as one compact row.
+            Picker("Agent output", selection: Binding(get: { prefs.expertMode }, set: { prefs.expertMode = $0 })) {
+                Text("Simple").tag(false)
+                Text("Detailed").tag(true)
+            }
+            .pickerStyle(.palette)
+            .accessibilityIdentifier("chats.view.mode")
+            // Each row names the setting with its current value under it (a menu's
+            // subtitle); its choices open in the system's submenu.
+            Section {
+                Menu {
+                    Picker("Group by", selection: bind(\.groupBy)) {
+                        // By computer, as the desktop offers it, once chats come from more than one place.
+                        ForEach(ChatListView.GroupBy.allCases.filter { $0 != .computer || places.count > 1 }, id: \.self) {
+                            Text(Self.groupName($0)).tag($0)
+                        }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                } label: {
+                    Text("Group by")
+                    Text(Self.groupName(view.groupBy))
+                }
+                .accessibilityIdentifier("chats.view.groupBy")
+                Menu {
+                    Picker("Sort by", selection: Binding(get: { view.sortBy }, set: { app.prefs.chatListView = view.withSort($0) })) {
+                        ForEach(ChatListView.SortBy.allCases, id: \.self) { Text(Self.sortName($0)).tag($0) }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                } label: {
+                    Text("Sort by")
+                    Text(Self.sortName(view.sortBy))
+                }
+                .accessibilityIdentifier("chats.view.sortBy")
+                // Manual order has no direction: it is whatever was dragged on the computer.
+                if view.sortBy != .manual {
+                    Menu {
+                        Picker("Order", selection: bind(\.ascending)) {
+                            Text(orderName(ascending: true)).tag(true)
+                            Text(orderName(ascending: false)).tag(false)
+                        }
+                        .pickerStyle(.inline).labelsHidden()
+                    } label: {
+                        Text("Order")
+                        Text(orderName(ascending: view.ascending))
+                    }
+                }
+            }
+            Section {
+                // Toggles keep the submenu open, so several can be flipped in one go.
+                Menu("Card details") {
+                    Toggle("Model", isOn: bind(\.showModel)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showModel")
+                    Toggle("Context window", isOn: bind(\.showContext)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showContext")
+                    Toggle("Pull requests", isOn: bind(\.showPullRequests)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showPullRequests")
+                    Toggle("Last updated", isOn: bind(\.showUpdated)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showUpdated")
+                }
+                Menu("Show") {
+                    Toggle("Previews", isOn: bind(\.showPreviews)).menuActionDismissBehavior(.disabled)
+                    Toggle("Completed chats", isOn: bind(\.showCompleted)).menuActionDismissBehavior(.disabled)
+                    Toggle("Always show groups", isOn: bind(\.showEmptyGroups)).menuActionDismissBehavior(.disabled)
+                        .accessibilityIdentifier("chats.view.showEmptyGroups")
+                    if places.count > 1 {
+                        Toggle("Computer", isOn: bind(\.showComputer)).menuActionDismissBehavior(.disabled)
+                        Toggle("Computer icons", isOn: bind(\.showComputerIcons)).menuActionDismissBehavior(.disabled)
+                    }
+                }
+            }
+            Section {
+                if view.canReorderGroups {
+                    Button { reorderingGroups = true } label: { Label("Reorder groups…", systemImage: "arrow.up.arrow.down") }
+                }
+                Button { open(.customize) } label: { Label("Customize…", systemImage: "slider.horizontal.3") }
+            }
+            // Only when there is something to reset: what does not apply is gone, not greyed.
+            if !view.isStandard {
+                Section {
+                    Button { app.prefs.chatListView = .standard } label: { Label("Reset to defaults", systemImage: "arrow.counterclockwise") }
+                        .accessibilityIdentifier("chats.view.reset")
+                }
+            }
+        } label: {
             Image(systemName: view.isStandard ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
         }
         .accessibilityLabel("View options")
         .accessibilityIdentifier("chats.view")
-        .popover(isPresented: $viewOptionsOpen) {
-          Form {
-            ExperienceModePicker()
-            Button("Customize…") { viewOptionsOpen = false; open(.customize) }
-            Picker("Group by", selection: bind(\.groupBy)) {
-                // By computer, as the desktop offers it, once chats come from more than one place.
-                ForEach(ChatListView.GroupBy.allCases.filter { $0 != .computer || places.count > 1 }, id: \.self) {
-                    Text(Self.groupName($0)).tag($0)
-                }
-            }
-            .pickerStyle(.menu)
-            .accessibilityIdentifier("chats.view.groupBy")
-            Picker("Sort by", selection: Binding(get: { view.sortBy }, set: { app.prefs.chatListView = view.withSort($0) })) {
-                ForEach(ChatListView.SortBy.allCases, id: \.self) { Text(Self.sortName($0)).tag($0) }
-            }
-            .pickerStyle(.menu)
-            // Manual order has no direction: it is whatever was dragged on the computer.
-            if view.sortBy != .manual {
-                Picker("Order", selection: bind(\.ascending)) {
-                    Text(view.sortBy == .name ? String(localized: "A to Z") : String(localized: "Oldest first")).tag(true)
-                    Text(view.sortBy == .name ? String(localized: "Z to A") : String(localized: "Newest first")).tag(false)
-                }
-                .pickerStyle(.menu)
-            }
-            // A nested popup inside this Form can leave its controls inaccessible.
-            // Keep the field switches in the same popover, like Show below.
-            DisclosureGroup("Card details") {
-                Toggle("Model", isOn: bind(\.showModel))
-                    .accessibilityIdentifier("chats.view.showModel")
-                Toggle("Context window", isOn: bind(\.showContext))
-                    .accessibilityIdentifier("chats.view.showContext")
-                Toggle("Pull requests", isOn: bind(\.showPullRequests))
-                    .accessibilityIdentifier("chats.view.showPullRequests")
-                Toggle("Last updated", isOn: bind(\.showUpdated))
-                    .accessibilityIdentifier("chats.view.showUpdated")
-            }
-            // Keep these controls in the popover: a second popup menu did not
-            // expose its toggles reliably when hosted inside this Form.
-            DisclosureGroup("Show") {
-                Toggle("Previews", isOn: bind(\.showPreviews))
-                Toggle("Completed chats", isOn: bind(\.showCompleted))
-                Toggle("Always show groups", isOn: bind(\.showEmptyGroups))
-                    .accessibilityIdentifier("chats.view.showEmptyGroups")
-                if places.count > 1 {
-                    Toggle("Computer", isOn: bind(\.showComputer))
-                    Toggle("Computer icons", isOn: bind(\.showComputerIcons))
-                }
-            }
-            if view.canReorderGroups {
-                Button { viewOptionsOpen = false; reorderingGroups = true } label: { Label("Reorder groups…", systemImage: "arrow.up.arrow.down") }
-            }
-            Divider()
-            Button("Reset to defaults") { app.prefs.chatListView = .standard }.disabled(view.isStandard)
-            Button("Done") { viewOptionsOpen = false }
-                .accessibilityIdentifier("chats.view.done")
-          }
-          .frame(minWidth: 300, idealWidth: 340, minHeight: 420)
-          .presentationCompactAdaptation(.popover)
-        }
     }
 
     private var view: ChatListView { app.prefs.chatListView }
+
+    /// A sort's direction in words: names A to Z or Z to A, dates oldest or newest first.
+    private func orderName(ascending: Bool) -> String {
+        view.sortBy == .name
+            ? (ascending ? String(localized: "A to Z") : String(localized: "Z to A"))
+            : (ascending ? String(localized: "Oldest first") : String(localized: "Newest first"))
+    }
 
     private func bind<T>(_ key: WritableKeyPath<ChatListView, T>) -> Binding<T> {
         Binding(get: { app.prefs.chatListView[keyPath: key] }, set: { app.prefs.chatListView[keyPath: key] = $0 })
@@ -596,17 +627,25 @@ struct ChatRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
-                    Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
+                    Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink)
+                        .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 }
                 if summary.chatType == "image" {
                     Label("Image", systemImage: "photo").font(.caption2).foregroundStyle(palette.accent)
                 }
-                if modelShown || contextShown != nil {
+                if modelShown || contextShown != nil || showUpdated {
                     HStack(spacing: 6) {
                         if modelShown, let model = shownModelId {
                             ModelFact(model: model, mark: ChatCard.providerMark(kind: providerKind, modelId: model))
                         }
                         if let context = contextShown { ContextFact(context: context) }
+                        if showUpdated {
+                            Spacer(minLength: 4)
+                            TimelineView(.periodic(from: .now, by: 60)) { _ in
+                                Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                                    .font(.caption2).foregroundStyle(palette.inkFaint)
+                            }
+                        }
                     }
                 }
                 if showPreview, let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
@@ -627,18 +666,15 @@ struct ChatRow: View {
                     .padding(.top, 2)
                 }
             }
-            Spacer(minLength: 6)
-            // Re-rendered each minute, so "2m" doesn't stay "2m".
-            if showUpdated { TimelineView(.periodic(from: .now, by: 60)) { _ in
-                Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
-                    .font(.caption2).foregroundStyle(palette.inkFaint).padding(.top, 3)
-            } }
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
     }
 
-    private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }
+    private var title: String {
+        let text = summary.title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return text.isEmpty ? "New chat" : text
+    }
 
     /// An image chat shows the image model it draws with, not the chat model.
     private var shownModelId: String? { summary.chatType == "image" ? summary.imageParams?.modelId : summary.modelId }

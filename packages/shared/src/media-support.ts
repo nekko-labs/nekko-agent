@@ -99,6 +99,8 @@ export function modelMediaSupport(input: {
 export function mediaSupportNotice(kind: 'image' | 'video', support: MediaSupport, modelLabel: string): string | null {
   if (support === 'yes') return null;
   const what = kind === 'image' ? 'photos' : 'videos';
+  // A video the model can't watch is still attached, as a file the agent can work with.
+  if (support === 'no' && kind === 'video') return `${modelLabel} can't watch videos, so they're attached as files.`;
   if (support === 'no') return `${modelLabel} can't take ${what}. Pick a model with vision input to send them.`;
   return `${modelLabel} may not accept ${what}; it hasn't said. Send one to find out, or pick a model known to take them.`;
 }

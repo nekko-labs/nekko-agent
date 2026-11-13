@@ -6,7 +6,7 @@ import com.nekko.android.ui.files.LogGroup
 import com.nekko.android.ui.files.logGroups
 import com.nekko.android.ui.screens.MonitorSection
 import com.nekko.android.ui.screens.monitorSections
-import com.nekko.android.ui.screens.pairedCaption
+import com.nekko.android.ui.screens.onlineCaption
 import com.nekko.android.ui.screens.pillDescription
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -15,12 +15,13 @@ import org.junit.Test
 /** The chats header's computer pill, Monitors' groups, the Logs sections and the effort slider's snapping. */
 class ListsAndControlsTest {
     @Test fun `the pill says how many computers are paired only when there are several`() {
-        assertNull(pairedCaption(0))
-        assertNull(pairedCaption(1))
-        assertEquals("2 paired", pairedCaption(2))
-        assertEquals("5 paired", pairedCaption(5))
-        assertEquals("Computer menu, Studio Mac, Online", pillDescription("Studio Mac", "Online", 1))
-        assertEquals("Computer menu, Studio Mac, Offline, 3 paired", pillDescription("Studio Mac", "Offline", 3))
+        // #2108: every computer stays connected, so the pill counts the online ones, as on the iPhone.
+        assertNull(onlineCaption(0, 0))
+        assertNull(onlineCaption(1, 1))
+        assertEquals("1 of 2 online", onlineCaption(1, 2))
+        assertEquals("5 of 5 online", onlineCaption(5, 5))
+        assertEquals("Computer menu, Studio Mac, Online", pillDescription("Studio Mac", "Online", 1, 1))
+        assertEquals("Computer menu, Computers, Offline, 2 of 3 online", pillDescription("Computers", "Offline", 2, 3))
     }
 
     @Test fun `Running and Needs you show only while they hold something`() {

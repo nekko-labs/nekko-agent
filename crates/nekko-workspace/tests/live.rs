@@ -179,6 +179,7 @@ async fn successful_stack_link_refreshes_session_membership_before_cache_expiry(
         json!({"role": "assistant", "toolCalls": [{"id": "create", "name": "bash", "input": {"command": "gh pr create --title feature --body feature"}}]}),
         json!({"role": "tool", "toolResult": {"toolCallId": "create", "output": "https://github.com/o/r/pull/5", "isError": false}}),
     ];
+    let messages = nekko_workspace::pr::collect_session_pr_urls(&messages);
     let initial = prs.session_prs(&messages, Some("tok"), false).await;
     assert_eq!(initial.len(), 1);
     assert!(initial[0].get("stack").is_none());

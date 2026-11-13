@@ -240,9 +240,6 @@
     <string name="chats_group_general">Général</string>
     <string name="chats_group_completed">Terminées</string>
     <string name="chats_group_all">Toutes les discussions</string>
-    <string name="chats_group_needs_you">Besoin de vous</string>
-    <string name="chats_group_working">En cours</string>
-    <string name="chats_group_idle">Inactif</string>
     <string name="chats_group_today">Aujourd’hui</string>
     <string name="chats_group_yesterday">Hier</string>
     <string name="chats_group_week">7 derniers jours</string>
@@ -261,4 +258,22 @@
     <string name="chats_pr_draft">brouillon</string>
     <string name="chats_pr_merged">fusionnée</string>
     <string name="chats_pr_closed">fermée</string>
+
+    <string name="chats_group_input">Attend une réponse</string>
+    <string name="chats_group_draft">Brouillon</string>
+    <string name="chats_group_building">En cours</string>
+    <string name="chats_group_verifying">Vérification</string>
+    <string name="chats_group_watching">Surveille</string>
+    <string name="chats_group_done">Terminés</string>
+    <!-- One chat list across every computer and this phone (#2108). -->
+    <string name="chats_this_phone">Ce téléphone</string>
+    <string name="chats_show_chats_from">Afficher les chats de</string>
+    <string name="chats_all_computers">Tous les ordinateurs</string>
+    <string name="chats_phone_own_models">Ses propres modèles</string>
+    <string name="chats_n_of_m_online">%1$d sur %2$d en ligne</string>
+    <string name="chats_group_computer">Ordinateur</string>
+    <string name="chats_computer_icons">Icônes des ordinateurs</string>
+    <string name="chats_phone_forget_title">Oublier ce chat ?</string>
+    <string name="chats_phone_forget_body">Ses messages sont supprimés de ce téléphone. Les données du fournisseur restent.</string>
+    <string name="chats_phone_forget">Oublier</string>
 </resources>
