@@ -4,7 +4,7 @@ import NekkoKit
 import NekkoProtocol
 import SwiftUI
 
-/// Real banner, saved transcript and composer against a memory-only computer (#2473).
+/// Real connection strip, saved transcript and composer against a memory-only computer (#2473).
 /// Run only in the disposable evidence simulator. Lifecycle work is disabled;
 /// the fixture computer, transcript cache and outbox never use real credentials or transport.
 struct QuietReconnectEvidenceFixture: View {
@@ -22,7 +22,7 @@ struct QuietReconnectEvidenceFixture: View {
             if ready {
                 ChatView(sessionId: Self.chatId)
                     .safeAreaInset(edge: .top) {
-                        ConnectionBanner()
+                        ConnectionStrip()
                             .padding(.horizontal, 16)
                             .accessibilityIdentifier("quietReconnect.banner")
                     }

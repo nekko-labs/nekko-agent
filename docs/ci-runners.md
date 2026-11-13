@@ -388,7 +388,8 @@ the VM it landed in:
 
 ```sh
 WORKERS=$(( $(sysctl -n hw.ncpu) / 2 ))   # about one simulator per 2 vCPUs
-[ "$WORKERS" -gt 4 ] && WORKERS=4          # and leave each one some memory (about 4 GB)
+MEM=$(( $(sysctl -n hw.memsize) / 6442450944 ))   # and about 6 GB of the VM for each
+[ "$MEM" -lt "$WORKERS" ] && WORKERS=$MEM; [ "$WORKERS" -gt 4 ] && WORKERS=4
 xcodebuild test-without-building ... \
   -parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS"
 ```
@@ -397,7 +398,8 @@ Parallel tests suit tests that keep their state inside the simulator. Keep seria
 share something outside it: a server or port on the host, a fixed file the job reads afterwards,
 or settings changed on the simulator from the job's script (each clone starts from the original
 simulator, not from those changes). Nekko Agent's own `ios-native.yml` splits its first-run suite
-this way and keeps its live journeys serial.
+this way and keeps its live journeys serial. At 4 GB a simulator, a 10 GB VM ran two clones and
+swapped its way into timeouts; with 6 GB it runs them one at a time.
 
 Linux jobs will get their own Linux slots, which Apple's limit does not cover.
 

@@ -72,6 +72,10 @@ impl Sink {
                         self.apply(&session, mapped, renamed).await;
                     }
                 }
+                // Kept past the end of this turn, until its notification.
+                Subagent::Backgrounded { call_id } => {
+                    self.harness.with_subagent(&parent.id, &call_id, |run| run.background = true);
+                }
                 Subagent::Ended { call_id, outcome } => self.end(&parent.id, &call_id, outcome).await,
             }
         }
@@ -88,8 +92,22 @@ impl Sink {
     async fn end(&self, parent_id: &str, call_id: &str, outcome: Outcome) {
         // Also reached for a background command's notification, which has no child.
         let Some(mut run) = self.harness.remove_subagent(parent_id, call_id) else { return };
-        let mapped = run.mapper.close(outcome);
-        self.apply(&run.session, mapped, false).await;
+        let mut mapped = run.mapper.close(outcome);
+        // What the stream missed, from the transcript Claude Code saved.
+        let (store, snapshot) = (self.store.clone(), lock(&run.session).clone());
+        let filled = tokio::task::spawn_blocking(move || saved_transcript(&store, &snapshot)).await.ok().flatten();
+        let filled = filled.is_some_and(|messages| {
+            if let Some(obj) = lock(&run.session).as_object_mut() {
+                obj.insert("messages".into(), Value::Array(messages));
+                obj.insert("transcriptFilledAt".into(), json!(nekko_js::now_ms()));
+            }
+            true
+        });
+        if filled {
+            // The saved transcript already holds the step that was in progress.
+            mapped.retain(|m| !matches!(m, Mapped::Message(_)));
+        }
+        self.apply(&run.session, mapped, filled).await;
     }
 
     async fn start(
@@ -173,6 +191,60 @@ impl Sink {
             self.hub.publish("agent:event", event, false);
         }
     }
+}
+
+/// A Claude Code sub-agent's child chat, filled from the transcript Claude
+/// Code saved for it (`subagents/agent-*.jsonl`): its opening task message,
+/// then every saved step. `None` unless that holds more than the chat has and
+/// every tool call the chat already shows, so a wrong or older file never
+/// replaces it. Sub-agent lines reach Nekko only while it reads the stream,
+/// and a background one could outlive that (#2645).
+pub fn saved_transcript(store: &SessionStore, child: &Value) -> Option<Vec<Value>> {
+    let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+    if child.get("claudeCodeSubagent") != Some(&Value::Bool(true)) {
+        return None;
+    }
+    let (id, parent_id, call) = (text(child, "id")?, text(child, "parentSessionId")?, text(child, "spawnCallId")?);
+    let parent = store.meta(&parent_id)?.into_value();
+    let session = text(&parent, "claudeCodeSessionId")?;
+    let config = nekko_harness::claude_config_dir(text(&parent, "claudeCodeAccount").as_deref())?;
+    let path = nekko_harness::find_transcript(&config, &session, &call)?;
+    let saved = nekko_harness::transcript_messages(&nekko_harness::read_transcript(&path), &id, &call);
+    let have: &[Value] = child.get("messages").and_then(Value::as_array).map_or(&[], Vec::as_slice);
+    let task = have.first().filter(|m| m.get("id").and_then(Value::as_str).is_some_and(|i| i.ends_with("_task")));
+    let (had_ids, saved_ids) = (nekko_harness::tool_call_ids(have), nekko_harness::tool_call_ids(&saved));
+    let more = saved_ids.len() > had_ids.len() || saved.len() > have.len() - usize::from(task.is_some());
+    if saved.is_empty() || !more || !had_ids.is_subset(&saved_ids) {
+        return None;
+    }
+    Some(task.cloned().into_iter().chain(saved).collect())
+}
+
+/// At startup: fill the child chats of Claude Code sub-agents that ended
+/// short, from the transcripts Claude Code saved (until #2645 a background
+/// sub-agent's chat stopped recording when the turn that started it ended).
+/// A filled chat keeps its `updatedAt`, so the chat lists do not reorder.
+/// Chats untouched for over 30 days are left alone. Returns how many it filled.
+pub fn fill_short_chats(store: &SessionStore) -> usize {
+    const RECENT_MS: u64 = 30 * 24 * 60 * 60 * 1000;
+    let now = nekko_js::now_ms();
+    let mut filled = 0;
+    for mut child in store.list_containing("\"claudeCodeSubagent\"") {
+        let updated = child.get("updatedAt").and_then(Value::as_u64).unwrap_or(0);
+        if child.get("transcriptFilledAt").is_some() || now.saturating_sub(updated) > RECENT_MS {
+            continue;
+        }
+        let Some(messages) = saved_transcript(store, &child) else { continue };
+        if let Some(obj) = child.as_object_mut() {
+            obj.insert("messages".into(), Value::Array(messages));
+            obj.insert("transcriptFilledAt".into(), json!(now));
+        }
+        match store.put_synced(&child) {
+            Ok(()) => filled += 1,
+            Err(e) => eprintln!("nekkod: could not fill a sub-agent's chat: {e}"),
+        }
+    }
+    filled
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {

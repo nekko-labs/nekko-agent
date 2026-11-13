@@ -488,7 +488,66 @@ export function collectSessionPrInteractions(messages: PrMessages, knownUrls: re
   return results.sort((a, b) => a.order - b.order).map(({ order: _order, ...interaction }) => interaction);
 }
 
-/** Only successful PR-creation tool results attach PRs to this chat. */
+/**
+ * Shell tools whose commands can open a PR: Nekko's `bash`, Claude Code's `Bash`,
+ * and Claude Code's `PowerShell` on Windows.
+ * Keep aligned with `crates/nekko-store/src/pr.rs::SHELL_TOOLS`.
+ */
+const SHELL_TOOLS = new Set(['bash', 'Bash', 'PowerShell', 'powershell']);
+
+/** A PowerShell here-string (`@'` ... `'@`, or the `"` form): text, never commands. */
+const HERE_STRING_RE = /@(['"])\r?\n[\s\S]*?\r?\n\1@/g;
+
+/**
+ * The top-level commands of a shell line: split on unquoted line breaks, `;`,
+ * `&` (so `&&` and `2>&1` too) and `|`. Quoted text stays inside its command,
+ * so a script or fixture that mentions `gh pr create` is never a command.
+ * `escape` is the shell's escape character: `\` in bash, a backtick in PowerShell.
+ */
+function topLevelCommands(command: string, escape: string): string[] {
+  const commands: string[] = [];
+  let current = '';
+  let quote = '';
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+    if (ch === escape && quote !== "'") {
+      current += ch + (command[++i] ?? '');
+    } else if (quote) {
+      if (ch === quote) quote = '';
+      current += ch;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+    } else if (/[\r\n;&|]/.test(ch)) {
+      commands.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  commands.push(current.trim());
+  return commands.filter(Boolean);
+}
+
+/** `gh pr create`, or a POST to the pulls API, as a command of its own (after env or `$var =` prefixes). */
+const CREATE_COMMAND_RE = /^(?:\$[A-Za-z_][\w:]*\s*=\s*|[A-Za-z_]\w*=\S*\s+)*gh\s+(?:pr\s+create(?:\s|$)|api\s+\/?(?:repos\/)?[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pulls(?:\s|$)(?=.*(?:-X|--method)\s+POST\b))/;
+
+/** A line that is exactly a PR URL, as `gh pr create` prints the PR it opened. */
+const BARE_PR_URL_RE = /^https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+$/;
+
+/**
+ * Only successful PR-creation tool results attach PRs to this chat.
+ *
+ * A call counts when one of its top-level commands is `gh pr create` (or a POST
+ * to the pulls API), as agents really run it: alone, after `cd` or `git push`,
+ * with a body written by a heredoc or a PowerShell here-string first, or
+ * followed by `gh pr merge --auto`. Its output must then hold the new PRs'
+ * URLs as bare lines, no more of them than it ran create commands; anything
+ * else is ambiguous and attaches nothing. So does a create that found the PR
+ * already existed (that PR may be another chat's).
+ * Keep aligned with `crates/nekko-store/src/pr.rs::collect_session_pr_urls`
+ * (`fixtures/pr-creation.json` runs against both).
+ */
 export function collectSessionPrUrls(messages: Array<{
   role?: string; content?: string;
   toolCalls?: Array<{ id: string; name: string; input?: Record<string, unknown> }>;
@@ -499,25 +558,17 @@ export function collectSessionPrUrls(messages: Array<{
   for (const m of messages) {
     const result = m.toolResult;
     const call = result?.toolCallId ? calls.get(result.toolCallId) : undefined;
-    // Nekko's `bash`, or Claude Code's own `Bash` in a Claude Agent chat.
-    if (!call || result?.isError || (call.name !== 'bash' && call.name !== 'Bash')) continue;
-    // A heredoc body (how Claude Code passes `--body`) is the command's text,
-    // not more commands: it is set aside before the checks below. So is one
-    // leading `cd <dir> &&`, how Claude Code runs a command in a worktree.
-    // A trailing `2>&1 | tail -5` only trims what it printed.
-    const command = String(call.input?.command ?? '').replace(HEREDOC_BODY_RE, '<<HEREDOC').trim()
-      .replace(LEADING_CD_RE, '').replace(TRAILING_TRIM_RE, '');
-    // Do not classify strings embedded in scripts, quoted fixtures, or shell
-    // batches as creation. Fail closed when output provenance is ambiguous.
-    if (!command.startsWith('gh ') || /[\r\n;&|`]/.test(command)) continue;
-    const create = /^gh\s+pr\s+create(?:\s|$)/.test(command);
-    const api = /^gh\s+api\s+(?:repos\/)?[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pulls(?:\s|$)/.test(command)
-      && /(?:-X|--method)\s+POST\b/.test(command);
-    if (!create && !api) continue;
-    // `gh pr create` prints the PR's URL last, after any warnings (with `2>&1`).
-    const output = (result?.output ?? '').trim();
-    const value = create ? output.split(/\r?\n/).pop()!.trim() : output;
-    if (/^https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+$/.test(value)) urls.add(value);
+    if (!call || result?.isError || !SHELL_TOOLS.has(call.name)) continue;
+    const raw = String(call.input?.command ?? '');
+    const powershell = call.name.toLowerCase() === 'powershell';
+    // Body text (a bash heredoc or a PowerShell here-string) is not commands.
+    const command = powershell ? raw.replace(HERE_STRING_RE, "''") : raw.replace(HEREDOC_BODY_RE, '<<HEREDOC');
+    const creates = topLevelCommands(command, powershell ? '`' : '\\').filter(c => CREATE_COMMAND_RE.test(c)).length;
+    if (!creates) continue;
+    const output = (result?.output ?? '').replace(/\x1b\[[0-9;]*m/g, '');
+    if (/\balready exists\b/i.test(output)) continue;
+    const found = [...new Set(output.split(/\r?\n/).map(line => line.trim()).filter(line => BARE_PR_URL_RE.test(line)))];
+    if (found.length <= creates) found.forEach(url => urls.add(url));
   }
   return [...urls];
 }

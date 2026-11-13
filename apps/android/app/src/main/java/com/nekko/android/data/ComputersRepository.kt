@@ -890,6 +890,26 @@ class ComputersRepository(
     }
 
     /**
+     * The service section's link to one computer (#2059): live only while [computerId] is the
+     * active computer and online, and every call checks that again, so nothing meant for one
+     * computer reaches another. Changes are signed ([callChange]) and never retried here.
+     */
+    fun serviceLink(computerId: String): com.nekko.android.computer.ServiceLink = object : com.nekko.android.computer.ServiceLink {
+        override fun connection(): Any? = client?.takeIf { _state.value.activeId == computerId && _state.value.conn == RelayState.ONLINE }
+
+        private fun live(): Remote = (connection() as? Remote) ?: throw RelayException("The connection changed. Refresh this computer’s service status before trying again.")
+
+        override suspend fun read(channel: String): JsonElement = live().callWithTimeout(SERVICE_READ_TIMEOUT_MS, channel)
+
+        override suspend fun change(channel: String, stepUp: StepUpProof?): JsonElement {
+            val r = live()
+            return callChange(channel, emptyList(), stepUp, timeoutMs = SERVICE_CHANGE_TIMEOUT_MS, authorize = {
+                check(client === r && _state.value.activeId == computerId) { "The connection changed. Refresh this computer’s service status before trying again." }
+            })
+        }
+    }
+
+    /**
      * A fresh step-up challenge from the active computer (SK-7): single use,
      * two minutes, and which kinds of method it has. Fetched for every try.
      */
@@ -1390,6 +1410,9 @@ class ComputersRepository(
         const val INDEX_KEY = "nekko.computers"
         const val ACTIVE_KEY = "nekko.activeComputer"
         const val DEVICE_KEY = "nekko.deviceId"
+        /** The service section's reads, and its changes (an install may take a while to be accepted), as on the iPhone. */
+        const val SERVICE_READ_TIMEOUT_MS = 10_000L
+        const val SERVICE_CHANGE_TIMEOUT_MS = 60_000L
         fun secretKey(id: String) = "nekko.computer.$id"
     }
 }

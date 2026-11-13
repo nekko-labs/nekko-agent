@@ -8,6 +8,10 @@
 //! `JSON.stringify(store, null, 2)` layout. Writes are serialized and atomic.
 //! Unlike the TS host, a generation re-reads the board after the model
 //! answers, so an edit made while it ran is kept.
+//!
+//! The board also follows the project's `nekko-designs/` folder
+//! ([`follow_folder`], not in the TS host): a design an agent or a person
+//! saves there becomes a card, and an edit to a card's file shows on the card.
 
 use crate::files;
 use nekko_js as js;
@@ -223,9 +227,168 @@ pub fn update_page(
     })
 }
 
-/// `removeDesignPage(workspaceId, pageId)`.
+/// `removeDesignPage(workspaceId, pageId)`. A removed card's file stays on
+/// disk, so it is remembered as dismissed and [`follow_folder`] leaves it off
+/// the board.
 pub fn remove_page(data_dir: &Path, workspace: Option<&Value>, page_id: Option<&Value>) -> Result<Value, String> {
-    edit(data_dir, &key_of(workspace), |list| Ok(list.into_iter().filter(|p| p.get("id") != page_id).collect()))
+    let ws = key_of(workspace);
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut store = load(data_dir);
+    if !store.is_object() {
+        store = json!({});
+    }
+    let list = pages(&store, &ws);
+    let file = list.iter().find(|p| p.get("id") == page_id).and_then(file_of).map(str::to_string);
+    let next: Vec<Value> = list.into_iter().filter(|p| p.get("id") != page_id).collect();
+    store[ws.as_str()] = Value::Array(next);
+    if let Some(file) = file {
+        let key = dismissed_key(&ws);
+        let mut dismissed = dismissed(&store, &ws);
+        if !dismissed.iter().any(|d| file_key(d) == file_key(&file)) {
+            dismissed.push(file);
+        }
+        store[key.as_str()] = json!(dismissed);
+    }
+    save(data_dir, &store)?;
+    Ok(board(&ws, &store))
+}
+
+/// Where a workspace's dismissed design files are kept, beside the boards. No
+/// workspace id contains `#`, so it is never read as a board.
+fn dismissed_key(workspace: &str) -> String {
+    format!("{workspace}#dismissed")
+}
+
+/// The design files whose cards were removed from this workspace's board.
+fn dismissed(store: &Value, workspace: &str) -> Vec<String> {
+    match store.get(dismissed_key(workspace)) {
+        Some(Value::Array(a)) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// A card's prototype file, when it has one.
+fn file_of(page: &Value) -> Option<&str> {
+    page.get("file").and_then(Value::as_str).filter(|f| !f.is_empty())
+}
+
+/// A path as the board compares files: either separator, any case.
+fn file_key(p: &str) -> String {
+    p.replace('\\', "/").to_lowercase()
+}
+
+/// The most files one board adopts from its folder.
+const FOLLOW_LIMIT: usize = 200;
+
+/// A design file's HTML when the board can hold it: complete, text, markup,
+/// and within the size [`revise`] accepts.
+fn read_design(file: &str) -> Option<String> {
+    let read = files::read_file(file).ok()?;
+    if js::truthy(read.get("binary")) || js::truthy(read.get("truncated")) {
+        return None;
+    }
+    let html = read.get("content")?.as_str()?;
+    (html.contains('<') && html.len() <= 1_000_000).then(|| html.to_string())
+}
+
+/// A card's label for an adopted file: the page's `<title>`, else its file
+/// name as words (`checkout-design.html` is "Checkout design").
+fn adopted_label(html: &str, name: &str) -> String {
+    // ASCII lower-casing keeps every byte offset, so they index `html` too.
+    let lower = html.to_ascii_lowercase();
+    let title = lower.find("<title").and_then(|at| {
+        let from = at + lower[at..].find('>')? + 1;
+        let to = from + lower[from..].find("</title")?;
+        let text = html[from..to].split_whitespace().collect::<Vec<_>>().join(" ");
+        (!text.is_empty()).then(|| text.chars().take(60).collect::<String>())
+    });
+    if let Some(title) = title {
+        return title;
+    }
+    let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
+    let words = stem.replace(['-', '_'], " ");
+    let mut chars = words.trim().chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => "Design".into(),
+    }
+}
+
+/// The board, brought in step with the project's `nekko-designs/` folder
+/// first. `folder` is the workspace's saved path, when it has one.
+///
+/// - A concept whose file changed on disk (an agent or a person edited it)
+///   takes the file's HTML; the HTML it had is kept as a revision.
+/// - An HTML file in the folder that no card owns becomes a concept card with
+///   origin `file`, unless its card was removed before.
+///
+/// Nothing is written when nothing changed, and never to the folder.
+pub fn follow_folder(data_dir: &Path, workspace: Option<&Value>, folder: Option<&str>) -> Result<Value, String> {
+    let ws = key_of(workspace);
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut store = load(data_dir);
+    let mut list = pages(&store, &ws);
+    let mut changed = false;
+
+    for page in &mut list {
+        if page.get("kind").and_then(Value::as_str) != Some("concept") {
+            continue;
+        }
+        let Some(html) = file_of(page).and_then(read_design) else { continue };
+        if page.get("html").and_then(Value::as_str) != Some(html.as_str()) {
+            *page = revise(page, &json!({ "html": html }))?;
+            changed = true;
+        }
+    }
+
+    let dir = folder.map(|f| path::join(&[f, "nekko-designs"])).filter(|d| nekko_tools::nodefs::exists(d));
+    if let Some(dir) = dir {
+        let mut skip: std::collections::HashSet<String> = list.iter().filter_map(file_of).map(file_key).collect();
+        skip.extend(dismissed(&store, &ws).iter().map(|d| file_key(d)));
+        let mut names: Vec<String> = nekko_tools::nodefs::read_dir(&dir)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|e| !e.is_dir && is_html(&e.name))
+            .map(|e| e.name)
+            .collect();
+        names.sort();
+        let now = now_ms();
+        for name in names.into_iter().take(FOLLOW_LIMIT) {
+            let file = path::join(&[&dir, &name]);
+            if !skip.insert(file_key(&file)) {
+                continue;
+            }
+            let Some(html) = read_design(&file) else { continue };
+            let mut page = Map::new();
+            page.insert("id".into(), json!(nekko_js::try_uuid()?));
+            page.insert("kind".into(), json!("concept"));
+            page.insert("label".into(), json!(adopted_label(&html, &name)));
+            page.insert("url".into(), json!(""));
+            page.insert("html".into(), json!(html));
+            page.insert("origin".into(), json!("file"));
+            page.insert("file".into(), json!(file));
+            page.insert("notes".into(), json!([]));
+            page.insert("createdAt".into(), json!(now));
+            page.insert("updatedAt".into(), json!(now));
+            list.push(Value::Object(page));
+            changed = true;
+        }
+    }
+
+    if changed {
+        if !store.is_object() {
+            store = json!({});
+        }
+        store[ws.as_str()] = Value::Array(list);
+        save(data_dir, &store)?;
+    }
+    Ok(board(&ws, &store))
+}
+
+/// Does the name end in `.html` or `.htm`, any case?
+fn is_html(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".html") || lower.ends_with(".htm")
 }
 
 /// `{ ...p, [key]: value, updatedAt }` keeping each key where it was.

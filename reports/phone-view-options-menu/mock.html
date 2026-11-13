@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chat list view options: one level (#2449)</title>
+<style>
+  /* Tokens: Light Nekko and Dusk, from apps/desktop/src/renderer/styles.css. */
+  .light { --paper:#fbfbfd; --surface:#ffffff; --surface-2:#f2f2f7; --ink:#17171d; --ink-soft:#52525e; --ink-faint:#6c6c77; --line:#e8e8ef; --accent:#5a2352; --scrim:rgba(23,23,29,.10); --glass:rgba(255,255,255,.78); --glass-sep:rgba(23,23,29,.08); --row-line:#e8e8ef; }
+  .dusk  { --paper:#0b0c14; --surface:#14151f; --surface-2:#1d1f2c; --ink:#eaeaf4; --ink-soft:#a3a4b6; --ink-faint:#87899b; --line:#252735; --accent:#c084b5; --scrim:rgba(0,0,0,.28); --glass:rgba(37,39,53,.82); --glass-sep:rgba(0,0,0,.35); --row-line:#252735; }
+
+  * { box-sizing:border-box; margin:0; }
+  body { background:#e9e7ee; font-family:-apple-system, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif; color:#17171d; padding:40px 44px 48px; width:1420px; }
+  h1 { font-size:20px; font-weight:600; letter-spacing:-.01em; }
+  .lede { font-size:13px; color:#52525e; margin-top:4px; max-width:880px; line-height:1.45; }
+  .platform { display:flex; align-items:baseline; gap:12px; margin:32px 0 12px; }
+  .platform h2 { font-size:16px; font-weight:600; }
+  .platform span { font-size:12px; color:#6c6c77; }
+  .row { display:flex; gap:28px; }
+  figure { width:430px; }
+  figcaption { font-size:12px; color:#52525e; margin-top:10px; line-height:1.4; }
+  figcaption b { color:#17171d; font-weight:500; }
+
+  /* Phone */
+  .phone { position:relative; width:430px; height:720px; border-radius:44px; overflow:hidden; background:var(--paper); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08), 0 16px 40px rgba(30,20,40,.14); }
+  .android.phone { border-radius:28px; }
+  .status { height:50px; display:flex; align-items:center; justify-content:space-between; padding:0 34px 0 40px; font-size:15px; font-weight:600; }
+  .android .status { height:36px; padding:0 22px; font-size:13px; font-weight:500; }
+  .bar { height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 18px; }
+  .pill { height:34px; border-radius:17px; background:var(--surface-2); display:flex; align-items:center; gap:8px; padding:0 14px; font-size:14px; font-weight:500; }
+  .dot { width:7px; height:7px; border-radius:50%; background:#2f9e6b; }
+  .tools { display:flex; gap:18px; color:var(--ink-soft); }
+  .tool { width:34px; height:34px; border-radius:17px; display:grid; place-items:center; }
+  .tool.on { background:var(--surface-2); color:var(--ink); }
+  .tool.changed { color:var(--accent); }
+  .title { font-size:32px; font-weight:700; padding:6px 20px 12px; letter-spacing:-.01em; }
+  .android .title { font-size:22px; font-weight:500; padding:4px 20px 12px; }
+  .group { padding:14px 20px 6px; font-size:14px; font-weight:500; color:var(--accent); display:flex; gap:6px; align-items:center; }
+  .chat { padding:10px 20px 10px 46px; border-bottom:1px solid var(--row-line); }
+  .chat b { display:block; font-size:16px; font-weight:600; }
+  .chat i { display:block; font-style:normal; font-size:13px; color:var(--ink-soft); margin-top:3px; }
+  .scrim { position:absolute; inset:0; background:var(--scrim); }
+
+  /* iOS native menu (Liquid Glass) */
+  .menu { position:absolute; top:104px; right:14px; width:262px; border-radius:26px; background:var(--glass); backdrop-filter:blur(30px) saturate(1.6); -webkit-backdrop-filter:blur(30px) saturate(1.6); box-shadow:0 12px 40px rgba(0,0,0,.22), 0 0 0 .5px rgba(0,0,0,.06); padding:6px 0; overflow:hidden; }
+  .dusk .menu { box-shadow:0 12px 40px rgba(0,0,0,.55), 0 0 0 .5px rgba(255,255,255,.07); }
+  .sec + .sec { border-top:8px solid var(--glass-sep); }
+  .head { font-size:12px; color:var(--ink-faint); padding:10px 18px 2px 44px; }
+  .it { display:flex; align-items:center; min-height:44px; padding:0 16px 0 44px; position:relative; font-size:17px; letter-spacing:-.02em; }
+  .it + .it::before { content:""; position:absolute; top:0; left:44px; right:0; height:.5px; background:var(--glass-sep); }
+  .it .lab { flex:1; display:flex; flex-direction:column; justify-content:center; padding:9px 0; }
+  .it .sub { font-size:14px; color:var(--ink-soft); margin-top:1px; letter-spacing:-.01em; }
+  .it .check { position:absolute; left:16px; top:50%; transform:translateY(-50%); color:var(--ink); }
+  .it .ic { color:var(--ink); display:grid; place-items:center; width:22px; }
+  .it .chev { color:var(--ink-faint); }
+  .it.reset { color:var(--accent); }
+  .palette { display:flex; gap:6px; padding:8px 12px 10px; }
+  .seg { flex:1; height:40px; border-radius:20px; display:grid; place-items:center; font-size:15px; font-weight:500; color:var(--ink); background:rgba(127,127,140,.12); }
+  .seg.on { background:var(--accent); color:var(--surface); }
+  .dusk .seg.on { color:var(--paper); }
+  .it.pressed { background:rgba(127,127,140,.14); }
+
+  /* iOS submenu: the parent row stays, dimmed, above the opened menu */
+  .menu.parent { opacity:.42; transform:scale(.97); transform-origin:top right; filter:blur(.4px); }
+  .menu.child { top:142px; right:20px; width:262px; }
+  .child-title { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; color:var(--ink-soft); padding:10px 16px 8px 44px; position:relative; }
+  .child-title .back { position:absolute; left:16px; color:var(--ink-faint); }
+
+  /* Android Material 3 dropdown */
+  .md { position:absolute; top:84px; right:12px; width:248px; border-radius:16px; background:var(--surface-2); box-shadow:0 2px 6px rgba(0,0,0,.15), 0 8px 24px rgba(0,0,0,.16); padding:8px 0; }
+  .dusk .md { background:#252735; box-shadow:0 2px 6px rgba(0,0,0,.45), 0 8px 24px rgba(0,0,0,.45); }
+  .md .hd { font-size:12px; font-weight:500; color:var(--ink-soft); padding:8px 16px 4px; }
+  .md .rule { height:1px; background:var(--line); margin:8px 0; }
+  .dusk .md .rule { background:#33364a; }
+  .mi { display:flex; align-items:center; gap:12px; height:48px; padding:0 12px 0 16px; font-size:14px; letter-spacing:.01em; }
+  .mi .ic { width:24px; display:grid; place-items:center; color:var(--ink-soft); }
+  .mi .lab { flex:1; }
+  .mi .val { font-size:14px; color:var(--ink-soft); }
+  .mi .chev, .mi .tick { color:var(--ink-soft); display:grid; place-items:center; width:24px; }
+  .mi .tick.on { color:var(--accent); }
+  .mi.on .ic { color:var(--accent); }
+  .mi.reset { color:var(--accent); }
+  .mi.back { font-weight:500; }
+  .mi.back .ic { color:var(--ink); }
+
+  .notes { margin-top:36px; display:grid; grid-template-columns:repeat(3, 1fr); gap:28px; font-size:13px; line-height:1.5; color:#52525e; }
+  .notes b { display:block; color:#17171d; font-weight:600; font-size:13px; margin-bottom:4px; }
+  svg { display:block; }
+</style>
+</head>
+<body>
+<h1>Chat list view options, one level</h1>
+<p class="lede">One native menu replaces the glass panel inside a glass panel. No scroll bar, no blank row, no Done (a tap outside closes it). Every row is the same kind of row: a name, its current value under or beside it, a chevron when it opens choices. Reset to defaults appears only when the view differs from the defaults.</p>
+
+<!-- Icons (16-24px line, one stroke) -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="check" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="chev" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="back" viewBox="0 0 16 16"><path d="M10 3.5L5.5 8 10 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="arrowback" viewBox="0 0 24 24"><path d="M19 12H5m6-6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="bubble" viewBox="0 0 24 24"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+    <symbol id="code" viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="filter" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 9.5h9M9.5 12.5h5M11 15.5h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="filterfill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="currentColor"/><path d="M7.5 9.5h9M9.5 12.5h5M11 15.5h2" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="sort" viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="compose" viewBox="0 0 24 24"><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6M17.5 3.5l3 3L12 15H9v-3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+    <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="updown" viewBox="0 0 24 24"><path d="M8 4v16m0-16L5 7m3-3l3 3M16 20V4m0 16l-3-3m3 3l3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="reset" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4v3.5H8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="tickbox" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<template id="ios-list">
+  <div class="status"><span>16:52</span><span>5G</span></div>
+  <div class="bar">
+    <div class="pill"><span class="dot"></span>gomi</div>
+    <div class="tools"><div class="tool on"><svg width="24" height="24"><use href="#filter"/></svg></div><div class="tool"><svg width="24" height="24"><use href="#compose"/></svg></div></div>
+  </div>
+  <div class="title">Chats</div>
+  <div class="group"><svg width="12" height="12"><use href="#chev"/></svg>Needs you</div>
+  <div class="group"><svg width="12" height="12" style="transform:rotate(90deg)"><use href="#chev"/></svg>Done</div>
+  <div class="chat"><b>Fix CI on the batch runner</b><i>The batch is green again; the stale UI test was the cause.</i></div>
+  <div class="chat"><b>Finish the release notes</b><i>The notes are drafted and linked from the issue.</i></div>
+  <div class="chat"><b>Nekko agent beanie</b><i>Nekko now wears a knitted cat-ear beanie under Winter.</i></div>
+  <div class="chat"><b>Check default agent folder</b><i>Local agents can read ~/.nekko-agent by default.</i></div>
+  <div class="chat"><b>Plan the week</b><i>Three goals for Monday.</i></div>
+  <div class="scrim"></div>
+</template>
+
+<template id="md-list">
+  <div class="status"><span>16:52</span><span>5G</span></div>
+  <div class="bar">
+    <div class="pill"><span class="dot"></span>gomi</div>
+    <div class="tools"><div class="tool on"><svg width="24" height="24"><use href="#sort"/></svg></div><div class="tool"><svg width="24" height="24"><use href="#gear"/></svg></div></div>
+  </div>
+  <div class="title">Chats</div>
+  <div class="group"><svg width="12" height="12"><use href="#chev"/></svg>Needs you</div>
+  <div class="group"><svg width="12" height="12" style="transform:rotate(90deg)"><use href="#chev"/></svg>Done</div>
+  <div class="chat"><b>Fix CI on the batch runner</b><i>The batch is green again; the stale UI test was the cause.</i></div>
+  <div class="chat"><b>Finish the release notes</b><i>The notes are drafted and linked from the issue.</i></div>
+  <div class="chat"><b>Nekko agent beanie</b><i>Nekko now wears a knitted cat-ear beanie under Winter.</i></div>
+  <div class="chat"><b>Check default agent folder</b><i>Local agents can read ~/.nekko-agent by default.</i></div>
+  <div class="chat"><b>Plan the week</b><i>Three goals for Monday.</i></div>
+  <div class="chat"><b>Write the docs page</b><i>The page is drafted.</i></div>
+  <div class="scrim"></div>
+</template>
+
+<div class="platform"><h2>iPhone</h2><span>SwiftUI Menu: Simple / Detailed as a palette row, Picker(.menu) rows show their value, submenus for Card details and Show, toggles keep the menu open</span></div>
+<div class="row">
+  <figure>
+    <div class="phone light ios" data-list="ios-list">
+      <div class="menu">
+        <div class="sec">
+          <div class="palette"><span class="seg on">Simple</span><span class="seg">Detailed</span></div>
+        </div>
+        <div class="sec">
+          <div class="it"><span class="lab">Group by<span class="sub">Status</span></span><span class="chev"><svg width="14" height="14"><use href="#chev"/></svg></span></div>
+          <div class="it"><span class="lab">Sort by<span class="sub">Manual</span></span><span class="chev"><svg width="14" height="14"><use href="#chev"/></svg></span></div>
+        </div>
+        <div class="sec">
+          <div class="it"><span class="lab">Card details</span><span class="chev"><svg width="14" height="14"><use href="#chev"/></svg></span></div>
+          <div class="it"><span class="lab">Show</span><span class="chev"><svg width="14" height="14"><use href="#chev"/></svg></span></div>
+        </div>
+        <div class="sec">
+          <div class="it"><span class="lab">Customize…</span><span class="ic"><svg width="20" height="20"><use href="#sliders"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>Light Nekko, default view.</b> The quick Simple / Detailed switch on top, then three short sections, no Reset (nothing to reset), no Done.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone dusk ios" data-list="ios-list" data-changed>
+      <div class="menu">
+        <div class="sec">
+          <div class="palette"><span class="seg">Simple</span><span class="seg on">Detailed</span></div>
+        </div>
+        <div class="sec">
+          <div class="it"><span class="lab">Group by<span class="sub">Project</span></span><span class="chev"><svg width="14" height="14"><use href="#chev"/></svg></span></div>
+          <div class="it"><span class="lab">Sort by<span class="sub">Last updated</span></span><span class="chev"><svg width="14" height="14"><use href="#chev"/></svg></span></div>
+          <div class="it"><span class="lab">Order<span class="sub">Newest first</span></span><span class="chev"><svg width="14" height="14"><use href="#chev"/></svg></span></div>
+        </div>
+        <div class="sec">
+          <div class="it"><span class="lab">Card details</span><span class="chev"><svg width="14" height="14"><use href="#chev"/></svg></span></div>
+          <div class="it"><span class="lab">Show</span><span class="chev"><svg width="14" height="14"><use href="#chev"/></svg></span></div>
+        </div>
+        <div class="sec">
+          <div class="it"><span class="lab">Reorder groups…</span><span class="ic"><svg width="20" height="20"><use href="#updown"/></svg></span></div>
+          <div class="it"><span class="lab">Customize…</span><span class="ic"><svg width="20" height="20"><use href="#sliders"/></svg></span></div>
+        </div>
+        <div class="sec">
+          <div class="it reset"><span class="lab">Reset to defaults</span><span class="ic" style="color:inherit"><svg width="20" height="20"><use href="#reset"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>Dusk, a changed view.</b> Order appears with a sort that has a direction, Reorder groups with Group by Project, Reset once anything differs. The toolbar icon fills.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone light ios" data-list="ios-list">
+      <div class="menu parent">
+        <div class="sec">
+          <div class="palette"><span class="seg on">Simple</span><span class="seg">Detailed</span></div>
+        </div>
+        <div class="sec">
+          <div class="it"><span class="lab">Group by<span class="sub">Status</span></span></div>
+          <div class="it"><span class="lab">Sort by<span class="sub">Manual</span></span></div>
+        </div>
+        <div class="sec"><div class="it"><span class="lab">Card details</span></div><div class="it pressed"><span class="lab">Show</span></div></div>
+      </div>
+      <div class="menu child">
+        <div class="child-title"><span class="back"><svg width="14" height="14"><use href="#back"/></svg></span>Show</div>
+        <div class="sec">
+          <div class="it"><span class="check"><svg width="16" height="16"><use href="#check"/></svg></span><span class="lab">Previews</span></div>
+          <div class="it"><span class="check"><svg width="16" height="16"><use href="#check"/></svg></span><span class="lab">Completed chats</span></div>
+          <div class="it"><span class="lab">Always show groups</span></div>
+          <div class="it"><span class="check"><svg width="16" height="16"><use href="#check"/></svg></span><span class="lab">Computer</span></div>
+          <div class="it"><span class="check"><svg width="16" height="16"><use href="#check"/></svg></span><span class="lab">Computer icons</span></div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>Show, opened.</b> The system's own submenu: checks on the left, taps flip a choice and keep it open. Computer rows only with more than one place.</figcaption>
+  </figure>
+</div>
+
+<div class="platform"><h2>Android</h2><span>Material 3 dropdown: value rows open their choices in the same panel, with a back row</span></div>
+<div class="row">
+  <figure>
+    <div class="phone light android" data-list="md-list">
+      <div class="md">
+        <div class="mi on"><span class="ic"><svg width="22" height="22"><use href="#bubble"/></svg></span><span class="lab">Simple</span><span class="tick on"><svg width="20" height="20"><use href="#tickbox"/></svg></span></div>
+        <div class="mi"><span class="ic"><svg width="22" height="22"><use href="#code"/></svg></span><span class="lab">Detailed</span><span class="tick"></span></div>
+        <div class="rule"></div>
+        <div class="mi"><span class="lab">Group by</span><span class="val">Status</span><span class="chev"><svg width="16" height="16"><use href="#chev"/></svg></span></div>
+        <div class="mi"><span class="lab">Sort by</span><span class="val">Manual</span><span class="chev"><svg width="16" height="16"><use href="#chev"/></svg></span></div>
+        <div class="rule"></div>
+        <div class="mi"><span class="lab">Card details</span><span class="chev"><svg width="16" height="16"><use href="#chev"/></svg></span></div>
+        <div class="mi"><span class="lab">Show</span><span class="chev"><svg width="16" height="16"><use href="#chev"/></svg></span></div>
+      </div>
+    </div>
+    <figcaption><b>Light Nekko, default view.</b> Was one long list of every choice under tracked-caps headings; now seven rows.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone dusk android" data-list="md-list" data-changed>
+      <div class="md">
+        <div class="mi"><span class="ic"><svg width="22" height="22"><use href="#bubble"/></svg></span><span class="lab">Simple</span><span class="tick"></span></div>
+        <div class="mi on"><span class="ic"><svg width="22" height="22"><use href="#code"/></svg></span><span class="lab">Detailed</span><span class="tick on"><svg width="20" height="20"><use href="#tickbox"/></svg></span></div>
+        <div class="rule"></div>
+        <div class="mi"><span class="lab">Group by</span><span class="val">Project</span><span class="chev"><svg width="16" height="16"><use href="#chev"/></svg></span></div>
+        <div class="mi"><span class="lab">Sort by</span><span class="val">Last updated</span><span class="chev"><svg width="16" height="16"><use href="#chev"/></svg></span></div>
+        <div class="mi"><span class="lab">Order</span><span class="val">Newest first</span><span class="chev"><svg width="16" height="16"><use href="#chev"/></svg></span></div>
+        <div class="rule"></div>
+        <div class="mi"><span class="lab">Card details</span><span class="chev"><svg width="16" height="16"><use href="#chev"/></svg></span></div>
+        <div class="mi"><span class="lab">Show</span><span class="chev"><svg width="16" height="16"><use href="#chev"/></svg></span></div>
+        <div class="rule"></div>
+        <div class="mi"><span class="ic"><svg width="22" height="22"><use href="#updown"/></svg></span><span class="lab">Reorder groups…</span></div>
+        <div class="mi reset"><span class="ic" style="color:inherit"><svg width="22" height="22"><use href="#reset"/></svg></span><span class="lab">Reset to defaults</span></div>
+      </div>
+    </div>
+    <figcaption><b>Dusk, a changed view.</b> Same order and words as the iPhone. Customize… joins with the Android Customize page (#2426).</figcaption>
+  </figure>
+
+  <figure>
+    <div class="phone light android" data-list="md-list">
+      <div class="md">
+        <div class="mi back"><span class="ic"><svg width="22" height="22"><use href="#arrowback"/></svg></span><span class="lab">Show</span></div>
+        <div class="rule"></div>
+        <div class="mi"><span class="lab">Previews</span><span class="tick on"><svg width="20" height="20"><use href="#tickbox"/></svg></span></div>
+        <div class="mi"><span class="lab">Completed chats</span><span class="tick on"><svg width="20" height="20"><use href="#tickbox"/></svg></span></div>
+        <div class="mi"><span class="lab">Always show groups</span><span class="tick"></span></div>
+      </div>
+    </div>
+    <figcaption><b>Show, opened.</b> The panel swaps to the choices in place (as the computer menu does), back row on top; checks toggle without closing. The back row returns to the menu; a tap outside closes it.</figcaption>
+  </figure>
+</div>
+
+<div class="notes">
+  <div><b>One surface</b>A single floating menu; nothing inside it is a card, panel or field. Sections are separated by the platform's own gap or one hairline.</div>
+  <div><b>Same row everywhere</b>Name on the left, current value in the soft ink tier, a chevron when it opens choices. No blue link rows; accent only for the selected check and Reset.</div>
+  <div><b>Only what applies</b>Order with a directional sort, Reorder groups with Group by Project, Computer rows with more than one place, Reset when the view differs. Gone, not greyed.</div>
+</div>
+
+<script>
+  for (const phone of document.querySelectorAll('.phone[data-list]')) {
+    const list = document.getElementById(phone.dataset.list).content.cloneNode(true);
+    if (phone.hasAttribute('data-changed')) {
+      const tool = list.querySelector('.tool.on');
+      tool.classList.add('changed');
+      const use = tool.querySelector('use');
+      if (use.getAttribute('href') === '#filter') use.setAttribute('href', '#filterfill');
+    }
+    phone.prepend(list);
+  }
+</script>
+</body>
+</html>

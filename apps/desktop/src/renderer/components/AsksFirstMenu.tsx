@@ -46,11 +46,21 @@ export function privacyToggles(session: Session, opts: { shieldOn: boolean; isCl
   ];
 }
 
-const TOGGLE_ICON: Record<PrivacyToggleKey, (on: boolean) => React.ReactElement> = {
-  incognito: () => <IncognitoIcon className="h-3.5 w-3.5" />,
-  shield: () => <ShieldIcon className="h-3.5 w-3.5" />,
-  internet: (on) => (on ? <GlobeIcon className="h-3.5 w-3.5" /> : <GlobeOffIcon className="h-3.5 w-3.5" />),
+const TOGGLE_ICON: Record<PrivacyToggleKey, (on: boolean, className?: string) => React.ReactElement> = {
+  incognito: (_on, className = 'h-3.5 w-3.5') => <IncognitoIcon className={className} />,
+  shield: (_on, className = 'h-3.5 w-3.5') => <ShieldIcon className={className} />,
+  internet: (on, className = 'h-3.5 w-3.5') => (on ? <GlobeIcon className={className} /> : <GlobeOffIcon className={className} />),
 };
+
+/**
+ * The switches the closed menu shows beside the approvals icon: Incognito and
+ * Privacy Shield when on, and Internet access when off. Internet access is on
+ * for nearly every chat, so its globe only marks the departure from that.
+ */
+export function permissionMarks(toggles: PrivacyToggle[]): Array<{ key: PrivacyToggleKey; on: boolean; label: string }> {
+  return toggles.filter((t) => (t.key === 'internet' ? !t.on : t.on))
+    .map((t) => ({ key: t.key, on: t.on, label: t.key === 'internet' ? 'Internet access off' : t.label }));
+}
 
 export const PRIVACY_SHIELD_DOCS = 'https://nekkoagent.com/docs/privacy-shield';
 
@@ -109,6 +119,8 @@ export function AsksFirstMenu({ session, onChange, iconOnly = false, isCloudMode
   const current = ASKS_FIRST.find((o) => o.mode === mode) ?? ASKS_FIRST[1];
   const shieldOn = privacyMode(session, settings) === 'redact';
   const toggles = privacyToggles(session, { shieldOn, isCloudModel });
+  const marks = permissionMarks(toggles);
+  const marksText = marks.map((m) => m.label).join(', ');
   const pick = async (next: ChatMode) => {
     pop.setOpen(false);
     if (next === mode) return;
@@ -130,8 +142,11 @@ export function AsksFirstMenu({ session, onChange, iconOnly = false, isCloudMode
   };
   return (
     <>
-      <button ref={pop.anchor} type="button" className={`ctl-menu min-w-0 whitespace-nowrap ${iconOnly ? 'composer-permissions' : ''}`} aria-label={`Permissions: ${current.label}`} data-asks-first={mode} aria-haspopup="menu" aria-expanded={pop.open} title={sandbox ? 'A sandbox always asks' : `${current.label}: ${current.hint}`} onClick={() => pop.setOpen((o) => !o)}>
+      <button ref={pop.anchor} type="button" className={`ctl-menu min-w-0 whitespace-nowrap ${iconOnly ? 'composer-permissions' : ''}`} aria-label={`Permissions: ${current.label}${marks.length ? `, ${marksText}` : ''}`} data-asks-first={mode} aria-haspopup="menu" aria-expanded={pop.open} title={(sandbox ? 'A sandbox always asks' : `${current.label}: ${current.hint}`) + (marks.length ? `\n${marksText}` : '')} onClick={() => pop.setOpen((o) => !o)}>
         <current.icon className="h-3 w-3 shrink-0 text-ink-faint" />
+        {marks.length > 0 && <span className="permission-marks" aria-hidden="true">
+          {marks.map((m) => <span key={m.key} className="permission-mark" data-permission-mark={m.key}>{TOGGLE_ICON[m.key](m.on, 'h-3 w-3')}</span>)}
+        </span>}
         {!iconOnly && <><span className="min-w-0 truncate text-ink">{current.label}</span>
         <span className="ctl-caret">▾</span></>}
       </button>

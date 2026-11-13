@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasTestTag
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
 import com.nekko.android.data.ChatListPrefs
 import com.nekko.android.data.ComputersRepository
@@ -68,7 +69,10 @@ class ChatListViewTest {
         val app = (0 until 10).joinToString(",") { i ->
             """{"id":"a$i","title":"App task ${i + 1}","updatedAt":${now - i * day / 2},"workspaceId":"w1","lastReplyText":"Reply ${i + 1} in App."}"""
         }
-        return """[{"id":"g1","title":"Plan the week","updatedAt":${now - 2 * day},"lastReplyText":"Three goals for Monday."},
+        // exchangeCount, activeWatchCount and activeRun feed the status groups (#2107).
+        return """[{"id":"g1","title":"Plan the week","updatedAt":${now - 2 * day},"lastReplyText":"Three goals for Monday.","exchangeCount":2},
+            {"id":"w9","title":"Ship the release","updatedAt":${now - day / 2},"workspaceId":"w2","exchangeCount":6,"activeWatchCount":1,"lastReplyText":"Watching PR #555."},
+            {"id":"n0","title":"Notes for later","updatedAt":${now - day / 3},"exchangeCount":0},
             {"id":"d1","title":"Write the docs page","updatedAt":${now - day / 4},"workspaceId":"w2","lastReplyText":"The page is drafted."},
             {"id":"d2","title":"Old notes","updatedAt":${now - 3 * day},"workspaceId":"w2","archivedAt":${now - day}},
             $app]"""
@@ -125,6 +129,9 @@ class ChatListViewTest {
     @Test fun projectGroupsShowTheRecentFewAndReorderOnThePhone() {
         show()
         shot("1-default")
+        // Groups start folded (#2107): open App first.
+        compose.onNodeWithText("APP", useUnmergedTree = true).performClick()
+        settle()
         // App has 10 chats from the last five days: 8 shown, then Show 2 more.
         compose.onNodeWithTag("chats.list").performScrollToNode(hasTestTag("chats.showMore"))
         compose.onNode(hasTestTag("chats.showMore"), useUnmergedTree = true).assertExists()
@@ -151,13 +158,31 @@ class ChatListViewTest {
 
     @Test fun groupByDateAndHidePreviews() {
         show()
+        // One level (#2449): Group by shows its value and opens its choices in place; no Reset at the defaults.
         compose.onNodeWithTag("chats.view").performClick()
         settle()
+        compose.onNodeWithTag("chats.view.reset").assertDoesNotExist()
+        compose.onNodeWithTag("chats.view.groupBy").performClick()
+        settle()
+        shot("2b-group-by")
         compose.onNodeWithText("Date").performClick()
         settle()
+        // A pick closes the menu; Show opens its toggles in place and keeps the menu open.
+        compose.onNodeWithTag("chats.view.groupBy").assertDoesNotExist()
         compose.onNodeWithTag("chats.view").performClick()
         settle()
+        compose.onNodeWithText("Date", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("chats.view.show").performClick()
+        settle()
         compose.onNodeWithText("Previews").performClick()
+        settle()
+        compose.onNodeWithText("Completed chats").assertExists()
+        shot("2c-show")
+        compose.onNodeWithTag("chats.view.back").performClick()
+        settle()
+        compose.onNodeWithTag("chats.view.reset").assertExists()
+        shot("2d-menu-changed")
+        Espresso.pressBack()
         settle()
         assertEquals(ChatListView.GroupBy.DATE, prefs.get(ChatListPrefs.VIEW).groupBy)
         assertEquals(false, prefs.get(ChatListPrefs.VIEW).showPreviews)
@@ -167,20 +192,22 @@ class ChatListViewTest {
         // Reset to defaults brings the list back as it was.
         compose.onNodeWithTag("chats.view").performClick()
         settle()
-        compose.onNodeWithText("Reset to defaults").performClick()
+        compose.onNodeWithTag("chats.view.reset").performClick()
         settle()
         assertEquals(ChatListView.STANDARD, prefs.get(ChatListPrefs.VIEW))
     }
 
     /** #2133: a closed group stays closed after the list is rebuilt from the saved preferences, as on a cold launch. */
-    @Test fun closedGroupsSurviveARelaunch() {
+    @Test fun groupsStartFoldedAndOpenedOnesSurviveARelaunch() {
         show()
-        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
+        // #2107: groups start folded, as on the iPhone; General has no fold.
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Plan the week", useUnmergedTree = true).assertExists()
+        shot("6-folded")
         compose.onNodeWithText("APP", useUnmergedTree = true).performClick()
         settle()
-        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
-        assertEquals(setOf("w1"), prefs.get(ChatListPrefs.COLLAPSED_GROUPS))
-        shot("6-app-closed")
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
+        assertEquals(setOf("w1"), prefs.get(ChatListPrefs.OPENED_GROUPS))
 
         // Cold launch: a fresh read of the same preferences file and a new list.
         screenPrefs = PhonePrefs(object : PrefStore {
@@ -188,16 +215,138 @@ class ChatListViewTest {
             override fun putString(name: String, value: String?) { if (value == null) store.remove(name) else store[name] = value }
         })
         settle()
-        compose.onNodeWithText("APP", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithText("Plan the week", useUnmergedTree = true).assertExists()
-        shot("7-app-closed-after-relaunch")
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
+        shot("7-app-open-after-relaunch")
 
-        // Opening it again is saved too.
+        // Folding it again is saved too.
         compose.onNodeWithText("APP", useUnmergedTree = true).performClick()
         settle()
-        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertExists()
-        assertEquals(emptySet<String>(), screenPrefs.get(ChatListPrefs.COLLAPSED_GROUPS))
+        compose.onNodeWithText("App task 1", useUnmergedTree = true).assertDoesNotExist()
+        assertEquals(emptySet<String>(), screenPrefs.get(ChatListPrefs.OPENED_GROUPS))
+    }
+
+    /** #2107: by status, the iPhone's groups; Watching is live while a watch is armed. */
+    @Test fun statusGroupsLikeTheIphone() {
+        show()
+        compose.onNodeWithTag("chats.view").performClick()
+        settle()
+        compose.onNodeWithText("Group by").performClick()
+        settle()
+        compose.onNodeWithText("Status").performClick()
+        settle()
+        compose.onNodeWithText("WATCHING", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("DRAFT", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("DONE", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("chats.group.live.status:watching", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("WATCHING", useUnmergedTree = true).performClick()
+        settle()
+        compose.onNodeWithText("Ship the release", useUnmergedTree = true).assertExists()
+        shot("8-by-status")
+    }
+
+    /**
+     * #2108: two paired computers and a chat on this phone, in one list. Studio Mac answers with
+     * the chats above; Office PC (its own room and key) with one of its own.
+     */
+    private fun showFleet(): Pair<ComputersRepository, String> {
+        val officeRoom = "b2c3d4e5f6071829"
+        val officeKey = "BE4Fn5F4K5mkw+MBYHvdQT/kC5NZN9rHpVgZBu5TJjT8ZDQi5gfJoAAZUNSiXhFQAHF+CVRUTY3F9l4HofyGWbA="
+        val office = """[{"id":"o1","title":"Back up the photos","updatedAt":${now - day / 6},"exchangeCount":3,"lastReplyText":"Copied 2,140 photos to the NAS."}]"""
+        val repo = ComputersRepository(
+            store = object : SecureStore {
+                private val map = HashMap<String, String>()
+                override suspend fun get(key: String) = map[key]
+                override suspend fun set(key: String, value: String?) { if (value == null) map.remove(key) else map[key] = value }
+            },
+            remotes = { config, _ ->
+                if (config.room != officeRoom) remote(config)
+                else object : Remote by remote(config) {
+                    override val status = MutableStateFlow(RelayStatus(RelayState.IDLE))
+                    override fun connect() { status.value = RelayStatus(RelayState.ONLINE) }
+                    override fun close() { status.value = RelayStatus(RelayState.IDLE) }
+                    override suspend fun call(channel: String, vararg args: JsonElement) =
+                        if (channel == Channels.SESSIONS_SUMMARIES) WireJson.parseToJsonElement(office) else JsonNull
+                    override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) = call(channel, *args)
+                }
+            },
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+            deviceName = { "Pixel" },
+            deriveKey = { _, _ -> ByteArray(32) },
+            stayConnected = true,
+        )
+        // A chat on this phone, with its own provider: no computer involved.
+        val phoneStore = HashMap<String, String>()
+        phoneStore["phone.chats.v1"] = """[{"id":"phone:q1","title":"Quick question","providerId":"p1","modelId":"claude-haiku-5-5","createdAt":$now,"updatedAt":${now - day / 8},
+            "messages":[{"id":"u","role":"user","text":"What rhymes with orange?","at":$now},{"id":"a","role":"assistant","text":"Nothing quite does: door hinge is close.","at":$now}]}]"""
+        val phone = com.nekko.android.phone.PhoneChats(
+            object : SecureStore {
+                override suspend fun get(key: String) = phoneStore[key]
+                override suspend fun set(key: String, value: String?) { if (value == null) phoneStore.remove(key) else phoneStore[key] = value }
+            },
+            object : com.nekko.android.phone.PhoneHTTP { override suspend fun send(request: com.nekko.protocol.PhoneRequest, line: ((String) -> Boolean)?) = error("offline") },
+            CoroutineScope(SupervisorJob()),
+        )
+        val officeId = runBlocking {
+            val mac = repo.pair(testPairing())
+            repo.rename(mac, "Studio Mac")
+            val pc = repo.pair(com.nekko.protocol.PairingLink("wss://relay.example.dev", officeRoom, "00112233445566778899aabbccddeeff", hostKey = officeKey))
+            repo.rename(pc, "Office PC")
+            // The Mac is the one used last.
+            repo.connect(mac)
+            repo.load(mac)
+            phone.load()
+            pc
+        }
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {}, phonePrefs = prefs, phone = phone)
+            }
+        }
+        compose.waitUntil(10_000) { repo.state.value.summaries.isNotEmpty() && repo.state.value.peers[officeId]?.summaries?.isNotEmpty() == true }
+        settle()
+        return repo to officeId
+    }
+
+    /** #2108: every computer's chats and this phone's in one list; each row says where it runs. */
+    @Test fun oneListAcrossComputersAndThisPhone() {
+        val (repo, officeId) = showFleet()
+        compose.onNodeWithText("Computers", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("2 of 2 online", useUnmergedTree = true).assertExists()
+        // General holds chats from both computers and the phone, each row naming its place.
+        compose.onNodeWithText("Back up the photos", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Quick question", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Office PC", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("This phone", useUnmergedTree = true).assertExists()
+        shot("9-all-computers")
+
+        // Group by computer: one group per place, the phone last.
+        compose.onNodeWithTag("chats.view").performClick()
+        settle()
+        compose.onNodeWithTag("chats.view.groupBy").performClick()
+        settle()
+        compose.onNodeWithText("Computer").performClick()
+        settle()
+        compose.onNodeWithText("STUDIO MAC", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("OFFICE PC", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("THIS PHONE", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("OFFICE PC", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("THIS PHONE", useUnmergedTree = true).performClick()
+        settle()
+        compose.onNodeWithText("Back up the photos", useUnmergedTree = true).assertExists()
+        shot("10-by-computer")
+        assertEquals(ChatListView.GroupBy.COMPUTER, prefs.get(ChatListPrefs.VIEW).groupBy)
+
+        // Show chats from one computer: only its chats, and it becomes the active one.
+        compose.onNodeWithTag("chats.menu").performClick()
+        settle()
+        shot("11-show-chats-from")
+        compose.onNodeWithTag("chats.from.$officeId").performClick()
+        settle()
+        compose.waitUntil(5_000) { repo.state.value.activeId == officeId }
+        compose.onNodeWithText("Plan the week", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Back up the photos", useUnmergedTree = true).assertExists()
+        assertEquals(officeId, prefs.get(ChatListPrefs.FILTER))
+        shot("12-office-only")
     }
 
     private fun settle() {

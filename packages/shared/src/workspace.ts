@@ -146,6 +146,11 @@ export interface GitStatus {
    */
   worktree?: { name: string; path: string };
   /**
+   * The GitHub repository the folder's `origin` points at, so a reply's bare
+   * `#123` can be drawn as that repo's PR. Absent for other hosts and no origin.
+   */
+  github?: { owner: string; repo: string };
+  /**
    * The pull request for this branch, when `gh` can see one. This is the PR
    * the work is going into, which is a different thing from the PRs a chat
    * happens to have mentioned.

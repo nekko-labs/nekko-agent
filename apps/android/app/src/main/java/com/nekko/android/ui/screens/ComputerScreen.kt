@@ -179,7 +179,7 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
             return@Scaffold
         }
         val summary = m.summary
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).testTag("computer.scroll")) {
             Hero(c, summary, active, s.conn)
             Tiles(c, m, active, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             if (!active) {
@@ -247,6 +247,8 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                 Fact(stringResource(R.string.settings_paired), ago(c.pairedAt).let { if (it == "now") stringResource(R.string.settings_just_now) else stringResource(R.string.settings_ago, localAgo(c.pairedAt)) })
                 summary?.version?.let { v -> Fact("Nekko Agent", listOfNotNull(v, summary.edition).joinToString(" · ")) }
             }
+            // Nekko Agent's service: status, updates, restart (#2059). Live only while this computer is the active one.
+            ServiceSection(repo, c.id, c.name)
             Spacer(Modifier.size(32.dp))
         }
     }

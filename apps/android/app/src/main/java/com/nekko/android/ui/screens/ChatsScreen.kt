@@ -21,9 +21,14 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.automirrored.filled.Sort
 import com.nekko.android.data.PhonePrefs
+import com.nekko.android.data.AllChats
+import com.nekko.protocol.ChatPlace
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Tune
 import com.nekko.android.data.ChatListPrefs
 import com.nekko.protocol.ChatGroupOrder
 import com.nekko.protocol.ChatSections
@@ -96,6 +101,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.contentDescription
@@ -178,6 +184,12 @@ fun ChatsScreen(
     onSkipFirstRun: (() -> Unit)? = null,
     /** Where the view menu and the group order are kept; null keeps them for this screen only (tests). */
     phonePrefs: PhonePrefs? = null,
+    /** Chats on this phone, listed with the computers' (#2108); null lists the computers' only. */
+    phone: com.nekko.android.phone.PhoneChats? = null,
+    /** Open one of this phone's chats ([ChatPlace.PHONE] alone: this phone's chats and providers). */
+    onOpenPhone: (String?) -> Unit = {},
+    /** The view menu's Customize… (#2426). */
+    onCustomize: (() -> Unit)? = null,
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
     val outbox by repo.outbox.state.collectAsStateWithLifecycle()
@@ -215,39 +227,72 @@ fun ChatsScreen(
     var pressedDone by remember { mutableStateOf<SessionSummary?>(null) }
     // Groups showing all their chats; kept while a chat is open.
     var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
-    // The view menu (group by, sort by, what is shown), the project groups' order and the closed groups, kept on this phone.
+    // The view menu (group by, sort by, what is shown), the project groups' order and the opened groups, kept on this phone.
     val localView = remember { MutableStateFlow(ChatListView.STANDARD) }
     val localOrder = remember { MutableStateFlow(emptyMap<String, List<String>>()) }
-    val localCollapsed = remember { MutableStateFlow(emptySet<String>()) }
-    val collapsed by (phonePrefs?.flow(ChatListPrefs.COLLAPSED_GROUPS) ?: localCollapsed).collectAsStateWithLifecycle()
+    val localOpened = remember { MutableStateFlow(emptySet<String>()) }
+    // Groups start folded, as on the iPhone (#2107); each one's last choice is kept.
+    val opened by (phonePrefs?.flow(ChatListPrefs.OPENED_GROUPS) ?: localOpened).collectAsStateWithLifecycle()
     val toggleGroup: (String) -> Unit = { key ->
-        if (phonePrefs != null) phonePrefs.set(ChatListPrefs.COLLAPSED_GROUPS, ChatListPrefs.toggled(phonePrefs.get(ChatListPrefs.COLLAPSED_GROUPS), key))
-        else localCollapsed.value = ChatListPrefs.toggled(localCollapsed.value, key)
+        if (phonePrefs != null) phonePrefs.set(ChatListPrefs.OPENED_GROUPS, ChatListPrefs.toggled(phonePrefs.get(ChatListPrefs.OPENED_GROUPS), key))
+        else localOpened.value = ChatListPrefs.toggled(localOpened.value, key)
     }
     val view by (phonePrefs?.flow(ChatListPrefs.VIEW) ?: localView).collectAsStateWithLifecycle()
     val orders by (phonePrefs?.flow(ChatListPrefs.GROUP_ORDER) ?: localOrder).collectAsStateWithLifecycle()
     val setView: (ChatListView) -> Unit = { v -> if (phonePrefs != null) phonePrefs.set(ChatListPrefs.VIEW, v) else localView.value = v }
-    val groupOrder = orders[active?.id].orEmpty()
-    val setGroupOrder: (List<String>) -> Unit = { keys ->
-        active?.id?.let { id -> if (phonePrefs != null) phonePrefs.set(ChatListPrefs.GROUP_ORDER, orders + (id to keys)) else localOrder.value = orders + (id to keys) }
+    // One list across every computer and this phone (#2108), or the one place it is filtered to.
+    val localFilter = remember { MutableStateFlow("") }
+    val filter by (phonePrefs?.flow(ChatListPrefs.FILTER) ?: localFilter).collectAsStateWithLifecycle()
+    val setFilter: (String) -> Unit = { f -> if (phonePrefs != null) phonePrefs.set(ChatListPrefs.FILTER, f) else localFilter.value = f }
+    val phoneState = phone?.state?.collectAsStateWithLifecycle()?.value
+    val phoneName = stringResource(R.string.chats_this_phone)
+    val all = remember(s, phoneState, filter, phoneName) {
+        AllChats.of(
+            s, phoneState?.chats.orEmpty(), phoneState?.running.orEmpty(), phoneState?.providers?.isNotEmpty() == true,
+            filter.ifEmpty { null }, phoneName,
+        )
     }
+    // Several places: each row says where its chat runs, unless the groups already do.
+    val rowPlaces = all.shown.size > 1 && view.showComputer && view.groupBy != ChatListView.GroupBy.COMPUTER
+    val placeOfRow: (SessionSummary) -> ChatPlace? = { c -> if (rowPlaces) all.place(c.id) else null }
+    // Group order per place shown: a single computer keeps its own (as before #2108), every place shares one.
+    val orderKey = ChatListPrefs.orderKey(all.shown.map { it.id })
+    val groupOrder = orders[orderKey].orEmpty()
+    val setGroupOrder: (List<String>) -> Unit = { keys ->
+        if (phonePrefs != null) phonePrefs.set(ChatListPrefs.GROUP_ORDER, orders + (orderKey to keys)) else localOrder.value = orders + (orderKey to keys)
+    }
+    // A chat on another computer: that computer becomes the active one (its link is already open), then the chat opens.
+    val onOwner: (SessionSummary, () -> Unit) -> Unit = { chat, then ->
+        val owner = all.owners[chat.id]
+        if (owner == null || owner == s.activeId || owner == ChatPlace.PHONE) then()
+        else scope.launch { repo.connect(owner); then() }
+    }
+    val openChat: (SessionSummary) -> Unit = { chat ->
+        if (ChatPlace.isPhoneChat(chat.id)) onOpenPhone(chat.id) else onOwner(chat) { onOpenChat(chat.id) }
+    }
+    // Long-press on a chat on this phone: it can only be forgotten here.
+    var forgetting by remember { mutableStateOf<SessionSummary?>(null) }
+    val press: (SessionSummary) -> Unit = { chat -> if (ChatPlace.isPhoneChat(chat.id)) forgetting = chat else pressed = chat }
+    val pressDone: (SessionSummary) -> Unit = { chat -> pressedDone = chat }
     var reordering by remember { mutableStateOf(false) }
     val now = System.currentTimeMillis()
-    val sections = remember(s.summaries, s.workspaces, view, s.activity, groupOrder) {
-        ChatSections.make(s.summaries, s.workspaces, view, s.activity, groupOrder, now)
+    val sections = remember(all, view, groupOrder) {
+        ChatSections.make(all.chats, all.folders, view, all.activity, groupOrder, now, places = all.shown, placeOf = all::placeOf)
     }
     // The rows' PR chips: the state of each PR a chat names, asked of the computer a few at a time (the iPhone's loadRowPrs).
-    val rowPrs = remember(repo, active?.id) { RowPrs() }
+    val rowPrs = remember(repo) { RowPrs() }
     val rowPrMap by rowPrs.byChat.collectAsStateWithLifecycle()
-    val prsKey = s.summaries.filter { it.prUrls.isNotEmpty() }.joinToString(",") { "${it.id}:${it.updatedAt}:${it.prUrls.size}" }
-    LaunchedEffect(rowPrs, prsKey, s.conn, view.showPullRequests, now / RowPrs.FRESH_MS) {
-        if (view.showPullRequests && s.conn == RelayState.ONLINE) rowPrs.load(s.summaries, repo.caller)
+    val prsKey = all.chats.filter { it.prUrls.isNotEmpty() }.joinToString(",") { "${it.id}:${it.updatedAt}:${it.prUrls.size}" }
+    val onlineKey = s.computers.joinToString(",") { "${it.id}:${s.connOf(it.id)}" }
+    LaunchedEffect(rowPrs, prsKey, onlineKey, view.showPullRequests, now / RowPrs.FRESH_MS) {
+        // Each computer is asked about its own chats only, over its own connection.
+        if (view.showPullRequests) for (pc in all.shown) repo.callerFor(pc.id)?.let { rowPrs.load(all.on(pc.id), it) }
     }
     // The provider each chat runs on, from the computer's list, for the mark beside its model.
     val providerKindOf: (SessionSummary) -> String? = { summary -> s.providers.firstOrNull { it.id == summary.providerId }?.kind }
     // Status groups lead with their own Needs you group; other views get one at the top.
-    val needsYou = remember(s.summaries, s.activity, view) {
-        if (view.groupBy == ChatListView.GroupBy.STATUS) emptyList() else s.summaries.filter { !it.archived && s.activity[it.id] == Activity.NEEDS_YOU }
+    val needsYou = remember(all, view) {
+        if (view.groupBy == ChatListView.GroupBy.STATUS) emptyList() else all.chats.filter { !it.archived && all.activity[it.id] == Activity.NEEDS_YOU }
     }
     // Search: every word, any case or accent, in the title, first prompt or last reply, completed chats too.
     var query by rememberSaveable { mutableStateOf("") }
@@ -255,10 +300,10 @@ fun ChatsScreen(
     var searching by rememberSaveable { mutableStateOf(false) }
     val closeSearch = { query = ""; searching = false }
     BackHandler(enabled = searching, onBack = closeSearch)
-    val found = remember(s.summaries, query) { if (query.isBlank()) emptyList() else ChatSearch.matches(s.summaries.filter { it.isVisible }, query) }
+    val found = remember(all, query) { if (query.isBlank()) emptyList() else ChatSearch.matches(all.chats.filter { it.isVisible }, query) }
     val restore: (SessionSummary) -> Unit = { chat ->
         actionError = null
-        scope.launch {
+        onOwner(chat) { scope.launch {
             try {
                 repo.restoreChat(chat.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -266,11 +311,11 @@ fun ChatsScreen(
             } catch (e: Exception) {
                 actionError = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_restore_failed)
             }
-        }
+        } }
     }
     val run: (SessionSummary, Boolean) -> Unit = { chat, delete ->
         actionError = null
-        scope.launch {
+        onOwner(chat) { scope.launch {
             try {
                 if (delete) repo.deleteChat(chat.id) else repo.completeChat(chat.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -278,7 +323,7 @@ fun ChatsScreen(
             } catch (e: Exception) {
                 actionError = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_change_failed)
             }
-        }
+        } }
     }
     // Long-press → Rename: the title on the computer.
     var renaming by remember { mutableStateOf<SessionSummary?>(null) }
@@ -300,7 +345,7 @@ fun ChatsScreen(
             title = plainText(chat.title).ifEmpty { newChat },
             delete = delete,
             pinned = chat.pinned,
-            computer = computerName,
+            computer = all.place(chat.id)?.name ?: computerName,
             onDismiss = { pressed = null },
             onConfirm = {
                 pressed = null
@@ -308,7 +353,7 @@ fun ChatsScreen(
             },
             onPin = {
                 pressed = null
-                change(res.getString(R.string.chats_change_failed)) { repo.setPinned(chat.id, !chat.pinned) }
+                onOwner(chat) { change(res.getString(R.string.chats_change_failed)) { repo.setPinned(chat.id, !chat.pinned) } }
             },
             onRename = { pressed = null; renaming = chat },
         )
@@ -316,14 +361,14 @@ fun ChatsScreen(
     renaming?.let { chat ->
         RenameChatDialog(plainText(chat.title), onDismiss = { renaming = null }) { title ->
             renaming = null
-            change(res.getString(R.string.chats_rename_failed)) { repo.renameChat(chat.id, title) }
+            onOwner(chat) { change(res.getString(R.string.chats_rename_failed)) { repo.renameChat(chat.id, title) } }
         }
     }
     pressedDone?.let { chat ->
         AlertDialog(
             onDismissRequest = { pressedDone = null },
             title = { Text(plainText(chat.title).ifEmpty { newChat }, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            text = { Text(stringResource(R.string.chats_completed_on, computerName)) },
+            text = { Text(stringResource(R.string.chats_completed_on, all.place(chat.id)?.name ?: computerName)) },
             confirmButton = {
                 TextButton(onClick = { pressedDone = null; restore(chat) }) { Text(stringResource(R.string.chats_restore), color = p.accent) }
             },
@@ -342,11 +387,26 @@ fun ChatsScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
             title = { Text(stringResource(R.string.chats_delete_title)) },
-            text = { Text(stringResource(R.string.chats_delete_body, plainText(chat.title).ifEmpty { newChat }, computerName)) },
+            text = { Text(stringResource(R.string.chats_delete_body, plainText(chat.title).ifEmpty { newChat }, all.place(chat.id)?.name ?: computerName)) },
             confirmButton = {
                 TextButton(onClick = { confirmDelete = null; run(chat, true) }) { Text(stringResource(R.string.chats_delete), color = p.danger) }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text(stringResource(R.string.chats_cancel)) } },
+        )
+    }
+
+    forgetting?.let { chat ->
+        AlertDialog(
+            onDismissRequest = { forgetting = null },
+            title = { Text(stringResource(R.string.chats_phone_forget_title)) },
+            text = { Text(stringResource(R.string.chats_phone_forget_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    forgetting = null
+                    change(res.getString(R.string.chats_change_failed)) { phone?.forget(chat.id) }
+                }) { Text(stringResource(R.string.chats_phone_forget), color = p.danger) }
+            },
+            dismissButton = { TextButton(onClick = { forgetting = null }) { Text(stringResource(R.string.chats_cancel)) } },
         )
     }
 
@@ -373,14 +433,18 @@ fun ChatsScreen(
                         expandedHeight = 56.dp,
                         navigationIcon = {
                             ComputerPill(
-                                s, exits, compact = pane != null,
+                                s, all, exits, compact = pane != null,
                                 onSearch = { searching = true },
                                 onComputers = onComputers,
-                                onConnect = { id -> scope.launch { repo.connect(id) } },
+                                onFilter = { id ->
+                                    setFilter(id.orEmpty())
+                                    // A computer picked: it becomes the active one too, as on the iPhone.
+                                    if (id != null && id != ChatPlace.PHONE && id != s.activeId) scope.launch { repo.connect(id) }
+                                },
                             )
                         },
                         actions = {
-                            if (active != null) ChatListViewMenu(view, setView, onReorder = { reordering = true })
+                            if (active != null) ChatListViewMenu(view, setView, onReorder = { reordering = true }, places = all.places.size, onCustomize = onCustomize)
                             IconButton(onClick = onSettings) {
                                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.chats_settings), tint = p.inkSoft)
                             }
@@ -393,7 +457,8 @@ fun ChatsScreen(
             floatingActionButton = {
                 if (active != null) {
                     ExtendedFloatingActionButton(
-                        onClick = onNewChat,
+                        // Filtered to this phone: its own chats start there.
+                        onClick = { if (all.shown.singleOrNull()?.isPhone == true) onOpenPhone(null) else onNewChat() },
                         icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                         text = { Text(newChat) },
                         containerColor = p.accent,
@@ -449,7 +514,8 @@ fun ChatsScreen(
                                     )
                                 }
                             }
-                            item(key = "header") { SectionHeader(stringResource(R.string.chats_on_computer, active.name)) }
+                            // One place shown: say which. Every place: the rows (or the groups) say it.
+                            all.shown.singleOrNull()?.let { only -> item(key = "header") { SectionHeader(stringResource(R.string.chats_on_computer, only.name)) } }
                             actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
                             if (query.isNotBlank()) {
                                 if (found.isEmpty()) {
@@ -460,11 +526,11 @@ fun ChatsScreen(
                                 }
                                 itemsIndexed(found, key = { _, it -> "found:${it.id}" }) { i, summary ->
                                     if (i > 0) RowDivider(60.dp)
-                                    if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
-                                    else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) }, waiting = outbox.waitingFor(summary.id).size,
-                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary))
+                                    if (summary.archived) CompletedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
+                                    else ChatRow(summary, all.activity[summary.id], onLongClick = { press(summary) }, onClick = { openChat(summary) }, waiting = outbox.waitingFor(summary.id).size,
+                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary), place = placeOfRow(summary), placeIcons = view.showComputerIcons)
                                 }
-                            } else if (s.summaries.isEmpty()) {
+                            } else if (all.chats.isEmpty()) {
                                 item(key = "empty") {
                                     Text(
                                         stringResource(
@@ -484,22 +550,28 @@ fun ChatsScreen(
                                 item(key = "needs-you") { GroupHeader(stringResource(R.string.chats_needs_you), open = true, count = "${needsYou.size}", onToggle = null) }
                                 itemsIndexed(needsYou, key = { _, it -> "needs:${it.id}" }) { i, summary ->
                                     if (i > 0) RowDivider(60.dp)
-                                    ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) },
+                                    ChatRow(summary, all.activity[summary.id], onLongClick = { press(summary) }, onClick = { openChat(summary) },
                                         waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view,
-                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary))
+                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary), place = placeOfRow(summary), placeIcons = view.showComputerIcons)
                                 }
                             }
                             // The desktop's agent sidebar as the view menu arranges it: by project (General, then each
                             // folder, in the order arranged here), status, date or none; the recent few, then Show more.
                             if (query.isBlank()) sections.forEach { g ->
-                                val open = g.key !in collapsed
-                                val all = g.key in expanded
-                                val (shown, hidden) = ChatSections.split(g, s.activity, now)
+                                val open = g.isOpen(opened)
+                                val showAll = g.key in expanded
+                                val (shown, hidden) = ChatSections.split(g, all.activity, now)
+                                // General and All chats have no fold, as on the iPhone.
+                                val folds = g.key != ChatGroup.GENERAL && g.key != "all"
                                 item(key = "group:${g.key}") {
                                     GroupHeader(
                                         groupTitle(g.key, g.name), open, groupCounts(g),
                                         onReorder = if (view.canReorderGroups && sections.size > 1) ({ reordering = true }) else null,
-                                    ) { toggleGroup(g.key) }
+                                        live = g.live(all.activity), total = g.chats.size, groupKey = g.key,
+                                        place = if (g.key.startsWith("computer:")) all.places.firstOrNull { ChatPlace.groupKey(it.id) == g.key } else null,
+                                        placeIcons = view.showComputerIcons,
+                                        onToggle = if (folds) ({ toggleGroup(g.key) }) else null,
+                                    )
                                 }
                                 if (!open) return@forEach
                                 if (g.chats.isEmpty()) {
@@ -512,16 +584,16 @@ fun ChatsScreen(
                                         )
                                     }
                                 }
-                                itemsIndexed(if (all) g.chats else shown, key = { _, it -> "${g.key}:${it.id}" }) { i, summary ->
+                                itemsIndexed(if (showAll) g.chats else shown, key = { _, it -> "${g.key}:${it.id}" }) { i, summary ->
                                     if (i > 0) RowDivider(60.dp)
-                                    if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
-                                    else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) },
+                                    if (summary.archived) CompletedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
+                                    else ChatRow(summary, all.activity[summary.id], onLongClick = { press(summary) }, onClick = { openChat(summary) },
                                         waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view,
-                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary))
+                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary), place = placeOfRow(summary), placeIcons = view.showComputerIcons)
                                 }
                                 if (hidden > 0) {
                                     item(key = "more:${g.key}") {
-                                        ShowMoreToggle(all, hidden) { expanded = if (all) expanded - g.key else expanded + g.key }
+                                        ShowMoreToggle(showAll, hidden) { expanded = if (showAll) expanded - g.key else expanded + g.key }
                                     }
                                 }
                             }
@@ -542,12 +614,13 @@ fun ChatsScreen(
     }
 }
 
-/** The pill's second line once more than one computer is paired: "2 paired". The phone holds a live connection to one at a time. */
-internal fun pairedCaption(count: Int, template: String = "%1\$d paired"): String? = if (count >= 2) template.format(count) else null
+/** The pill's second line once more than one computer is paired: "1 of 2 online" (the iPhone's, #1665). */
+internal fun onlineCaption(online: Int, count: Int, template: String = "%1\$d of %2\$d online"): String? =
+    if (count >= 2) template.format(online, count) else null
 
-/** What the pill's screen-reader label says: the computer, its connection, and how many are paired. */
-internal fun pillDescription(name: String, state: String, count: Int, menu: String = "Computer menu", paired: String = "%1\$d paired"): String =
-    listOfNotNull(menu, name, state, pairedCaption(count, paired)).joinToString(", ")
+/** What the pill's screen-reader label says: what it shows, its connection, and how many computers are online. */
+internal fun pillDescription(name: String, state: String, online: Int, count: Int, menu: String = "Computer menu", template: String = "%1\$d of %2\$d online"): String =
+    listOfNotNull(menu, name, state, onlineCaption(online, count, template)).joinToString(", ")
 
 private fun connName(s: RelayState) = when (s) {
     RelayState.IDLE -> R.string.simple_conn_idle
@@ -557,36 +630,52 @@ private fun connName(s: RelayState) = when (s) {
     RelayState.DENIED -> R.string.simple_conn_denied
 }
 
+/** How bad a connection state is, for a dot that stands for several computers: the worst one shows. */
+internal fun worstConn(states: List<RelayState>): RelayState =
+    states.maxByOrNull { listOf(RelayState.ONLINE, RelayState.CONNECTING, RelayState.IDLE, RelayState.OFFLINE, RelayState.DENIED).indexOf(it) } ?: RelayState.IDLE
+
 /**
- * The computer at the top left: its connection dot, its name, and "N paired" under it when there
- * are several. It opens the computer menu: switch computers, Search chats, Computers (where pairing
- * lives), and Sign out or disconnect (the safety exits, SK-8).
+ * The pill at the top left: what the list shows (every computer, one, or this phone), its
+ * connection dot, and "1 of 2 online" under it when several computers are paired. It opens the
+ * menu: Show chats from (with more than one place, #2108), Search chats, Computers (where pairing
+ * lives), and Sign out or disconnect (the safety exits, SK-8). No Connect: every paired computer
+ * stays connected (the iPhone's #1665).
  */
 @Composable
 private fun ComputerPill(
     s: com.nekko.android.data.ComputersState,
+    all: AllChats,
     exits: SafetyExits,
     /** A folding phone's pane: the name gets less room beside the centred title. */
     compact: Boolean,
     onSearch: () -> Unit,
     onComputers: () -> Unit,
-    onConnect: (String) -> Unit,
+    /** A place id to show only it, or null for every place. */
+    onFilter: (String?) -> Unit,
 ) {
     val p = Nekko.palette
-    // With no computer chosen yet the pill still opens the menu, as on the iPhone.
-    val name = s.active?.name ?: stringResource(R.string.chats_computers)
-    val pairedWords = stringResource(R.string.simple_paired)
+    val only = all.shown.singleOrNull()
+    // Every place shown: "Computers"; one: its name. With no computer chosen yet the pill still opens the menu, as on the iPhone.
+    val name = only?.name ?: stringResource(R.string.chats_computers)
+    val template = stringResource(R.string.chats_n_of_m_online)
     var open by remember { mutableStateOf(false) }
     var exitsOpen by remember { mutableStateOf(false) }
-    val caption = pairedCaption(s.computers.size, pairedWords)
-    val dot = when (s.conn) {
+    val online = s.computers.count { s.connOf(it.id) == RelayState.ONLINE }
+    val caption = onlineCaption(online, s.computers.size, template)
+    // The dot stands for the computers the list shows; this phone is always reachable.
+    val conn = when {
+        only?.isPhone == true -> RelayState.ONLINE
+        only != null -> s.connOf(only.id)
+        else -> worstConn(s.computers.map { s.connOf(it.id) })
+    }
+    val dot = when (conn) {
         RelayState.ONLINE -> p.success
         RelayState.CONNECTING -> p.accent
         RelayState.OFFLINE -> p.warning
         RelayState.DENIED -> p.danger
         RelayState.IDLE -> p.inkFaint
     }
-    val description = pillDescription(name, stringResource(connName(s.conn)), s.computers.size, stringResource(R.string.simple_computer_menu), pairedWords)
+    val description = pillDescription(name, stringResource(connName(conn)), online, s.computers.size, stringResource(R.string.simple_computer_menu), template)
     val close = { open = false; exitsOpen = false }
     Box {
         Box(
@@ -624,20 +713,34 @@ private fun ComputerPill(
                 SafetyExitMenuItems(s, exits, onPicked = close)
                 return@DropdownMenu
             }
-            s.computers.forEach { c ->
-                val on = c.id == s.activeId
-                DropdownMenuItem(
-                    text = { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    leadingIcon = { if (on) Icon(Icons.Filled.Check, contentDescription = null, tint = p.accent) else Spacer(Modifier.size(24.dp)) },
-                    trailingIcon = if (on) null else ({ Text(stringResource(R.string.simple_connect), style = MaterialTheme.typography.labelMedium, color = p.accent) }),
-                    onClick = {
-                        close()
-                        if (!on) onConnect(c.id)
-                    },
-                    modifier = Modifier.semantics { selected = on },
+            // Show chats from: every place, or one (the iPhone's #1741), only when there is a choice.
+            if (all.places.size > 1) {
+                Text(
+                    stringResource(R.string.chats_show_chats_from),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = p.inkSoft,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
+                @Composable
+                fun place(text: String, detail: String?, on: Boolean, tag: String, lead: @Composable () -> Unit, pick: () -> Unit) = DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 1) }
+                        }
+                    },
+                    leadingIcon = lead,
+                    trailingIcon = { Icon(Icons.Filled.Check, contentDescription = null, tint = if (on) p.accent else Color.Transparent) },
+                    onClick = { close(); pick() },
+                    modifier = Modifier.semantics { selected = on }.testTag(tag),
+                )
+                place(stringResource(R.string.chats_all_computers), caption, all.shown.size > 1, "chats.from.all", { Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkSoft) }) { onFilter(null) }
+                all.places.forEach { pl ->
+                    val detail = if (pl.isPhone) stringResource(R.string.chats_phone_own_models) else stringResource(connName(s.connOf(pl.id)))
+                    place(pl.name, detail, only?.id == pl.id, "chats.from.${pl.id}", { Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { PlaceMark(pl, true, 18.dp) } }) { onFilter(pl.id) }
+                }
+                HorizontalDivider(color = p.line)
             }
-            HorizontalDivider(color = p.line)
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.simple_search_chats)) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
@@ -749,6 +852,9 @@ internal fun ChatRow(
     prs: List<PullRequest> = emptyList(),
     /** The kind of provider it runs on (`providers:list`), for the mark beside the model. */
     providerKind: String? = null,
+    /** Where it runs, when the list holds several places (#2108); null says nothing. */
+    place: ChatPlace? = null,
+    placeIcons: Boolean = true,
 ) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
@@ -793,13 +899,14 @@ internal fun ChatRow(
                 Text(preview, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             val prChip = details.showPullRequests && (prs.isNotEmpty() || s.prUrls.isNotEmpty())
-            if (activity != null || waiting > 0 || prChip) {
+            if (activity != null || waiting > 0 || prChip || place != null) {
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     when (activity) {
                         Activity.NEEDS_YOU -> RowChip(stringResource(R.string.chats_needs_you), tone = AgentRows.Tone.WARN)
                         Activity.RUNNING -> RowChip(stringResource(R.string.chats_working), accent = true)
                         null -> Unit
                     }
+                    place?.let { PlaceChip(it, placeIcons) }
                     // Prompts written offline for this chat, still in the outbox.
                     if (waiting > 0) {
                         val waitingDesc = if (waiting == 1) stringResource(R.string.chats_prompts_waiting_one) else stringResource(R.string.chats_prompts_waiting_other, waiting)
@@ -853,6 +960,33 @@ internal fun ChatStatusIcon(activity: Activity?, waiting: Boolean, activeWatchCo
     }
 }
 
+/** Where a chat runs, on its row (the iPhone's PlaceChip): the place's mark in its colour, then its name. */
+@Composable
+private fun PlaceChip(place: ChatPlace, icons: Boolean) {
+    val p = Nekko.palette
+    val label = stringResource(R.string.chats_on_computer, place.name)
+    Row(
+        Modifier.clearAndSetSemantics { contentDescription = label }.testTag("chats.row.place"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        PlaceMark(place, icons, 12.dp)
+        Text(place.name, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A place's mark: its icon, or the phone's, in its colour; a dot when there is no icon to show. The colour is only on the mark. */
+@Composable
+private fun PlaceMark(place: ChatPlace, icons: Boolean, size: androidx.compose.ui.unit.Dp) {
+    val tint = Color(0xFF000000 or place.color)
+    val icon = if (icons && !place.isPhone) com.nekko.android.ui.components.computerIconRes(place.icon) else null
+    when {
+        icons && place.isPhone -> Icon(Icons.Filled.PhoneAndroid, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        icon != null -> Icon(androidx.compose.ui.res.painterResource(icon), contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        else -> Box(Modifier.size(size).padding(size * 0.2f).clip(CircleShape).background(tint))
+    }
+}
+
 /** The last row of the list: the computer's Monitors. */
 @Composable
 private fun MonitorsRow(onClick: () -> Unit) {
@@ -886,7 +1020,21 @@ private fun MonitorsRow(onClick: () -> Unit) {
  * press (and as an accessibility action).
  */
 @Composable
-private fun GroupHeader(name: String, open: Boolean, count: String, onReorder: (() -> Unit)? = null, onToggle: (() -> Unit)?) {
+private fun GroupHeader(
+    name: String,
+    open: Boolean,
+    count: String,
+    onReorder: (() -> Unit)? = null,
+    /** Building or Verifying with a chat running, Watching with a watch armed (#2107, the iPhone's #1918). */
+    live: Boolean = false,
+    /** The group's chats, shown as a count when it is live or folded. */
+    total: Int = 0,
+    groupKey: String? = null,
+    /** By computer (#2108): the place's mark before its name. */
+    place: ChatPlace? = null,
+    placeIcons: Boolean = true,
+    onToggle: (() -> Unit)?,
+) {
     val p = Nekko.palette
     val toggleLabel = stringResource(if (open) R.string.chats_collapse_group else R.string.chats_expand_group, name)
     val reorderLabel = if (onReorder != null) stringResource(R.string.chats_reorder_groups) else null
@@ -915,6 +1063,7 @@ private fun GroupHeader(name: String, open: Boolean, count: String, onReorder: (
             tint = if (onToggle == null) Color.Transparent else p.inkFaint,
             modifier = Modifier.size(18.dp).rotate(if (open) 90f else 0f),
         )
+        place?.let { PlaceMark(it, placeIcons, 14.dp) }
         Text(
             name.uppercase(),
             style = MaterialTheme.typography.labelMedium,
@@ -925,7 +1074,21 @@ private fun GroupHeader(name: String, open: Boolean, count: String, onReorder: (
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
-        if (count.isNotEmpty()) Text(count, style = MaterialTheme.typography.labelSmall, color = p.inkFaint, maxLines = 1)
+        // Its activity at a glance, folded or not: Nekko with a green light while it works or watches.
+        if (live) Box(Modifier.testTag("chats.group.live.${groupKey.orEmpty()}")) {
+            com.nekko.android.ui.components.PixelCat(Modifier.size(16.dp))
+            Box(Modifier.align(Alignment.BottomEnd).size(6.dp).clip(CircleShape).background(p.success))
+        }
+        if (live || (!open && onToggle != null)) {
+            val tint = if (live) p.success else p.inkFaint
+            Text(
+                "$total",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (live) FontWeight.SemiBold else FontWeight.Normal,
+                color = tint,
+                modifier = Modifier.clip(CircleShape).background(tint.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        } else if (count.isNotEmpty()) Text(count, style = MaterialTheme.typography.labelSmall, color = p.inkFaint, maxLines = 1)
     }
 }
 
@@ -959,74 +1122,146 @@ private fun ShowMoreToggle(open: Boolean, hidden: Int, onToggle: () -> Unit) {
     }
 }
 
-/** Group by, sort by, and what is shown: the desktop Agents panel's view menu, as on the iPhone. */
+/** The view menu's pages: the menu itself, and the choices one of its rows opens in place. */
+private enum class ViewPage { MAIN, GROUP_BY, SORT_BY, ORDER, CARD_DETAILS, SHOW }
+
+/**
+ * Group by, sort by, and what is shown: the desktop Agents panel's view menu, as on the iPhone.
+ * One level (#2449): each row names a setting and shows its value, and opens its choices in the
+ * same panel with a back row (as the computer menu does). A pick closes the menu; the Card details
+ * and Show toggles keep it open. Reset appears only when the view differs from the defaults.
+ */
 @Composable
-private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Unit, onReorder: () -> Unit) {
+private fun ChatListViewMenu(
+    view: ChatListView,
+    onChange: (ChatListView) -> Unit,
+    onReorder: () -> Unit,
+    /** How many places the list can show: By computer, and the rows' place, only with more than one (#2108). */
+    places: Int = 1,
+    /** Customize…, at the bottom as on the iPhone (#2426). */
+    onCustomize: (() -> Unit)? = null,
+) {
     val p = Nekko.palette
     var open by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(ViewPage.MAIN) }
+    val close = { open = false; page = ViewPage.MAIN }
     Box {
-        IconButton(onClick = { open = true }, modifier = Modifier.testTag("chats.view")) {
+        IconButton(onClick = { page = ViewPage.MAIN; open = true }, modifier = Modifier.testTag("chats.view")) {
             Icon(
                 if (view.isStandard) Icons.AutoMirrored.Outlined.Sort else Icons.AutoMirrored.Filled.Sort,
                 contentDescription = stringResource(R.string.chats_view_options),
                 tint = if (view.isStandard) p.inkSoft else p.accent,
             )
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            // Simple / Detailed first, as on the iPhone (#2117): the pill holds only the gauges now.
-            com.nekko.android.ui.simple.ModeMenuItems(onPicked = { open = false })
-            HorizontalDivider()
+        // One width for every page, so the panel does not jump as a row opens its choices.
+        DropdownMenu(expanded = open, onDismissRequest = close, modifier = Modifier.widthIn(min = 220.dp)) {
+            /** A row that opens choices: its name, the current value in the soft ink tier, a chevron. */
             @Composable
-            fun heading(text: String) = Text(
-                text.uppercase(), style = MaterialTheme.typography.labelSmall, color = p.inkFaint, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp),
+            fun opens(text: String, value: String?, tag: String, to: ViewPage) = DropdownMenuItem(
+                text = { Text(text) },
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkSoft)
+                    }
+                },
+                onClick = { page = to },
+                modifier = Modifier.testTag(tag),
             )
+
+            /** A choice: a check on the chosen one, in the accent. */
             @Composable
             fun choice(text: String, on: Boolean, change: () -> Unit) = DropdownMenuItem(
                 text = { Text(text) },
-                leadingIcon = { Icon(Icons.Filled.Check, contentDescription = null, tint = if (on) p.accent else Color.Transparent) },
+                trailingIcon = { Icon(Icons.Filled.Check, contentDescription = null, tint = if (on) p.accent else Color.Transparent) },
                 onClick = change,
                 modifier = Modifier.semantics { selected = on },
             )
-            heading(stringResource(R.string.chats_group_by))
-            ChatListView.GroupBy.entries.forEach { g -> choice(stringResource(groupName(g)), view.groupBy == g) { onChange(view.copy(groupBy = g)) } }
-            HorizontalDivider()
-            heading(stringResource(R.string.chats_sort_by))
-            ChatListView.SortBy.entries.forEach { o -> choice(stringResource(sortName(o)), view.sortBy == o) { onChange(view.withSort(o)) } }
-            // Manual order has no direction: it is whatever was dragged on the computer.
-            if (view.sortBy != ChatListView.SortBy.MANUAL) {
-                HorizontalDivider()
-                heading(stringResource(R.string.chats_order))
-                val name = view.sortBy == ChatListView.SortBy.NAME
-                choice(stringResource(if (name) R.string.chats_a_to_z else R.string.chats_oldest_first), view.ascending) { onChange(view.copy(ascending = true)) }
-                choice(stringResource(if (name) R.string.chats_z_to_a else R.string.chats_newest_first), !view.ascending) { onChange(view.copy(ascending = false)) }
-            }
-            HorizontalDivider()
-            heading(stringResource(R.string.chats_card_details))
-            choice(stringResource(R.string.chats_showmodel), view.showModel) { onChange(view.copy(showModel = !view.showModel)) }
-            choice(stringResource(R.string.chats_showcontext), view.showContext) { onChange(view.copy(showContext = !view.showContext)) }
-            choice(stringResource(R.string.chats_showpullrequests), view.showPullRequests) { onChange(view.copy(showPullRequests = !view.showPullRequests)) }
-            choice(stringResource(R.string.chats_showupdated), view.showUpdated) { onChange(view.copy(showUpdated = !view.showUpdated)) }
-            HorizontalDivider()
-            heading(stringResource(R.string.chats_show))
-            choice(stringResource(R.string.chats_previews), view.showPreviews) { onChange(view.copy(showPreviews = !view.showPreviews)) }
-            choice(stringResource(R.string.chats_completed_chats), view.showCompleted) { onChange(view.copy(showCompleted = !view.showCompleted)) }
-            choice(stringResource(R.string.chats_empty_groups), view.showEmptyGroups) { onChange(view.copy(showEmptyGroups = !view.showEmptyGroups)) }
-            if (view.canReorderGroups) {
-                HorizontalDivider()
+
+            /** The top of a page of choices: back to the menu, under the setting's name. */
+            @Composable
+            fun back(title: String) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.chats_reorder_groups_menu)) },
-                    leadingIcon = { Icon(Icons.Filled.SwapVert, contentDescription = null) },
-                    onClick = { open = false; onReorder() },
-                    modifier = Modifier.testTag("chats.reorder"),
+                    text = { Text(title, fontWeight = FontWeight.Medium) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back), tint = p.ink) },
+                    onClick = { page = ViewPage.MAIN },
+                    modifier = Modifier.testTag("chats.view.back"),
                 )
+                HorizontalDivider(color = p.line)
             }
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.chats_reset_defaults)) },
-                enabled = !view.isStandard,
-                onClick = { open = false; onChange(ChatListView.STANDARD) },
+            val byName = view.sortBy == ChatListView.SortBy.NAME
+            val orderName = stringResource(
+                if (view.ascending) (if (byName) R.string.chats_a_to_z else R.string.chats_oldest_first)
+                else (if (byName) R.string.chats_z_to_a else R.string.chats_newest_first),
             )
+            when (page) {
+                ViewPage.MAIN -> {
+                    // Simple / Detailed first, as on the iPhone (#2117): the pill holds only the gauges now.
+                    com.nekko.android.ui.simple.ModeMenuItems(onPicked = close)
+                    HorizontalDivider(color = p.line)
+                    opens(stringResource(R.string.chats_group_by), stringResource(groupName(view.groupBy)), "chats.view.groupBy", ViewPage.GROUP_BY)
+                    opens(stringResource(R.string.chats_sort_by), stringResource(sortName(view.sortBy)), "chats.view.sortBy", ViewPage.SORT_BY)
+                    // Manual order has no direction: it is whatever was dragged on the computer.
+                    if (view.sortBy != ChatListView.SortBy.MANUAL) opens(stringResource(R.string.chats_order), orderName, "chats.view.order", ViewPage.ORDER)
+                    HorizontalDivider(color = p.line)
+                    opens(stringResource(R.string.chats_card_details), null, "chats.view.cardDetails", ViewPage.CARD_DETAILS)
+                    opens(stringResource(R.string.chats_show), null, "chats.view.show", ViewPage.SHOW)
+                    // Only what applies now: gone, not greyed out.
+                    if (view.canReorderGroups || !view.isStandard) HorizontalDivider(color = p.line)
+                    if (view.canReorderGroups) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chats_reorder_groups_menu)) },
+                        leadingIcon = { Icon(Icons.Filled.SwapVert, contentDescription = null, tint = p.inkSoft) },
+                        onClick = { close(); onReorder() },
+                        modifier = Modifier.testTag("chats.reorder"),
+                    )
+                    if (!view.isStandard) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chats_reset_defaults), color = p.accent) },
+                        leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null, tint = p.accent) },
+                        onClick = { close(); onChange(ChatListView.STANDARD) },
+                        modifier = Modifier.testTag("chats.view.reset"),
+                    )
+                    if (onCustomize != null) {
+                        HorizontalDivider(color = p.line)
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.customize_menu)) },
+                            leadingIcon = { Icon(Icons.Filled.Tune, contentDescription = null, tint = p.inkSoft) },
+                            onClick = { close(); onCustomize() },
+                            modifier = Modifier.testTag("chats.view.customize"),
+                        )
+                    }
+                }
+                ViewPage.GROUP_BY -> {
+                    back(stringResource(R.string.chats_group_by))
+                    ChatListView.GroupBy.entries.filter { it != ChatListView.GroupBy.COMPUTER || places > 1 }
+                        .forEach { g -> choice(stringResource(groupName(g)), view.groupBy == g) { onChange(view.copy(groupBy = g)); close() } }
+                }
+                ViewPage.SORT_BY -> {
+                    back(stringResource(R.string.chats_sort_by))
+                    ChatListView.SortBy.entries.forEach { o -> choice(stringResource(sortName(o)), view.sortBy == o) { onChange(view.withSort(o)); close() } }
+                }
+                ViewPage.ORDER -> {
+                    back(stringResource(R.string.chats_order))
+                    choice(stringResource(if (byName) R.string.chats_a_to_z else R.string.chats_oldest_first), view.ascending) { onChange(view.copy(ascending = true)); close() }
+                    choice(stringResource(if (byName) R.string.chats_z_to_a else R.string.chats_newest_first), !view.ascending) { onChange(view.copy(ascending = false)); close() }
+                }
+                ViewPage.CARD_DETAILS -> {
+                    back(stringResource(R.string.chats_card_details))
+                    choice(stringResource(R.string.chats_showmodel), view.showModel) { onChange(view.copy(showModel = !view.showModel)) }
+                    choice(stringResource(R.string.chats_showcontext), view.showContext) { onChange(view.copy(showContext = !view.showContext)) }
+                    choice(stringResource(R.string.chats_showpullrequests), view.showPullRequests) { onChange(view.copy(showPullRequests = !view.showPullRequests)) }
+                    choice(stringResource(R.string.chats_showupdated), view.showUpdated) { onChange(view.copy(showUpdated = !view.showUpdated)) }
+                }
+                ViewPage.SHOW -> {
+                    back(stringResource(R.string.chats_show))
+                    choice(stringResource(R.string.chats_previews), view.showPreviews) { onChange(view.copy(showPreviews = !view.showPreviews)) }
+                    choice(stringResource(R.string.chats_completed_chats), view.showCompleted) { onChange(view.copy(showCompleted = !view.showCompleted)) }
+                    choice(stringResource(R.string.chats_empty_groups), view.showEmptyGroups) { onChange(view.copy(showEmptyGroups = !view.showEmptyGroups)) }
+                    if (places > 1) {
+                        choice(stringResource(R.string.chats_group_computer), view.showComputer) { onChange(view.copy(showComputer = !view.showComputer)) }
+                        choice(stringResource(R.string.chats_computer_icons), view.showComputerIcons) { onChange(view.copy(showComputerIcons = !view.showComputerIcons)) }
+                    }
+                }
+            }
         }
     }
 }
@@ -1036,6 +1271,7 @@ private fun groupName(g: ChatListView.GroupBy): Int = when (g) {
     ChatListView.GroupBy.PROJECT -> R.string.chats_group_project
     ChatListView.GroupBy.STATUS -> R.string.chats_group_status
     ChatListView.GroupBy.DATE -> R.string.chats_group_date
+    ChatListView.GroupBy.COMPUTER -> R.string.chats_group_computer
     ChatListView.GroupBy.NONE -> R.string.chats_group_none
 }
 
@@ -1219,9 +1455,12 @@ private fun groupTitle(key: String, name: String): String = when (key) {
     ChatGroup.GENERAL -> stringResource(R.string.chats_group_general)
     ChatSection.COMPLETED -> stringResource(R.string.chats_group_completed)
     "all" -> stringResource(R.string.chats_group_all)
-    "status:input" -> stringResource(R.string.chats_group_needs_you)
-    "status:working" -> stringResource(R.string.chats_group_working)
-    "status:idle" -> stringResource(R.string.chats_group_idle)
+    "status:input" -> stringResource(R.string.chats_group_input)
+    "status:draft" -> stringResource(R.string.chats_group_draft)
+    "status:building" -> stringResource(R.string.chats_group_building)
+    "status:verifying" -> stringResource(R.string.chats_group_verifying)
+    "status:watching" -> stringResource(R.string.chats_group_watching)
+    "status:done" -> stringResource(R.string.chats_group_done)
     "date:today" -> stringResource(R.string.chats_group_today)
     "date:yesterday" -> stringResource(R.string.chats_group_yesterday)
     "date:week" -> stringResource(R.string.chats_group_week)

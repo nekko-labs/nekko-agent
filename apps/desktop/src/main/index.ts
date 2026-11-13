@@ -131,7 +131,7 @@ preservePackagedProfile(app);
  * background and a light-themed overlay would flash white in the corner for
  * the frame or two before the page mounts.
  */
-const DEFAULT_OVERLAY: TitleBarOverlayTheme = { color: '#0c0c11', symbolColor: '#a3a1b0' };
+const DEFAULT_OVERLAY: TitleBarOverlayTheme = { color: '#0b0c14', symbolColor: '#a3a4b6' };
 
 /**
  * The URL scheme other apps use to reach Nekko Agent
@@ -702,6 +702,8 @@ app.whenReady().then(async () => {
     mainDir: __dirname,
   });
   engine.start();
+  // Opt-in usage reports (dropped while reports are off): the app opened.
+  void engine.call(IpcChannels.telemetryCapture, 'app_opened', {}).catch(() => {});
   const nekkod = engine;
   foreground = createForegroundGuard({
     ask: () => nekkod.running ? nekkod.call<{ quiet?: unknown }>('activity:fullscreen') : Promise.resolve(null),
@@ -804,7 +806,11 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   const stopping = engine;
   engine = null;
-  void stopping.stop().finally(() => {
+  // Opt-in usage reports: how long the app ran. The engine sends it at once;
+  // quitting waits two seconds at most for that.
+  const closed = stopping.call(IpcChannels.telemetryCapture, 'app_closed', { running_seconds: Math.round(process.uptime()) }).catch(() => {});
+  const reported = Promise.race([closed, new Promise((r) => setTimeout(r, 2000))]);
+  void reported.then(() => stopping.stop()).finally(() => {
     engineStopped = true;
     // Not from inside this handler: with no daemon running, stop() is already
     // settled and this runs as a microtask of the same emit. Electron then sets
