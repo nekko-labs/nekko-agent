@@ -123,7 +123,13 @@ final class AppModel {
         // Every relay HELLO is signed with this iPhone's device key (decision 0036), without asking.
         computers.helloSigner = SecureEnclaveHelloSigner(store: keychain)
         store = computers
+        #if DEBUG
+        previews = ProcessInfo.processInfo.arguments.contains("-uiTestPreviews")
+            ? PreviewLoader(read: PreviewEvidenceFixture.read)
+            : PreviewLoader(store: computers)
+        #else
         previews = PreviewLoader(store: computers)
+        #endif
         let cloudKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.cloud")
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { cloudKeychain.wipe() }
