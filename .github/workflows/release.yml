@@ -42,6 +42,9 @@ jobs:
     env:
       MACOS_SIGNING_CERTS_P12: ${{ secrets.MACOS_SIGNING_CERTS_P12 }}
       APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+      # base64 of the Developer ID .provisionprofile that authorizes the main
+      # executable's restricted entitlements (Touch ID passkeys).
+      MACOS_PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
       # Windows signs through Azure Artifact Signing (formerly Trusted
       # Signing). The service principal's client id is the gate, like the
       # macOS certificate above.
@@ -102,7 +105,7 @@ jobs:
           # failure while the cert is still missing.)
           if [ -z "${MACOS_SIGNING_CERTS_P12:-}" ]; then
             echo 'No Developer ID certificate configured, building unsigned.'
-            for name in MACOS_CERT_PASSWORD APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            for name in MACOS_CERT_PASSWORD APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER MACOS_PROVISIONING_PROFILE; do
               if [ -n "${!name:-}" ]; then
                 echo "Note: $name is set but unused without MACOS_SIGNING_CERTS_P12." >&2
               fi
@@ -112,16 +115,37 @@ jobs:
 
           # A cert *is* present, so this build will be signed. Anything missing
           # now yields a signed-but-unnotarized app: still Gatekeeper-blocked,
-          # while looking like the release worked. Fail before building.
+          # while looking like the release worked. Without the provisioning
+          # profile it yields an app macOS refuses to launch (#2688). Fail
+          # before building.
           missing=()
-          for name in MACOS_CERT_PASSWORD APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER; do
+          for name in MACOS_CERT_PASSWORD APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER MACOS_PROVISIONING_PROFILE; do
             [ -n "${!name:-}" ] || missing+=("$name")
           done
           if [ "${#missing[@]}" -gt 0 ]; then
             printf 'macOS signing configuration is incomplete. Missing: %s\n' "${missing[*]}" >&2
+            echo 'Secrets are listed in docs/signing.md, "Secrets" and "Provisioning profile".' >&2
             exit 1
           fi
           echo 'macOS signing fully configured.'
+
+      # electron-builder.yml names build/nekko-agent.provisionprofile, which is
+      # never committed. Write it from the secret and check it authorizes the
+      # main executable's entitlements now: a wrong profile is otherwise found
+      # only when the shipped app will not open (#2688). A tag from before the
+      # profile has no check script and no use for the file.
+      - name: Install the macOS provisioning profile
+        if: runner.os == 'macOS' && env.MACOS_SIGNING_CERTS_P12 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          profile=apps/desktop/build/nekko-agent.provisionprofile
+          printf '%s' "$MACOS_PROVISIONING_PROFILE" | base64 --decode > "$profile"
+          if [ -f apps/desktop/scripts/check-provisioning-profile.cjs ]; then
+            node apps/desktop/scripts/check-provisioning-profile.cjs "$profile"
+          else
+            echo "$RELEASE_TAG predates the provisioning profile; not checking it."
+          fi
 
       # The notary key is the credential that actually breaks between
       # releases: an App Store Connect API key can be revoked or rotated in
@@ -327,11 +351,20 @@ jobs:
 
       # Only nekko-vm may create VMs (apps/desktop/scripts/sign-mac.cjs): it must
       # carry the virtualization entitlement and nothing else in the app may.
-      # Signed or not, and a file codesign cannot read fails it. docs/signing.md.
-      - name: Check the virtualization entitlement
+      # Only the main executable may carry a restricted entitlement, and a
+      # signed app must carry them and embed the profile. Signed or not, and a
+      # file codesign cannot read fails it. docs/signing.md.
+      - name: Check the entitlements
         if: runner.os == 'macOS'
         shell: bash
-        run: scripts/check-mac-entitlements.sh "$(find apps/desktop/release -maxdepth 2 -name '*.app' -print -quit)"
+        run: |
+          set -euo pipefail
+          app=$(find apps/desktop/release -maxdepth 2 -name '*.app' -print -quit)
+          if [ -n "${MACOS_SIGNING_CERTS_P12:-}" ] && [ -f apps/desktop/scripts/check-provisioning-profile.cjs ]; then
+            scripts/check-mac-entitlements.sh "$app" --signed
+          else
+            scripts/check-mac-entitlements.sh "$app"
+          fi
 
       # Proof the artifact is actually distributable, rather than trusting that
       # the build steps above did what they claim.
@@ -352,6 +385,17 @@ jobs:
           # that wraps it, so this is the artifact to validate.
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose=4 "$app"
+          # macOS checks restricted entitlements against the embedded profile
+          # only when the binary starts, so every check above passed on
+          # 0.10.1000, which no Mac would open (#2688). Start it for real.
+          bin="$app/Contents/MacOS/$(defaults read "$PWD/$app/Contents/Info" CFBundleExecutable)"
+          # 0.10.1000 exits 137 here (SIGKILL at exec).
+          if ! ELECTRON_RUN_AS_NODE=1 "$bin" -e 'process.exit(0)'; then
+            echo "$bin did not start. If the system log shows amfid 'No matching profile found', the provisioning profile does not authorize the entitlements (docs/signing.md, \"Provisioning profile\")." >&2
+            log show --last 2m --style compact --predicate 'process == "amfid" OR (process == "kernel" AND eventMessage CONTAINS "AMFI")' 2>/dev/null | tail -20 >&2 || true
+            exit 1
+          fi
+          echo 'The signed app starts.'
 
       - name: Verify the signed installer
         if: runner.os == 'Windows' && env.AZURE_SIGNING_CLIENT_ID != ''

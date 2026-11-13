@@ -39,10 +39,9 @@ export interface CeremonyWindow {
 
 /**
  * What the owner is told when this computer has no platform authenticator to
- * offer: Linux, and for now every Mac, since Touch ID stays off until a
- * provisioning profile lets the build carry its keychain access group
- * (webauthnPlatform.ts, #2703). Without this the window waits on a prompt that
- * never comes.
+ * offer: Linux, a Mac with no Secure Enclave, or a build whose signature does
+ * not carry the keychain access group (webauthnPlatform.ts). Without this the
+ * window waits on a prompt that never comes.
  */
 export const NO_PLATFORM_AUTHENTICATOR = 'This computer has no built-in passkey (Touch ID or Windows Hello) to register. Use a security key instead.';
 

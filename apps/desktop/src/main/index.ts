@@ -27,6 +27,7 @@ import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
 import { runCeremonyWindow } from './webauthnWindow.js';
+import { configurePlatformAuthenticator } from './webauthnPlatform.js';
 import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
 import { createDisplayWindows, type DisplayWindows, type SpacesApi } from './displayWindows.js';
 import { readSpaces, switchDesktop } from './spaces.js';
@@ -586,9 +587,9 @@ function claimSingleInstance(): boolean {
  * page has no origin WebAuthn accepts. Only the app's own windows may ask.
  */
 function registerWebAuthnCeremony(): void {
-  // Touch ID stays off: it needs the keychain-access-groups entitlement, which
-  // macOS only honours with an embedded provisioning profile (#2703). Until
-  // then the ceremony window reports no platform authenticator on macOS.
+  // Electron services no platform-authenticator request until this is called,
+  // so without it the passkey ceremony never prompts for Touch ID.
+  configurePlatformAuthenticator(app, process.platform, (e) => console.warn('The Touch ID authenticator could not be turned on; passkeys on this computer will be unavailable.', e));
   ipcMain.handle(WEBAUTHN_CEREMONY_CHANNEL, (event, request: unknown) => {
     if (!applicationWindows.has(event.sender.id)) throw new Error('untrusted');
     const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;

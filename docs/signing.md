@@ -13,7 +13,7 @@ worked.
 
 | Platform | Mechanism | Wired | Blocked on |
 | --- | --- | --- | --- |
-| macOS | Developer ID codesign + notarization | ✅ live since v0.6.0 | nothing |
+| macOS | Developer ID codesign + notarization + provisioning profile | ✅ live since v0.6.0; profile secret-required | the `MACOS_PROVISIONING_PROFILE` secret ([below](#provisioning-profile)) |
 | Windows | Authenticode via Azure Artifact Signing | ✅ secret-gated | Azure identity validation + the secrets below |
 | Linux | none (AppImage/deb are unsigned) | n/a | n/a |
 | Update feed (all) | Ed25519 signature beside each `latest*.yml` | ✅ secret-gated | Philip generating the release key ([below](#the-release-signing-key)) |
@@ -124,7 +124,11 @@ artifacts are `.dmg`/`.zip` rather than a `.pkg`.
 What is configured, in `apps/desktop/electron-builder.yml`:
 
 - `hardenedRuntime: true` — required for notarization
-- `entitlements` / `entitlementsInherit` → `build/entitlements.mac.plist`
+- `entitlements` → `build/entitlements.mac.plist` (the main executable)
+- `entitlementsInherit` → `build/entitlements.mac.inherit.plist` (helpers,
+  nekkod, everything in `Resources/bin`): the same keys minus the restricted ones
+- `provisioningProfile` → `build/nekko-agent.provisionprofile`, never committed;
+  see [Provisioning profile](#provisioning-profile)
 - `notarize: false` by default, flipped on with `-c.mac.notarize=true` by the
   release workflow, so a local `npm run dist` does not need the Apple API key
 
@@ -146,28 +150,96 @@ the short version:
 | `files.user-selected.read-write` | the user's project folders |
 | `network.client` / `network.server` | model providers and the local phone-relay server |
 | `device.camera` | the QR pairing scanner |
+| `keychain-access-groups` | Settings → Security's Touch ID passkeys (main executable only) |
+| `com.apple.application-identifier`, `com.apple.developer.team-identifier` | required beside it by the provisioning profile (main executable only) |
 
 `NSCameraUsageDescription` is set via `mac.extendInfo`. Without it macOS kills
 the process instead of prompting when the QR scanner opens.
 
-**No restricted entitlements.** `keychain-access-groups`,
-`com.apple.application-identifier` and `com.apple.developer.*` need an embedded
-provisioning profile that authorizes them, and this build embeds none. Without
-one, macOS refuses to launch the app (`amfid ... Code=-413 "No matching profile
-found"`), even though `codesign --verify`, notarization and `spctl` all pass.
-0.10.1000 shipped `keychain-access-groups` for Touch ID passkeys and did not
-open on any Mac (#2688). A test in `webauthnPlatform.test.ts` keeps these keys
-out. Touch ID passkeys come back once a Developer ID profile is embedded
-(#2703).
+`keychain-access-groups` is the one entitlement whose value has to be kept in
+step with the code: it holds `3HM5598S99.dev.nekkolabs.nekkoagent.webauthn`,
+the group Electron's Touch ID authenticator stores WebAuthn credentials in, and
+`WEBAUTHN_KEYCHAIN_ACCESS_GROUP` in `apps/desktop/src/main/webauthnPlatform.ts`
+passes the same string to `app.configureWebAuthn`. A test fails if they drift.
+The team id is spelled out because `codesign` expands no build variable:
+`$(AppIdentifierPrefix)` is an Xcode substitution, and nothing here runs Xcode.
+
+### Provisioning profile
+
+`keychain-access-groups`, `com.apple.application-identifier` and
+`com.apple.developer.*` are **restricted**: macOS refuses to launch a Developer
+ID app carrying one unless `Contents/embedded.provisionprofile` authorizes it
+(`amfid ... Code=-413 "No matching profile found"`). `codesign --verify`,
+notarization and `spctl` all pass regardless. 0.10.1000 shipped
+`keychain-access-groups` with no profile and did not open on any Mac (#2688).
+So:
+
+- The main executable carries the three keys and the profile authorizes them.
+  The helpers, nekkod and `Resources/bin` have no profile of their own, so they
+  are signed with `entitlements.mac.inherit.plist`, which has none of them; a
+  test in `webauthnPlatform.test.ts` holds that.
+- `scripts/sign-mac.cjs` fails a signed build when the profile file is missing.
+  A signed release never ships without Touch ID, and never ships an app macOS
+  kills.
+- A local `npm run dist` without `CSC_LINK` is unaffected: `after-pack.cjs`
+  ad-hoc signs with no entitlements, so it launches, with no Touch ID passkeys.
+  A local signed build (`CSC_NAME`, below) needs the file in
+  `apps/desktop/build/`. So does a plain `npm run dist` on a Mac whose keychain
+  holds the Developer ID identity, since electron-builder finds and uses it on
+  its own: set `CSC_IDENTITY_AUTO_DISCOVERY=false` for an unsigned build there.
+- In `release.yml`, *Validate macOS signing configuration* requires
+  `MACOS_PROVISIONING_PROFILE` whenever the certificate is set, *Install the
+  macOS provisioning profile* writes it and runs
+  `apps/desktop/scripts/check-provisioning-profile.cjs` on it,
+  *Check the entitlements* runs `check-mac-entitlements.sh --signed` (profile
+  embedded, three keys on the main executable), and *Verify the signed app*
+  starts the app's binary (`ELECTRON_RUN_AS_NODE=1 ... -e 'process.exit(0)'`),
+  the one check that sees what AMFI sees.
+
+**Creating it.** Needs Account Holder or Admin on team `3HM5598S99`, org-admin
+on `nekko-labs`, and a Mac with the Developer ID certificate in the login
+keychain.
+
+1. Find the certificate the release signs with, to pick the same one in the
+   portal. If more than one prints, it is the one exported into
+   `MACOS_SIGNING_CERTS_P12` (match the expiry in Keychain Access → My
+   Certificates):
+
+   ```bash
+   security find-certificate -a -c "Developer ID Application: Nekko Labs LLC" -p | openssl x509 -noout -serial -enddate
+   ```
+
+2. developer.apple.com → Account → Certificates, Identifiers & Profiles →
+   **Profiles** → **+** → under Distribution, **Developer ID** → Continue →
+   profile type **Mac** → App ID `dev.nekkolabs.nekkoagent` → that certificate
+   → name it `Nekko Agent Developer ID` → **Generate** → **Download**. No
+   capability needs ticking on the App ID: a Developer ID profile grants
+   `keychain-access-groups` = `3HM5598S99.*` on its own.
+3. Check it. It must print `provisioning profile OK`:
+
+   ```bash
+   node apps/desktop/scripts/check-provisioning-profile.cjs ~/Downloads/Nekko_Agent_Developer_ID.provisionprofile
+   ```
+
+4. Store it, alone (not pasted with other commands: `gh secret set` reads stdin):
+
+   ```bash
+   gh secret set MACOS_PROVISIONING_PROFILE --org nekko-labs --visibility all < <(base64 -i ~/Downloads/Nekko_Agent_Developer_ID.provisionprofile)
+   ```
+
+**Renewing it.** The profile expires (the portal shows when; the check warns
+30 days ahead and fails after) and names the certificate it was made for.
+Regenerate it when it nears expiry or when the Developer ID certificate is
+replaced, then repeat steps 3 and 4.
 
 ### The VM helper's entitlement
 
 `Contents/Resources/bin/nekko-vm`, the CI runner VM helper, is the only binary
 that carries `com.apple.security.virtualization`. Virtualization.framework
-refuses to create a VM without it. It is never in `build/entitlements.mac.plist`:
-that file is both `entitlements` and `entitlementsInherit`, so the app, its
-helpers, nekkod and everything nekkod starts would hold it too, and any agent
-process could then boot a VM.
+refuses to create a VM without it. It is never in `build/entitlements.mac.plist`
+or `entitlements.mac.inherit.plist`: the app, its helpers, nekkod and
+everything nekkod starts would hold it too, and any agent process could then
+boot a VM.
 
 - **Release signing:** `mac.sign` in `electron-builder.yml` points at
   `apps/desktop/scripts/sign-mac.cjs`, the stock osx-sign run (through
@@ -186,11 +258,13 @@ process could then boot a VM.
 `scripts/check-mac-entitlements.sh <app>` reads the entitlements of the app,
 every helper app under `Contents/Frameworks` and every file under
 `Contents/Resources/bin`, and fails if `nekko-vm` is missing, lacks the
-entitlement, anything else has it, or `codesign` cannot read a file. Where it
-runs:
+entitlement, anything else has it, anything but the main executable carries a
+restricted entitlement, or `codesign` cannot read a file. With `--signed` it
+also requires `Contents/embedded.provisionprofile` and the three restricted
+entitlements on the main executable. Where it runs:
 
-- `release.yml`, step `Check the virtualization entitlement`, right after the
-  build, on every macOS release, signed or not.
+- `release.yml`, step `Check the entitlements`, right after the build, on
+  every macOS release: `--signed` when the certificate is set.
 - `installers.yml`, on PRs that touch packaging: the same check on the unsigned
   build, then `Signed dry-run through the release hook`, which runs
   `apps/desktop/scripts/sign-mac-dry-run.cjs` on a copy of the app. That is the
@@ -217,7 +291,7 @@ Still needs Philip (Developer ID certificate, a real release):
   then the check above exits 0 and `codesign --verify --deep --strict --verbose=2`
   passes on the app; open it, connect a runner and see one VM boot from the
   signed `nekko-vm`.
-- [ ] On the next tag, `Check the virtualization entitlement` is green on the
+- [ ] On the next tag, `Check the entitlements` is green on the
   signed, notarized macOS build and `Verify the signed app` still passes.
 
 ## Secrets
@@ -232,6 +306,7 @@ These are **`nekko-labs` organization secrets**, shared with `hypergate` and
 | `APPLE_API_KEY_P8` | App Store Connect API key contents |
 | `APPLE_API_KEY_ID` | ASC key id |
 | `APPLE_API_ISSUER` | ASC issuer id (a UUID) |
+| `MACOS_PROVISIONING_PROFILE` | base64 of the Developer ID `.provisionprofile` ([Provisioning profile](#provisioning-profile)) |
 | `AZURE_SIGNING_TENANT_ID` | Entra tenant of the signing service principal |
 | `AZURE_SIGNING_CLIENT_ID` | its application (client) id; the Windows gate |
 | `AZURE_SIGNING_CLIENT_SECRET` | its client secret |

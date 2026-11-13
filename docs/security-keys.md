@@ -12,7 +12,7 @@ Your computer checks every answer itself. There is no Nekko Cloud account behind
 
 Open **Settings → Security** on the computer. It lists the methods registered for this computer, each with its name, when it was added and when it was last used.
 
-1. **Add a security key.** Choose to add a security key, give it a name you will recognize, and touch the key (or hold it to the top of your phone for NFC). On Windows you can use Windows Hello. Touch ID on a Mac is not available for now: use a key. On Linux only a key works: Chromium has no built-in authenticator there.
+1. **Add a security key.** Choose to add a security key, give it a name you will recognize, and touch the key (or hold it to the top of your phone for NFC). On a Mac you can use Touch ID, on Windows, Windows Hello. On Linux only a key works: Chromium has no built-in authenticator there.
 2. **Add a second method.** Step-up cannot be turned on with fewer than **two** methods, so a lost key never locks you out of your own computer. Good pairs are two keys (keep one at home), or a key and a one-time code.
    - **One-time code:** type a name if you like (the app's, say), choose to add a one-time code, scan the QR with any authenticator app (1Password, Google Authenticator, Authy and the like), and type the six digits it shows. Settings warns, but lets you go on, if the authenticator is on the same phone you are protecting.
    - **Passkey on this phone or computer:** registered the same way as a key, with Face ID, Touch ID, Windows Hello or the phone's fingerprint.
@@ -88,8 +88,8 @@ On the desktop, the Remote access card has two matching controls:
 
 ## Where it works
 
-- **Desktop app**: security keys over USB, NFC or Bluetooth; Windows Hello. Mac and Linux: keys only.
-  - Touch ID on a Mac is off for now: *Add passkey on this computer* says the computer has no built-in passkey, and you can use a security key instead. When it returns, a Touch ID passkey will stay in that Mac's Secure Enclave, will not sync through iCloud Keychain, and will need Apple silicon or an Intel Mac with a T2 chip.
+- **Desktop app**: security keys over USB, NFC or Bluetooth; Touch ID on a Mac; Windows Hello. Linux: keys only.
+  - A Touch ID passkey is kept in that Mac's Secure Enclave, so it stays on that Mac and does not sync through iCloud Keychain, and it needs a Mac that has one (Apple silicon, or an Intel Mac with a T2 chip). It also needs the app you downloaded from us: a copy you built yourself is not signed for it. Where Touch ID cannot be offered, *Add passkey on this computer* says so and you can use a security key instead.
 - **Local Web UI**: the same, at `http://localhost`. If you reach it through a reverse proxy on another host name, step-up needs `https`, and the page says so.
 - **iPhone**: security keys over NFC, Lightning or USB-C, and passkeys.
 - **Android**: security keys over NFC or USB-C, and passkeys.
