@@ -71,6 +71,8 @@ fn str_at<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
 const DELEGATION_TOOLS: [&str; 2] = ["Agent", "Task"];
 /// What they are called here, so their row is the one a Nekko delegation gets.
 const DELEGATE_AS: &str = "spawn_agent";
+/// How Claude Code's `Agent` result begins for a sub-agent it runs in the background.
+const ASYNC_LAUNCHED: &str = "Async agent launched";
 
 /// A sub-agent's part of the stream. Claude Code runs it inside the chat's
 /// session, so nothing else tells Nekko it exists: the daemon turns these into
@@ -82,6 +84,14 @@ pub enum Subagent {
         title: String,
         task: String,
         background: bool,
+    },
+    /// Claude Code moved it to the background after it started: `task_started`
+    /// with `is_backgrounded`, or an `Agent` result saying it launched
+    /// asynchronously. That is every `Agent` call when sub-agents run in the
+    /// background by default, with no `run_in_background` in the call. It
+    /// outlives the turn that started it, until its `task_notification` (#2645).
+    Backgrounded {
+        call_id: String,
     },
     /// One of its stream-json lines, unmarked, ready for a [`Mapper`] of its own.
     Line {
@@ -514,8 +524,12 @@ impl Mapper {
                 self.denied.insert(id, reason.to_string());
             }
             Some("task_started") if v.get("is_backgrounded") == Some(&Value::Bool(true)) => {
-                if let Some(background) = str_at(v, "tool_use_id").and_then(|id| self.delegating.get_mut(id)) {
+                if let Some(call_id) = str_at(v, "tool_use_id")
+                    && let Some(background) = self.delegating.get_mut(call_id)
+                    && !*background
+                {
                     *background = true;
+                    out.push(Mapped::Subagent(Subagent::Backgrounded { call_id: call_id.into() }));
                 }
             }
             // Also said of background commands, which have no child to end.
@@ -701,7 +715,13 @@ impl Mapper {
                 "createdAt": nekko_js::now_ms(),
             })));
             out.push(self.event("tool_result", json!({ "result": result })));
-            if self.delegating.remove(&id) == Some(false) {
+            // A result that only says it launched, with no `task_started` before
+            // it: backgrounded all the same, and it ends at its notification.
+            let launched = str_at(&result, "output").is_some_and(|o| o.trim_start().starts_with(ASYNC_LAUNCHED));
+            if launched && self.delegating.get(&id) == Some(&false) {
+                self.delegating.remove(&id);
+                out.push(Mapped::Subagent(Subagent::Backgrounded { call_id: id.clone() }));
+            } else if self.delegating.remove(&id) == Some(false) {
                 let outcome = if result.get("isError").is_some() {
                     Outcome::Failed(str_at(&result, "output").unwrap_or_default().to_string())
                 } else {

@@ -141,9 +141,10 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
-          # Identical debug transition history on both revisions observes the real
-          # refresh across XCTest's idle wait. No seasonal implementation is copied.
-          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/WinterThemeTests.swift" ]]; then
+          # Overlay only deterministic test data: the title comparison, and for the winter
+          # comparison an identical debug transition history on both revisions that observes
+          # the real refresh across XCTest's idle wait. No seasonal implementation is copied.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/WinterThemeTests.swift" ]]; then
             cp .evidence-harness/apps/ios/App/Views/ChatStatusFixture.swift apps/ios/App/Views/
           fi
           # The keyboard baseline contains the independently diagnosed recursive
@@ -205,6 +206,8 @@ jobs:
           VIDEO_FILE=""
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/PendingResponsesUITests.swift" ]]; then
             VIDEO_FILE=evidence/native-motion.mp4
+          elif [[ "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then
+            VIDEO_FILE=evidence/native-comparison.mp4
           elif [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/KeyboardDismissEvidenceTests.swift" ]]; then
             VIDEO_FILE=evidence/quiet-transcript.mp4
           fi

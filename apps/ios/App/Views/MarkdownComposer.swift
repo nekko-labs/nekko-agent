@@ -297,7 +297,8 @@ struct MarkdownEditor: UIViewRepresentable {
         }]
         tv.text = text
         editor.textView = tv
-        if editor.text != text { editor.text = text }
+        editor.text = text
+        context.coordinator.bound = text
         let palette = context.environment.palette
         tv.inputAccessoryView = ComposerKeyboardBarView(ComposerKeyboardBar(editor: editor, palette: palette))
         context.coordinator.colors(palette)
@@ -315,12 +316,19 @@ struct MarkdownEditor: UIViewRepresentable {
         tv.onRichPaste = { range, plain, markdown in
             editor.pasteOffer = MarkdownEditorState.PasteOffer(range: range, plain: plain, markdown: markdown)
         }
-        if tv.text != text {
-            // Set from outside (a draft restored, dictation, Edit on a waiting prompt): not an undoable edit.
+        // Only a binding that changed since the last update is set from outside (a draft
+        // restored, dictation, Send clearing it, Edit on a waiting prompt): not an undoable edit.
+        // An update can run before the parent re-renders, with `text` still the value from
+        // before the latest keystrokes; writing that back dropped typed characters and moved
+        // the caret ("Kthis draft", #2460). Never read `editor.text` here either: it is
+        // observable, and reading it made every keystroke run this update early.
+        let external = text != context.coordinator.bound
+        context.coordinator.bound = text
+        if external && tv.text != text {
             tv.text = text
+            editor.text = text
             context.coordinator.restyle(tv)
         }
-        if editor.text != text { editor.text = text }
         let recolored = context.coordinator.colors(palette)
         if recolored { context.coordinator.restyle(tv) }
         if let bar = tv.inputAccessoryView as? ComposerKeyboardBarView, recolored || bar.host.rootView.editor !== editor {
@@ -348,6 +356,8 @@ struct MarkdownEditor: UIViewRepresentable {
         /// The palette's colours, taken while SwiftUI updates the view (the environment isn't readable from delegate calls).
         private var ink = UIColor.label, faint = UIColor.secondaryLabel, accent = UIColor.tintColor
         private var palette: [Color]?
+        /// The `text` binding as the last update saw it, to tell a change made outside from a stale value.
+        var bound = ""
         init(_ parent: MarkdownEditor) { self.parent = parent }
 
         /// True when the colours changed (the text's, or the keyboard bar's).

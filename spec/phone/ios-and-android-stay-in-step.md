@@ -74,11 +74,8 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
 | Full system-permissions checklist in onboarding and Settings (no video) | Notifications-only onboarding; checklist not yet implemented | [#2251](https://github.com/nekko-labs/nekko-agent/issues/2251) |
-| Computer controls: persistent connection opt-out, Models disclosure and filters, Cloud fleet group, and service management | Not implemented on Android | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
-| Watching and Done groups, collapsible groups (PR status on rows landed 2026-11-09) | Only a Needs you group | [#2107](https://github.com/nekko-labs/nekko-agent/issues/2107) |
-| One chat list across every computer, group by computer | One computer's list at a time | [#2108](https://github.com/nekko-labs/nekko-agent/issues/2108) |
+| Computer controls: persistent connection opt-out, Models disclosure and filters, Cloud fleet group | Not implemented on Android; service management landed (2026-11-12); Cloud fleet waits with Nekko Cloud (#2122) | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
 | Connectors page (with the brand logos the iPhone has had since 2026-11-09) | Missing | [#2109](https://github.com/nekko-labs/nekko-agent/issues/2109) |
-| Full-screen photos, previews before and after sending | No photo viewer | [#2111](https://github.com/nekko-labs/nekko-agent/issues/2111) |
 | Edit photos in image chats: attach photos to a prompt, Edit under a made picture | Not implemented on Android | [#2230](https://github.com/nekko-labs/nekko-agent/issues/2230) |
 | Plan sheet on the composer | Missing (the iPhone's `PlanSheet.swift`) | [#2115](https://github.com/nekko-labs/nekko-agent/issues/2115) |
 | Live card: chats as chips that open the chat | Focused chat and its actions only | [#2116](https://github.com/nekko-labs/nekko-agent/issues/2116) |
@@ -86,13 +83,19 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Push notifications | No push; the keep-alive service covers an open connection | [#2121](https://github.com/nekko-labs/nekko-agent/issues/2121) |
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
-| Customize page: view, this phone's tone, skills | Missing; Simple/Detailed is in the pill | [#2426](https://github.com/nekko-labs/nekko-agent/issues/2426) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
+| Connection row under the title instead of the connection, fleet and protocol banners (2026-11-12) | Tinted banners | [#2633](https://github.com/nekko-labs/nekko-agent/issues/2633) |
 | New chat as a composer (the desktop's bottom row: +, folder, asks-first, mic, Start) | A form; only its Chat / Image toggle matches the iPhone's (#2448) | [#2459](https://github.com/nekko-labs/nekko-agent/issues/2459) |
 
 Android features the iPhone lacks have not been audited yet.
 
 Nothing is recorded as a true OS exclusive yet.
+
+## Reconnect status wording
+
+| Capability | iPhone / iPad | Android | Gap / follow-up |
+| --- | --- | --- | --- |
+| Two-line reconnect status with fixed-width animated ellipsis | Branch implementation, native verification pending ([spec](ios-streaming-and-reconnect-status.md)) | Existing single-paragraph notice | [#2475](https://github.com/nekko-labs/nekko-agent/issues/2475) |
 
 ## Secret box (desktop first, #2594)
 

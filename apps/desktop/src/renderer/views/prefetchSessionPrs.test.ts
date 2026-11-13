@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { prefetchSessionPrs } from './prefetchSessionPrs.js';
+import type { PrInfo } from '@nekko-agent/shared';
+import { freshSessionPrs, prefetchSessionPrs } from './prefetchSessionPrs.js';
 
 describe('visible sidebar PR prefetch', () => {
   it('continues past eight cards, bounds parallelism and skips cached cards', async () => {
@@ -48,5 +49,20 @@ describe('visible sidebar PR prefetch', () => {
     expect([...seen].sort()).toEqual([...ids].sort());
     expect(peak).toBeLessThanOrEqual(8);
     expect(inFlight.size).toBe(0);
+  });
+});
+
+describe('agent cards re-read PRs that can still change', () => {
+  const info = (state: 'open' | 'merged' | 'closed') => ({ url: 'u', owner: 'o', repo: 'r', number: 1, title: 't', state, isDraft: false, additions: 0, deletions: 0, changedFiles: 0, checks: 'none', source: 'gh' }) as PrInfo;
+  it('treats final PRs and recently read open PRs as loaded, and drops stale open ones', () => {
+    const now = 1_000_000;
+    const fresh = freshSessionPrs({
+      done: [info('merged'), info('closed')],
+      none: [],
+      justRead: [info('open')],
+      stale: [info('open'), info('merged')],
+      neverRead: [info('open')],
+    }, new Map([['justRead', now - 10_000], ['stale', now - 45_000]]), now);
+    expect(Object.keys(fresh).sort()).toEqual(['done', 'justRead', 'none']);
   });
 });

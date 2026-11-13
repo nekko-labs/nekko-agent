@@ -12,20 +12,33 @@ final class SeasonalDecorationTests: XCTestCase {
         }
     }
 
-    func testEightDeterministicFlakesWithOneCat() {
-        XCTAssertEqual(WinterFlakes.count, 8)
-        XCTAssertTrue((0..<WinterFlakes.count).contains(WinterFlakes.catIndex))
-        XCTAssertEqual((0..<WinterFlakes.count).filter { $0 == WinterFlakes.catIndex }.count, 1)
-        for index in 0..<WinterFlakes.count {
-            let start = WinterFlakes.position(index, seconds: 0)
-            XCTAssertEqual(start, WinterFlakes.position(index, seconds: 0))
-            XCTAssertNotEqual(start, WinterFlakes.position(index, seconds: 3))
-            for seconds in [0.0, 3, 30, 300, 3_600] {
-                let point = WinterFlakes.position(index, seconds: seconds)
-                XCTAssertTrue((0...1).contains(point.x))
-                XCTAssertTrue((0..<1).contains(point.y))
+    func testTenSlowLargeFlakesInEightDesignsAndNoCat() {
+        XCTAssertEqual(WinterFlakes.count, 10)
+        XCTAssertEqual(WinterFlakes.typeCount, 8)
+        for type in 0..<WinterFlakes.typeCount { XCTAssertFalse(WinterFlakes.path(type).isEmpty) }
+        var types = Set<Int>()
+        for seed: UInt64 in [1, 42, 0xDEAD_BEEF] {
+            for index in 0..<WinterFlakes.count {
+                let start = WinterFlakes.flake(index, seconds: 0, seed: seed)
+                XCTAssertEqual(start, WinterFlakes.flake(index, seconds: 0, seed: seed))
+                XCTAssertNotEqual(start.position, WinterFlakes.flake(index, seconds: 3, seed: seed).position)
+                // Slow: no flake moves more than 1/48 of the screen height per second.
+                let next = WinterFlakes.flake(index, seconds: 1, seed: seed)
+                if next.position.y > start.position.y { XCTAssertLessThanOrEqual(next.position.y - start.position.y, 1.0 / 48 + 1e-9) }
+                for seconds in [0.0, 3, 30, 300, 3_600] {
+                    let flake = WinterFlakes.flake(index, seconds: seconds, seed: seed)
+                    XCTAssertTrue((0...1).contains(flake.position.x))
+                    XCTAssertTrue((0..<1).contains(flake.position.y))
+                    XCTAssertTrue(WinterFlakes.radius.contains(flake.radius))
+                    types.insert(flake.type)
+                }
             }
         }
+        XCTAssertEqual(types, Set(0..<8))
+    }
+
+    func testHashMatchesAndroid() {
+        XCTAssertEqual(WinterFlakes.unit(42, 3, 7, 4), 0.20620949912738473, accuracy: 1e-12)
     }
 
     func testNoHatForOtherThemesAndSeasonalHatsRender() throws {

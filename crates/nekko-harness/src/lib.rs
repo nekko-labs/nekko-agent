@@ -39,6 +39,7 @@ mod locate;
 mod map;
 mod plan;
 mod session;
+mod subagent_log;
 mod turn;
 
 pub use account::{MAX_ACCOUNT_LEN, account_config_dir, is_account_name};
@@ -53,4 +54,5 @@ pub use session::{
     LaunchSpec, PermissionMode, Session, SessionStart, control_error_line, interrupt_line, is_passive, launch_args,
     new_session_id, user_line,
 };
+pub use subagent_log::{claude_config_dir, find_transcript, read_transcript, tool_call_ids, transcript_messages};
 pub use turn::{Transport, TurnExit, TurnInput, run_turn};

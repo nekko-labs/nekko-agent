@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -76,6 +77,14 @@ fun SimpleModeSection(deps: SettingsDeps) {
     val changed = remember(raw) { SimpleMode.parse(raw).size }
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         NCard {
+            // Customize (#2426): the view, this phone's tone and the computer's skills, as on the iPhone.
+            SettingsRow(
+                title = stringResource(R.string.customize_title),
+                detail = stringResource(R.string.customize_settings_detail),
+                icon = Icons.Outlined.AutoAwesome,
+                onClick = { deps.open(Routes.CUSTOMIZE) },
+            )
+            androidx.compose.material3.HorizontalDivider(color = com.nekko.android.ui.theme.Nekko.palette.line)
             SettingsRow(
                 title = stringResource(R.string.simple_mode_title),
                 detail = if (changed == 0) stringResource(R.string.simple_mode_detail) else stringResource(R.string.simple_mode_detail_changed, changed),

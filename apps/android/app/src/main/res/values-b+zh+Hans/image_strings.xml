@@ -23,5 +23,4 @@
     <string name="image_reply_n">生成的图像 %1$d</string>
     <string name="image_open">打开图像</string>
     <string name="image_close">关闭</string>
-    <string name="image_unavailable">无法加载此图像。请重新连接并重试。</string>
 </resources>

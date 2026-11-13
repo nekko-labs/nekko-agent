@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Markdown, markdownSegments, renderWhole, safeHref, linkContextActions } from './Markdown.js';
+import { Markdown, MarkdownSandbox, markdownSegments, renderWhole, safeHref, linkContextActions } from './Markdown.js';
+import { MarkdownRefs } from './ReplyRefChips.js';
 
 const browser = vi.hoisted(() => vi.fn());
 vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openBrowserPane: browser }) } }));
@@ -369,5 +370,51 @@ describe('Markdown block split', () => {
       const after = markdownSegments(REPLY.slice(0, n + 3));
       for (const seg of before.slice(0, -1)) expect(after).toContainEqual(seg);
     }
+  });
+});
+
+describe('code spans naming an output file', () => {
+  it('draws a page, image or PDF named in code as a file chip', () => {
+    const out = renderToStaticMarkup(<Markdown text={'Design: `reports/strip.html`.'} basePath="/repo" />);
+    expect(out).toMatch(/<button[^>]*data-file-ref="\/repo\/reports\/strip\.html"[^>]*>/);
+    expect(out).toContain('>strip.html<');
+  });
+  it('stays plain code when a relative path has no folder to resolve against', () => {
+    const out = html('Design: `reports/strip.html`.');
+    expect(out).not.toContain('<button');
+    expect(out).toMatch(/<code[^>]*>reports\/strip\.html<\/code>/);
+  });
+});
+
+describe('reply references as chips', () => {
+  const refs = { repo: { owner: 'nekko-labs', repo: 'nekko-agent' }, files: ['/repo/apps/ios/App/RootView.swift', '/repo/apps/ios/App/Theme.swift'] };
+  const reply = (text: string, sandbox = false) => renderToStaticMarkup(<MarkdownSandbox.Provider value={sandbox}><MarkdownRefs.Provider value={refs}><Markdown text={text} basePath="/repo" /></MarkdownRefs.Provider></MarkdownSandbox.Provider>);
+  const sample = 'The cover is built with the same theme setup (RootView.swift:164-166). Since the Winter snow change (#2480), it draws snowfall (Theme.swift:165-167). Replaced in **PR #2640**.';
+
+  it('turns file references and PR numbers in prose into chips', () => {
+    const out = reply(sample);
+    expect(out).toMatch(/data-file-ref="\/repo\/apps\/ios\/App\/RootView\.swift" title="\/repo\/apps\/ios\/App\/RootView\.swift, lines 164-166"/);
+    expect(out).toContain('>:164-166<');
+    expect(out).toContain('data-file-ref="/repo/apps/ios/App/Theme.swift"');
+    expect(out).toContain('href="https://github.com/nekko-labs/nekko-agent/pull/2480"');
+    expect(out).toContain('href="https://github.com/nekko-labs/nekko-agent/pull/2640"');
+    expect(out).toContain('(<a');
+  });
+  it('chips a file or PR in code formatting and an issue by name', () => {
+    const out = reply('See `src/App.tsx:12`, `#2480` and issue #12.');
+    expect(out).toContain('data-file-ref="/repo/src/App.tsx" title="/repo/src/App.tsx, line 12"');
+    expect(out).toContain('href="https://github.com/nekko-labs/nekko-agent/pull/2480"');
+    expect(out).toContain('href="https://github.com/nekko-labs/nekko-agent/issues/12"');
+    expect(out).toContain('data-issue-state');
+  });
+  it('leaves what it cannot place, or should not touch, as written', () => {
+    const out = reply('Step #3, colour #2480ff, page.html#12, an untouched Other.swift:3, Node.js and\n```\nRootView.swift:1 #2480\n```');
+    expect(out).not.toContain('data-file-ref');
+    expect(out).not.toContain('github.com');
+    expect(out).toContain('Step #3');
+    expect(html('Since #2480 (RootView.swift:1)')).not.toMatch(/github\.com|data-file-ref/);
+  });
+  it('keeps file references as text in Sandbox', () => {
+    expect(reply(sample, true)).not.toContain('data-file-ref');
   });
 });

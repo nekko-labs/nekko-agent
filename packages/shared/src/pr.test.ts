@@ -11,35 +11,8 @@ const run = (name: string, command: string, output = pr) => [call('c', command, 
 const event = (value: PrEvent, url = pr, toolCallId = 'c') => ({ toolCallId, url, event: value });
 
 // These tests intentionally require no live PR snapshot or poller state.
+// The command shapes themselves are in fixtures/pr-creation.json (pr-creation.golden.test.ts).
 describe('collectSessionPrUrls', () => {
-  it('takes a PR Claude Code opened with its Bash tool and a heredoc body', () => {
-    const body = `gh pr create --title "Fix" --body "$(cat <<'EOF'\n## Summary\n- one; two | three\nEOF\n)"`;
-    expect(collectSessionPrUrls(run('Bash', body))).toEqual([pr]);
-    expect(collectSessionPrUrls(run('bash', 'gh pr create --fill'))).toEqual([pr]);
-  });
-
-  it('takes one leading cd into a worktree, as Claude Code runs it', () => {
-    const body = `cd C:/Users/me/code/app/.worktrees/fix && gh pr create --title "Fix" --body "$(cat <<'EOF'\nCloses #1.\nEOF\n)"`;
-    expect(collectSessionPrUrls(run('Bash', body))).toEqual([pr]);
-    expect(collectSessionPrUrls(run('Bash', 'cd "/tmp/my repo" && gh pr create --fill'))).toEqual([pr]);
-    expect(collectSessionPrUrls(run('Bash', 'cd a && cd b && gh pr create --fill'))).toEqual([]);
-    expect(collectSessionPrUrls(run('Bash', 'cd $(mktemp -d) && gh pr create --fill'))).toEqual([]);
-    expect(collectSessionPrUrls(run('Bash', 'cd a && gh pr create --fill && gh pr merge --auto'))).toEqual([]);
-  });
-
-  it('reads past a trailing output trim and gh warnings', () => {
-    const withTrim = `cd /w && gh pr create --title "Fix" --body "$(cat <<'EOF'\nx\nEOF\n)" 2>&1 | tail -5`;
-    expect(collectSessionPrUrls(run('Bash', withTrim, `Warning: 1 uncommitted change\n${pr}`))).toEqual([pr]);
-    expect(collectSessionPrUrls(run('Bash', 'gh pr create --fill | grep http'))).toEqual([]);
-    expect(collectSessionPrUrls(run('Bash', 'gh pr create --fill', `${pr}\nsomething else`))).toEqual([]);
-  });
-
-  it('refuses batches around a heredoc and other tools, preserving the existing creation-only session collector', () => {
-    const chained = `gh pr create --body "$(cat <<'EOF'\nx\nEOF\n)" && gh pr merge --auto`;
-    expect(collectSessionPrUrls(run('Bash', chained))).toEqual([]);
-    expect(collectSessionPrUrls(run('Bash', 'gh pr view 9'))).toEqual([]);
-    expect(collectSessionPrUrls(run('Read', 'gh pr create --fill'))).toEqual([]);
-  });
 
   it('dedupes URLs, not the underlying repeated lifecycle interactions', () => {
     const messages = [

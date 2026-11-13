@@ -1,4 +1,10 @@
 ---
+
+## Active: chat titles and compact iOS composer (#2413)
+
+- Owner: Nekko; branch fix/phone-titles-composer; isolated worktree .worktrees/phone-titles-composer.
+- [x] Trace raw multiline placeholders, add focused title tests, implement wider titles and compact borderless controls.
+- [ ] Inspect matching native evidence, verify menus and touch targets, then land the linked PR.
 status: active
 last-updated: 2026-11-04
 owner:

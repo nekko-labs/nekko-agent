@@ -149,6 +149,8 @@ private struct NativeAppContent: View {
             StarAskFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestFirstPromptIntro") {
             FirstPromptIntroFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestConnectionStrip") {
+            ConnectionStripFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") {
             SecurityEvidenceFixture()
         } else { RootView() }

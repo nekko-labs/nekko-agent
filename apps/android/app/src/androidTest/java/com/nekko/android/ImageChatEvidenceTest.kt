@@ -84,7 +84,7 @@ class ImageChatEvidenceTest {
             compose.onAllNodesWithTag("image.reply.0").onFirst().assertIsDisplayed()
             compose.onNodeWithText("Generated image 1").performClick()
             compose.waitUntil(10_000) { host.calls.any { it.first == "session:photo" } }
-            compose.waitUntil(10_000) { compose.onAllNodesWithTag("image.full").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("photo.full").fetchSemanticsNodes().isNotEmpty() }
             shot("image-full")
             assertEquals(listOf(JsonPrimitive("image-session"), JsonPrimitive("reply"), JsonPrimitive(0)), host.calls.single { it.first == "session:photo" }.second)
             compose.onNodeWithText("Close").performClick()

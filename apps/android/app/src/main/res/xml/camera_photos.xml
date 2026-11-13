@@ -4,4 +4,6 @@
 <paths>
     <cache-path name="camera" path="camera/" />
     <cache-path name="diagrams" path="diagram-share/" />
+    <!-- A chat photo being copied or shared from the full-screen viewer (#2111), replaced by the next one. -->
+    <cache-path name="photos" path="photo-share/" />
 </paths>

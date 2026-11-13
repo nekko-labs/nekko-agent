@@ -77,8 +77,8 @@ fn offers_the_builds_the_host_offers() {
 
 /// The pinned stable-diffusion.cpp release (`builds.rs`) and how upstream names
 /// its archives. Update both when updating the pin in `builds.rs`.
-const SD_RELEASE: &str = "master-1047-984eb06";
-const SD_ARCHIVE_TAG: &str = "master-1047-984eb06";
+const SD_RELEASE: &str = "master-1050-58bb3c1";
+const SD_ARCHIVE_TAG: &str = "master-58bb3c1";
 
 #[test]
 fn diffusion_release_matches_published_asset_names() {
@@ -87,8 +87,8 @@ fn diffusion_release_matches_published_asset_names() {
         "cudart-sd-bin-win-cu12-x64.zip".to_string(),
         format!("sd-{SD_ARCHIVE_TAG}-bin-Darwin-macOS-26.6.2-arm64.zip"),
         format!("sd-{SD_ARCHIVE_TAG}-bin-Linux-Ubuntu-24.04-x86_64-rocm-10.1.0.zip"),
-        format!("sd-{SD_ARCHIVE_TAG}-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip"),
-        format!("sd-{SD_ARCHIVE_TAG}-bin-Linux-Ubuntu-24.04-x86_64.zip"),
+        format!("sd-{SD_ARCHIVE_TAG}-bin-Linux-Ubuntu-26.04-x86_64-vulkan.zip"),
+        format!("sd-{SD_ARCHIVE_TAG}-bin-Linux-Ubuntu-26.04-x86_64.zip"),
         format!("sd-{SD_ARCHIVE_TAG}-bin-win-cpu-x64.zip"),
         format!("sd-{SD_ARCHIVE_TAG}-bin-win-cuda12-x64.zip"),
         format!("sd-{SD_ARCHIVE_TAG}-bin-win-rocm-10.1.0-x64.zip"),
@@ -107,6 +107,8 @@ fn diffusion_release_matches_published_asset_names() {
             .as_str()
             .unwrap()
             .replace(SD_RELEASE, SD_ARCHIVE_TAG)
+            .replace("Ubuntu-24.04-x86_64.zip", "Ubuntu-26.04-x86_64.zip")
+            .replace("Ubuntu-24.04-x86_64-vulkan", "Ubuntu-26.04-x86_64-vulkan")
             .replace("rocm-6.4", "rocm-10.1.0")
             .replace("macOS-15.6", "macOS-26.6.2");
         assert_eq!(builds::match_diffusion_asset(build, &names), Some(expected), "{c}");

@@ -35,6 +35,14 @@ Every feature or change is tracked as a GitHub issue in `nekko-labs/nekko-agent`
 gh issue create --title "<what changes, in plain words>" --body "<what and why>"
 ```
 
+Assign the issue to yourself as soon as you start on it, so everyone can see what is being worked on:
+
+```
+gh issue edit <n> --add-assignee @me
+```
+
+If someone else is already assigned, ask before taking it over. If you stop without opening a PR, unassign yourself (`--remove-assignee @me`) and leave a comment saying where the work stands. When fanning work out to parallel agents, assign each agent's issue when you hand it over.
+
 Put the requester's prompt, screenshots or other chat context in the issue only when they said to (the app's Settings > Project management holds the same choice for its own users). Then put `Closes #<n>` in the PR description. A fix for a baseline failure links the issue for that failure.
 
 ## Always land work as a PR

@@ -289,4 +289,9 @@
     <string name="chat_star_never">Ne plus demander</string>
     <string name="chat_star_thanks">Merci ! Nekko est ravi que vous soyez là.</string>
     <string name="chat_star_thanks_detail">GitHub s’est ouvert dans votre navigateur. L’étoile y est à un geste.</string>
+    <!-- The full-screen photo viewer (#2111). -->
+    <string name="photo_n_of_m">%1$d sur %2$d</string>
+    <string name="photo_actions">Actions sur la photo</string>
+    <!-- Save to Photos on Android 9, when storage access was refused. -->
+    <string name="chat_save_needs_storage">Autorisez l’accès au stockage pour l’enregistrer dans Photos.</string>
 </resources>
