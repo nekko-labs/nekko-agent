@@ -1,4 +1,4 @@
-import { BrowserWindow, desktopCapturer } from 'electron';
+import { BrowserWindow, desktopCapturer, systemPreferences } from 'electron';
 import { hwndFromSourceId, printWindowCapture, type PrintWindowResult } from './printWindowCapture.js';
 
 /** Raised inside the recorder page when WGC refuses the window, so the fallback can tell it apart. */
@@ -8,6 +8,23 @@ let printWindow: (hwnd: string) => Promise<PrintWindowResult> = (hwnd) => printW
 /** Tests only. */
 export function __setPrintWindow(fn: (hwnd: string) => Promise<PrintWindowResult>): void { printWindow = fn; }
 
+/**
+ * macOS answers a refused Screen Recording grant with Electron's bare "Failed to
+ * get sources.". Say what to do instead. A grant that still looks on in System
+ * Settings can be stale: macOS ties it to the app's signature, so a re-signed
+ * build (every ad-hoc signed dev rebuild) needs it granted again.
+ */
+export const SCREEN_RECORDING_REFUSED = 'macOS has not given Nekko Agent Screen Recording access, so other apps\' windows cannot be listed or captured. Open System Settings > Privacy & Security > Screen & System Audio Recording and turn on Nekko Agent. If it already looks on, remove it with the minus button and turn it on again when macOS asks, then quit and reopen Nekko Agent';
+
+async function listWindowSources() {
+  try {
+    return await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false });
+  } catch (e) {
+    if (process.platform === 'darwin' && systemPreferences.getMediaAccessStatus('screen') !== 'granted') throw new Error(SCREEN_RECORDING_REFUSED);
+    throw e;
+  }
+}
+
 const selections = new Map<string, Map<string, string>>();
 let recording = false;
 
@@ -16,11 +33,20 @@ export async function captureWindow(sessionId: string, input: Record<string, unk
   const action = input.action;
   if (!['list', 'screenshot', 'record'].includes(String(action))) throw new Error('Invalid capture action');
   if (action === 'list') {
-    const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false });
-    const windows = sources.map((s) => ({ id: s.id, title: s.name }));
-    if (ownedWindow && !ownedWindow.isDestroyed()) windows.push({ id: `nekko:${ownedWindow.id}`, title: 'Nekko Browser (owned by this chat)' });
+    const owned = ownedWindow && !ownedWindow.isDestroyed();
+    let windows: { id: string; title: string }[];
+    let warning: string | undefined;
+    try {
+      windows = (await listWindowSources()).map((s) => ({ id: s.id, title: s.name }));
+    } catch (e) {
+      // The chat's own hidden browser needs no OS permission: still offer it.
+      if (!owned) throw e;
+      windows = [];
+      warning = e instanceof Error ? e.message : String(e);
+    }
+    if (owned) windows.push({ id: `nekko:${ownedWindow.id}`, title: 'Nekko Browser (owned by this chat)' });
     selections.set(sessionId, new Map(windows.map((s) => [s.id, s.title])));
-    return { windows };
+    return warning ? { windows, warning } : { windows };
   }
   const id = String(input.window_id ?? '');
   const title = selections.get(sessionId)?.get(id);
@@ -43,7 +69,7 @@ export async function captureWindow(sessionId: string, input: Record<string, unk
     // session, so a fresh one per capture leaked. `recording` serializes
     // captures and the finally block clears the grant, so sharing is safe.
     win = new BrowserWindow({ show: false, focusable: false, skipTaskbar: true, width: 1, height: 1, webPreferences: { partition: 'nekko-capture', sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
-    const source = (await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false })).find((s) => s.id === id && s.name === title);
+    const source = (await listWindowSources()).find((s) => s.id === id && s.name === title);
     if (!source) throw new Error('Selected window disappeared; list windows again');
     // Only this isolated, temporary recorder gets a display-media grant. It
     // never opens remote content, exposes a preload, or requests audio.

@@ -5,11 +5,15 @@ area: code
 
 # Issue per change and work tracking preferences
 
-Added 2026-10-23. Every agent chat whose work lands as a PR tracks that work as an issue: before opening the PR it finds the issue for the feature or change, or files one (GitHub Issues through `gh` or the GitHub connector, or the tracker the project already uses, such as Linear or Jira), with a plain-language title and the what and why. The PR then links to it (for example `Closes #123`). Questions and chats that open no PR file nothing.
+Added 2026-10-23. Every agent chat whose work lands as a PR tracks that work as an issue: before opening the PR it finds the issue for the feature or change, or files one (GitHub Issues through `gh` or the GitHub connector, or the tracker the project already uses, such as Linear or Jira), with a plain-language title and the what and why. The PR then links to it (for example `Closes #123`). Since 2026-11-14 this covers any work that changes something, not only PR work (below).
+
+## Issue first for any work, broken down
+
+Added 2026-11-14. Issue-first is the default for any work that changes something (code, docs, configuration, a document, a chore), not only work that ends in a PR. Before starting, the agent finds the issue for the work or files one. Work of more than one real step is broken into small pieces that can each be done and checked on their own: a checklist in the issue, or sub-issues under a parent issue for pieces someone could pick up separately. The agent ticks checklist items off as they land, links a PR to its issue, and closes an issue that needed no PR once its work is done. Questions, explanations and chats that change nothing file nothing. When the work has no tracker the agent can reach, it says so once and carries on rather than inventing one. The "file an issue for each change" toggle still turns all of this off.
 
 ## Assign the issue while working on it
 
-Added 2026-11-12. So everyone on a project can see what is being worked on, the agent assigns the issue to the account doing the work as soon as it starts on it (`gh issue edit <number> --add-assignee @me` on GitHub, or the tracker's equivalent), whether it found the issue, filed it, or the user named it. This applies to every user and every chat that tracks work as an issue; it is part of the base system prompt, not a setting, and it follows the "file an issue for each change" toggle (off means no issue, so nothing to assign).
+Added 2026-11-12. So everyone on a project, people and other agents alike, can see what is being worked on and nobody picks up the same work twice, the agent checks who is assigned before starting and assigns the issue to the account doing the work as soon as it starts on it (`gh issue edit <number> --add-assignee @me` on GitHub, or the tracker's equivalent), whether it found the issue, filed it, or the user named it. This applies to every user and every chat that tracks work as an issue; it is part of the base system prompt, not a setting, and it follows the "file an issue for each change" toggle (off means no issue, so nothing to assign).
 
 - An issue already assigned to someone else is not taken over: the agent tells the user and lets them decide.
 - If the agent stops without opening a PR, it unassigns itself and leaves a short comment saying where the work stands, so the issue does not look taken when it is not.
@@ -37,4 +41,4 @@ The first-run wizard asks these as quick toggles on its **Work tracking** step, 
 
 ## Status
 
-Implemented: prompt default, settings, both Settings sections, onboarding step, unit and render tests, hidden-window screenshots. Not verified: a live chat filing an issue end to end against a real repository. Issue assignment (2026-11-12): prompt text and golden fixtures only; not yet seen in a live chat.
+Implemented: prompt default, settings, both Settings sections, onboarding step, unit and render tests, hidden-window screenshots. Not verified: a live chat filing an issue end to end against a real repository. Issue assignment (2026-11-12): prompt text and golden fixtures only; not yet seen in a live chat. Issue first for any work and breaking it down (2026-11-14): prompt text and golden fixtures only; not yet seen in a live chat.

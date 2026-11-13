@@ -673,7 +673,13 @@ once to trust it. From then on `npm run dev` (`stage-daemon.mjs --dev`) signs
 `target/dev-daemon/nekkod`, and `npm run local` (or `npm run build:nekkod`)
 signs `target/release/nekkod`, with it under the identifier
 `dev.nekkolabs.nekkod`. A local `npm run dist` without `CSC_LINK` signs the
-app with it instead of ad-hoc (`after-pack.cjs`). Answer the Keychain once more
+app with it instead of ad-hoc (`after-pack.cjs`). `npm run dev` also signs its
+`Nekko Agent.app` dev runtime (`dev-launch.mjs`, `com.nekkoagent.desktop.dev`)
+with it, which is what keeps macOS privacy grants such as Screen Recording: an
+ad-hoc runtime's grant is pinned to its hash, so each rebuild of the runtime (an
+Electron upgrade, a new icon) leaves System Settings showing it on while the app
+is refused (the agent's `capture` tool then failed with "Failed to get sources.",
+#2762). Answer the Keychain once more
 with **Always Allow** on both prompts. After that the access list keeps
 matching, and each rebuild asks once (the partition list): Always Allow again.
 The first signing may also ask to let `codesign` use the key: Always Allow.
@@ -683,7 +689,11 @@ The first signing may also ask to let `codesign` use the key: Always Allow.
   rebuilds may not ask at all (not verified here).
   `NEKKO_DEV_SIGN_IDENTITY=-` keeps ad-hoc.
 - Without the identity nothing breaks: the build stays ad-hoc, says so, and the
-  Keychain asks twice after every rebuild.
+  Keychain asks twice after every rebuild. The dev runtime's Screen Recording
+  grant is lost whenever it is rebuilt: remove Nekko Agent from System Settings >
+  Privacy & Security > Screen & System Audio Recording (or run
+  `tccutil reset ScreenCapture com.nekkoagent.desktop.dev`), grant it again when
+  asked, and restart the app.
 - A `cargo build -p nekkod` run by hand is not re-signed. The app runs the
   newest of `target/release`, `target/dev-daemon` and `target/debug`, so that
   build asks twice.

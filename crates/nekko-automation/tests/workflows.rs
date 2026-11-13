@@ -735,6 +735,71 @@ async fn an_untrusted_pr_never_gets_tools_that_run_its_code() {
 }
 
 #[tokio::test]
+async fn an_untrusted_pr_cannot_bypass_tool_access_with_shell_or_nested_steps() {
+    for (name, event) in [
+        ("fork", pr_event("MEMBER", true)),
+        ("outsider", pr_event("CONTRIBUTOR", false)),
+        (
+            "missing-trust",
+            json!({ "kind": "connector", "connector": "github", "event": "pr_opened",
+            "payload": { "number": 42 } }),
+        ),
+    ] {
+        for kind in ["shell", "workflow"] {
+            let (engine, fake, dir) = engine_with(&format!("pr-execution-{name}-{kind}"), local_settings());
+            let child = engine
+                .create(&json!({ "name": "Child", "steps": [
+                { "id": "sh", "name": "Shell", "kind": "shell", "run": "echo child" }
+            ] }))
+                .await
+                .unwrap();
+            let run_text = if kind == "workflow" { child["id"].as_str().unwrap() } else { "echo parent" };
+            engine
+                .create(&review_workflow(json!({ "toolAccess": "workspace", "steps": [
+                { "id": "bypass", "name": "Bypass", "kind": kind, "run": run_text }
+            ] })))
+                .await
+                .unwrap();
+            let runs = engine.dispatch_event(&event).await;
+            assert_eq!(runs.len(), 1, "{name}/{kind}: {runs:?}");
+            assert_eq!(runs[0]["status"], "failure", "{name}/{kind}: {runs:?}");
+            assert!(runs[0]["message"].as_str().unwrap().contains("untrusted PR"), "{runs:?}");
+            assert!(fake.shells.lock().unwrap().is_empty(), "{name}/{kind}: no shell may run");
+            assert!(fake.turns.lock().unwrap().is_empty(), "{name}/{kind}: no model turn needed");
+            assert_eq!(fake.removed.lock().unwrap().len(), 1, "the PR checkout is still removed");
+            // No nested run may be created with a fresh, trusted manual context.
+            assert!(engine.runs(child["id"].as_str()).is_empty(), "{name}/{kind}");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+}
+
+#[tokio::test]
+async fn trusted_pr_shell_and_nested_steps_still_run() {
+    for kind in ["shell", "workflow"] {
+        let (engine, fake, dir) = engine_with(&format!("pr-execution-trusted-{kind}"), local_settings());
+        let child = engine
+            .create(&json!({ "name": "Child", "steps": [
+            { "id": "sh", "name": "Shell", "kind": "shell", "run": "echo child" }
+        ] }))
+            .await
+            .unwrap();
+        let run_text = if kind == "workflow" { child["id"].as_str().unwrap() } else { "echo parent" };
+        engine
+            .create(&review_workflow(json!({ "steps": [
+            { "id": "allowed", "name": "Allowed", "kind": kind, "run": run_text }
+        ] })))
+            .await
+            .unwrap();
+        let runs = engine.dispatch_event(&pr_event("MEMBER", false)).await;
+        assert_eq!(runs[0]["status"], "success", "{kind}: {runs:?}");
+        assert_eq!(fake.shells.lock().unwrap().len(), 1, "{kind}");
+        assert_eq!(fake.removed.lock().unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[tokio::test]
 async fn the_checkout_is_removed_when_the_run_fails_or_is_cancelled() {
     let (engine, fake, dir) = engine_with("pr-fail", local_settings());
     *fake.engine.lock().unwrap() = Some(Arc::downgrade(&engine));
