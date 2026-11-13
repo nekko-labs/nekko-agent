@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-13
 ---
 
-# 0092. Library tiles show the file itself, files that are gone drop out, and a design on the canvas is always interactive
+# 0093. Library tiles show the file itself, files that are gone drop out, and a design on the canvas is always interactive
 
 ## Context
 
