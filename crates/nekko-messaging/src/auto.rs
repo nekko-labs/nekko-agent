@@ -19,20 +19,58 @@ const TIERS: [(&str, i32); 3] = [
     (r"haiku|mini|flash|small|1\.5b|3b|7b|8b|9b|phi|gemma", 2),
 ];
 
+const TIER_RULES: &str = include_str!("../../../packages/shared/src/model-tiers.json");
+
+/// Shared suggestions, with user overrides applied before family/parameter rules.
+pub fn capability(model: &Value, overrides: Option<&Value>) -> Option<String> {
+    let key = format!("{}::{}", crate::show(model.get("providerId")), crate::show(model.get("id")));
+    if let Some(tier) = overrides.and_then(|o| o.get(&key)).and_then(Value::as_str) {
+        if capability_rank(tier).is_some() {
+            return Some(tier.into());
+        }
+    }
+    res().tiers.iter().find(|(re, _)| re.test(&label(model))).map(|(_, tier)| tier.clone())
+}
+
+pub fn capability_rank(tier: &str) -> Option<i32> {
+    match tier {
+        "small" => Some(2),
+        "medium" => Some(3),
+        "large" => Some(4),
+        "frontier" => Some(5),
+        _ => None,
+    }
+}
+
+pub fn tier_with_overrides(model: &Value, overrides: Option<&Value>) -> i32 {
+    capability(model, overrides).and_then(|t| capability_rank(&t)).unwrap_or(3)
+}
+
 struct Res {
+    legacy_tiers: Vec<(JsRegex, i32)>,
     complex: JsRegex,
     fence: JsRegex,
     non_chat: JsRegex,
-    tiers: Vec<(JsRegex, i32)>,
+    tiers: Vec<(JsRegex, String)>,
 }
 
 fn res() -> &'static Res {
     static RES: OnceLock<Res> = OnceLock::new();
     RES.get_or_init(|| Res {
+        legacy_tiers: TIERS.iter().map(|(s, t)| (JsRegex::new(s, "").expect("valid"), *t)).collect(),
         complex: JsRegex::new(COMPLEX, "i").expect("valid"),
         fence: JsRegex::new("```", "").expect("valid"),
         non_chat: JsRegex::new(NON_CHAT, "i").expect("valid"),
-        tiers: TIERS.iter().map(|(s, t)| (JsRegex::new(s, "").expect("valid"), *t)).collect(),
+        tiers: serde_json::from_str::<Vec<Value>>(TIER_RULES)
+            .expect("valid rules")
+            .iter()
+            .map(|r| {
+                (
+                    JsRegex::new(r["pattern"].as_str().expect("pattern"), "i").expect("valid regex"),
+                    r["tier"].as_str().expect("tier").to_string(),
+                )
+            })
+            .collect(),
     })
 }
 
@@ -54,7 +92,7 @@ pub fn is_chat_model(model: &Value) -> bool {
 /// `modelTier`.
 pub fn tier(model: &Value) -> i32 {
     let id = label(model).to_lowercase();
-    res().tiers.iter().find(|(re, _)| re.test(&id)).map_or(3, |(_, t)| *t)
+    res().legacy_tiers.iter().find(|(re, _)| re.test(&id)).map_or(3, |(_, t)| *t)
 }
 
 /// `pickAutoModel(models, prompt)?.modelId`: the strongest model for complex
