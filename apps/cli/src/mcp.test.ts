@@ -1,12 +1,13 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as lib from './lib.js';
 import * as skills from './skills.js';
 import { runMcpServer } from './mcp.js';
+import { findNekkod } from './engine.js';
 
 const toolCases = [
   ['chat', 'getSession', { sessionId: 'session', prompt: 'hello' }],
@@ -136,15 +137,48 @@ describe('MCP tool identity and legacy dispatch', () => {
   });
 });
 
+// Keep this a real local-engine test, but diagnose an unbuilt worktree before
+// opening a child or a profile. A missing daemon is not an MCP status failure.
+function requireTestDaemon(here: string, env: NodeJS.ProcessEnv = process.env) {
+  const daemon = findNekkod({ here, env });
+  if (!daemon) {
+    const override = env.NEKKOD_PATH ? ` NEKKOD_PATH points at ${env.NEKKOD_PATH}.` : '';
+    throw new Error(
+      'MCP stdio integration requires a built nekkod.' + override +
+      ' Run cargo build -p nekkod from the repository root before npm test.' +
+      ' For a shared/custom Cargo target, set NEKKOD_PATH to its nekkod binary (nekkod.exe on Windows).',
+    );
+  }
+  return daemon;
+}
+
+describe('MCP stdio prerequisites', () => {
+  it('diagnoses an absent daemon with build and custom-target instructions', () => {
+    const missing = join(tmpdir(), 'nekko-mcp-missing-daemon', 'nekkod');
+    expect(() => requireTestDaemon(tmpdir(), { NEKKOD_PATH: missing })).toThrow(
+      `MCP stdio integration requires a built nekkod. NEKKOD_PATH points at ${missing}. ` +
+      'Run cargo build -p nekkod from the repository root before npm test. ' +
+      'For a shared/custom Cargo target, set NEKKOD_PATH to its nekkod binary (nekkod.exe on Windows).',
+    );
+  });
+
+  it('keeps the explicitly selected daemon for the child', () => {
+    expect(requireTestDaemon(tmpdir(), { NEKKOD_PATH: process.execPath })).toEqual({
+      path: process.execPath, source: 'NEKKOD_PATH',
+    });
+  });
+});
+
 describe('MCP stdio transport', () => {
   it('negotiates and lists tools with JSON-only stdout', async () => {
     const binary = fileURLToPath(new URL('../dist/index.js', import.meta.url));
     if (!existsSync(binary)) {
       throw new Error(`Build the CLI before running this integration test: ${binary}`);
     }
+    const daemon = requireTestDaemon(dirname(binary));
     const dataDir = mkdtempSync(join(tmpdir(), 'nekko-mcp-test-'));
     const child = spawn(process.execPath, [binary, 'mcp'], {
-      env: { ...process.env, NEKKO_URL: '', NEKKO_DATA_DIR: dataDir },
+      env: { ...process.env, NEKKO_URL: '', NEKKO_DATA_DIR: dataDir, NEKKOD_PATH: daemon.path },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     const lines: string[] = [];
