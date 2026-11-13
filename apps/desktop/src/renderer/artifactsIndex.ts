@@ -72,6 +72,14 @@ export interface ArtifactEntry {
   at: number;
   /** Linked from a reply, written by the agent and never linked, or found in a project's designs folder. */
   source: 'linked' | 'written' | 'folder';
+  /** A design saved more than once: every version, oldest first. The entry itself is the newest. */
+  versions?: DesignVersion[];
+}
+
+/** One saved version of a design: `checkout-design-v2.html` is version 2 of `checkout-design.html`. */
+export interface DesignVersion {
+  version: number;
+  path: string;
 }
 
 function normalize(path: string): string {
@@ -174,6 +182,51 @@ export async function readDesignsFolder(
 export function withFolderDesigns(entries: readonly ArtifactEntry[], folder: readonly ArtifactEntry[]): ArtifactEntry[] {
   const seen = new Set(entries.map((e) => e.path.toLowerCase()));
   return [...entries, ...folder.filter((e) => !seen.has(e.path.toLowerCase()) && seen.add(e.path.toLowerCase()))];
+}
+
+/** `-v2`, `_v3`, `.v4` or ` v5` at the end of a file's name, before its extension. */
+const VERSION_SUFFIX = /^(.+?)[-_. ]v(\d{1,3})$/i;
+
+/**
+ * Which design a file is a version of, and which version: the file without a
+ * number is version 1, `name-v2.html` is version 2 of `name.html`.
+ */
+export function designVersion(path: string): { design: string; version: number } {
+  const slash = path.lastIndexOf('/');
+  const file = path.slice(slash + 1);
+  const dot = file.lastIndexOf('.');
+  const [stem, ext] = dot > 0 ? [file.slice(0, dot), file.slice(dot)] : [file, ''];
+  const numbered = VERSION_SUFFIX.exec(stem);
+  if (!numbered) return { design: path.toLowerCase(), version: 1 };
+  return { design: `${path.slice(0, slash + 1)}${numbered[1]}${ext}`.toLowerCase(), version: Number(numbered[2]) };
+}
+
+/**
+ * The numbered files of one design as one entry: the newest version stands for
+ * the design (its path, its chat), named without the number, and carries every
+ * version. Everything that is not a design, and a design saved once, is left
+ * as it is.
+ */
+export function groupDesignVersions(entries: readonly ArtifactEntry[]): ArtifactEntry[] {
+  const byDesign = new Map<string, ArtifactEntry[]>();
+  for (const e of entries) {
+    if (e.kind !== 'design') continue;
+    const key = designVersion(e.path).design;
+    byDesign.set(key, [...(byDesign.get(key) ?? []), e]);
+  }
+  const out: ArtifactEntry[] = [];
+  const done = new Set<string>();
+  for (const e of entries) {
+    const key = e.kind === 'design' ? designVersion(e.path).design : '';
+    const group = key ? byDesign.get(key)! : [e];
+    if (group.length === 1) { out.push(e); continue; }
+    if (done.has(key)) continue;
+    done.add(key);
+    const versions = group.map((g) => ({ version: designVersion(g.path).version, path: g.path })).sort((a, b) => a.version - b.version);
+    const newest = group.find((g) => g.path === versions.at(-1)!.path)!;
+    out.push({ ...newest, title: newest.title.replace(/[-_. ]v\d{1,3}$/i, ''), at: Math.max(...group.map((g) => g.at)), versions });
+  }
+  return out;
 }
 
 /** Chats worth scanning: top-level, real conversations, newest first. */
