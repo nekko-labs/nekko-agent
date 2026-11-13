@@ -5,6 +5,8 @@ build/
 # but keep the desktop app's icon resources (electron-builder buildResources)
 !apps/desktop/build/
 !apps/desktop/build/**
+# except the Developer ID provisioning profile (release CI writes it from a secret)
+apps/desktop/build/*.provisionprofile
 *.log
 .DS_Store
 .env

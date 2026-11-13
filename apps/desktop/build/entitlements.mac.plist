@@ -9,8 +9,11 @@
     several things Electron and Nekko Agent genuinely need. Each exception below is
     here for a reason; check the note before pruning one.
 
-    Used for both `entitlements` and `entitlementsInherit`, so the Electron
-    helper processes (which are the ones that actually run V8) inherit them.
+    This file is the main executable's (`entitlements`). The Electron helpers
+    (which are the ones that actually run V8), nekkod and the rest of
+    Resources/bin are signed with entitlements.mac.inherit.plist: the same
+    keys without the three restricted ones at the bottom. Change one, change
+    both.
   -->
 
   <!-- V8 compiles JavaScript at runtime. Without these the renderer helper
@@ -57,12 +60,31 @@
   <key>com.apple.security.automation.apple-events</key>
   <true/>
 
-  <!-- No restricted entitlements here (keychain-access-groups,
-       com.apple.application-identifier, com.apple.developer.*). macOS refuses
-       to launch a Developer ID app that carries one without an embedded
-       provisioning profile authorizing it, and this build embeds none: that is
-       why 0.10.1000 did not open (#2688). spctl and notarization do not catch
-       it. Touch ID passkeys need keychain-access-groups and come back with a
-       profile in #2703. -->
+  <!-- Settings → Security's "Add passkey on this computer": Electron's Touch ID
+       authenticator keeps the WebAuthn credential in this keychain group,
+       and macOS grants the group only when the signature carries it.
+
+       All three keys are restricted: macOS refuses to launch a Developer ID
+       app carrying them unless Contents/embedded.provisionprofile authorizes
+       them (0.10.1000 shipped without one and did not open, #2688). The
+       profile is mac.provisioningProfile in electron-builder.yml; a signed
+       build without it fails (scripts/sign-mac.cjs). Only the main executable
+       has the profile, so these never go in the inherit file: AMFI would kill
+       every helper and nekkod.
+
+       The team id is spelled out because codesign expands no build variable
+       ($(AppIdentifierPrefix) is Xcode's). The group matches
+       WEBAUTHN_KEYCHAIN_ACCESS_GROUP in src/main/webauthnPlatform.ts and the
+       application identifier is the team id plus appId; tests hold both. An
+       unsigned build is ad-hoc signed with no entitlements (after-pack.cjs),
+       so Touch ID is unavailable there. -->
+  <key>com.apple.application-identifier</key>
+  <string>3HM5598S99.dev.nekkolabs.nekkoagent</string>
+  <key>com.apple.developer.team-identifier</key>
+  <string>3HM5598S99</string>
+  <key>keychain-access-groups</key>
+  <array>
+    <string>3HM5598S99.dev.nekkolabs.nekkoagent.webauthn</string>
+  </array>
 </dict>
 </plist>

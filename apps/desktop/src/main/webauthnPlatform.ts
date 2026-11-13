@@ -18,15 +18,14 @@
  *
  * The credential lives in a keychain access group, so the group has to be in
  * the signed `keychain-access-groups` entitlement and has to carry the team
- * id as its prefix. An ad-hoc or self-signed build (a local `npm run dist`
- * without `CSC_LINK`, see docs/signing.md) is not granted the group, so Touch
- * ID stays unavailable there; the ceremony window says so rather than hanging.
- *
- * Not called at startup for now. On a Developer ID build that entitlement is
- * restricted: macOS refuses to launch the app unless an embedded provisioning
- * profile authorizes it, and 0.10.1000 shipped without one (#2688). The
- * entitlement is out of build/entitlements.mac.plist until #2703 embeds the
- * profile and turns this back on.
+ * id as its prefix. On a Developer ID build that entitlement is restricted:
+ * macOS launches the app only because the embedded provisioning profile
+ * authorizes it (0.10.1000 shipped without one and did not open, #2688), so
+ * only the main executable carries it (build/entitlements.mac.plist; the
+ * helpers get the inherit file). An ad-hoc or self-signed build (a local
+ * `npm run dist` without `CSC_LINK`, see docs/signing.md) is signed with no
+ * entitlements, so Touch ID stays unavailable there; the ceremony window says
+ * so rather than hanging.
  */
 
 /** Nekko Labs' Apple team id, the prefix macOS requires on a keychain access group (the `APPLE_TEAM_ID` repository variable). */
