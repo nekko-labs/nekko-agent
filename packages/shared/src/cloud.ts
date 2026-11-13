@@ -31,7 +31,13 @@ export interface SyncDevice {
 
 export interface CloudStatus {
   signedIn: boolean;
-  account: { email: string; plan: 'free' | 'pro' | 'team' | string; canSync: boolean } | null;
+  account: {
+    email: string; plan: 'free' | 'pro' | 'team' | string; canSync: boolean;
+    /** A Nekko team account, which may switch unreleased Cloud features (decision 0092). */
+    staff?: boolean;
+    /** Unreleased Cloud features switched on for this account. */
+    features?: { billing?: boolean };
+  } | null;
   /** A browser sign-in (GitHub, Google, Apple) is waiting for its callback. */
   oauthPending: boolean;
   /** Where this device's keys live ("macOS Keychain"…). */
@@ -194,3 +200,11 @@ export interface FleetSharingResult {
 export interface FleetStatus {
   sharing: Array<{ orgId: string; state: FleetSharingState; lastHeartbeat: number | string | null; error?: string }>;
 }
+
+/** A plan on sale through Stripe (#2724); `amount` in the currency's smallest unit. */
+export interface BillingPlan { id: 'pro' | 'team'; amount: number; currency: string; interval: string }
+
+export type TeamFeatureKey = 'billing';
+/** off: nobody; team: Nekko team accounts only; on: everyone. */
+export type TeamFeatureState = 'off' | 'team' | 'on';
+export interface TeamFeatures { features: Record<TeamFeatureKey, TeamFeatureState>; available: TeamFeatureKey[] }

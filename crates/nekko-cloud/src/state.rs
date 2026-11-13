@@ -12,6 +12,24 @@ pub struct Account {
     pub email: String,
     pub plan: String,
     pub can_sync: bool,
+    /// A Nekko team account: may turn unreleased Cloud features on (decision 0092).
+    pub staff: bool,
+    /// Plans and billing are switched on for this account (#2724).
+    pub billing: bool,
+}
+
+impl Account {
+    /// From the API's `account` object (`POST /v1/auth/session`, `GET /v1/auth/me`).
+    pub fn from_api(a: &serde_json::Value) -> Account {
+        Account {
+            id: a["id"].as_str().unwrap_or("").into(),
+            email: a["email"].as_str().unwrap_or("").into(),
+            plan: a["plan"].as_str().unwrap_or("free").into(),
+            can_sync: a["canSync"].as_bool().unwrap_or(false),
+            staff: a["staff"].as_bool().unwrap_or(false),
+            billing: a["features"]["billing"].as_bool().unwrap_or(false),
+        }
+    }
 }
 
 /// One synced chat as this device last pushed or applied it.
