@@ -629,7 +629,8 @@ function PageSheet({
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Close" onClick={onClose}><CloseIcon className="h-3.5 w-3.5" /></button>
       </div>
 
-      {concept && <ArtifactPreview source={page.html ?? ''} title={page.label} />}
+      {/* shrink-0 with an auto height: the preview's own minimum height is then the room it takes in the scrolling sheet, so Previous versions and Refine start below it. */}
+      {concept && <div className="shrink-0"><ArtifactPreview source={page.html ?? ''} title={page.label} /></div>}
       {concept && (page.revisions?.length ?? 0) > 0 && <details className="p-3 text-xs">
         <summary>Previous versions ({page.revisions?.length})</summary>
         {page.revisions?.map((revision) => <button key={revision.id} className="chip chip-action my-1 block" onClick={() => { if (window.confirm('Restore this version? The current design will be kept in history.')) void onRestore(revision.html); }}>
