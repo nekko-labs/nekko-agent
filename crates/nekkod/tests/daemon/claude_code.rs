@@ -112,7 +112,10 @@ pub fn fake_claude() {
             );
             continue;
         }
-        let text = msg["message"]["content"].as_str().unwrap_or_default().to_string();
+        // What nekkod wrote, and the user's own words in it: where the Claude
+        // policy allows a context note, Nekko's notes follow the message.
+        let raw = msg["message"]["content"].as_str().unwrap_or_default().to_string();
+        let text = raw.split("\n\nNekko design note: ").next().unwrap_or_default().to_string();
         let lifecycle =
             |state: &str| json!({ "type": "command_lifecycle", "command_uuid": msg["uuid"], "state": state });
         if replay && msg["uuid"].is_string() {
@@ -123,7 +126,7 @@ pub fn fake_claude() {
         if text.starts_with("title probe") {
             let probe = json!({
                 "offered": offered.iter().any(|t| t == "set_chat_title"),
-                "note": text.contains("Nekko chat naming note:"),
+                "note": raw.contains("Nekko chat naming note:"),
                 "systemFlag": args.iter().any(|a| a == "--system-prompt" || a == "--append-system-prompt"),
             });
             if text.starts_with("title probe hold") {
@@ -272,6 +275,11 @@ pub fn fake_claude() {
                 "no watch tool".to_string()
             };
             out(assistant("m_w", json!([{ "type": "text", "text": reply }])));
+            out(result(&reply, "completed"));
+        } else if text == "design probe" {
+            // Report exactly what arrived, so a test can tell a note from a passthrough.
+            let reply = json!({ "raw": raw, "systemFlag": args.iter().any(|a| a == "--system-prompt" || a == "--append-system-prompt") }).to_string();
+            out(assistant("m_design", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
         } else if text == "usage" {
             // Plan usage Claude Code reports on its own while it works.
@@ -809,6 +817,52 @@ async fn claude_title_bridge_rechecks_rename_privacy_and_policy_at_dispatch() {
         assert_eq!(answer["answer"]["ok"], false, "{change}: {answer}");
         assert_eq!(saved["title"], if change == "rename" { "My chosen title" } else { "cc" });
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_design_note_rides_on_each_message_only_where_the_policy_allows() {
+    let rig = rig("design-note", "guardrails", true);
+    let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
+    // `cc` has a sign-in nekkod has not read (`unknown`, treated as a plan); `cc_key` runs on an API key.
+    let plan = provider("cc", json!({}));
+    let key = provider("cc_key", json!({ "authSource": "nekko-anthropic-key" }));
+    write_settings(&rig, json!({ "providers": [plan.clone(), key.clone()] })).await;
+    let received = |turn: &'static str, provider: Value| {
+        let rig = &rig;
+        async move {
+            let (status, body) =
+                post(rig.d.port, "chat:turn", json!([spec_on(rig, turn, "design probe", provider)]), Some(TOKEN)).await;
+            assert_eq!(status, 200, "{body}");
+            let (_, end) = turn_record(rig, turn, "s_cc").await;
+            assert_eq!(end["aborted"], false, "{end}");
+            serde_json::from_str::<Value>(assistant_texts(&saved(rig)).last().unwrap()).unwrap()
+        }
+    };
+
+    // On a plan nothing is added: Claude Code receives the user's message, byte for byte.
+    let on_plan = received("dn1", plan).await;
+    assert_eq!(on_plan["raw"], "design probe", "{on_plan}");
+
+    // On an API key every message carries the note, never as a system flag, and the saved chat keeps the user's words.
+    for turn in ["dn2", "dn3"] {
+        let on_key = received(turn, key.clone()).await;
+        let raw = on_key["raw"].as_str().unwrap();
+        assert!(raw.starts_with("design probe\n\nNekko design note: "), "{raw}");
+        assert!(
+            raw.contains("nekko-designs/") && raw.contains("never in reports/") && raw.contains("-v2.html"),
+            "{raw}"
+        );
+        assert_eq!(raw.matches("Nekko design note: ").count(), 1);
+        assert_eq!(on_key["systemFlag"], false);
+    }
+    let users: Vec<String> = saved(&rig)["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["role"] == "user")
+        .map(|m| m["content"].as_str().unwrap_or_default().to_string())
+        .collect();
+    assert_eq!(users, ["design probe", "design probe", "design probe"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
