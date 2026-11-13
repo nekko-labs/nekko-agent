@@ -93,7 +93,7 @@ enum NativeFixtureRoute {
     static var isolated: Bool {
         #if DEBUG
         let flags = ["-uiTestPermissionsSettings", "-uiTestNotificationStep", "-uiTestComputerSettingsEvidence", "-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
-                     "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
+                     "-uiTestPreviews", "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
                      "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications",
                      "-uiTestSecurityEvidence", "-uiTestRunSettings", "-uiTestStarAsk"]
         return flags.contains { ProcessInfo.processInfo.arguments.contains($0) }
@@ -133,6 +133,8 @@ private struct NativeAppContent: View {
             ChatRefreshFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
             NewChatFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestPreviews") {
+            PreviewEvidenceFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestMarkdownLab") {
             MarkdownLab()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") {
