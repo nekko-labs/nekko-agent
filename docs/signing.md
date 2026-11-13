@@ -146,24 +146,19 @@ the short version:
 | `files.user-selected.read-write` | the user's project folders |
 | `network.client` / `network.server` | model providers and the local phone-relay server |
 | `device.camera` | the QR pairing scanner |
-| `keychain-access-groups` | Settings → Security's Touch ID passkeys |
 
 `NSCameraUsageDescription` is set via `mac.extendInfo`. Without it macOS kills
 the process instead of prompting when the QR scanner opens.
 
-`keychain-access-groups` is the one entitlement whose value has to be kept in
-step with the code: it holds `3HM5598S99.dev.nekkolabs.nekkoagent.webauthn`,
-the group Electron's Touch ID authenticator stores WebAuthn credentials in, and
-`WEBAUTHN_KEYCHAIN_ACCESS_GROUP` in `apps/desktop/src/main/webauthnPlatform.ts`
-passes the same string to `app.configureWebAuthn`. A test fails if they drift.
-The team id is spelled out because `codesign` expands no build variable —
-`$(AppIdentifierPrefix)` is an Xcode substitution, and nothing here runs Xcode,
-so a placeholder would ship a group macOS never grants. macOS grants the group
-only to a build signed by that team, so **Touch ID passkeys do not work in an
-ad-hoc or self-signed build**; the app says so in the ceremony window rather
-than waiting for a prompt that cannot come. Nothing else about the signing
-setup changes: unlike associated domains, a keychain access group needs no
-embedded provisioning profile and no `com.apple.application-identifier`.
+**No restricted entitlements.** `keychain-access-groups`,
+`com.apple.application-identifier` and `com.apple.developer.*` need an embedded
+provisioning profile that authorizes them, and this build embeds none. Without
+one, macOS refuses to launch the app (`amfid ... Code=-413 "No matching profile
+found"`), even though `codesign --verify`, notarization and `spctl` all pass.
+0.10.1000 shipped `keychain-access-groups` for Touch ID passkeys and did not
+open on any Mac (#2688). A test in `webauthnPlatform.test.ts` keeps these keys
+out. Touch ID passkeys come back once a Developer ID profile is embedded
+(#2703).
 
 ### The VM helper's entitlement
 
