@@ -596,7 +596,7 @@ internal fun ModelList(
  * group. Every tab stays on offer; an empty one says so in the list.
  */
 @Composable
-private fun ModelScopeTabs(scope: ModelScope, onScope: (ModelScope) -> Unit) {
+internal fun ModelScopeTabs(scope: ModelScope, onScope: (ModelScope) -> Unit) {
     val source = stringResource(R.string.chats_model_source)
     val tabs = ModelScope.entries
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().semantics { contentDescription = source }.testTag("modelPicker.scope")) {
