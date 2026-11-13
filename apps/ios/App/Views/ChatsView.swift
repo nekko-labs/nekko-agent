@@ -808,16 +808,35 @@ struct RowPrChip: View {
 
 /// A chat row's ground: the list's paper, the selection on iPad, and for a chat
 /// that needs you a warning bar down its leading edge (the desktop's attention colour).
+/// The tint is a rounded tile inset from the row's edges, the same corner as the
+/// app's cards, so the selection no longer reads as a hard full-width rectangle.
 struct RowBackground: View {
     let needsYou: Bool
     var selected = false
     @Environment(\.palette) private var palette
 
+    static let cornerRadius: CGFloat = 10
+    static let inset = EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8)
+
+    private var tint: Color? {
+        if selected { return palette.accent.opacity(0.12) }
+        if needsYou { return palette.warning.opacity(0.07) }
+        return nil
+    }
+
     var body: some View {
         ZStack(alignment: .leading) {
             Color.clear
-            if selected { palette.accent.opacity(0.12) } else if needsYou { palette.warning.opacity(0.07) }
-            if needsYou { Rectangle().fill(palette.warning).frame(width: 3).accessibilityHidden(true) }
+            if let tint {
+                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                    .fill(tint)
+                    .padding(Self.inset)
+            }
+            if needsYou {
+                Capsule().fill(palette.warning).frame(width: 3)
+                    .padding(.vertical, Self.inset.top + 6).padding(.leading, Self.inset.leading)
+                    .accessibilityHidden(true)
+            }
         }
     }
 }
