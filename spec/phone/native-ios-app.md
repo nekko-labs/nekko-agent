@@ -8,6 +8,20 @@ split-from: SPEC.md (2026-10-22)
 
 **User intent:** Philip asked (2026-10-16) to finish the native SwiftUI iPhone app using Orca's mobile app as the competitive reference, **Tailscale first** and on the Nekko relay, following the Android app's connection approach. It replaces the read-only direct-HTTPS foundation, which never shipped: one transport, the end-to-end encrypted relay, as on Android. Competitive notes: [reports/ios-native-competitive-2026-10-16.md](reports/ios-native-competitive-2026-10-16.md).
 
+## Simulator Keychain verification (#1096)
+
+`[verified 2026-11-14 on an isolated iPhone 17 Pro / iOS 26.5, Xcode 27.2]`
+Unsigned runtime tests reproduce `nil` reads in the original save/overwrite test.
+A disposable Security-framework probe reports update/add/read all returning
+`-34018` (`errSecMissingEntitlement`). With ad-hoc signing and unchanged
+assertions, both Keychain tests pass. The probe preserves SecureStore's
+`AfterFirstUnlockThisDeviceOnly`, non-synchronizing attributes and reports status
+codes, not credentials. Supported simulator test commands use
+`CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM=""` (see
+[the iOS README](../../apps/ios/README.md)). No plaintext fallback, skipped
+assertion or weaker entitlement policy was introduced. Hardware, release signing,
+managed-relay availability and intermittent live journeys remain separate gates.
+
 ## Image chats (2026-11-08, #2162)
 
 `[implemented; focused package checks passed with Linux compatibility shims; final Xcode/native evidence and hardware verification pending]`: New chat selects Chat or Image, discovers only eligible local image models on supporting hosts, edits generation parameters and creates an image session using existing create/options calls. Image turns use signed Change authorization, not text send/queue. Summary badges and assistant-image replies use existing scoped session-photo viewing. Unsupported hosts and offline image requests fail visibly without text fallback. Image parameters/kind survive saved metadata; unsupported inputs and fractional CFG require explicit correction (whole-number default 4), not rounding. See [image host contract](image-chats.md) and [readiness matrix](../../reports/voice-image-readiness.md). No installation/removal, arbitrary file/image read or cloud-upload authority is added.
