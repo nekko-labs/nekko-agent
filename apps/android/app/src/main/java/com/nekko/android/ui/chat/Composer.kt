@@ -292,13 +292,11 @@ fun Composer(
             } else if (sendsLater != null) {
                 Text(sendsLater, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(horizontal = 4.dp).testTag("composer.sendsLater"))
             }
-            // One box the width of the screen: the message on top, + and Send inside it below.
+            // The message on top, + and Send below it, with no card around them (#2417, the iPhone's #2416):
+            // the bar's top line already sets it apart from the transcript.
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(p.surface)
-                    .border(1.dp, p.line, RoundedCornerShape(16.dp))
                     .padding(6.dp)
                     .testTag("composer.card"),
             ) {
@@ -699,6 +697,12 @@ private fun PlusMenu(
 @Composable
 private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, onRemove: (Long) -> Unit) {
     val p = Nekko.palette
+    // A tap opens the photo full screen before it is sent (the iPhone's #1879): it is all on the phone already.
+    var opened by remember { mutableStateOf<Int?>(null) }
+    opened?.let { start ->
+        val label = stringResource(R.string.chat_photo_n)
+        PhotoViewer(photos.map { ViewerPhoto(it.dataUrl) }, start, label = { i -> label.format(i + 1) }, onDismiss = { opened = null })
+    }
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -710,7 +714,8 @@ private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, 
                     photo.preview,
                     contentDescription = stringResource(R.string.chat_photo_n, i + 1),
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, p.line, RoundedCornerShape(10.dp)),
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, p.line, RoundedCornerShape(10.dp))
+                        .clickable(role = androidx.compose.ui.semantics.Role.Image) { opened = i }.testTag("composer.photo.$i"),
                 )
                 Box(
                     Modifier

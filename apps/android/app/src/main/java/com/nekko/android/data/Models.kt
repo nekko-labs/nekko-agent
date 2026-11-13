@@ -38,6 +38,11 @@ data class Computer(
     /** Its `machineIcon`, learned from app:info once connected. Null shows nothing. */
     val icon: String? = null,
     val nameIsCustom: Boolean? = null,
+    /**
+     * Turned off on this phone ("Connect to <name>", #2059, the iPhone's connection intent): the
+     * pairing, saved chats, drafts and queued prompts stay, but the phone doesn't dial it. Null is on.
+     */
+    val connectionDisabled: Boolean? = null,
 )
 
 /** Secret half of a pairing, kept in [SecureStore] only. */
@@ -148,6 +153,7 @@ internal object StoredJson {
                 if (c.alts.isNotEmpty()) put("alts", buildJsonArray { c.alts.forEach { add(JsonPrimitive(it)) } })
                 c.icon?.let { put("icon", it) }
                 c.nameIsCustom?.let { put("nameIsCustom", it) }
+                if (c.connectionDisabled == true) put("connectionDisabled", true)
             })
         }
     }.toString()
@@ -165,6 +171,7 @@ internal object StoredJson {
                 alts = (o["alts"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
                 icon = o.str("icon"),
                 nameIsCustom = (o["nameIsCustom"] as? JsonPrimitive)?.booleanOrNull,
+                connectionDisabled = (o["connectionDisabled"] as? JsonPrimitive)?.booleanOrNull?.takeIf { it },
             )
         }
     }

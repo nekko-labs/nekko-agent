@@ -174,7 +174,10 @@ macOS or Xcode still needs **Rebuild image**.
 An image set up by an older Nekko may lack `node`, `gh` or `jq`, and a job that runs one
 before its own setup fails in seconds with `command not found`. The runner card then says, for
 example, "node and gh are missing from this Mac's runner image. Jobs that need them will fail."
-Choose **Install them**: Nekko copies the image, starts the copy once to install them with
+It may also lack `zstd` and `gtar`. Jobs still pass without them, but `actions/cache` falls back
+to gzip and its caches save slower, so the card says "zstd and gtar are missing from this Mac's
+runner image, so caches save slower." An image set up after these two were added still has them
+but no record of them, so it shows the notice once. Either way, choose **Install them**: Nekko copies the image, starts the copy once to install them with
 Homebrew, checks its disk for them and test-boots it: minutes, not a rebuild's half hour. The image in use keeps
 taking jobs until then, and the sheet shows the stages and any failure like setup does.
 
@@ -388,7 +391,8 @@ the VM it landed in:
 
 ```sh
 WORKERS=$(( $(sysctl -n hw.ncpu) / 2 ))   # about one simulator per 2 vCPUs
-[ "$WORKERS" -gt 4 ] && WORKERS=4          # and leave each one some memory (about 4 GB)
+MEM=$(( $(sysctl -n hw.memsize) / 6442450944 ))   # and about 6 GB of the VM for each
+[ "$MEM" -lt "$WORKERS" ] && WORKERS=$MEM; [ "$WORKERS" -gt 4 ] && WORKERS=4
 xcodebuild test-without-building ... \
   -parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS"
 ```
@@ -397,7 +401,8 @@ Parallel tests suit tests that keep their state inside the simulator. Keep seria
 share something outside it: a server or port on the host, a fixed file the job reads afterwards,
 or settings changed on the simulator from the job's script (each clone starts from the original
 simulator, not from those changes). Nekko Agent's own `ios-native.yml` splits its first-run suite
-this way and keeps its live journeys serial.
+this way and keeps its live journeys serial. At 4 GB a simulator, a 10 GB VM ran two clones and
+swapped its way into timeouts; with 6 GB it runs them one at a time.
 
 Linux jobs will get their own Linux slots, which Apple's limit does not cover.
 

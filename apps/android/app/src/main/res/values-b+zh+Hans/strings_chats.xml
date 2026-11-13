@@ -217,8 +217,6 @@
     <string name="chats_no_models_match">没有与“%1$s”匹配的模型。</string>
     <string name="chats_loaded">已加载</string>
     <string name="chats_selected">已选择</string>
-    <string name="chats_offline_connecting">%1$s 正在连接… 现在开始，聊天会在它恢复后开始；在此之前会在这部手机上等待。</string>
-    <string name="chats_offline_offline">%1$s 已离线。现在开始，聊天会在它恢复后开始；在此之前会在这部手机上等待。</string>
     <string name="chats_not_started">未开始：%1$s</string>
     <string name="chats_offline_no_model">要在 %1$s 离线时开始聊天，请在 设置 → 新聊天 中为它选择默认模型。</string>
     <string name="chats_model_named">模型 · %1$s</string>
@@ -244,9 +242,6 @@
     <string name="chats_group_general">通用</string>
     <string name="chats_group_completed">已完成</string>
     <string name="chats_group_all">所有聊天</string>
-    <string name="chats_group_needs_you">需要你</string>
-    <string name="chats_group_working">工作中</string>
-    <string name="chats_group_idle">空闲</string>
     <string name="chats_group_today">今天</string>
     <string name="chats_group_yesterday">昨天</string>
     <string name="chats_group_week">过去 7 天</string>
@@ -265,4 +260,26 @@
     <string name="chats_pr_draft">草稿</string>
     <string name="chats_pr_merged">已合并</string>
     <string name="chats_pr_closed">已关闭</string>
+
+    <string name="chats_group_input">需要输入</string>
+    <string name="chats_group_draft">草稿</string>
+    <string name="chats_group_building">进行中</string>
+    <string name="chats_group_verifying">验证中</string>
+    <string name="chats_group_watching">关注中</string>
+    <string name="chats_group_done">已完成</string>
+    <!-- One chat list across every computer and this phone (#2108). -->
+    <string name="chats_this_phone">此手机</string>
+    <string name="chats_show_chats_from">显示以下来源的聊天</string>
+    <string name="chats_all_computers">所有电脑</string>
+    <string name="chats_phone_own_models">自带模型</string>
+    <string name="chats_n_of_m_online">%2$d 台中 %1$d 台在线</string>
+    <string name="chats_group_computer">电脑</string>
+    <string name="chats_computer_icons">电脑图标</string>
+    <string name="chats_phone_forget_title">忘记此聊天？</string>
+    <string name="chats_phone_forget_body">其消息将从此手机删除。服务商的记录仍会保留。</string>
+    <string name="chats_phone_forget">忘记</string>
+    <!-- New chat while the computer is away (#2475), the iPhone's two lines. -->
+    <string name="chats_reconnecting">%1$s 正在重新连接</string>
+    <string name="chats_reconnecting_label">%1$s 正在重新连接…</string>
+    <string name="chats_reconnect_draft">现在就写好消息，%1$s 重新连接后会自动发送</string>
 </resources>

@@ -334,7 +334,7 @@ fun NewChatScreen(
                             onSave = { params -> onCreated(repo.createImageChat(params)) },
                         )
                     }
-                    !online -> OfflineNewChat(repo, active.name, c.conn == RelayState.CONNECTING, phonePick, c.workspaces, shared, onQueued)
+                    !online -> OfflineNewChat(repo, active.name, phonePick, c.workspaces, shared, onQueued)
                     else -> NCard {
                         Label(Icons.Outlined.Memory, stringResource(R.string.chats_model_from, active.name))
                         if (phonePickMissing && !touched) {
@@ -487,12 +487,22 @@ private fun Label(icon: androidx.compose.ui.graphics.vector.ImageVector, text: S
 @Composable
 private fun Chip(label: String, selected: Boolean, icon: String? = null, onClick: () -> Unit) {
     val p = Nekko.palette
+    // Quiet choices (#2417, the iPhone's #2416): no outline and no solid fill; the chosen one is
+    // tinted and named in the accent, with a check. The touch target stays at least 48 dp.
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        leadingIcon = computerIconRes(icon)?.let { { ComputerIcon(icon) } },
-        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = p.accent, selectedLabelColor = p.accentInk, selectedLeadingIconColor = p.accentInk),
+        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium) },
+        leadingIcon = computerIconRes(icon)?.let { { ComputerIcon(icon) } }
+            ?: if (selected) ({ Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }) else null,
+        border = null,
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            labelColor = p.ink,
+            selectedContainerColor = p.accentSoft,
+            selectedLabelColor = p.accent,
+            selectedLeadingIconColor = p.accent,
+        ),
         modifier = Modifier.heightIn(min = 48.dp),
     )
 }
@@ -658,7 +668,7 @@ private fun AccountSlider(section: ModelSection.Accounts, onTap: (ModelGroup) ->
  * group. Every tab stays on offer; an empty one says so in the list.
  */
 @Composable
-private fun ModelScopeTabs(scope: ModelScope, onScope: (ModelScope) -> Unit) {
+internal fun ModelScopeTabs(scope: ModelScope, onScope: (ModelScope) -> Unit) {
     val source = stringResource(R.string.chats_model_source)
     val tabs = ModelScope.entries
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().semantics { contentDescription = source }.testTag("modelPicker.scope")) {
@@ -764,7 +774,6 @@ private fun ModelRow(m: ModelInfo, detail: String?, selected: Boolean, onClick: 
 private fun OfflineNewChat(
     repo: ComputersRepository,
     computer: String,
-    connecting: Boolean,
     phonePick: ModelPick?,
     workspaces: List<WorkspaceFolder>,
     shared: String?,
@@ -780,12 +789,8 @@ private fun OfflineNewChat(
         repo.drafts.set(DraftStore.NEW_CHAT, repo.drafts.draft(DraftStore.NEW_CHAT).copy(text = text, workspaceId = workspaceId))
     }
     NCard {
-        Text(
-            stringResource(if (connecting) R.string.chats_offline_connecting else R.string.chats_offline_offline, computer),
-            style = MaterialTheme.typography.bodyMedium,
-            color = p.inkSoft,
-            modifier = Modifier.testTag("newChat.offlineNote"),
-        )
+        // The iPhone's two lines (#2475): who is reconnecting, and that the draft will go when it does.
+        com.nekko.android.ui.components.ReconnectingNotice(computer, Modifier.testTag("newChat.offlineNote"))
         saved.refusal?.let { Text(stringResource(R.string.chats_not_started, it), style = MaterialTheme.typography.bodySmall, color = p.danger) }
         if (pick == null) {
             Text(

@@ -1,5 +1,13 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.runtime.saveable.rememberSaveable
+
+import androidx.compose.ui.draw.rotate
+
+import androidx.compose.foundation.selection.toggleable
+
+import androidx.compose.material3.Switch
+
 import androidx.annotation.StringRes
 import com.nekko.android.R
 import androidx.compose.ui.res.stringResource
@@ -180,7 +188,7 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
             return@Scaffold
         }
         val summary = m.summary
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).testTag("computer.scroll")) {
             Hero(c, summary, active, s.conn)
             Tiles(c, m, active, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             if (!active) {
@@ -215,9 +223,28 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                 }
                 val models = s.providers.filter { it.enabled }.flatMap { s.models[it.id].orEmpty() }
                 if (models.isNotEmpty()) {
+                    // Folded by default, with All / Cloud / Local, as on the iPhone (#2059).
+                    var modelsOpen by rememberSaveable(c.id) { mutableStateOf(false) }
+                    val foldState = stringResource(if (modelsOpen) R.string.chats_expanded else R.string.chats_collapsed)
+                    var modelScope by rememberSaveable(c.id) { mutableStateOf(com.nekko.android.data.ModelScope.ALL) }
                     SectionHeader(stringResource(R.string.settings_models))
                     NCard(Modifier.padding(horizontal = 16.dp)) {
-                        models.forEach { info -> ModelRow(info, info.loaded || info.id in m.loadedIds, s.providers.firstOrNull { it.id == info.providerId }?.let(ProviderAccounts::shortName), s.defaults.defaultModelId == info.id) }
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { modelsOpen = !modelsOpen }
+                                .heightIn(min = 48.dp).semantics { stateDescription = foldState }.testTag("computer.models"),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(stringResource(R.string.settings_models), style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+                            Text("${models.size}", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
+                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint, modifier = Modifier.rotate(if (modelsOpen) 90f else 0f))
+                        }
+                        if (modelsOpen) {
+                            ModelScopeTabs(modelScope) { modelScope = it }
+                            // Each model under the provider it was listed for, so its kind is never guessed.
+                            val shown = s.providers.filter { it.enabled && modelScope.includes(it) }.flatMap { s.models[it.id].orEmpty() }
+                            if (shown.isEmpty()) Text(stringResource(R.string.computer_no_models_in_group), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(vertical = 8.dp))
+                            shown.forEach { info -> ModelRow(info, info.loaded || info.id in m.loadedIds, s.providers.firstOrNull { it.id == info.providerId }?.let(ProviderAccounts::shortName), s.defaults.defaultModelId == info.id) }
+                        }
                     }
                 }
                 if (s.providers.isNotEmpty()) {
@@ -241,13 +268,32 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                 NCard(Modifier.padding(horizontal = 16.dp)) { Hardware(summary) }
             }
             SectionHeader(stringResource(R.string.settings_connection))
+            // "Connect to <name>" (#2059): connection intent, not reachability; off keeps the pairing.
+            val connectOn = c.connectionDisabled != true
             NCard(Modifier.padding(horizontal = 16.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().toggleable(value = connectOn, role = Role.Switch) { on ->
+                        scope.launch {
+                            repo.setConnectionEnabled(c.id, on)
+                            // Turned on from its own page: it becomes the one in use, as on the iPhone.
+                            if (on && repo.state.value.activeId != c.id) repo.connect(c.id)
+                        }
+                    }.heightIn(min = 56.dp).testTag("computer.connect"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.computer_connect_to, c.name), style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+                    Switch(checked = connectOn, onCheckedChange = null)
+                }
+                HorizontalDivider(color = p.line)
                 val route = if (active) s.route ?: c.relayUrl else c.relayUrl
                 Fact(stringResource(R.string.settings_fact_route), "${routeLabel(RelayRoute.of(route))} · ${Pairing.relayHost(route)}")
                 Fact(stringResource(R.string.settings_fact_status), stringResource(if (active) stateName(s.conn) else R.string.settings_state_idle))
                 Fact(stringResource(R.string.settings_paired), ago(c.pairedAt).let { if (it == "now") stringResource(R.string.settings_just_now) else stringResource(R.string.settings_ago, localAgo(c.pairedAt)) })
                 summary?.version?.let { v -> Fact("Nekko Agent", listOfNotNull(v, summary.edition).joinToString(" · ")) }
             }
+            Text(stringResource(R.string.computer_connect_footer), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            // Nekko Agent's service: status, updates, restart (#2059). Live only while this computer is the active one.
+            ServiceSection(repo, c.id, c.name)
             Spacer(Modifier.size(32.dp))
         }
     }

@@ -143,7 +143,8 @@ object Channels {
     val GIT_CHANGE = setOf(GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT, PR_CREATE, PR_ACTION)
 
     /** Every Change channel this phone calls ([ChangeProof]). */
-    val CHANGE = GIT_CHANGE + TerminalChannels.CHANGE + setOf(CHAT_GENERATE_IMAGE, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, PROVIDERS_SAVE_SEALED, PROVIDERS_SET_ENABLED)
+    val CHANGE = GIT_CHANGE + TerminalChannels.CHANGE + setOf(CHAT_GENERATE_IMAGE, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, PROVIDERS_SAVE_SEALED, PROVIDERS_SET_ENABLED) +
+        setOf(ServiceChannels.UPDATE_CHECK, ServiceChannels.UPDATE_DOWNLOAD, ServiceChannels.RESTART, ServiceChannels.UPDATE_INSTALL)
 
     val ALL = listOf(
         ENGINE_MODELS, CHAT_GENERATE_IMAGE, SESSION_PHOTO, SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
@@ -157,7 +158,7 @@ object Channels {
         WORKSPACE_GIT_STATUS, GIT_DIFF, GIT_LOG, GIT_SHOW, GIT_BRANCHES, GIT_COMPARE,
         GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT,
         PR_SESSION_LIST, PR_CHECKS, PR_DIFF, PR_CREATE, PR_ACTION,
-    ) + TerminalChannels.ALL
+    ) + TerminalChannels.ALL + ServiceChannels.ALL
 }
 
 object Events {
@@ -373,6 +374,10 @@ data class SessionSummary(
     val imageParams: ImageChatParams? = null,
     /** Prompts sent in the chat; null when the computer doesn't say (an older one). The first-chat intro reads it. */
     val exchangeCount: Long? = null,
+    /** A run is under way there (`activeRun` is set), whatever the phone saw of it. */
+    val running: Boolean = false,
+    /** What the chat's latest telling tool call says it is doing (`phase`: building, verifying, shipping…). */
+    val phase: String? = null,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -403,6 +408,8 @@ data class SessionSummary(
                 prUrls = o["prUrls"].arr()?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList(),
                 transcriptTokens = o.long("transcriptTokens")?.takeIf { it > 0 },
                 exchangeCount = o.long("exchangeCount")?.takeIf { it >= 0 },
+                running = o["activeRun"].let { it != null && it !is JsonNull },
+                phase = o.str("phase"),
                 contextUsed = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
                 contextWindow = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )

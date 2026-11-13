@@ -316,4 +316,27 @@ class PhoneChatsTest {
             assertNull(phone.state.value.errors[p])
         }
     }
+
+    /** #2426: Customize → Tone reaches the next phone-hosted reply's system prompt and survives a relaunch. */
+    @Test fun theToneGoesWithTheNextReplyAndIsKept() = runTest {
+        val memory = Memory(); val http = HTTP(); val phone = PhoneChats(memory, http, backgroundScope)
+        phone.load()
+        val p = phone.add("openai", "My API", null, "device-secret")
+        phone.models(p)
+        val id = phone.newChat(p, "chat-model")
+        phone.send(id, "Hi"); runCurrent()
+        val plain = http.requests.last().body.toString()
+        assertTrue(plain.contains("You are Nekko Agent"))
+        assertFalse(plain.contains("Communication preference"))
+
+        phone.setTone(com.nekko.protocol.PhoneTone.CONCISE)
+        phone.send(id, "Again"); runCurrent()
+        val toned = http.requests.last().body.toString()
+        assertTrue(toned.contains("Communication preference: Keep replies brief"))
+        assertEquals("the saved messages are not rewritten", listOf("Hi", "Hello", "Again", "Hello"), phone.state.value.chats.single().messages.map { it.text })
+
+        val again = PhoneChats(memory, http, backgroundScope); again.load()
+        assertEquals(com.nekko.protocol.PhoneTone.CONCISE, again.state.value.tone)
+        assertEquals("an unknown saved tone reads as Default", com.nekko.protocol.PhoneTone.STANDARD, com.nekko.protocol.PhoneTone.parse("Pirate"))
+    }
 }

@@ -3,7 +3,7 @@
 use nekko_js as js;
 use regress::Regex;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 fn re(cell: &'static OnceLock<Regex>, src: &str) -> &'static Regex {
@@ -113,11 +113,8 @@ pub fn collect_session_pr_urls(messages: &[Value]) -> Vec<String> {
         if creates == 0 {
             continue;
         }
-        let output = replace_all(
-            re(&ANSI, r"\x1b\[[0-9;]*m"),
-            result.get("output").and_then(Value::as_str).unwrap_or(""),
-            "",
-        );
+        let output =
+            replace_all(re(&ANSI, r"\x1b\[[0-9;]*m"), result.get("output").and_then(Value::as_str).unwrap_or(""), "");
         if re(&EXISTS, r"\balready exists\b").find(&output.to_ascii_lowercase()).is_some() {
             continue;
         }
@@ -139,6 +136,63 @@ pub fn collect_session_pr_urls(messages: &[Value]) -> Vec<String> {
     urls
 }
 
+/// Sub-agent nesting deeper than this is not followed.
+pub const MAX_CHILD_DEPTH: usize = 16;
+
+fn str_of<'a>(chat: &'a Value, key: &str) -> Option<&'a str> {
+    chat.get(key).and_then(Value::as_str).filter(|s| !s.is_empty())
+}
+
+/// A chat lists the PRs its sub-agents opened: each summary's own `prUrls`
+/// are added to every chat above it, after the chat's own and in list order,
+/// without repeats.
+/// Child chats keep their own. Sub-agent chats are linked by `parentSessionId`
+/// (Claude Code's Agent tool and Nekko's `spawn_agent` both make one). A cycle
+/// or nesting deeper than [`MAX_CHILD_DEPTH`] stops the walk.
+pub fn roll_up_child_pr_urls(summaries: &mut [Value]) {
+    let own = |s: &Value| -> Vec<String> {
+        s.get("prUrls")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|u| u.as_str().map(str::to_string))
+            .collect()
+    };
+    let index: HashMap<String, usize> =
+        summaries.iter().enumerate().filter_map(|(i, s)| Some((str_of(s, "id")?.to_string(), i))).collect();
+    let parent: Vec<Option<usize>> =
+        summaries.iter().map(|s| str_of(s, "parentSessionId").and_then(|p| index.get(p).copied())).collect();
+    let mut extra: Vec<Vec<String>> = vec![Vec::new(); summaries.len()];
+    for (i, s) in summaries.iter().enumerate() {
+        let urls = own(s);
+        if urls.is_empty() {
+            continue;
+        }
+        let (mut seen, mut cur) = (HashSet::from([i]), parent[i]);
+        while let Some(p) = cur {
+            if !seen.insert(p) || seen.len() > MAX_CHILD_DEPTH + 1 {
+                break;
+            }
+            extra[p].extend(urls.iter().cloned());
+            cur = parent[p];
+        }
+    }
+    for (s, extra) in summaries.iter_mut().zip(extra) {
+        if extra.is_empty() {
+            continue;
+        }
+        let mut urls = own(s);
+        for u in extra {
+            if !urls.contains(&u) {
+                urls.push(u);
+            }
+        }
+        if let Some(obj) = s.as_object_mut() {
+            obj.insert("prUrls".into(), Value::from(urls));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,6 +203,55 @@ mod tests {
             json!({"toolResult": {"toolCallId": "c", "output": output}}),
         ]
     }
+    fn chat(id: &str, parent: Option<&str>, urls: &[&str]) -> Value {
+        let mut c = json!({ "id": id, "prUrls": urls });
+        if let Some(p) = parent {
+            c["parentSessionId"] = json!(p);
+        }
+        c
+    }
+    #[test]
+    fn a_chat_lists_the_prs_its_sub_agents_and_theirs_opened() {
+        let (a, b, c) =
+            ("https://github.com/o/r/pull/1", "https://github.com/o/r/pull/2", "https://github.com/o/r/pull/3");
+        let mut list = vec![
+            chat("parent", None, &[a]),
+            chat("child", Some("parent"), &[b]),
+            chat("grandchild", Some("child"), &[c, a]),
+            chat("quiet", Some("parent"), &[]),
+            chat("other", None, &[]),
+        ];
+        roll_up_child_pr_urls(&mut list);
+        assert_eq!(list[0]["prUrls"], json!([a, b, c]));
+        assert_eq!(list[1]["prUrls"], json!([b, c, a]));
+        assert_eq!(list[2]["prUrls"], json!([c, a]));
+        assert_eq!(list[3]["prUrls"], json!([]));
+        assert_eq!(list[4]["prUrls"], json!([]));
+    }
+    #[test]
+    fn a_parent_cycle_stops_the_walk() {
+        let (a, b) = ("https://github.com/o/r/pull/1", "https://github.com/o/r/pull/2");
+        let mut list = vec![chat("x", Some("y"), &[a]), chat("y", Some("x"), &[b]), chat("self", Some("self"), &[a])];
+        roll_up_child_pr_urls(&mut list);
+        assert_eq!(list[0]["prUrls"], json!([a, b]));
+        assert_eq!(list[1]["prUrls"], json!([b, a]));
+        assert_eq!(list[2]["prUrls"], json!([a]));
+        // A chain of 40: the leaf's PR reaches MAX_CHILD_DEPTH chats above it, no further.
+        let leaf = [a];
+        let mut deep: Vec<Value> = (0..40)
+            .map(|i| {
+                chat(
+                    &format!("d{i}"),
+                    (i > 0).then(|| format!("d{}", i - 1)).as_deref(),
+                    if i == 39 { &leaf[..] } else { &[] },
+                )
+            })
+            .collect();
+        roll_up_child_pr_urls(&mut deep);
+        let reached = deep.iter().filter(|c| c["prUrls"] == json!([a])).count();
+        assert_eq!(reached, MAX_CHILD_DEPTH + 1);
+    }
+
     #[test]
     fn shared_pr_creation_fixture() {
         let fixture: Value =

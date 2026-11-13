@@ -429,12 +429,10 @@ fn the_sudoers_file_for_homebrew_is_removed_after_it() {
     let steps = xcode_steps(Kind::MacosOnly);
     let add = steps.iter().position(|s| s.command.contains("/etc/sudoers.d/build") && s.command.contains("NOPASSWD"));
     let brew = steps.iter().position(|s| s.command.contains("NONINTERACTIVE=1"));
-    let tools = steps.iter().position(|s| s.command.contains("brew install zstd gnu-tar"));
-    let job_tools = steps.iter().position(|s| s.command.contains("brew install node gh jq"));
+    let job_tools = steps.iter().position(|s| s.command.contains("brew install node gh jq zstd gnu-tar"));
     let rm = steps.iter().position(|s| s.command.contains("rm -f /etc/sudoers.d/build"));
-    assert!(add < brew && brew < tools && tools < job_tools && job_tools < rm && add.is_some(), "{steps:?}");
+    assert!(add < brew && brew < job_tools && job_tools < rm && add.is_some(), "{steps:?}");
     assert!(!steps[brew.unwrap()].root, "Homebrew refuses to run as root");
-    assert!(!steps[tools.unwrap()].root, "Homebrew refuses to run as root");
     assert!(!steps[job_tools.unwrap()].root, "Homebrew refuses to run as root");
 }
 
@@ -447,11 +445,13 @@ fn every_image_gets_the_tools_jobs_run_before_their_setup() {
             assert!(step.command.split_whitespace().any(|w| w == t.formula), "{kind:?} installs {}", t.formula);
             assert!(TOOLS_LABEL.contains(t.command), "the label names {}", t.command);
         }
-        assert_eq!(step.limit, Duration::from_secs(15 * 60));
+        assert_eq!(step.limit, Duration::from_secs(20 * 60));
     }
-    // What ios-native.yml runs on the runner before setup-node, and in its batch report (#1845).
+    // What ios-native.yml runs on the runner before setup-node, and in its batch report (#1845),
+    // then what actions/cache needs to compress with zstd (#2701).
     let commands: Vec<_> = JOB_TOOLS.iter().map(|t| t.command).collect();
-    assert_eq!(commands, ["node", "gh", "jq"]);
+    assert_eq!(commands, ["node", "gh", "jq", "zstd", "gtar"]);
+    assert_eq!(tool_formulas(), "node gh jq zstd gnu-tar");
 }
 
 fn info(macos: &str, tools: Option<&[&str]>) -> ImageInfo {
@@ -467,20 +467,22 @@ fn info(macos: &str, tools: Option<&[&str]>) -> ImageInfo {
 
 #[test]
 fn an_image_built_before_the_check_lacks_every_tool_macos_does_not_ship() {
-    assert_eq!(missing_tools(&info("27.2", None)), ["node", "gh"], "macOS 15 and later ship jq");
-    assert_eq!(missing_tools(&info("14.6", None)), ["node", "gh", "jq"]);
-    assert_eq!(missing_tools(&info("", None)), ["node", "gh", "jq"], "an unreadable version ships nothing");
+    assert_eq!(missing_tools(&info("27.2", None)), ["node", "gh", "zstd", "gtar"], "macOS 15 and later ship jq");
+    assert_eq!(missing_tools(&info("14.6", None)), ["node", "gh", "jq", "zstd", "gtar"]);
+    assert_eq!(missing_tools(&info("", None)), ["node", "gh", "jq", "zstd", "gtar"], "an unreadable version ships nothing");
 }
 
 #[test]
 fn a_recorded_image_lacks_only_what_its_disk_lacked() {
-    assert!(missing_tools(&info("27.2", Some(&["node", "gh", "jq"]))).is_empty());
+    assert!(missing_tools(&info("27.2", Some(&["node", "gh", "jq", "zstd", "gtar"]))).is_empty());
     assert_eq!(
         missing_tools(&info("27.2", Some(&["node"]))),
-        ["gh", "jq"],
+        ["gh", "jq", "zstd", "gtar"],
         "a record is believed over the macOS version"
     );
-    assert_eq!(missing_tools(&info("27.2", Some(&[]))), ["node", "gh", "jq"]);
+    assert_eq!(missing_tools(&info("27.2", Some(&[]))), ["node", "gh", "jq", "zstd", "gtar"]);
+    // Recorded before zstd and gtar were checked (#2701): this Mac's image from 2026-11-03.
+    assert_eq!(missing_tools(&info("27.2", Some(&["node", "gh", "jq"]))), ["zstd", "gtar"]);
 }
 
 #[test]
@@ -488,7 +490,7 @@ fn the_proof_keeps_its_fields_and_gains_the_tools() {
     let merged = with_tools(PROOF, &all_tools()).unwrap();
     let v: Value = serde_json::from_str(&merged).unwrap();
     assert_eq!(v["gitlabRunner"], "19.5.1", "what provision.sh wrote stays");
-    assert_eq!(v["tools"], json!(["node", "gh", "jq"]));
+    assert_eq!(v["tools"], json!(["node", "gh", "jq", "zstd", "gtar"]));
     let info: ImageInfo = serde_json::from_str(&merged).unwrap();
     assert!(missing_tools(&info).is_empty());
     assert!(with_tools("[]", &[]).is_err());
@@ -500,7 +502,7 @@ fn the_view_names_the_missing_tools_and_never_stores_them() {
     assert_eq!(i.tools, None, "an image from before the check");
     i.missing_tools = missing_tools(&i);
     let v = serde_json::to_value(ImageView { info: Some(i), ..Default::default() }).unwrap();
-    assert_eq!(v["info"]["missingTools"], json!(["node", "gh"]));
+    assert_eq!(v["info"]["missingTools"], json!(["node", "gh", "zstd", "gtar"]));
     let back: ImageInfo = serde_json::from_value(v["info"].clone()).unwrap();
     assert!(back.missing_tools.is_empty(), "worked out on each read, never read back");
 }
@@ -517,6 +519,9 @@ fn tools_are_found_where_a_jobs_path_looks_on_any_volume() {
     std::os::unix::fs::symlink("../Cellar/node/25.1.0/bin/node", data.join("opt/homebrew/bin/node")).unwrap();
     assert_eq!(tools_on(dir.path()), ["node", "jq"]);
     std::fs::write(data.join("opt/homebrew/bin/gh"), "").unwrap();
+    std::fs::write(data.join("opt/homebrew/bin/zstd"), "").unwrap();
+    assert_eq!(tools_on(dir.path()), ["node", "gh", "jq", "zstd"]);
+    std::os::unix::fs::symlink("../Cellar/gnu-tar/1.35/bin/gtar", data.join("opt/homebrew/bin/gtar")).unwrap();
     assert_eq!(tools_on(dir.path()), all_tools());
     assert_eq!(proof_on(dir.path()).tools, all_tools());
 }
@@ -558,7 +563,7 @@ async fn an_old_image_shows_its_missing_tools_and_adding_them_clears_it() {
     let rig = Rig::new();
     old_image(&rig);
     let job = rig.job(Fake::default());
-    assert_eq!(job.status().info.unwrap().missing_tools, ["node", "gh"]);
+    assert_eq!(job.status().info.unwrap().missing_tools, ["node", "gh", "zstd", "gtar"]);
 
     let view = job.build(BuildRequest { kind: Kind::Tools, runner_id: None, priority: Priority::Balanced }).unwrap();
     assert_eq!(view.kind, Some(Kind::Tools));
@@ -592,7 +597,7 @@ async fn an_install_that_leaves_a_tool_out_fails_and_keeps_the_image() {
     finish(&job).await;
     let v = job.status();
     assert_eq!((v.state, v.stage), (ImageState::Failed, Some(Stage::Tools)));
-    assert_eq!(v.error.as_deref(), Some("Still missing after the install: gh. Show the log for why."));
+    assert_eq!(v.error.as_deref(), Some("Still missing after the install: gh, zstd, gtar. Show the log for why."));
     assert!(v.can_resume);
     assert!(!job.host.called("swap"));
     assert_eq!(std::fs::read_to_string(rig.images().join("default/image.json")).unwrap(), PROOF);
@@ -625,7 +630,7 @@ fn every_guest_step_has_its_limit() {
     assert_eq!(limit("-runFirstLaunch"), Duration::from_secs(20 * 60));
     assert_eq!(limit("-downloadPlatform iOS"), Duration::from_secs(60 * 60));
     assert_eq!(limit("NONINTERACTIVE=1"), Duration::from_secs(20 * 60));
-    assert_eq!(limit("brew install zstd gnu-tar"), Duration::from_secs(10 * 60));
+    assert_eq!(limit("brew install node gh jq zstd gnu-tar"), Duration::from_secs(20 * 60));
     let sim = steps.iter().find(|s| s.command.contains("-downloadPlatform iOS")).unwrap();
     assert!(sim.command.contains("launchctl asuser") && sim.command.contains("sudo -u nekko-build -H"));
 }

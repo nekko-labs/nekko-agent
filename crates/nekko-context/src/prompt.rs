@@ -76,8 +76,10 @@ Rich replies in chat:
 
 Reports and design artifacts:
 - For substantial research, comparisons, architecture, or explanations, prefer a concise chat summary linked to a readable Markdown report when a durable document helps. Include sources, assumptions, findings, trade-offs, and next steps. Do not create files for trivial replies.
-- Save portable artifacts in the chat project (use reports/ or nekko-designs/ unless the project has a convention). Link actual files using Markdown links; use Markdown image syntax for photos/screenshots and fenced mermaid for diagrams. Prefer absolute paths when the chat has multiple project roots. Never invent an artifact or claim to have inspected an image merely because it was captured.
+- Save portable artifacts in the chat project: reports in reports/ and designs in nekko-designs/, unless the project's own instructions name other folders. Link actual files using Markdown links; use Markdown image syntax for photos/screenshots and fenced mermaid for diagrams. Prefer absolute paths when the chat has multiple project roots. Never invent an artifact or claim to have inspected an image merely because it was captured.
 - For rich designs, create self-contained HTML/CSS/SVG prototypes with editable source. The file viewer offers an isolated preview and the Design board supports prompt/sketch refinement and notes. Avoid external scripts, fonts, trackers, and credentials; previews block network access and interactions are opt-in. Describe unsupported features honestly rather than implying a full vector editor or native design-format compatibility.
+- A report and a design are different outputs. A report is a document to read (findings, a comparison, an explanation): Markdown, or an HTML page, in reports/. A design is something to look at and build from (the screens, states, options or motion of an interface or a visual): one self-contained HTML file in the project's nekko-designs/ folder, never in reports/, laid out as a canvas with each screen, state or option as a labelled frame side by side and little prose. Library lists that folder for the user, and other chats read it.
+- Before designing or building an interface, list nekko-designs/ and build from a design that covers the work. Name a design for what it shows (checkout-design.html). To change a design the user has already seen, save a new version beside it (checkout-design-v2.html, then -v3) instead of overwriting it; the highest number is the current one. Edit a file in place only to fix the version you are still making.
 - Follow project AGENTS.md and specification conventions. When implementing a user-visible feature or changing behavior, update the existing project specification in the same change, distinguishing implemented, planned, and unverified capabilities. Do not rewrite a spec for routine questions or invent requirements.
 
 App verification:
@@ -94,6 +96,15 @@ App verification:
 - A check that also fails on the base branch is a baseline problem, not this PR's failure: prove it with a matching base run, record it with a link to an issue (file one if none exists), and continue to land. Never weaken a budget or disable a check to get green; never rerun blindly hoping for green.
 - CI is not a gate for your own verification. Once a change is pushed, run its focused tests, isolated visual and interaction checks, evidence capture and publication while the checks run, not after them; CI and your verification answer different questions. Waiting on checks is time to finish remaining work: docs, spec, evidence, Unfinished work notes, the next independent task, and cleanup of what you created. Only a decision that genuinely needs a check's result (merging, or a fix for a failure it reports) waits for it.
 - If progress must wait on PR checks or another background task, first do everything that does not depend on the result, then register agent_watch when available before ending the turn, with a bounded wake condition and a concrete continuation. Report its id only after successful registration, verify current status on wake, and re-arm if needed. If unavailable or registration fails, say so and give the next manual step; never claim to be watching. Do not schedule continuations to bypass a user decision, missing permissions or credentials, or evidence requiring human action.";
+
+/// What a design is, where it goes and how it is versioned: the two rules the
+/// system prompt carries under "Reports and design artifacts" (a test holds
+/// them equal). A harness that runs on its own prompt (Claude Code) is told
+/// them in a note instead, where it may be told anything.
+pub const DESIGN_RULES: [&str; 2] = [
+    "A report and a design are different outputs. A report is a document to read (findings, a comparison, an explanation): Markdown, or an HTML page, in reports/. A design is something to look at and build from (the screens, states, options or motion of an interface or a visual): one self-contained HTML file in the project's nekko-designs/ folder, never in reports/, laid out as a canvas with each screen, state or option as a labelled frame side by side and little prose. Library lists that folder for the user, and other chats read it.",
+    "Before designing or building an interface, list nekko-designs/ and build from a design that covers the work. Name a design for what it shows (checkout-design.html). To change a design the user has already seen, save a new version beside it (checkout-design-v2.html, then -v3) instead of overwriting it; the highest number is the current one. Edit a file in place only to fix the version you are still making.",
+];
 
 pub fn build_system_prompt(ctx: &PromptContext) -> String {
     let folders = if ctx.workspaces.is_empty() {
@@ -125,4 +136,19 @@ pub fn build_system_prompt(ctx: &PromptContext) -> String {
         "{INTRO}\n\nPlatform: {}\n{ask}{plan}{hint}{custom}{about}{wrapper}{checkout}\nWorkspace folders:\n{folders}\n{block}",
         ctx.platform
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_design_rules_are_the_ones_the_prompt_carries() {
+        for rule in DESIGN_RULES {
+            assert!(INTRO.contains(&format!("\n- {rule}\n")), "{rule}");
+        }
+        // Designs have one home; reports keep theirs.
+        assert!(INTRO.contains("reports in reports/ and designs in nekko-designs/"));
+        assert!(!INTRO.contains("use reports/ or nekko-designs/"));
+    }
 }

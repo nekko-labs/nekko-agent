@@ -1,0 +1,104 @@
+name: iOS streaming and reconnect evidence
+# Evidence only; Native iOS still runs its full required suite separately.
+on:
+  workflow_call:
+    inputs:
+      baseline_ref:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  iphone:
+    runs-on: xcode-27
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+        device: [iPhone-18-Pro, iPad-Pro-13-inch-M4-16GB]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .evidence-harness
+          persist-credentials: false
+          sparse-checkout: |
+            apps/ios/App/Views/ChatRefreshFixture.swift
+            apps/ios/UITests/StreamingStabilityTests.swift
+            apps/ios/App/Views/StreamingGeometryProbe.swift
+          sparse-checkout-cone-mode: false
+      - name: Overlay only the shared fixture and tests; record revisions
+        env:
+          BASELINE: ${{ inputs.baseline_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$BASELINE" =~ ^[0-9a-fA-F]{40}$ ]]
+          mkdir -p apps/ios/evidence
+          {
+            echo "app=$(git rev-parse HEAD)"
+            echo "harness=$(git -C .evidence-harness rev-parse HEAD)"
+            xcodebuild -version
+          } > apps/ios/evidence/revisions.txt
+          cp .evidence-harness/apps/ios/App/Views/ChatRefreshFixture.swift apps/ios/App/Views/
+          cp .evidence-harness/apps/ios/App/Views/StreamingGeometryProbe.swift apps/ios/App/Views/
+          cp .evidence-harness/apps/ios/UITests/StreamingStabilityTests.swift apps/ios/UITests/
+      - run: brew install xcodegen
+      - name: Create an isolated iPhone simulator and build
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          # Runtime list ordering and installed versions differ between hosted Macs.
+          # Both revisions must use this exact pair, never each runner's newest OS.
+          RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-27-0
+          TYPE=com.apple.CoreSimulator.SimDeviceType.${{ matrix.device }}
+          xcrun simctl list runtimes -j | ruby -rjson -e 'abort "Required matched iOS 27.0 simulator is unavailable" unless JSON.parse(STDIN.read)["runtimes"].any? { |r| r["isAvailable"] && r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-27-0" }'
+          DEVICE=$(xcrun simctl create Nekko-Streaming-Evidence "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt
+          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" \
+            COMPILER_INDEX_STORE_ENABLE=NO build-for-testing
+      - name: Exercise live streaming, reader scroll intent and reconnect status
+        working-directory: apps/ios
+        env:
+          TEST_RUNNER_NEKKO_STREAM_BASELINE: ${{ matrix.revision == 'before' && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl ui "$DEVICE" appearance light
+          xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
+          xcrun simctl io "$DEVICE" recordVideo --codec=h264 evidence/streaming-interaction.mp4 &
+          VIDEO=$!
+          trap 'kill -INT "$VIDEO" 2>/dev/null || true; wait "$VIDEO" || true' EXIT
+          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" \
+            -parallel-testing-enabled NO -resultBundlePath evidence/streaming.xcresult test-without-building \
+            -only-testing:NekkoNativeUITests/StreamingStabilityTests
+      - name: Export screenshots and remove the owned simulator
+        if: always()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          if [ -n "${DEVICE:-}" ]; then
+            xcrun simctl shutdown "$DEVICE" || true
+            xcrun simctl delete "$DEVICE" || true
+          fi
+          if [ -d evidence/streaming.xcresult ]; then
+            xcrun xcresulttool export attachments --path evidence/streaming.xcresult --output-path evidence/shots
+          fi
+          test -n "$(find evidence/shots -name '*.png' -print -quit)"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ios-streaming-${{ matrix.revision }}-${{ matrix.device }}
+          path: apps/ios/evidence/**
+          if-no-files-found: error

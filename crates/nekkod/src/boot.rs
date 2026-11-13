@@ -36,6 +36,16 @@ pub fn start(ctx: &Ctx, auto_start_engine: bool) {
     }
     keep_awake(ctx);
     {
+        // Sub-agent chats that stopped recording early, from Claude Code's own copy (#2645).
+        let store = ctx.sessions.clone();
+        tokio::spawn(async move {
+            let filled = tokio::task::spawn_blocking(move || crate::subagents::fill_short_chats(&store)).await;
+            if let Ok(n @ 1..) = filled {
+                eprintln!("[sessions] filled {n} sub-agent chat(s) from Claude Code's saved transcripts");
+            }
+        });
+    }
+    {
         crate::auto_continue::start(ctx);
         let ctx = ctx.clone();
         tokio::spawn(async move {

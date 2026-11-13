@@ -477,6 +477,8 @@ final class NotificationPrefsTests: XCTestCase {
 final class ChatStatusIconTests: XCTestCase {
     @MainActor
     func testArchivedDoneUsesTheSameGrayCheckAsUnarchivedDone() throws {
+        // #2456 replaced the SF Symbol checkmark with CheckGlyph. Both archived
+        // and unarchived done still render identically.
         func render(_ completed: Bool) throws -> Data {
             let icon = ChatStatusIcon(activity: nil, completed: completed)
                 .frame(width: 32, height: 32)
