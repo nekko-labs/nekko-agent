@@ -181,7 +181,7 @@ final class ChatListLayoutTests: XCTestCase {
     func testSavedViewsKeepWhatIsStillValid() throws {
         var v = ChatListView.standard
         v.groupBy = .date
-        v.showPreviews = false
+        v.showSubagents = false
         XCTAssertEqual(ChatListView.parse(v.encoded), v)
         let partial = ChatListView.parse(Data(#"{"groupBy":"status","sortBy":"created","showCompleted":false}"#.utf8))
         XCTAssertEqual(partial.groupBy, .status)

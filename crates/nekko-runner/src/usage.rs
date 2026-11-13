@@ -17,8 +17,10 @@ pub const STATS_DISK_BYTES: usize = 1 << 20;
 pub const STATS_HEADER: &[u8] = b"NEKKOSTATS1\n";
 const STATS_BLOCK: usize = 512;
 
-/// Jobs at the current size before a size is suggested.
-pub const SUGGEST_MIN_JOBS: u32 = 3;
+/// Jobs at the current size before a size is suggested: two, so a runner tells its owner after
+/// its second CI run (#2700). The rules take the most demanding job, so one more job can only
+/// raise a suggestion, never undo a "too small".
+pub const SUGGEST_MIN_JOBS: u32 = 2;
 /// GitHub's standard hosted Mac, which passes the jobs routed to a runner.
 pub const FLOOR_CPUS: u8 = 3;
 pub const FLOOR_MEMORY_MB: u32 = 7 * 1024;

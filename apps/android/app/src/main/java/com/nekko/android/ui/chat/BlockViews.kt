@@ -116,7 +116,19 @@ private fun UserBubble(b: Block.User, fork: ForkAction?) {
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
             if (b.thumbs.isNotEmpty()) {
-                PromptPhotos(b.thumbs, tint = p.userInk.copy(alpha = 0.7f), tile = p.userInk.copy(alpha = 0.12f))
+                // A tap opens them full screen, sharp once the computer sends the full photo (#2111).
+                val read = LocalSessionPhoto.current
+                var opened by remember(b.id) { mutableStateOf<Int?>(null) }
+                PromptPhotos(b.thumbs, tint = p.userInk.copy(alpha = 0.7f), tile = p.userInk.copy(alpha = 0.12f), onOpen = { opened = it })
+                opened?.let { start ->
+                    val label = stringResource(R.string.chat_photo_n)
+                    PhotoViewer(
+                        b.thumbs.mapIndexed { i, thumb -> ViewerPhoto(thumb, read?.let { r -> { r(b.id, i) } }) },
+                        start,
+                        label = { i -> label.format(i + 1) },
+                        onDismiss = { opened = null },
+                    )
+                }
             }
             if (b.text.isNotEmpty()) {
                 LongPressMenu(b.text, fork) { press ->

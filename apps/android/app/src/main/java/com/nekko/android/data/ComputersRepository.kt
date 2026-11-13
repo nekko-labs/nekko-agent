@@ -408,7 +408,8 @@ class ComputersRepository(
             val id = existing?.id ?: newId()
             store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair, hostKey)))
             // The computer's routes may have changed since (another Wi-Fi, LAN addresses on or off).
-            val next = if (existing != null) list.map { if (it.id == id) it.copy(relayUrl = link.relayUrl, alts = link.alts) else it }
+            // Paired again: connecting is on again too.
+            val next = if (existing != null) list.map { if (it.id == id) it.copy(relayUrl = link.relayUrl, alts = link.alts, connectionDisabled = null) else it }
             else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now(), alts = link.alts)
             saveIndex(next)
             _state.update { it.copy(computers = next) }
@@ -515,6 +516,15 @@ class ComputersRepository(
         // Opening the app away from the computer: the list as it was, marked as saved.
         if (taken == null) chatListCache?.load(id)?.let { saved ->
             _state.update { it.copy(summaries = saved.summaries, workspaces = saved.folders, savedListAt = saved.savedAt) }
+        }
+        // Turned off on this phone: it is the active one, with its saved chats, drafts and queued
+        // prompts, but it isn't dialed until "Connect to" is on again.
+        if (computer.connectionDisabled == true) {
+            taken?.client?.close()
+            logStatus(RelayState.IDLE)
+            _state.update { it.copy(conn = RelayState.IDLE) }
+            syncFleet()
+            return@withLock
         }
         val c = taken?.client ?: dial(computer, secret, hostKey)
         client = c
@@ -657,7 +667,8 @@ class ComputersRepository(
     private suspend fun syncFleet() {
         if (!stayConnected) return
         val s = _state.value
-        val wanted = s.computers.map { it.id }.filter { it != s.activeId }.toSet()
+        // A computer turned off on this phone gets no link (#2059).
+        val wanted = s.computers.filter { it.id != s.activeId && it.connectionDisabled != true }.map { it.id }.toSet()
         (links.keys + s.peers.keys).filter { it !in wanted }.forEach { dropLink(it) }
         for (id in wanted) if (!links.containsKey(id) && !_state.value.peers.containsKey(id)) openLink(id)
     }
@@ -845,6 +856,30 @@ class ComputersRepository(
         cache.save(id, SavedChatList(now(), p.summaries, p.workspaces))
     }
 
+    /** "Connect to <name>" (#2059): on unless turned off on this phone. Connection intent, not reachability. */
+    fun connectionEnabled(id: String): Boolean = _state.value.computers.firstOrNull { it.id == id }?.connectionDisabled != true
+
+    /**
+     * Turn connecting to [id] on or off on this phone. Off keeps its pairing, saved chats, drafts
+     * and queued prompts, closes its link and stops reconnecting; on dials it again (as the active
+     * computer, or as a fleet link beside it).
+     */
+    suspend fun setConnectionEnabled(id: String, enabled: Boolean) {
+        lock.withLock {
+            val list = _state.value.computers
+            if (list.none { it.id == id }) return
+            val updated = list.map { if (it.id == id) it.copy(connectionDisabled = if (enabled) null else true) else it }
+            saveIndex(updated)
+            _state.update { it.copy(computers = updated) }
+        }
+        val active = _state.value.activeId == id
+        if (enabled) {
+            if (active) connect(id) else lock.withLock { syncFleet() }
+        } else {
+            if (active) disconnect() else { dropLink(id); lock.withLock { syncFleet() } }
+        }
+    }
+
     /** Drop the live connection (the pairing stays). */
     fun disconnect() {
         connJob?.cancel(); connJob = null
@@ -887,6 +922,26 @@ class ComputersRepository(
         val id = _state.value.activeId ?: return
         updatePcSettings(PcSettings.patch(icon = name))
         learnIcon(id, name.ifEmpty { null })
+    }
+
+    /**
+     * The service section's link to one computer (#2059): live only while [computerId] is the
+     * active computer and online, and every call checks that again, so nothing meant for one
+     * computer reaches another. Changes are signed ([callChange]) and never retried here.
+     */
+    fun serviceLink(computerId: String): com.nekko.android.computer.ServiceLink = object : com.nekko.android.computer.ServiceLink {
+        override fun connection(): Any? = client?.takeIf { _state.value.activeId == computerId && _state.value.conn == RelayState.ONLINE }
+
+        private fun live(): Remote = (connection() as? Remote) ?: throw RelayException("The connection changed. Refresh this computer’s service status before trying again.")
+
+        override suspend fun read(channel: String): JsonElement = live().callWithTimeout(SERVICE_READ_TIMEOUT_MS, channel)
+
+        override suspend fun change(channel: String, stepUp: StepUpProof?): JsonElement {
+            val r = live()
+            return callChange(channel, emptyList(), stepUp, timeoutMs = SERVICE_CHANGE_TIMEOUT_MS, authorize = {
+                check(client === r && _state.value.activeId == computerId) { "The connection changed. Refresh this computer’s service status before trying again." }
+            })
+        }
     }
 
     /**
@@ -1390,6 +1445,9 @@ class ComputersRepository(
         const val INDEX_KEY = "nekko.computers"
         const val ACTIVE_KEY = "nekko.activeComputer"
         const val DEVICE_KEY = "nekko.deviceId"
+        /** The service section's reads, and its changes (an install may take a while to be accepted), as on the iPhone. */
+        const val SERVICE_READ_TIMEOUT_MS = 10_000L
+        const val SERVICE_CHANGE_TIMEOUT_MS = 60_000L
         fun secretKey(id: String) = "nekko.computer.$id"
     }
 }

@@ -18,7 +18,6 @@
     <string name="simple_asks_detail_first">Te consulta antes de cambiar un archivo o ejecutar un comando.</string>
     <string name="simple_asks_detail_matters">Lee y explora libremente, y pregunta antes de cualquier otra cosa.</string>
     <string name="simple_asks_detail_own">Ejecuta todo, excepto lo que bloquean tus reglas.</string>
-    <string name="simple_paired">%1$d vinculados</string>
     <string name="simple_computer_menu">Menú del ordenador</string>
     <string name="simple_conn_idle">No conectado</string>
     <string name="simple_conn_connecting">Conectando</string>
@@ -27,7 +26,6 @@
     <string name="simple_conn_denied">Rechazado</string>
     <string name="simple_sign_out_or_disconnect">Cerrar sesión o desconectar</string>
     <string name="simple_back_to_menu">Volver al menú</string>
-    <string name="simple_connect">Conectar</string>
     <string name="simple_search_chats">Buscar chats</string>
     <string name="simple_cancel_search">Cancelar búsqueda</string>
     <string name="simple_logs_on_phone">En este teléfono</string>

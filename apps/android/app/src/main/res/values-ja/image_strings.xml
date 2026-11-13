@@ -23,5 +23,4 @@
     <string name="image_reply_n">生成された画像 %1$d</string>
     <string name="image_open">画像を開く</string>
     <string name="image_close">閉じる</string>
-    <string name="image_unavailable">この画像を読み込めませんでした。再接続して、もう一度お試しください。</string>
 </resources>

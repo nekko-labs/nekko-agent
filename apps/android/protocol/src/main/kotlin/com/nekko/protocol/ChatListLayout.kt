@@ -35,8 +35,13 @@ data class ChatListView(
     val showContext: Boolean = true,
     val showPullRequests: Boolean = true,
     val showUpdated: Boolean = true,
+    /** Where each chat runs, on its row, when the list holds more than one place (the iPhone's #1741). */
+    val showComputer: Boolean = true,
+    /** The computer's own icon (or the phone's) beside that name, else a dot. */
+    val showComputerIcons: Boolean = true,
 ) {
-    enum class GroupBy(val wire: String) { PROJECT("project"), STATUS("status"), DATE("date"), NONE("none") }
+    /** By computer is offered only when the list holds more than one place. */
+    enum class GroupBy(val wire: String) { PROJECT("project"), STATUS("status"), DATE("date"), COMPUTER("computer"), NONE("none") }
 
     /** No "Date created" as on the desktop: the phone's summaries carry only the last update. */
     enum class SortBy(val wire: String) { MANUAL("manual"), UPDATED("updated"), NAME("name") }
@@ -61,6 +66,8 @@ data class ChatListView(
         put("showContext", showContext)
         put("showPullRequests", showPullRequests)
         put("showUpdated", showUpdated)
+        put("showComputer", showComputer)
+        put("showComputerIcons", showComputerIcons)
     }.toString()
 
     companion object {
@@ -81,6 +88,8 @@ data class ChatListView(
                 showContext = flag("showContext", STANDARD.showContext),
                 showPullRequests = flag("showPullRequests", STANDARD.showPullRequests),
                 showUpdated = flag("showUpdated", STANDARD.showUpdated),
+                showComputer = flag("showComputer", STANDARD.showComputer),
+                showComputerIcons = flag("showComputerIcons", STANDARD.showComputerIcons),
             )
         }
     }
@@ -95,6 +104,25 @@ data class ChatSection(
     val activeCount: Int,
     val doneCount: Int,
 ) {
+    /** Ungrouped chats have no disclosure; every other group opens only when chosen (the iPhone's, #2107). */
+    fun isOpen(opened: Set<String>): Boolean = key == ChatGroup.GENERAL || key == "all" || key in opened
+
+    /** Attention wins over work; completed chats never make a group look busy. */
+    fun headerActivity(activity: Map<String, Activity>): Activity? {
+        val active = chats.filter { !it.archived }
+        if (active.any { activity[it.id] == Activity.NEEDS_YOU }) return Activity.NEEDS_YOU
+        if (active.any { activity[it.id] == Activity.RUNNING }) return Activity.RUNNING
+        return null
+    }
+
+    /** Watches armed across the group's active chats. */
+    val watchingCount: Long get() = chats.filter { !it.archived }.sumOf { it.activeWatchCount }
+
+    /** Whether the heading shows the group live: Building or Verifying with a chat running, Watching with a watch armed. */
+    fun live(activity: Map<String, Activity>): Boolean =
+        if (key == "status:watching") watchingCount > 0
+        else key in setOf("status:building", "status:verifying") && headerActivity(activity) == Activity.RUNNING
+
     companion object {
         const val COMPLETED = "__completed"
     }
@@ -107,8 +135,14 @@ object ChatSections {
     /** ...and only those touched in this window (ms). */
     const val RECENT_WINDOW: Long = 14L * 24 * 60 * 60 * 1000
 
-    /** The status groups, most urgent first. */
-    val STATUS_GROUPS = listOf("status:input" to "Needs you", "status:working" to "Working", "status:idle" to "Idle")
+    /**
+     * The status groups, most urgent first (the iPhone's, #1838). A stopped chat is Watching while a
+     * watch is armed on it, otherwise Done, as the desktop's Agents panel splits them.
+     */
+    val STATUS_GROUPS = listOf(
+        "status:input" to "Needs input", "status:draft" to "Draft", "status:building" to "Building",
+        "status:verifying" to "Verifying", "status:watching" to "Watching", "status:done" to "Done",
+    )
 
     /** The date groups, newest first, counted in local calendar days. */
     val DATE_GROUPS = listOf(
@@ -119,7 +153,9 @@ object ChatSections {
     /**
      * The list's groups for [view]. Project groups follow [groupOrder] (folder
      * ids and [ChatGroup.GENERAL], as arranged on the phone); folders it doesn't
-     * name keep the computer's order after the ones it does.
+     * name keep the computer's order after the ones it does. By computer, one
+     * group per [places] (in their order), [placeOf] saying where a chat runs;
+     * with fewer than two places it is one list, as Group by none.
      */
     fun make(
         chats: List<SessionSummary>,
@@ -129,6 +165,8 @@ object ChatSections {
         groupOrder: List<String> = emptyList(),
         now: Long,
         zone: ZoneId = ZoneId.systemDefault(),
+        places: List<ChatPlace> = emptyList(),
+        placeOf: (SessionSummary) -> String? = { null },
     ): List<ChatSection> {
         val sort = comparator(view)
         fun done(list: List<SessionSummary>) =
@@ -146,15 +184,25 @@ object ChatSections {
             return ChatGroupOrder.apply(groups.map { it.key }, groupOrder).mapNotNull { k -> groups.firstOrNull { it.key == k } }
         }
 
+        if (view.groupBy == ChatListView.GroupBy.COMPUTER && places.size > 1) {
+            // A chat whose place is unknown joins the first group, as on the iPhone.
+            val byPlace = chats.groupBy { c -> placeOf(c)?.takeIf { id -> places.any { it.id == id } } ?: places.first().id }
+            return places.mapNotNull { place ->
+                val mine = byPlace[place.id].orEmpty()
+                val s = section(ChatPlace.groupKey(place.id), place.name, mine.filter { !it.archived }.sortedWith(sort), done(mine))
+                if (s.chats.isEmpty() && !view.showEmptyGroups) null else s
+            }
+        }
+
         val active = chats.filter { !it.archived }.sortedWith(sort)
         val completedAll = done(chats)
         val completed = if (completedAll.isEmpty()) emptyList() else listOf(section(ChatSection.COMPLETED, "Completed", emptyList(), completedAll))
-        if (view.groupBy == ChatListView.GroupBy.NONE) {
+        if (view.groupBy == ChatListView.GroupBy.NONE || view.groupBy == ChatListView.GroupBy.COMPUTER) {
             return (if (active.isEmpty()) emptyList() else listOf(section("all", "All chats", active, emptyList()))) + completed
         }
         val defs = if (view.groupBy == ChatListView.GroupBy.STATUS) STATUS_GROUPS else DATE_GROUPS
         val grouped = active.groupBy { s ->
-            if (view.groupBy == ChatListView.GroupBy.STATUS) statusKey(activity[s.id]) else dateKey(s.updatedAt, now, zone)
+            if (view.groupBy == ChatListView.GroupBy.STATUS) statusKey(activity[s.id], s) else dateKey(s.updatedAt, now, zone)
         }
         return defs.mapNotNull { (key, name) ->
             val items = grouped[key].orEmpty()
@@ -179,10 +227,13 @@ object ChatSections {
         return shown to hidden
     }
 
-    fun statusKey(a: Activity?): String = when (a) {
-        Activity.NEEDS_YOU -> "status:input"
-        Activity.RUNNING -> "status:working"
-        null -> "status:idle"
+    /** The iPhone's `statusKey`: needs you, then running (verifying or shipping, else building), a draft, watching, done. */
+    fun statusKey(a: Activity?, chat: SessionSummary? = null): String = when {
+        a == Activity.NEEDS_YOU -> "status:input"
+        a == Activity.RUNNING || chat?.running == true -> if (chat?.phase == "verifying" || chat?.phase == "shipping") "status:verifying" else "status:building"
+        chat?.exchangeCount == 0L -> "status:draft"
+        (chat?.activeWatchCount ?: 0) > 0 -> "status:watching"
+        else -> "status:done"
     }
 
     fun dateKey(at: Long, now: Long, zone: ZoneId = ZoneId.systemDefault()): String {

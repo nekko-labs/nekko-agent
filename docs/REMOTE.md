@@ -14,11 +14,25 @@ After pairing your first computer, the permissions checklist explains what Nekko
 
 Denied access can be restored in system Settings. If Settings opens its home page, find Nekko Agent there (under **Apps** on newer iOS versions). Device restrictions or missing hardware may prevent a feature. Photo and file pickers need no blanket library or storage permission. Allowing microphone or speech access here does not start recording. You can revisit the checklist at any time.
 
+## Pending answers and approvals on iPhone
+
+If your computer is reconnecting, you can still submit an answer or a one-time **Allow** or **Deny** response inside its chat. It appears as a pending response message with its request identifier and stays on your phone when you leave the chat or restart the app.
+
+The phone tries again when connected, but only while the exact original question or tool call is still pending on that computer. **Retry** tries delivery again; **Cancel** removes an unsent response and lets you answer the original request again if it is still waiting. A response already sending cannot be recalled. After confirmation it reads **Sent**.
+
+If the request changed or was answered elsewhere, the message says **No longer pending** instead of applying your answer to a different action. If the connection dropped after the computer accepted it, the phone may not be able to confirm delivery; a missing request is not treated as proof that this phone sent it. **Always allow this tool** changes, voice actions, and responses from Monitors still need a live connection.
+
 ## Draft photos and appearance on iPhone
 
 Photos added with **+ → Photos** or **Paste image** appear inside the message composer. Tap a thumbnail to preview it, or its remove button to leave it out. Adding or removing a photo saves the draft immediately on the phone; reopening the app restores its text and attachments. Photos stay local until you send the message.
 
 The primary Home Screen icon follows iOS icon appearance: the light version keeps the white Nekko outline on plum, and the dark version uses the brand-plum outline on charcoal. Choose **Dark** or **Automatic** in the Home Screen customization controls. The seasonal alternate icon is unchanged.
+
+## Reconnecting and reading replies on iPhone and iPad
+
+When a paired computer is unavailable, New chat separates its reconnecting status from the drafting hint. You can write your message and choose Send while waiting; the queued text stays on this device until the computer reconnects. Drafting without choosing Send does not queue a message. Image chats and supporting folders that require confirmation retain their specific reconnect instructions.
+
+On iOS 18 and later, an open computer chat follows the measured growth of the reply while you are at the end. Scroll into history to stop following, then tap **Jump to latest** to resume. iOS 17 retains the previous scrolling implementation. The reconnect ellipsis stays still with Reduce Motion enabled.
 
 ## Groups on iPhone
 
@@ -122,6 +136,8 @@ New chat and phone-only chat support Markdown formatting while you type. Effort 
 The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
 
 Each chat row on the iPhone and on Android reads like the desktop's agent card. Under the title: the provider's logo and the model (*Opus 5.5*), then, while the chat is still in progress (working, waiting on you or watching), how full its context window is, such as *45k/1M*, in green, amber from 60% and red from 85%. At the bottom right, a chip for its pull requests: the one that matters most (open before draft, merged or closed), with GitHub's glyph and colour for its state, and *+2* when there are more. **View → Card details** turns each of these off.
+
+On the iPhone a row is two lines at most, with no preview of the conversation and no divider lines: the title and when it last moved, then those facts. Under a chat, each sub-agent it spawned gets its own line, hanging from the chat on a thin tree line as on the desktop, with its status, its title and, at the end, the model it runs on (*Haiku 5.5*). Tap one to open the sub-agent's chat; **View → Card details → Sub-agents** hides them. Android still shows the preview and no sub-agent lines.
 
 From New chat's folder picker, choose **Manage folders** to add a computer path or remove a saved folder. Removing never deletes files. Stars select default folders for future chats: the first is primary, and the others are supporting folders. An explicit folder choice overrides those defaults for the current chat. Changing supporting folders may ask for device authentication; multi-folder starts wait for an online computer rather than queue a start that could lose folder context.
 
@@ -336,7 +352,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Every computer stays connected** (Android): the app keeps a connection to every paired
 > computer, not only the one you are using, so switching to another (in Computers, or **New chat →
 > Run on**) is instant and needs no new connection. **Run on** shows whether each one is online.
-> The chat list still shows one computer's chats at a time.
+> The chat list shows every computer's chats at once, and the chats on this phone: each row says
+> where its chat runs, and **Group by → Computer** gives each computer its own group. Tap the
+> pill at the top left (*Computers, 1 of 2 online*) and use **Show chats from** to see only one
+> computer or this phone. Opening a chat on another computer switches to it.
 >
 > **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
 > different phone protocol versions, the side to update is named: on the iPhone, *update* beside
@@ -357,6 +376,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > with the shared text or link. You can edit it on the New chat screen; after you start the chat it
 > waits in the message box and you send it yourself. Nekko never sends shared text on its own, and
 > it is kept only in memory until then. Text and links only for now, up to 20,000 characters.
+> **Customize** (Android): **Settings → Customize**, or **Customize…** at the bottom of the chat
+> list's view menu. **Experience** picks Simple or Detailed, the **Tone** of models running on this
+> phone (Default, Friendly, Professional, Concise or Explanatory; agents on your computer keep its
+> own tone) and the look. **Skills** lists your computer's skills: type `/name` in a chat to run one.
+>
 > **Vibration** (Android): while the app is open, the phone vibrates when the agent needs your
 > approval (two pulses) or asks you a question (one long pulse). In **Settings → Vibration** you can
 > also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them
@@ -427,6 +451,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
 > - **Photos:** selected photos appear as thumbnails in the iPhone's message box and **New chat**, before you send. Tap one to inspect it full screen, or use its **Remove photo** button to remove just that photo. Sent photos stay visible in the message bubble; tap one to open the same viewer. It sharpens as the computer sends the photo at full size (a spinner shows while it loads). **⋯** saves it to Photos, copies it or shares it, and swiping up or down closes the viewer. **+ → Paste image** adds photos from the clipboard. Chats carry small previews; the viewer asks for one full-size photo at a time (`session:photo`). Older or unavailable photos may show a placeholder. Offline saved transcripts keep only photo counts.
+> - **Photos on Android:** tap a photo in the message box, in a sent message or in an image chat's reply to open it full screen. Pinch or double-tap to zoom, swipe sideways for the next photo, and drag up or down to close. It sharpens when the computer sends the full photo. **⋮** offers **Save to Photos** (into *Pictures/Nekko*; on Android 9 the phone asks once for storage access), **Copy** and **Share**.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
@@ -496,9 +521,12 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
-> first, then one group per project folder. Tap a group's name to fold it, and again to open it:
-> the phone remembers each group's choice, also after you leave the list or restart the app (it
-> isn't synced to your computer). Search shows every match whatever is folded. Each group lists its
+> first, then one group per project folder. Groups start folded, as on the iPhone, with a count of
+> their chats; tap a group's name to open it, and again to fold it. The phone remembers each group's
+> choice, also after you leave the list or restart the app (it isn't synced to your computer).
+> Grouped by status, the list uses the iPhone's groups (Needs input, Draft, Building, Verifying,
+> Watching, Done), and a group with a chat running or watching shows the cat with a green dot in
+> its heading. Search shows every match whatever is folded. Each group lists its
 > active chats, then **Show completed (N)**, which opens the chats completed there (struck through,
 > newest first). Tap a completed chat to read it; its message box is replaced by **Restore**, and a
 > long-press on it offers Restore or Delete. Completing or restoring a chat on the computer shows up

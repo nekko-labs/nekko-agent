@@ -3,26 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nekko Agent: the personal, local agent you can trust</title>
+    <title>Nekko Agent by NekkoLabs | Personal, local AI agent</title>
     <meta
       name="description"
-      content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
+      content="Nekko Agent is a free, open source, local-first AI coding and cowork desktop app that runs models via Ollama, LM Studio or vLLM. By NekkoLabs, Tokyo."
     />
     <link rel="canonical" href="https://nekkoagent.com/" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
     <meta name="theme-color" content="#fbf6f8" />
     <!-- White without script. Before first paint the saved look (Dark or White) applies, or, with none saved, the system's light or dark setting, so the page never flashes the wrong look -->
-    <script>(function(){var t=null;try{t=localStorage.getItem('nekko-theme');}catch(e){}if(t!=='white'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'white';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='white'?'#fbf6f8':'#0c0c11';})();</script>
+    <script>(function(){var t=null;try{t=localStorage.getItem('nekko-theme');}catch(e){}if(t!=='white'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'white';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='white'?'#fbf6f8':'#0c0c11';var p=document.createElement('link');p.rel='preload';p.as='image';p.href='media/hero-v2'+(t==='dark'?'':'-light')+'-poster.webp';p.fetchPriority='high';document.head.appendChild(p);})();</script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Nekko Agent" />
     <meta property="og:url" content="https://nekkoagent.com/" />
     <meta property="og:locale" content="en_US" />
-    <meta property="og:title" content="Nekko Agent: the personal, local agent you can trust" />
+    <meta property="og:title" content="Nekko Agent by NekkoLabs | Personal, local AI agent" />
     <meta
       property="og:description"
-      content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
+      content="Nekko Agent is a free, open source, local-first AI coding and cowork desktop app that runs models via Ollama, LM Studio or vLLM. By NekkoLabs, Tokyo."
     />
     <meta property="og:image" content="https://nekkoagent.com/og.png?v=plum-white-2" />
     <meta property="og:image:width" content="1200" />
@@ -30,13 +30,13 @@
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:alt" content="Nekko Agent: the personal, local agent you can trust" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Nekko Agent: the personal, local agent you can trust" />
+    <meta name="twitter:title" content="Nekko Agent by NekkoLabs | Personal, local AI agent" />
     <meta
       name="twitter:description"
-      content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
+      content="Nekko Agent is a free, open source, local-first AI coding and cowork desktop app that runs models via Ollama, LM Studio or vLLM. By NekkoLabs, Tokyo."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=plum-white-2" />
-    <link rel="stylesheet" href="styles.css?v=13" />
+    <link rel="stylesheet" href="styles.css?v=18" />
     <link rel="stylesheet" href="fonts.css?v=1" />
     <!-- Structured data: so search and answer engines describe Nekko Agent accurately -->
     <script type="application/ld+json">
@@ -46,8 +46,8 @@
           {
             "@type": "Organization",
             "@id": "https://nekkolabs.com/#organization",
-            "name": "Nekko Labs",
-            "url": "https://nekkolabs.com/"
+            "name": "NekkoLabs",
+            "url": "https://nekkolabs.com"
           },
           {
             "@type": "WebSite",
@@ -71,6 +71,7 @@
             "isAccessibleForFree": true,
             "downloadUrl": "https://github.com/nekko-labs/nekko-agent/releases/latest",
             "codeRepository": "https://github.com/nekko-labs/nekko-agent",
+            "sameAs": ["https://github.com/nekko-labs/nekko-agent"],
             "featureList": [
               "Built-in local model server: a Rust core driving llama.cpp; download, load and run models from the app",
               "Faster decode and code edits than Ollama and LM Studio in our published benchmarks (30 September 2026)",
@@ -133,7 +134,7 @@
       <!-- ===== hero: one lavender band holds the headline, the app rises out of it ===== -->
       <div class="hero-band">
       <section class="hero">
-        <p class="eyebrow reveal">FREE &amp; OPEN SOURCE · RUNS ON YOUR COMPUTER</p>
+        <p class="eyebrow reveal">FREE &amp; OPEN SOURCE · RUNS ON YOUR COMPUTER · BY NEKKOLABS</p>
         <h1 class="display reveal">Nekko Agent</h1>
         <p class="tagline reveal">
           The personal, local agent<br />
@@ -188,7 +189,9 @@
         </div>
         <p class="micro reveal">No account needed to use AI on your computer · Works offline after setup · MIT licensed</p>
 
-        <!-- The app icon, reimagined as a playful pixel cat. -->
+        <!-- The app icon, reimagined as a playful pixel cat, with its one-line intro.
+             It sits at the hero's top right on wide screens, clear of the cat that
+             peeks over the pillar tour further down; on phones it follows the buttons. -->
         <div class="mascot" title="Nekko is keeping you company">
           <svg class="pixel-nekko" viewBox="0 0 32 32" width="112" height="112" shape-rendering="crispEdges" role="img" aria-label="Nekko, a pixel cat with blinking eyes">
             <g data-part="pixel-head" stroke-linejoin="miter">
@@ -202,6 +205,7 @@
     </g>
           </svg>
           <span>MEET NEKKO</span>
+          <p class="mascot-cap">Meet Nekko: a small pixel cat keeping you company while your agents get to work.</p>
         </div>
         <div class="scroll-hint" aria-hidden="true">SCROLL<br />▾</div>
       </section>
@@ -229,9 +233,9 @@
         <p class="chapter-lede reveal">Private, fast, and on every machine you own.</p>
 
         <div class="pillar-tour reveal" data-pillar-tour aria-roledescription="carousel" aria-label="What makes Nekko Agent different">
-          <ol class="pillar-list" role="tablist" aria-orientation="vertical" aria-label="Five reasons to use Nekko Agent">
-            <li role="presentation" class="pillar-item is-active">
-              <button class="pillar-tab" role="tab" id="pillar-tab-local" aria-selected="true" aria-controls="pillar-panel" data-pillar="local"
+          <ol class="pillar-list" aria-label="Five reasons to use Nekko Agent">
+            <li class="pillar-item is-active">
+              <button class="pillar-tab" id="pillar-tab-local" aria-current="step" aria-controls="pillar-panel" data-pillar="local"
                       data-alt="Picking a local model in Nekko Agent, then Claude Code using it over MCP">
                 <span class="pillar-num">01</span><span class="pillar-title">Built for local models</span>
               </button>
@@ -241,8 +245,8 @@
                 <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
             </li>
-            <li role="presentation" class="pillar-item">
-              <button class="pillar-tab" role="tab" id="pillar-tab-speed" aria-selected="false" aria-controls="pillar-panel" data-pillar="speed" tabindex="-1"
+            <li class="pillar-item">
+              <button class="pillar-tab" id="pillar-tab-speed" aria-controls="pillar-panel" data-pillar="speed" tabindex="-1"
                       data-alt="Side-by-side replay: Nekko Agent returns the edited file in 2.5 seconds, Ollama in 13.9">
                 <span class="pillar-num">02</span><span class="pillar-title">Fast. Really fast.</span>
               </button>
@@ -252,8 +256,8 @@
                 <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
             </li>
-            <li role="presentation" class="pillar-item">
-              <button class="pillar-tab" role="tab" id="pillar-tab-privacy" aria-selected="false" aria-controls="pillar-panel" data-pillar="privacy" tabindex="-1"
+            <li class="pillar-item">
+              <button class="pillar-tab" id="pillar-tab-privacy" aria-controls="pillar-panel" data-pillar="privacy" tabindex="-1"
                       data-alt="Privacy Shield swapping an email and card number for placeholders, then the encrypted phone relay">
                 <span class="pillar-num">03</span><span class="pillar-title">Your data stays yours</span>
               </button>
@@ -263,8 +267,8 @@
                 <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
             </li>
-            <li role="presentation" class="pillar-item">
-              <button class="pillar-tab" role="tab" id="pillar-tab-fleet" aria-selected="false" aria-controls="pillar-panel" data-pillar="fleet" tabindex="-1"
+            <li class="pillar-item">
+              <button class="pillar-tab" id="pillar-tab-fleet" aria-controls="pillar-panel" data-pillar="fleet" tabindex="-1"
                       data-alt="Three chats running at once on a Studio PC, a Mac mini and a Claude subscription">
                 <span class="pillar-num">04</span><span class="pillar-title">One fleet, every machine</span>
               </button>
@@ -274,8 +278,8 @@
                 <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
             </li>
-            <li role="presentation" class="pillar-item">
-              <button class="pillar-tab" role="tab" id="pillar-tab-anywhere" aria-selected="false" aria-controls="pillar-panel" data-pillar="anywhere" tabindex="-1"
+            <li class="pillar-item">
+              <button class="pillar-tab" id="pillar-tab-anywhere" aria-controls="pillar-panel" data-pillar="anywhere" tabindex="-1"
                       data-alt="A MacBook running Nekko Agent with an iPhone in front of it: the agent asks to run the tests, Allow is tapped on the phone, and both show the tests passing">
                 <span class="pillar-num">05</span><span class="pillar-title">Take it anywhere</span>
               </button>
@@ -288,14 +292,25 @@
           </ol>
 
           <div class="pillar-stage">
-            <div class="pillar-media" id="pillar-panel" role="tabpanel" aria-labelledby="pillar-tab-local">
-              <video class="pillar-video" muted playsinline preload="none" width="1280" height="720" poster="media/pillar-local-poster.jpg"
-                     aria-label="Picking a local model in Nekko Agent, then Claude Code using it over MCP"></video>
+            <!-- Nekko peeks over the demo box. Her drawing is cloned from the beta
+                 card's peek by site.js, so both stay identical. Decorative. -->
+            <div class="pillar-frame">
+              <div class="nekko-peek pillar-peek" data-mood="idle" data-pillar-peek aria-hidden="true"></div>
+              <div class="pillar-media" id="pillar-panel" role="region" aria-labelledby="pillar-tab-local">
+                <video class="pillar-video is-shown" muted playsinline preload="none" width="1280" height="720" poster="media/pillar-local-poster.jpg"
+                       aria-label="Picking a local model in Nekko Agent, then Claude Code using it over MCP"></video>
+                <video class="pillar-video" muted playsinline preload="none" width="1280" height="720" aria-hidden="true"></video>
+              </div>
             </div>
-            <button class="pillar-pause" type="button" data-pillar-pause aria-label="Pause the tour" hidden>
-              <svg class="ic-pause" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2h3v12H4zM9 2h3v12H9z" fill="currentColor"/></svg>
-              <svg class="ic-play" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2l10 6-10 6z" fill="currentColor"/></svg>
-            </button>
+            <div class="pillar-controls">
+              <button class="pillar-enlarge" type="button" data-pillar-enlarge aria-label="Enlarge the demo" title="Enlarge" hidden>
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+              </button>
+              <button class="pillar-pause" type="button" data-pillar-pause aria-label="Pause the tour" hidden>
+                <svg class="ic-pause" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2h3v12H4zM9 2h3v12H9z" fill="currentColor"/></svg>
+                <svg class="ic-play" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2l10 6-10 6z" fill="currentColor"/></svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -406,12 +421,12 @@
                 <p>You're in. Nekko will be in touch when new builds are ready to try.</p>
               </div>
             </form>
-            <p class="beta-privacy micro">We'll only use your email (and name, if you give it) to send beta invites, and product updates only if you tick the box. No spam, and we never share it. To be removed, email <a href="mailto:hello@nekkoagent.com" data-cta="beta-email-hello">hello@nekkoagent.com</a>. <a href="/privacy" data-cta="beta-privacy-policy">Privacy policy</a>.</p>
+            <p class="beta-privacy micro">We'll only use your email (and name, if you give it) to send beta invites, and product updates only if you tick the box. No spam, and we never share it. To be removed, email <a href="mailto:hello@nekkoagent.com" data-cta="beta-email-hello">hello@nekkoagent.com</a>. <a href="/privacy" data-cta="beta-privacy-policy">Privacy policy</a>. <a href="/beta" data-cta="beta-what-beta-means">What beta means</a>.</p>
           </div>
         </div>
       </section>
 
-      <section id="local" class="chapter band band-aqua">
+      <section id="local" class="chapter">
         <h2 class="reveal">Your own model server, built in</h2>
         <p class="chapter-lede reveal">Nekko comes with its own engine, so running AI on your computer takes a few clicks rather than a weekend of setup. Find a model, see whether it fits your machine, and start using it.</p>
         <div class="split reveal">
@@ -430,105 +445,6 @@
             <div class="sc glass"><b>LM Studio</b><span class="dim">○&nbsp;not running</span><code>localhost:1234</code></div>
           </div>
         </div>
-      </section>
-
-      <!-- ===== the harness: a spec-sheet manifest, deliberately not cards ===== -->
-      <section id="features" class="chapter">
-        <h2 class="reveal">Share only what you choose</h2>
-        <p class="chapter-lede reveal">
-          Letting an AI read a prompt is one thing. Handing it your files, your terminal,
-          your microphone and your network is another. Nekko keeps every one of those
-          behind a control you set, and shows you exactly what it did.
-        </p>
-
-        <div class="manifest reveal">
-          <section class="mf-group">
-            <div class="mf-head">
-              <h3>Choose the information it uses</h3>
-              <p>Context means the information sent with your request. Check what is included and leave out what is not needed.</p>
-            </div>
-            <ol class="mf-rows">
-              <li>
-                <b>Context Inspector</b>
-                <span>See the files, instructions, and saved notes included in your next request. Toggle or pin them and see how much space they take up, measured in tokens, the small pieces of text AI models process.</span>
-              </li>
-              <li>
-                <b>Find relevant files</b>
-                <span>Search across the project folders you choose, so Nekko can find useful code and notes without sending every file to the AI.</span>
-              </li>
-              <li>
-                <b>Guidelines and memory</b>
-                <span>Give Nekko project instructions through <code>AGENTS.md</code> or <code>CLAUDE.md</code>, and keep saved notes for your preferences. Turn individual instructions and notes on or off.</span>
-              </li>
-              <li>
-                <b>Save the plan</b>
-                <span>Turn the conversation into a project description in <code>SPEC.md</code>, plus a plan and task list that can guide later work.</span>
-              </li>
-              <li>
-                <b>Improve your request</b>
-                <span>Get suggestions for making your instructions clearer before you send them. This draft check runs on your computer without an online AI service.</span>
-              </li>
-            </ol>
-          </section>
-
-          <section class="mf-group">
-            <div class="mf-head">
-              <h3>Give it useful tools</h3>
-              <p>Connect the tools and repeatable steps your work needs, rather than copying everything into a chat.</p>
-            </div>
-            <ol class="mf-rows">
-              <li>
-                <b>Split up a task</b>
-                <span>Delegate smaller pieces of work to separate AI sessions, called sub-agents. Each gets its own instructions, with limits on further delegation and a view of the work in progress.</span>
-              </li>
-              <li>
-                <b>Reusable instructions</b>
-                <span>Not sure which skill to reach for? Nekko's library sorts skills by the job they do, from research and planning to code review and testing, and shows every step before you run one. Install more from the marketplace in a click.</span>
-              </li>
-              <li>
-                <b>Connect coding tools</b>
-                <span>MCP is the common language AI tools use to talk to each other. Nekko can use other MCP servers or act as one, so Claude Code, Codex, Cursor or OpenClaw can pass work to your local models through it.</span>
-              </li>
-              <li>
-                <b>Connect your services</b>
-                <span>Bring in what matters from GitHub, Linear, Slack, Discord, Gmail and Drive instead of pasting it by hand. Each connection is one you switch on, and it only reaches the network when you use it.</span>
-              </li>
-              <li>
-                <b>Longer tasks with limits</b>
-                <span>Give Nekko a goal to plan and work through. Set limits on time or steps, and get a request for guidance if it stops making progress.</span>
-              </li>
-            </ol>
-          </section>
-
-          <section class="mf-group">
-            <div class="mf-head">
-              <h3>Review and correct changes</h3>
-              <p>AI can make mistakes. Approval settings, file limits, and change review help you stay involved.</p>
-            </div>
-            <ol class="mf-rows">
-              <li>
-                <b>Command approvals</b>
-                <span>Choose which terminal commands are allowed, need approval, or are blocked. The app checks for risky operations such as deleting files or changing system permissions.</span>
-              </li>
-              <li>
-                <b>Limit file access</b>
-                <span>Nekko only touches the folders you pick. Your microphone is only used when you start dictating, and speech is turned into text on your computer. For extra peace of mind, Docker can wall off terminal commands entirely.</span>
-              </li>
-              <li>
-                <b>Review file changes</b>
-                <span>See edits line by line in the Changes panel. Keep or undo individual lines, whole files, or all changes from the app.</span>
-              </li>
-              <li>
-                <b>Try again from an earlier step</b>
-                <span>If an AI returns an empty reply, Nekko retries and then reports the problem. Use "Reset here" to return to an earlier message and try a different approach.</span>
-              </li>
-            </ol>
-          </section>
-        </div>
-
-        <p class="micro center reveal mf-foot">
-          Meet Nekko: a small pixel cat keeping you company while your agents get to work.
-        </p>
       </section>
 
       <!-- ===== profiles: one account, separate spaces. The copy claims only what
@@ -561,34 +477,6 @@
           </div>
         </div>
         <p class="micro center reveal">Example profiles, not a scan of your machine. Profiles separate what agents can reach inside Nekko; they do not lock the app against someone using your unlocked computer, and a terminal command can still reach files anywhere your computer account can.</p>
-      </section>
-
-      <section id="why" class="chapter">
-        <h2 class="reveal">Choose what stays on your computer</h2>
-        <div class="grid two reveal">
-          <div class="card glass">
-            <span class="mf-num">ON YOUR COMPUTER</span>
-            <h3>Work without an internet connection</h3>
-            <p>Once your model is downloaded, local work keeps going without the internet. Read, edit and search your folders with nothing sent to an online AI service.</p>
-          </div>
-          <div class="card glass">
-            <span class="mf-num">ONLINE SERVICES</span>
-            <h3>Connect online AI when you need it</h3>
-            <p>Online AI models, downloads, and connected services need internet access and may send data to the providers you configure. You choose those connections and are responsible for their costs.</p>
-          </div>
-        </div>
-      </section>
-
-      <section id="editions" class="chapter band band-blend">
-        <h2 class="reveal">Choose how to use Nekko</h2>
-        <p class="chapter-lede reveal">Download the desktop app to get started. If you prefer a technical setup, run Nekko in your browser, in Docker, or from a terminal.</p>
-        <div class="grid four reveal">
-          <div class="card glass"><h3>Desktop app</h3><p>Download for macOS, Windows, or Linux.</p><a class="card-link" href="#download" data-cta="editions-desktop">Get the app</a></div>
-          <div class="card glass"><h3>In your browser</h3><p>Run it yourself from a source checkout: <code>npm install</code>, then <code>npm run web</code>. Tasks using AI on your computer can work offline after setup.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent#readme" data-cta="editions-browser">Setup guide</a></div>
-          <div class="card glass"><h3>In Docker</h3><p>For container-based setups, run <code>docker compose up</code> from a source checkout and connect your project folders and model servers.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/docker-compose.yml" data-cta="editions-docker">Compose setup</a></div>
-          <div class="card glass"><h3>From other tools</h3><p>The CLI is Nekko's command-line interface. Run <code>nekko-agent</code>, or <code>nekko-agent mcp</code> to connect tools that support the MCP standard.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/apps/cli/README.md" data-cta="editions-cli">Client setup</a></div>
-        </div>
-        <p class="micro center reveal">The npm package is <code>nekko-agent</code>, publishing with the next release; until then run the CLI from a source checkout (<code>npm run dev</code> or <code>apps/cli</code>). It provides the <code>nekko-agent</code> command.</p>
       </section>
 
       <section id="roadmap" class="chapter roadmap">
@@ -670,6 +558,8 @@
       <span class="footer-brand"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="26" height="20" /> NEKKO AGENT</span>
       <span class="micro">MIT · Made with ❤️ by the <a href="https://nekkolabs.com/#team" target="_blank" rel="noopener" data-cta="footer-nekko-labs-team">Nekko Labs team</a></span>
       <a href="/docs" data-cta="footer-docs">Docs</a>
+      <a href="/beta" data-cta="footer-beta">Beta</a>
+      <a href="/status" data-cta="footer-status">Status</a>
       <a href="/privacy" data-cta="footer-privacy">Privacy</a>
       <a class="with-gh" href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener" data-cta="footer-github"><svg class="gh-ico" width="16" height="16" aria-hidden="true"><use href="#i-github"/></svg>github.com/nekko-labs/nekko-agent</a>
     </footer>
@@ -678,7 +568,7 @@
       <button class="lightbox-close btn btn-ghost btn-sm" type="button" aria-label="Close">Close ✕</button>
       <div class="lightbox-stage"></div>
     </div>
-    <script src="site.js?v=15"></script>
+    <script src="site.js?v=19"></script>
     <script src="contributors.js?v=2" defer></script>
     <script src="/analytics.js?v=2" defer></script>
     <script>

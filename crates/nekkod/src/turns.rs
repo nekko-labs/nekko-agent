@@ -1821,6 +1821,10 @@ impl Turns {
                 claude_attachments(&s, &id)
             }
         };
+        // Claude Code runs on its own prompt, so what a design is and where it
+        // goes rides on each message, only where the Claude policy lets Nekko
+        // add to what Claude Code receives (`context_note`).
+        let design_note = !wake && self.claude_allows(provider, "context_note").await;
         let input = TurnInput {
             content: if wake {
                 None
@@ -1829,6 +1833,7 @@ impl Turns {
                     claude_turn_content(
                         u,
                         tools.iter().any(|t| t == crate::harness::BRIDGE_TITLE),
+                        design_note,
                         attachments.as_deref(),
                     )
                 })
@@ -2082,10 +2087,21 @@ fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec
     (Some(parts.join("\n\n---\n\n")), seen)
 }
 
-/// A context note on the existing user message, not a system flag, extra
-/// message or persisted user edit. Both policy capabilities gate `name_chat`.
+/// The design rules as a note for a Claude Code message: the two rules of
+/// `nekko_context::DESIGN_RULES`, and the project's own instructions win.
+fn claude_design_note() -> String {
+    format!(
+        "Nekko design note: {} {} Where the project's own instructions differ, follow them.",
+        nekko_context::DESIGN_RULES[0],
+        nekko_context::DESIGN_RULES[1]
+    )
+}
+
+/// Context notes on the existing user message, not a system flag, extra
+/// message or persisted user edit. Both policy capabilities gate `name_chat`;
+/// `context_note` gates `design_note`, which rides on every message.
 /// Attached files the Claude Code session has not been given yet go first.
-fn claude_turn_content(user: &Value, name_chat: bool, attachments: Option<&str>) -> Value {
+fn claude_turn_content(user: &Value, name_chat: bool, design_note: bool, attachments: Option<&str>) -> Value {
     let mut content = nekko_harness::user_content(user);
     // Leave CLI commands such as /compact intact.
     if str_at(user, "content").is_some_and(|s| s.trim_start().starts_with('/')) {
@@ -2103,20 +2119,27 @@ fn claude_turn_content(user: &Value, name_chat: bool, attachments: Option<&str>)
             _ => {}
         }
     }
-    if !name_chat {
-        return content;
+    let mut notes: Vec<String> = Vec::new();
+    if design_note {
+        notes.push(claude_design_note());
     }
-    const NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a short 2-4 word label for what the chat is for, leading with an issue or PR number if the request names one (like \"Issue #2391\"); never copy the opening words of the request. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
-    match &mut content {
-        Value::String(text) => {
-            text.push_str("\n\n");
-            text.push_str(NOTE);
+    if name_chat {
+        notes.push(NAMING_NOTE.to_string());
+    }
+    for note in notes {
+        match &mut content {
+            Value::String(text) => {
+                text.push_str("\n\n");
+                text.push_str(&note);
+            }
+            Value::Array(blocks) => blocks.push(json!({ "type": "text", "text": note })),
+            _ => {}
         }
-        Value::Array(blocks) => blocks.push(json!({ "type": "text", "text": NOTE })),
-        _ => {}
     }
     content
 }
+
+const NAMING_NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a short 2-4 word label for what the chat is for, leading with an issue or PR number if the request names one (like \"Issue #2391\"); never copy the opening words of the request. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
 
 /// A Claude Agent chat's `agentPlan` after Claude Code changed its own plan
 /// (nekko_harness::PlanCall), through the same rules as `update_plan`;
@@ -3708,10 +3731,40 @@ mod tests {
     }
 
     #[test]
+    fn claude_design_note_rides_on_every_message_the_policy_allows() {
+        let user = json!({ "content": "Mock up the checkout" });
+        // Off (a Claude plan, an unread sign-in): the message is passed through untouched.
+        assert_eq!(claude_turn_content(&user, false, false, None), user["content"]);
+        let noted = claude_turn_content(&user, false, true, None);
+        let text = noted.as_str().unwrap();
+        assert!(text.starts_with("Mock up the checkout\n\nNekko design note: "), "{text}");
+        for rule in nekko_context::DESIGN_RULES {
+            assert!(text.contains(rule), "{rule}");
+        }
+        assert!(text.contains("nekko-designs/") && text.contains("never in reports/"));
+        assert!(text.contains("checkout-design-v2.html"));
+        assert!(text.ends_with("Where the project's own instructions differ, follow them."));
+        assert_eq!(user["content"], "Mock up the checkout", "the saved message is not edited");
+        // With the naming note, the design note comes first and each is added once.
+        let both = claude_turn_content(&user, true, true, None);
+        let text = both.as_str().unwrap();
+        assert_eq!(text.matches("Nekko design note: ").count(), 1);
+        assert!(text.find("Nekko design note: ").unwrap() < text.find("Nekko chat naming note").unwrap());
+        // An image message keeps its blocks and gains one text block.
+        let image = json!({ "content": "Like this", "images": ["data:image/png;base64,AAAA"] });
+        let original = nekko_harness::user_content(&image);
+        let noted = claude_turn_content(&image, false, true, None);
+        assert_eq!(noted.as_array().unwrap().len(), original.as_array().unwrap().len() + 1);
+        assert!(noted.as_array().unwrap().last().unwrap()["text"].as_str().unwrap().starts_with("Nekko design note: "));
+        // A CLI command is never touched.
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true, true, None), json!("/compact"));
+    }
+
+    #[test]
     fn claude_naming_note_uses_only_the_existing_user_content() {
         let user = json!({ "content": "Fix the login form" });
-        assert_eq!(claude_turn_content(&user, false, None), user["content"]);
-        let named = claude_turn_content(&user, true, None);
+        assert_eq!(claude_turn_content(&user, false, false, None), user["content"]);
+        let named = claude_turn_content(&user, true, false, None);
         let text = named.as_str().unwrap();
         assert!(text.starts_with("Fix the login form\n\n"));
         assert!(text.contains("mcp__nekko_bridge__set_chat_title"));
@@ -3721,11 +3774,11 @@ mod tests {
         assert_eq!(user["content"], "Fix the login form");
         let image = json!({ "content": "Fix this", "images": ["data:image/png;base64,AAAA"] });
         let original = nekko_harness::user_content(&image);
-        let named = claude_turn_content(&image, true, None);
+        let named = claude_turn_content(&image, true, false, None);
         assert_eq!(named[0], original[0]);
         assert_eq!(named[1], original[1]);
         assert!(named[2]["text"].as_str().unwrap().contains("Nekko chat naming note"));
-        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true, None), json!("/compact"));
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true, false, None), json!("/compact"));
     }
 
     #[test]
@@ -3744,24 +3797,27 @@ mod tests {
         let block = block.expect("a new attachment is sent");
         assert!(block.contains("the quarterly numbers"));
         assert_eq!(seen, vec![notes.clone()]);
-        let text = claude_turn_content(&json!({ "content": "Summarize it" }), false, Some(&block));
+        let text = claude_turn_content(&json!({ "content": "Summarize it" }), false, false, Some(&block));
         let text = text.as_str().unwrap();
         assert!(text.starts_with("Files the user attached to this chat:"));
         assert!(text.ends_with("Summarize it"));
 
         // A file-only message still says something.
-        let alone = claude_turn_content(&json!({ "content": "" }), false, Some(&block));
+        let alone = claude_turn_content(&json!({ "content": "" }), false, false, Some(&block));
         assert!(alone.as_str().unwrap().contains("the quarterly numbers"));
 
         // With a photo, the files sit before the user's text, after the image.
         let image = json!({ "content": "And this", "images": ["data:image/png;base64,AAAA"] });
-        let with_image = claude_turn_content(&image, false, Some(&block));
+        let with_image = claude_turn_content(&image, false, false, Some(&block));
         assert_eq!(with_image[0]["type"], "image");
         assert!(with_image[1]["text"].as_str().unwrap().contains("the quarterly numbers"));
         assert_eq!(with_image[2]["text"], "And this");
 
         // A CLI command is left alone.
-        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), false, Some(&block)), json!("/compact"));
+        assert_eq!(
+            claude_turn_content(&json!({ "content": "/compact" }), false, false, Some(&block)),
+            json!("/compact")
+        );
 
         // The same Claude Code session is not sent it again; only the new file goes.
         session["claudeCodeAttached"] = json!({ "session": "cc1", "paths": seen });

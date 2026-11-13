@@ -213,8 +213,6 @@
     <string name="chats_no_models_match">Nenhum modelo corresponde a “%1$s”.</string>
     <string name="chats_loaded">carregado</string>
     <string name="chats_selected">Selecionado</string>
-    <string name="chats_offline_connecting">%1$s está conectando… Inicie agora e o chat começa quando ele voltar; até lá ele aguarda neste celular.</string>
-    <string name="chats_offline_offline">%1$s está offline. Inicie agora e o chat começa quando ele voltar; até lá ele aguarda neste celular.</string>
     <string name="chats_not_started">Não iniciado: %1$s</string>
     <string name="chats_offline_no_model">Para iniciar um chat enquanto %1$s está offline, escolha um modelo padrão para ele em Configurações → Novos chats.</string>
     <string name="chats_model_named">Modelo · %1$s</string>
@@ -240,9 +238,6 @@
     <string name="chats_group_general">Geral</string>
     <string name="chats_group_completed">Concluídas</string>
     <string name="chats_group_all">Todas as conversas</string>
-    <string name="chats_group_needs_you">Precisa de você</string>
-    <string name="chats_group_working">Em andamento</string>
-    <string name="chats_group_idle">Inativo</string>
     <string name="chats_group_today">Hoje</string>
     <string name="chats_group_yesterday">Ontem</string>
     <string name="chats_group_week">Últimos 7 dias</string>
@@ -261,4 +256,26 @@
     <string name="chats_pr_draft">rascunho</string>
     <string name="chats_pr_merged">mesclado</string>
     <string name="chats_pr_closed">fechado</string>
+
+    <string name="chats_group_input">Precisa de resposta</string>
+    <string name="chats_group_draft">Rascunho</string>
+    <string name="chats_group_building">Em andamento</string>
+    <string name="chats_group_verifying">Verificando</string>
+    <string name="chats_group_watching">Acompanhando</string>
+    <string name="chats_group_done">Concluídos</string>
+    <!-- One chat list across every computer and this phone (#2108). -->
+    <string name="chats_this_phone">Este telefone</string>
+    <string name="chats_show_chats_from">Mostrar chats de</string>
+    <string name="chats_all_computers">Todos os computadores</string>
+    <string name="chats_phone_own_models">Modelos próprios</string>
+    <string name="chats_n_of_m_online">%1$d de %2$d online</string>
+    <string name="chats_group_computer">Computador</string>
+    <string name="chats_computer_icons">Ícones dos computadores</string>
+    <string name="chats_phone_forget_title">Esquecer este chat?</string>
+    <string name="chats_phone_forget_body">As mensagens são removidas deste telefone. Os registros do provedor continuam.</string>
+    <string name="chats_phone_forget">Esquecer</string>
+    <!-- New chat while the computer is away (#2475), the iPhone's two lines. -->
+    <string name="chats_reconnecting">%1$s está reconectando</string>
+    <string name="chats_reconnecting_label">%1$s está reconectando…</string>
+    <string name="chats_reconnect_draft">Escreva sua mensagem agora; ela será enviada quando %1$s se reconectar</string>
 </resources>

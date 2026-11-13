@@ -161,6 +161,8 @@ public final class ComputersStore {
     public private(set) var connDetail: String?
     public private(set) var denied: DenyReason?
     public private(set) var summaries: [SessionSummary] = []
+    /// Each chat's sub-agents (`SessionSummary.subagents`), by the parent's id.
+    public private(set) var subagents: [String: [SessionSummary]] = [:]
     public private(set) var summariesLoading = false
     /// The list has been read (or failed to) since connecting: before that an
     /// empty list means "not loaded yet", not "no chats".
@@ -256,6 +258,8 @@ public final class ComputersStore {
     public let drafts: DraftStore
     /// The active computer's prompts waiting to be delivered, kept on disk.
     public let outbox: Outbox
+    /// Answers and one-time approvals bound to the original request.
+    public let responses: PendingResponses
     private let offlineFiles: OfflineFiles?
 
     public var active: Computer? { computers.first { $0.id == activeId } }
@@ -342,6 +346,7 @@ public final class ComputersStore {
         var defaultsNow: () -> RemoteDefaults = { RemoteDefaults() }
         outbox = Outbox(files: offlineFiles, drafts: drafts, caller: { reach() }, defaults: { defaultsNow() },
                         newId: newId, now: now, pollInterval: outboxPoll, confirmTimeout: outboxConfirmTimeout)
+        responses = PendingResponses(files: offlineFiles, caller: { reach() }, newId: newId)
         reach = { [weak self] in
             guard let self, self.conn == .online else { return nil }
             return self.client
@@ -352,8 +357,9 @@ public final class ComputersStore {
 
     /// Deliver the outbox now (connected, back in the foreground, Send now).
     public func flushOutbox() {
-        guard conn == .online, !outbox.items.isEmpty else { return }
-        Task { await outbox.flush() }
+        guard conn == .online else { return }
+        Task { await responses.flush() }
+        if !outbox.items.isEmpty { Task { await outbox.flush() } }
     }
 
     /// Calls the active computer at call time; throws when none is connected.
@@ -695,6 +701,7 @@ public final class ComputersStore {
         if wasActive {
             drafts.load(nil)
             outbox.load(nil)
+            responses.load(nil)
             transcripts.load(nil)
             offlineComputer = nil
         }
@@ -766,6 +773,7 @@ public final class ComputersStore {
         if offlineComputer != id {
             drafts.load(id)
             outbox.load(id)
+            responses.load(id)
             transcripts.load(id)
             offlineComputer = id
         }
@@ -784,6 +792,7 @@ public final class ComputersStore {
             activity = peer.activity
             if peer.loaded {
                 summaries = peer.summaries
+                subagents = peer.subagents
                 workspaces = peer.workspaces
                 summariesLoaded = true
             }
@@ -858,7 +867,7 @@ public final class ComputersStore {
 
     /// What the active computer's link knows, handed to the fleet when another computer becomes active.
     private func leftBehind() -> Peer {
-        Peer(conn: conn, detail: connDetail, denied: denied, summaries: summaries, activity: activity,
+        Peer(conn: conn, detail: connDetail, denied: denied, summaries: summaries, subagents: subagents, activity: activity,
              workspaces: workspaces, loaded: summariesLoaded && savedListAt == nil, hostProtocol: hostProtocol)
     }
 
@@ -889,6 +898,7 @@ public final class ComputersStore {
                 if safetyExit?.computerId == computerId { safetyExit = nil }
                 Task {
                     await refresh()
+                    await responses.flush()
                     await outbox.flush()
                 }
                 registerPushNow()
@@ -1202,6 +1212,7 @@ public final class ComputersStore {
             let r = (try await summaries, try await providers, s, await workspaces, await info, await pending)
             guard client === c else { return }
             self.summaries = SessionSummary.visible(r.0)
+            self.subagents = SessionSummary.subagents(r.0)
             self.providers = PublicProvider.list(r.1)
             // Only public projections leave this block.
             self.defaults = RemoteDefaults.from(r.2)
@@ -1256,6 +1267,7 @@ public final class ComputersStore {
             let list = try await c.call(Channels.sessionsSummaries)
             guard client === c else { return }
             summaries = SessionSummary.visible(list)
+            subagents = SessionSummary.subagents(list)
             saveList()
         }
     }
@@ -1498,6 +1510,7 @@ public final class ComputersStore {
         savedListAt = nil
         summariesLoaded = false
         summaries = []
+        subagents = [:]
         providers = []
         models = [:]
         modelErrors = [:]
@@ -1534,6 +1547,7 @@ public final class ComputersStore {
                 guard self.client === c, !Task.isCancelled else { return }
                 if let list {
                     self.summaries = SessionSummary.visible(list)
+                    self.subagents = SessionSummary.subagents(list)
                     self.saveList()
                 }
                 // Only a new invalidation retries, never a failed call alone.

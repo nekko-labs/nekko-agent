@@ -14,6 +14,7 @@ import {
   runnerSubtitle,
   runnerTitle,
   scopeName,
+  sizeNotice,
   slotLines,
   stepText,
   formatMinutes,
@@ -400,9 +401,52 @@ function MissingToolsRow({ tools, onAddTools }: { tools: string[]; onAddTools?()
   );
 }
 
+/** Where **Not now** remembers the suggestion it hid, per runner. */
+const NOT_NOW_KEY = (id: string) => `nekko.runner.sizeNotNow.${id}`;
+
+/**
+ * The suggested VM size, on the card once the daemon has two jobs at the current size and
+ * the suggestion differs from it (#2700). Apply saves it as the settings row does; Not now
+ * hides this suggestion until the daemon suggests something else.
+ */
+function SizeNoticeRow({ view, beginReply }: { view: RunnerView; beginReply(): (v: RunnerView) => void }) {
+  const notice = sizeNotice(view);
+  const id = view.config.id;
+  const [hidden, setHidden] = useState<string | null>(() => {
+    try { return window.localStorage.getItem(NOT_NOW_KEY(id)); } catch { return null; }
+  });
+  const [busy, setBusy] = useState(false);
+  const pushToast = useStore((s) => s.pushToast);
+  if (!notice || hidden === notice.key) return null;
+  const apply = async () => {
+    setBusy(true);
+    try {
+      const reply = beginReply();
+      reply(await window.nekko.updateRunner(id, notice.apply));
+      pushToast('success', 'New VM size saved. It applies from the next VM.');
+    } catch (e) {
+      pushToast('error', `Couldn't apply the suggested size: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const notNow = () => {
+    try { window.localStorage.setItem(NOT_NOW_KEY(id), notice.key); } catch { /* best effort */ }
+    setHidden(notice.key);
+  };
+  return (
+    <div className="flex min-w-0 items-center gap-2" data-size-notice={notice.key}>
+      <StatusDot tone="info" size={6} />
+      <p role="status" className="min-w-0 flex-1 text-xs text-ink-soft" title={notice.reasons.join(' ') || undefined}>{notice.line}</p>
+      <button className="btn btn-ghost shrink-0" disabled={busy} onClick={notNow}>Not now</button>
+      <button className="btn btn-primary shrink-0" disabled={busy} onClick={() => void apply()}>Apply</button>
+    </div>
+  );
+}
+
 /**
  * One connected runner, as quiet rows: a header with state, switch and
- * settings; one line for an error, the image build or missing tools; why it
+ * settings; one line for an error, the image build, missing tools or a suggested VM size; why it
  * waits; the slots not running a job; the jobs; and one line of facts.
  * `compact` is the Automations panel: it leaves out idle slots without a VM,
  * the facts line, completed jobs and Connect to a workflow, which stay on the
@@ -462,6 +506,7 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
         {view.error && <p role="alert" className="text-xs" style={{ color: 'var(--danger-text)' }}>{view.error}</p>}
         {image && settingUp && <ImageRow image={image} onSetup={onSetup} />}
         {missingTools.length > 0 && <MissingToolsRow tools={missingTools} onAddTools={onAddTools} />}
+        <SizeNoticeRow view={view} beginReply={beginReply} />
         {reasons.length > 0 && (
           <ul className="text-xs text-ink-soft" data-runner-reasons>
             {reasons.map((r) => <li key={r}>{reasonText(r).sentence}</li>)}

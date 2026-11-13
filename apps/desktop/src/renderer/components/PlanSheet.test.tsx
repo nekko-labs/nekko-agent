@@ -9,7 +9,8 @@ vi.mock('../planStepLinks.js', async (original) => {
   const real = await original<typeof import('../planStepLinks.js')>();
   return { ...real, planStepLinks: (...args: Parameters<typeof real.planStepLinks>) => linked.links ?? real.planStepLinks(...args) };
 });
-import { PlanSheet, issueLook, subagentCardState } from './PlanSheet.js';
+import { PlanSheet, subagentCardState } from './PlanSheet.js';
+import { issueLook } from './PrLinkChip.js';
 import { stylesheet } from '../tests/css.js';
 
 const now = 1_800_000_000_000;

@@ -45,8 +45,13 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
 | Native proof | No new native test/evidence pass or physical-device proof claimed | No new native test/evidence pass or physical-device proof claimed | Run native builds/tests, inspect matched evidence and verify device auth/microphone/lifecycle before closing the verification gap. |
 | Chat environment: repositories and question actions (desktop since #2404) | Actioned `ask_user` options show as plain answers; no repository list | Same | [#2415](https://github.com/nekko-labs/nekko-agent/issues/2415) |
+| Quiet chat rows: no preview or dividers, sub-agent rows with their models ([spec](phone-chat-rows-match-the-desktop-card.md#quiet-rows-and-sub-agents-on-the-iphone-2026-11-10)) | Built 2026-11-10 in source; native screenshots pending | Rows still show the preview; no sub-agent rows | [#2509](https://github.com/nekko-labs/nekko-agent/issues/2509) |
 | Run a suggested command in the chat's terminal ([spec](../chat/run-suggested-commands-in-a-terminal.md), desktop since #2595) | No Run on shell blocks | Same | [#2607](https://github.com/nekko-labs/nekko-agent/issues/2607) (iPhone), [#2608](https://github.com/nekko-labs/nekko-agent/issues/2608) (Android) |
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Built 2026-11-09 ([#2423](https://github.com/nekko-labs/nekko-agent/issues/2423)): inline card, link to the repository only, verified in Native iOS CI, not on a device | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | Both: the native store rating request once on the App Store and Google Play (planned). |
+
+## Pending response messages (#2476, not shipped)
+
+The lower stack layer implements iOS pending in-chat answers and one-time Allow/Deny messages. Android parity is tracked in [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) and the upper stack layer. Neither branch implementation nor an uninspected capture is release verification.
 
 ## Direct cloud text chats (#2414, not shipped)
 
@@ -70,11 +75,8 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
 | Full system-permissions checklist in onboarding and Settings (no video) | Notifications-only onboarding; checklist not yet implemented | [#2251](https://github.com/nekko-labs/nekko-agent/issues/2251) |
-| Computer controls: persistent connection opt-out, Models disclosure and filters, Cloud fleet group, and service management | Not implemented on Android | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
-| Watching and Done groups, collapsible groups (PR status on rows landed 2026-11-09) | Only a Needs you group | [#2107](https://github.com/nekko-labs/nekko-agent/issues/2107) |
-| One chat list across every computer, group by computer | One computer's list at a time | [#2108](https://github.com/nekko-labs/nekko-agent/issues/2108) |
+| Computer controls: Cloud fleet group | Waits with Nekko Cloud (#2122); service management, the Models filter and Connect to <computer> landed (2026-11-12/13) | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
 | Connectors page (with the brand logos the iPhone has had since 2026-11-09) | Missing | [#2109](https://github.com/nekko-labs/nekko-agent/issues/2109) |
-| Full-screen photos, previews before and after sending | No photo viewer | [#2111](https://github.com/nekko-labs/nekko-agent/issues/2111) |
 | Edit photos in image chats: attach photos to a prompt, Edit under a made picture | Not implemented on Android | [#2230](https://github.com/nekko-labs/nekko-agent/issues/2230) |
 | Plan sheet on the composer | Missing (the iPhone's `PlanSheet.swift`) | [#2115](https://github.com/nekko-labs/nekko-agent/issues/2115) |
 | Live card: chats as chips that open the chat | Focused chat and its actions only | [#2116](https://github.com/nekko-labs/nekko-agent/issues/2116) |
@@ -82,7 +84,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Push notifications | No push; the keep-alive service covers an open connection | [#2121](https://github.com/nekko-labs/nekko-agent/issues/2121) |
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
-| Customize page: view, this phone's tone, skills | Missing; Simple/Detailed is in the pill | [#2426](https://github.com/nekko-labs/nekko-agent/issues/2426) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
 | Connection row under the title instead of the connection, fleet and protocol banners (2026-11-12) | Tinted banners | [#2633](https://github.com/nekko-labs/nekko-agent/issues/2633) |
 | New chat as a composer (the desktop's bottom row: +, folder, asks-first, mic, Start) | A form; only its Chat / Image toggle matches the iPhone's (#2448) | [#2459](https://github.com/nekko-labs/nekko-agent/issues/2459) |
@@ -90,6 +91,12 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 Android features the iPhone lacks have not been audited yet.
 
 Nothing is recorded as a true OS exclusive yet.
+
+## Reconnect status wording
+
+| Capability | iPhone / iPad | Android | Gap / follow-up |
+| --- | --- | --- | --- |
+| Two-line reconnect status with fixed-width animated ellipsis | Branch implementation, native verification pending ([spec](ios-streaming-and-reconnect-status.md)) | Same two lines in New chat while the computer is away (2026-11-13, `ReconnectingNotice`; dots still with animations off) | None |
 
 ## Secret box (desktop first, #2594)
 

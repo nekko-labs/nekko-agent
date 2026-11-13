@@ -169,6 +169,11 @@ struct ChatView: View {
                         }
                         }
                     }
+                    ForEach(chat.responseMessages) { message in
+                        ResponseMessageRow(message: message,
+                            retry: { chat.retryResponse(message.id) }, cancel: { chat.cancelResponse(message.id) })
+                            .id("response-\(message.id)")
+                    }
                     // Prompts written here that the computer doesn't have yet.
                     ForEach(chat.waiting) { item in
                         WaitingRow(item: item, sending: store.outbox.sendingId == item.id, online: store.conn == .online,
@@ -201,8 +206,8 @@ struct ChatView: View {
                             .transition(.opacity)
                     }
                     Color.clear.frame(height: 1).id("bottom")
-                        .onAppear { atBottom = true }
-                        .onDisappear { atBottom = false }
+                        .onAppear { if #unavailable(iOS 18.0) { atBottom = true } }
+                        .onDisappear { if #unavailable(iOS 18.0) { atBottom = false } }
                 }
                 // A vertical ScrollView must propose the viewport's exact column
                 // width. Text's pixel-rounded ideal width can otherwise grow it
@@ -226,6 +231,8 @@ struct ChatView: View {
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
+             .modifier(TranscriptFollow(atBottom: $atBottom,
+                 readerScrolled: { settling?.cancel() }))
             .contentMargins(.top, pillRoom, for: .scrollContent)
             .hidesPillOnScroll($pillHidden)
           }
@@ -241,8 +248,11 @@ struct ChatView: View {
                 let layoutChanged = chat.blocksLayout != followedLayout
                 followedLayout = chat.blocksLayout
                 guard atBottom else { return }
-                proxy.scrollTo("bottom", anchor: .bottom)
-                if layoutChanged { settleAtEnd(proxy) }
+                // iOS 18+ follows laid-out height, not every token. New lazy rows still settle.
+                if #unavailable(iOS 18.0) {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                    if layoutChanged { settleAtEnd(proxy) }
+                }
             }
             // A chat that opens with its transcript already there (the saved copy) settles too.
             .onAppear {
@@ -430,13 +440,13 @@ struct ChatView: View {
     /// The approval and question cards, the queue, the PR chip and the composer.
     private func bottomBar(_ chat: ChatModel) -> some View {
         VStack(spacing: 8) {
-            if let a = chat.turn.approval {
+            if let a = chat.responseApproval {
                 ApprovalCard(approval: a, answer: { ok in try await chat.approve(ok) },
                              alwaysAllow: ChatModel.offersAlwaysAllow(a.call) ? { try await chat.alwaysAllowTool() } : nil,
                              startAlways: alwaysNow == a.call.id, startedAlways: { alwaysNow = nil })
                     .id(a.call.id)
             }
-            if let q = chat.turn.question {
+            if let q = chat.responseQuestion {
                 // A new question starts with nothing picked.
                 QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
             }
@@ -480,6 +490,7 @@ struct ChatView: View {
     }
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        atBottom = true
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
     }
 

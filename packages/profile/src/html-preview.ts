@@ -95,8 +95,19 @@ export function previewPolicy(internet: boolean): string {
 /** Inserted first in every served page: storage that works in an opaque origin. */
 export const STORAGE_SHIM = "<script>(()=>{const s=()=>{const m=new Map();return{get length(){return m.size},key:i=>[...m.keys()][i]??null,getItem:k=>m.has(String(k))?m.get(String(k)):null,setItem:(k,v)=>{m.set(String(k),String(v))},removeItem:k=>{m.delete(String(k))},clear:()=>m.clear()}};for(const n of['localStorage','sessionStorage']){try{void window[n]}catch{try{Object.defineProperty(window,n,{value:s(),configurable:true})}catch{}}}})()</script>";
 
-/** The page with the stand-in after its doctype (before it would force quirks mode). */
-export function withStorageShim(html: string): string {
+/**
+ * Inserted after the storage stand-in when the design canvas asked for it
+ * (`controls`): the page answers its viewer, and only its viewer, over
+ * `postMessage` with its scroll size and what is moving, and pauses or
+ * resumes all of it (CSS animations and transitions, Web Animations,
+ * `requestAnimationFrame` loops, video and audio). It tells the frame above
+ * nothing else, and takes nothing from it but the three commands.
+ */
+export const CONTROL_SHIM = "<script>(()=>{if(window.parent===window)return;const raf=window.requestAnimationFrame.bind(window),caf=window.cancelAnimationFrame.bind(window);let paused=false,frames=0,seq=0;const held=new Map(),playing=new Set();window.requestAnimationFrame=cb=>{frames++;if(!paused)return raf(cb);const id=-(++seq);held.set(id,cb);return id};window.cancelAnimationFrame=id=>{if(id<0)held.delete(id);else caf(id)};const anims=()=>{try{return document.getAnimations().filter(a=>a.playState==='running'||a.playState==='paused')}catch{return[]}};const media=()=>[...document.querySelectorAll('video,audio')];const tell=()=>{const d=document.documentElement,b=document.body;window.parent.postMessage({nekkoPreview:'state',animations:anims().length,media:media().length,frames,paused,width:Math.max(d.scrollWidth,b?b.scrollWidth:0),height:Math.max(d.scrollHeight,b?b.scrollHeight:0)},'*')};addEventListener('message',e=>{if(e.source!==window.parent||!e.data||typeof e.data.nekkoPreview!=='string')return;const c=e.data.nekkoPreview;if(c==='pause'&&!paused){paused=true;anims().forEach(a=>{try{a.pause()}catch{}});media().forEach(m=>{if(!m.paused){playing.add(m);m.pause()}})}else if(c==='play'&&paused){paused=false;anims().forEach(a=>{try{a.play()}catch{}});playing.forEach(m=>{m.play().catch(()=>{})});playing.clear();const q=[...held.values()];held.clear();q.forEach(cb=>raf(cb))}if(c==='pause'||c==='play'||c==='probe')tell()});addEventListener('load',tell)})()</script>";
+
+/** The page with the stand-in (and `extra`) after its doctype (before it would force quirks mode). */
+export function withStorageShim(html: string, extra = ''): string {
+  const shim = STORAGE_SHIM + extra;
   // A single forward scan (no backtracking regex): byte-order mark, then
   // whitespace and comments, then the doctype.
   let i = html.charCodeAt(0) === 0xfeff ? 1 : 0;
@@ -104,14 +115,14 @@ export function withStorageShim(html: string): string {
   skipSpace();
   while (html.startsWith('<!--', i)) {
     const end = html.indexOf('-->', i + 4);
-    if (end < 0) return STORAGE_SHIM + html;
+    if (end < 0) return shim + html;
     i = end + 3;
     skipSpace();
   }
-  if (html.slice(i, i + 9).toLowerCase() !== '<!doctype') return STORAGE_SHIM + html;
+  if (html.slice(i, i + 9).toLowerCase() !== '<!doctype') return shim + html;
   const close = html.indexOf('>', i);
-  if (close < 0) return STORAGE_SHIM + html;
-  return html.slice(0, close + 1) + STORAGE_SHIM + html.slice(close + 1);
+  if (close < 0) return shim + html;
+  return html.slice(0, close + 1) + shim + html.slice(close + 1);
 }
 
 /** The path without separators at its end, by a plain scan. */
@@ -131,6 +142,7 @@ export class HtmlPreviewRefusal extends Error {
 interface Page {
   folder: string;
   internet: boolean;
+  controls: boolean;
 }
 
 export interface HtmlPreviewServerOptions {
@@ -232,7 +244,7 @@ export function createHtmlPreviewServer(options: HtmlPreviewServerOptions = {}):
     if (type.startsWith('text/html') && size <= MAX_REWRITE_BYTES) {
       let body: Buffer;
       try {
-        body = Buffer.from(withStorageShim((await readFile(real)).toString('utf8')), 'utf8');
+        body = Buffer.from(withStorageShim((await readFile(real)).toString('utf8'), page.controls ? CONTROL_SHIM : ''), 'utf8');
       } catch {
         return fail(404);
       }
@@ -263,7 +275,7 @@ export function createHtmlPreviewServer(options: HtmlPreviewServerOptions = {}):
   };
 
   return {
-    async serve(file, { internet }) {
+    async serve(file, { internet, controls }) {
       if (typeof file !== 'string' || !file || file.includes('\0')) throw new HtmlPreviewRefusal('Preview needs a file path.');
       if (!isServableHtml(file)) throw new HtmlPreviewRefusal('Only .html and .htm pages are served.');
       let real: string;
@@ -284,7 +296,7 @@ export function createHtmlPreviewServer(options: HtmlPreviewServerOptions = {}):
       if (why) throw new HtmlPreviewRefusal(why === 'hidden' ? 'Hidden pages are not served.' : 'That page is not served.');
       const { port } = await listen();
       const id = randomBytes(18).toString('base64url');
-      pages.set(id, { folder, internet: internet === true });
+      pages.set(id, { folder, internet: internet === true, controls: controls === true });
       while (pages.size > MAX_SERVED_PAGES) pages.delete(pages.keys().next().value as string);
       return { id, port, path: `/${id}/${encodeURIComponent(basename(real))}` };
     },
