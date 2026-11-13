@@ -16,7 +16,7 @@ import {
   LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
   type LibraryLayout,
 } from '../components/library/libraryPrefs.js';
-import { ChevronDownIcon, CloseIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
+import { ChevronDownIcon, ChevronIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
 import {
   ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns,
   type ArtifactEntry, type ArtifactKind,
@@ -258,6 +258,22 @@ export function ArtifactsView() {
   // In List the list gives way to the preview, so the change is animated; elsewhere it is a swap.
   const pick = (e: ArtifactEntry | null) => { setSelected(e); setVersion(null); setAsFile(false); };
   const select = (e: ArtifactEntry | null) => (layout === 'list' ? transition(() => pick(e), true) : pick(e));
+  // Back to Library from a file: Escape outside a field, or the mouse's back button.
+  const back = useRef(() => {});
+  back.current = () => { if (selected && !showIntro) select(null); };
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== 'Escape' || e.defaultPrevented || !t || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      // A dialog over the page (the palette, a menu) takes its own Escape.
+      if (document.querySelector('[aria-modal="true"], [role="menu"]')) return;
+      back.current();
+    };
+    const mouse = (e: MouseEvent) => { if (e.button === 3) { e.preventDefault(); back.current(); } };
+    window.addEventListener('keydown', key);
+    window.addEventListener('mouseup', mouse);
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('mouseup', mouse); };
+  }, []);
   const openPath = selected ? version ?? selected.path : '';
   const onCanvas = !!selected && selected.kind === 'design' && isHtml(openPath);
 
@@ -366,8 +382,11 @@ export function ArtifactsView() {
           {selected ? (
             <>
               <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
-                <button type="button" className="btn btn-outline py-1 text-xs md:hidden" onClick={() => select(null)}>Back to Library</button>
-                <div className="order-first min-w-0 flex-1 basis-full md:order-none md:basis-auto">
+                <button type="button" className="btn btn-ghost shrink-0 gap-1 px-2 py-1 text-xs" data-library-back aria-label="Back to Library" title="Back to Library (Esc)" onClick={() => select(null)}>
+                  <ChevronIcon className="h-3.5 w-3.5 rotate-180" /> Library
+                </button>
+                {/* At least 10rem for the name: on a narrow window the actions wrap below instead. */}
+                <div className="min-w-0 flex-1 basis-40">
                   <p className="truncate text-sm font-semibold">{selected.title}</p>
                   <p className="truncate font-mono text-2xs text-ink-faint" title={openPath}>{openPath}</p>
                 </div>
@@ -380,9 +399,6 @@ export function ArtifactsView() {
                   <ExternalIcon className="h-3.5 w-3.5" /> Open file
                 </button>
                 {onCanvas && asFile && <button type="button" className="btn btn-ghost py-1 text-xs" data-design-back onClick={() => setAsFile(false)} title="Show the design on its canvas again">Canvas</button>}
-                <button type="button" className="btn-icon hidden md:inline-flex" aria-label="Close preview" title="Back to Library" onClick={() => select(null)}>
-                  <CloseIcon className="h-4 w-4" />
-                </button>
               </div>
               <div className="min-h-0 flex-1 overflow-hidden" key={onCanvas && !asFile ? `canvas:${selected.path}` : `file:${openPath}`}>
                 {onCanvas && !asFile
