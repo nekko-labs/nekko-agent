@@ -65,7 +65,8 @@ class FirstRunJourneyTest {
             InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
         }
         val prefs = journey(shots = true)
-        compose.onNodeWithTag("firstRun.allowNotifications").performClick()
+        // Step 3 is the permissions checklist (#2251): alerts already allowed here, Continue ends the first run.
+        compose.onNodeWithTag("permissions.continue").performClick()
         compose.waitUntil(5_000) { prefs.get(FirstRun.DONE) }
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty() }
         settle()
@@ -74,10 +75,13 @@ class FirstRunJourneyTest {
     }
 
     @Test fun notNow() {
+        // Alerts left off: only meaningful while Android hasn't granted them (13+ asks; revoking would end this process).
+        val app = ApplicationProvider.getApplicationContext<NekkoApp>()
+        org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 33 && app.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
         val prefs = journey(shots = false)
-        compose.onNodeWithTag("firstRun.notNow").performClick()
+        compose.onNodeWithTag("permissions.continue").performClick()
         compose.waitUntil(5_000) { prefs.get(FirstRun.DONE) }
-        assertFalse("Not now turns Notify me off", prefs.get(Notices.NEEDS_YOU) || prefs.get(Notices.FINISHED))
+        assertFalse("Continue with alerts off turns Notify me off", prefs.get(Notices.NEEDS_YOU) || prefs.get(Notices.FINISHED))
     }
 
     /** Steps 1 to 3, leaving step 3 on screen. */

@@ -9,7 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.nekko.android.data.FirstRun
 import com.nekko.android.ui.screens.FirstRunIntro
-import com.nekko.android.ui.screens.FirstRunNotifications
 import kotlinx.coroutines.flow.first
 import android.net.Uri
 import android.os.Handler
@@ -58,6 +57,8 @@ import com.nekko.android.ui.settings.SettingsDeps
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -116,6 +117,7 @@ object Routes {
     const val PROVIDERS = "settings/providers"
     const val SIMPLE_MODE = "settings/simple"
     const val CUSTOMIZE = "settings/customize"
+    const val PERMISSIONS = "settings/permissions"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     /** This phone's chats, opened on [chat] when one is given (a row of the chat list, #2108). */
@@ -311,6 +313,9 @@ fun NekkoNavHost(
                     })
                 }
                 com.nekko.android.ui.screens.CustomizeScreen(deps, phoneChats(), onBack = { nav.popBackStack() })
+            }
+            composable(Routes.PERMISSIONS) {
+                com.nekko.android.permissions.PermissionsScreen(phonePrefs, onBack = { nav.popBackStack() })
             }
             composable(Routes.SIMPLE_MODE) {
                 SimpleModeScreen(prefs = phonePrefs, onBack = { nav.popBackStack() })
@@ -508,24 +513,26 @@ private fun firstRunStep(repo: ComputersRepository, prefs: PhonePrefs): Boolean 
     val done by prefs.flow(FirstRun.DONE).collectAsStateWithLifecycle()
     val notifyStep by prefs.flow(FirstRun.NOTIFY_STEP).collectAsStateWithLifecycle()
     var introSeen by rememberSaveable { mutableStateOf(false) }
-    var asking by remember { mutableStateOf(false) }
-    // Whatever Android answers, the step is done; a refusal shows in Settings → Connection.
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { FirstRun.finish(prefs, allowNotifications = true) }
+    val context = LocalContext.current
     if (!c.ready) return false
     if (notifyStep && c.computers.isNotEmpty()) {
-        FirstRunNotifications(
-            computer = c.active?.name ?: stringResource(R.string.chats_your_computer_cap),
-            asking = asking,
-            onAllow = {
-                if (Build.VERSION.SDK_INT >= 33) {
-                    asking = true
-                    permission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else {
-                    FirstRun.finish(prefs, allowNotifications = true)
-                }
-            },
-            onNotNow = { FirstRun.finish(prefs, allowNotifications = false) },
-        )
+        // Step 3: the permissions checklist (#2251, the iPhone's #2249). Nothing is required;
+        // Continue ends the first run, and alerts left off turn Notify me off, as Not now did.
+        androidx.compose.foundation.layout.Box(
+            Modifier.fillMaxSize().background(com.nekko.android.ui.theme.Nekko.palette.paper)
+                .safeDrawingPadding(),
+        ) {
+            com.nekko.android.permissions.PermissionChecklist(
+                prefs,
+                step = { com.nekko.android.ui.screens.StepLabel(3) },
+                onDone = {
+                    val alerts = com.nekko.android.permissions.PermissionStates.read(
+                        context, com.nekko.android.permissions.PermissionItem.ALERTS, emptySet(), { false }, verified = false,
+                    )
+                    FirstRun.finish(prefs, allowNotifications = alerts == com.nekko.android.permissions.PermissionState.ALLOWED)
+                },
+            )
+        }
         return true
     }
     if (!done && !introSeen && c.computers.isEmpty()) {

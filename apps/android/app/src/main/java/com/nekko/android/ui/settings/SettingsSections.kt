@@ -28,6 +28,7 @@ val SettingsSections: List<SettingsSection> = listOf(
     { AppearanceSection(it) },
     { SimpleModeSection(it) },
     { SecuritySection(it) },
+    { com.nekko.android.permissions.DeviceAccessSection(it) },
     { NewChatsSection(it) },
     { ConnectionSection(it) },
     { ConnectionStatusSection(it) },
