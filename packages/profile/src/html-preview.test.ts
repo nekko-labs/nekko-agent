@@ -194,6 +194,61 @@ describe('viewer control script', () => {
     expect(sent.at(-1)).toMatchObject({ frames: 3, animations: 1 });
     expect(sent.every((m) => Object.keys(m).sort().join() === 'animations,frames,height,media,nekkoPreview,paused,width')).toBe(true);
   });
+
+  it('passes the canvas a scroll the page has no scroll box for, any pinch, and Space held outside a field', () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const listeners: Record<string, (e: unknown) => void> = {};
+    const parent = { postMessage: (m: Record<string, unknown>) => { sent.push(m); } };
+    const body = { nodeType: 1 };
+    const html = { nodeType: 1 };
+    const list = { nodeType: 1, scrollHeight: 2000, clientHeight: 400, scrollTop: 0, scrollWidth: 300, clientWidth: 300, scrollLeft: 0, parentElement: body, style: 'auto' };
+    const row = { nodeType: 1, scrollHeight: 40, clientHeight: 40, scrollTop: 0, scrollWidth: 300, clientWidth: 300, scrollLeft: 0, parentElement: list, style: 'visible' };
+    const card = { nodeType: 1, scrollHeight: 300, clientHeight: 300, scrollTop: 0, scrollWidth: 300, clientWidth: 300, scrollLeft: 0, parentElement: body, style: 'visible' };
+    const win = {
+      parent,
+      requestAnimationFrame: () => 1,
+      cancelAnimationFrame: () => {},
+      getComputedStyle: (el: { style: string }) => ({ overflowX: 'visible', overflowY: el.style }),
+    } as Record<string, unknown>;
+    const document = { documentElement: html, body, getAnimations: () => [], querySelectorAll: () => [] };
+    new Function('window', 'document', 'addEventListener', CONTROL_SHIM.slice(8, -9))(win, document, (type: string, fn: (e: unknown) => void) => { listeners[type] = fn; });
+    const wheel = (target: unknown, over: Record<string, unknown> = {}) => {
+      let prevented = false;
+      listeners.wheel({ target, deltaX: 0, deltaY: 30, deltaMode: 0, clientX: 120, clientY: 80, ctrlKey: false, metaKey: false, preventDefault: () => { prevented = true; }, ...over });
+      return prevented;
+    };
+
+    // Over a plain card the page has nothing to scroll, so the canvas moves.
+    expect(wheel(card)).toBe(true);
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'wheel', dx: 0, dy: 30, x: 120, y: 80, zoom: false });
+    // Inside a list that can still scroll down, the list scrolls and nothing is sent.
+    const before = sent.length;
+    expect(wheel(row)).toBe(false);
+    expect(sent.length).toBe(before);
+    // At its end, or scrolling up from its top, the canvas moves again.
+    expect(wheel(row, { deltaY: -30 })).toBe(true);
+    list.scrollTop = 1600;
+    expect(wheel(row)).toBe(true);
+    // A pinch always zooms the canvas, and lines are turned into pixels.
+    list.scrollTop = 0;
+    expect(wheel(row, { ctrlKey: true, deltaY: 2, deltaMode: 1 })).toBe(true);
+    expect(sent.at(-1)).toMatchObject({ nekkoPreview: 'wheel', dy: 32, zoom: true });
+
+    // Space is the hand outside a field or button, once per press.
+    const key = (type: string, target: unknown) => { let prevented = false; listeners[type]({ code: 'Space', target, preventDefault: () => { prevented = true; } }); return prevented; };
+    expect(key('keydown', body)).toBe(true);
+    key('keydown', body);
+    expect(sent.filter((m) => m.nekkoPreview === 'hand')).toEqual([{ nekkoPreview: 'hand', down: true }]);
+    key('keyup', body);
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'hand', down: false });
+    expect(key('keydown', { tagName: 'BUTTON' })).toBe(false);
+    expect(key('keydown', { tagName: 'DIV', isContentEditable: true })).toBe(false);
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'hand', down: false });
+    // Leaving the page lets go.
+    key('keydown', body);
+    listeners.blur({});
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'hand', down: false });
+  });
 });
 
 describe('storage stand-in', () => {

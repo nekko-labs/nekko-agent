@@ -96,9 +96,9 @@ app.whenReady().then(async () => {
     } else {
       await check(`document.querySelectorAll('[data-artifact-row]').length === 22`, 'all-files-listed');
       await check(`document.querySelector('[data-library-layout]').dataset.libraryLayout === 'large' && !!document.querySelector('[data-library-canvas]')`, 'opens-on-large-previews');
-      await check(`document.querySelector('[data-library-group]').dataset.libraryGroup === 'web' && document.querySelector('[data-artifact-kind]').dataset.artifactKind === 'web'`, 'developer-leads-with-web-pages');
+      await check(`[...document.querySelectorAll('[data-library-group]')].slice(0, 2).map(g => g.dataset.libraryGroup).join() === 'design,web' && [...document.querySelectorAll('[data-artifact-kind]')].slice(0, 2).map(g => g.dataset.artifactKind).join() === 'design,web'`, 'designs-then-the-developers-web-pages');
       await check(`[...document.querySelectorAll('.library-fold')].every(f => f.hasAttribute('data-open'))`, 'groups-start-expanded');
-      await check(`[...document.querySelector('[role="radiogroup"][aria-label="Show"]').querySelectorAll('[role="radio"]')].map(b => b.textContent.replace(/\\s+\\d+$/, '').trim()).join('|') === 'All|Web pages|Documents|Designs|Data|Office files|Images'`, 'type-slider-all-then-kinds');
+      await check(`[...document.querySelector('[role="radiogroup"][aria-label="Show"]').querySelectorAll('[role="radio"]')].map(b => b.textContent.replace(/\\s+\\d+$/, '').trim()).join('|') === 'All|Designs|Web pages|Documents|Data|Office files|Images'`, 'type-slider-all-then-kinds');
       await shot('desktop-large');
       for (const [label, name] of [['Small icons', 'small'], ['Full cards', 'cards'], ['List', 'list']]) {
         await radio('Layout', label); await sleep(600);

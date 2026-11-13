@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage, SessionSummary } from '@nekko-agent/shared';
-import { artifactCandidates, artifactKind, designVersion, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
+import { artifactCandidates, artifactKind, designVersion, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
 
 const msg = (id: string, content: string, createdAt: number, extra: Partial<ChatMessage> = {}): ChatMessage => ({ id, role: 'assistant', content, createdAt, ...extra });
 const write = (path: string) => ({ id: path, name: 'write_file', input: { path, content: 'x' } });
@@ -185,5 +185,25 @@ describe('artifacts index', () => {
     const s = (id: string, extra: Partial<SessionSummary>) => ({ id, updatedAt: 1, exchangeCount: 4, ...extra }) as SessionSummary;
     const picked = artifactCandidates([s('a', { updatedAt: 1 }), s('b', { updatedAt: 3 }), s('child', { parentSessionId: 'a' }), s('img', { chatType: 'image' }), s('empty', { exchangeCount: 1 }), s('inc', { incognito: true })]);
     expect(picked.map((x) => x.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('presentPaths', () => {
+  it('keeps files their folder still lists and drops the rest, listing each folder once', async () => {
+    const asked: string[] = [];
+    const disk: Record<string, string[]> = { '/p/nekko-designs': ['Checkout-design.html', 'login.html'], 'C:/w/reports': ['a.md'] };
+    const listDir = async (path: string) => { asked.push(path); return (disk[path] ?? []).map((name) => ({ name })); };
+    const present = await presentPaths(listDir, [
+      '/p/nekko-designs/checkout-design.html', '/p/nekko-designs/checkout-design-v2.html', '/p/nekko-designs/login.html',
+      'C:/w/reports/a.md', '/gone/folder/x.html',
+    ]);
+    expect([...present].sort()).toEqual(['/p/nekko-designs/checkout-design.html', '/p/nekko-designs/login.html', 'c:/w/reports/a.md']);
+    expect(asked.sort()).toEqual(['/gone/folder', '/p/nekko-designs', 'C:/w/reports']);
+  });
+
+  it('keeps every file in a folder it cannot list', async () => {
+    const present = await presentPaths(async () => { throw new Error('refused'); }, ['/locked/a.html', '/locked/b.png']);
+    expect([...present].sort()).toEqual(['/locked/a.html', '/locked/b.png']);
+    expect([...await presentPaths(async () => null as unknown as [], ['/odd/a.html'])]).toEqual(['/odd/a.html']);
   });
 });

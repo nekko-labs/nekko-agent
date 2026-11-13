@@ -1,4 +1,4 @@
-import type { PreviewState } from '@nekko-agent/shared';
+import type { PreviewState, PreviewWheel } from '@nekko-agent/shared';
 
 /**
  * The arithmetic of the design canvas, kept apart from the component so it can
@@ -32,6 +32,38 @@ export function readPreviewState(data: unknown): PreviewState | null {
   if (animations === null || media === null || frames === null || width === null || height === null) return null;
   return { nekkoPreview: 'state', animations, media, frames, paused: d.paused === true, width, height };
 }
+
+/** The largest single scroll step a page may pass up, in CSS pixels: a hostile page can nudge the view, not fling it. */
+export const WHEEL_MAX = 400;
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * A scroll or pinch the page passed up, or null for anything else. Steps are
+ * capped and the pointer is held inside the frame, since the page is untrusted.
+ */
+export function readPreviewWheel(data: unknown, frame: CanvasSize): PreviewWheel | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  if (d.nekkoPreview !== 'wheel' || !finite(d.dx) || !finite(d.dy) || !finite(d.x) || !finite(d.y)) return null;
+  return {
+    nekkoPreview: 'wheel',
+    dx: clamp(d.dx, -WHEEL_MAX, WHEEL_MAX),
+    dy: clamp(d.dy, -WHEEL_MAX, WHEEL_MAX),
+    x: clamp(d.x, 0, frame.width),
+    y: clamp(d.y, 0, frame.height),
+    zoom: d.zoom === true,
+  };
+}
+
+/** Space pressed (true) or let go (false) in the page, or null for anything else. */
+export function readPreviewHand(data: unknown): boolean | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  return d.nekkoPreview === 'hand' && typeof d.down === 'boolean' ? d.down : null;
+}
+
+/** How far a scroll step zooms: the same for the canvas's own wheel and one passed up by the page. */
+export const wheelZoom = (deltaY: number) => Math.exp(-deltaY * 0.0015);
 
 /** The frame that shows the whole design: at least a desktop window, at most `FRAME_MAX`. */
 export function frameSize(state: Pick<PreviewState, 'width' | 'height'>): CanvasSize {
