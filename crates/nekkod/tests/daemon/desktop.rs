@@ -260,10 +260,28 @@ async fn serves_the_local_api_server_and_its_link_with_no_backend() {
     assert!(snippet.to_string().contains(API_TOKEN), "{snippet}");
 
     // A new token: the old one stops working, the link follows.
+    // The port is never let go: a thread tries to take it for the whole rotation, as another
+    // process (or a test's port probe) can. A stop and rebind leaves it a gap and the server
+    // comes back `running: false` with `listen EADDRINUSE`.
+    let rotating = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let thief = {
+        let rotating = rotating.clone();
+        std::thread::spawn(move || {
+            while rotating.load(std::sync::atomic::Ordering::Relaxed) {
+                if let Ok(l) = std::net::TcpListener::bind(("127.0.0.1", port)) {
+                    std::thread::sleep(Duration::from_millis(2));
+                    drop(l);
+                }
+            }
+        })
+    };
     let (_, status) = post(d.port, "apiServer:newToken", json!([]), Some(TOKEN)).await;
+    rotating.store(false, std::sync::atomic::Ordering::Relaxed);
+    thief.join().unwrap();
     let fresh = status["settings"]["token"].as_str().unwrap().to_string();
     assert_eq!(fresh.len(), 32);
     assert_eq!(status["running"], true, "{status}");
+    assert_eq!(status["clients"], 0, "the old token's events socket is closed: {status}");
     let (s, _, _) = api(port, reqwest::Method::GET, "/api/health", Some(API_TOKEN), None).await;
     assert_eq!(s, 401);
     let (s, _, _) = api(port, reqwest::Method::GET, "/api/health", Some(&fresh), None).await;

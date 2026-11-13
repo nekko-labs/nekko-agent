@@ -163,6 +163,9 @@ struct Running {
     stop: watch::Sender<bool>,
     /// The serve task, done once the port is free again.
     served: tokio::task::JoinHandle<()>,
+    /// The token requests are checked against. A new token goes in here, on the
+    /// listener that is already bound: see `rotate`.
+    token: watch::Sender<Arc<str>>,
 }
 
 #[derive(Default)]
@@ -202,7 +205,7 @@ fn listen_error(e: &std::io::Error, host: &str, port: u16) -> String {
 #[derive(Clone)]
 struct App {
     ctx: Ctx,
-    token: Arc<str>,
+    token: watch::Receiver<Arc<str>>,
     counters: Arc<Counters>,
     stop: watch::Receiver<bool>,
 }
@@ -217,12 +220,38 @@ impl ApiServer {
                 return;
             }
         }
+        if enabled && self.rotate(settings) {
+            return;
+        }
         self.stop().await;
         if enabled {
             self.start(ctx, settings).await;
         } else {
             lock(&self.live).last_error = None;
         }
+    }
+
+    /// A changed token and nothing else keeps the bound listener: the new token
+    /// is swapped in and the event sockets of the old one are closed. Stopping and
+    /// rebinding the same port instead leaves a gap in which anything else can take
+    /// it, and the rebind then fails with EADDRINUSE and a server that no longer runs.
+    /// Returns false when the listener has to be restarted after all.
+    fn rotate(&self, settings: &Value) -> bool {
+        let mut live = lock(&self.live);
+        let next = applied_of(settings);
+        let Some(running) = live.running.as_ref() else { return false };
+        let same_listener = live.applied.as_ref().is_some_and(|a| a[..3] == next[..3]);
+        if !same_listener || running.served.is_finished() {
+            return false;
+        }
+        let token: Arc<str> = str_of(settings, "token").into();
+        running.token.send_replace(token);
+        live.applied = Some(next);
+        live.last_error = None;
+        live.counters.clients.store(0, Ordering::SeqCst);
+        live.counters.requests.store(0, Ordering::SeqCst);
+        live.counters.last_request_at.store(0, Ordering::SeqCst);
+        true
     }
 
     async fn start(&self, ctx: &Ctx, settings: &Value) {
@@ -245,15 +274,16 @@ impl ApiServer {
         };
         let (stop, stopped) = watch::channel(false);
         let counters = Arc::new(Counters::default());
+        let (token, token_rx) = watch::channel::<Arc<str>>(str_of(settings, "token").into());
         let app = App {
             ctx: ctx.clone(),
-            token: str_of(settings, "token").into(),
+            token: token_rx,
             counters: counters.clone(),
             stop: stopped.clone(),
         };
         let served = serve(listener, app, stopped);
         let mut live = lock(&self.live);
-        live.running = Some(Running { stop, served });
+        live.running = Some(Running { stop, served, token });
         live.applied = Some(applied_of(settings));
         live.last_error = None;
         live.counters = counters;
@@ -342,9 +372,10 @@ async fn handle(State(app): State<App>, req: Request) -> Response {
         Ok(u) => u,
         Err(_) => return send(StatusCode::NOT_FOUND, json!({ "error": "not found" })),
     };
-    let authorized = bearer_of(&req, &url).is_some_and(|t| crate::wire::token_eq(&t, &app.token));
+    let token = app.token.borrow().clone();
+    let authorized = bearer_of(&req, &url).is_some_and(|t| crate::wire::token_eq(&t, &token));
     if req.headers().contains_key(header::UPGRADE) {
-        return upgrade(app, req, &url, authorized).await;
+        return upgrade(app, req, &url, authorized, token).await;
     }
     if !authorized {
         return send(StatusCode::UNAUTHORIZED, json!({ "error": "unauthorized" }));
@@ -394,7 +425,7 @@ async fn stopped(rx: &mut watch::Receiver<bool>) {
 }
 
 /// `/api/events`: every chat's agent events as `{ channel, payload }` frames.
-async fn upgrade(app: App, req: Request, url: &url::Url, authorized: bool) -> Response {
+async fn upgrade(app: App, req: Request, url: &url::Url, authorized: bool, token: Arc<str>) -> Response {
     if url.path() != "/api/events" || !req.headers().contains_key(header::SEC_WEBSOCKET_KEY) {
         return bare(StatusCode::NOT_FOUND);
     }
@@ -408,6 +439,11 @@ async fn upgrade(app: App, req: Request, url: &url::Url, authorized: bool) -> Re
     };
     let prefix = format!("{{\"channel\":\"{AGENT_EVENT}\"");
     ws.on_upgrade(move |socket| async move {
+        // A socket opened with a token that was replaced meanwhile never counts.
+        let mut current = app.token.clone();
+        if *current.borrow_and_update() != token {
+            return;
+        }
         app.counters.clients.fetch_add(1, Ordering::SeqCst);
         let (mut sink, mut stream) = socket.split();
         let mut rx = app.ctx.hub.subscribe();
@@ -415,6 +451,8 @@ async fn upgrade(app: App, req: Request, url: &url::Url, authorized: bool) -> Re
         loop {
             tokio::select! {
                 () = stopped(&mut stop) => break,
+                // A new token closes the sockets the old one opened.
+                _ = current.changed() => break,
                 ev = rx.recv() => match ev {
                     Ok(ev) => {
                         if !ev.text.starts_with(prefix.as_str()) { continue }
@@ -433,8 +471,8 @@ async fn upgrade(app: App, req: Request, url: &url::Url, authorized: bool) -> Re
                 },
             }
         }
-        // `stop()` zeroes the count when it closes every socket at once.
-        if !*app.stop.borrow() {
+        // `stop()` and a new token zero the count when they close every socket at once.
+        if !*app.stop.borrow() && *current.borrow() == token {
             app.counters.clients.fetch_sub(1, Ordering::SeqCst);
         }
     })
