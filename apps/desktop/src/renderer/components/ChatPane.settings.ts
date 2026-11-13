@@ -16,6 +16,7 @@ export function chatPaneSettings(settings: AppSettings | null | undefined) {
     backgroundAnimation: settings.backgroundAnimation,
     localCostBenchmark: settings.localCostBenchmark,
     favoriteModels: settings.favoriteModels,
+    fusion: settings.fusion,
     prompts: settings.prompts,
     workspaces: settings.workspaces,
     defaultChatMode: settings.defaultChatMode,

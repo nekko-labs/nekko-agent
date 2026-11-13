@@ -54,10 +54,20 @@ model servers are first-class, not an afterthought.
   and each sits in a container with a faint border and tint in its colour (green
   for local, blue for cloud). A group is never split: when it has more cards than
   fit on a line, they wrap inside its own container.
-- **Add provider** lets you configure a server manually, or add a cloud provider -
-  Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint (just paste the
-  base URL + key).
-- For **Google Gemini**, choose Gemini and paste a key from [Google AI Studio](https://aistudio.google.com/apikey). This is API billing, not a Google AI subscription sign-in.
+- The row of providers above the list adds one: pick a provider by its name and
+  its setup opens in place. **ChatGPT** and **OpenRouter** connect with one sign-in
+  in your browser. Providers that only offer API keys walk you through three steps:
+  open the provider's key page, bring the key back, and Nekko Agent checks it and
+  connects by itself.
+- For **Google Gemini**, choose Google Gemini and press **Open Google AI Studio**.
+  Sign in with Google, create a key and copy it. On the desktop app the key is
+  picked up when you come back to the window (only a key shaped like a Gemini key is
+  read from the clipboard); in a browser, paste it. This is API billing, not a Google
+  AI subscription sign-in: Google offers no sign-in that lets another app use your
+  Google AI plan or create a key for you.
+- **OpenAI API**, an **Anthropic API key** and **Ollama Cloud** use the same three
+  steps. Any other OpenAI-compatible endpoint takes its address and key under
+  **More**.
 - For **Claude on Vertex AI**, choose the separate Vertex option, enter your Google Cloud project and location, and follow the Google Application Default Credentials instructions on the computer running Nekko Agent. No Claude subscription sign-in is needed.
 - For **Ollama Cloud**, use an [Ollama Cloud API key](https://ollama.com/settings/keys). Requests go directly to Ollama's hosted service; no desktop app or model download is needed.
 - For local **Ollama**, use **Local servers**. You can **pull** new models and **load / unload** them into memory right from the card. Existing local connections are not converted to cloud connections.
