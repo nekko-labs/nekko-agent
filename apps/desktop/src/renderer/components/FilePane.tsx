@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LineComment } from '@nekko-agent/shared';
+import type { LineComment, PreviewTextEdit } from '@nekko-agent/shared';
+import { applyTextEdit } from './htmlTextEdit.js';
 import { Markdown } from './Markdown.js';
 import { ArtifactPreview, MermaidDiagram } from './ArtifactPreview.js';
 import { FileTypeIcon } from '../fileIcons.js';
@@ -58,11 +59,15 @@ function readAutoSavePref(): boolean {
  * it) or Run now (send it). Deliberately not a full IDE, just enough to read,
  * tweak, and steer changes without leaving Nekko Agent.
  */
-export function FilePane({ path }: { path: string }) {
+export function FilePane({ path, readOnly = false }: {
+  path: string;
+  /** Show the file without any way to change it (Library's designs, which change by a new version instead). */
+  readOnly?: boolean;
+}) {
   // File panes are independent host documents, not owned by the globally focused chat.
-  return <HostFilePane path={path} />;
+  return <HostFilePane path={path} readOnly={readOnly} />;
 }
-function HostFilePane({ path }: { path: string }) {
+function HostFilePane({ path, readOnly }: { path: string; readOnly: boolean }) {
   const isMd = /\.(md|markdown)$/i.test(path);
   const isHtml = /\.(html?|svg)$/i.test(path);
   const isMermaid = /\.(mmd|mermaid)$/i.test(path);
@@ -292,7 +297,7 @@ function HostFilePane({ path }: { path: string }) {
     if (mod && key === 'z' && !e.shiftKey) { e.preventDefault(); step('undo'); return; }
     if (mod && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); step('redo'); return; }
     // Tab indents instead of leaving the editor, which is what a code pane owes you.
-    if (e.key === 'Tab' && !truncated) {
+    if (e.key === 'Tab' && !truncated && !readOnly) {
       e.preventDefault();
       const el = taRef.current;
       if (!el) return;
@@ -333,7 +338,17 @@ function HostFilePane({ path }: { path: string }) {
   };
 
   const showGutter = loaded && !binary && !(isMd && preview);
-  const editable = loaded && !binary && !truncated;
+  const editable = loaded && !binary && !truncated && !readOnly;
+
+  /** A piece of text changed in the running page: made in the source as one undo step, and saved at once. */
+  const textEdit = (change: PreviewTextEdit) => {
+    if (!editable) return;
+    const next = applyTextEdit(latest.current.content, change);
+    if (next === null) { pushToast('error', 'That text could not be found as plain text in the file. Change it in Source.'); return; }
+    edit(next);
+    latest.current = { ...latest.current, content: next, dirty: true };
+    void write(next, 'manual');
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden outline-hidden" style={{ background: 'var(--paper)' }} tabIndex={-1} onKeyDown={onPaneKeyDown}>
@@ -350,6 +365,9 @@ function HostFilePane({ path }: { path: string }) {
           </span>
         )}
         {editable && <SaveState dirty={dirty} saving={saving} saved={saved} autoSave={autoSave} />}
+        {readOnly && loaded && (
+          <span className="shrink-0 text-2xs text-ink-faint" data-file-read-only title="Designs are kept as versions: ask an agent for a new version to change one">View only</span>
+        )}
 
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {editable && (
@@ -458,7 +476,7 @@ function HostFilePane({ path }: { path: string }) {
           ) : binary ? (
             <p className="p-4 text-xs text-ink-faint">Binary file, can't display as text.</p>
           ) : isHtml && preview ? (
-            <ArtifactPreview source={content} title={name} path={path} />
+            <ArtifactPreview source={content} title={name} path={path} reloadKey={saved?.at ?? 0} onTextEdit={editable && !/\.svg$/i.test(path) ? textEdit : undefined} />
           ) : isMermaid && preview ? (
             <MermaidDiagram code={content} />
           ) : isMd && preview ? (
@@ -479,8 +497,8 @@ function HostFilePane({ path }: { path: string }) {
                 spellCheck={false}
                 wrap="off"
                 value={content}
-                readOnly={truncated}
-                aria-label={`Edit ${name}`}
+                readOnly={truncated || readOnly}
+                aria-label={readOnly ? `View ${name}` : `Edit ${name}`}
                 data-language={language ?? 'plaintext'}
                 onScroll={onEditorScroll}
                 onKeyDown={onKeyDown}

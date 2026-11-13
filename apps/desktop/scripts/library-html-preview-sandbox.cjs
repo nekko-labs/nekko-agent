@@ -60,8 +60,10 @@ app.whenReady().then(async () => {
   const server = createHtmlPreviewServer({ host: '127.0.0.1' });
   const local = await server.serve(page, { internet: false });
   const online = await server.serve(page, { internet: true });
+  const editing = await server.serve(page, { internet: false, edit: true });
+  const original = fs.readFileSync(page, 'utf8');
   const origin = `http://127.0.0.1:${local.port}/`;
-  const urls = { local: origin.slice(0, -1) + local.path, online: origin.slice(0, -1) + online.path };
+  const urls = { local: origin.slice(0, -1) + local.path, online: origin.slice(0, -1) + online.path, edit: origin.slice(0, -1) + editing.path };
   session.defaultSession.webRequest.onBeforeRequest((d, done) => {
     const ok = /^(file:|data:|blob:|devtools:)/.test(d.url) || d.url.startsWith(origin);
     if (!ok) report.offMachine.push(d.url);
@@ -98,7 +100,10 @@ app.whenReady().then(async () => {
       f.bridge.readFile = async () => ({ content: ${js(fs.readFileSync(page, 'utf8'))}, truncated: false, binary: false });
       f.served = [];
       f.released = [];
-      f.bridge.serveHtmlPreview = async (p, o) => { f.served.push({ p, internet: o.internet }); return o.internet ? { id: ${js(online.id)}, url: ${js(urls.online)} } : { id: ${js(local.id)}, url: ${js(urls.local)} }; };
+      f.written = [];
+      // Like the host, a write answers once the file is on disk: here, once the journey has written it.
+      f.bridge.writeFile = (p, text) => { f.written.push({ p, text }); return new Promise((done) => { f.landWrite = done; }); };
+      f.bridge.serveHtmlPreview = async (p, o) => { f.served.push({ p, internet: o.internet, edit: o.edit === true }); return o.edit ? { id: ${js(editing.id)}, url: ${js(urls.edit)} } : o.internet ? { id: ${js(online.id)}, url: ${js(urls.online)} } : { id: ${js(local.id)}, url: ${js(urls.local)} }; };
       f.bridge.releaseHtmlPreview = async (id) => { f.released.push(id); };
       f.store.setState({ settings: { ...f.store.getState().settings, theme: 'dark' } }); f.store.getState().applyTheme();
       f.store.getState().refreshSessions();
@@ -125,6 +130,37 @@ app.whenReady().then(async () => {
       await inFrame(`fetch('http://127.0.0.1:9/').then(() => 'reached', () => 'blocked')`, 'other-local-service-blocked', 'blocked');
       if (report.offMachine.length) throw Error('Internet off, yet requests left: ' + report.offMachine.join(', '));
       report.checks['no-request-left-with-internet-off'] = true;
+
+      // Edit text: the page is served again with the editor script; clicking the heading makes it editable,
+      // and Enter puts the new text into the file's source, changing nothing else.
+      await check(`!!document.querySelector('[data-preview-edit]') && document.querySelector('[data-preview-edit]').getAttribute('aria-pressed') === 'false'`, 'edit-text-offered-for-a-web-page');
+      await run(`document.querySelector('[data-preview-edit]').click()`); await sleep(1800);
+      await check(`document.querySelector('[data-served-preview] iframe')?.getAttribute('src') === ${js(urls.edit)} && layoutFixture.served.at(-1).edit === true && layoutFixture.served.at(-1).internet === false`, 'edit-text-serves-the-editor-script-offline');
+      await inFrame(`(() => { const h = document.querySelector('h1'); h.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); return h.hasAttribute('data-nekko-edit-hover'); })()`, 'hovering-text-outlines-it', true);
+      await sleep(250); await shot('after-edit-hover');
+      await inFrame(`(() => { const h = document.querySelector('h1'); h.click(); return h.getAttribute('contenteditable'); })()`, 'clicking-text-makes-it-editable', 'plaintext-only');
+      await inFrame(`(() => { const h = document.querySelector('h1'); h.textContent = 'Fair pricing for teams'; return true; })()`, 'typed-new-text', true);
+      await sleep(250); await shot('after-edit-typing');
+      await inFrame(`(() => { document.querySelector('h1').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return true; })()`, 'enter-saves', true);
+      await sleep(600);
+      const written = await run(`layoutFixture.written.map(w => w.text)`);
+      report.checks['the-file-gets-only-that-change'] = written.length === 1 && written[0] === original.replace('<h1>Simple pricing</h1>', '<h1>Fair pricing for teams</h1>');
+      if (!report.checks['the-file-gets-only-that-change']) throw Error('the-file-gets-only-that-change: ' + JSON.stringify(written).slice(0, 400));
+      // The journey writes the file as the host would and answers the write; then the page reloads with the change, still editable.
+      await inFrame(`document.querySelector('h1').textContent`, 'page-keeps-the-edit-until-the-save-lands', 'Fair pricing for teams');
+      fs.writeFileSync(page, written[0]); await run('layoutFixture.landWrite()'); await sleep(1500);
+      await inFrame(`document.querySelector('h1').textContent`, 'page-reloads-with-the-change', 'Fair pricing for teams');
+      await inFrame(`(() => { const h = document.querySelector('h1'); h.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); return h.hasAttribute('data-nekko-edit-hover'); })()`, 'still-editable-after-the-reload', true);
+      await shot('after-edit-saved');
+      // Text a script wrote ("Scripts ran") is not in the file: refused with a note, nothing written.
+      await inFrame(`(() => { const p = document.getElementById('status'); p.click(); p.textContent = 'Changed'; p.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return true; })()`, 'script-text-edited', true);
+      await sleep(600);
+      await check(`layoutFixture.written.length === 1 && document.body.innerText.includes('Change it in Source')`, 'script-made-text-is-refused');
+      // The change is in the code view too, as an undo step.
+      await run(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Source').click()`); await sleep(400);
+      await check(`document.querySelector('textarea[aria-label^="Edit "]').value.includes('<h1>Fair pricing for teams</h1>') && !document.querySelector('[aria-label="Undo (Ctrl+Z)"]').disabled`, 'code-view-has-the-change-with-undo');
+      await run(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Preview').click()`); await sleep(1500);
+      fs.writeFileSync(page, original);
       await run(`document.querySelector('[data-preview-internet]').click()`);
       await sleep(2000);
       await check(`document.querySelector('[data-served-preview] iframe')?.getAttribute('src') === ${js(urls.online)} && document.querySelector('[data-preview-internet]').getAttribute('aria-pressed') === 'true'`, 'internet-toggle-reserves-the-page');

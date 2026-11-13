@@ -403,7 +403,8 @@ export function ArtifactsView() {
               <div className="min-h-0 flex-1 overflow-hidden" key={onCanvas && !asFile ? `canvas:${selected.path}` : `file:${openPath}`}>
                 {onCanvas && !asFile
                   ? <DesignCanvas path={openPath} title={selected.title} versions={selected.versions} onVersion={setVersion} onSource={() => setAsFile(true)} />
-                  : <FilePane path={openPath} />}
+                  // A design changes by a new version beside it, never in place, so it opens view-only.
+                  : <FilePane path={openPath} readOnly={selected.kind === 'design'} />}
               </div>
             </>
           ) : browsing ? (

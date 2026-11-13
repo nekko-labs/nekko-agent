@@ -20,6 +20,11 @@ export interface HtmlPreviewOptions {
    * its size and pause or resume its motion over `postMessage`. Off by default.
    */
   controls?: boolean;
+  /**
+   * Add the text editor script: clicking a piece of text in the page makes it
+   * editable, and each change is posted up as a `PreviewTextEdit`. Off by default.
+   */
+  edit?: boolean;
 }
 
 /** What the design canvas asks a served page, as `{ nekkoPreview: <command> }`. */
@@ -52,6 +57,20 @@ export interface PreviewWheel {
   x: number;
   y: number;
   zoom: boolean;
+}
+
+/**
+ * A piece of text the person changed by clicking it in a page served with
+ * `edit` (posted up as this message): an element of
+ * `tag` with no elements inside, which had `old` as its text and was the
+ * `occurrence`-th (from 0) such element with that text in the page.
+ */
+export interface PreviewTextEdit {
+  nekkoPreview: 'edit';
+  tag: string;
+  old: string;
+  occurrence: number;
+  text: string;
 }
 
 /** Space pressed or let go inside the design: while it is down the canvas drags. */

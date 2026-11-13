@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CONTROL_SHIM, createHtmlPreviewServer, HtmlPreviewRefusal, MAX_SERVED_PAGES, previewPolicy, STORAGE_SHIM, withStorageShim, type HtmlPreviewServer } from './html-preview.js';
+import { CONTROL_SHIM, EDIT_SHIM, createHtmlPreviewServer, HtmlPreviewRefusal, MAX_SERVED_PAGES, previewPolicy, STORAGE_SHIM, withStorageShim, type HtmlPreviewServer } from './html-preview.js';
 
 const dirs: string[] = [];
 const servers: HtmlPreviewServer[] = [];
@@ -119,6 +119,58 @@ describe('html preview server', () => {
     await expect(s.serve(join(site, 'assets', 'app.css'), { internet: false })).rejects.toBeInstanceOf(HtmlPreviewRefusal);
     await expect(s.serve(join(site, 'gone.html'), { internet: false })).rejects.toBeInstanceOf(HtmlPreviewRefusal);
     await expect(s.serve(join(root, 'home.html'), { internet: false })).rejects.toThrow(/home folder/);
+  });
+});
+
+describe('text editor script', () => {
+  it('is added only to a page served for editing', async () => {
+    const { site } = design();
+    const s = server();
+    const plain = await s.serve(join(site, 'index.html'), { internet: false, controls: true });
+    expect(await (await get(plain.port, plain.path)).text()).not.toContain('nekko-edit');
+    const editing = await s.serve(join(site, 'index.html'), { internet: false, edit: true });
+    expect((await (await get(editing.port, editing.path)).text()).startsWith(`<!doctype html>${STORAGE_SHIM}${EDIT_SHIM}<html>`)).toBe(true);
+  });
+
+  it('is one inline script that touches text only and talks only to its viewer', () => {
+    expect(EDIT_SHIM.startsWith('<script>') && EDIT_SHIM.endsWith('</script>')).toBe(true);
+    expect(EDIT_SHIM.slice(8, -9)).not.toContain('</script');
+    expect(() => new Function(EDIT_SHIM.slice(8, -9))).not.toThrow();
+    expect(EDIT_SHIM).toContain('if(window.parent===window)return');
+    for (const leak of ['cookie', 'localStorage', 'location', 'innerHTML', 'outerHTML', 'fetch(', 'XMLHttpRequest', 'eval(']) expect(EDIT_SHIM).not.toContain(leak);
+  });
+
+  it('makes a clicked piece of text editable and posts its change on Enter, and puts it back on Escape', () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const listeners: Record<string, (e: unknown) => void> = {};
+    const el = (tagName: string, textContent: string, children: unknown[] = []) => {
+      const attrs = new Map<string, string>();
+      return { nodeType: 1, tagName, textContent, children, focused: false, attrs,
+        setAttribute(k: string, v: string) { attrs.set(k, v); }, removeAttribute(k: string) { attrs.delete(k); },
+        focus() { this.focused = true; }, contains(o: unknown) { return o === this; } };
+    };
+    const first = el('LI', 'Free'), second = el('LI', 'Free'), pro = el('LI', 'Pro'), list = el('UL', 'FreeProFree', [first, pro, second]);
+    const body = { contains: () => true, getElementsByTagName: (t: string) => (t === 'LI' ? [first, pro, second] : []) };
+    const document = { readyState: 'complete', head: { appendChild() {} }, body, createElement: () => ({ textContent: '' }) };
+    const win = { parent: { postMessage: (m: Record<string, unknown>) => { sent.push(m); } } };
+    new Function('window', 'document', 'addEventListener', EDIT_SHIM.slice(8, -9))(win, document, (type: string, fn: (e: unknown) => void) => { listeners[type] = fn; });
+    const click = (target: unknown) => { let prevented = false; listeners.click({ target, preventDefault: () => { prevented = true; }, stopPropagation() {} }); return prevented; };
+    const key = (k: string) => listeners.keydown({ key: k, shiftKey: false, preventDefault() {} });
+
+    // A list holds elements, so clicking it does nothing special.
+    expect(click(list)).toBe(false);
+    // The second "Free": editable in place, and the click goes no further.
+    expect(click(second)).toBe(true);
+    expect([second.attrs.get('contenteditable'), second.focused]).toEqual(['plaintext-only', true]);
+    second.textContent = 'Starter';
+    key('Enter');
+    expect(sent).toEqual([{ nekkoPreview: 'edit', tag: 'li', old: 'Free', occurrence: 1, text: 'Starter' }]);
+    expect(second.attrs.has('contenteditable')).toBe(false);
+    // Escape keeps the old text and posts nothing.
+    click(pro);
+    pro.textContent = 'Plus';
+    key('Escape');
+    expect([pro.textContent, sent.length]).toEqual(['Pro', 1]);
   });
 });
 

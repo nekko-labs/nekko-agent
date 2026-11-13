@@ -33,6 +33,23 @@ The page reads nothing outside its folder and reaches no network until the user 
 
 `[implemented, not yet released]` A page served for Library's design canvas (`serveHtmlPreview(path, { controls: true })`) gets one more inline script after the storage stand-in. It answers the frame directly above it, and nothing else, over `postMessage`: asked `probe`, `pause` or `play`, it replies with seven values (running or paused animations, media elements, `requestAnimationFrame` calls so far, whether it is paused, and the page's scroll width and height). Pausing pauses the document's animations and playing media and holds `requestAnimationFrame` callbacks; playing releases them. It reads no cookie, storage, location or content. A page served without `controls` (the file pane, chat cards) is unchanged. Details and the trust reasoning: [Library](library-and-first-visit-guide.md#designs-open-on-a-canvas-with-their-versions), [decision 0091](../../docs/decisions/0091-the-design-canvas-controls-a-served-design-over-postmessage.md).
 
+## Edit text in a running page (2026-11-14, #2755)
+
+Requested 2026-11-14: every Library file except designs should be editable, HTML pages included, in the code or by selecting an element.
+
+Implemented, not yet released:
+
+- **Edit text** sits beside **Load from internet** on a served page in the file pane, when the file can be edited (not a design opened from Library, not truncated, not an SVG). Switching it on serves the page again, offline, with the editor script, and a line says what to do: "Click text to change it · Enter saves · Esc cancels".
+- Hovering a piece of text (an element with no elements inside: a heading, paragraph, list item, button or link label) outlines it with a dashed line. Clicking it makes it editable in place, with a solid outline; the click does nothing else (a link does not follow, a button does not press). Enter or clicking elsewhere saves; Shift+Enter is a new line; Escape puts the old text back.
+- The change goes into the file's source as plain text in that element only (escaped, so typed `<` stays text), saved at once and kept as one undo step in **Source**. Formatting, attributes, scripts and the rest of the file are unchanged byte for byte. The page reloads once the save is on disk and stays in Edit text.
+- Text the file does not hold as plain text (written by the page's script, inside an element with other tags, or in an element written without its closing tag) is not changed: a note says to change it in Source.
+- The served page in the file pane now reloads when a save reaches the disk, not when the editor's text changes, so it never reloads an unsaved or half-written file.
+- How and why, and what it does not do: [decision 0099](../../docs/decisions/0099-library-edits-a-page-by-its-text-and-keeps-designs-view-only.md).
+
+Boundaries: the editor script is a separate `edit` serve option (the canvas's control script is unchanged and never edits). It reads and writes text only and posts only to its own viewer; the app takes a change only from that frame and only while Edit text is on, as four bounded fields (tag, old text, which one, new text; up to 20,000 characters each). The hover and editing outlines are drawn inside the page with a fixed colour, since the page cannot see the app's theme.
+
+Verified in the hidden, isolated `library-html-preview-sandbox.cjs` journey against the real preview server (32 checks: offered for a web page, served offline with the script, hover outline, click to edit, the file gets only that change, the page keeps the edit until the save lands and then reloads with it, still editable, script-written text refused with nothing written, the change in Source with undo) and unit tests for the source patch and the script. Not checked: a real click and typing in a visible window (the journey drives the page's own events), Windows, the Local Web UI in other browsers.
+
 ## Status and verification
 
 Implemented 2026-11-11, not yet released.

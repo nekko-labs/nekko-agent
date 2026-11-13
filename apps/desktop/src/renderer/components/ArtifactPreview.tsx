@@ -1,6 +1,7 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { isServableHtml, type HtmlPreviewServed } from '@nekko-agent/shared';
+import { isServableHtml, type HtmlPreviewServed, type PreviewTextEdit } from '@nekko-agent/shared';
+import { readPreviewTextEdit } from './htmlTextEdit.js';
 
 /** Untrusted documents get an opaque origin, no app bridge, and no network. */
 export function isolatedDocument(source: string): string {
@@ -26,9 +27,17 @@ function ViewportSelect({ width, onChange }: { width: string; onChange: (width: 
  * page runs live with its own folder (`ServedPreview`); otherwise its text is
  * drawn in a scriptless, network-less frame (`StaticPreview`).
  */
-export function ArtifactPreview({ source, title = 'Design preview', path }: { source: string; title?: string; path?: string }) {
+export function ArtifactPreview({ source, title = 'Design preview', path, onTextEdit, reloadKey }: {
+  source: string;
+  title?: string;
+  path?: string;
+  /** Offer Edit text: a piece of text clicked and changed in the running page comes here. */
+  onTextEdit?: (edit: PreviewTextEdit) => void;
+  /** Reload the served page when this changes (a save that reached the disk), instead of whenever `source` does. */
+  reloadKey?: string | number;
+}) {
   const servable = !!path && isServableHtml(path) && typeof window !== 'undefined' && !!window.nekko?.serveHtmlPreview;
-  return servable ? <ServedPreview path={path} source={source} title={title} /> : <StaticPreview source={source} title={title} />;
+  return servable ? <ServedPreview path={path} source={source} title={title} onTextEdit={onTextEdit} reloadKey={reloadKey} /> : <StaticPreview source={source} title={title} />;
 }
 
 /**
@@ -38,25 +47,44 @@ export function ArtifactPreview({ source, title = 'Design preview', path }: { so
  * opening another file turns it off again. If the host refuses or can't
  * serve the page, the scriptless preview shows with the reason.
  */
-function ServedPreview({ path, source, title }: { path: string; source: string; title: string }) {
+function ServedPreview({ path, source, title, onTextEdit, reloadKey }: {
+  path: string; source: string; title: string; onTextEdit?: (edit: PreviewTextEdit) => void; reloadKey?: string | number;
+}) {
   const [width, setWidth] = useState('100%');
   const [internet, setInternet] = useState(false);
+  // Edit text: the page is served again with the editor script, and its changes come back here.
+  const [editing, setEditing] = useState(false);
   const [served, setServed] = useState<HtmlPreviewServed | null>(null);
   const [failed, setFailed] = useState('');
-  useEffect(() => { setInternet(false); }, [path]);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const report = useRef(onTextEdit);
+  report.current = onTextEdit;
+  const canEdit = !!onTextEdit;
+  useEffect(() => { setInternet(false); setEditing(false); }, [path]);
+  useEffect(() => {
+    if (!editing) return;
+    // Only this frame's own page is heard, and only a well-formed text change is taken from it.
+    const onMessage = (e: MessageEvent) => {
+      if (!frame.current || e.source !== frame.current.contentWindow) return;
+      const edit = readPreviewTextEdit(e.data);
+      if (edit) report.current?.(edit);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [editing]);
   useEffect(() => {
     let live = true;
     let id = '';
     const release = (served: string) => { void window.nekko.releaseHtmlPreview?.(served).catch(() => {}); };
     setServed(null); setFailed('');
-    window.nekko.serveHtmlPreview!(path, { internet }).then((s) => {
+    window.nekko.serveHtmlPreview!(path, { internet, edit: editing && canEdit }).then((s) => {
       if (!s?.url) throw new Error('Nothing here can serve the page.');
       if (!live) { release(s.id); return; }
       id = s.id;
       setServed(s);
     }).catch((e) => { if (live) setFailed((e as Error).message || 'The page could not be served.'); });
     return () => { live = false; if (id) release(id); };
-  }, [path, internet]);
+  }, [path, internet, editing, canEdit]);
   if (failed) return <StaticPreview source={source} title={title} note={`${failed} Showing it without its files or scripts.`} />;
   return <div className="flex h-full min-h-96 flex-col gap-2 p-3" data-served-preview>
     <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -66,11 +94,18 @@ function ServedPreview({ path, source, title }: { path: string; source: string; 
         title={internet ? 'This page may load from the internet (https only). Click to block it again.' : 'Only files in this page’s folder load. Click to let it load from the internet too.'}>
         <span className="ctl-dot" /> Load from internet
       </button>
+      {canEdit && (
+        <button type="button" className="ctl-toggle text-2xs" aria-pressed={editing} onClick={() => setEditing((on) => !on)} data-preview-edit
+          title={editing ? 'Stop editing text in the page' : 'Click any piece of text in the page to change it; Enter saves it to the file, Escape cancels'}>
+          <span className="ctl-dot" /> Edit text
+        </button>
+      )}
+      {editing && <span className="text-2xs text-ink-faint" data-preview-edit-hint>Click text to change it · Enter saves · Esc cancels</span>}
     </div>
     <div className="min-h-96 flex-1 overflow-auto rounded-lg bg-surface-2">
       {served
-        // A saved edit changes `source`, which reloads the frame from disk.
-        ? <iframe key={`${served.url}:${source.length}:${hashText(source)}`} title={title} src={served.url} sandbox={SERVED_PREVIEW_SANDBOX}
+        // A saved edit reloads the frame from disk: `reloadKey` says when the save landed, else a change of `source` does.
+        ? <iframe ref={frame} key={`${served.url}:${reloadKey ?? `${source.length}:${hashText(source)}`}`} title={title} src={served.url} sandbox={SERVED_PREVIEW_SANDBOX}
             referrerPolicy="no-referrer" style={{ width, height: '100%', minHeight: 480, border: 0, background: 'white' }} />
         : <p className="p-4 text-xs text-ink-faint">Loading…</p>}
     </div>

@@ -200,6 +200,7 @@ app.whenReady().then(async () => {
       await click('[data-design-source]'); await sleep(1500);
       await check(`!document.querySelector('[data-design-canvas]') && !!document.querySelector('[data-served-preview]') && !!document.querySelector('[data-design-back]')`, 'source-opens-the-file-pane');
       await check(`JSON.stringify(layoutFixture.asked.at(-1)) === ${js(JSON.stringify({ p: file('checkout-design.html'), internet: false, controls: false }))}`, 'file-pane-page-has-no-viewer-script');
+      await check(`!!document.querySelector('[data-file-read-only]') && !document.querySelector('[data-preview-edit]') && !document.querySelector('[aria-label="Undo (Ctrl+Z)"]')`, 'a-design-opens-view-only');
       await shot('design-source');
       await click('[data-design-back]'); await sleep(1500);
       await check(`!!document.querySelector('[data-design-canvas] iframe')`, 'canvas-comes-back');
