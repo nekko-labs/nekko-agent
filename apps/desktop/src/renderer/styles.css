@@ -4907,6 +4907,32 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 /* With switch marks beside the approvals icon, the button grows to hold them. */
 .composer-permissions:has(.permission-marks) { padding: 0 8px; }
 
+/* The composer's bar items (attach, folders, permissions, model, effort,
+   context) light up in the accent with a soft glow on hover and while their
+   menu is open, so the bar reads as a set of live controls. This is the one
+   place plum marks hover (see docs/design-system.md, Colour). */
+:is(.composer-bar, .clean-start-model, [data-composer-primary-row]) :is(.ctl-menu, .effort-trigger, .context-bar, .action-target:not(.composer-action)) {
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+:is(.composer-bar, .clean-start-model, [data-composer-primary-row]) :is(.ctl-menu, .effort-trigger, .context-bar, .action-target:not(.composer-action))[aria-expanded='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 14px -2px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+@media (hover: hover) {
+  :is(.composer-bar, .clean-start-model, [data-composer-primary-row]) :is(.ctl-menu, .effort-trigger, .context-bar, .action-target:not(.composer-action)):hover:not(:disabled) {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 14px -2px color-mix(in srgb, var(--accent) 50%, transparent);
+  }
+  /* Captions, carets and the provider name inside the item follow it. */
+  :is(.composer-bar, .clean-start-model, [data-composer-primary-row]) :is(.ctl-menu, .effort-trigger, .context-bar, .action-target:not(.composer-action)):hover:not(:disabled) :is(.ctl-caret, .ctl-menu-label, .text-ink-soft, .text-ink-faint) {
+    color: var(--accent);
+  }
+}
+
 @container (max-width: 520px) {
   /* Let the folder summary truncate before pushing the 44px actions outside. */
   .composer-bar > .composer-folders { min-width: 44px; }
