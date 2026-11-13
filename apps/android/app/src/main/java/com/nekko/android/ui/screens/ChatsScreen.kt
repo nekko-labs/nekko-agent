@@ -28,6 +28,7 @@ import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.AllChats
 import com.nekko.protocol.ChatPlace
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Tune
 import com.nekko.android.data.ChatListPrefs
 import com.nekko.protocol.ChatGroupOrder
 import com.nekko.protocol.ChatSections
@@ -187,6 +188,8 @@ fun ChatsScreen(
     phone: com.nekko.android.phone.PhoneChats? = null,
     /** Open one of this phone's chats ([ChatPlace.PHONE] alone: this phone's chats and providers). */
     onOpenPhone: (String?) -> Unit = {},
+    /** The view menu's Customize… (#2426). */
+    onCustomize: (() -> Unit)? = null,
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
     val outbox by repo.outbox.state.collectAsStateWithLifecycle()
@@ -441,7 +444,7 @@ fun ChatsScreen(
                             )
                         },
                         actions = {
-                            if (active != null) ChatListViewMenu(view, setView, onReorder = { reordering = true }, places = all.places.size)
+                            if (active != null) ChatListViewMenu(view, setView, onReorder = { reordering = true }, places = all.places.size, onCustomize = onCustomize)
                             IconButton(onClick = onSettings) {
                                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.chats_settings), tint = p.inkSoft)
                             }
@@ -1143,6 +1146,8 @@ private fun ChatListViewMenu(
     onReorder: () -> Unit,
     /** How many places the list can show: By computer, and the rows' place, only with more than one (#2108). */
     places: Int = 1,
+    /** Customize…, at the bottom as on the iPhone (#2426). */
+    onCustomize: (() -> Unit)? = null,
 ) {
     val p = Nekko.palette
     var open by remember { mutableStateOf(false) }
@@ -1223,6 +1228,15 @@ private fun ChatListViewMenu(
                         onClick = { close(); onChange(ChatListView.STANDARD) },
                         modifier = Modifier.testTag("chats.view.reset"),
                     )
+                    if (onCustomize != null) {
+                        HorizontalDivider(color = p.line)
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.customize_menu)) },
+                            leadingIcon = { Icon(Icons.Filled.Tune, contentDescription = null, tint = p.inkSoft) },
+                            onClick = { close(); onCustomize() },
+                            modifier = Modifier.testTag("chats.view.customize"),
+                        )
+                    }
                 }
                 ViewPage.GROUP_BY -> {
                     back(stringResource(R.string.chats_group_by))
