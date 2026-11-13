@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FRAME, FRAME_MAX, MARGIN, ZOOM, fitView, frameSize, isAnimating, readPreviewState, zoomAt } from './designCanvasView.js';
+import { FRAME, FRAME_MAX, MARGIN, WHEEL_MAX, ZOOM, fitView, frameSize, isAnimating, readPreviewHand, readPreviewState, readPreviewWheel, zoomAt } from './designCanvasView.js';
 
 const state = (over: Record<string, unknown> = {}) => ({ nekkoPreview: 'state', animations: 0, media: 0, frames: 0, paused: false, width: 1440, height: 900, ...over });
 
@@ -46,5 +46,22 @@ describe('design canvas view', () => {
     expect(isAnimating(still, readPreviewState(state({ frames: 5 }))!)).toBe(false);
     expect(isAnimating(still, readPreviewState(state({ frames: 60 }))!)).toBe(true);
     expect(isAnimating(null, readPreviewState(state({ frames: 600 }))!)).toBe(false);
+  });
+
+  it('reads a scroll the page passed up, capped and held inside the frame', () => {
+    const frame = { width: 1440, height: 900 };
+    expect(readPreviewWheel({ nekkoPreview: 'wheel', dx: 3, dy: -40, x: 200, y: 300, zoom: true, extra: 1 }, frame))
+      .toEqual({ nekkoPreview: 'wheel', dx: 3, dy: -40, x: 200, y: 300, zoom: true });
+    expect(readPreviewWheel({ nekkoPreview: 'wheel', dx: 1e9, dy: -1e9, x: -50, y: 5000, zoom: 'yes' }, frame))
+      .toEqual({ nekkoPreview: 'wheel', dx: WHEEL_MAX, dy: -WHEEL_MAX, x: 0, y: 900, zoom: false });
+    for (const bad of [null, 'wheel', { nekkoPreview: 'wheel' }, { nekkoPreview: 'wheel', dx: '1', dy: 0, x: 0, y: 0 }, { nekkoPreview: 'wheel', dx: NaN, dy: 0, x: 0, y: 0 }, { nekkoPreview: 'state', dx: 0, dy: 0, x: 0, y: 0 }]) {
+      expect(readPreviewWheel(bad, frame)).toBeNull();
+    }
+  });
+
+  it('reads Space pressed or let go in the page, and nothing else', () => {
+    expect(readPreviewHand({ nekkoPreview: 'hand', down: true })).toBe(true);
+    expect(readPreviewHand({ nekkoPreview: 'hand', down: false })).toBe(false);
+    for (const bad of [null, { nekkoPreview: 'hand' }, { nekkoPreview: 'hand', down: 1 }, { nekkoPreview: 'wheel', down: true }]) expect(readPreviewHand(bad)).toBeNull();
   });
 });

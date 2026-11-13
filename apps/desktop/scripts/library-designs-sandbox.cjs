@@ -28,6 +28,14 @@ const FOLDER = {
     { name: 'tokens.json', path: '/work/nekko-designs/settings/tokens.json', dir: false },
   ],
 };
+// The rest of the disk: the files the chats wrote or linked are still there (Library drops ones that are not).
+const DISK = {
+  ...FOLDER,
+  '/work/reports': [{ name: 'checkout-design.html' }, { name: 'beta-readiness.md' }],
+  '/work/.scratch': [{ name: 'pricing-mockup.html' }],
+  '/work/site': [{ name: 'pricing.html' }, { name: 'status.html' }],
+  '/work/office': [{ name: 'budget.xlsx' }],
+};
 const write = (name, key, file) => ({ id: file, name, input: { [key]: file, content: '<!doctype html>' }, ...(name === 'Write' ? { executedBy: 'claude-code' } : {}) });
 const CHATS = [
   { title: 'Checkout redesign', messages: [
@@ -65,7 +73,7 @@ app.whenReady().then(async () => {
       document.querySelector('.zones-intro button[aria-label="Close"]')?.click();
       localStorage.setItem('nekko.libraryIntroSeen', '1');
       localStorage.removeItem('nekko.libraryLayout'); localStorage.removeItem('nekko.libraryCollapsed');
-      const f = layoutFixture, chats = ${js(CHATS)}, folder = ${js(FOLDER)}, now = Date.now();
+      const f = layoutFixture, chats = ${js(CHATS)}, folder = ${js(DISK)}, now = Date.now();
       f.records.slice(0, 3).forEach((s, n) => {
         s.title = chats[n].title; s.workspaceId = 'w1';
         s.messages = chats[n].messages.map((m, i) => ({ id: s.id + i, createdAt: now - 86400000 * n - 60000 * (9 - i), ...m }));
@@ -89,7 +97,8 @@ app.whenReady().then(async () => {
     await check(`document.querySelectorAll('[data-artifact-row]').length === 10`, 'source-files-agent-notes-and-non-designs-stay-out');
     await check(`document.querySelector('[data-library-group]').dataset.libraryGroup === 'design'`, 'designer-leads-with-designs');
     await check(`${row('Onboarding')}.textContent.includes('Shop designs folder') && ${row('Login')}.textContent.includes('Pricing page') && ${row('Checkout design')}.textContent.includes('Checkout redesign')`, 'each-design-names-its-chat-or-its-folder');
-    await check(`!(layoutFixture.read ?? []).length && JSON.stringify([...new Set(layoutFixture.listed)]) === ${js(JSON.stringify(['/work/nekko-designs', '/work/nekko-designs/settings']))}`, 'folder-is-listed-not-read');
+    // Folders are listed (the designs folder, and each chat file's folder to see it is still there); only images are read, for their tiles.
+    await check(`(layoutFixture.read ?? []).every(p => /\\.(png|jpe?g|gif|webp|svg)$/i.test(p)) && JSON.stringify([...new Set(layoutFixture.listed)].sort()) === ${js(JSON.stringify(['/work/.scratch', '/work/nekko-designs', '/work/nekko-designs/settings', '/work/office', '/work/reports', '/work/site']))}`, 'folders-are-listed-and-only-images-read');
     await radio('Layout', 'Full cards'); await sleep(600);
     await shot('desktop-cards');
     await check(`(() => { const tile = t => [...document.querySelectorAll('[data-library-tile]')].find(e => e.querySelector('.library-tile-title').textContent === t); return !/Open chat/.test(tile('Hero').textContent) && /Open file/.test(tile('Hero').textContent) && /Open chat/.test(tile('Checkout design').textContent); })()`, 'folder-card-has-no-chat-to-open');

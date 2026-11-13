@@ -40,6 +40,26 @@ export interface PreviewState {
   height: number;
 }
 
+/**
+ * A scroll or pinch over the design that the page had no use for, passed up so
+ * the canvas moves (or zooms, when `zoom`) as it would over its own surface.
+ * `x`/`y` are where the pointer is in the page, in its own CSS pixels.
+ */
+export interface PreviewWheel {
+  nekkoPreview: 'wheel';
+  dx: number;
+  dy: number;
+  x: number;
+  y: number;
+  zoom: boolean;
+}
+
+/** Space pressed or let go inside the design: while it is down the canvas drags. */
+export interface PreviewHand {
+  nekkoPreview: 'hand';
+  down: boolean;
+}
+
 export interface HtmlPreviewServed {
   /** Hand back to `release` when the preview closes. */
   id: string;

@@ -46,19 +46,28 @@ describe('Library layout and folded groups', () => {
   });
 });
 
-describe('Library group order follows the setup answer', () => {
+describe('Library group order: Designs, then the setup answer', () => {
+  const ids = (list: readonly { kind: { id: string } }[]) => list.map((g) => g.kind.id);
+  const usual = ARTIFACT_KINDS.map((k) => k.id).filter((id) => id !== 'design');
   it.each([
-    ['developer', 'web'], ['designer', 'design'], ['writer', 'doc'], ['student', 'doc'], ['business', 'office'],
-  ] as const)('%s leads with %s', (profile, kind) => {
+    ['developer', 'web'], ['writer', 'doc'], ['student', 'doc'], ['business', 'office'],
+  ] as const)('%s sees Designs, then %s', (profile, kind) => {
     const ordered = orderForProfile(groups, profile);
-    expect(ordered[0].kind.id).toBe(kind);
+    expect(ids(ordered).slice(0, 2)).toEqual(['design', kind]);
     expect(ordered).toHaveLength(groups.length);
   });
-  it('keeps the usual order for Just exploring, no answer, or a lead kind with no files', () => {
-    expect(orderForProfile(groups, 'exploring').map((g) => g.kind.id)).toEqual(ARTIFACT_KINDS.map((k) => k.id));
-    expect(orderForProfile(groups, undefined).map((g) => g.kind.id)).toEqual(ARTIFACT_KINDS.map((k) => k.id));
+  it('puts Designs first for a designer, and keeps the rest in the usual order', () => {
+    expect(ids(orderForProfile(groups, 'designer'))).toEqual(['design', ...usual]);
+  });
+  it('puts Designs first for Just exploring and no answer, then the usual order', () => {
+    expect(ids(orderForProfile(groups, 'exploring'))).toEqual(['design', ...usual]);
+    expect(ids(orderForProfile(groups, undefined))).toEqual(['design', ...usual]);
+  });
+  it('skips a kind with no files', () => {
+    const noDesigns = groups.filter((g) => g.kind.id !== 'design');
+    expect(ids(orderForProfile(noDesigns, 'developer'))).toEqual(['web', ...usual.filter((id) => id !== 'web')]);
     const noPages = groups.filter((g) => g.kind.id !== 'web');
-    expect(orderForProfile(noPages, 'developer').map((g) => g.kind.id)).toEqual(noPages.map((g) => g.kind.id));
+    expect(ids(orderForProfile(noPages, 'developer'))).toEqual(['design', ...usual.filter((id) => id !== 'web')]);
   });
 });
 

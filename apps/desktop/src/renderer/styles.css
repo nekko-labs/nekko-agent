@@ -4647,6 +4647,15 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 [data-library-layout="cards"] .library-tile-main { align-items: stretch; text-align: left; }
 [data-library-layout="cards"] .library-tile-preview { aspect-ratio: 16 / 10; border-radius: 9px; margin-bottom: 4px; }
 .library-tile-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+/* A tile showing the file itself: a page laid out at a desktop width and shrunk
+   from its top-left corner, or an image cropped to the tile. The kind's drawing
+   sits underneath until the page has settled. White is the web's own page
+   colour for a page that sets none, not a theme colour. */
+.library-live { position: relative; overflow: hidden; isolation: isolate; background: var(--surface-2); }
+.library-live-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.library-live-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.library-live-frame { position: absolute; left: 0; top: 0; border: 0; background: #fff; transform-origin: 0 0; pointer-events: none; opacity: 0; transition: opacity 200ms ease-out; }
+.library-live-frame[data-ready] { opacity: 1; }
 @media (hover: hover) {
   .library-tile-main:hover .library-tile-preview { transform: translateY(-2px); }
 }
@@ -4678,7 +4687,7 @@ html[data-library-transition="list"]::view-transition-new(library-list) { width:
 html[data-library-transition="list"]::view-transition-old(library-list) { animation: library-fade-out 70ms ease-out both; }
 html[data-library-transition="list"]::view-transition-new(library-list) { animation: library-fade-in 160ms ease-out both; }
 @media (prefers-reduced-motion: reduce) {
-  .slide-toggle-thumb[data-animate], .library-fold, .library-chevron, .library-tile-preview { transition: none; }
+  .slide-toggle-thumb[data-animate], .library-fold, .library-chevron, .library-tile-preview, .library-live-frame { transition: none; }
 }
 
 /* The chat's details: a panel inside the composer card, under the toolbar. */

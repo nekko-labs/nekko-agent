@@ -11,13 +11,14 @@ import { LibraryArtwork, LibraryIntro, libraryIntroSeen, dismissLibraryIntro } f
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
 import { ArtifactPreview } from '../components/library/ArtifactPreview.js';
 import { DesignCanvas } from '../components/library/DesignCanvas.js';
+import { TilePreview } from '../components/library/TilePreview.js';
 import {
   LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
   type LibraryLayout,
 } from '../components/library/libraryPrefs.js';
 import { ChevronDownIcon, CloseIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
 import {
-  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, readDesignsFolder, sessionArtifacts, withFolderDesigns,
+  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns,
   type ArtifactEntry, type ArtifactKind,
 } from '../artifactsIndex.js';
 
@@ -196,10 +197,28 @@ export function ArtifactsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folders, key]);
 
-  const entries = useMemo(
-    () => (fromChats || fromFolders ? groupDesignVersions(withFolderDesigns(fromChats ?? [], fromFolders ?? [])) : null),
+  const merged = useMemo(
+    () => (fromChats || fromFolders ? withFolderDesigns(fromChats ?? [], fromFolders ?? []) : null),
     [fromChats, fromFolders],
   );
+  // Which of those files are still on disk: a chat can name a file it never wrote, or one deleted since.
+  // A file shows until its folder has been listed.
+  const [presence, setPresence] = useState<{ checked: Set<string>; present: Set<string> } | null>(null);
+  const paths = merged?.filter((e) => e.source !== 'folder').map((e) => e.path).join('\n') ?? '';
+  useEffect(() => {
+    if (!paths || !window.nekko?.listDir) return;
+    let live = true;
+    const list = paths.split('\n');
+    presentPaths((path) => window.nekko.listDir(path), list).then((present) => {
+      if (live) setPresence({ checked: new Set(list.map((p) => p.toLowerCase())), present });
+    });
+    return () => { live = false; };
+  }, [paths]);
+  const entries = useMemo(() => {
+    if (!merged) return null;
+    const gone = (e: ArtifactEntry) => !!presence && presence.checked.has(e.path.toLowerCase()) && !presence.present.has(e.path.toLowerCase());
+    return groupDesignVersions(merged.filter((e) => !gone(e)));
+  }, [merged, presence]);
   const indexed = chatsRead && fromFolders !== null;
 
   // The kinds that have files lead the slider; the setup answer's kind comes first.
@@ -267,7 +286,7 @@ export function ArtifactsView() {
     return (
     <div key={e.path} role="listitem" className="library-tile" data-library-tile>
       <button type="button" className="library-tile-main" onClick={() => select(e)} title={e.path}>
-        <ArtifactPreview kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
+        <TilePreview kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
           <span className="library-tile-meta">{fromAndWhen(e)}</span>

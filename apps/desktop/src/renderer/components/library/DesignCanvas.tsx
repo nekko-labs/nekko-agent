@@ -4,20 +4,28 @@ import type { DesignVersion } from '../../artifactsIndex.js';
 import { SERVED_PREVIEW_SANDBOX } from '../ArtifactPreview.js';
 import { FilePane } from '../FilePane.js';
 import { SlideToggle, type SlideOption } from './SlideToggle.js';
-import { FRAME, ZOOM, fitView, frameSize, isAnimating, readPreviewState, zoomAt, type CanvasSize, type CanvasView } from './designCanvasView.js';
+import {
+  FRAME, ZOOM, fitView, frameSize, isAnimating, readPreviewHand, readPreviewState, readPreviewWheel, wheelZoom, zoomAt, type CanvasSize, type CanvasView,
+} from './designCanvasView.js';
 
 /** When to ask a loaded design what is moving: once it settles, and again to catch a script-driven loop. */
 const PROBES_MS = [400, 1400, 3000];
 
+/** Keys that type or press something, where Space is not the hand. */
+const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName));
+
 /**
- * A design on a canvas: the page at its full size on a dotted surface, moved
- * by dragging or scrolling and zoomed with a pinch or Ctrl/Cmd+scroll. A
- * design that moves gets Play/Pause; one saved more than once gets its
- * versions; Interact hands the pointer to the page for a clickable prototype.
+ * A design on a canvas: the page at its full size on a dotted surface. The
+ * design always takes clicks and hover, so a prototype responds at once. The
+ * canvas moves by dragging the space around the design, or anywhere while
+ * Space is held, and by scrolling anywhere (over the design too, unless the
+ * spot has its own scroll box); a pinch or Ctrl/Cmd+scroll zooms. A design
+ * that moves gets Play/Pause; one saved more than once gets its versions.
  *
  * The page runs where every served page does: an opaque-origin sandbox with
  * no network. The canvas only posts it three words (probe, pause, play) and
- * believes nothing it answers beyond a size and whether it is moving.
+ * believes nothing it says beyond a size, whether it is moving, a capped
+ * scroll step and whether Space is down.
  * A host that cannot serve the page shows the ordinary file pane instead.
  */
 export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
@@ -34,8 +42,9 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
   const [size, setSize] = useState<CanvasSize>(FRAME);
   const [view, setView] = useState<CanvasView | null>(null);
   const [motion, setMotion] = useState({ animating: false, paused: false });
-  const [interact, setInteract] = useState(false);
   const [dragging, setDragging] = useState(false);
+  // Space held, in the canvas or in the design: the whole surface drags.
+  const [hand, setHand] = useState(false);
   // What the page last said, whether its size was taken, and whether the person has moved the view.
   const page = useRef<{ last: PreviewState | null; sized: boolean; moved: boolean }>({ last: null, sized: false, moved: false });
   const drag = useRef<{ dx: number; dy: number } | null>(null);
@@ -45,7 +54,7 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
     let id = '';
     const release = (served: string) => { void window.nekko.releaseHtmlPreview?.(served).catch(() => {}); };
     page.current = { last: null, sized: false, moved: false };
-    setServed(null); setFailed(false); setSize(FRAME); setView(null); setMotion({ animating: false, paused: false }); setInteract(false);
+    setServed(null); setFailed(false); setSize(FRAME); setView(null); setMotion({ animating: false, paused: false }); setHand(false);
     const serve = window.nekko.serveHtmlPreview;
     if (!serve) { setFailed(true); return; }
     serve(path, { internet: false, controls: true }).then((s) => {
@@ -57,10 +66,26 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
     return () => { live = false; if (id) release(id); };
   }, [path]);
 
-  // The page's reports. Only this frame's own window is listened to, and only numbers are read from it.
+  // The latest view and frame size, for gestures the page passes up between renders.
+  const latest = useRef({ view, size });
+  latest.current = { view, size };
+
+  // The page's reports. Only this frame's own window is listened to, and only numbers and flags are read from it.
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (!frame.current || e.source !== frame.current.contentWindow) return;
+      const down = readPreviewHand(e.data);
+      if (down !== null) { setHand(down); return; }
+      const wheel = readPreviewWheel(e.data, latest.current.size);
+      if (wheel) {
+        const v = latest.current.view;
+        if (!v) return;
+        // The pointer in the page, placed on the canvas.
+        const point = { x: v.x + wheel.x * v.z, y: v.y + wheel.y * v.z };
+        if (wheel.zoom) move((w) => zoomAt(w, wheelZoom(wheel.dy), point));
+        else move((w) => ({ ...w, x: w.x - wheel.dx, y: w.y - wheel.dy }));
+        return;
+      }
       const state = readPreviewState(e.data);
       if (!state) return;
       const p = page.current;
@@ -110,7 +135,7 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
       if (e.ctrlKey || e.metaKey) {
         const box = el.getBoundingClientRect();
         const point = { x: e.clientX - box.left, y: e.clientY - box.top };
-        move((v) => zoomAt(v, Math.exp(-e.deltaY * 0.0015), point));
+        move((v) => zoomAt(v, wheelZoom(e.deltaY), point));
       } else {
         move((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
       }
@@ -118,6 +143,17 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
     el.addEventListener('wheel', wheel, { passive: false });
     return () => el.removeEventListener('wheel', wheel);
   }, [served, failed]);
+
+  // Space held while the app has the keyboard. Inside the design, the page says so instead.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.code === 'Space' && !isField(e.target)) { e.preventDefault(); setHand(true); } };
+    const up = (e: KeyboardEvent) => { if (e.code === 'Space') setHand(false); };
+    const away = () => setHand(false);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', away);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', away); };
+  }, []);
 
   if (failed) return <FilePane path={path} />;
 
@@ -127,6 +163,7 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
     <div className="flex h-full min-h-0 flex-col" data-design-view>
       <div className="flex flex-wrap items-center gap-4 px-5 py-2 text-xs" data-design-controls>
         {versionOptions.length > 1 && <SlideToggle label="Version" options={versionOptions} value={path} onChange={onVersion} />}
+        <span className="hidden text-2xs text-ink-faint lg:inline" data-design-hint>Hold Space to drag over the design</span>
         <div className="ml-auto flex items-center gap-2">
           {motion.animating && (
             <button type="button" className="btn btn-ghost" data-design-playback onClick={() => send(motion.paused ? 'play' : 'pause')}
@@ -134,10 +171,6 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
               {motion.paused ? 'Play' : 'Pause'}
             </button>
           )}
-          <button type="button" className="ctl-toggle" aria-pressed={interact} data-design-interact onClick={() => setInteract((on) => !on)}
-            title={interact ? 'The design has the pointer. Click to move the canvas again.' : 'Let clicks and hover reach the design, for a prototype that responds.'}>
-            <span className="ctl-dot" /> Interact
-          </button>
           <button type="button" className="btn btn-ghost" aria-label="Zoom out" title="Zoom out" disabled={(view?.z ?? 1) <= ZOOM.min} onClick={() => zoomBy(1 / ZOOM.step)}>−</button>
           <button type="button" className="btn btn-ghost tabular-nums" data-design-zoom aria-label={`Zoom ${percent}%. Fit to the window`} title="Fit to the window" onClick={fit}>{percent}%</button>
           <button type="button" className="btn btn-ghost" aria-label="Zoom in" title="Zoom in" disabled={(view?.z ?? 1) >= ZOOM.max} onClick={() => zoomBy(ZOOM.step)}>+</button>
@@ -148,9 +181,11 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
         ref={wrap}
         data-design-canvas
         className="diagram-canvas relative min-h-0 flex-1 overflow-hidden"
-        style={{ cursor: interact ? 'default' : dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+        style={{ cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+        data-design-hand={hand || undefined}
         onPointerDown={(e) => {
-          if (interact || !view || e.button !== 0) return;
+          // Reaches here from the space around the design, or from anywhere while Space is held.
+          if (!view || e.button !== 0) return;
           drag.current = { dx: e.clientX - view.x, dy: e.clientY - view.y };
           setDragging(true);
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -163,7 +198,7 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
           ? <iframe ref={frame} key={served.url} title={title} src={served.url} sandbox={SERVED_PREVIEW_SANDBOX} referrerPolicy="no-referrer" onLoad={probe}
               className="design-canvas-frame"
               style={{
-                width: size.width, height: size.height, pointerEvents: interact ? 'auto' : 'none', visibility: view ? 'visible' : 'hidden',
+                width: size.width, height: size.height, pointerEvents: hand || dragging ? 'none' : 'auto', visibility: view ? 'visible' : 'hidden',
                 transform: view ? `translate(${view.x}px, ${view.y}px) scale(${view.z})` : undefined,
               }} />
           : <p className="p-5 text-xs text-ink-faint">Loading…</p>}
