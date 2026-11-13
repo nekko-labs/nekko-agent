@@ -62,8 +62,9 @@ app.whenReady().then(async () => {
     await shot('api-setup');
     if (!before) {
       check('connection name visible outside disclosure', await run('!![...document.querySelectorAll("label")].find(l => l.textContent.includes("Connection name") && !l.closest("details"))'));
-      await run(`(() => { const labels = [...document.querySelectorAll('label')]; for (const [text, value] of [['Connection name', 'Client B API'], ['API key', 'synthetic-new-key']]) { const input = labels.find(l => l.textContent.includes(text))?.querySelector('input'); if (!input) throw Error('Missing input ' + text); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); } })()`);
-      await sleep(200); await click('Connect provider');
+      // The Anthropic key goes in through the guided key flow, whose field is named for the key.
+      await run(`(() => { const set = (input, value) => { if (!input) throw Error('Missing input for ' + value); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); }; set([...document.querySelectorAll('label')].find(l => l.textContent.includes('Connection name'))?.querySelector('input'), 'Client B API'); set(document.querySelector('input[aria-label="Anthropic API key"]'), 'synthetic-new-key'); })()`);
+      await sleep(200); await click('Connect'); await sleep(300);
       check('saving a named API creates a new provider rather than replacing a key', await run('window.integration.calls.some(c => c.saved?.label === "Client B API" && c.saved.kind === "anthropic" && c.saved.id !== "production" && c.saved.id !== "sandbox")'));
     }
   } catch (e) { report.errors.push(String(e.stack || e)); }
