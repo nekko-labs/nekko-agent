@@ -330,7 +330,7 @@ fun NewChatScreen(
                             onSave = { params -> onCreated(repo.createImageChat(params)) },
                         )
                     }
-                    !online -> OfflineNewChat(repo, active.name, c.conn == RelayState.CONNECTING, phonePick, c.workspaces, shared, onQueued)
+                    !online -> OfflineNewChat(repo, active.name, phonePick, c.workspaces, shared, onQueued)
                     else -> NCard {
                         Label(Icons.Outlined.Memory, stringResource(R.string.chats_model_from, active.name))
                         if (phonePickMissing && !touched) {
@@ -674,7 +674,6 @@ private fun ModelRow(m: ModelInfo, detail: String?, selected: Boolean, onClick: 
 private fun OfflineNewChat(
     repo: ComputersRepository,
     computer: String,
-    connecting: Boolean,
     phonePick: ModelPick?,
     workspaces: List<WorkspaceFolder>,
     shared: String?,
@@ -690,12 +689,8 @@ private fun OfflineNewChat(
         repo.drafts.set(DraftStore.NEW_CHAT, repo.drafts.draft(DraftStore.NEW_CHAT).copy(text = text, workspaceId = workspaceId))
     }
     NCard {
-        Text(
-            stringResource(if (connecting) R.string.chats_offline_connecting else R.string.chats_offline_offline, computer),
-            style = MaterialTheme.typography.bodyMedium,
-            color = p.inkSoft,
-            modifier = Modifier.testTag("newChat.offlineNote"),
-        )
+        // The iPhone's two lines (#2475): who is reconnecting, and that the draft will go when it does.
+        com.nekko.android.ui.components.ReconnectingNotice(computer, Modifier.testTag("newChat.offlineNote"))
         saved.refusal?.let { Text(stringResource(R.string.chats_not_started, it), style = MaterialTheme.typography.bodySmall, color = p.danger) }
         if (pick == null) {
             Text(

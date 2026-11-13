@@ -1,5 +1,7 @@
 package com.nekko.android
 
+import androidx.compose.ui.test.assert
+
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.activity.ComponentActivity
@@ -112,6 +114,20 @@ class OutboxJourneyTest {
             }
         }
         compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("newChat.offlineNote")).fetchSemanticsNodes().isNotEmpty() }
+        // #2475: the iPhone's two lines, the computer named in both; the dots are read once, as "…".
+        val name = repo.state.value.active!!.name
+        compose.onNode(hasTestTag("reconnect.title"), useUnmergedTree = true).assert(androidx.compose.ui.test.hasContentDescription("$name is reconnecting…"))
+        compose.onNode(hasTestTag("reconnect.draft"), useUnmergedTree = true).assert(androidx.compose.ui.test.hasText("Draft your message now and it will send when $name reconnects"))
+        // The dots cycle every 0.4 s, or stay all shown with animations off.
+        fun dots() = (1..3).first { n -> compose.onAllNodes(hasTestTag("reconnect.dots.$n"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        val still = android.provider.Settings.Global.getFloat(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        compose.mainClock.autoAdvance = false
+        val first = dots()
+        compose.mainClock.advanceTimeBy(450)
+        val next = dots()
+        compose.mainClock.autoAdvance = true
+        if (still) org.junit.Assert.assertEquals(listOf(3, 3), listOf(first, next))
+        else org.junit.Assert.assertEquals(first % 3 + 1, next)
         compose.onNode(hasTestTag("newChat.firstMessage")).performTextInput("Draft the release notes for 0.9")
         settle()
         shot("outbox-4-new-chat-offline")
