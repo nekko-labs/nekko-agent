@@ -101,7 +101,7 @@ Nothing is recorded as a true OS exclusive yet.
 
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
-| The chat's secret box when the agent asks for a secret (`request_secret`) | Not implemented: the chat looks busy while it waits | Not implemented: the chat looks busy while it waits | [#2603](https://github.com/nekko-labs/nekko-agent/issues/2603), [#2604](https://github.com/nekko-labs/nekko-agent/issues/2604) |
+| The chat's secret box when the agent asks for a secret (`request_secret`): lock, variable name, reason, counts as needing you, "Nekko Agent needs a secret" notification | Shows the request, with "Enter this on your computer" (#2603, simulator-verified) | Shows the request, with "Enter this on your computer" (#2604) | Entering the value on the phone (masked field, Paste, Show, Skip, Provide) waits on the phone access-class decision for `chat:provideSecret`: [#2603](https://github.com/nekko-labs/nekko-agent/issues/2603), [#2604](https://github.com/nekko-labs/nekko-agent/issues/2604) |
 
 ## Quiet transcript follow-up
 

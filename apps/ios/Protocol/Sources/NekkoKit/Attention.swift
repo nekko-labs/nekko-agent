@@ -7,7 +7,8 @@ public struct AttentionState: Equatable, Sendable {
     private struct Inputs: Equatable, Sendable {
         var approvals: Set<String> = []
         var questions: Set<String> = []
-        var pending: Bool { !approvals.isEmpty || !questions.isEmpty }
+        var secrets: Set<String> = []
+        var pending: Bool { !approvals.isEmpty || !questions.isEmpty || !secrets.isEmpty }
     }
     private enum Change: Equatable, Sendable {
         case event(AgentEvent)
@@ -46,12 +47,14 @@ public struct AttentionState: Equatable, Sendable {
             let p = parsed[sid]
             return (value["approval"] == nil || value["approval"] == .null || p?.approval != nil)
                 && (value["question"] == nil || value["question"] == .null || p?.question != nil)
+                && (value["secret"] == nil || value["secret"] == .null || p?.secret != nil)
         }) else { invalidate(); return [] }
         var next = AttentionState()
         for (sid, p) in parsed {
             var input = Inputs()
             if let a = p.approval { input.approvals.insert(a.call.id) }
             if let q = p.question { input.questions.insert(q.callId) }
+            if let s = p.secret { input.secrets.insert(s.callId) }
             if input.pending { next.inputs[sid] = input }
         }
         // Replay new inputs while the read was in flight. A resolution cancels
@@ -72,10 +75,10 @@ public struct AttentionState: Equatable, Sendable {
     @discardableResult
     public mutating func receive(_ event: AgentEvent) -> Bool {
         switch event {
-        case .questionResolved, .toolResult, .done, .error:
+        case .questionResolved, .secretResolved, .toolResult, .done, .error:
             invalidate()
             return true
-        case .approvalRequired, .question:
+        case .approvalRequired, .question, .secretRequest:
             record(.event(event))
         default: break
         }
@@ -102,6 +105,7 @@ public struct AttentionState: Equatable, Sendable {
             switch e {
             case .approvalRequired(_, let a): input.approvals.insert(a.call.id)
             case .question(_, let q): input.questions.insert(q.callId)
+            case .secretRequest(_, let s): input.secrets.insert(s.callId)
             default: return // Streaming output does not resolve a waiting input.
             }
             inputs[sid] = input.pending ? input : nil

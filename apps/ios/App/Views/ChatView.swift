@@ -182,7 +182,7 @@ struct ChatView: View {
                                    sendNow: { sendNow() })
                             .id("waiting-\(item.id)")
                     }
-                    if chat.turn.running && chat.turn.approval == nil && chat.turn.question == nil {
+                    if chat.turn.running && chat.turn.approval == nil && chat.turn.question == nil && chat.turn.secret == nil {
                         let working = chat.turn.blocks.isEmpty ? "Working…" : "Working on \(store.active?.name ?? "your computer")…"
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -200,7 +200,7 @@ struct ChatView: View {
                         Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
                     }
                     // Under the reply, never over a question, an approval, a failure or a saved copy.
-                    if starAsk && !chat.running && chat.turn.approval == nil && chat.turn.question == nil && chat.error == nil && chat.savedAt == nil {
+                    if starAsk && !chat.running && chat.turn.approval == nil && chat.turn.question == nil && chat.turn.secret == nil && chat.error == nil && chat.savedAt == nil {
                         GitHubStarAsk(stop: { prefs.stopStarAsk() }, close: { withAnimation(.easeOut(duration: 0.16)) { starAsk = false } })
                             .id("starAsk")
                             .transition(.opacity)
@@ -265,6 +265,7 @@ struct ChatView: View {
             // After the card has been laid out: scrolling in the same update used the old inset.
             .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
             .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
+            .onChange(of: chat.turn.secret != nil) { _, _ in scrollAfterLayout(proxy) }
             // A prompt sent from here got its reply: it counts, and the 10th and 50th carry the star ask.
             .onChange(of: chat.promptReplies) { old, new in
                 guard new > old, prefs.starAskAfterReply() else { return }
@@ -450,6 +451,7 @@ struct ChatView: View {
                 // A new question starts with nothing picked.
                 QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
             }
+            if let s = chat.turn.secret { SecretCard(request: s).id(s.callId) }
             if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
             if prefs.shows("pr-status", pr: true) { PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading) }
             // The phone's saved copy (OF-5): read-only until the computer answers.
@@ -1025,6 +1027,38 @@ struct ApprovalCard: View {
         guard !input.isEmpty else { return nil }
         if input.count == 1, let s = input.values.first?.string, Transcript.toolLabel(approval.call).hasSuffix(s) { return nil }
         return JSONValue.object(input).serialized()
+    }
+}
+
+/// The agent asked for a secret (`request_secret`, #2594). Same words and order as the
+/// computer's secret box: a lock, the variable name, the agent's reason. The value is
+/// entered on the computer only: `chat:provideSecret` is not a phone channel, so this
+/// card has no field, nothing to send and nothing to keep.
+struct SecretCard: View {
+    let request: SecretRequest
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "lock.fill").font(.subheadline).foregroundStyle(palette.inkSoft)
+                .padding(.top, 2).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(request.name).font(.system(.subheadline, design: .monospaced).weight(.medium))
+                    .foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle)
+                if !request.reason.isEmpty {
+                    Text(request.reason).font(.caption).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true)
+                }
+                Text("Enter this on your computer").font(.footnote).foregroundStyle(palette.inkSoft)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("The agent needs \(request.name). Enter this on your computer.")
+        .accessibilityIdentifier("chat.secretCard")
     }
 }
 

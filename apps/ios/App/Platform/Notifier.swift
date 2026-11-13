@@ -22,6 +22,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// `userInfo` key on the note that says an answer did not reach the computer.
     nonisolated static let unsentKey = "unsent"
 
+    /// The secret request's notification text: the variable name, never a value.
+    nonisolated static func secretBody(name: String, hideContent: Bool) -> String {
+        hideContent ? "Your computer needs a secret." : "Nekko Agent needs a secret: \(name)"
+    }
+
     var onApprove: ((_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
     /// "Always allow this tool": opens the chat, whose card saves the tool and allows the call.
     var onAlwaysAllow: ((_ sessionId: String, _ callId: String) -> Void)?
@@ -114,6 +119,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             content.sound = .default
         case .question(_, let q):
             content.body = hideContent ? "Your computer has a question." : (q.questions.first?.question ?? "A question for you.")
+            content.interruptionLevel = .timeSensitive
+            content.sound = .default
+        case .secretRequest(_, let r):
+            content.body = Self.secretBody(name: r.name, hideContent: hideContent)
             content.interruptionLevel = .timeSensitive
             content.sound = .default
         case .done:

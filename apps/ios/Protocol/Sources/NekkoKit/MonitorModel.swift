@@ -87,7 +87,7 @@ public final class MonitorModel {
     /// The events that change what Monitors shows bring the next read forward.
     func onEvent(_ e: AgentEvent) {
         switch e {
-        case .approvalRequired, .question, .questionResolved, .done, .error, .sessionMeta:
+        case .approvalRequired, .question, .questionResolved, .secretRequest, .secretResolved, .done, .error, .sessionMeta:
             readSoon()
         default:
             break

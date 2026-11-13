@@ -9,6 +9,25 @@ final class AttentionTests: XCTestCase {
                                       "question": ["callId": "question", "questions": []]],
                               "b": ["question": ["callId": "other", "questions": []]]]
 
+    func testASecretRequestCountsAsNeedingYouUntilResolved() {
+        let secret: JSONValue = ["callId": "s1", "name": "OPENAI_API_KEY", "reason": "To call the API", "requestedAt": 5]
+        var state = AttentionState()
+        state.replace(["a": ["secret": secret]], ticket: state.beginSnapshot())
+        XCTAssertEqual(state.pending, ["a"])
+        XCTAssertEqual(state.count, 1)
+        XCTAssertTrue(state.receive(event(["type": "secret_resolved", "sessionId": "a", "callId": "s1", "provided": true])))
+        XCTAssertNil(state.count, "a resolution needs a fresh read")
+        state.replace([:], ticket: state.beginSnapshot())
+        XCTAssertEqual(state.count, 0)
+        state.receive(event(["type": "secret_request", "sessionId": "b", "request": secret]))
+        XCTAssertEqual(state.pending, ["b"])
+        XCTAssertEqual(ActivityTracker.next([:], event(["type": "secret_request", "sessionId": "b", "request": secret]))["b"], .needsYou)
+        // A secret that does not decode is not proof of an empty room.
+        var bad = AttentionState()
+        bad.replace(["a": ["secret": ["callId": "x"]]], ticket: bad.beginSnapshot())
+        XCTAssertNil(bad.count)
+    }
+
     func testUnknownUntilCompleteSnapshotAndDistinctChatsNotInputs() {
         var state = AttentionState()
         XCTAssertNil(state.count)

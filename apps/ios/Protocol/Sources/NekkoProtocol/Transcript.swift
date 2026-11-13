@@ -36,18 +36,21 @@ public struct LiveTurn: Equatable, Sendable {
     public var blocks: [Block] = []
     public var approval: Approval?
     public var question: AskRequest?
+    /// A `request_secret` call waiting on the computer's secret box (name and reason only).
+    public var secret: SecretRequest?
     public var error: String?
     /// Tokens/sec of the last reply, when the host reported usage.
     public var rate: Double?
     /// When the overlay started (for Live Activities' elapsed time).
     public var startedAt: Int64?
 
-    public init(running: Bool = false, blocks: [Block] = [], approval: Approval? = nil, question: AskRequest? = nil,
+    public init(running: Bool = false, blocks: [Block] = [], approval: Approval? = nil, question: AskRequest? = nil, secret: SecretRequest? = nil,
                 error: String? = nil, rate: Double? = nil, startedAt: Int64? = nil) {
         self.running = running
         self.blocks = blocks
         self.approval = approval
         self.question = question
+        self.secret = secret
         self.error = error
         self.rate = rate
         self.startedAt = startedAt
@@ -113,6 +116,11 @@ public enum Transcript {
             t.question = request
         case .questionResolved(_, let callId):
             if t.question?.callId == callId { t.question = nil }
+        case .secretRequest(_, let request):
+            t.running = true
+            t.secret = request
+        case .secretResolved(_, let callId):
+            if t.secret?.callId == callId { t.secret = nil }
         case .usage(_, let tokens, let ms):
             if let ms, ms > 0, tokens > 0 { t.rate = Double(tokens) / Double(ms) * 1000 }
         case .retry:
@@ -123,11 +131,13 @@ public enum Transcript {
             t.running = false
             t.approval = nil
             t.question = nil
+            t.secret = nil
             t.blocks = settle(t.blocks)
         case .error(_, let message):
             t.running = false
             t.approval = nil
             t.question = nil
+            t.secret = nil
             t.blocks = settle(t.blocks)
             // A user stop arrives as an error; it isn't one from the user's side.
             let m = message.lowercased()
@@ -320,8 +330,8 @@ public enum ActivityTracker {
     public static func next(_ activity: [String: Activity], _ e: AgentEvent) -> [String: Activity] {
         let next: Activity?
         switch e {
-        case .approvalRequired, .question: next = .needsYou
-        case .text, .reasoning, .toolCall, .toolResult, .questionResolved, .other(_, "image_status"): next = .running
+        case .approvalRequired, .question, .secretRequest: next = .needsYou
+        case .text, .reasoning, .toolCall, .toolResult, .questionResolved, .secretResolved, .other(_, "image_status"): next = .running
         case .error: next = .failed
         case .done: next = activity[e.sessionId] == .failed ? .failed : nil
         default: return activity

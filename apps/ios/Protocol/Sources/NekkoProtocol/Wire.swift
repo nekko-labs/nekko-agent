@@ -952,10 +952,32 @@ public struct Approval: Equatable, Sendable {
     }
 }
 
+/// The agent asked for a secret (`request_secret`, #2594). Only the variable name
+/// and the agent's reason: the phone never holds, sends or shows a value.
+public struct SecretRequest: Equatable, Sendable {
+    public let callId: String
+    public let name: String
+    public let reason: String
+    public let requestedAt: Int64
+
+    public init(callId: String, name: String, reason: String = "", requestedAt: Int64 = 0) {
+        self.callId = callId
+        self.name = name
+        self.reason = reason
+        self.requestedAt = requestedAt
+    }
+
+    public static func from(_ v: JSONValue?) -> SecretRequest? {
+        guard let v, let callId = v.str("callId"), let name = v.str("name"), !name.isEmpty else { return nil }
+        return SecretRequest(callId: callId, name: name, reason: v.str("reason") ?? "", requestedAt: v.long("requestedAt") ?? 0)
+    }
+}
+
 public struct PendingInput: Equatable, Sendable {
     public let sessionId: String
     public let approval: Approval?
     public let question: AskRequest?
+    public let secret: SecretRequest?
 
     /// `chat:pending` → `Record<sessionId, PendingInput>`.
     public static func map(_ v: JSONValue?) -> [String: PendingInput] {
@@ -966,7 +988,7 @@ public struct PendingInput: Equatable, Sendable {
             if let a = p["approval"], let call = ToolCall.from(a["call"]) {
                 approval = Approval(call: call, reason: a.str("reason") ?? "", severity: .parse(a.str("severity")))
             }
-            out[sid] = PendingInput(sessionId: sid, approval: approval, question: AskRequest.from(p["question"]))
+            out[sid] = PendingInput(sessionId: sid, approval: approval, question: AskRequest.from(p["question"]), secret: SecretRequest.from(p["secret"]))
         }
         return out
     }
@@ -982,6 +1004,8 @@ public enum AgentEvent: Equatable, Sendable {
     case toolResult(sessionId: String, result: ToolResult)
     case question(sessionId: String, request: AskRequest)
     case questionResolved(sessionId: String, callId: String)
+    case secretRequest(sessionId: String, request: SecretRequest)
+    case secretResolved(sessionId: String, callId: String)
     case usage(sessionId: String, outputTokens: Int64, outputMs: Int64?)
     case retry(sessionId: String)
     case done(sessionId: String, messageId: String?)
@@ -992,7 +1016,7 @@ public enum AgentEvent: Equatable, Sendable {
     public var sessionId: String {
         switch self {
         case .text(let s, _), .reasoning(let s, _), .toolCall(let s, _), .approvalRequired(let s, _), .toolResult(let s, _),
-             .question(let s, _), .questionResolved(let s, _), .usage(let s, _, _), .retry(let s), .done(let s, _),
+             .question(let s, _), .questionResolved(let s, _), .secretRequest(let s, _), .secretResolved(let s, _), .usage(let s, _, _), .retry(let s), .done(let s, _),
              .error(let s, _), .sessionMeta(let s), .other(let s, _):
             return s
         }
@@ -1018,6 +1042,8 @@ public enum AgentEvent: Equatable, Sendable {
         case "tool_result": return ToolResult.from(v["result"]).map { .toolResult(sessionId: sid, result: $0) }
         case "question": return AskRequest.from(v["request"]).map { .question(sessionId: sid, request: $0) }
         case "question_resolved": return v.str("callId").map { .questionResolved(sessionId: sid, callId: $0) }
+        case "secret_request": return SecretRequest.from(v["request"]).map { .secretRequest(sessionId: sid, request: $0) }
+        case "secret_resolved": return v.str("callId").map { .secretResolved(sessionId: sid, callId: $0) }
         case "usage": return .usage(sessionId: sid, outputTokens: v.long("outputTokens") ?? 0, outputMs: v.long("outputMs"))
         case "retry": return .retry(sessionId: sid)
         case "done": return .done(sessionId: sid, messageId: v.str("messageId"))

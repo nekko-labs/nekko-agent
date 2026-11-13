@@ -258,6 +258,7 @@ public final class ChatModel {
             if cardChanges == cardChangesBefore {
                 t.approval = mine?.approval
                 t.question = mine?.question
+                t.secret = mine?.secret
             }
             t.running = t.running || mine != nil
             turn = t

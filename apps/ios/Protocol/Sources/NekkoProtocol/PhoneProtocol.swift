@@ -55,7 +55,7 @@ public enum PushKind: String, CaseIterable, Sendable {
     /// The kind of notification an agent event would cause, if any.
     public static func of(_ e: AgentEvent) -> PushKind? {
         switch e {
-        case .approvalRequired, .question: return .needsYou
+        case .approvalRequired, .question, .secretRequest: return .needsYou
         case .done: return .finished
         case .error(_, let message): return ["stopped", "aborted"].contains(message.lowercased()) ? nil : .failed
         default: return nil

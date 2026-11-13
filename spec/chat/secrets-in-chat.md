@@ -21,6 +21,15 @@ Tracked by [#2594](https://github.com/nekko-labs/nekko-agent/issues/2594). Decis
 - **Skip** tells the agent the user chose not to give it and not to ask again unless they bring it up. An unattended chat (with the unattended limit set) that nobody answers in time gets the same, worded for the timeout. Stopping the turn drops the box.
 - **Lifetime.** Secrets live in the engine's memory per chat: a restart of the app or the engine forgets them, and deleting the chat drops them. Sub-agents (`spawn_agent`) do not inherit them.
 
+## On the phone
+
+`[iPhone implemented in source, simulator evidence in the PR (#2603); Android in its own PR (#2604)]`
+
+- `chat:pending` carries `secret: { callId, name, reason, requestedAt }` and the computer emits `secret_request` and `secret_resolved` (never a value). The phone decodes both.
+- The chat shows the same box as the computer, in the same order: a lock, the variable name, the agent's reason. Where the computer has a masked field and buttons, the phone says "Enter this on your computer": `chat:provideSecret` is not a phone channel, and there is no field, Paste, Show, Skip or Provide on the phone yet.
+- The chat counts as needing you, as a question does (the chat list's needs-you state, the badge, a needs-you push). The notification says "Nekko Agent needs a secret: NAME" (the variable name only; "Your computer needs a secret." when content is hidden). The Live Activity says "Waiting for NAME".
+- The box goes away on `secret_resolved`, when the turn ends, or when a re-read finds nothing pending.
+
 ## Acceptance
 
 - The daemon test `a_secret_reaches_commands_and_never_the_model_or_the_chat` drives a scripted model through `request_secret`, `chat:provideSecret` and `echo $NEKKO_T_TOKEN`: the command's output reads `[secret NEKKO_T_TOKEN]`, and the value is in no event, the saved chat or any request sent to the model. A call from another chat, or one nobody waits on, cannot set a secret.
@@ -36,6 +45,6 @@ Tracked by [#2594](https://github.com/nekko-labs/nekko-agent/issues/2594). Decis
 ## Not done yet
 
 - `[planned]` Remembering a secret across restarts (in the OS keystore, decision 0046), a list of a chat's secrets to remove one, and reusing one secret across chats.
-- `[planned]` The phone apps: the request reaches them as a plain wait, without the box (iOS and Android issues are linked from the gaps table in [ios-and-android-stay-in-step](../phone/ios-and-android-stay-in-step.md)).
+- `[planned]` Entering the value on the phone. Phase 1 (below) shows the request; the masked field, Paste, Show, Skip and Provide wait on a decision on the phone access class for `chat:provideSecret` (a guarded, proof-signed call like raising a chat's mode), and the value must never enter a push payload, the Live Activity/Live Update or a log.
 - `[not covered]` Claude Agent chats (Claude Code runs its own tools and is never offered `request_secret`) and sandbox chats (their commands run in a container that does not get the chat's secrets; the tool is not offered there).
 - `[unverified]` The packaged desktop app on macOS and Linux, and the Local Web UI in a browser other than the hidden Electron fixture.

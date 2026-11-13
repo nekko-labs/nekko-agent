@@ -22,6 +22,24 @@ final class PhoneProtocolTests: XCTestCase {
         XCTAssertTrue(ProtocolCheck.updatePhone.message(computer: "Studio")!.contains("App Store"))
     }
 
+    func testDecodesAPendingSecretAndItsEvents() throws {
+        let pending = PendingInput.map(["s": ["secret": ["callId": "c", "name": "NEKKO_TOKEN", "reason": "To deploy", "requestedAt": 9]]])
+        XCTAssertEqual(pending["s"]?.secret, SecretRequest(callId: "c", name: "NEKKO_TOKEN", reason: "To deploy", requestedAt: 9))
+        XCTAssertNil(PendingInput.map(["s": ["secret": ["callId": "c"]]])["s"]?.secret, "a request needs a name")
+        let request = try XCTUnwrap(AgentEvent.from(["type": "secret_request", "sessionId": "s",
+                                                     "request": ["callId": "c", "name": "NEKKO_TOKEN", "reason": "To deploy"]]))
+        var turn = Transcript.apply(LiveTurn(), request)
+        XCTAssertEqual(turn.secret?.name, "NEKKO_TOKEN")
+        XCTAssertTrue(turn.running)
+        XCTAssertEqual(PushKind.of(request), .needsYou)
+        turn = Transcript.apply(turn, .secretResolved(sessionId: "s", callId: "other"))
+        XCTAssertNotNil(turn.secret, "another call's resolution leaves the box")
+        turn = Transcript.apply(turn, try XCTUnwrap(AgentEvent.from(["type": "secret_resolved", "sessionId": "s", "callId": "c", "provided": false])))
+        XCTAssertNil(turn.secret)
+        turn = Transcript.apply(Transcript.apply(turn, request), .done(sessionId: "s", messageId: nil))
+        XCTAssertNil(turn.secret, "the turn ending drops the box")
+    }
+
     func testPushKindsOfEvents() {
         XCTAssertEqual(PushKind.choosable.map(\.rawValue), ["needs-you", "finished", "failed"])
         XCTAssertEqual(PushKind.of(.question(sessionId: "s", request: AskRequest.from(["callId": "q", "questions": []])!)), .needsYou)

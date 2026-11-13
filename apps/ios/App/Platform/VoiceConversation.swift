@@ -69,7 +69,7 @@ enum ConversationTarget {
             while chat.sending || chat.running {
                 try Task.checkCancellation()
                 guard store.activeId == computer, store.conn == .online else { throw RelayError("The computer disconnected. Voice stopped; check the chat before continuing.") }
-                if chat.turn.approval != nil || chat.turn.question != nil { throw RelayError("The agent needs your input. Answer in the chat, then start voice again.") }
+                if chat.turn.approval != nil || chat.turn.question != nil || chat.turn.secret != nil { throw RelayError("The agent needs your input. Answer in the chat, then start voice again.") }
                 guard Date() < deadline else { throw RelayError("The agent is still working. Voice stopped; its work continues in the chat.") }
                 try await Task.sleep(for: .milliseconds(100))
             }

@@ -595,7 +595,7 @@ final class AppModel {
         // Every computer's runs: the card counts the whole chat list.
         activities.onEvent(e)
         switch e {
-        case .approvalRequired, .question:
+        case .approvalRequired, .question, .secretRequest:
             if foreground, prefs.hapticNeedsYou { Haptics.needsYou() }
         case .done:
             if foreground, prefs.hapticDone { Haptics.done() }

@@ -144,7 +144,8 @@ final class RunActivities {
         case .approvalRequired(_, let a): running(Transcript.toolVerb(a.call), callId: a.call.id, severity: a.severity.rawValue,
                                                    alwaysAllow: ChatModel.offersAlwaysAllow(a.call))
         case .question(_, let q): running(q.questions.first?.question ?? String(localized: "A question for you"))
-        case .toolResult, .questionResolved: running(String(localized: "Working…"))
+        case .secretRequest(_, let r): running(String(localized: "Waiting for \(r.name)"))
+        case .toolResult, .questionResolved, .secretResolved: running(String(localized: "Working…"))
         case .done: finish(.done, String(localized: "Finished"))
         case .error(_, let message):
             let stopped = ["stopped", "aborted"].contains(message.lowercased())

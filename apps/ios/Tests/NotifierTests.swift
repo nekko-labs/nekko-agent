@@ -70,6 +70,20 @@ final class NotifierTests: XCTestCase {
         XCTAssertTrue(delivery.badges.isEmpty)
     }
 
+    func testASecretRequestNotificationNamesTheVariableNeverAValue() async throws {
+        let delivery = Delivery()
+        let notifier = Notifier(delivery: delivery)
+        let event = try XCTUnwrap(AgentEvent.from(["type": "secret_request", "sessionId": "s",
+                                                  "request": ["callId": "c", "name": "OPENAI_API_KEY", "reason": "sk-private-reason"]]))
+        notifier.post(event, chatTitle: "Deploy", computer: "Work Mac", hideContent: false, computerId: "fleet")
+        await notifier.finishPosts()
+        let note = try XCTUnwrap(delivery.requests.last?.content)
+        XCTAssertEqual(note.title, "Deploy")
+        XCTAssertEqual(note.body, "Nekko Agent needs a secret: OPENAI_API_KEY")
+        XCTAssertEqual(note.userInfo["kind"] as? String, "needs-you")
+        XCTAssertEqual(Notifier.secretBody(name: "OPENAI_API_KEY", hideContent: true), "Your computer needs a secret.")
+    }
+
     func testPermissionsPrefsAndPrivacyApplyToLocalDeliveryWithoutCapturedBadges() async throws {
         let delivery = Delivery()
         let notifier = Notifier(delivery: delivery)
