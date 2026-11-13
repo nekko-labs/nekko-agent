@@ -104,6 +104,7 @@ import com.nekko.protocol.COMPUTER_ICONS
 import com.nekko.protocol.MachineSummary
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.Pairing
+import com.nekko.protocol.ProviderAccounts
 import com.nekko.protocol.RelayRoute
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.CancellationException
@@ -242,7 +243,7 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                             // Each model under the provider it was listed for, so its kind is never guessed.
                             val shown = s.providers.filter { it.enabled && modelScope.includes(it) }.flatMap { s.models[it.id].orEmpty() }
                             if (shown.isEmpty()) Text(stringResource(R.string.computer_no_models_in_group), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(vertical = 8.dp))
-                            shown.forEach { info -> ModelRow(info, info.loaded || info.id in m.loadedIds, s.providers.firstOrNull { it.id == info.providerId }?.label, s.defaults.defaultModelId == info.id) }
+                            shown.forEach { info -> ModelRow(info, info.loaded || info.id in m.loadedIds, s.providers.firstOrNull { it.id == info.providerId }?.let(ProviderAccounts::shortName), s.defaults.defaultModelId == info.id) }
                         }
                     }
                 }

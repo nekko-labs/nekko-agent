@@ -214,7 +214,7 @@ public final class FleetUsageModel {
             }
             for await (pid, l) in group { if let l { found[pid] = l } }
         }
-        let plans = providers.compactMap { p in found[p.id].map { UsagePlace.Plan(providerId: p.id, label: p.label, limits: $0) } }
+        let plans = providers.compactMap { p in found[p.id].map { UsagePlace.Plan(providerId: p.id, label: p.shortName, limits: $0) } }
         return UsagePlace(id: id, kind: .computer, name: name, online: true, summary: summary, plans: plans)
     }
 }
