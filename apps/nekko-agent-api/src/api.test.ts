@@ -33,7 +33,7 @@ describe("migrations", () => {
       [],
     );
     expect(rows.map((r) => r.table_name)).toEqual([
-      "api_tokens", "cloud_machines", "donations", "email_suppressions", "feedback", "feedback_screenshots", "fleet_computers", "machine_usage", "org_fleet_computers", "org_invites", "org_members", "orgs", "pending_auth_deletions", "schema_migrations", "signups", "sync_devices", "sync_key_wraps", "sync_keyrings", "sync_objects", "sync_usage", "used_unsubscribe_tokens", "users",
+      "api_tokens", "cloud_machines", "donations", "email_suppressions", "feature_flags", "feedback", "feedback_screenshots", "fleet_computers", "machine_usage", "org_fleet_computers", "org_invites", "org_members", "orgs", "pending_auth_deletions", "schema_migrations", "signups", "sync_devices", "sync_key_wraps", "sync_keyrings", "sync_objects", "sync_usage", "used_unsubscribe_tokens", "users",
     ]);
   });
 
