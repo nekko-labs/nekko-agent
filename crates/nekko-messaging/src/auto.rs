@@ -24,10 +24,10 @@ const TIER_RULES: &str = include_str!("../../../packages/shared/src/model-tiers.
 /// Shared suggestions, with user overrides applied before family/parameter rules.
 pub fn capability(model: &Value, overrides: Option<&Value>) -> Option<String> {
     let key = format!("{}::{}", crate::show(model.get("providerId")), crate::show(model.get("id")));
-    if let Some(tier) = overrides.and_then(|o| o.get(&key)).and_then(Value::as_str) {
-        if capability_rank(tier).is_some() {
-            return Some(tier.into());
-        }
+    if let Some(tier) = overrides.and_then(|o| o.get(&key)).and_then(Value::as_str)
+        && capability_rank(tier).is_some()
+    {
+        return Some(tier.into());
     }
     res().tiers.iter().find(|(re, _)| re.test(&label(model))).map(|(_, tier)| tier.clone())
 }
