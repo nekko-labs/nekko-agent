@@ -58,7 +58,7 @@ Geist for the interface, Geist Mono for code, paths and numbers in tables (Setti
 A component reads a token, never a hex value, `rgb()`, a Tailwind palette class (`text-red-400`) or `white`/`black`, and never `var(--token, #fallback)`: the token always exists. The one exception is third-party marks (provider and connector logos) in the `*Icons.tsx` files.
 
 - **Neutrals** build the screen: `--paper`, `--surface`, `--surface-2`, `--line`, and the three ink tiers. Light is Light Nekko; dark is Dusk (`#0B0C14` page, `#1D1F2C` raised, `#252735` line).
-- **Plum** marks intent: the one primary button (`.btn-primary`: the accent fill, deep plum `#190019` with a `#854F6C` edge in dark in the Nekko themes), focus (`--ring`), what is selected (title in `--accent` plus a check, or `--accent-soft` behind a row), links, the on state of a toggle, chart series one. Never headings, icons at rest, decorative borders, badges that only inform, secondary buttons or hover.
+- **Plum** marks intent: the one primary button (`.btn-primary`: the accent fill, deep plum `#190019` with a `#854F6C` edge in dark in the Nekko themes), focus (`--ring`), what is selected (title in `--accent` plus a check, or `--accent-soft` behind a row), links, the on state of a toggle, chart series one. Never headings, icons at rest, decorative borders, badges that only inform, secondary buttons or hover. One exception: the composer's bar items (attach, folders, permissions, model, effort, context) light up in `--accent` on an `--accent-soft` wash with a soft accent glow on hover and while their menu is open.
 - **Petrol** (`--info`: `#1F6680` light, `#6BB8D4` dark) is information: notices, "New", tips, chart series three. `--accent-2` is chart series two.
 - **State**: `--success`, `--warning`, `--danger`, `--attention` (an agent waiting on you), `--neutral`. Each has a base value for glyphs, dots and meter fills, a `-text` value for words (`--danger-text`; it passes 4.5:1 where the base value does not), and a `-soft` tint used only when the user must act.
 
@@ -80,7 +80,7 @@ Everything else (connected, expiring, offline) is a dot and a word: `StatusDot` 
 
 - Control icons are **Gentleface** (MIT, bundled in `gentleface-icons.tsx`), line at 16px. New ones go in [ASSETS.md](../ASSETS.md).
 - Each plays its motion **once** on the control's hover, focus or press, then rests. Never loop. Decorative and disabled icons stay still. Reduced motion stops playback.
-- `--ink-soft` at rest, `--ink` on hover, `--accent` only when the control is on.
+- `--ink-soft` at rest, `--ink` on hover, `--accent` only when the control is on (the composer's bar items are the one exception, see Colour).
 - Status glyphs and the Nekko mascot are ours; provider logos keep their own marks.
 - **Phones** keep their platform's symbol set for controls (SF Symbols on iOS, Material Symbols Outlined on Android, line weight; the Gentleface PR and permission marks where both apps bundle them), coloured by the same rule: `inkSoft` at rest, the accent only for a selected check, a link or the screen's main action. Agent status is always our glyphs (`ChatStatusIcon`, `LiveStatusGlyph` on iOS, `StatusGlyph` on Android). The theme's accent is also UIKit's window tint on iOS, so popovers, menus and alerts never fall back to system blue.
 
