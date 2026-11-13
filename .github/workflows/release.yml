@@ -351,9 +351,10 @@ jobs:
 
       # Only nekko-vm may create VMs (apps/desktop/scripts/sign-mac.cjs): it must
       # carry the virtualization entitlement and nothing else in the app may.
-      # Only the main executable may carry a restricted entitlement, and a
-      # signed app must carry them and embed the profile. Signed or not, and a
-      # file codesign cannot read fails it. docs/signing.md.
+      # Only the main executable may carry a restricted entitlement, and only
+      # when the embedded profile authorizes it and was issued for the signing
+      # certificate: 0.10.1000 fails here (#2688). A signed app must carry them.
+      # Signed or not, and a file codesign cannot read fails it. docs/signing.md.
       - name: Check the entitlements
         if: runner.os == 'macOS'
         shell: bash

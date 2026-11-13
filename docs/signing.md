@@ -191,10 +191,17 @@ So:
   `MACOS_PROVISIONING_PROFILE` whenever the certificate is set, *Install the
   macOS provisioning profile* writes it and runs
   `apps/desktop/scripts/check-provisioning-profile.cjs` on it,
-  *Check the entitlements* runs `check-mac-entitlements.sh --signed` (profile
-  embedded, three keys on the main executable), and *Verify the signed app*
-  starts the app's binary (`ELECTRON_RUN_AS_NODE=1 ... -e 'process.exit(0)'`),
-  the one check that sees what AMFI sees.
+  *Check the entitlements* runs `check-mac-entitlements.sh --signed` on the
+  built app, and *Verify the signed app* starts the app's binary
+  (`ELECTRON_RUN_AS_NODE=1 ... -e 'process.exit(0)'`), the one check that sees
+  what AMFI sees.
+- `check-mac-entitlements.sh` fails any build whose main executable carries a
+  restricted entitlement without an embedded profile, signed or not: 0.10.1000
+  fails it. When a profile is embedded it runs
+  `check-provisioning-profile.cjs --app` on the built app, which checks the
+  profile authorizes every restricted key the main executable actually carries
+  (not only the three expected ones) and was issued for the certificate the
+  app is signed with. Either mismatch is a launch failure on users' Macs.
 
 **Creating it.** Needs Account Holder or Admin on team `3HM5598S99` and
 org-admin on `nekko-labs`. Any Mac works: the certificate is read from a
@@ -267,9 +274,12 @@ boot a VM.
 every helper app under `Contents/Frameworks` and every file under
 `Contents/Resources/bin`, and fails if `nekko-vm` is missing, lacks the
 entitlement, anything else has it, anything but the main executable carries a
-restricted entitlement, or `codesign` cannot read a file. With `--signed` it
-also requires `Contents/embedded.provisionprofile` and the three restricted
-entitlements on the main executable. Where it runs:
+restricted entitlement, or `codesign` cannot read a file. If the main
+executable carries a restricted entitlement, the app must embed a profile that
+authorizes it ([Provisioning profile](#provisioning-profile)). With `--signed`
+it also requires the three restricted entitlements on the main executable.
+`--ad-hoc`, for the dry-run only, skips the profile: that copy is never
+launched. Where it runs:
 
 - `release.yml`, step `Check the entitlements`, right after the build, on
   every macOS release: `--signed` when the certificate is set.
@@ -277,8 +287,8 @@ entitlements on the main executable. Where it runs:
   build, then `Signed dry-run through the release hook`, which runs
   `apps/desktop/scripts/sign-mac-dry-run.cjs` on a copy of the app. That is the
   real `sign-mac.cjs` hook with the ad-hoc identity `-` in place of the
-  Developer ID, followed by `codesign --verify --deep --strict`, the check, and
-  `nekko-vm count-vms`.
+  Developer ID, followed by `codesign --verify --deep --strict`, the check
+  with `--ad-hoc`, and `nekko-vm count-vms`.
 
 By hand, on an Apple silicon Mac, with no credentials (build first: the
 workspace `dist` packages what `npm run build` left, and the root `npm run dist`

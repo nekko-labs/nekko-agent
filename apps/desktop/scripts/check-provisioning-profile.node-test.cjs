@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { checkProfile, grants, readDecoded, MAIN_ENTITLEMENTS } = require('./check-provisioning-profile.cjs');
+const { checkProfile, grants, issuedFor, readDecoded, ungranted, MAIN_ENTITLEMENTS } = require('./check-provisioning-profile.cjs');
 
 const TEAM = '3HM5598S99';
 const NOW = new Date('2026-11-13T00:00:00Z');
@@ -52,7 +52,7 @@ test('a_profile_for_another_app_or_team_fails', () => {
 });
 
 test('a_profile_without_the_keychain_group_fails', () => {
-  assert.match(errors(developerId({ Entitlements: { 'keychain-access-groups': undefined } }))[0], /^Keychain access group .*webauthn is not authorized/);
+  assert.equal(errors(developerId({ Entitlements: { 'keychain-access-groups': undefined } }))[0], `keychain-access-groups "${TEAM}.dev.nekkolabs.nekkoagent.webauthn" is not authorized (profile allows null).`);
   assert.match(errors(developerId({ Entitlements: { 'keychain-access-groups': ['ABCDE12345.*'] } }))[0], /is not authorized/);
 });
 
@@ -62,6 +62,34 @@ test('expiry_fails_when_past_and_warns_within_30_days', () => {
   const soon = checkProfile(developerId({ ExpirationDate: new Date(NOW.getTime() + 10 * DAY) }), wanted, NOW);
   assert.deepEqual(soon.errors, []);
   assert.match(soon.warnings[0], /in under 30 days/);
+});
+
+test('every_restricted_key_the_app_carries_must_be_granted', () => {
+  // A capability added to the entitlements but not to the App ID: macOS kills the app at launch.
+  const more = { ...wanted, 'com.apple.developer.associated-domains': ['webcredentials:example.com'] };
+  assert.match(checkProfile(developerId(), more, NOW).errors[0], /^com\.apple\.developer\.associated-domains "webcredentials:example\.com" is not authorized/);
+  assert.deepEqual(checkProfile(developerId({ Entitlements: { 'com.apple.developer.associated-domains': '*' } }), more, NOW).errors, []);
+});
+
+test('ungranted_matches_strings_lists_and_booleans', () => {
+  const allowed = { 'keychain-access-groups': [`${TEAM}.*`], 'com.apple.developer.foo': true, 'com.apple.developer.bar': `${TEAM}.x` };
+  assert.deepEqual(ungranted({ 'keychain-access-groups': [`${TEAM}.a`, `${TEAM}.b`], 'com.apple.developer.foo': true, 'com.apple.developer.bar': `${TEAM}.x` }, allowed), []);
+  assert.deepEqual(ungranted({ 'com.apple.developer.foo': false }, {}), ['com.apple.developer.foo false is not authorized (profile allows null).']);
+  assert.equal(ungranted({ 'com.apple.developer.bar': `${TEAM}.y` }, allowed).length, 1);
+  assert.equal(ungranted({ 'keychain-access-groups': ['ABCDE12345.a'] }, allowed).length, 1);
+  // Unrestricted keys need no profile.
+  assert.deepEqual(ungranted({ 'com.apple.security.cs.allow-jit': true }, {}), []);
+});
+
+test('the_profile_must_be_issued_for_the_signing_certificate', () => {
+  const cert = Buffer.from('signing leaf');
+  assert.equal(issuedFor([Buffer.from('other'), Buffer.from('signing leaf')], cert), true);
+  assert.equal(issuedFor([Buffer.from('other')], cert), false);
+  assert.equal(issuedFor(undefined, cert), false);
+});
+
+test('entitlements_without_the_identifiers_fail', () => {
+  assert.match(checkProfile(developerId(), { 'keychain-access-groups': ['x'] }, NOW).errors[0], /no team identifier/);
 });
 
 test('wildcards_match_by_prefix_only', () => {
@@ -100,7 +128,7 @@ test('it_reads_a_decoded_profile_with_data_and_date_values', { skip: process.pla
 `);
   try {
     const read = readDecoded(plist);
-    assert.deepEqual(read, developerId({ ExpirationDate: new Date('2027-11-13T05:00:00Z') }));
+    assert.deepEqual(read, developerId({ ExpirationDate: new Date('2027-11-13T05:00:00Z'), DeveloperCertificates: [Buffer.from([0, 1, 2])] }));
     assert.deepEqual(checkProfile(read, wanted, NOW), { errors: [], warnings: [] });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
