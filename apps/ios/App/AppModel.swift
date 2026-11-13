@@ -78,6 +78,9 @@ final class AppModel {
     /// The computer that was just paired: the celebration shows over everything
     /// until it is dismissed (PairSuccessView), then the first run goes on.
     var justPaired: String?
+    /// A computer just paired over Tailscale: after the celebration, the
+    /// remaining Tailscale steps are checked live (TailscaleSetupView).
+    var tailscaleSetup: String?
     /// The step-up sheet's question (SK-6), while the store waits for the owner's answer.
     private(set) var stepUpRequest: StepUpRequest?
     private var stepUpAnswer: CheckedContinuation<StepUpProof?, Never>?
@@ -162,6 +165,7 @@ final class AppModel {
         if args.contains("-uiTestNotificationStep") { showNotificationStep = true }
         // The pairing celebration without pairing a computer first.
         if args.contains("-uiTestPairSuccess") { justPaired = "ui-test" }
+        if args.contains("-uiTestTailscaleSetup") { tailscaleSetup = "ui-test" }
         #endif
         if NativeFixtureRoute.isolated { return }
         // Here, not in `start()`: a tap on the card can launch the app in the
@@ -700,6 +704,7 @@ final class AppModel {
         do { id = try await store.pair(link) } catch { return error.localizedDescription }
         if prefs.defaultComputer == nil { prefs.defaultComputer = id }
         justPaired = id
+        if RelayRoute.of(link.relayUrl) == .tailscale { tailscaleSetup = id }
         if prefs.onboarded {
             if await notifier.requestPermission() { registerForPush() }
         } else {
