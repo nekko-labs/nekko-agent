@@ -434,7 +434,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Read offline** (iPhone and Android): the phone keeps each computer's chat list
 > and the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
 > newest messages). Opening the app or a chat shows them at once, and while the computer can't be
-> reached they stay readable under **Saved list from 10:42** and **Saved copy from 10:42**. When the
+> reached they stay readable under **Saved list from 10:42** and **Updated last on 10:42**. When the
 > computer answers, the live list and chat replace them in place. A saved chat can't be changed
 > (model, tool policy, rename, complete) until the computer is back, but what you send waits as
 > above. Photos are never kept, only how many a message had. Both are on unless you turn them off

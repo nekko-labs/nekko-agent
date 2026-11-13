@@ -796,12 +796,15 @@ final class ChatModelTests: XCTestCase {
     func testBlockedReasons() async throws {
         let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
+        c.status(RelayStatus(.connecting))
+        await settle()
+        XCTAssertEqual(chat.offlineNote, "\(s.active!.name) is reconnecting.\nYour draft will be saved here and sent when reconnected")
         c.status(RelayStatus(.offline))
         await settle()
         // Offline is not a reason to block: Send puts the prompt in the outbox.
         XCTAssertNil(chat.blocked)
         XCTAssertTrue(chat.sendsLater)
-        XCTAssertEqual(chat.offlineNote, "\(s.active!.name) is offline. What you send waits on this iPhone and goes when it’s back.")
+        XCTAssertEqual(chat.offlineNote, "\(s.active!.name) is offline.\nYour draft will be saved here and sent when reconnected")
         c.status(RelayStatus(.denied, denied: .revoked))
         await settle()
         XCTAssertEqual(chat.blocked, "This phone is no longer paired.")

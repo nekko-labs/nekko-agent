@@ -16,7 +16,7 @@
     <string name="chats_banner_stopped">Você interrompeu o acesso remoto em %1$s. Ative-o lá (Configurações → Acesso remoto) e toque aqui para reconectar.</string>
     <string name="chats_banner_online">%1$s está online</string>
     <string name="chats_banner_offline">%1$s está offline. Abra o Nekko Agent nele.</string>
-    <string name="chats_banner_connecting">Conectando a %1$s…</string>
+    <string name="chats_banner_connecting">Reconectando a %1$s...</string>
     <string name="chats_banner_host_not_found">Não foi possível encontrar %1$s, o endereço com que este telefone foi pareado. Em %2$s, mude como os telefones se conectam em Configurações → Acesso remoto e pareie novamente.</string>
     <string name="chats_reconnect">Reconectar</string>
     <string name="chats_pair_again">Parear novamente</string>
@@ -80,8 +80,8 @@
     <string name="chats_delete">Excluir</string>
     <string name="chats_delete_title">Excluir este chat?</string>
     <string name="chats_delete_body">“%1$s” será excluído de %2$s de vez. Não é possível desfazer.</string>
-    <string name="chats_outbox_note_one">1 prompt aguarda neste celular. Ele será enviado quando %1$s voltar.</string>
-    <string name="chats_outbox_note_other">%1$d prompts aguardam neste celular. Eles serão enviados quando %2$s voltar.</string>
+    <string name="chats_outbox_note_one">1 prompt será enviado ao reconectar.</string>
+    <string name="chats_outbox_note_other">%1$d prompts serão enviados ao reconectar.</string>
     <string name="chats_waiting_to_send">Aguardando envio</string>
     <string name="chats_on_computer">Em %1$s</string>
     <string name="chats_search_placeholder">Buscar chats</string>
@@ -147,7 +147,7 @@
     <string name="chats_welcome_body">Controle o Nekko Agent do seu computador daqui: inicie chats, acompanhe execuções e aprove o que ele quer fazer.</string>
     <string name="chats_welcome_scan">Escaneie o QR em Configurações → Acesso remoto no seu computador.</string>
     <string name="chats_saved_list_note">Lista salva de %1$s. Ela é atualizada quando %2$s responder.</string>
-    <string name="chats_saved_copy_note">Cópia salva de %1$s. Ela é atualizada quando %2$s responder.</string>
+    <string name="chats_saved_copy_note">Última atualização em %1$s</string>
     <string name="chats_pending_new_chat">Novo chat, começa quando seu computador voltar</string>
     <string name="chats_delete_waiting_chat">Excluir chat em espera</string>
     <string name="chats_edit_in_new_chat">Editar em um novo chat</string>

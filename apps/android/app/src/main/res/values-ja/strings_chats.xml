@@ -16,7 +16,7 @@
     <string name="chats_banner_stopped">%1$s のリモートアクセスを停止しました。そちらでオンにしてから（設定 → リモートアクセス）、ここをタップして再接続してください。</string>
     <string name="chats_banner_online">%1$s はオンラインです</string>
     <string name="chats_banner_offline">%1$s はオフラインです。そちらで Nekko Agent を開いてください。</string>
-    <string name="chats_banner_connecting">%1$s に接続中…</string>
+    <string name="chats_banner_connecting">%1$s に再接続中...</string>
     <string name="chats_banner_host_not_found">このスマートフォンをペアリングしたアドレス %1$s が見つかりません。%2$s の 設定 → リモートアクセス でスマートフォンの接続方法を変更してから、もう一度ペアリングしてください。</string>
     <string name="chats_reconnect">再接続</string>
     <string name="chats_pair_again">もう一度ペアリング</string>
@@ -80,8 +80,8 @@
     <string name="chats_delete">削除</string>
     <string name="chats_delete_title">このチャットを削除しますか？</string>
     <string name="chats_delete_body">「%1$s」は %2$s から完全に削除されます。この操作は取り消せません。</string>
-    <string name="chats_outbox_note_one">1 件のプロンプトがこのスマートフォンで待機中です。%1$s が戻ると送信されます。</string>
-    <string name="chats_outbox_note_other">%1$d 件のプロンプトがこのスマートフォンで待機中です。%2$s が戻ると送信されます。</string>
+    <string name="chats_outbox_note_one">再接続後に 1 件のプロンプトを送信します。</string>
+    <string name="chats_outbox_note_other">再接続後に %1$d 件のプロンプトを送信します。</string>
     <string name="chats_waiting_to_send">送信待ち</string>
     <string name="chats_on_computer">%1$s 上</string>
     <string name="chats_search_placeholder">チャットを検索</string>
@@ -147,7 +147,7 @@
     <string name="chats_welcome_body">ここからコンピュータの Nekko Agent を操作できます。チャットを始め、実行を追い、やりたいことを承認しましょう。</string>
     <string name="chats_welcome_scan">コンピュータの 設定 → リモートアクセス にある QR をスキャンしてください。</string>
     <string name="chats_saved_list_note">%1$s に保存したリストです。%2$s が応答すると更新されます。</string>
-    <string name="chats_saved_copy_note">%1$s に保存したコピーです。%2$s が応答すると更新されます。</string>
+    <string name="chats_saved_copy_note">最終更新: %1$s</string>
     <string name="chats_pending_new_chat">新しいチャット。コンピュータが戻ると開始します</string>
     <string name="chats_delete_waiting_chat">待機中のチャットを削除</string>
     <string name="chats_edit_in_new_chat">新しいチャットで編集</string>

@@ -348,6 +348,16 @@ Implemented in the task branch, native verification pending. Photo additions and
 
 The primary app icon has an iOS dark luminosity variant: the existing Nekko outline in brand plum (#854F6C) on opaque charcoal. The existing light icon and seasonal alternate are unchanged. Acceptance: photos survive reopening without waiting for a typing debounce; removal also survives; the native composer contains its thumbnails; Home Screen dark appearance selects the dark asset while light retains the original. Protocol regression tests and matched native screenshots are required before marking verified. Android durability parity is tracked in #2043.
 
+### Quiet reconnecting notices (#2473)
+
+Implemented in native iOS and Android source; native iOS compilation and matching visual evidence remain pending until the hosted verification run is inspected.
+
+- On iPhone the connection state is main's connection strip (#2636), which replaced the reconnecting banner, its pulse and the separate queued-prompt line; its wording ('{n} prompts wait to send.') is the strip's. Android keeps the quiet inline row with a pulse and a separate '{n} prompts will send when reconnected.' line.
+- The text-chat composer says '{computer} is reconnecting.', then on the next line 'Your draft will be saved here and sent when reconnected'. An actually offline computer still says offline. Image chats retain their no-text-queue explanation.
+- A saved transcript shows only 'Updated last on {timestamp}', preserving the existing localized time and date for older copies. The saved-list explanation is unchanged.
+- Retry, pairing repair, Tailscale help and safety exits remain available. Delivery, queue persistence, encryption and authorization are unchanged. No notice sends a draft merely because it was typed; the existing Send action still queues it.
+- Acceptance: names and singular/plural counts remain correct, zero count hides the line, no reconnect card/background remains, the pulse rests with reduced motion, and saved-copy metadata is one timestamp. Matching native screenshots and pulse recordings verify layout and motion; untested physical-device, large-text and foldable postures must not be claimed verified.
+
 ## Readable chat titles and compact composer options (#2413)
 
 Implemented; native before/after verification pending. Chat-list titles normalize embedded whitespace for display without editing saved titles. They use up to two lines and the full content width; the relative timestamp shares the model/context metadata row instead of competing with the title. VoiceOver still receives the complete title.

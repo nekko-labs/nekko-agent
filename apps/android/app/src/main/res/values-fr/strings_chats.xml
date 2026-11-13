@@ -16,7 +16,7 @@
     <string name="chats_banner_stopped">Vous avez arrêté l’accès à distance sur %1$s. Réactivez-le là-bas (Paramètres → Accès à distance), puis touchez ici pour vous reconnecter.</string>
     <string name="chats_banner_online">%1$s est en ligne</string>
     <string name="chats_banner_offline">%1$s est hors ligne. Ouvrez Nekko Agent dessus.</string>
-    <string name="chats_banner_connecting">Connexion à %1$s…</string>
+    <string name="chats_banner_connecting">Reconnexion à %1$s...</string>
     <string name="chats_banner_host_not_found">Impossible de trouver %1$s, l’adresse avec laquelle ce téléphone a été associé. Sur %2$s, changez la façon dont les téléphones se connectent dans Paramètres → Accès à distance, puis associez-le à nouveau.</string>
     <string name="chats_reconnect">Se reconnecter</string>
     <string name="chats_pair_again">Associer à nouveau</string>
@@ -80,8 +80,8 @@
     <string name="chats_delete">Supprimer</string>
     <string name="chats_delete_title">Supprimer cette discussion ?</string>
     <string name="chats_delete_body">« %1$s » sera supprimée définitivement de %2$s. Cette action est irréversible.</string>
-    <string name="chats_outbox_note_one">1 prompt attend sur ce téléphone. Il partira quand %1$s sera de retour.</string>
-    <string name="chats_outbox_note_other">%1$d prompts attendent sur ce téléphone. Ils partiront quand %2$s sera de retour.</string>
+    <string name="chats_outbox_note_one">1 prompt sera envoyé à la reconnexion.</string>
+    <string name="chats_outbox_note_other">%1$d prompts seront envoyés à la reconnexion.</string>
     <string name="chats_waiting_to_send">En attente d’envoi</string>
     <string name="chats_on_computer">Sur %1$s</string>
     <string name="chats_search_placeholder">Rechercher des discussions</string>
@@ -147,7 +147,7 @@
     <string name="chats_welcome_body">Pilotez Nekko Agent sur votre ordinateur d’ici : lancez des discussions, suivez les exécutions et approuvez ce qu’il veut faire.</string>
     <string name="chats_welcome_scan">Scannez le QR dans Paramètres → Accès à distance sur votre ordinateur.</string>
     <string name="chats_saved_list_note">Liste enregistrée de %1$s. Elle se met à jour quand %2$s répond.</string>
-    <string name="chats_saved_copy_note">Copie enregistrée de %1$s. Elle se met à jour quand %2$s répond.</string>
+    <string name="chats_saved_copy_note">Dernière mise à jour le %1$s</string>
     <string name="chats_pending_new_chat">Nouvelle discussion, démarre quand votre ordinateur est de retour</string>
     <string name="chats_delete_waiting_chat">Supprimer la discussion en attente</string>
     <string name="chats_edit_in_new_chat">Modifier dans une nouvelle discussion</string>

@@ -16,7 +16,7 @@
     <string name="chats_banner_stopped">Du hast den Fernzugriff auf %1$s beendet. Schalte ihn dort wieder ein (Einstellungen → Fernzugriff) und tippe dann hier, um neu zu verbinden.</string>
     <string name="chats_banner_online">%1$s ist online</string>
     <string name="chats_banner_offline">%1$s ist offline. Öffne dort Nekko Agent.</string>
-    <string name="chats_banner_connecting">Verbinde mit %1$s …</string>
+    <string name="chats_banner_connecting">Verbindung mit %1$s wird wiederhergestellt...</string>
     <string name="chats_banner_host_not_found">%1$s, die Adresse, mit der dieses Telefon gekoppelt wurde, ist nicht auffindbar. Ändere auf %2$s unter Einstellungen → Fernzugriff, wie sich Telefone verbinden, und kopple dann erneut.</string>
     <string name="chats_reconnect">Neu verbinden</string>
     <string name="chats_pair_again">Erneut koppeln</string>
@@ -80,8 +80,8 @@
     <string name="chats_delete">Löschen</string>
     <string name="chats_delete_title">Diesen Chat löschen?</string>
     <string name="chats_delete_body">„%1$s“ wird endgültig von %2$s gelöscht. Das lässt sich nicht rückgängig machen.</string>
-    <string name="chats_outbox_note_one">1 Prompt wartet auf diesem Telefon. Er geht raus, sobald %1$s wieder da ist.</string>
-    <string name="chats_outbox_note_other">%1$d Prompts warten auf diesem Telefon. Sie gehen raus, sobald %2$s wieder da ist.</string>
+    <string name="chats_outbox_note_one">1 Prompt wird nach dem Wiederverbinden gesendet.</string>
+    <string name="chats_outbox_note_other">%1$d Prompts werden nach dem Wiederverbinden gesendet.</string>
     <string name="chats_waiting_to_send">Wartet auf das Senden</string>
     <string name="chats_on_computer">Auf %1$s</string>
     <string name="chats_search_placeholder">Chats durchsuchen</string>
@@ -147,7 +147,7 @@
     <string name="chats_welcome_body">Steuere Nekko Agent auf deinem Computer von hier aus: Starte Chats, verfolge Läufe und gib frei, was er tun will.</string>
     <string name="chats_welcome_scan">Scanne den QR-Code unter Einstellungen → Fernzugriff auf deinem Computer.</string>
     <string name="chats_saved_list_note">Gespeicherte Liste von %1$s. Sie wird aktualisiert, wenn %2$s antwortet.</string>
-    <string name="chats_saved_copy_note">Gespeicherte Kopie von %1$s. Sie wird aktualisiert, wenn %2$s antwortet.</string>
+    <string name="chats_saved_copy_note">Zuletzt aktualisiert am %1$s</string>
     <string name="chats_pending_new_chat">Neuer Chat, startet, wenn dein Computer wieder da ist</string>
     <string name="chats_delete_waiting_chat">Wartenden Chat löschen</string>
     <string name="chats_edit_in_new_chat">In neuem Chat bearbeiten</string>

@@ -16,7 +16,7 @@
     <string name="chats_banner_stopped">你已停止 %1$s 上的远程访问。请在那里重新开启（设置 → 远程访问），然后点按此处重新连接。</string>
     <string name="chats_banner_online">%1$s 在线</string>
     <string name="chats_banner_offline">%1$s 已离线。请在它上面打开 Nekko Agent。</string>
-    <string name="chats_banner_connecting">正在连接 %1$s…</string>
+    <string name="chats_banner_connecting">正在重新连接 %1$s...</string>
     <string name="chats_banner_host_not_found">找不到 %1$s，这是此手机配对时使用的地址。请在 %2$s 上的 设置 → 远程访问 中更改手机的连接方式，然后重新配对。</string>
     <string name="chats_reconnect">重新连接</string>
     <string name="chats_pair_again">重新配对</string>
@@ -80,8 +80,8 @@
     <string name="chats_delete">删除</string>
     <string name="chats_delete_title">删除此聊天？</string>
     <string name="chats_delete_body">“%1$s”将从 %2$s 上永久删除。此操作无法撤销。</string>
-    <string name="chats_outbox_note_one">1 条提示词在这部手机上等待。%1$s 恢复连接后发送。</string>
-    <string name="chats_outbox_note_other">%1$d 条提示词在这部手机上等待。%2$s 恢复连接后发送。</string>
+    <string name="chats_outbox_note_one">1 条提示词将在重新连接后发送。</string>
+    <string name="chats_outbox_note_other">%1$d 条提示词将在重新连接后发送。</string>
     <string name="chats_waiting_to_send">等待发送</string>
     <string name="chats_on_computer">在 %1$s 上</string>
     <string name="chats_search_placeholder">搜索聊天</string>
@@ -147,7 +147,7 @@
     <string name="chats_welcome_body">在这里操控你电脑上的 Nekko Agent：开始聊天、跟进运行，并批准它想做的事。</string>
     <string name="chats_welcome_scan">在你电脑上的 设置 → 远程访问 中扫描 QR 码。</string>
     <string name="chats_saved_list_note">保存于 %1$s 的列表。%2$s 响应后会更新。</string>
-    <string name="chats_saved_copy_note">保存于 %1$s 的副本。%2$s 响应后会更新。</string>
+    <string name="chats_saved_copy_note">上次更新于 %1$s</string>
     <string name="chats_pending_new_chat">新聊天，电脑恢复连接后开始</string>
     <string name="chats_delete_waiting_chat">删除等待中的聊天</string>
     <string name="chats_edit_in_new_chat">在新聊天中编辑</string>

@@ -18,7 +18,7 @@
     <string name="chats_banner_stopped">You stopped remote access on %1$s. Turn it on there (Settings → Remote access), then tap here to reconnect.</string>
     <string name="chats_banner_online">%1$s is online</string>
     <string name="chats_banner_offline">%1$s is offline. Open Nekko Agent on it.</string>
-    <string name="chats_banner_connecting">Connecting to %1$s…</string>
+    <string name="chats_banner_connecting">Reconnecting to %1$s...</string>
     <string name="chats_banner_host_not_found">Can’t find %1$s, the address this phone was paired with. On %2$s, change how phones connect in Settings → Remote access, then pair again.</string>
     <string name="chats_reconnect">Reconnect</string>
     <string name="chats_pair_again">Pair again</string>
@@ -90,8 +90,8 @@
     <string name="chats_delete">Delete</string>
     <string name="chats_delete_title">Delete this chat?</string>
     <string name="chats_delete_body">“%1$s” will be deleted from %2$s for good. This can’t be undone.</string>
-    <string name="chats_outbox_note_one">1 prompt waits on this phone. It goes when %1$s is back.</string>
-    <string name="chats_outbox_note_other">%1$d prompts wait on this phone. They go when %2$s is back.</string>
+    <string name="chats_outbox_note_one">1 prompt will send when reconnected.</string>
+    <string name="chats_outbox_note_other">%1$d prompts will send when reconnected.</string>
     <string name="chats_waiting_to_send">Waiting to send</string>
     <string name="chats_on_computer">On %1$s</string>
     <string name="chats_search_placeholder">Search chats</string>
@@ -157,7 +157,7 @@
     <string name="chats_welcome_body">Drive Nekko Agent on your computer from here: start chats, follow runs, and approve what it wants to do.</string>
     <string name="chats_welcome_scan">Scan the QR in Settings → Remote access on your computer.</string>
     <string name="chats_saved_list_note">Saved list from %1$s. It updates when %2$s answers.</string>
-    <string name="chats_saved_copy_note">Saved copy from %1$s. It updates when %2$s answers.</string>
+    <string name="chats_saved_copy_note">Updated last on %1$s</string>
     <string name="chats_pending_new_chat">New chat, starts when your computer is back</string>
     <string name="chats_delete_waiting_chat">Delete waiting chat</string>
 

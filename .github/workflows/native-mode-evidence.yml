@@ -121,6 +121,7 @@ jobs:
             apps/ios/App/Views/SecurityEvidenceFixture.swift
             apps/ios/App/Views/ChatStatusFixture.swift
             apps/ios/App/Views/ReplyVoicesFixture.swift
+            apps/ios/App/Views/QuietReconnectEvidenceFixture.swift
             apps/ios/Protocol/Tests/NekkoKitTests/StarAskTests.swift
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
@@ -172,6 +173,23 @@ jobs:
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" ]]; then
             cp .evidence-harness/apps/ios/App/Views/ReplyVoicesFixture.swift apps/ios/App/Views/
           fi
+          # Overlay only the memory fixture, never the reconnect production views.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietReconnectEvidenceTests.swift" ]]; then
+          cp .evidence-harness/apps/ios/App/Views/QuietReconnectEvidenceFixture.swift apps/ios/App/Views/
+          python3 - <<'PYQUIET'
+          from pathlib import Path
+          p = Path("apps/ios/App/NekkoApp.swift")
+          s = p.read_text()
+          if '"-uiTestQuietReconnectEvidence"' not in s:
+              needle = 'let flags = ['
+              assert needle in s
+              s = s.replace(needle, 'let flags = ["-uiTestQuietReconnectEvidence", ', 1)
+              needle = '        if ProcessInfo.processInfo.arguments.contains("-uiTestPermissionsSettings")'
+              assert needle in s
+              s = s.replace(needle, '        if ProcessInfo.processInfo.arguments.contains("-uiTestQuietReconnectEvidence") { QuietReconnectEvidenceFixture() } else\n' + needle, 1)
+          p.write_text(s)
+          PYQUIET
+          fi
       - name: Test native protocol and phone request payloads
         working-directory: apps/ios/Protocol
         run: swift test
@@ -218,6 +236,33 @@ jobs:
           fi
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
             "-only-testing:$ONLY_TESTING"
+          if [[ "$ONLY_TESTING" == *QuietReconnectEvidenceTests* ]]; then
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/saved-note.xcresult test-without-building \
+              -only-testing:NekkoNativeTests/SavedListNoteTests
+            if [[ "${{ matrix.revision }}" == "after" ]]; then
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/reconnect-copy.xcresult test-without-building \
+                -only-testing:NekkoNativeUITests/QuietReconnectEvidenceTests/testQuietReconnectCopy
+            fi
+          fi
+      - name: Record reconnect pulse on the same native surface
+        if: inputs.ios_test_file == 'apps/ios/UITests/QuietReconnectEvidenceTests.swift'
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          # UI tests installed this Debug app in our disposable simulator.
+          # Do not reset or seed production data; all chat state is in fixture memory.
+          xcrun simctl launch --terminate-running-process "$DEVICE" dev.nekkolabs.nekkoagent \
+            -uiTestQuietReconnectEvidence -quietReconnectCount 0 -splash NO -appLock NO \
+            -theme light -expertMode NO -simpleChoices '{}' -AppleLanguages '(en)' -AppleLocale en_US
+          sleep 3
+          xcrun simctl io "$DEVICE" recordVideo --codec=h264 evidence/quiet-reconnect-pulse.mp4 &
+          RECORDER=$!
+          trap 'kill -INT "$RECORDER" 2>/dev/null || true' EXIT
+          sleep 6
+          kill -INT "$RECORDER"
+          wait "$RECORDER"
+          trap - EXIT
+          test -s evidence/quiet-reconnect-pulse.mp4
       - name: Record Winter motion on the owned simulator
         if: inputs.ios_test_file == 'apps/ios/UITests/WinterThemeTests.swift'
         working-directory: apps/ios
