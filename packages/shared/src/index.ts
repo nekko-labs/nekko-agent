@@ -92,6 +92,7 @@ export * from './saved-modes.js';
 export * from './orchestration.js';
 export * from './messaging.js';
 export * from './model-select.js';
+export * from './fusion.js';
 export * from './agent-steps.js';
 export * from './tool-purpose.js';
 export * from './oauth.js';

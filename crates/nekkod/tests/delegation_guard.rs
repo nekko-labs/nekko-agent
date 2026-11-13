@@ -38,9 +38,10 @@ async fn delegation_guard_new_default_and_resumed_routes_use_saved_permission() 
     std::fs::write(data.path().join("settings.json"), settings.to_string()).unwrap();
     let cases = [
         ("plain", json!({}), "cloud", "local", false),
+        ("forged_source", json!({}), "cloud", "local", false),
         ("explicit_engine", json!({}), "cloud", "nekko-engine", false),
         ("switch_only", json!({"autoProviderSwitch": true}), "cloud", "local", false),
-        ("router", json!({"autoModel": true}), "cloud", "local", true),
+        ("router", json!({"autoModel": true}), "cloud", "local", false),
         ("fusion", json!({"autoModel": true, "autoProviderSwitch": true}), "cloud", "local", true),
         (
             "cloud_only",
@@ -67,7 +68,7 @@ async fn delegation_guard_new_default_and_resumed_routes_use_saved_permission() 
             json!({"task": "test", "provider_id": target, "model_id": "chat-model"})
         };
         // Deliberately stale permissions: only the saved parent may authorize routing.
-        let req = json!({"parent": {"id": id, "autoModel": !allowed}, "providerId": source,
+        let req = json!({"parent": {"id": id, "autoModel": !allowed}, "providerId": if id == "forged_source" { "local" } else { source },
             "modelId": "chat-model", "input": input});
         let before = hits.load(Ordering::SeqCst);
         let (status, result) = post(d.port, "turn:spawnPrepare", json!([req]), Some(TOKEN)).await;
@@ -117,7 +118,7 @@ async fn delegation_guard_new_default_and_resumed_routes_use_saved_permission() 
                 );
             }
         }
-        if id == "router" {
+        if id == "default_fusion" {
             // Cloud-only wins even when Auto is still enabled, including on resume.
             let (status, _) = post(d.port, "session:setOptions", json!([id, {"cloudOnly": true}]), Some(TOKEN)).await;
             assert_eq!(status, 200);
@@ -147,7 +148,10 @@ async fn delegation_guard_new_default_and_resumed_routes_use_saved_permission() 
                 Some(TOKEN),
             )
             .await;
-            assert!(resumed["error"].as_str().is_some_and(|e| e.contains("Cloud chats cannot delegate")), "{resumed}");
+            assert!(
+                resumed["error"].as_str().is_some_and(|e| e.contains("Provider switching requires Fusion")),
+                "{resumed}"
+            );
             assert_eq!(hits.load(Ordering::SeqCst), before);
         }
     }
@@ -156,7 +160,57 @@ async fn delegation_guard_new_default_and_resumed_routes_use_saved_permission() 
         .flatten()
         .filter(|e| std::fs::read_to_string(e.path()).unwrap_or_default().contains("\"parentSessionId\""))
         .count();
-    assert_eq!(children, 5, "only the five permitted routes created children");
+    assert_eq!(children, 4, "only the four permitted routes created children");
     drop(d);
+    server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn automatic_tiers_respect_provider_permission_and_rank_across_local_catalogs() {
+    let app = axum::Router::new()
+        .route(
+            "/cloud/models",
+            axum::routing::get(|| async { axum::Json(json!({"data":[{"id":"gpt-5"},{"id":"gpt-5-mini"}]})) }),
+        )
+        .route("/small/models", axum::routing::get(|| async { axum::Json(json!({"data":[{"id":"qwen-8b"}]})) }))
+        .route(
+            "/local/models",
+            axum::routing::get(|| async { axum::Json(json!({"data":[{"id":"qwen-32b"},{"id":"llama-70b"}]})) }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    for (name, fusion, tier, expected_provider, expected_model) in [
+        ("pinned", false, "medium", "cloud", "gpt-5-mini"),
+        ("medium", true, "medium", "local", "qwen-32b"),
+        ("small", true, "small", "small-local", "qwen-8b"),
+    ] {
+        let data = tempfile::tempdir().unwrap();
+        std::fs::create_dir(data.path().join("sessions")).unwrap();
+        let settings = json!({"providers":[
+            {"id":"cloud","kind":"openai","enabled":true,"baseUrl":format!("http://127.0.0.1:{port}/cloud")},
+            {"id":"small-local","kind":"openai-compat","enabled":true,"baseUrl":format!("http://127.0.0.1:{port}/small")},
+            {"id":"local","kind":"openai-compat","enabled":true,"baseUrl":format!("http://127.0.0.1:{port}/local")}
+        ], "orchestration":{"subagentModel":"auto-local","subagentTier":tier}});
+        std::fs::write(data.path().join("settings.json"), settings.to_string()).unwrap();
+        let parent = json!({"id":name,"providerId":"cloud","modelId":"gpt-5","messages":[],"createdAt":1,"updatedAt":1,"autoModel":fusion,"autoProviderSwitch":fusion});
+        std::fs::write(data.path().join(format!("sessions/{name}.json")), parent.to_string()).unwrap();
+        let d = start_with(data.path());
+        let (_, result) = post(
+            d.port,
+            "turn:spawnPrepare",
+            json!([{"parent":{"id":name},"providerId":"cloud","modelId":"gpt-5","input":{"task":"focused worker"}}]),
+            Some(TOKEN),
+        )
+        .await;
+        assert!(result["spec"].is_object(), "{name}: {result}");
+        let child = result["childId"].as_str().unwrap();
+        let saved: Value =
+            serde_json::from_str(&std::fs::read_to_string(data.path().join(format!("sessions/{child}.json"))).unwrap())
+                .unwrap();
+        assert_eq!(saved["providerId"], expected_provider, "{name}: {saved}");
+        assert_eq!(saved["modelId"], expected_model, "{name}: {saved}");
+        drop(d);
+    }
     server.abort();
 }

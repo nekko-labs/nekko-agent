@@ -67,6 +67,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Privacy Shield](https://nekkoagent.com/docs/privacy-shield.md): Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model.
 - [Code mode](https://nekkoagent.com/docs/code-mode.md): Let the model write code that calls your tools in a sandbox, so long tool lists and big results cost far fewer tokens.
 - [Running models locally](https://nekkoagent.com/docs/local-models.md): Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM).
+- [Fusion routing and model tiers](https://nekkoagent.com/docs/fusion-routing.md): Keep Auto on one provider, opt into Fusion strategies, classify model capabilities and target Small or Medium local subagents.
 - [Subscription sign-in](https://nekkoagent.com/docs/subscriptions.md): Use your ChatGPT subscription instead of a metered API key, and how Claude works in Nekko Agent.
 - [Accounts and switching](https://nekkoagent.com/docs/accounts.md): Several accounts for any provider in one window, switching a chat between them, and what Anthropic allows with several Claude accounts.
 - [Usage limits and prices](https://nekkoagent.com/docs/usage-limits.md): Where the usage numbers and price estimates come from, and what they mean.
