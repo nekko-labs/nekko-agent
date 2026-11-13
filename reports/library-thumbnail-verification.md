@@ -1,4 +1,4 @@
-# Library document thumbnails — verification
+# Library document thumbnails, verification
 
 Tracks [#2747](https://github.com/nekko-labs/nekko-agent/issues/2747).
 
@@ -35,4 +35,8 @@ NEKKO_TEST_SOURCE=/absolute/path/to/unchanged/base NEKKO_LIBRARY_BASELINE=1 NEKK
 NEKKO_TEST_LABEL=library-thumbs-after NEKKO_LAYOUT_SANDBOX=library-thumbnails-sandbox.cjs node apps/desktop/scripts/layout-evidence-integration.cjs
 ```
 
-The base revision used here is `afd98dd4c26b53880b80820a438a1e7e5c4852c1`. The script writes evidence and its JSON report only under ignored `.shots/layout-evidence/`.
+The feature base is `afd98dd4c26b53880b80820a438a1e7e5c4852c1`. The primary worktree advanced to `0ffcf2fe78f713d11fa83c0eaca0451fb41daaf2` before the final baseline capture; `git diff afd98dd4c..0ffcf2fe7 -- apps/desktop/src/renderer` was empty, so its renderer is byte-identical to the feature base. Both source revisions therefore show the same unchanged Library. The script writes evidence and its JSON report only under ignored `.shots/layout-evidence/`.
+
+## Security follow-up
+
+CodeQL initially flagged the tag-stripping regex and interpolated fixture labels. Follow-up `dd6492540` removes tag stripping entirely (literal markup is XML-escaped as text in the inert image) and passes only numeric control indexes into evaluated fixture code. Ten focused thumbnail tests and the desktop typecheck pass again; CI and the full isolated journey are rerun for the follow-up. The plain-text/Markdown evidence fixture has no visual delta.
