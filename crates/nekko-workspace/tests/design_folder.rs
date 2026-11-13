@@ -127,3 +127,39 @@ fn a_removed_card_stays_removed_while_its_file_remains() {
         serde_json::from_str(&std::fs::read_to_string(data.path().join("design.json")).unwrap()).unwrap();
     assert_eq!(store["w1#dismissed"].as_array().unwrap().len(), 1);
 }
+
+#[test]
+fn keeps_a_readme_index_of_the_board_in_the_folder() {
+    let (data, project) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (ws, folder) = (json!("w1"), text(project.path()));
+    let designs = project.path().join("nekko-designs");
+    let readme = designs.join("README.md");
+
+    // No designs folder: nothing is created.
+    let board = design::follow_folder(data.path(), Some(&ws), Some(&folder)).unwrap();
+    assert!(!design::write_index(&folder, &board).unwrap());
+    assert!(!designs.exists());
+
+    std::fs::create_dir_all(&designs).unwrap();
+    std::fs::write(designs.join("checkout-design.html"), "<title>Checkout | states</title><p>a</p>").unwrap();
+    let board = design::follow_folder(data.path(), Some(&ws), Some(&folder)).unwrap();
+    let id = board["pages"][0]["id"].clone();
+    let board = design::add_note(data.path(), Some(&ws), Some(&id), Some(&json!("Make the\nbutton bigger"))).unwrap();
+    assert!(design::write_index(&folder, &board).unwrap());
+    let text = std::fs::read_to_string(&readme).unwrap();
+    assert!(text.starts_with(design::INDEX_MARKER), "{text}");
+    assert!(text.contains("| Checkout \\| states | checkout-design.html | Make the button bigger |"), "{text}");
+
+    // Unchanged board: no write. A resolved note leaves the row.
+    assert!(!design::write_index(&folder, &board).unwrap());
+    let note = board["pages"][0]["notes"][0]["id"].clone();
+    let board = design::resolve_note(data.path(), Some(&ws), Some(&id), Some(&note)).unwrap();
+    assert!(design::write_index(&folder, &board).unwrap());
+    assert!(std::fs::read_to_string(&readme).unwrap().contains("| checkout-design.html |  |"));
+
+    // The README is not adopted as a design, and a README the person wrote is left alone.
+    assert_eq!(pages(&design::follow_folder(data.path(), Some(&ws), Some(&folder)).unwrap()).len(), 1);
+    std::fs::write(&readme, "# My own notes").unwrap();
+    assert!(!design::write_index(&folder, &board).unwrap());
+    assert_eq!(std::fs::read_to_string(&readme).unwrap(), "# My own notes");
+}
