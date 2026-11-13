@@ -66,7 +66,8 @@ struct WelcomeView: View {
     }
 }
 
-/// How to reach the computer: Tailscale (private, recommended), or the Nekko relay.
+/// How to reach the computer: Tailscale (private, recommended). Nekko Cloud is
+/// shown as coming soon, as on the computer, until its relay is running.
 struct TailscaleGuide: View {
     @Environment(\.palette) private var palette
     @State private var tailnet = Tailnet.isConnected
@@ -89,8 +90,13 @@ struct TailscaleGuide: View {
                     .frame(minHeight: 44, alignment: .leading).contentShape(Rectangle())
             }
             Divider().padding(.vertical, 4)
-            Text("No Tailscale?").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
-            Text("Use a wss:// relay instead: the Nekko relay or one you host. The relay only ever sees encrypted frames.")
+            HStack(spacing: 8) {
+                Text("Nekko Cloud").font(.subheadline.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                Text("Coming soon").font(.caption.weight(.medium)).foregroundStyle(palette.inkSoft)
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(palette.surface2, in: Capsule())
+            }
+            Text("Will connect your phone from anywhere with nothing to install. Not running yet, so use Tailscale for now. If you host your own wss:// relay, its pairing code works here too.")
                 .font(.footnote).foregroundStyle(palette.inkSoft)
         }
         .padding(16)

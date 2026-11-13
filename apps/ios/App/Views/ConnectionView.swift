@@ -14,6 +14,7 @@ struct ConnectionView: View {
     @Environment(\.palette) private var palette
     @Environment(\.scenePhase) private var phase
     @State private var tailnet = Tailnet.isConnected
+    @State private var setupOpen = false
     @State private var copied = false
 
     var body: some View {
@@ -40,6 +41,12 @@ struct ConnectionView: View {
                         }
                         .accessibilityIdentifier("open-tailscale-status")
                         .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")
+                    }
+                    if RelayRoute.of(inUse) == .tailscale {
+                        Button { setupOpen = true } label: {
+                            Label("Tailscale setup guide", systemImage: "checklist")
+                        }
+                        .accessibilityIdentifier("connection.tailscaleSetup")
                     }
                     if let at = store.connectionLog.lastOnline, store.conn != .online {
                         LabeledContent("Last online") { Text(at, format: .relative(presentation: .named)) }
@@ -126,6 +133,9 @@ struct ConnectionView: View {
         }
         .appBackground()
         .navigationTitle("Connection")
+        .sheet(isPresented: $setupOpen) {
+            if let id = store.activeId { TailscaleSetupView(computerId: id) { setupOpen = false } }
+        }
         .onAppear { tailnet = Tailnet.isConnected }
         .onChange(of: phase) { _, p in if p == .active { tailnet = Tailnet.isConnected } }
         .onChange(of: store.conn) { _, _ in tailnet = Tailnet.isConnected }

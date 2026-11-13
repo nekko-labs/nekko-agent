@@ -138,7 +138,12 @@ struct RootView: View {
                 ConfirmPairSheet(link: box.link) { path = [] }
             }
             // First run, step 3: right after the first pairing, once its celebration is over.
-            .fullScreenCover(isPresented: Binding(get: { app.showNotificationStep && app.justPaired == nil && !covered }, set: { if !$0 { app.showNotificationStep = false } })) {
+            // After a Tailscale pairing: the steps that are left, checked live.
+            .sheet(item: Binding(get: { app.justPaired == nil && !covered ? app.tailscaleSetup.map(SetupBox.init) : nil },
+                                 set: { if $0 == nil { app.tailscaleSetup = nil } })) { box in
+                TailscaleSetupView(computerId: box.id) { app.tailscaleSetup = nil }
+            }
+            .fullScreenCover(isPresented: Binding(get: { app.showNotificationStep && app.justPaired == nil && app.tailscaleSetup == nil && !covered }, set: { if !$0 { app.showNotificationStep = false } })) {
                 NotificationStepView()
             }
             // SK-6 / SK-8: the step-up sheet, and the safety exits' confirmations.
@@ -421,3 +426,6 @@ struct BrandMark: View {
         CatMark().foregroundStyle(palette.accent).accessibilityHidden(true)
     }
 }
+
+/// The computer whose Tailscale setup sheet is showing.
+private struct SetupBox: Identifiable { let id: String }
