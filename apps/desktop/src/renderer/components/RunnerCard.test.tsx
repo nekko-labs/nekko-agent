@@ -172,6 +172,19 @@ describe('RunnerCard', () => {
     expect(html).not.toContain('VM support unavailable');
   });
 
+  it('after 2 jobs, a different suggested size shows on the card with Apply and Not now (#2700)', () => {
+    const settings = { ...DEFAULT_RUNNER_SETTINGS, enabled: true, macosSlots: 1, memoryPerVmMb: 10240 };
+    const at = (suggestedSize: RunnerView['suggestedSize']) => render(view({ config: { ...view().config, settings }, host: { ...view().host, cpusPerVm: 6 }, suggestedSize }));
+    const html = at({ jobs: 2, cpus: 6, memoryMb: 14336, reasons: ['The jobs swapped.'] });
+    expect(html).toContain('Your last 2 jobs suggest 6 vCPUs, 14 GB per VM (now 6 vCPUs, 10 GB).');
+    expect(html).toContain('data-size-notice="6x14336"');
+    expect(html).toContain('>Apply<');
+    expect(html).toContain('>Not now<');
+    // Too few jobs, or a size that already fits: nothing on the card.
+    expect(at({ jobs: 1, cpus: 6, memoryMb: 14336, reasons: [] })).not.toContain('data-size-notice');
+    expect(at({ jobs: 3, cpus: 6, memoryMb: 10240, reasons: [] })).not.toContain('data-size-notice');
+  });
+
   it('no_em_dash_in_markup', () => {
     expect(render(view())).not.toContain('\u2014');
   });
