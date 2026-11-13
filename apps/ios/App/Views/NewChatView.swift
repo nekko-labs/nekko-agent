@@ -652,7 +652,7 @@ struct NewChatView: View {
 
     private func modelName(_ m: (String, String)) -> String {
         let name = store.models[m.0]?.first { $0.id == m.1 }?.name ?? m.1
-        let provider = store.providers.first { $0.id == m.0 }?.label ?? m.0
+        let provider = store.providers.first { $0.id == m.0 }?.shortName ?? m.0
         return "\(name) · \(provider)"
     }
 
@@ -868,6 +868,8 @@ struct ModelPicker: View {
     @State private var scope = ModelScope.all
     @State private var limits: [String: ProviderLimits] = [:]
     @State private var limitsLoading = false
+    /// Which Claude account the slider shows, once the user taps one.
+    @State private var viewing: String?
 
     var body: some View {
         NavigationStack {
@@ -876,7 +878,8 @@ struct ModelPicker: View {
                     Section("Starred on your computer") {
                         ForEach(favorites, id: \.self) { f in
                             let pm = split(f)
-                            row(pm.0, pm.1, store.models[pm.0]?.first { $0.id == pm.1 }?.name ?? pm.1)
+                            row(pm.0, pm.1, store.models[pm.0]?.first { $0.id == pm.1 }?.name ?? pm.1,
+                                provider: store.providers.first { $0.id == pm.0 }?.shortName)
                         }
                     }
                 }
@@ -888,24 +891,28 @@ struct ModelPicker: View {
                         .listRowBackground(Color.clear)
                         .accessibilityIdentifier("modelPicker.emptyScope")
                 }
-                ForEach(groups) { g in
-                    Section(g.provider.label) {
-                        if let plan = limits[g.provider.id] {
-                            VStack(alignment: .leading, spacing: 8) {
-                                if let type = plan.planType { Text(type.capitalized).font(.caption).foregroundStyle(palette.inkSoft) }
-                                ForEach(plan.windows) { window in LimitBar(window: window) }
-                                if plan.windows.isEmpty { Text("No limits reported.").font(.caption).foregroundStyle(palette.inkSoft) }
+                ForEach(ModelSection.of(groups, viewing: viewing, selectedProvider: selected.0, searching: !query.isEmpty)) { section in
+                    switch section {
+                    case .provider(let g):
+                        Section {
+                            groupContent(g)
+                        } header: {
+                            // One Claude login can be a personal plan and an organization seat: each names itself (#2488).
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(g.provider.accountTitle)
+                                if let caption = g.provider.accountCaption {
+                                    Text(caption).font(.caption).foregroundStyle(palette.inkSoft).textCase(nil)
+                                }
                             }
-                            .accessibilityIdentifier("modelPicker.limits.\(g.provider.id)")
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("modelPicker.provider.\(g.provider.id)")
                         }
-                        if let e = g.error {
-                            Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.warning)
-                        } else if let models = g.models {
-                            let shown = models.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || $0.id.localizedCaseInsensitiveContains(query) }
-                            if shown.isEmpty { Text("No models").font(.footnote).foregroundStyle(palette.inkFaint) }
-                            ForEach(shown) { m in row(g.provider.id, m.id, m.name, loaded: m.loaded) }
-                        } else {
-                            ProgressView()
+                    case .accounts(let logins, let shown):
+                        Section {
+                            accountSlider(logins, shown: shown)
+                            groupContent(shown)
+                        } header: {
+                            Text(verbatim: "Claude")
                         }
                     }
                 }
@@ -947,20 +954,76 @@ struct ModelPicker: View {
     private var favorites: [String] { scope.favorites(store.defaults.favoriteModels, providers: store.providers) }
     private var groups: [ModelGroup] { scope.groups(store.modelGroups) }
 
+    /// One provider's limits and models, or why there are none yet.
+    @ViewBuilder private func groupContent(_ g: ModelGroup) -> some View {
+        if let plan = limits[g.provider.id] {
+            VStack(alignment: .leading, spacing: 8) {
+                // The header or the slider already says a plan login's plan ("Personal · Max"): say it once.
+                if let type = plan.planType, !g.provider.titleNamesPlan { Text(type.capitalized).font(.caption).foregroundStyle(palette.inkSoft) }
+                ForEach(plan.windows) { window in LimitBar(window: window) }
+                if plan.windows.isEmpty { Text("No limits reported.").font(.caption).foregroundStyle(palette.inkSoft) }
+            }
+            .accessibilityIdentifier("modelPicker.limits.\(g.provider.id)")
+        }
+        if let e = g.error {
+            Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.warning)
+        } else if let models = g.models {
+            // A search for the account's email or name lists all of that account's models.
+            let account = g.provider.accountMatches(query)
+            let shown = models.filter { query.isEmpty || account || $0.name.localizedCaseInsensitiveContains(query) || $0.id.localizedCaseInsensitiveContains(query) }
+            if shown.isEmpty { Text("No models").font(.footnote).foregroundStyle(palette.inkFaint) }
+            ForEach(shown) { m in row(g.provider.id, m.id, m.name, loaded: m.loaded) }
+        } else {
+            ProgressView()
+        }
+    }
+
+    /// The desktop's account slider: one tab per Claude login ("Personal · Max", "Acme Inc · Team"),
+    /// and under it the email and which account the one on show is. A tab shows that account's
+    /// models; when the pick is on another of these accounts it moves to the same model there
+    /// and closes, as on the desktop.
+    private func accountSlider(_ logins: [ModelGroup], shown: ModelGroup) -> some View {
+        let labels = PublicProvider.accountTabLabels(logins.map(\.provider))
+        let tab = Binding<String>(
+            get: { shown.id },
+            set: { id in
+                guard let tapped = logins.first(where: { $0.id == id }) else { return }
+                viewing = id
+                if let target = ModelSection.switchTo(logins, tapped: tapped, selected: selected), let model = selected.1 {
+                    pick(target, model)
+                    dismiss()
+                }
+            }
+        )
+        return VStack(alignment: .leading, spacing: 6) {
+            Picker("Claude account", selection: tab) {
+                ForEach(logins) { g in Text(labels[g.id] ?? g.provider.label).tag(g.id) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("modelPicker.accounts")
+            if let who = shown.provider.accountWhoLine {
+                Text(who).font(.caption).foregroundStyle(palette.inkSoft).lineLimit(1).truncationMode(.middle)
+                    .accessibilityIdentifier("modelPicker.account.\(shown.id)")
+            }
+        }
+    }
+
     private func split(_ f: String) -> (String, String) {
         guard let r = f.range(of: "::") else { return (f, "") }
         return (String(f[..<r.lowerBound]), String(f[r.upperBound...]))
     }
 
-    private func row(_ p: String, _ m: String, _ name: String, loaded: Bool = false) -> some View {
-        Button {
+    /// `provider` names the account beside a starred model, so the same model starred on two Claude accounts reads apart.
+    private func row(_ p: String, _ m: String, _ name: String, loaded: Bool = false, provider: String? = nil) -> some View {
+        let detail = [name != m ? m : nil, provider].compactMap { $0 }.joined(separator: " · ")
+        return Button {
             pick(p, m)
             dismiss()
         } label: {
             HStack {
                 VStack(alignment: .leading) {
                     Text(name).foregroundStyle(palette.ink)
-                    if name != m { Text(m).font(.caption2).foregroundStyle(palette.inkFaint) }
+                    if !detail.isEmpty { Text(detail).font(.caption2).foregroundStyle(palette.inkFaint) }
                 }
                 Spacer()
                 if loaded { Text("Loaded").font(.caption2).foregroundStyle(palette.success) }

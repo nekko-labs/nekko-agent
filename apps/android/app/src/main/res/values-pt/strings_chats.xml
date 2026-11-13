@@ -200,6 +200,10 @@
     <string name="chats_no_providers">Nenhum provedor de modelos está ativado no Nekko Agent do seu computador. Adicione ou ative um nas configurações de Modelos.</string>
     <string name="chats_search_models">Buscar modelos</string>
     <string name="chats_starred">Favoritos</string>
+    <string name="chats_account_signed_out">Sessão encerrada</string>
+    <string name="chats_account_personal_plan">Plano pessoal</string>
+    <string name="chats_account_organization">Organização</string>
+    <string name="chats_account_switcher">Conta do Claude</string>
     <string name="chats_model_source">Origem do modelo</string>
     <string name="chats_scope_all">Todos</string>
     <string name="chats_scope_cloud">Nuvem</string>

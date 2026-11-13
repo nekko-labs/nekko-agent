@@ -469,13 +469,57 @@ data class ChatGroup(
     }
 }
 
-/** A provider as the phone keeps it: never the API key, base URL or token reference. */
-data class PublicProvider(val id: String, val kind: String, val label: String, val enabled: Boolean) {
+/**
+ * A provider as the phone keeps it: never the API key, base URL or token reference.
+ * [account] is the Claude login behind a Claude subscription provider, when the
+ * computer reports one (shared/models.ts ProviderAccount); see [ProviderAccounts]
+ * for how it reads.
+ */
+data class PublicProvider(
+    val id: String,
+    val kind: String,
+    val label: String,
+    val enabled: Boolean,
+    val account: ProviderAccount? = null,
+) {
     companion object {
         fun list(e: JsonElement?): List<PublicProvider> = e.arr()?.mapNotNull { p ->
             val o = p.obj() ?: return@mapNotNull null
-            PublicProvider(o.str("id") ?: return@mapNotNull null, o.str("kind") ?: "", o.str("label") ?: o.str("id")!!, o.bool("enabled"))
+            PublicProvider(
+                o.str("id") ?: return@mapNotNull null,
+                o.str("kind") ?: "",
+                o.str("label") ?: o.str("id")!!,
+                o.bool("enabled"),
+                ProviderAccount.from(o["account"]),
+            )
         } ?: emptyList()
+    }
+}
+
+/**
+ * Which Claude login a Claude subscription provider is signed in as. One email can
+ * have a personal plan (Pro, Max) and an organization seat (Team, Enterprise), each
+ * its own provider on the computer.
+ */
+data class ProviderAccount(
+    val signedIn: Boolean,
+    /** Missing for an API-key login. */
+    val email: String? = null,
+    /** `personal` or `organization`; anything else is kept as sent. */
+    val scope: String? = null,
+    /** "Personal", or the organization's name. */
+    val name: String? = null,
+    /** `pro`, `max`, `team`, `enterprise`, as Claude Code printed it; may be missing. */
+    val plan: String? = null,
+) {
+    val organization: Boolean get() = scope == "organization"
+
+    companion object {
+        fun from(e: JsonElement?): ProviderAccount? {
+            val o = e.obj() ?: return null
+            fun text(k: String) = o.str(k)?.trim()?.takeIf { it.isNotEmpty() }
+            return ProviderAccount(o.bool("signedIn"), text("email"), text("scope"), text("name"), text("plan"))
+        }
     }
 }
 

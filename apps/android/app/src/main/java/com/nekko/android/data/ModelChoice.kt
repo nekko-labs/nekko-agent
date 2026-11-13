@@ -3,6 +3,7 @@ package com.nekko.android.data
 import com.nekko.protocol.AUTO_MODEL_ID
 import com.nekko.protocol.LocalProviders
 import com.nekko.protocol.ModelInfo
+import com.nekko.protocol.ProviderAccounts
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.SessionSummary
@@ -15,6 +16,54 @@ data class ModelGroup(
     /** The provider could not list its models (server off, request timed out). */
     val error: String? = null,
 )
+
+/**
+ * One stretch of the model list: a provider on its own, or a computer's Claude
+ * logins together under "Claude" with a slider of their accounts, as on the
+ * desktop (ModelPicker.tsx's account switcher, #2488).
+ */
+sealed interface ModelSection {
+    data class Provider(val group: ModelGroup) : ModelSection
+
+    /** Two or more Claude logins; only [shown]'s models are listed. */
+    data class Accounts(val groups: List<ModelGroup>, val shown: ModelGroup) : ModelSection
+}
+
+object ModelSections {
+    /**
+     * The list in sections. The Claude logins sit where the first of them was.
+     * The account on show is the one the user tapped ([viewing]), else the one
+     * the pick is on, else the first. A search lists every account's matches,
+     * each under its own name, so nothing it finds hides behind a tab.
+     */
+    fun of(groups: List<ModelGroup>, viewing: String?, selected: ModelPick?, searching: Boolean): List<ModelSection> {
+        val logins = groups.filter { ProviderAccounts.isClaudeLogin(it.provider) }
+        if (searching || logins.size < 2) return groups.map { ModelSection.Provider(it) }
+        val shown = logins.firstOrNull { it.provider.id == viewing }
+            ?: logins.firstOrNull { it.provider.id == selected?.providerId }
+            ?: logins.first()
+        val out = mutableListOf<ModelSection>()
+        for (g in groups) {
+            when {
+                !ProviderAccounts.isClaudeLogin(g.provider) -> out += ModelSection.Provider(g)
+                g === logins.first() -> out += ModelSection.Accounts(logins, shown)
+            }
+        }
+        return out
+    }
+
+    /**
+     * What tapping an account's tab picks. When the pick is on another of these
+     * accounts, the same model on the tapped one if it offers it (one tap to
+     * switch, as on the desktop); otherwise nothing, and the tab only shows its models.
+     */
+    fun switchTo(section: ModelSection.Accounts, tapped: ModelGroup, selected: ModelPick?): ModelPick? {
+        val pick = selected ?: return null
+        if (pick.providerId == tapped.provider.id || pick.modelId == AUTO_MODEL_ID) return null
+        if (section.groups.none { it.provider.id == pick.providerId }) return null
+        return if (tapped.models?.any { it.id == pick.modelId } == true) ModelPick(tapped.provider.id, pick.modelId) else null
+    }
+}
 
 /**
  * The tabs across the top of the model picker, after the desktop's "Model source"
@@ -98,12 +147,15 @@ object ModelChoice {
             g.models?.firstOrNull { it.id == pick.modelId }?.let { g.provider to it }
         }
 
-    /** Case-insensitive match on model name, model id or provider label. */
+    /**
+     * Case-insensitive match on model name, model id, provider label, or the
+     * Claude account behind the provider (its email and name, [ProviderAccounts]).
+     */
     fun filter(groups: List<ModelGroup>, query: String): List<ModelGroup> {
         val q = query.trim().lowercase()
         if (q.isEmpty()) return groups
         return groups.mapNotNull { g ->
-            if (g.provider.label.lowercase().contains(q)) return@mapNotNull g
+            if (ProviderAccounts.searchable(g.provider).any { it.lowercase().contains(q) }) return@mapNotNull g
             val hits = g.models?.filter { it.name.lowercase().contains(q) || it.id.lowercase().contains(q) }
             if (hits.isNullOrEmpty()) null else g.copy(models = hits)
         }
