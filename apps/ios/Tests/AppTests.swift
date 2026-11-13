@@ -3,10 +3,42 @@ import NekkoKit
 import NekkoProtocol
 import AVFoundation
 import Speech
+import Security
 import SwiftUI
 @testable import NekkoNative
 
 final class KeychainStoreTests: XCTestCase {
+    /// Report the Security framework's actual status, not only a nil read from
+    /// SecureStore. In particular, unsigned simulator builds can lack access.
+    func testSecurityFrameworkAccess() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "dev.nekkolabs.nekkoagent.tests.\(UUID().uuidString)",
+            kSecAttrAccount as String: "probe",
+            kSecAttrSynchronizable as String: false
+        ]
+        defer { SecItemDelete(query as CFDictionary) }
+        let attrs: [String: Any] = [
+            kSecValueData as String: Data("probe".utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        var item = query
+        attrs.forEach { item[$0.key] = $0.value }
+        let update = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)
+        let add = SecItemAdd(item as CFDictionary, nil)
+        var readQuery = query
+        readQuery[kSecReturnData as String] = true
+        readQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let read = SecItemCopyMatching(readQuery as CFDictionary, &result)
+        let message = "Keychain OSStatus: update=\(update), add=\(add), read=\(read). "
+            + "Simulator tests require CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=\"-\" DEVELOPMENT_TEAM=\"\"."
+        XCTAssertEqual(update, errSecItemNotFound, message)
+        XCTAssertEqual(add, errSecSuccess, message)
+        XCTAssertEqual(read, errSecSuccess, message)
+        XCTAssertEqual(result as? Data, Data("probe".utf8), message)
+    }
+
     func testRoundTripsOverwritesAndDeletes() {
         let s = KeychainStore(service: "dev.nekkolabs.nekkoagent.tests.\(UUID().uuidString)")
         defer { s.wipe() }
