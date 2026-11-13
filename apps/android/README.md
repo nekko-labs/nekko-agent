@@ -35,7 +35,7 @@ CI have been removed. Remaining native feature gaps below stay tracked separatel
   way in today; the sheet says so. Raises also need the Change proof, which
   this app can't sign yet (AN-30). *Settings → Security* lists the computer's
   methods by kind.
-- **Safety exits:** *Settings → This computer* and the connection banner's ⋮:
+- **Safety exits:** *Settings → This computer* and the connection row's ⋮:
   *Sign out this phone* (forgets the computer now, tells it now or at the next
   start), *Stop remote access on the computer*, and *Quit Nekko Agent on the
   computer* (confirmed, only when the computer allows it).

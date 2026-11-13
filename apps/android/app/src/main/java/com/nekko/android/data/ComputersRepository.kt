@@ -490,6 +490,7 @@ class ComputersRepository(
                 quitFromPhone = false,
                 imageGeneration = false,
                 remoteStoppedAt = null,
+                remoteQuitAt = null,
                 lastError = null,
                 savedListAt = null,
                 hostProtocol = null,
@@ -1017,6 +1018,7 @@ class ComputersRepository(
         } catch (e: RelayException) {
             if (e.refusal != null || !e.afterSend) throw e
         }
+        _state.update { it.copy(remoteQuitAt = now()) }
     }
 
     /**
@@ -1129,6 +1131,11 @@ class ComputersRepository(
     fun reconnect() {
         client?.reconnect()
         links.values.forEach { it.client.reconnect() }
+    }
+
+    /** Dial one computer again now (the connection row's *Retry*), the active one or a fleet link. */
+    fun reconnect(id: String) {
+        if (id == _state.value.activeId) client?.reconnect() else links[id]?.client?.reconnect()
     }
 
     /** The phone's network, for the route choice; the next connection starts from it too. */

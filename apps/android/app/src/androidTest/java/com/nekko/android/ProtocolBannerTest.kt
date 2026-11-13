@@ -9,7 +9,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -46,7 +48,7 @@ import org.junit.runner.RunWith
 
 /**
  * The version check (IO-32): a computer that welcomes the phone with an older protocol shows
- * the banner on the chat list and in Settings → About; the same version shows none. Each
+ * the connection row's word *update* on the chat list and in Settings → About; the same version shows none. Each
  * step is a whole-screen screenshot under the app's external files (`evidence/`).
  */
 @RunWith(AndroidJUnit4::class)
@@ -62,7 +64,10 @@ class ProtocolBannerTest {
         }
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty() }
         settle()
-        compose.onNodeWithTag("protocol-banner").assertExists()
+        // The connection row says one word on the computer; tapping it opens the sentence and which side to update.
+        compose.onNodeWithTag("strip.${computerId()}").assertExists().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Studio Mac runs an older Nekko Agent", substring = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        settle()
         shot("1-chats-older-computer")
     }
 
@@ -81,19 +86,25 @@ class ProtocolBannerTest {
         shot("2-about-older-computer")
     }
 
-    @Test fun sameVersionShowsNoBanner() {
+    @Test fun sameVersionShowsNoUpdateWord() {
         val repo = repo(PhoneProtocol.VERSION)
         compose.setContent {
             NekkoTheme(dark = false) { ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {}) }
         }
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty() }
         settle()
-        compose.onNodeWithTag("protocol-banner").assertDoesNotExist()
+        // The computer is a dot and a name with nothing to open: no word, no update line.
+        compose.onNodeWithTag("strip.${computerId()}").assertExists()
+        compose.onAllNodes(hasText("update"), useUnmergedTree = true).assertCountEquals(0)
+        compose.onNodeWithTag("strip.line").assertDoesNotExist()
         shot("3-chats-same-version")
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeTestRule.onNodeWithText(text: String) =
         onNode(hasText(text), useUnmergedTree = true)
+
+    private var pairedId = ""
+    private fun computerId() = pairedId
 
     private fun repo(protocol: Int): ComputersRepository {
         val repo = ComputersRepository(
@@ -105,6 +116,7 @@ class ProtocolBannerTest {
         )
         runBlocking {
             val id = repo.pair(testPairing())
+            pairedId = id
             repo.rename(id, "Studio Mac")
             repo.load()
         }
