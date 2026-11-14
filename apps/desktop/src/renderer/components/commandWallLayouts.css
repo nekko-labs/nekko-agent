@@ -36,7 +36,7 @@
 .command-wall-content { position: absolute; inset: 0; display: flex; }
 .command-wall-primary { position: relative; flex: 1; min-width: 0; min-height: 0; }
 /* Only companions fold; primary chat/terminal bodies never hide with folded. */
-.command-wall-companions { display: none; width: var(--companion-share, 38%); flex-shrink: 0; min-width: 0; overflow: auto; gap: 8px; }
+.command-wall-companions { display: none; width: var(--companion-share, 60%); flex-shrink: 0; min-width: 0; overflow: auto; gap: 8px; }
 /* The drag handle between an agent and its companions: a thin hit area that
    shows a line on hover, focus and drag. */
 .command-wall-companion-resizer { position: relative; flex: 0 0 6px; margin: 0 -3px; z-index: 2; cursor: col-resize; touch-action: none; }
@@ -211,7 +211,7 @@ body:has(.wall-drag-shield) { user-select: none; }
 .command-wall-content[data-focus-chat][data-companions-visible] .command-wall-primary { flex-basis: auto; }
 /* No transition while dragging the column: it would lag the pointer. */
 body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary, body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-companions { transition: none; }
-.command-wall-content[data-focus-chat][data-companions-visible] .command-wall-companions { flex-basis: var(--companion-share, 38%); opacity: 1; transform: translateX(0); border-radius: 20px 0 0 20px; }
+.command-wall-content[data-focus-chat][data-companions-visible] .command-wall-companions { flex-basis: var(--companion-share, 60%); opacity: 1; transform: translateX(0); border-radius: 20px 0 0 20px; }
 .command-wall-content[data-focus-chat] .command-wall-companion { background: var(--surface); border-radius: 20px 0 0 20px; }
 @media (max-width: 639px) {
   .command-wall-content[data-focus-chat][data-companions-visible] .command-wall-primary { flex-basis: 65%; }
