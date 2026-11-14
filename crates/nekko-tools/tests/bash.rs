@@ -191,3 +191,51 @@ async fn invalid_utf8_output_decodes_like_node() {
     let res = bash(&ctx, r"printf '\377ok\342\202'").await;
     assert_eq!(res.output, "\u{FFFD}ok\u{FFFD}");
 }
+
+/// A chat whose folder is a Nekko chat worktree, with an approver that fails
+/// the test if it is asked (#2780).
+#[cfg(not(windows))]
+fn worktree_chat(tag: &str) -> (ToolContext, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!("nekko-scoped-delete-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let wt = dir.join("repo").join(".git").join("nekko-worktrees").join("tidy-teal-wren");
+    std::fs::create_dir_all(wt.join("build").join("deep")).unwrap();
+    std::fs::write(wt.join(".git"), "gitdir: x\n").unwrap();
+    std::fs::write(wt.join("keep.txt"), "keep\n").unwrap();
+    let mut ctx = ToolContext::new(approver_fn(|c: ToolCall, r: String, _s: Severity| async move {
+        panic!("asked to approve {:?}: {r}", c.input)
+    }));
+    ctx.mode = ChatMode::Guardrails;
+    let path = wt.to_string_lossy().into_owned();
+    ctx.workspaces = vec![Workspace { id: "wt".into(), path: path.clone() }];
+    ctx.default_cwd = Some(path);
+    (ctx, dir)
+}
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn a_delete_inside_a_chat_worktree_runs_without_asking() {
+    let (ctx, dir) = worktree_chat("run");
+    let wt = std::path::PathBuf::from(ctx.default_cwd.clone().unwrap());
+    let res = bash(&ctx, "rm -rf build").await;
+    assert!(!res.is_error, "{}", res.output);
+    assert!(!wt.join("build").exists());
+    assert!(wt.join("keep.txt").exists() && wt.join(".git").exists());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn a_delete_that_could_wipe_the_drive_is_refused_even_in_yolo() {
+    let (mut ctx, dir) = worktree_chat("refuse");
+    ctx.mode = ChatMode::Yolo;
+    // A `touch` ahead of the delete shows whether the command reached the shell.
+    let marker = dir.join("ran");
+    for command in ["rm -rf /", "rm -rf ~", "rm -rf \"$HOME\"", "rm -rf", "cd / && rm -rf *"] {
+        let res = bash(&ctx, &format!("touch {} ; {command}", marker.to_string_lossy())).await;
+        assert!(res.is_error, "{command:?}: {}", res.output);
+        assert!(res.output.starts_with("Blocked by guardrail ("), "{command:?}: {}", res.output);
+        assert!(!marker.exists(), "{command:?} reached the shell");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
