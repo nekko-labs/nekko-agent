@@ -29,6 +29,7 @@ import {
 import { useStore } from '../store.js';
 import { Badge, EmptyHint, StatusDot, Toggle } from '../components/primitives/index.js';
 import { WorkflowCanvas } from '../components/WorkflowCanvas.js';
+import { AutomationsPausedLine } from '../components/AutomationsPane.js';
 import { WorkflowEditor, type WorkflowSeed } from '../components/WorkflowEditor.js';
 import { TemplateGallery, TemplateSetup, templateSeed } from '../components/TemplateGallery.js';
 import { FirstWorkflowWizard } from '../components/FirstWorkflowWizard.js';
@@ -345,20 +346,7 @@ export function WorkflowsView() {
             by hand, on a schedule, or when something happens.
           </p>
 
-          {paused && (
-            <div
-              className="mt-2 flex items-center gap-3 rounded-xl border px-3 py-2 text-xs"
-              style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}
-              role="status"
-              data-automations-paused
-            >
-              <span className="min-w-0 flex-1">
-                <strong className="font-semibold">Automations are paused.</strong> Schedules, events and polls won't start
-                any task. Run still works.
-              </span>
-              <button className="btn btn-outline py-1! text-xs" onClick={() => void togglePaused(false)}>Resume</button>
-            </div>
-          )}
+          {paused && <AutomationsPausedLine className="mt-2" onResume={() => void togglePaused(false)} />}
 
           <details className="mt-2 rounded-xl border px-3 py-2 text-xs text-ink-soft" style={{ borderColor: 'var(--line)' }} open={workflows.length === 0}>
             <summary className="cursor-pointer font-medium text-ink-faint">How scheduled tasks work</summary>

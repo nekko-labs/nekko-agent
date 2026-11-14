@@ -6,6 +6,7 @@ import { WorkflowsView } from '../src/renderer/views/WorkflowsView';
 import * as Settings from '../src/renderer/views/SettingsView';
 import { WorkflowEditor } from '../src/renderer/components/WorkflowEditor';
 import { AutomationsPane } from '../src/renderer/components/AutomationsPane';
+import { Toggle as PrimitiveToggle } from '../src/renderer/components/primitives/Toggle';
 import { ScheduleTaskModal } from '../src/renderer/components/ScheduleTaskModal';
 import { ResourceHud } from '../src/renderer/components/ResourceMonitor';
 import { MonitorsDock } from '../src/renderer/components/MonitorsDock';
@@ -56,13 +57,16 @@ const bridge: any = {
   getSystemStats: async () => ({ cpuPct: 18, cpuCores: 18, memUsedMB: 61_440, memTotalMB: 131_072 }),
   getGpuStats: async () => ({ source: 'ioreg', unified: true, totalMB: 131_072, usedMB: 9_800, freeMB: 121_272, devices: [{ name: 'Apple M5 Max', memoryTotalMB: 131_072, memoryUsedMB: 9_800, memoryFreeMB: 121_272, utilizationPct: 4 }] }),
   listWorkflows: async () => ({ workflows: [local, review], runs }),
+  // No CI runners connected; the panel then says so in one line.
+  listRunners: async () => [],
+  imageStatus: async () => { throw new Error('fixture has no image builder'); },
   listModels: async () => [{ id: 'qwen3-8b', name: 'Qwen3 8B' }],
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
   updateSettings: async (patch: any) => ({ ...useStore.getState().settings, ...patch }),
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if (key in target) return target[key]; if (key.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 
-type Scene = 'workflows' | 'editor' | 'pane' | 'modal' | 'settings' | 'paused' | 'hud' | 'dock';
+type Scene = 'workflows' | 'editor' | 'pane' | 'pane-empty' | 'pane-paused' | 'switches' | 'modal' | 'settings' | 'paused' | 'hud' | 'dock';
 
 function DockScene() {
   const [wall, setWall] = useState({ ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, show: true, side: 'right' as const, monitors: { ...DEFAULT_WALL_STATE.dock.monitors, hardware: true }, monitorOrder: ['hardware'] as any, minimized: {} } });
@@ -95,12 +99,22 @@ function PausedScene() {
   </div>;
 }
 
+/** Every switch the Automations surfaces show, on and off: the shared primitive, Settings' wrapper, and the CI runner's. */
+function SwitchesScene() {
+  const SettingsToggle = (Settings as any).Toggle;
+  const [a, setA] = useState(true); const [b, setB] = useState(false);
+  return <div style={{ margin: 24, display: 'grid', gridTemplateColumns: 'auto auto auto', gap: 16, alignItems: 'center', width: 360 }} className="text-xs text-ink-soft" data-switches>
+    <span>Automations page</span><PrimitiveToggle value={a} onChange={setA} label="primitive on" /><PrimitiveToggle value={b} onChange={setB} label="primitive off" />
+    <span>Settings</span><SettingsToggle on={a} onChange={setA} aria-label="settings on" /><SettingsToggle on={b} onChange={setB} aria-label="settings off" />
+  </div>;
+}
+
 function Fixture() {
   const [scene, setScene] = useState<Scene>('workflows');
   const [epoch, setEpoch] = useState(0);
   const show = (next: Scene) => {
     localStorage.clear();
-    useStore.setState({ view: 'workflows', providers, models: [], sessions: [], terminals: [], workspaces: [], settings, settingsLoaded: true, installedSkillDefs: [] } as any);
+    useStore.setState({ view: 'workflows', providers, models: [], sessions: [], terminals: [], workspaces: [], settings: next === 'pane-paused' ? { ...settings, automationsPaused: true } : settings, settingsLoaded: true, installedSkillDefs: [] } as any);
     setScene(next);
     setEpoch((e) => e + 1);
   };
@@ -111,6 +125,9 @@ function Fixture() {
     {scene === 'workflows' && <WorkflowsView />}
     {scene === 'editor' && <WorkflowEditor workflow={local as any} workflows={[local as any]} skills={[]} onClose={() => {}} onSave={() => {}} />}
     {scene === 'pane' && <div style={{ width: 640, height: 360, margin: 24 }} className="card"><AutomationsPane tasks={tasks as any} running={new Set()} now={NOW} onOpen={() => {}} /></div>}
+    {scene === 'pane-empty' && <div style={{ width: 640, height: 360, margin: 24 }} className="card"><AutomationsPane tasks={[]} running={new Set()} now={NOW} onOpen={() => {}} /></div>}
+    {scene === 'pane-paused' && <div style={{ width: 640, height: 360, margin: 24 }} className="card"><AutomationsPane tasks={tasks as any} running={new Set()} now={NOW} onOpen={() => {}} /></div>}
+    {scene === 'switches' && <SwitchesScene />}
     {scene === 'modal' && <ScheduleTaskModal providerId="nekko-engine" modelId="qwen3-8b" initialPrompt="Summarize yesterday’s commits." onClose={() => {}} />}
     {scene === 'paused' && <PausedScene />}
     {scene === 'hud' && <div style={{ height: 300 }}><ResourceHud /></div>}
