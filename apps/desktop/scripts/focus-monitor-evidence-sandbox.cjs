@@ -54,16 +54,6 @@ app.whenReady().then(async () => {
       await wait(60);
       check(`${side} outside click closes menu`, !await run(`!!document.querySelector('.monitors-dock__popover')`));
     }
-    win.setContentSize(1440, 900);
-    await dock('right');
-    await run(`document.querySelector('[aria-label="Show agents in a row"]').click()`);
-    await wait(500);
-    report.metrics.horizontal = await run(`(()=>{const rect=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom}};return {wall:[...document.querySelectorAll('[data-command-wall]')].map(rect),panels:[...document.querySelectorAll('[data-agent-panel]')].map(rect),dock:rect(document.querySelector('.monitors-dock')),layout:layoutFixture.store.getState().settings.commandWall}})()`);
-    check('horizontal agent row has bounded height', report.metrics.horizontal.panels.some(p => p.w > 700 && p.h < 400), report.metrics.horizontal);
-    report.metrics.rowGap = await run(`(()=>{const list=document.querySelector('.agent-panel-row');const cards=[...list.querySelectorAll('.collapse-wrap > div > *')];const bottom=Math.max(...cards.map(e=>e.getBoundingClientRect().bottom));const r=list.getBoundingClientRect();return {cardCount:cards.length,cardBottom:bottom,scrollbarTop:r.top+list.clientHeight,gap:r.top+list.clientHeight-bottom,panelBottom:list.closest('[data-agent-panel]').getBoundingClientRect().bottom,listBottom:r.bottom}})()`);
-    check('cards meet scrollbar without empty row space', report.metrics.rowGap.cardCount > 0 && Math.abs(report.metrics.rowGap.gap) <= 4, report.metrics.rowGap);
-    check('no space after row scrollbar', Math.abs(report.metrics.rowGap.panelBottom-report.metrics.rowGap.listBottom)<=1, report.metrics.rowGap);
-    await capture('horizontal-agents-1440x900');
     win.setContentSize(1100, 800);
     await dock('right');
     const before = await run(`[...document.querySelectorAll('.monitors-dock__monitor')].map(e=>e.dataset.monitor)`);

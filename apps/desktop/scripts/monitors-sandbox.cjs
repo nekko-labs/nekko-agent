@@ -35,7 +35,7 @@ app.whenReady().then(async () => {
     await capture('plus-menu-dark', { x: 0, y: 0, width: 420, height: 360 });
     if (version === 'after') {
       await check('menu labels', "(()=>{const b=[...document.querySelectorAll('[data-new-agent-menu] button')];return b.length===3&&b[1].textContent==='Create or Edit Photos and Videos'&&b[2].textContent==='Terminal'})()");
-      await check('controls left of plus', "(()=>{const plus=document.querySelector('.agent-panel-plus').getBoundingClientRect();const c=[...document.querySelectorAll('[data-agent-panel] button')].filter(b=>/agent list|orientation|row|column/i.test(b.getAttribute('aria-label')||''));return c.length>0&&c.every(b=>b.getBoundingClientRect().right<plus.left-40)})()");
+      await check('controls left of plus', "(()=>{const plus=document.querySelector('.agent-panel-plus').getBoundingClientRect();const c=[...document.querySelectorAll('[data-agent-panel] button')].filter(b=>/agent list|Hide the agent panel/i.test(b.getAttribute('aria-label')||''));return c.length>0&&c.every(b=>b.getBoundingClientRect().right<plus.left-40)})()");
     }
     fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify({ checks }, null, 2));
   } catch (e) { console.error(e); process.exitCode = 1; }

@@ -34,14 +34,12 @@ app.whenReady().then(async () => {
     })()`);
     await sleep(1200);
     for (let i = 0; i < 4; i++) { await run("document.querySelector('[role=dialog] [aria-label=Close]')?.click()"); await sleep(200); }
-    await run("document.querySelector('[aria-label=\"Show agents in a column\"]')?.click()");
+    // Terminals have their own view in the panel's window-type switcher.
+    await run("document.querySelector('[role=\"radio\"][aria-label=\"Terminals\"]')?.click()");
     await sleep(700);
     await run("document.querySelector('[data-terminal-row=\"term-claude\"]')?.click() || document.querySelector('.agent-chip[title=\"zsh\"]')?.click()");
     await sleep(800);
     fs.writeFileSync(path.join(out, 'terminal-rows.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG());
-    await run("document.querySelector('[aria-label=\"Show agents in a row\"]')?.click()"); await sleep(500);
-    fs.writeFileSync(path.join(out, 'terminal-horizontal-working.png'), (await win.capturePage(undefined, {stayHidden:true})).toPNG());
-    await run("document.querySelector('[aria-label=\"Show agents in a column\"]')?.click()"); await sleep(500);
     const report = { baseline, checks: [] };
     if (!baseline) {
       const rows = await run("[...document.querySelectorAll('[data-terminal-row]')].map(e=>e.dataset.terminalRow)");
@@ -61,8 +59,6 @@ app.whenReady().then(async () => {
       for (let i = 0; i < 60 && !(await run("document.querySelector('[data-terminal-context]')?.textContent")).includes('Needs attention'); i++) await sleep(100);
       assert((await run("document.querySelector('[data-terminal-context]').textContent")).includes('Needs attention')); report.checks.push('Metadata updates without remount');
       fs.writeFileSync(path.join(out, 'terminal-attention.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG());
-      await run("document.querySelector('[aria-label=\"Show agents in a row\"]')?.click()"); await sleep(500);
-      fs.writeFileSync(path.join(out, 'terminal-horizontal.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG());
       await run(`(() => {
         const f = layoutFixture;
         f.bridge.createTerminal = async () => {

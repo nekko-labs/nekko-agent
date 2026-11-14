@@ -22,7 +22,7 @@ app.whenReady().then(async () => {
   const run = source => win.webContents.executeJavaScript(source, true);
   const check = async (name, source) => { await sleep(300); if (!await run(source)) throw Error(name); report.checks.push(name); };
   const capture = async name => { await sleep(300); fs.writeFileSync(path.join(dir, name + '.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG()); };
-  const setup = async (mode, orientation = 'vertical', filter = 'all') => {
+  const setup = async (mode, filter = 'all') => {
     await run('integration.reset()'); await sleep(300);
     await run(`(async () => {
       const state = integration.state();
@@ -31,7 +31,7 @@ app.whenReady().then(async () => {
       Object.assign(integration.records()[0], {workspaceId:'repo-a'});
       integration.state().setActiveProject('repo-a');
       const wall = state.settings.commandWall;
-      await integration.configureWall({...wall, hero:'existing', filter:${JSON.stringify(filter)}, layout:{...wall.layout,mode:${JSON.stringify(mode)}}, agentPanel:{show:true,orientation:${JSON.stringify(orientation)}}});
+      await integration.configureWall({...wall, hero:'existing', filter:${JSON.stringify(filter)}, layout:{...wall.layout,mode:${JSON.stringify(mode)}}, agentPanel:{show:true}});
     })()`);
     await sleep(500);
     if (win.getContentSize()[0] < 768) { await run("document.querySelector('[aria-label=\"Open agent list\"]')?.click()"); await sleep(200); }
@@ -39,22 +39,21 @@ app.whenReady().then(async () => {
   const click = async kind => { await run(`document.querySelector('[data-agent-group="repo-b"] [title="New ${kind === 'chat' ? 'agent in this project' : 'terminal in project'}"]').click()`); await sleep(450); };
   try {
     await win.loadFile(path.join(out, 'index.html')); win.showInactive(); await sleep(700);
-    for (const theme of ['light', 'dark']) for (const width of [1200, 400]) for (const orientation of ['vertical', 'horizontal']) {
+    for (const theme of ['light', 'dark']) for (const width of [1200, 400]) {
       win.setContentSize(width, 900);
       for (const kind of ['chat', 'terminal']) {
-        await setup('focus', orientation);
+        await setup('focus');
         await run(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
         await click(kind);
-        await check('fixture uses requested orientation', `document.querySelector('.wall-agent-workspace').dataset.tabs===${JSON.stringify(orientation === 'horizontal' ? 'top' : 'left')}`);
         await check('fixture uses Focus layout', "document.querySelector('[data-wall-layout]').dataset.wallLayout==='focus'");
-        if (base) report.baseline.push({theme,width,orientation,kind, result:await run("({calls:integration.calls.filter(c=>c.method==='create'||c.method==='terminal'),hero:integration.state().settings.commandWall.hero,visible:[...document.querySelectorAll('[data-wall-hero]')].map(e=>e.dataset.gridCell)})")});
+        if (base) report.baseline.push({theme,width,kind, result:await run("({calls:integration.calls.filter(c=>c.method==='create'||c.method==='terminal'),hero:integration.state().settings.commandWall.hero,visible:[...document.querySelectorAll('[data-wall-hero]')].map(e=>e.dataset.gridCell)})")});
         else {
-          await check(`${theme}/${width}/${orientation} ${kind} repository payload`, kind === 'chat' ? "integration.calls.some(c=>c.method==='create'&&c.workspaceId==='repo-b')&&!integration.calls.some(c=>c.method==='terminal')" : "integration.calls.some(c=>c.method==='terminal'&&c.options.workspaceId==='repo-b')");
+          await check(`${theme}/${width} ${kind} repository payload`, kind === 'chat' ? "integration.calls.some(c=>c.method==='create'&&c.workspaceId==='repo-b')&&!integration.calls.some(c=>c.method==='terminal')" : "integration.calls.some(c=>c.method==='terminal'&&c.options.workspaceId==='repo-b')");
           await check(`${kind} is visible in Focus`, `!!document.querySelector('[data-wall-hero][data-grid-cell="${kind}:${kind === 'chat' ? 'new' : 'terminal'}-1"]')`);
           await check('mobile overlay dismissed after success', "!document.querySelector('[aria-label=\"Open agent list\"]') || document.querySelector('[aria-label=\"Open agent list\"]').getAttribute('aria-expanded')==='false'");
           await check('active repository unchanged', "integration.state().activeProjectId==='repo-a'");
         }
-        await capture(`${kind}-${theme}-${width}-${orientation}`);
+        await capture(`${kind}-${theme}-${width}`);
       }
     }
     if (!base) {

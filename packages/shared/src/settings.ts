@@ -110,8 +110,8 @@ export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
 export interface CommandWallSetting {
   /** Agent tab placement, independent of window layout. */
   tabs?: 'top' | 'left' | 'hidden';
-  /** The Agents tab's panel of agent cards: shown or closed, a column or a row. */
-  agentPanel?: { show: boolean; orientation: 'vertical' | 'horizontal' };
+  /** The Agents tab's panel of agent cards: shown or closed. */
+  agentPanel?: { show: boolean };
   layout?: WallLayout;
   dock?: MonitorsDock;
   hero?: string | null;

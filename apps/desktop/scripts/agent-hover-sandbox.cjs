@@ -15,8 +15,8 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
   let win;
   try {
-    for (const [width, orientation] of [[1440, 'vertical'], [1440, 'horizontal'], [460, 'horizontal'], [460, 'vertical']]) {
-      const label = `${width}-${orientation}`;
+    for (const width of [1440, 460]) {
+      const label = `${width}`;
       win = new BrowserWindow({ width, height: 900, useContentSize: true, show: false, focusable: false, skipTaskbar: true, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
       const run = s => win.webContents.executeJavaScript(s, true);
       const shot = async name => fs.writeFileSync(path.join(out, `${name}.png`), (await win.capturePage(undefined, { stayHidden: true })).toPNG());
@@ -37,17 +37,12 @@ app.whenReady().then(async () => {
       }
       await run(`(() => { const toggle = document.querySelector('[aria-label="Open agent list"]'); if (toggle && toggle.getBoundingClientRect().width) toggle.click(); })()`);
       await sleep(300);
-      await run(orientation === 'horizontal'
-        ? "document.querySelector('[aria-label=\"Show agents in a row\"]')?.click()"
-        : "document.querySelector('[aria-label=\"Show agents in a column\"]')?.click()");
-      await sleep(500);
       await run("document.querySelector('[aria-label=\"Open agent list\"][aria-expanded=false]')?.click()");
       await sleep(300);
       const metrics = () => run(`(() => {
         const rows = [...document.querySelectorAll('.agent-chip-chat')];
         return rows.map(e => { const s = getComputedStyle(e), r = e.getBoundingClientRect(); return { title: e.title, active: e.hasAttribute('data-agent-active'), hover: e.matches(':hover'), background: s.backgroundColor, shadow: s.boxShadow, transition: s.transitionDuration, outline: s.outlineStyle, x: r.x, y: r.y, width: r.width, height: r.height }; });
       })()`);
-      if (orientation === 'horizontal') await run("document.querySelectorAll('.agent-chip-chat')[1].scrollIntoView({block:'nearest',inline:'nearest'})");
       await sleep(200);
       const resting = await metrics();
       assert(resting.length >= 2, 'Need two real rows');
@@ -60,9 +55,9 @@ app.whenReady().then(async () => {
       const h = hovered.find(r => r.title === target.title);
       report.hit = await run("(() => { const r=document.querySelectorAll('.agent-chip-chat')[1].getBoundingClientRect(); return document.elementFromPoint(Math.round(r.x+r.width/2),Math.round(r.y+r.height/2))?.outerHTML.slice(0,1000); })()");
       report.target = target;
-      if (!h.hover && width === 460 && orientation === 'vertical' && report.hit?.includes('clean-start')) {
+      if (!h.hover && width === 460 && report.hit?.includes('clean-start')) {
         await shot(`drawer-occluded-${label}`);
-        report.checks.push({ width, orientation, limitation: 'Existing narrow drawer is covered by chat wall (#1909)', hit: report.hit });
+        report.checks.push({ width, limitation: 'Existing narrow drawer is covered by chat wall (#1909)', hit: report.hit });
         win.destroy(); win = null; continue;
       }
       assert(h.hover, 'Real pointer must hover row');
@@ -78,7 +73,7 @@ app.whenReady().then(async () => {
       await sleep(200);
       const left = await metrics();
       if (!baseline) assert.equal(left.find(r => r.title === target.title).background, target.background, 'Leave restores background');
-      if (width === 1440 && orientation === 'vertical') {
+      if (width === 1440) {
         const frames = path.join(out, 'motion'); fs.mkdirSync(frames, { recursive: true });
         for (let i = 0; i < 48; i++) {
           if (i === 8 || i === 32) hover();
@@ -113,7 +108,7 @@ app.whenReady().then(async () => {
       if (!baseline) assert(reduced.every(r => r.transition === '0s'), 'Reduced motion disables transition');
       win.webContents.debugger.detach();
       assert(!win.isVisible() && !win.isFocusable() && !win.isFocused(), 'Fixture stays hidden/non-focusable');
-      report.checks.push({ width, orientation, resting, hovered, focused, reducedMotion: reduced.map(r => r.transition), isolation: { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds() } });
+      report.checks.push({ width, resting, hovered, focused, reducedMotion: reduced.map(r => r.transition), isolation: { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds() } });
       win.destroy(); win = null;
     }
   } catch (e) { report.errors.push(e.stack); }

@@ -1,61 +1,27 @@
-import React, { useLayoutEffect, useRef } from 'react';
-type AgentPanelOrientation = 'vertical' | 'horizontal';
-import { PanelSwapIcon } from '../icons.js';
+import React from 'react';
 import { SidebarCollapseIcon, SidebarExpandIcon } from '../gentleface-icons.js';
 import { HoverTip } from './HoverTip.js';
-import { EASE_OUT } from '../easing.js';
 
 /**
- * The Agents panel's own show/hide and column/row controls. They stay in the
- * panel's corner whether the panel is open or collapsed, so the way back is
- * where the panel was rather than up in the title bar.
+ * The Agents panel's own show/hide control. It stays in the panel's corner
+ * whether the panel is open or collapsed, so the way back is where the panel
+ * was rather than up in the title bar.
  *
- * Each is an icon button; what it does shows in a hover tooltip, so the button
- * never changes size under the pointer. Switching orientation moves the buttons between a stack and a row; the move
- * animates from where each button was (FLIP), so they slide into place
- * instead of jumping.
+ * An icon button; what it does shows in a hover tooltip, so the button never
+ * changes size under the pointer. Open, it sits at the left of the panel's
+ * header; collapsed, it heads a strip down the wall's left edge.
  */
-export function AgentPanelControls({ show, orientation, onToggle, onOrientation, extra }: {
+export function AgentPanelControls({ show, onToggle, extra }: {
   show: boolean;
-  orientation: AgentPanelOrientation;
   onToggle: () => void;
-  onOrientation: (next: AgentPanelOrientation) => void;
-  /** Panel-only actions (the + menu) that follow the same layout. */
+  /** Panel-only actions that follow the same layout. */
   extra?: React.ReactNode;
 }) {
-  const horizontal = orientation === 'horizontal';
-  // A row panel keeps its controls in a narrow column at its left; a column
-  // panel keeps them in a row across its top. Collapsed, they hold the same
-  // place: a strip down the wall's left, or a row above it.
-  const stacked = show ? horizontal : !horizontal;
-  const ref = useRef<HTMLDivElement>(null);
-  const last = useRef<Map<Element, DOMRect>>(new Map());
-
-  // FLIP: remember each button's box, and when the layout flips, start each
-  // one where it was and let it travel to where it now is.
-  useLayoutEffect(() => {
-    const root = ref.current;
-    if (!root) return;
-    const items = [...root.children];
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    for (const el of items) {
-      const before = last.current.get(el);
-      const after = el.getBoundingClientRect();
-      if (!before || reduce || !(el instanceof HTMLElement) || typeof el.animate !== 'function') continue;
-      const dx = before.left - after.left;
-      const dy = before.top - after.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 280, easing: EASE_OUT });
-    }
-    last.current = new Map(items.map((el) => [el, el.getBoundingClientRect()]));
-  }, [stacked]);
-
-  const orientationLabel = horizontal ? 'Show agents in a column' : 'Show agents in a row';
-  // Stacked controls sit against the wall's left edge: their tips open to the right.
-  const tipSide = stacked ? 'right' : 'bottom';
+  // Collapsed controls sit against the wall's left edge: their tips open to the right.
+  const stacked = !show;
   return (
-    <div ref={ref} className="agent-panel-controls" data-stacked={stacked || undefined} data-collapsed={!show || undefined}>
-      <HoverTip label={show ? 'Hide agents' : 'Show agents'} side={tipSide}>
+    <div className="agent-panel-controls" data-stacked={stacked || undefined} data-collapsed={!show || undefined}>
+      <HoverTip label={show ? 'Hide agents' : 'Show agents'} side={stacked ? 'right' : 'bottom'}>
         <button
           type="button"
           className="agent-panel-pill"
@@ -64,16 +30,6 @@ export function AgentPanelControls({ show, orientation, onToggle, onOrientation,
           onClick={onToggle}
         >
           {show ? <SidebarCollapseIcon className="h-4 w-4 shrink-0" /> : <SidebarExpandIcon className="h-4 w-4 shrink-0" />}
-        </button>
-      </HoverTip>
-      <HoverTip label={orientationLabel} side={tipSide}>
-        <button
-          type="button"
-          className="agent-panel-pill"
-          aria-label={orientationLabel}
-          onClick={() => onOrientation(horizontal ? 'vertical' : 'horizontal')}
-        >
-          <PanelSwapIcon className="h-4 w-4 shrink-0" />
         </button>
       </HoverTip>
       {extra}

@@ -14,13 +14,13 @@ it('lists each registry terminal once, regardless of workspace anchors or splits
     { id: 'wt', anchor: { kind: 'terminal', refId: 'anchored' }, activePaneId: 'pt', root: { id: 'pt', kind: 'terminal', refId: 'anchored' } },
     { id: 'wc', anchor: { kind: 'chat', refId: 's1' }, activePaneId: 'pc', root: { id: 'r', dir: 'row', sizes: [.5,.5], children: [{ id: 'pc', kind: 'chat', refId: 's1' }, { id: 'ps', kind: 'terminal', refId: 'split' }] } },
   ] });
-  for (const orientation of ['vertical', 'horizontal'] as const) {
-    const html = renderSidebar({ orientation });
-    expect([...html.matchAll(/data-terminal-row="([^"]+)"/g)].map(m => m[1]).sort()).toEqual(['anchored', 'exited', 'split', 'unopened']);
-  }
+  const html = renderSidebar({ shows: 'terminals' });
+  expect([...html.matchAll(/data-terminal-row="([^"]+)"/g)].map(m => m[1]).sort()).toEqual(['anchored', 'exited', 'split', 'unopened']);
+  // Terminals have their own view: the agent cards leave them out.
+  expect(renderSidebar()).not.toContain('data-terminal-row');
 });
 it('shows smart title and attention state without pretending the terminal is a chat', () => {
   useStore.setState({ terminals: [{ ...t('claude'), activity: { title: 'Fix login', state: 'attention', detail: 'Claude Code needs permission' } }] });
-  const html = renderSidebar();
+  const html = renderSidebar({ shows: 'terminals' });
   expect(html).toContain('Fix login'); expect(html).toContain('Needs attention'); expect(html).toContain('Claude Code needs permission');
 });
