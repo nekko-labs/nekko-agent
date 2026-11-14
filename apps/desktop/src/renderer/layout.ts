@@ -138,22 +138,34 @@ export function canSplit(root: WbNode | null, paneId: string, dir: Direction): b
 }
 
 /**
+ * How much of its neighbour a window opened beside it takes. A file, terminal,
+ * browser or diff opened next to a chat is what you are about to read, so it
+ * gets most of the room (60%); a second chat is a peer and splits evenly.
+ */
+export const SUB_PANEL_SHARE = 0.6;
+export function openingShare(kind: PaneKind): number {
+  return kind === 'chat' ? 0.5 : SUB_PANEL_SHARE;
+}
+
+/**
  * Put `pane` on the given side of `paneId`.
  *
  * Landing next to a sibling on the same axis joins that split instead of
  * nesting a new one inside it, so three windows in a row stay one row of three
  * — the shape you'd draw if asked — rather than a row containing a row. The new
- * window takes half of what its neighbour had, leaving everything else alone.
+ * window takes `share` of what its neighbour had (half unless told otherwise),
+ * leaving everything else alone.
  */
-export function splitPane(root: WbNode | null, paneId: string, dir: Direction, pane: WbPane): WbNode {
+export function splitPane(root: WbNode | null, paneId: string, dir: Direction, pane: WbPane, share = 0.5): WbNode {
   if (!root) return pane;
   const axis = axisOf(dir);
   const before = isBefore(dir);
+  const pair = (): number[] => (before ? [share, 1 - share] : [1 - share, share]);
 
   // The target is the whole workspace: wrap it in a split of two.
   if (!isSplit(root)) {
     if (root.id !== paneId) return root;
-    return { id: newSplitId(), dir: axis, children: order(root, pane, before), sizes: [0.5, 0.5] };
+    return { id: newSplitId(), dir: axis, children: order(root, pane, before), sizes: pair() };
   }
 
   const at = root.children.findIndex((c) => !isSplit(c) && c.id === paneId);
@@ -163,22 +175,22 @@ export function splitPane(root: WbNode | null, paneId: string, dir: Direction, p
     if (root.dir === axis) {
       const children = [...root.children];
       const sizes = [...root.sizes];
-      const half = sizes[at] / 2;
-      sizes[at] = half;
+      const taken = sizes[at] * share;
+      sizes[at] -= taken;
       children.splice(before ? at : at + 1, 0, pane);
-      sizes.splice(before ? at : at + 1, 0, half);
+      sizes.splice(before ? at : at + 1, 0, taken);
       return { ...root, children, sizes };
     }
     const nested: WbSplit = {
       id: newSplitId(),
       dir: axis,
       children: order(root.children[at], pane, before),
-      sizes: [0.5, 0.5],
+      sizes: pair(),
     };
     return { ...root, children: root.children.map((c, i) => (i === at ? nested : c)) };
   }
 
-  return { ...root, children: root.children.map((c) => splitPane(c, paneId, dir, pane)) };
+  return { ...root, children: root.children.map((c) => splitPane(c, paneId, dir, pane, share)) };
 }
 
 /**
