@@ -1,5 +1,13 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.material.icons.automirrored.outlined.Notes
+
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+
+import androidx.compose.ui.draw.rotate
+
+import androidx.compose.animation.AnimatedVisibility
+
 import android.content.ClipData
 import android.content.Context
 import android.os.Build
@@ -97,6 +105,15 @@ fun BlockView(block: Block, fork: ForkAction? = null, voice: Voice? = null, reas
     when (block) {
         // A watch's wake-up is a step of the run, not something the user typed.
         is Block.User -> AgentRows.parseWake(block.text)?.takeIf { block.thumbs.isEmpty() }?.let { WatchWakeRow(it, block.text, block.at) }
+            // A compacted chat's summary folds away; the prompt merged after it stays a bubble (#2453).
+            ?: com.nekko.protocol.ConversationContext.parts(block.text)?.takeIf { block.thumbs.isEmpty() }?.let { (summary, prompt) ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Folded(stringResource(R.string.chat_conversation_summary), Icons.AutoMirrored.Outlined.Notes, "chat.contextSummary", block.id) {
+                        MarkdownText(summary, color = Nekko.palette.inkSoft, modifier = Modifier.fillMaxWidth())
+                    }
+                    if (!prompt.isNullOrBlank()) UserBubble(block.copy(text = prompt), fork)
+                }
+            }
             ?: UserBubble(block, fork.takeUnless { block.id.startsWith("ask-answer:") })
         is Block.Assistant -> Reply(block, fork, voice, reasoning)
         // The agent's work, drawn as the desktop draws it: no fill, no stroke, one line each.
@@ -194,7 +211,15 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?, showReas
             }
         }
         if (b.thumbs.isNotEmpty()) ReplyPhotos(b.id, b.thumbs)
-        if (b.text.isNotEmpty()) {
+        if (b.text.isNotEmpty() && voice == Voice.WORKING) {
+            // Progress commentary folds behind "Progress note" (#2453, the iPhone's #2452); replies,
+            // things left for the reader and text still unsettled stay open.
+            Folded(stringResource(R.string.chat_progress_note), Icons.Outlined.Psychology, "chat.progressNote", b.id) {
+                LongPressMenu(b.text, fork) { press ->
+                    MarkdownText(b.text, color = p.inkSoft, topics = true, modifier = Modifier.fillMaxWidth().then(press))
+                }
+            }
+        } else if (b.text.isNotEmpty()) {
             Voiced(voice) {
                 LongPressMenu(b.text, fork) { press ->
                     MarkdownText(
@@ -269,6 +294,33 @@ private fun Voiced(voice: Voice?, content: @Composable () -> Unit) {
                     .padding(10.dp),
             ) { content() }
         }
+    }
+}
+
+/**
+ * One line that opens what it holds (a progress note, a conversation summary): folded by default,
+ * a 48 dp target, its state said to screen readers. The text inside is the original, unchanged.
+ */
+@Composable
+private fun Folded(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, tag: String, key: String, content: @Composable () -> Unit) {
+    val p = Nekko.palette
+    var open by rememberSaveable(key) { mutableStateOf(false) }
+    val state = stringResource(if (open) R.string.chats_expanded else R.string.chats_collapsed)
+    Column(Modifier.fillMaxWidth().testTag(tag)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable(role = Role.Button) { open = !open }
+                .semantics(mergeDescendants = true) { stateDescription = state },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(icon, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
+            Text(label, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f))
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(18.dp).rotate(if (open) 90f else 0f))
+        }
+        AnimatedVisibility(open) { Box(Modifier.padding(start = 24.dp, bottom = 4.dp)) { content() } }
     }
 }
 
