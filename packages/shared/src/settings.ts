@@ -205,6 +205,8 @@ export interface AppNotice {
 }
 
 export interface AppSettings {
+  /** Fusion's ranking policy; permission remains per-chat. */
+  fusion?: import('./fusion.js').FusionSettings;
   /**
    * Default off. The user has Anthropic's own permission to use the
    * approval-gated features (scheduled runs, Nekko tools, the context note,

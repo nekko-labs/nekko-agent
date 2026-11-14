@@ -9,15 +9,16 @@ import { prefersReducedMotion } from '../displays.js';
 import { FilePane } from '../components/FilePane.js';
 import { LibraryArtwork, LibraryIntro, libraryIntroSeen, dismissLibraryIntro } from '../components/LibraryIntro.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
-import { ArtifactPreview } from '../components/library/ArtifactPreview.js';
+import { LibraryFileIcon } from '../components/library/LibraryFileIcon.js';
 import { DesignCanvas } from '../components/library/DesignCanvas.js';
+import { TilePreview } from '../components/library/TilePreview.js';
 import {
   LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
   type LibraryLayout,
 } from '../components/library/libraryPrefs.js';
-import { ChevronDownIcon, CloseIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
+import { ChevronDownIcon, ChevronIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
 import {
-  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, readDesignsFolder, sessionArtifacts, withFolderDesigns,
+  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns,
   type ArtifactEntry, type ArtifactKind,
 } from '../artifactsIndex.js';
 
@@ -196,10 +197,28 @@ export function ArtifactsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folders, key]);
 
-  const entries = useMemo(
-    () => (fromChats || fromFolders ? groupDesignVersions(withFolderDesigns(fromChats ?? [], fromFolders ?? [])) : null),
+  const merged = useMemo(
+    () => (fromChats || fromFolders ? withFolderDesigns(fromChats ?? [], fromFolders ?? []) : null),
     [fromChats, fromFolders],
   );
+  // Which of those files are still on disk: a chat can name a file it never wrote, or one deleted since.
+  // A file shows until its folder has been listed.
+  const [presence, setPresence] = useState<{ checked: Set<string>; present: Set<string> } | null>(null);
+  const paths = merged?.filter((e) => e.source !== 'folder').map((e) => e.path).join('\n') ?? '';
+  useEffect(() => {
+    if (!paths || !window.nekko?.listDir) return;
+    let live = true;
+    const list = paths.split('\n');
+    presentPaths((path) => window.nekko.listDir(path), list).then((present) => {
+      if (live) setPresence({ checked: new Set(list.map((p) => p.toLowerCase())), present });
+    });
+    return () => { live = false; };
+  }, [paths]);
+  const entries = useMemo(() => {
+    if (!merged) return null;
+    const gone = (e: ArtifactEntry) => !!presence && presence.checked.has(e.path.toLowerCase()) && !presence.present.has(e.path.toLowerCase());
+    return groupDesignVersions(merged.filter((e) => !gone(e)));
+  }, [merged, presence]);
   const indexed = chatsRead && fromFolders !== null;
 
   // The kinds that have files lead the slider; the setup answer's kind comes first.
@@ -239,15 +258,32 @@ export function ArtifactsView() {
   // In List the list gives way to the preview, so the change is animated; elsewhere it is a swap.
   const pick = (e: ArtifactEntry | null) => { setSelected(e); setVersion(null); setAsFile(false); };
   const select = (e: ArtifactEntry | null) => (layout === 'list' ? transition(() => pick(e), true) : pick(e));
+  // Back to Library from a file: Escape outside a field, or the mouse's back button.
+  const back = useRef(() => {});
+  back.current = () => { if (selected && !showIntro) select(null); };
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== 'Escape' || e.defaultPrevented || !t || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      // A dialog over the page (the palette, a menu) takes its own Escape.
+      if (document.querySelector('[aria-modal="true"], [role="menu"]')) return;
+      back.current();
+    };
+    const mouse = (e: MouseEvent) => { if (e.button === 3) { e.preventDefault(); back.current(); } };
+    window.addEventListener('keydown', key);
+    window.addEventListener('mouseup', mouse);
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('mouseup', mouse); };
+  }, []);
   const openPath = selected ? version ?? selected.path : '';
   const onCanvas = !!selected && selected.kind === 'design' && isHtml(openPath);
 
+  const revisions = new Map(sessions.map((s) => [s.id, s.updatedAt]));
   const row = (e: ArtifactEntry) => {
     const active = selected?.path === e.path;
     return (
       <div key={e.path} role="listitem" className={`group rounded-lg ${active ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
         <button type="button" data-artifact-row className="flex w-full min-w-0 items-center gap-3 px-2 py-1 text-left" onClick={() => select(e)} title={e.path}>
-          <ArtifactPreview kind={e.kind} path={e.path} ext={extOf(e.filename)} icon className="h-7 w-7 shrink-0 rounded-md" />
+          <LibraryFileIcon kind={e.kind} className="h-7 w-7 shrink-0 rounded-md" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
             {!listWide && <span className="block truncate text-2xs text-ink-faint">{fromAndWhen(e)}</span>}
@@ -267,7 +303,7 @@ export function ArtifactsView() {
     return (
     <div key={e.path} role="listitem" className="library-tile" data-library-tile>
       <button type="button" className="library-tile-main" onClick={() => select(e)} title={e.path}>
-        <ArtifactPreview kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
+        <TilePreview revision={revisions.get(e.sessionId) ?? e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
           <span className="library-tile-meta">{fromAndWhen(e)}</span>
@@ -347,8 +383,11 @@ export function ArtifactsView() {
           {selected ? (
             <>
               <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
-                <button type="button" className="btn btn-outline py-1 text-xs md:hidden" onClick={() => select(null)}>Back to Library</button>
-                <div className="order-first min-w-0 flex-1 basis-full md:order-none md:basis-auto">
+                <button type="button" className="btn btn-ghost shrink-0 gap-1 px-2 py-1 text-xs" data-library-back aria-label="Back to Library" title="Back to Library (Esc)" onClick={() => select(null)}>
+                  <ChevronIcon className="h-3.5 w-3.5 rotate-180" /> Library
+                </button>
+                {/* At least 10rem for the name: on a narrow window the actions wrap below instead. */}
+                <div className="min-w-0 flex-1 basis-40">
                   <p className="truncate text-sm font-semibold">{selected.title}</p>
                   <p className="truncate font-mono text-2xs text-ink-faint" title={openPath}>{openPath}</p>
                 </div>
@@ -361,9 +400,6 @@ export function ArtifactsView() {
                   <ExternalIcon className="h-3.5 w-3.5" /> Open file
                 </button>
                 {onCanvas && asFile && <button type="button" className="btn btn-ghost py-1 text-xs" data-design-back onClick={() => setAsFile(false)} title="Show the design on its canvas again">Canvas</button>}
-                <button type="button" className="btn-icon hidden md:inline-flex" aria-label="Close preview" title="Back to Library" onClick={() => select(null)}>
-                  <CloseIcon className="h-4 w-4" />
-                </button>
               </div>
               <div className="min-h-0 flex-1 overflow-hidden" key={onCanvas && !asFile ? `canvas:${selected.path}` : `file:${openPath}`}>
                 {onCanvas && !asFile

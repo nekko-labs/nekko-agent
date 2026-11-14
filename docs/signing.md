@@ -191,10 +191,17 @@ So:
   `MACOS_PROVISIONING_PROFILE` whenever the certificate is set, *Install the
   macOS provisioning profile* writes it and runs
   `apps/desktop/scripts/check-provisioning-profile.cjs` on it,
-  *Check the entitlements* runs `check-mac-entitlements.sh --signed` (profile
-  embedded, three keys on the main executable), and *Verify the signed app*
-  starts the app's binary (`ELECTRON_RUN_AS_NODE=1 ... -e 'process.exit(0)'`),
-  the one check that sees what AMFI sees.
+  *Check the entitlements* runs `check-mac-entitlements.sh --signed` on the
+  built app, and *Verify the signed app* starts the app's binary
+  (`ELECTRON_RUN_AS_NODE=1 ... -e 'process.exit(0)'`), the one check that sees
+  what AMFI sees.
+- `check-mac-entitlements.sh` fails any build whose main executable carries a
+  restricted entitlement without an embedded profile, signed or not: 0.10.1000
+  fails it. When a profile is embedded it runs
+  `check-provisioning-profile.cjs --app` on the built app, which checks the
+  profile authorizes every restricted key the main executable actually carries
+  (not only the three expected ones) and was issued for the certificate the
+  app is signed with. Either mismatch is a launch failure on users' Macs.
 
 **Creating it.** Needs Account Holder or Admin on team `3HM5598S99` and
 org-admin on `nekko-labs`. Any Mac works: the certificate is read from a
@@ -267,9 +274,12 @@ boot a VM.
 every helper app under `Contents/Frameworks` and every file under
 `Contents/Resources/bin`, and fails if `nekko-vm` is missing, lacks the
 entitlement, anything else has it, anything but the main executable carries a
-restricted entitlement, or `codesign` cannot read a file. With `--signed` it
-also requires `Contents/embedded.provisionprofile` and the three restricted
-entitlements on the main executable. Where it runs:
+restricted entitlement, or `codesign` cannot read a file. If the main
+executable carries a restricted entitlement, the app must embed a profile that
+authorizes it ([Provisioning profile](#provisioning-profile)). With `--signed`
+it also requires the three restricted entitlements on the main executable.
+`--ad-hoc`, for the dry-run only, skips the profile: that copy is never
+launched. Where it runs:
 
 - `release.yml`, step `Check the entitlements`, right after the build, on
   every macOS release: `--signed` when the certificate is set.
@@ -277,8 +287,8 @@ entitlements on the main executable. Where it runs:
   build, then `Signed dry-run through the release hook`, which runs
   `apps/desktop/scripts/sign-mac-dry-run.cjs` on a copy of the app. That is the
   real `sign-mac.cjs` hook with the ad-hoc identity `-` in place of the
-  Developer ID, followed by `codesign --verify --deep --strict`, the check, and
-  `nekko-vm count-vms`.
+  Developer ID, followed by `codesign --verify --deep --strict`, the check
+  with `--ad-hoc`, and `nekko-vm count-vms`.
 
 By hand, on an Apple silicon Mac, with no credentials (build first: the
 workspace `dist` packages what `npm run build` left, and the root `npm run dist`
@@ -663,7 +673,13 @@ once to trust it. From then on `npm run dev` (`stage-daemon.mjs --dev`) signs
 `target/dev-daemon/nekkod`, and `npm run local` (or `npm run build:nekkod`)
 signs `target/release/nekkod`, with it under the identifier
 `dev.nekkolabs.nekkod`. A local `npm run dist` without `CSC_LINK` signs the
-app with it instead of ad-hoc (`after-pack.cjs`). Answer the Keychain once more
+app with it instead of ad-hoc (`after-pack.cjs`). `npm run dev` also signs its
+`Nekko Agent.app` dev runtime (`dev-launch.mjs`, `com.nekkoagent.desktop.dev`)
+with it, which is what keeps macOS privacy grants such as Screen Recording: an
+ad-hoc runtime's grant is pinned to its hash, so each rebuild of the runtime (an
+Electron upgrade, a new icon) leaves System Settings showing it on while the app
+is refused (the agent's `capture` tool then failed with "Failed to get sources.",
+#2762). Answer the Keychain once more
 with **Always Allow** on both prompts. After that the access list keeps
 matching, and each rebuild asks once (the partition list): Always Allow again.
 The first signing may also ask to let `codesign` use the key: Always Allow.
@@ -673,7 +689,11 @@ The first signing may also ask to let `codesign` use the key: Always Allow.
   rebuilds may not ask at all (not verified here).
   `NEKKO_DEV_SIGN_IDENTITY=-` keeps ad-hoc.
 - Without the identity nothing breaks: the build stays ad-hoc, says so, and the
-  Keychain asks twice after every rebuild.
+  Keychain asks twice after every rebuild. The dev runtime's Screen Recording
+  grant is lost whenever it is rebuilt: remove Nekko Agent from System Settings >
+  Privacy & Security > Screen & System Audio Recording (or run
+  `tccutil reset ScreenCapture com.nekkoagent.desktop.dev`), grant it again when
+  asked, and restart the app.
 - A `cargo build -p nekkod` run by hand is not re-signed. The app runs the
   newest of `target/release`, `target/dev-daemon` and `target/debug`, so that
   build asks twice.

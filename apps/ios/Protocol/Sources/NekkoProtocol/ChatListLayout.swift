@@ -18,12 +18,12 @@ public struct ChatListView: Codable, Equatable, Sendable {
     public var sortBy: SortBy = .manual
     /// Manual order has no direction: it is whatever was dragged on the computer.
     public var ascending = false
-    /// The last reply (or first prompt) under each title.
-    public var showPreviews = true
     public var showModel = true
     public var showContext = true
     public var showPullRequests = true
     public var showUpdated = true
+    /// The sub-agents a chat spawned, one row each under it, with the model each runs on.
+    public var showSubagents = true
     /// Completed chats, after their group's active ones (in a Completed group when not by project).
     public var showCompleted = true
     /// Keep even groups with no chats visible.
@@ -59,7 +59,7 @@ public struct ChatListView: Codable, Equatable, Sendable {
     public var encoded: Data? { try? JSONEncoder().encode(self) }
 
     private enum CodingKeys: String, CodingKey {
-        case groupBy, sortBy, ascending, showPreviews, showCompleted, showEmptyGroups, showComputer, showComputerIcons, showModel, showContext, showPullRequests, showUpdated
+        case groupBy, sortBy, ascending, showCompleted, showEmptyGroups, showComputer, showComputerIcons, showModel, showContext, showPullRequests, showUpdated, showSubagents
     }
 
     /// A saved view keeps every field that is still valid; the rest fall back to the defaults.
@@ -69,11 +69,11 @@ public struct ChatListView: Codable, Equatable, Sendable {
         groupBy = (try? c.decodeIfPresent(GroupBy.self, forKey: .groupBy)) ?? d.groupBy
         sortBy = (try? c.decodeIfPresent(SortBy.self, forKey: .sortBy)) ?? d.sortBy
         ascending = (try? c.decodeIfPresent(Bool.self, forKey: .ascending)) ?? d.ascending
-        showPreviews = (try? c.decodeIfPresent(Bool.self, forKey: .showPreviews)) ?? d.showPreviews
         showModel = (try? c.decodeIfPresent(Bool.self, forKey: .showModel)) ?? d.showModel
         showContext = (try? c.decodeIfPresent(Bool.self, forKey: .showContext)) ?? d.showContext
         showPullRequests = (try? c.decodeIfPresent(Bool.self, forKey: .showPullRequests)) ?? d.showPullRequests
         showUpdated = (try? c.decodeIfPresent(Bool.self, forKey: .showUpdated)) ?? d.showUpdated
+        showSubagents = (try? c.decodeIfPresent(Bool.self, forKey: .showSubagents)) ?? d.showSubagents
         showCompleted = (try? c.decodeIfPresent(Bool.self, forKey: .showCompleted)) ?? d.showCompleted
         showEmptyGroups = (try? c.decodeIfPresent(Bool.self, forKey: .showEmptyGroups)) ?? d.showEmptyGroups
         showComputer = (try? c.decodeIfPresent(Bool.self, forKey: .showComputer)) ?? d.showComputer

@@ -11,14 +11,14 @@ import { type ProviderSetupKind } from '../components/providers/providerPresets.
 import { AddProvider, SUBSCRIPTION_KINDS, reconnectProviderConfig } from '../components/providers/AddProvider.js';
 import { ClaudeWhyLink, useClaudeCodeStatus } from '../components/claude/ClaudeAgent.js';
 import { claudeSourceLine, claudeIdentityLine, isClaudeKind } from '../components/claude/ClaudeSetup.js';
-import { TrashIcon, CheckIcon, StarIcon } from '../icons.js';
+import { TrashIcon, CheckIcon, StarIcon, CloseIcon } from '../icons.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
 import { matchesModelQuery } from '../components/agent-console/modelPickerInteractions.js';
 import { MODEL_FILTER_THRESHOLD, modelListProblem } from './modelListProblem.js';
 import { MiddleTruncate } from '../components/primitives/MiddleTruncate.js';
 import { ModelRowName } from './ModelRowName.js';
-import { ProviderMark, providerColor, providerMarkKind } from '../components/providers/ProviderMark.js';
+import { ProviderMark, providerMarkKind } from '../components/providers/ProviderMark.js';
 import { ProviderBillingBadge } from '../components/providers/ProviderBillingBadge.js';
 import { ProviderFamilies } from './ProviderFamilies.js';
 
@@ -120,13 +120,13 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
   return (
     <section className="models-providers" aria-label={localOnly ? 'Connected local servers' : 'Cloud providers'}>
       <div className="models-provider-bar">
-        <div ref={shortcutsRef}><ProviderShortcuts localOnly={localOnly} onAdd={openAdd} /></div>
+        <div ref={shortcutsRef}><ProviderShortcuts localOnly={localOnly} onAdd={openAdd} open={adding ? addKind : undefined} /></div>
       </div>
-      {localOnly && <button className="btn btn-outline mb-4 text-xs" onClick={discover} disabled={discovering}>
+      {localOnly && <button className="btn mb-4" onClick={discover} disabled={discovering}>
         {discovering ? 'Scanning…' : 'Discover local servers'}
       </button>}
-      {adding && <div ref={setupRef} className="mb-5" data-provider-setup={addKind ?? 'any'}>
-        <button type="button" className="btn btn-ghost float-right" aria-label="Close provider setup" onClick={() => setAdding(false)}>×</button>
+      {adding && <div ref={setupRef} className="provider-setup" data-provider-setup={addKind ?? 'any'}>
+        <button type="button" className="provider-setup-close" aria-label="Close provider setup" title="Close" onClick={() => setAdding(false)}><CloseIcon className="h-4 w-4" /></button>
         <AddProvider scope={localOnly ? 'local' : 'cloud'} key={addKind ?? 'any'} fixedKind={addKind} onDone={() => { setAdding(false); setAddKind(undefined); refreshProviders(); }} />
       </div>}
       {localOnly
@@ -161,18 +161,26 @@ const LOCAL_SHORTCUTS: { kind: ProviderSetupKind; label: string }[] = [
   { kind: 'vllm', label: 'vLLM' },
 ];
 
-export function ProviderShortcuts({ localOnly = false, onAdd }: { localOnly?: boolean; onAdd: (kind: ProviderSetupKind) => void }) {
+/**
+ * The add-a-provider strip: each provider as its mark and name, quiet until
+ * hovered. The one whose setup is open reads as selected.
+ */
+export function ProviderShortcuts({ localOnly = false, onAdd, open }: { localOnly?: boolean; onAdd: (kind: ProviderSetupKind) => void; open?: ProviderSetupKind }) {
   const [expanded, setExpanded] = useState(false);
   const firstRevealed = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (expanded) firstRevealed.current?.focus({ preventScroll: true }); }, [expanded]);
-  const choices = localOnly ? LOCAL_SHORTCUTS : [...CLOUD_SHORTCUTS, ...(expanded ? MORE_SHORTCUTS : [])];
+  // A setup opened on a kind behind More (a notice's action) shows it in the strip.
+  const showMore = expanded || MORE_SHORTCUTS.some((s) => s.kind === open);
+  const choices = localOnly ? LOCAL_SHORTCUTS : [...CLOUD_SHORTCUTS, ...(showMore ? MORE_SHORTCUTS : [])];
   return <div className="models-add-strip" role="group" aria-label="Add provider">
-    {choices.map(({ kind, label }, index) =>
-      <button key={kind} ref={!localOnly && index === CLOUD_SHORTCUTS.length ? firstRevealed : undefined} type="button" className={`models-add-provider${!localOnly && index >= CLOUD_SHORTCUTS.length ? ' models-add-revealed' : ''}`} style={{ background: providerColor(kind), animationDelay: `${Math.max(0, index - CLOUD_SHORTCUTS.length) * 35}ms` }} title={`Add ${label}`} aria-label={`Add ${label}`} onClick={() => onAdd(kind)}>
-        <ProviderMark kind={kind} />
-        <span className="models-add-plus" aria-hidden="true">+</span>
-      </button>)}
-    {!localOnly && !expanded && <button type="button" className="models-add-provider models-add-more" title="More providers" aria-label="More providers" aria-expanded={false} onClick={() => setExpanded(true)}>···</button>}
+    {choices.map(({ kind, label }, index) => {
+      const revealed = !localOnly && index >= CLOUD_SHORTCUTS.length;
+      return <button key={kind} ref={!localOnly && index === CLOUD_SHORTCUTS.length ? firstRevealed : undefined} type="button" className={`models-add-provider${revealed ? ' models-add-revealed' : ''}`} style={revealed ? { animationDelay: `${(index - CLOUD_SHORTCUTS.length) * 35}ms` } : undefined} title={`Add ${label}`} aria-label={`Add ${label}`} aria-pressed={open === kind} onClick={() => onAdd(kind)}>
+        <ProviderMark kind={kind} tile />
+        <span>{label}</span>
+      </button>;
+    })}
+    {!localOnly && !showMore && <button type="button" className="models-add-provider models-add-more" title="More providers" aria-label="More providers" aria-expanded={false} onClick={() => setExpanded(true)}>More</button>}
   </div>;
 }
 

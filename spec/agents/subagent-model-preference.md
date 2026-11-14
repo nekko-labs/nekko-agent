@@ -21,17 +21,21 @@ Every `spawn_agent` call that named no model ran its child on the parent's model
 
 When a `spawn_agent` call names no `provider_id`/`model_id`:
 
-- **Auto** (default, also when unset): a lighter model than the chat's on the same provider, one step down from a top-tier model (Opus or Fable to Sonnet, `gpt-5` to `gpt-5-mini`), the closest relative by name and then the newest. A chat on ✨ Auto (the Nekko router, which already routes between cloud and local) first uses a local model that is already loaded, so nothing new is loaded for it; otherwise its child keeps routing on ✨ Auto.
+- **Auto** (default, also when unset): a lighter model than the chat's on the same provider, one step down from a top-tier model (Opus or Fable to Sonnet, `gpt-5` to `gpt-5-mini`), the closest relative by name and then the newest. Only a Fusion chat (both `autoModel` and `autoProviderSwitch` true) may first use an already-loaded local model. Plain Auto stays on this configured provider/account.
 - **Auto · same provider**: the lighter model, never leaving the chat's provider; a chat on ✨ Auto keeps its child on ✨ Auto.
-- **Auto · prefer local**: a local chat model on this computer (loaded first, then the strongest), else the same-provider pick. Choosing it is the user's opt-in for a cloud chat's sub-agents to run locally; a cloud-only chat still cannot.
+- **Auto · prefer local**: in Fusion, a local chat model at the requested capability tier, then nearest smaller (loaded breaks ties), else the same-provider pick. Outside Fusion it stays on the chat provider. The preference never grants provider permission; cloud-only still wins.
 - **Same model as the chat**: the old behaviour.
 - **A specific model**: saved as the delegation route (`orchestration.delegationRoute`). It is checked against the provider's model list before each delegation and never falls back, as before.
 
-An auto pick never names a stronger model than the parent's. When the parent is not top tier, nothing lighter is listed, or the list cannot be read, the child inherits the parent's model: no error, and never a move to another cloud provider. A model the agent names explicitly still wins. The agent is told the preference in the routing prompt ("Omit provider_id and model_id to use the user's sub-agent model preference: …").
+An auto pick never names a stronger model than the parent's. When the parent is not top tier, nothing lighter is listed, or the list cannot be read, the child inherits the parent's model: no error, and never a move to another cloud provider. A model the agent names explicitly wins only within the chat's permitted provider scope; exact cross-provider routes require Fusion and are refused rather than substituted. The agent is told the preference in the routing prompt ("Omit provider_id and model_id to use the user's sub-agent model preference: …").
 
 **Claude Code chats** run their own sub-agents, so the preference reaches them as `CLAUDE_CODE_SUBAGENT_MODEL` at launch: `sonnet` under an Auto choice when the chat runs Opus or Fable, the saved model when the route is on a Claude Code provider, nothing otherwise (Claude Code's own default). A changed preference starts a new Claude Code child at the next message, as a model change does. Whether the installed Claude Code honours the variable for every sub-agent type is not verified here.
 
 **Fewer delegates.** The advisory parallel cap (`orchestration.maxParallel`, in the prompt as "keep concurrent sub-agents to about N") now defaults to 2 instead of 4 for settings that never saved one.
+
+## Capability targets and current routing
+
+[#2731](https://github.com/nekko-labs/nekko-agent/issues/2731) adds `orchestration.subagentTier`: Small, Medium, Large, Frontier, or Smaller than parent (default). Automatic tier picks choose the target, then nearest smaller, never exceeding the parent. Editable provider-scoped classifications, strategies, permissions, limitations and verification are defined in [Fusion routing and model tiers](../chat/fusion-routing-and-model-tiers.md). Claude Code maps explicit tier targets to Haiku/Sonnet/Opus without inventing a Frontier CLI alias.
 
 ## Data
 

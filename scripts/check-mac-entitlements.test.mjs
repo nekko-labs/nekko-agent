@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
@@ -11,10 +11,13 @@ const script = join(dirname(fileURLToPath(import.meta.url)), 'check-mac-entitlem
 const VIRT = '<plist><dict><key>com.apple.security.virtualization</key><true/></dict></plist>';
 const MAIN = '<plist><dict><key>com.apple.application-identifier</key><string>T.app</string><key>com.apple.developer.team-identifier</key><string>T</string><key>keychain-access-groups</key><array><string>T.app.webauthn</string></array></dict></plist>';
 const OK = (n, profile = '') => `virtualization entitlement: nekko-vm only (${n} binaries checked)\nrestricted entitlements: main executable only${profile}`;
+const AUTHORIZED = ', authorized by the embedded profile';
 
 // A fake app tree plus a stub codesign first on PATH. The stub reads fixtures
 // keyed by basename from a separate dir, so they never count as binaries:
 // <name>.ents is printed, <name>.fail makes it exit 1, else an empty plist.
+// A stub node stands in for check-provisioning-profile.cjs: it records its
+// arguments in node.args, and profile.fail makes it exit 1.
 const roots = [];
 after(() => roots.forEach((d) => rmSync(d, { recursive: true, force: true })));
 
@@ -38,9 +41,17 @@ n=$(basename "$p")
 echo '<plist><dict/></plist>'
 `);
   chmodSync(join(stubs, 'codesign'), 0o755);
+  writeFileSync(join(stubs, 'node'), `#!/bin/bash
+printf '%s\\n' "$@" > "${fx}/node.args"
+[ -e "${fx}/profile.fail" ] && { echo 'profile does not authorize keychain-access-groups'; exit 1; }
+echo 'provisioning profile OK'
+`);
+  chmodSync(join(stubs, 'node'), 0o755);
   const set = (name, ext, body = VIRT) => writeFileSync(join(fx, `${name}.${ext}`), body);
   const run = (arg = app, ...rest) => spawnSync('bash', [script, arg, ...rest], { encoding: 'utf8', env: { ...process.env, PATH: `${stubs}:${process.env.PATH}` } });
-  return { app, bin, set, run };
+  const checked = () => { try { return readFileSync(join(fx, 'node.args'), 'utf8').trim().split('\n'); } catch { return undefined; } };
+  const embed = () => writeFileSync(join(app, 'Contents', 'embedded.provisionprofile'), '');
+  return { app, bin, set, run, checked, embed };
 }
 
 test('only_nekko_vm_with_the_entitlement_passes', posixFixture, () => {
@@ -115,14 +126,53 @@ test('empty_app_path_says_no_app_found', posixFixture, () => {
   assert.equal(r.stderr.trim(), 'no .app found.');
 });
 
-test('the_unsigned_main_app_may_carry_restricted_entitlements_or_not', posixFixture, () => {
+test('a_main_app_with_restricted_entitlements_and_no_profile_fails_signed_or_not', posixFixture, () => {
+  // 0.10.1000: keychain-access-groups on the main executable, nothing embedded (#2688).
   const f = fixture();
   f.set('nekko-vm', 'ents');
-  assert.equal(f.run().status, 0);
-  f.set('Nekko Agent.app', 'ents', MAIN);
+  f.set('Nekko Agent.app', 'ents', '<plist><dict><key>keychain-access-groups</key><array><string>T.app.webauthn</string></array></dict></plist>');
+  const r = f.run();
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), `${f.app} carries keychain-access-groups but embeds no provisioning profile, so macOS will refuse to launch it.`);
+  assert.equal(f.checked(), undefined);
+});
+
+test('a_main_app_without_restricted_entitlements_needs_no_profile', posixFixture, () => {
+  const f = fixture();
+  f.set('nekko-vm', 'ents');
   const r = f.run();
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout.trim(), OK(5));
+  assert.equal(f.checked(), undefined);
+});
+
+test('the_ad_hoc_dry_run_copy_skips_the_profile', posixFixture, () => {
+  const f = fixture();
+  f.set('nekko-vm', 'ents');
+  f.set('Nekko Agent.app', 'ents', MAIN);
+  const r = f.run(f.app, '--ad-hoc');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), OK(5));
+  assert.equal(f.checked(), undefined);
+});
+
+test('an_embedded_profile_must_authorize_the_main_app', posixFixture, () => {
+  const f = fixture();
+  f.set('nekko-vm', 'ents');
+  f.set('Nekko Agent.app', 'ents', MAIN);
+  f.embed();
+  let r = f.run();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), OK(5, AUTHORIZED));
+  const args = f.checked();
+  assert.match(args[0], /apps\/desktop\/scripts\/check-provisioning-profile\.cjs$/);
+  assert.deepEqual(args.slice(1), ['--app', f.app]);
+
+  f.set('profile', 'fail', '');
+  r = f.run();
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, '');
+  assert.equal(r.stderr.trim(), 'profile does not authorize keychain-access-groups');
 });
 
 test('a_helper_or_nekkod_with_a_restricted_entitlement_fails', posixFixture, () => {
@@ -155,12 +205,13 @@ test('a_signed_app_needs_the_profile_and_the_three_entitlements', posixFixture, 
   f.set('Nekko Agent.app', 'ents', MAIN);
   r = f.run(f.app, '--signed');
   assert.equal(r.status, 1);
-  assert.equal(r.stderr.trim(), `${f.app} embeds no provisioning profile, so macOS will refuse to launch it.`);
+  assert.equal(r.stderr.trim(), `${f.app} carries com.apple.application-identifier but embeds no provisioning profile, so macOS will refuse to launch it.`);
 
-  writeFileSync(join(f.app, 'Contents', 'embedded.provisionprofile'), '');
+  f.embed();
   r = f.run(f.app, '--signed');
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout.trim(), OK(5, ', profile embedded'));
+  assert.equal(r.stdout.trim(), OK(5, AUTHORIZED));
+  assert.deepEqual(f.checked().slice(1), ['--app', f.app]);
 });
 
 test('an_unknown_option_fails', posixFixture, () => {
@@ -169,4 +220,12 @@ test('an_unknown_option_fails', posixFixture, () => {
   const r = f.run(f.app, '--sign');
   assert.equal(r.status, 1);
   assert.equal(r.stderr.trim(), 'unknown option --sign.');
+});
+
+test('signed_and_ad_hoc_together_fail', posixFixture, () => {
+  const f = fixture();
+  f.set('nekko-vm', 'ents');
+  const r = f.run(f.app, '--signed', '--ad-hoc');
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), 'at most one option.');
 });

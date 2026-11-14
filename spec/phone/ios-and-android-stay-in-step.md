@@ -45,8 +45,14 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
 | Native proof | No new native test/evidence pass or physical-device proof claimed | No new native test/evidence pass or physical-device proof claimed | Run native builds/tests, inspect matched evidence and verify device auth/microphone/lifecycle before closing the verification gap. |
 | Chat environment: repositories and question actions (desktop since #2404) | Actioned `ask_user` options show as plain answers; no repository list | Same | [#2415](https://github.com/nekko-labs/nekko-agent/issues/2415) |
+| Quiet chat rows: no preview or dividers, sub-agent rows with their models ([spec](phone-chat-rows-match-the-desktop-card.md#quiet-rows-and-sub-agents-on-the-iphone-2026-11-10)) | Built 2026-11-10 in source; native screenshots pending | Rows still show the preview; no sub-agent rows | [#2509](https://github.com/nekko-labs/nekko-agent/issues/2509) |
 | Run a suggested command in the chat's terminal ([spec](../chat/run-suggested-commands-in-a-terminal.md), desktop since #2595) | No Run on shell blocks | Same | [#2607](https://github.com/nekko-labs/nekko-agent/issues/2607) (iPhone), [#2608](https://github.com/nekko-labs/nekko-agent/issues/2608) (Android) |
+| Nekko in the car: voice-first, active work, Results of voice commands ([spec](carplay.md)) | CarPlay app built 2026-11-14 ([#2781](https://github.com/nekko-labs/nekko-agent/issues/2781)): Linux-tested logic, not yet in CarPlay Simulator; waits on Apple's entitlement | Nothing yet; Android Auto counterpart to work out | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Built 2026-11-09 ([#2423](https://github.com/nekko-labs/nekko-agent/issues/2423)): inline card, link to the repository only, verified in Native iOS CI, not on a device | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | Both: the native store rating request once on the App Store and Google Play (planned). |
+
+## Pending response messages (#2476, not shipped)
+
+The lower stack layer implements iOS pending in-chat answers and one-time Allow/Deny messages. Android parity is tracked in [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) and the upper stack layer. Neither branch implementation nor an uninspected capture is release verification.
 
 ## Direct cloud text chats (#2414, not shipped)
 
@@ -80,7 +86,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
-| Connection row under the title instead of the connection, fleet and protocol banners (2026-11-12) | Tinted banners | [#2633](https://github.com/nekko-labs/nekko-agent/issues/2633) |
 | New chat as a composer (the desktop's bottom row: +, folder, asks-first, mic, Start) | A form; only its Chat / Image toggle matches the iPhone's (#2448) | [#2459](https://github.com/nekko-labs/nekko-agent/issues/2459) |
 
 Android features the iPhone lacks have not been audited yet.
@@ -91,7 +96,7 @@ Nothing is recorded as a true OS exclusive yet.
 
 | Capability | iPhone / iPad | Android | Gap / follow-up |
 | --- | --- | --- | --- |
-| Two-line reconnect status with fixed-width animated ellipsis | Branch implementation, native verification pending ([spec](ios-streaming-and-reconnect-status.md)) | Existing single-paragraph notice | [#2475](https://github.com/nekko-labs/nekko-agent/issues/2475) |
+| Two-line reconnect status with fixed-width animated ellipsis | Branch implementation, native verification pending ([spec](ios-streaming-and-reconnect-status.md)) | Same two lines in New chat while the computer is away (2026-11-13, `ReconnectingNotice`; dots still with animations off) | None |
 
 ## Secret box (desktop first, #2594)
 

@@ -34,6 +34,28 @@ Implemented in the desktop/shared web renderer:
 Verification: focused renderer tests and hidden Electron interaction/geometry assertions at 1100×800 and 390×800; matched base-revision captures and real-frame motion recording. Live subscription sign-ins and native phone apps are not exercised by this change.
 
 
+## Quiet provider setup and the guided key flow (#2722, 2026-11-13)
+
+Philip asked for the add-provider setup to follow the quiet design and for Google to connect interactively: "either one button click with web auth or a wizard if that's not possible", for every provider.
+
+**Why Google is a guided flow, not a sign-in.** Google offers no browser sign-in that lets a third-party app call Gemini on a person's own account or plan, or create an AI Studio key for them. Gemini's OAuth path only covers an app's own Google Cloud project, so the usage would be billed to Nekko Labs and the app would need Google's verification for a sensitive scope. A key from AI Studio is the only way in. See [decision 0092](../../docs/decisions/0092-google-gemini-connects-through-a-guided-key-flow.md).
+
+What people see (implemented in the shared desktop/web renderer):
+
+- **The add strip** above the cloud list shows each provider as its logo and name (ChatGPT, Claude, OpenAI API, OpenRouter, Google Gemini, then More: Claude on Vertex AI, Ollama Cloud, OpenAI-compatible). No tinted tiles or "+" badges. The provider whose setup is open is shown as selected, and a setup opened on a provider behind More reveals that group.
+- **The setup panel** opens in the page, not in a card: the provider's logo, name and one line, then its steps, then the "Connection settings" disclosure (name and server address). It closes with the × or Esc, and one hairline separates it from the list below.
+- **Guided key flow** for every provider that only offers API keys: Google Gemini (Google AI Studio), OpenAI API, an Anthropic API key (Claude Console, inside the Claude panel's API option), Ollama Cloud, and OpenRouter's "Use a key you already have". Three numbered steps:
+  1. **Get a key from <site>**: one primary button opens the provider's key page in the browser, with a single line on what to press there.
+  2. **Bring the key back**: a quiet field and a Paste button. On the desktop app, once the key page was opened, a key on the clipboard that matches that provider's key shape (Gemini `AIza…`, OpenAI `sk-…`, Anthropic `sk-ant-…`, OpenRouter `sk-or-…`) is picked up when the window gets focus again. Nothing else on the clipboard is kept or sent, and Ollama Cloud keys, which have no fixed shape, are never picked up this way. A browser tab never reads the clipboard without a press.
+  3. **Connect**: a pasted or picked-up key is checked straight away with the provider's model list and saved if it works. The step shows "Checking your key…", the provider's error in words with **Try again**, or "<Provider> is connected" before the panel closes. A typed key connects on Enter or **Connect**. A failed key is never retried on its own.
+- **Sign-in providers** stay one click: ChatGPT and OpenRouter show only their sign-in button and its consent line under the panel heading.
+- **Plain forms** (Claude on Vertex AI, Bedrock, Foundry, an OpenAI-compatible endpoint, local servers) keep Test connection (a neutral button) and Connect (the one primary), with quiet fields. Vertex keeps its `gcloud auth application-default login` step. The other ways to sign in move behind a link.
+- **Claude setup** and the **provider chooser** (first-run setup and the full picker) follow the same rules: choices are rows with a wash on hover and the accent wash once picked, the steps have no boxes, there are no tracked caps, and "where your Claude API account is" is a quiet tab group.
+
+Privacy and security: keys go only to the provider they belong to, as before. The clipboard is read only on the desktop, only after the person opened that provider's key page, only while the field is empty, and only a value with that provider's key shape is used. Keys are never shown (password field).
+
+Verification: unit tests for key shapes, step states, panel markup and the strip. In the hidden Electron fixture (`cloud-providers-sandbox.cjs`), checked in Dusk and Light Nekko at 1100px and 390px: nothing is sent before a key, a failed check never saves and shows the error, Try again saves the hosted endpoint with key auth, the panel closes itself once connected, a pasted Gemini-shaped key connects without a press, OpenRouter shows sign-in first, and Vertex still saves its regional endpoint. The Claude API path saves through the key flow (`claude-setup-sandbox.cjs`). Not verified: the clipboard pickup on window focus with a real browser round trip, and real keys against the live services.
+
 ## Google and Ollama cloud setup (#1955)
 
 Implemented in the shared desktop/web renderer:

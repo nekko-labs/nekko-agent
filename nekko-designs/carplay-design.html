@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nekko in CarPlay</title>
+<style>
+:root{color-scheme:light dark;--paper:#faf8f5;--surface-2:#f1eeeb;--ink:#25202a;--ink-soft:#625b68;--ink-faint:#756d7a;--line:#ded7df;--accent:#5a2352;--info:#1f6680;--ring:#854f6c;
+/* The car screen is always CarPlay's own dark chrome: these stand for the system's colours, not ours. */
+--car:#000;--car-row:#1c1c1e;--car-ink:#fff;--car-soft:#ababb0;--car-faint:#7c7c82;--car-sep:#38383a;--car-tint:#0a84ff;
+--attention:#e8a33d;--success:#5fbf8f;--danger:#ef6f6c;--watch:#8d8794;--ease-out:cubic-bezier(.2,.8,.2,1)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#0b0c14;--surface-2:#1d1f2c;--ink:#ecebf0;--ink-soft:#b2afbd;--ink-faint:#8f8c9b;--line:#252735;--accent:#d6a4c8;--info:#6bb8d4}}
+:root[data-theme="dark"]{--paper:#0b0c14;--surface-2:#1d1f2c;--ink:#ecebf0;--ink-soft:#b2afbd;--ink-faint:#8f8c9b;--line:#252735;--accent:#d6a4c8;--info:#6bb8d4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-2);color:var(--ink);font:14px/1.5 system-ui,-apple-system,sans-serif}
+header{padding:40px 40px 8px;max-width:1100px}
+h1{margin:0;font-size:24px;font-weight:600}
+header p{margin:8px 0;color:var(--ink-soft)}
+h2{font-size:16px;font-weight:600;margin:40px 40px 0}
+.canvas{display:flex;gap:40px;padding:20px 40px 20px;align-items:flex-start;overflow-x:auto}
+.frame{flex:0 0 auto}
+.caption{font-size:12px;color:var(--ink-soft);margin-bottom:8px;max-width:640px}
+.caption b{color:var(--ink);font-weight:500}
+.note{font-size:12px;color:var(--ink-faint);margin-top:8px;max-width:640px}
+/* A CarPlay screen, 800x480 points drawn at 0.8. */
+.car{width:640px;height:384px;background:var(--car);color:var(--car-ink);border-radius:14px;display:flex;overflow:hidden;font:13px/1.35 -apple-system,system-ui,sans-serif;box-shadow:0 12px 40px #0003}
+.dock{width:56px;background:#0d0d0f;display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 0}
+.dock .t{font-size:11px;font-weight:600}.dock i{width:32px;height:32px;border-radius:8px;background:#2c2c2e;display:block}
+.dock i.me{background:linear-gradient(140deg,#5a2352,#190019)}
+.screen{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.nav{height:40px;display:flex;align-items:center;padding:0 12px;gap:8px;border-bottom:1px solid var(--car-sep)}
+.nav .title{flex:1;text-align:center;font-weight:600}
+.btn{color:var(--car-tint);font-size:13px;min-width:44px;display:inline-flex;align-items:center;gap:4px}
+.tabs{height:44px;display:flex;border-top:1px solid var(--car-sep);margin-top:auto}
+.tabs span{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;color:var(--car-faint)}
+.tabs span.on{color:var(--car-tint)}
+.list{overflow:hidden;flex:1}
+.sec{font-size:11px;color:var(--car-soft);padding:8px 16px 4px;font-weight:600}
+.row{display:flex;align-items:center;gap:12px;padding:0 16px;height:44px;border-bottom:1px solid var(--car-sep)}
+.row>div{flex:1;min-width:0}
+.row b{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row small{display:block;color:var(--car-soft);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .acc{color:var(--car-faint)}
+svg.g{width:20px;height:20px;flex:0 0 20px;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.needs{stroke:var(--attention)}.work{stroke:var(--success)}.watch{stroke:var(--watch)}.done{stroke:var(--car-faint)}.fail{stroke:var(--danger)}.ok{stroke:var(--success)}.wait{stroke:var(--car-soft)}
+/* Voice control template */
+.voice{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.voice .state{font-size:22px;font-weight:600}
+.orb{width:96px;height:96px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#d6a4c8,#5a2352 60%,#190019);display:grid;place-items:center;animation:breathe 1.6s var(--ease-out) infinite alternate}
+.orb.still{animation:none;opacity:.9}
+.orb svg{width:44px;height:44px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round}
+@keyframes breathe{from{transform:scale(.96)}to{transform:scale(1.04)}}
+@media (prefers-reduced-motion:reduce){.orb{animation:none}}
+.actions{display:flex;gap:12px}
+.pill{background:#2c2c2e;border-radius:20px;padding:8px 20px;font-weight:500}
+.pill.primary{background:var(--car-tint)}
+/* Information template */
+.info{padding:12px 20px;flex:1}
+.info dl{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;margin:0}
+.info dt{color:var(--car-soft)}.info dd{margin:0}
+.info .btns{display:flex;gap:12px;margin-top:20px}
+.info .btns span{flex:1;text-align:center;background:#2c2c2e;border-radius:10px;padding:10px 0;font-weight:500}
+.info .btns span.primary{background:var(--car-tint)}
+/* Modal sheets over the screen */
+.scrim{position:absolute;inset:0;background:#000a;display:grid;place-items:center}
+.sheet{width:340px;background:#2c2c2e;border-radius:14px;overflow:hidden;text-align:center}
+.sheet p{margin:0;padding:16px 16px 12px}.sheet p b{display:block;font-size:15px;margin-bottom:4px}
+.sheet span{display:block;border-top:1px solid #48484a;padding:10px;color:var(--car-tint)}
+.sheet span.d{color:var(--danger)}
+/* Flow and grammar boards */
+.board{background:var(--paper);border-radius:12px;padding:20px;width:640px}
+.board h3{font-size:14px;font-weight:600;margin:0 0 8px}
+.board table{border-collapse:collapse;width:100%;font-size:12px}
+.board td{padding:6px 8px 6px 0;vertical-align:top;border-top:1px solid var(--line)}
+.board td:first-child{color:var(--ink);font-family:ui-monospace,monospace;white-space:nowrap}
+.board td:nth-child(2){color:var(--ink-soft)}
+.board td:last-child{color:var(--ink-faint);white-space:nowrap}
+.pipe{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.pipe .n{background:var(--surface-2);border-radius:8px;padding:8px 12px}
+.pipe .n b{display:block;font-size:13px;font-weight:500}
+.pipe .n small{color:var(--ink-faint)}
+.pipe .a{color:var(--ink-faint)}
+.rules li{margin:4px 0;color:var(--ink-soft);font-size:12px}
+.rules b{color:var(--ink);font-weight:500}
+</style>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="rocket" viewBox="0 0 24 24"><path d="M12 2.5C14.6 4.5 15.8 7.5 15.8 11.1V16H8.2V11.1C8.2 7.5 9.4 4.5 12 2.5Z"/><circle cx="12" cy="9.5" r="1.6"/><path d="M8.2 12.5 5.8 15v2.2l2.4-1.2M15.8 12.5l2.4 2.5v2.2l-2.4-1.2M10.6 18.2 12 21.5l1.4-3.3"/></symbol>
+    <symbol id="question" viewBox="0 0 18 18"><path d="M5.5 6Q5.5 2.5 9 2.5T12.5 6Q12.5 8.5 9 10v1.5"/><circle cx="9" cy="15" r=".9"/></symbol>
+    <symbol id="check" viewBox="0 0 18 18"><path d="M3.5 9.5l4 4 7-9"/></symbol>
+    <symbol id="cross" viewBox="0 0 18 18"><path d="M4.5 4.5l9 9M13.5 4.5l-9 9"/></symbol>
+    <symbol id="zz" viewBox="0 0 18 18"><path d="M3 6h5L3 12h5M10 4h4l-4 5h4"/></symbol>
+    <symbol id="clock" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7"/><path d="M9 5v4l3 1.5"/></symbol>
+    <symbol id="warn" viewBox="0 0 18 18"><path d="M9 2.5l7.5 13h-15z M9 7v3.5"/><circle cx="9" cy="13.2" r=".6"/></symbol>
+    <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+    <symbol id="wave" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></symbol>
+    <symbol id="dots" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/></symbol>
+  </defs>
+</svg>
+
+<header>
+  <h1>Nekko Agent in CarPlay</h1>
+  <p>A voice-first CarPlay app: it opens listening, shows the work running on your computers, and keeps a list of what your voice commands did. Speech is heard and spoken on the iPhone; the agents keep running where they already run.</p>
+</header>
+
+<h2>1 · Opening: voice first</h2>
+<div class="canvas">
+  <div class="frame">
+    <div class="caption"><b>Listening</b> · CPVoiceControlTemplate, presented over the Work tab the moment the app opens (Apple: voice is the primary modality on launch). The audio session opens here, never earlier.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="voice"><div class="orb"><svg><use href="#wave"/></svg></div><div class="state">Listening…</div><div class="actions"><span class="pill">Cancel</span><span class="pill primary">Done</span></div></div>
+    </div></div>
+  </div>
+  <div class="frame">
+    <div class="caption"><b>Working on it</b> · after a pause the words are turned into text on the iPhone, then the command runs. The words themselves are never drawn.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="voice"><div class="orb still"><svg><use href="#dots"/></svg></div><div class="state">Working on it…</div><div class="actions"><span class="pill">Cancel</span></div></div>
+    </div></div>
+  </div>
+  <div class="frame">
+    <div class="caption"><b>Confirm</b> · anything that changes work (send, allow, deny, stop, new chat) is read back aloud first: <i>“Send to Billing: run the tests first. Say yes to send.”</i> The screen only names the step.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="voice"><div class="orb"><svg><use href="#mic"/></svg></div><div class="state">Say yes to send</div><div class="actions"><span class="pill">Cancel</span><span class="pill primary">Send</span></div></div>
+    </div></div>
+  </div>
+  <div class="frame">
+    <div class="caption"><b>Speaking</b> · the answer is spoken, never shown (Apple: no text in response to queries). When it ends the sheet closes and the Results tab has the outcome.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="voice"><div class="orb"><svg><use href="#wave"/></svg></div><div class="state">Nekko</div><div class="actions"><span class="pill">Stop</span><span class="pill primary">Talk</span></div></div>
+    </div></div>
+  </div>
+</div>
+
+<h2>2 · Active work</h2>
+<div class="canvas">
+  <div class="frame">
+    <div class="caption"><b>Work tab</b> · CPListTemplate in a CPTabBarTemplate (depth 1). Every chat the phone lists, from every computer, grouped as the Lock Screen card orders them: needs you first. Our status glyphs. Talk is always top right.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="nav"><span class="btn"></span><span class="title">Nekko</span><span class="btn"><svg class="g" style="stroke:var(--car-tint)"><use href="#mic"/></svg>Talk</span></div>
+      <div class="list">
+        <div class="sec">Needs you</div>
+        <div class="row"><svg class="g needs"><use href="#question"/></svg><div><b>Billing retries</b><small>Allow: run npm test · Studio Mac</small></div><span class="acc">›</span></div>
+        <div class="sec">Working</div>
+        <div class="row"><svg class="g work"><use href="#rocket"/></svg><div><b>Fix flaky login test</b><small>Editing auth.spec.ts · 12 min</small></div><span class="acc">›</span></div>
+        <div class="row"><svg class="g work"><use href="#rocket"/></svg><div><b>Release notes 0.9.8</b><small>Writing… · 3 min · Cloud M1</small></div><span class="acc">›</span></div>
+        <div class="sec">Watching</div>
+        <div class="row"><svg class="g watch"><use href="#zz"/></svg><div><b>iOS widget polish</b><small>Watching PR #2741</small></div><span class="acc">›</span></div>
+      </div>
+      <div class="tabs"><span class="on">● Work</span><span>Results</span></div>
+    </div></div>
+  </div>
+  <div class="frame">
+    <div class="caption"><b>A chat</b> · CPInformationTemplate pushed from a row (depth 2). State facts only, never the reply. Up to three buttons, only the ones that apply now: Allow and Deny when it waits on an approval, Hear latest and Stop when it works.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="nav"><span class="btn">‹ Work</span><span class="title">Billing retries</span><span class="btn"><svg class="g" style="stroke:var(--car-tint)"><use href="#mic"/></svg>Talk</span></div>
+      <div class="info"><dl><dt>Status</dt><dd>Needs you</dd><dt>Waiting on</dt><dd>Allow: run npm test</dd><dt>Risk</dt><dd>Low</dd><dt>Computer</dt><dd>Studio Mac</dd><dt>Running for</dt><dd>18 min</dd></dl>
+        <div class="btns"><span class="primary">Allow</span><span>Deny</span><span>Talk</span></div></div>
+      <div class="tabs"><span class="on">● Work</span><span>Results</span></div>
+    </div></div>
+  </div>
+  <div class="frame">
+    <div class="caption"><b>A chat, working</b> · Talk here starts a conversation bound to this chat: what you say is sent to it, its reply is read aloud, and it listens again.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="nav"><span class="btn">‹ Work</span><span class="title">Fix flaky login test</span><span class="btn"></span></div>
+      <div class="info"><dl><dt>Status</dt><dd>Working</dd><dt>Step</dt><dd>Editing auth.spec.ts</dd><dt>Computer</dt><dd>Studio Mac</dd><dt>Running for</dt><dd>12 min</dd></dl>
+        <div class="btns"><span class="primary">Talk</span><span>Hear latest</span><span>Stop</span></div></div>
+      <div class="tabs"><span class="on">● Work</span><span>Results</span></div>
+    </div></div>
+  </div>
+</div>
+
+<h2>3 · What your commands did</h2>
+<div class="canvas">
+  <div class="frame">
+    <div class="caption"><b>Results tab</b> · CPListTemplate. One row per command this drive, newest first: what was done and how it ended, in words. A row updates when the outcome changes (queued → delivered → reply ready). Tap to hear it again.</div>
+    <div class="car"><div class="dock"><span class="t">9:52</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="nav"><span class="btn"></span><span class="title">Results</span><span class="btn"><svg class="g" style="stroke:var(--car-tint)"><use href="#mic"/></svg>Talk</span></div>
+      <div class="list">
+        <div class="row"><svg class="g ok"><use href="#check"/></svg><div><b>Sent to Billing retries</b><small>Reply ready · tap to hear · 9:51</small></div></div>
+        <div class="row"><svg class="g ok"><use href="#check"/></svg><div><b>Allowed run npm test</b><small>Billing retries · 9:49</small></div></div>
+        <div class="row"><svg class="g wait"><use href="#clock"/></svg><div><b>New chat on Studio Mac</b><small>Waiting to send · Studio Mac is offline</small></div></div>
+        <div class="row"><svg class="g fail"><use href="#warn"/></svg><div><b>Stop Release notes</b><small>Couldn’t reach Cloud M1 · 9:44</small></div></div>
+        <div class="row"><svg class="g done"><use href="#check"/></svg><div><b>Status</b><small>1 needs you, 2 working · 9:41</small></div></div>
+      </div>
+      <div class="tabs"><span>Work</span><span class="on">● Results</span></div>
+    </div></div>
+  </div>
+  <div class="frame">
+    <div class="caption"><b>Confirm by touch</b> · CPActionSheetTemplate for Stop and Deny tapped on screen (voice confirms by voice instead). Destructive in red.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="nav"><span class="btn">‹ Work</span><span class="title">Fix flaky login test</span><span class="btn"></span></div>
+      <div class="info" style="opacity:.4"><dl><dt>Status</dt><dd>Working</dd><dt>Step</dt><dd>Editing auth.spec.ts</dd></dl></div>
+      <div class="scrim"><div class="sheet"><p><b>Stop Fix flaky login test?</b>Its work so far stays in the chat.</p><span class="d">Stop</span><span>Cancel</span></div></div>
+    </div></div>
+  </div>
+</div>
+
+<h2>4 · When it can’t</h2>
+<div class="canvas">
+  <div class="frame">
+    <div class="caption"><b>Offline</b> · the list keeps the last known chats under one line saying how old they are. Commands still queue in the outbox and show as Waiting to send.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="nav"><span class="btn"></span><span class="title">Nekko</span><span class="btn"><svg class="g" style="stroke:var(--car-tint)"><use href="#mic"/></svg>Talk</span></div>
+      <div class="list">
+        <div class="sec">Studio Mac is offline · as of 9:12</div>
+        <div class="row"><svg class="g needs"><use href="#question"/></svg><div><b>Billing retries</b><small>Needs you</small></div><span class="acc">›</span></div>
+        <div class="row"><svg class="g work"><use href="#rocket"/></svg><div><b>Fix flaky login test</b><small>Working</small></div><span class="acc">›</span></div>
+      </div>
+      <div class="tabs"><span class="on">● Work</span><span>Results</span></div>
+    </div></div>
+  </div>
+  <div class="frame">
+    <div class="caption"><b>Allow while the iPhone is locked</b> · the app’s existing rule holds: allowing a tool needs an unlocked iPhone. Said as a condition, never as “pick up your phone” (Apple guideline 2). Deny and Stop still work.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="nav"><span class="btn">‹ Work</span><span class="title">Billing retries</span><span class="btn"></span></div>
+      <div class="info" style="opacity:.4"><dl><dt>Status</dt><dd>Needs you</dd></dl></div>
+      <div class="scrim"><div class="sheet"><p><b>Not allowed yet</b>Allowing a tool needs your iPhone unlocked. It will keep waiting for you.</p><span>OK</span></div></div>
+    </div></div>
+  </div>
+  <div class="frame">
+    <div class="caption"><b>No computer yet</b> · CPAlertTemplate when nothing is paired; one line, no instructions to use the phone.</div>
+    <div class="car"><div class="dock"><span class="t">9:41</span><i></i><i class="me"></i><i></i></div><div class="screen">
+      <div class="nav"><span class="btn"></span><span class="title">Nekko</span><span class="btn"></span></div>
+      <div class="scrim"><div class="sheet"><p><b>No computer paired</b>Nekko Agent shows your agents here once a computer is paired.</p><span>OK</span></div></div>
+    </div></div>
+  </div>
+</div>
+
+<h2>5 · How it works</h2>
+<div class="canvas">
+  <div class="frame board">
+    <h3>Where each step runs</h3>
+    <div class="pipe">
+      <div class="n"><b>Car mic</b><small>via CarPlay</small></div><span class="a">→</span>
+      <div class="n"><b>iPhone</b><small>speech to text, on device</small></div><span class="a">→</span>
+      <div class="n"><b>CarCommand</b><small>parse, match chat, confirm</small></div><span class="a">→</span>
+      <div class="n"><b>Relay, end-to-end encrypted</b><small>outbox, approvals, stop</small></div><span class="a">→</span>
+      <div class="n"><b>Your computer or a Nekko Cloud machine</b><small>the agent runs as today</small></div>
+    </div>
+    <ul class="rules">
+      <li><b>Speech to text</b> on the iPhone first (on-device recogniser: fast, works in tunnels). Falls back to the computer’s Whisper only when the phone can’t recognise the language on device. Never a cloud speech service.</li>
+      <li><b>Text to speech</b> on the iPhone (system voices).</li>
+      <li><b>Nekko Cloud</b> is not needed for voice. A Nekko Cloud machine is just another computer in the list.</li>
+      <li><b>Audio session</b> opens only while the voice sheet is up (Apple guideline), and closes as it goes.</li>
+    </ul>
+  </div>
+  <div class="frame board">
+    <h3>What you can say</h3>
+    <table>
+      <tr><td>what’s happening · status · what needs me</td><td>Counts, then the chats that need you by name</td><td>no confirm</td></tr>
+      <tr><td>read Billing · what did Billing say</td><td>Speaks its latest reply</td><td>no confirm</td></tr>
+      <tr><td>tell Billing to run the tests first</td><td>Sends to that chat</td><td>read back, yes</td></tr>
+      <tr><td>allow · allow Billing</td><td>Allows the waiting step (low and medium risk)</td><td>read back, yes</td></tr>
+      <tr><td>deny Billing</td><td>Denies the waiting step</td><td>read back, yes</td></tr>
+      <tr><td>stop the login chat</td><td>Stops a running chat</td><td>read back, yes</td></tr>
+      <tr><td>start a chat to look into the flaky test</td><td>New chat on the active computer with its defaults</td><td>read back, yes</td></tr>
+      <tr><td>yes · no · cancel · the first one</td><td>Answers a read-back or a “which one?”</td><td></td></tr>
+    </table>
+    <p class="note">Chat names match loosely (“the login chat” finds “Fix flaky login test”). Two close matches are read out as a choice. Inside a chat’s Talk, anything else is sent to that chat. “Nekko,” at the start is allowed and ignored.</p>
+  </div>
+  <div class="frame board">
+    <h3>Apple’s rules this design follows (CarPlay Developer Guide, Oct 2026)</h3>
+    <ul class="rules">
+      <li><b>Category</b>: voice-based conversational (<code>com.apple.developer.carplay-voice-based-conversation</code>, iOS 26.4). Apple has to grant it.</li>
+      <li><b>Templates</b>: tab bar, list, information, action sheet, alert, voice control. At most 3 deep (tab bar → chat → nothing else pushed).</li>
+      <li><b>Voice first on launch</b>; the mic only while the voice control template shows.</li>
+      <li><b>No text or imagery in answers</b>, and never message contents: replies are spoken only; rows show state, never what the agent wrote.</li>
+      <li><b>Never ask the driver to pick up the iPhone</b>, and every flow works without it.</li>
+      <li><b>Works with the iPhone locked</b>: pairing keys are readable after first unlock already; signed changes (merging a PR) are not offered in the car.</li>
+    </ul>
+  </div>
+</div>
+<div style="height:40px"></div>
+</html>

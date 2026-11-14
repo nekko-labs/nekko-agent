@@ -8,7 +8,8 @@
 // entitlements.mac.plist and everything else entitlements.mac.inherit.plist. No
 // provisioning profile, and none picked up from this Mac's library: an ad-hoc
 // main executable with restricted entitlements would not launch, and this
-// never launches it. Any failure exits non-zero. It
+// never launches it, so the entitlements check runs with --ad-hoc. Any failure
+// exits non-zero. It
 // re-signs the app in place, so give it a copy. See docs/signing.md.
 const { execFileSync } = require('node:child_process');
 const { join, resolve } = require('node:path');
@@ -22,7 +23,7 @@ async function main() {
   await sign({ app, platform: 'darwin', identity: '-', identityValidation: false, preEmbedProvisioningProfile: false, optionsForFile: (file) => ({ hardenedRuntime: true, entitlements: entitlements(file) }) });
   const run = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
   run('codesign', ['--verify', '--deep', '--strict', app]);
-  process.stdout.write(run(join(__dirname, '..', '..', '..', 'scripts', 'check-mac-entitlements.sh'), [app]));
+  process.stdout.write(run(join(__dirname, '..', '..', '..', 'scripts', 'check-mac-entitlements.sh'), [app, '--ad-hoc']));
   // count-vms prints {"count":N}; nekko-vm must start under the new signature.
   const out = run(join(app, 'Contents', 'Resources', 'bin', 'nekko-vm'), ['count-vms']).trim();
   let count;
