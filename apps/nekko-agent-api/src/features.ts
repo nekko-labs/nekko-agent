@@ -7,8 +7,12 @@ import type { Db } from "./db.js";
  * off until a Nekko team account turns it on: `team` shows it to team
  * accounts only, `on` to everyone. A feature the service can't run (billing
  * without Stripe keys) stays unavailable whatever its switch says.
+ *
+ * `library-cloud`: syncing, sharing and versions of Library files (#2752).
+ * `library-multiplayer`: editing a shared document together with live
+ * cursors (#2751); unavailable until the service has its relay.
  */
-export const FEATURES = ["billing"] as const;
+export const FEATURES = ["billing", "library-cloud", "library-multiplayer"] as const;
 export type Feature = (typeof FEATURES)[number];
 export type FeatureState = "off" | "team" | "on";
 const STATES: ReadonlySet<string> = new Set(["off", "team", "on"]);

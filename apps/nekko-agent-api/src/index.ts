@@ -7,6 +7,7 @@ import { FlyDriver } from "./fly.js";
 import { deleteUnusedMachines, sweepMachineHours } from "./machines.js";
 import { resendMailer } from "./confirmations.js";
 import { purgeFeedbackScreenshots, purgeSignups } from "./retention.js";
+import { purgeLibraryHistory } from "./shares.js";
 import { Stripe } from "./billing.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
 import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
@@ -35,6 +36,13 @@ const applied = await migrate(db);
 if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
 await expireDonations(db);
 setInterval(() => expireDonations(db).catch(failed("expiring donations")), 24 * 60 * 60 * 1000).unref();
+
+// Library history (#2750): replaced revisions, old share versions and deleted shares go after 30 days.
+const purgeLibrary = () => purgeLibraryHistory(db)
+  .then((n) => { if (n.revisions || n.versions || n.shares) console.log(`library history purged: ${n.revisions} revisions, ${n.versions} share versions, ${n.shares} shares`); })
+  .catch(failed("purging library history"));
+await purgeLibrary();
+setInterval(purgeLibrary, 6 * 60 * 60 * 1000).unref();
 
 // Signup retention (privacy policy): unconfirmed after 30 days and
 // unsubscribed rows are deleted. A failed run deletes nothing (one
