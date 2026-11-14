@@ -107,9 +107,9 @@ app.whenReady().then(async () => {
       }
       await check(`!document.querySelector('[data-library-canvas]') && document.querySelector('.library-list').getBoundingClientRect().width > 1000`, 'list-spans-the-page');
       await run(`document.querySelector('[data-artifact-row]').click()`); await sleep(600);
-      await check(`document.querySelector('.library-list').getBoundingClientRect().width < 400 && !!document.querySelector('[aria-label="Close preview"]')`, 'list-preview-narrows-list');
+      await check(`document.querySelector('.library-list').getBoundingClientRect().width < 400 && !!document.querySelector('[data-library-back]')`, 'list-preview-narrows-list');
       await shot('desktop-list-preview');
-      await run(`document.querySelector('[aria-label="Close preview"]').click()`); await sleep(600);
+      await run(`document.querySelector('[data-library-back]').click()`); await sleep(600);
       await check(`document.querySelector('.library-list').getBoundingClientRect().width > 1000`, 'closing-preview-widens-list');
       await radio('Layout', 'Large icons'); await sleep(600);
       await run(`document.querySelector('[data-library-group="web"] h2 button').click()`); await sleep(400);
@@ -121,10 +121,16 @@ app.whenReady().then(async () => {
       await shot('desktop-documents');
       await radio('Show', 'All'); await sleep(600);
       await run(`document.querySelector('[data-library-tile] button').click()`); await sleep(400);
-      await check(`!!document.querySelector('[aria-label="Close preview"]') && !document.querySelector('[data-library-canvas]')`, 'tile-opens-preview');
+      await check(`!!document.querySelector('[data-library-back]') && !document.querySelector('[data-library-canvas]')`, 'tile-opens-preview');
       await shot('desktop-preview');
-      await run(`document.querySelector('[aria-label="Close preview"]').click()`); await sleep(300);
+      await run(`document.querySelector('[data-library-back]').click()`); await sleep(300);
       await check(`!!document.querySelector('[data-library-canvas]')`, 'close-returns-to-previews');
+      if (!baseline) {
+        await run(`document.querySelector('[data-library-tile] button').click()`); await sleep(400);
+        await check(`(() => { const back = document.querySelector('[data-library-back]').getBoundingClientRect(), pane = document.querySelector('[data-library-back]').closest('section').getBoundingClientRect(); return back.left - pane.left < 40 && back.top - pane.top < 40; })()`, 'back-sits-top-left');
+        await run(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`); await sleep(300);
+        await check(`!!document.querySelector('[data-library-canvas]') && !document.querySelector('[data-library-back]')`, 'escape-returns-to-previews');
+      }
       win.setContentSize(430, 932); await sleep(400);
       await shot('narrow-default');
       await check(`!!document.querySelector('[data-artifact-row]') && !document.querySelector('[data-library-canvas]')?.offsetParent`, 'narrow-keeps-the-list');

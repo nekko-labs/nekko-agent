@@ -108,11 +108,11 @@ app.whenReady().then(async () => {
     if (!baseline) {
     await run(`${row('Onboarding')}.click()`); await sleep(700);
     await shot('desktop-folder-design-preview');
-    await check(`(() => { const bar = document.querySelector('[aria-label="Close preview"]').parentElement; const open = [...bar.querySelectorAll('button')].find(b => b.textContent.trim() === 'Open file'); return !/Open chat/.test(bar.textContent) && open.classList.contains('btn-primary'); })()`, 'folder-design-preview-leads-with-open-file');
+    await check(`(() => { const bar = document.querySelector('[data-library-back]').parentElement; const open = [...bar.querySelectorAll('button')].find(b => b.textContent.trim() === 'Open file'); return !/Open chat/.test(bar.textContent) && open.classList.contains('btn-primary'); })()`, 'folder-design-preview-leads-with-open-file');
     await run(`${row('Checkout design')}.click()`); await sleep(700);
     await shot('desktop-claude-design-preview');
-    await check(`(() => { const bar = document.querySelector('[aria-label="Close preview"]').parentElement; return /Open chat/.test(bar.textContent) && bar.textContent.includes('/work/reports/checkout-design.html'); })()`, 'claude-code-design-opens-its-chat');
-    await run(`document.querySelector('[aria-label="Close preview"]').click()`); await sleep(300);
+    await check(`(() => { const bar = document.querySelector('[data-library-back]').parentElement; return /Open chat/.test(bar.textContent) && bar.textContent.includes('/work/reports/checkout-design.html'); })()`, 'claude-code-design-opens-its-chat');
+    await run(`document.querySelector('[data-library-back]').click()`); await sleep(300);
     }
     win.setContentSize(430, 932); await sleep(400);
     await shot('narrow-default');

@@ -40,6 +40,47 @@ xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative \
 Native protocol, app and UI checks remain in the Native iOS workflow. A headless
 protocol check does not establish physical-device, APNs delivery or store readiness.
 
+## Failed native test diagnostics
+
+The existing `native-ios-evidence-<shard>` workflow artifact includes
+`diagnostics/<result-name>/summary.json` and Xcode's diagnostic export for failed
+or unreadable results, including a failed first attempt when its retry passes.
+Clean passing results and Xcode’s host-wide `simctl_diagnostics` archive are
+excluded. Raw staging stays outside upload paths and is removed. `export-error.txt` records an export problem
+without masking the test verdict. These are CI fixture logs; review their content
+before copying them into an issue or publishing media. To collect from isolated
+local results: `node scripts/ios-failure-diagnostics.mjs <results-directory>`.
+The collection adds no retry and does not establish that #831/#1048 are fixed.
+
+## Simulator Keychain tests (#1096)
+
+Runtime tests need ad-hoc signing, unlike the build-only command above. On an
+isolated iPhone 17 Pro / iOS 26.5 simulator with Xcode 27.2,
+`CODE_SIGNING_ALLOWED=NO` makes `SecItemUpdate`, `SecItemAdd` and
+`SecItemCopyMatching` all return **-34018 (`errSecMissingEntitlement`)**; the
+original save/overwrite assertions read `nil`. With identical code and assertions,
+ad-hoc signing passes. No plaintext fallback or weaker Keychain attributes are
+needed. `KeychainStoreTests.testSecurityFrameworkAccess` reports actual status
+codes using a disposable item, never stored credentials.
+
+From the repository root, after `xcodegen generate --spec apps/ios/project.yml`,
+use a disposable simulator:
+
+```sh
+xcodebuild -project apps/ios/NekkoNative.xcodeproj -scheme NekkoNative \
+  -destination 'platform=iOS Simulator,id=YOUR_DISPOSABLE_SIMULATOR_UDID' \
+  -derivedDataPath /tmp/nekko-keychain-signed \
+  -parallel-testing-enabled NO \
+  -only-testing:NekkoNativeTests/KeychainStoreTests \
+  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" test
+```
+
+An unsigned negative control uses a different derived-data path and
+`CODE_SIGNING_ALLOWED=NO`; it is expected to fail, not a supported runtime test
+mode. An unsigned build can compile but does not prove Keychain access. This
+comparison does not verify hardware, distribution signing, managed relay
+availability or independent live-journey reliability.
+
 ## Local image chats (#2162)
 
 Implemented in source (native verification still pending):

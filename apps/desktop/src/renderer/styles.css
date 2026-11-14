@@ -2699,13 +2699,13 @@
 :is(.msg-ai, .msg-user) pre { overflow-wrap: normal; }
 
 /* Who a block of agent text is for (spec/chat/thinking-and-replies.md). Thinking
-   is quiet, with its icon out in the transcript's 30px gutter. A closing reply
+   keeps full ink so it reads clearly; its icon out in the transcript's 30px
+   gutter is what marks it as thinking. A closing reply
    has only a colored left rule; attention mid-turn keeps its panel. Both grow
    into the gutter and keep their right edge on the row's, clear of swipe-left
    times. Neither moves the text column, so settling a voice does not re-wrap. */
 .msg-ai[data-voice='working'] {
   position: relative;
-  color: var(--ink-soft);
 }
 .msg-voice-icon {
   position: absolute;
@@ -4586,6 +4586,24 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   box-shadow: var(--shadow-sm);
   transform-origin: 0 0;
 }
+/* What can be clicked in a design, outlined by the canvas over it. --z is the
+   canvas zoom, so the outline stays the same width on screen at every zoom. */
+.design-canvas-targets {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+.design-canvas-targets > span {
+  position: absolute;
+  border: calc(1.5px / var(--z)) solid var(--accent);
+  border-radius: calc(4px / var(--z));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  animation: design-target-in 180ms ease-out both;
+}
+@keyframes design-target-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .design-canvas-targets > span { animation: none; } }
 
 /* Working is a steady accent fill, never a new animation or GPU layer. */
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }
@@ -4681,6 +4699,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
    from its top-left corner, or an image cropped to the tile. The kind's drawing
    sits underneath until the page has settled. White is the web's own page
    colour for a page that sets none, not a theme colour. */
+.library-file-icon { display: inline-flex; align-items: center; justify-content: center; color: var(--file-color); background: color-mix(in srgb, var(--file-color) 12%, var(--surface)); }
 .library-live { position: relative; overflow: hidden; isolation: isolate; background: var(--surface-2); }
 .library-live-art { position: absolute; inset: 0; width: 100%; height: 100%; }
 .library-live-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center top; }
