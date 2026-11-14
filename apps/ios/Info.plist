@@ -19,7 +19,22 @@
     <!-- Renamed (LaunchScreen, Launch, LaunchPlum) with each colour change: iOS keeps showing a cached launch screen. -->
     <key>UILaunchStoryboardName</key><string>LaunchBrandPlum</string>
     <key>UIApplicationSceneManifest</key>
-    <dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key><false/>
+        <!-- The car's screen (App/CarPlay/CarPlayScene.swift; AppDelegate routes the role here).
+             It only connects once Apple grants the CarPlay entitlement (App/NekkoNative-CarPlay.entitlements). -->
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>CPTemplateApplicationSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneClassName</key><string>CPTemplateApplicationScene</string>
+                    <key>UISceneConfigurationName</key><string>CarPlay</string>
+                    <key>UISceneDelegateClassName</key><string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
     <key>UISupportedInterfaceOrientations</key>
     <array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
     <key>UISupportedInterfaceOrientations~ipad</key>

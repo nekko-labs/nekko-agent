@@ -1,4 +1,4 @@
-# 0099. Library edits a page by its text, and keeps designs view-only
+# 0101. Library edits a page by its text, and keeps designs view-only
 
 Date: 2026-11-14. Status: accepted. Issue: #2755.
 

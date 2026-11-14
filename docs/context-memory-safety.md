@@ -10,6 +10,20 @@ A context source toggle controls prompt assembly; it is not a filesystem permiss
 
 The Spec panel can turn a conversation into specifications and tasks, with selectable methodologies and editable checklist artifacts. This is a way to make requirements explicit, not evidence that generated code satisfies them. See the [walkthrough](/docs/walkthrough) and [verification progress](/docs/chat-progress).
 
+## Why do small local models get a shorter system prompt?
+
+A frontier model already knows how to plan, use tools and check its work, so a long rule list mostly costs tokens and can over-constrain it. A small local model needs the opposite: fewer, shorter, concrete instructions, one way to do each thing, and nothing it cannot act on. Every token of instructions also crowds out your work in a small context window.
+
+Nekko Agent therefore has three built-in prompt profiles:
+
+| Profile | Meant for | What it carries |
+| --- | --- | --- |
+| Small | Local models up to about 13B parameters, and any model whose context window is under 16k | A short prompt of about 500 tokens: use tools instead of guessing, say what you did, plus one-line forms of the issue, asking and planning rules. No pull request, CI, design or verification process. |
+| Medium | Mid-size local models and most cloud models | The working rules with the pull request, design and verification detail shortened |
+| Large | Frontier models, and the prompt every model gets today | Every rule, in full |
+
+**Every model gets Large for now.** Automatic sizing ships off until we have measured that the Small profile does better than Medium on small local models (about 8B and 32B), so nothing changes in your prompts unless you opt in. To use a profile, set `promptProfiles` in the app's settings file (a Settings screen for it is planned): `models` maps `provider::model` to `small`, `medium`, `large` or `auto`, and `providers` sets a default for every model of a provider. A model's own entry wins over its provider's. Setting `auto` to `true` turns on the automatic rule (a small context window or a small local model gets Small, a frontier model Large, the rest Medium) for models you have not set. Your own system instructions in Settings are added to whichever profile applies.
+
 ## Does Nekko Agent have persistent memory?
 
 **Yes.** Nekko stores global and workspace memory notes as Markdown and provides a manager for reviewing, editing and deleting them. A chat can use all memory, only its project folders' memory, or no memory. An incognito chat reads no memory.

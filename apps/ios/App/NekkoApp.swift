@@ -34,6 +34,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// Only so the Home Screen quick action reaches the app (QuickActionScene).
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        // The car's screen (Info.plist's CarPlay scene): its own delegate, never the quick action's.
+        if connectingSceneSession.role == .carTemplateApplication {
+            return UISceneConfiguration(name: CarPlaySceneDelegate.configurationName, sessionRole: connectingSceneSession.role)
+        }
         let config = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
         config.delegateClass = QuickActionScene.self
         // A cold launch from the quick action: the item arrives with the connection.

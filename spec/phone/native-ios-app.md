@@ -8,6 +8,22 @@ split-from: SPEC.md (2026-10-22)
 
 **User intent:** Philip asked (2026-10-16) to finish the native SwiftUI iPhone app using Orca's mobile app as the competitive reference, **Tailscale first** and on the Nekko relay, following the Android app's connection approach. It replaces the read-only direct-HTTPS foundation, which never shipped: one transport, the end-to-end encrypted relay, as on Android. Competitive notes: [reports/ios-native-competitive-2026-10-16.md](reports/ios-native-competitive-2026-10-16.md).
 
+## First-attempt failure diagnostics (#2767, #831, #1048)
+
+`[implemented; script tests and local failed/passing xcresult export verified;
+next failing CI/live-journey export unverified]` Native iOS retains the summary
+and Xcode diagnostic export for each failed or unreadable result bundle in the
+existing shard artifact's `diagnostics/<result-name>/` folder. Clean passing
+results are skipped, so a successful retry neither hides the first failure nor
+creates redundant diagnostics. An export failure is recorded and collection
+continues without changing the original test verdict. Collection uses the job's
+result bundles, not a new capture from a user's running simulator. Xcode's
+host-wide `simctl_diagnostics` archive is excluded before files enter an upload
+path; raw staging stays outside that path and is removed. No new macOS job, test
+retry, test-timeout increase or assertion change is added. This provides
+the next launch/testmanager investigation evidence; it does not fix or close the
+intermittent queue/fork or notification failures.
+
 ## Simulator Keychain verification (#1096)
 
 `[verified 2026-11-14 on an isolated iPhone 17 Pro / iOS 26.5, Xcode 27.2]`

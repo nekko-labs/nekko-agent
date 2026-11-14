@@ -350,6 +350,12 @@ pub fn turn_system_prompt(input: &Value) -> String {
         turn_wrapper: Some(wrapper),
         about_user: about,
         checkout_notice: Some(&checkout),
+        // Absent (or `auto`, unresolved): the full prompt, as before profiles.
+        profile: input
+            .get("promptProfile")
+            .and_then(Value::as_str)
+            .and_then(nekko_context::PromptProfile::parse)
+            .unwrap_or_default(),
     })
 }
 

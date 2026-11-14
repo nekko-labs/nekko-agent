@@ -44,7 +44,7 @@ Implemented, not yet released:
 - The change goes into the file's source as plain text in that element only (escaped, so typed `<` stays text), saved at once and kept as one undo step in **Source**. Formatting, attributes, scripts and the rest of the file are unchanged byte for byte. The page reloads once the save is on disk and stays in Edit text.
 - Text the file does not hold as plain text (written by the page's script, inside an element with other tags, or in an element written without its closing tag) is not changed: a note says to change it in Source.
 - The served page in the file pane now reloads when a save reaches the disk, not when the editor's text changes, so it never reloads an unsaved or half-written file.
-- How and why, and what it does not do: [decision 0099](../../docs/decisions/0099-library-edits-a-page-by-its-text-and-keeps-designs-view-only.md).
+- How and why, and what it does not do: [decision 0099](../../docs/decisions/0101-library-edits-a-page-by-its-text-and-keeps-designs-view-only.md).
 
 Boundaries: the editor script is a separate `edit` serve option (the canvas's control script is unchanged and never edits). It reads and writes text only and posts only to its own viewer; the app takes a change only from that frame and only while Edit text is on, as four bounded fields (tag, old text, which one, new text; up to 20,000 characters each). The hover and editing outlines are drawn inside the page with a fixed colour, since the page cannot see the app's theme.
 

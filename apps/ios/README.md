@@ -40,6 +40,18 @@ xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative \
 Native protocol, app and UI checks remain in the Native iOS workflow. A headless
 protocol check does not establish physical-device, APNs delivery or store readiness.
 
+## Failed native test diagnostics
+
+The existing `native-ios-evidence-<shard>` workflow artifact includes
+`diagnostics/<result-name>/summary.json` and Xcode's diagnostic export for failed
+or unreadable results, including a failed first attempt when its retry passes.
+Clean passing results and Xcode’s host-wide `simctl_diagnostics` archive are
+excluded. Raw staging stays outside upload paths and is removed. `export-error.txt` records an export problem
+without masking the test verdict. These are CI fixture logs; review their content
+before copying them into an issue or publishing media. To collect from isolated
+local results: `node scripts/ios-failure-diagnostics.mjs <results-directory>`.
+The collection adds no retry and does not establish that #831/#1048 are fixed.
+
 ## Simulator Keychain tests (#1096)
 
 Runtime tests need ad-hoc signing, unlike the build-only command above. On an

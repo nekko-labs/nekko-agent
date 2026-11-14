@@ -28,6 +28,8 @@
 
     <!-- Android 11+: see the phone's speech recognizer (the "This phone" dictation engine). -->
     <queries>
+        <!-- The connection row's Open Tailscale: the app if it is installed. -->
+        <package android:name="com.tailscale.ipn" />
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
