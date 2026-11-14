@@ -496,6 +496,38 @@
   background: var(--line);
   margin-block: var(--q-group);
 }
+/* The one on/off switch (primitives/Toggle and every role="switch" slider):
+   36x20 track, 16px knob. Off is a faint track, on is the accent; the knob
+   slides and the fill fades over --dur-med. A checkbox input or an
+   aria-hidden span (data-on) can wear it too. */
+.quiet-switch {
+  position: relative; flex: none; display: inline-block;
+  width: 36px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 999px;
+  appearance: none; cursor: pointer; vertical-align: middle;
+  background: color-mix(in srgb, var(--ink-faint) 35%, transparent);
+  transition: background-color var(--dur-med) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.quiet-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--switch-knob); box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-med) var(--ease-out);
+}
+.quiet-switch[aria-checked='true'], .quiet-switch:checked, .quiet-switch[data-on='true'] { background: var(--accent); }
+.quiet-switch[aria-checked='true']::after, .quiet-switch:checked::after, .quiet-switch[data-on='true']::after { transform: translateX(16px); }
+.quiet-switch:disabled { opacity: 0.5; cursor: not-allowed; }
+.quiet-switch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
+@media (prefers-reduced-motion: reduce) { .quiet-switch::after { transition: none; } }
+
+/* An automation row in the Automations panel: its state word sits flush
+   right; with a pointer, Run now, Pause and Delete take that place on hover
+   or focus and fade in. Touch shows both, the actions wrapping below. */
+@media (hover: hover) {
+  [data-task-row] [data-task-actions] { display: none; }
+  [data-task-row]:hover [data-task-actions], [data-task-row]:focus-within [data-task-actions] { display: flex; animation: task-actions-in var(--dur-fast) var(--ease-out); }
+  [data-task-row]:hover [data-task-state], [data-task-row]:focus-within [data-task-state] { display: none; }
+}
+@keyframes task-actions-in { from { opacity: 0; } }
+
 /* Groups stack with the group gap; the first in a container takes none. */
 .quiet-group + .quiet-group { margin-top: var(--q-group); }
 /* A row's own actions (remove, revert, load): hidden until the row is hovered
@@ -1391,6 +1423,8 @@
     --accent: #5a2352;
     /* Text on the accent fill (primary buttons). Themes with a light accent switch it to dark ink. */
     --on-accent: #ffffff;
+    /* The knob of every on/off switch (.quiet-switch), in every theme. */
+    --switch-knob: #ffffff;
     /* One brand hue. --accent-2 is a second data colour (charts, the code
      highlight, a celebration); it never fills a button, a title or the nav.
      Derived soft tokens track --accent, which the user can recolour. */
@@ -4362,11 +4396,6 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .mode-link.is-inline { margin: 0; font-size: inherit; }
 .mode-fly .mode-link, .mode-inline-fly .mode-link { margin: 4px 12px 2px; text-align: left; }
 
-.mode-switch { position: relative; width: 34px; height: 20px; flex: none; margin-top: 1px; border-radius: 999px; background: color-mix(in srgb, var(--ink-faint) 40%, transparent); transition: background .15s; }
-.mode-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-sm); transition: transform .15s; }
-.mode-switch[aria-checked="true"] { background: var(--accent); }
-.mode-switch[aria-checked="true"]::after { transform: translateX(14px); }
-.mode-switch:disabled { cursor: not-allowed; opacity: .6; }
 
 .mode-tiles { display: flex; flex-basis: 100%; gap: 4px; padding: 4px; border-radius: 10px; background: var(--surface-2); }
 .mode-tiles button { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 2px 4px; border-radius: 7px; font-size: var(--text-2xs); color: var(--ink-soft); }
@@ -4424,7 +4453,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   .mode-col { border-right: 0; border-bottom: 1px solid var(--line); }
   .mode-col:last-child { border-top: 0; }
 }
-@media (prefers-reduced-motion: reduce) { .mode-switch, .mode-switch::after, .mode-chev { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mode-chev { transition: none; } }
 
 /* Focus is a workspace, not a framed window inside another window. */
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel {
@@ -5001,11 +5030,6 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 /* ---------- First-run setup: the about-you steps (components/onboarding) ---------- */
 .setup-card { transition: background-color 120ms ease, border-color 120ms ease; }
 .setup-card.is-on { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
-.setup-switch { appearance: none; position: relative; flex: none; width: 44px; height: 26px; border-radius: 13px; background: var(--line); cursor: pointer; transition: background-color 150ms ease; }
-.setup-switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 25%, transparent); transition: transform 150ms ease; }
-.setup-switch:checked { background: var(--accent); }
-.setup-switch:checked::after { transform: translateX(18px); }
-.setup-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .theme-swatch-row { flex-wrap: nowrap; justify-content: center; gap: 4px; }
 .theme-swatch-row .theme-swatch-button { width: 64px; }
 .setup-nekko-eyes { transform-box: fill-box; transform-origin: center; animation: setup-blink 4.2s steps(1) infinite; }

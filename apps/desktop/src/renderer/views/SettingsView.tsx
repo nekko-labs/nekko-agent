@@ -1222,22 +1222,13 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
   );
 }
 
+/**
+ * Settings' call shape (`on`, aria props) for the app's one switch. It wears
+ * `.quiet-switch`, the same look as `primitives/Toggle`, so Settings and
+ * Automations draw the same slider.
+ */
 export function Toggle({ on, onChange, ...aria }: { on: boolean; onChange: (v: boolean) => void } & Pick<React.AriaAttributes, 'aria-label' | 'aria-describedby'>) {
-  return (
-    <button
-      role="switch"
-      {...aria}
-      aria-checked={on}
-      onClick={() => onChange(!on)}
-      className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors"
-      style={{ background: on ? 'var(--accent)' : 'var(--line)' }}
-    >
-      <span
-        className="inline-block h-5 w-5 rounded-full bg-white shadow-(--shadow-sm) transition-transform"
-        style={{ transform: on ? 'translateX(22px)' : 'translateX(2px)' }}
-      />
-    </button>
-  );
+  return <button type="button" role="switch" {...aria} aria-checked={on} className="quiet-switch" onClick={() => onChange(!on)} />;
 }
 
 /**
