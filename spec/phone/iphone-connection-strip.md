@@ -3,9 +3,9 @@ title: "iPhone: the connection row replaces the connection banners (2026-11-12)"
 area: phone
 ---
 
-# iPhone: the connection row replaces the connection banners (2026-11-12)
+# iPhone and Android: the connection row replaces the connection banners (2026-11-12)
 
-`[implemented 2026-11-12, iPhone only: the wording and state rules are unit tested in NekkoKit (ConnectionNotesTests); the row was built and photographed in the iPhone 17 Pro simulator (iOS 27.0) from the -uiTestConnectionStrip fixture, not yet against a real computer, a real Tailscale switch or on a device. Android still shows its banners: #2633]` Design: [reports/ios-connection-strip-design.html](../../reports/ios-connection-strip-design.html).
+`[implemented 2026-11-12, iPhone only: the wording and state rules are unit tested in NekkoKit (ConnectionNotesTests); the row was built and photographed in the iPhone 17 Pro simulator (iOS 27.0) from the -uiTestConnectionStrip fixture, not yet against a real computer, a real Tailscale switch or on a device. Android: built 2026-11-14 as `ConnectionRow` (see Android below)]` Design: [reports/ios-connection-strip-design.html](../../reports/ios-connection-strip-design.html).
 
 ## User intent
 
@@ -48,3 +48,15 @@ Philip asked (2026-11-12): update the iPhone's message banners to the quiet desi
 
 - Against a real paired computer, a real Tailscale off/on switch, and on a device.
 - Large Dynamic Type sizes (the row scrolls sideways; the opened line wraps).
+
+## Android (2026-11-14, #2633)
+
+`[implemented 2026-11-14: the state-to-row mapping is unit tested (ConnectionNotesTest, JVM) and the row was photographed and driven in an Android 12 (API 32) emulator by ConnectionRowTest and ProtocolBannerTest; not yet against a real computer, a real Tailscale switch or a device]`
+
+Same words, states and priority rules as above, as Material text rather than iOS controls:
+
+- `ConnectionNotes.make` (`connection/ConnectionNotes.kt`) is the Kotlin twin of the iPhone's mapping; `ConnectionRow` (`ui/components/ConnectionRow.kt`) draws it under the Chats title and replaces `ConnectionBanner` and the chat list's protocol notice. Android had no separate fleet banner. Words and lines are string resources in all six languages (`strings_connection.xml`).
+- The row is hidden while the list shows only this phone's own chats. It scrolls sideways; each item is a 48 dp target, the opened line animates over 200 ms.
+- Differences: *Open Tailscale* opens the Tailscale app, or its Google Play page (package visibility declared in the manifest); *update* says "Update it from Google Play"; an address a phone can never reach (localhost, public `ws://`) shows as *not found* with its own sentence and **Pair again**; *Details* opens Computers; the safety exits are the active computer's ⋮ and what they did is still said under the row. Quit is now remembered like stop (`remoteQuitAt`), giving the *quit* word.
+- Test hooks kept from the old banners: `open-tailscale`, `banner.pair-again`, `banner.menu`, `fleet.reconnect`; items are `strip.<computer id>`.
+- Not done: Settings → About still shows the version difference as before (the iPhone's one quiet line); Files and Monitors do not show problem-only items on Android.

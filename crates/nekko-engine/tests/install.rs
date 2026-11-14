@@ -77,8 +77,8 @@ fn offers_the_builds_the_host_offers() {
 
 /// The pinned stable-diffusion.cpp release (`builds.rs`) and how upstream names
 /// its archives. Update both when updating the pin in `builds.rs`.
-const SD_RELEASE: &str = "master-1050-58bb3c1";
-const SD_ARCHIVE_TAG: &str = "master-58bb3c1";
+const SD_RELEASE: &str = "master-1052-f5df5f8";
+const SD_ARCHIVE_TAG: &str = "master-f5df5f8";
 
 #[test]
 fn diffusion_release_matches_published_asset_names() {

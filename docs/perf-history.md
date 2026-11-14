@@ -58,6 +58,33 @@ The next test-only common overlay persists the debug route and original app-owne
 [Run 42926857207](https://github.com/nekko-labs/nekko-agent/actions/runs/42926857207), common `84dc0b80`, same original app SHAs and iPhone 18 Pro/iOS 27.0 (24A434)/Xcode 27.1 (27A9275). Both native test builds succeeded. BEFORE: 357 protocol/request tests passed; UI test 59.943 seconds, two setup failures. AFTER: 389 protocol/request tests passed; UI test 31.421 seconds, one setup failure. **These UI test durations are not Allowed latency. No return time was measured on either leg.** BEFORE stayed busy after the real denial; AFTER queried a still-transparent row immediately after Continue appeared. Neither reached the Settings toggle or activation.
 
 The next distinct common harness adds bounded initial-row and completed-denial predicates with stop-on-failure guards, plus DEBUG-only logs of the real request/refresh await boundaries. These do not replace providers or alter authorization; the timed return region stays byte-identical, with logging cost included in its existing ten seconds. This is a setup/measurement repair, not a measured performance improvement. Native compilation/readiness/return and matched media are unverified. Original failures and the stale-process race hypothesis above are not erased.
+## Design canvas paints a drag without re-rendering (#2756, 2026-11-14)
+Area: renderer
+Result: improvement (main-thread work); no effect on frame pacing in this harness
+Conditions: Apple M1 Max, macOS 27.2; the hidden, off-screen `design-canvas-sandbox.cjs` journey (Electron, offscreen rendering at 60 fps) with its 2880-wide, seven-frame `checkout-design-v3.html` (a CSS spinner and a `requestAnimationFrame` counter running) fitted on the canvas; 120 CDP mouse moves on the space around the design, 4 ms apart; Chrome's `Performance.getMetrics` deltas over the drag and the app's own `requestAnimationFrame` gaps. Three alternating runs each: before is `main` at afd98dd4c, after is this branch, same journey script and fixture.
+
+| Metric | Before (3 runs) | After (3 runs) |
+|---|---|---|
+| Script time during the drag | 114.5, 114.5, 110.6 ms | 22.5, 24.0, 20.9 ms |
+| All main-thread task time during the drag | 210.8, 212.6, 204.3 ms | 127.5, 142.5, 117.5 ms |
+| Style recalculations | 122, 122, 122 | 122, 122, 122 |
+| Layouts | 0, 0, 0 | 0, 0, 0 |
+| Frames painted, median / p95 / max gap | 132-133, 16.7 / 16.8 / 16.8 ms | 132, 16.7 / 16.8 / 16.8 ms |
+
+Why: a drag, a scroll or a pinch used to set React state on every pointer event, re-rendering the canvas each time; now it writes the transform straight onto the frame once per animation frame and settles into state 120 ms after the gesture pauses. The frame gaps did not move because this fast machine and hidden 60 fps window drop no frames either way; the saved script time is what slower machines and busier designs would feel. Not measured: a real trackpad, a visible window, a slower machine. Source: the #2756 PR.
+## Library document/image thumbnail cache (#2747, 2026-11-14)
+Area: renderer / memory. Result: improvement in synthetic thumbnail payload size and repeated-read behavior; end-to-end latency unmeasured.
+Conditions: macOS, Electron 45, hidden full-App fixture at 1440x900, one synthetic seven-file Library (three text documents, one refused document, one PDF and two images), one successful final journey. Network disabled, isolated profile. This is not a production workload or a frame-time benchmark.
+
+| Metric | Source / cold | Cached / warm |
+|---|---|---|
+| Solid-color 1600x900 raster data URL, UTF-16 characters | 41,962 (original PNG) | 1,335 (640x360 WebP thumbnail) |
+| Supported document reads per file | 1 at first thumbnail load | 0 additional reads during layout switches and return visit |
+| Image reads per file | 1 | 0 additional reads during image layout switches |
+
+The SVG fixture becomes a 640x480 WebP data URL of 1,511 characters. File opening deliberately performs a separate source read; changing the chat revision causes a new thumbnail read, and refused reads can retry after five seconds. Successful entries expire after 60 seconds on the next request. The LRU holds at most 80 results / 8 MiB of encoded strings and runs three read/decode jobs at once; these are configured bounds, not measured process-heap reductions. Documents become bounded first-page inert SVG images without per-document iframes. HTML keeps its existing live-frame lifecycle. Real photos may compress differently. Not measured: packaged startup, time to first preview, full-app memory/GPU use or disk-cache performance (the cache is renderer-local, not persisted).
+
+Source: `apps/desktop/scripts/library-thumbnails-sandbox.cjs`, final journey report and screenshots in the associated PR; issue [#2747](https://github.com/nekko-labs/nekko-agent/issues/2747). Early verification attempts exposed fixture interference from chat image cards, an incomplete Settings bridge and fixed-delay overlapping transitions; the final fixture uses the neutral Automations view, an explicit empty workflow response and waits for transition completion. These failed fixture runs are not product performance measurements.
 
 ## Chat pictures beside the chat, held turn saves (2026-11-09)
 Area: engine daemon

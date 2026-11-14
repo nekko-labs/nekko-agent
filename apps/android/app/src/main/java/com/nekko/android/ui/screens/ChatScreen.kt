@@ -294,7 +294,7 @@ private fun ChatScreenContent(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // Offline or refused: the chat stays as it was; the banner says why.
+                // Offline or refused: the chat stays as it was; the connection row says why.
             } finally {
                 pullUp.refreshing = false
             }

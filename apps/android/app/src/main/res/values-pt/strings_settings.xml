@@ -472,4 +472,8 @@
     <string name="service_note_failed">A solicitação falhou.</string>
     <string name="service_note_restart_accepted">Reinicialização aceita, ainda não verificada. Reconecte e atualize o status do serviço para verificar se o Nekko Agent está em execução.</string>
     <string name="service_note_install_accepted">Instalação aceita, ainda não verificada. Reconecte e confira a versão.</string>
+    <!-- Computer page: connection intent and the Models filter (#2059). -->
+    <string name="computer_connect_to">Conectar a %1$s</string>
+    <string name="computer_connect_footer">Desativado, o pareamento, os chats salvos, os rascunhos e as mensagens à espera continuam. Este telefone não se conecta até você ativar de novo.</string>
+    <string name="computer_no_models_in_group">Nenhum modelo neste grupo.</string>
 </resources>

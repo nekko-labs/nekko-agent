@@ -503,3 +503,35 @@ test('status page: a hand-set problem wins, a failed check shows as not answerin
   assert.equal(await check('x', reply(false, null)), 'fail');
   assert.equal(await check('x', () => Promise.reject(new Error('offline'))), 'fail');
 });
+
+test('pricing page: plans stay hidden until Nekko Cloud sells them to everyone (#2724)', async () => {
+  const read = (f) => readFileSync(fileURLToPath(new URL(`../apps/website/${f}`, import.meta.url)), 'utf8');
+  const html = read('pricing.html');
+  assert.match(html, /<meta name="robots" content="noindex"/, 'off the index before launch');
+  assert.match(html, /<div data-plans hidden>/, 'no plans without JavaScript or before the API says so');
+  assert.ok(!read('sitemap.xml').includes('https://nekkoagent.com/pricing<'), 'not in the sitemap before launch');
+  assert.match(read('privacy.html'), /href="\/pricing">pricing page<\/a>/, 'the privacy policy names the pricing page’s request');
+
+  const { runInNewContext } = await import('node:vm');
+  const ctx = { window: {}, Intl, Promise };
+  runInNewContext(read('pricing.js'), ctx);
+  const { price, pro, load } = ctx.window.NekkoPricing;
+  assert.equal(price({ amount: 1200, currency: 'usd', interval: 'month' }), '$12 a month');
+  assert.equal(price({ amount: 1250, currency: 'usd', interval: 'month' }), '$12.50 a month');
+  assert.match(price({ amount: 1800, currency: 'jpy', interval: 'month' }), /1,800 a month$/);
+  assert.equal(pro({ plans: [{ id: 'team', amount: 1 }] }), null);
+
+  const el = () => ({ hidden: true, textContent: '' });
+  const page = () => { const n = { '[data-plans]': el(), '[data-not-yet]': { hidden: false }, '[data-pro-price]': el() }; return { n, querySelector: (s) => n[s] }; };
+  const off = page();
+  assert.equal(await load(off, () => Promise.resolve({ ok: false, json: () => Promise.reject() })), false, '404 while billing is off or team-only');
+  assert.equal(off.n['[data-plans]'].hidden, true);
+  const down = page();
+  assert.equal(await load(down, () => Promise.reject(new Error('offline'))), false);
+  const on = page();
+  const plans = { plans: [{ id: 'pro', amount: 1200, currency: 'usd', interval: 'month' }] };
+  assert.equal(await load(on, () => Promise.resolve({ ok: true, json: () => Promise.resolve(plans) })), true);
+  assert.equal(on.n['[data-plans]'].hidden, false);
+  assert.equal(on.n['[data-not-yet]'].hidden, true);
+  assert.equal(on.n['[data-pro-price]'].textContent, '$12 a month');
+});

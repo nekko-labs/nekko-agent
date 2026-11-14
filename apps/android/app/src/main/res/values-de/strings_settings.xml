@@ -472,4 +472,8 @@
     <string name="service_note_failed">Anfrage fehlgeschlagen.</string>
     <string name="service_note_restart_accepted">Neustart angenommen, noch nicht bestätigt. Verbinde dich neu und aktualisiere den Dienststatus, um zu prüfen, dass Nekko Agent läuft.</string>
     <string name="service_note_install_accepted">Installation angenommen, noch nicht bestätigt. Verbinde dich neu und prüfe die Version.</string>
+    <!-- Computer page: connection intent and the Models filter (#2059). -->
+    <string name="computer_connect_to">Mit %1$s verbinden</string>
+    <string name="computer_connect_footer">Ausgeschaltet bleiben die Kopplung, gespeicherte Chats, Entwürfe und wartende Nachrichten erhalten. Dieses Telefon verbindet sich erst wieder, wenn du es einschaltest.</string>
+    <string name="computer_no_models_in_group">Keine Modelle in dieser Gruppe.</string>
 </resources>

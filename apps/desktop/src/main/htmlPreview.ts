@@ -15,9 +15,9 @@ export function registerHtmlPreview(authorized: (sender: WebContents) => boolean
   };
   ipcMain.handle(HTML_PREVIEW_CHANNELS.serve, async (event, path: unknown, options: unknown): Promise<HtmlPreviewServed> => {
     check(event.sender, event.senderFrame);
-    const internet = typeof options === 'object' && options !== null && (options as { internet?: unknown }).internet === true;
+    const flag = (name: 'internet' | 'controls') => typeof options === 'object' && options !== null && (options as Record<string, unknown>)[name] === true;
     try {
-      const served = await server.serve(path as string, { internet });
+      const served = await server.serve(path as string, { internet: flag('internet'), controls: flag('controls') });
       return { id: served.id, url: `http://127.0.0.1:${served.port}${served.path}` };
     } catch (e) {
       throw new Error(e instanceof HtmlPreviewRefusal ? e.message : 'The preview server could not start.');

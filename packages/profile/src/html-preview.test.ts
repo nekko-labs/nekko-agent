@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHtmlPreviewServer, HtmlPreviewRefusal, MAX_SERVED_PAGES, previewPolicy, STORAGE_SHIM, withStorageShim, type HtmlPreviewServer } from './html-preview.js';
+import { CONTROL_SHIM, createHtmlPreviewServer, HtmlPreviewRefusal, MAX_SERVED_PAGES, previewPolicy, STORAGE_SHIM, withStorageShim, type HtmlPreviewServer } from './html-preview.js';
 
 const dirs: string[] = [];
 const servers: HtmlPreviewServer[] = [];
@@ -119,6 +119,179 @@ describe('html preview server', () => {
     await expect(s.serve(join(site, 'assets', 'app.css'), { internet: false })).rejects.toBeInstanceOf(HtmlPreviewRefusal);
     await expect(s.serve(join(site, 'gone.html'), { internet: false })).rejects.toBeInstanceOf(HtmlPreviewRefusal);
     await expect(s.serve(join(root, 'home.html'), { internet: false })).rejects.toThrow(/home folder/);
+  });
+});
+
+describe('viewer control script', () => {
+  it('is added only to a page served for the design canvas, after the storage stand-in', async () => {
+    const { site } = design();
+    const s = server();
+    const plain = await s.serve(join(site, 'index.html'), { internet: false });
+    expect(await (await get(plain.port, plain.path)).text()).not.toContain('nekkoPreview');
+    const canvas = await s.serve(join(site, 'index.html'), { internet: false, controls: true });
+    const page = await (await get(canvas.port, canvas.path)).text();
+    expect(page.startsWith(`<!doctype html>${STORAGE_SHIM}${CONTROL_SHIM}<html>`)).toBe(true);
+    // Its other files are untouched, and the policy is the same as any served page's.
+    expect(await (await get(canvas.port, `/${canvas.id}/assets/app.css`)).text()).toBe('body{color:red}');
+    expect((await get(canvas.port, canvas.path)).headers.get('content-security-policy')).toBe(previewPolicy(false));
+  });
+
+  it('answers only its own viewer, and reports nothing but size and motion', () => {
+    // One inline classic script, safe to splice after a doctype.
+    expect(CONTROL_SHIM.startsWith('<script>') && CONTROL_SHIM.endsWith('</script>')).toBe(true);
+    expect(CONTROL_SHIM.slice(8, -9)).not.toContain('</script');
+    expect(() => new Function(CONTROL_SHIM.slice(8, -9))).not.toThrow();
+    expect(CONTROL_SHIM).toContain('e.source!==window.parent');
+    expect(CONTROL_SHIM).toContain('if(window.parent===window)return');
+    for (const leak of ['cookie', 'localStorage', 'location', 'innerHTML', 'fetch(', 'XMLHttpRequest']) expect(CONTROL_SHIM).not.toContain(leak);
+  });
+
+  it('pauses and resumes animations, frame loops and media, and counts them', () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const listeners: Record<string, (e: unknown) => void> = {};
+    const animation = { playState: 'running', pause() { this.playState = 'paused'; }, play() { this.playState = 'running'; } };
+    const video = { paused: false, pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } };
+    const still = { paused: true, pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } };
+    const ran: string[] = [];
+    const queue: Array<() => void> = [];
+    const parent = { postMessage: (m: Record<string, unknown>) => { sent.push(m); } };
+    const win = {
+      parent,
+      requestAnimationFrame: (cb: () => void) => { queue.push(cb); return queue.length; },
+      cancelAnimationFrame: () => {},
+    } as Record<string, unknown>;
+    const document = {
+      documentElement: { scrollWidth: 2400, scrollHeight: 1300 }, body: { scrollWidth: 1440, scrollHeight: 1800 },
+      getAnimations: () => [animation, { playState: 'finished' }],
+      querySelectorAll: () => [video, still],
+    };
+    new Function('window', 'document', 'addEventListener', CONTROL_SHIM.slice(8, -9))(win, document, (type: string, fn: (e: unknown) => void) => { listeners[type] = fn; });
+    const say = (nekkoPreview: string, source: unknown = parent) => listeners.message({ source, data: { nekkoPreview } });
+    const raf = win.requestAnimationFrame as (cb: () => void) => number;
+
+    listeners.load({});
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'state', animations: 1, media: 2, frames: 0, paused: false, width: 2400, height: 1800 });
+    raf(() => ran.push('before'));
+    expect(queue).toHaveLength(1);
+
+    // A message from anywhere but the viewer is ignored.
+    say('pause', {});
+    expect(animation.playState).toBe('running');
+
+    say('pause');
+    expect([animation.playState, video.paused, sent.at(-1)!.paused]).toEqual(['paused', true, true]);
+    const heldId = raf(() => ran.push('held'));
+    const dropped = raf(() => ran.push('cancelled'));
+    (win.cancelAnimationFrame as (id: number) => void)(dropped);
+    expect(heldId).toBeLessThan(0);
+    expect(queue).toHaveLength(1);
+
+    say('play');
+    expect([animation.playState, video.paused, still.paused, sent.at(-1)!.paused]).toEqual(['running', false, true, false]);
+    queue.forEach((cb) => cb());
+    expect(ran).toEqual(['before', 'held']);
+    say('probe');
+    expect(sent.at(-1)).toMatchObject({ frames: 3, animations: 1 });
+    expect(sent.every((m) => Object.keys(m).sort().join() === 'animations,frames,height,media,nekkoPreview,paused,width')).toBe(true);
+  });
+
+  it('reports where the clickable parts are only once asked, once per element, and stops when told', () => {
+    vi.useFakeTimers();
+    try {
+      const sent: Array<Record<string, unknown>> = [];
+      const listeners: Record<string, (e: unknown) => void> = {};
+      const parent = { postMessage: (m: Record<string, unknown>) => { sent.push(m); } };
+      const box = (left: number, top: number, width: number, height: number) => ({ getBoundingClientRect: () => ({ left, top, width, height }) });
+      const button = { ...box(10, 20, 80, 30), parentElement: null, cursor: 'pointer' };
+      const label = { ...box(12, 22, 40, 10), parentElement: button, cursor: 'pointer' };
+      const card = { ...box(0, 300, 200, 100), parentElement: null, cursor: 'pointer' };
+      const hidden = { ...box(0, 0, 0, 0), parentElement: null, cursor: 'pointer' };
+      const plain = { ...box(0, 0, 50, 50), parentElement: null, cursor: 'auto' };
+      let observed: (() => void) | null = null;
+      const win = {
+        parent, scrollX: 0, scrollY: 100,
+        requestAnimationFrame: () => 1, cancelAnimationFrame: () => {},
+        getComputedStyle: (el: { cursor: string }) => ({ cursor: el.cursor }),
+        MutationObserver: class { constructor(cb: () => void) { observed = cb; } observe() {} },
+      } as Record<string, unknown>;
+      const document = {
+        documentElement: {}, body: { getElementsByTagName: () => [button, label, card, hidden, plain] },
+        getAnimations: () => [],
+        querySelectorAll: (sel: string) => (sel.includes('button') ? [button] : []),
+      };
+      new Function('window', 'document', 'addEventListener', CONTROL_SHIM.slice(8, -9))(win, document, (type: string, fn: (e: unknown) => void) => { listeners[type] = fn; });
+      const say = (nekkoPreview: string) => listeners.message({ source: parent, data: { nekkoPreview } });
+
+      // Nothing is measured until the canvas asks.
+      expect(observed).toBeNull();
+      say('targets');
+      // The button once (its label inherits the pointer), the card, never a zero-size or plain element; page coordinates.
+      expect(sent.at(-1)).toEqual({ nekkoPreview: 'targets', boxes: [[10, 120, 80, 30], [0, 400, 200, 100]] });
+      // A change in the page reports again, a moment later and once for a burst.
+      const count = sent.length;
+      observed!(); observed!();
+      vi.advanceTimersByTime(300);
+      expect(sent.length).toBe(count + 1);
+      say('untargets');
+      observed!();
+      vi.advanceTimersByTime(300);
+      expect(sent.length).toBe(count + 1);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('passes the canvas a scroll the page has no scroll box for, any pinch, and Space held outside a field', () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const listeners: Record<string, (e: unknown) => void> = {};
+    const parent = { postMessage: (m: Record<string, unknown>) => { sent.push(m); } };
+    const body = { nodeType: 1 };
+    const html = { nodeType: 1 };
+    const list = { nodeType: 1, scrollHeight: 2000, clientHeight: 400, scrollTop: 0, scrollWidth: 300, clientWidth: 300, scrollLeft: 0, parentElement: body, style: 'auto' };
+    const row = { nodeType: 1, scrollHeight: 40, clientHeight: 40, scrollTop: 0, scrollWidth: 300, clientWidth: 300, scrollLeft: 0, parentElement: list, style: 'visible' };
+    const card = { nodeType: 1, scrollHeight: 300, clientHeight: 300, scrollTop: 0, scrollWidth: 300, clientWidth: 300, scrollLeft: 0, parentElement: body, style: 'visible' };
+    const win = {
+      parent,
+      requestAnimationFrame: () => 1,
+      cancelAnimationFrame: () => {},
+      getComputedStyle: (el: { style: string }) => ({ overflowX: 'visible', overflowY: el.style }),
+    } as Record<string, unknown>;
+    const document = { documentElement: html, body, getAnimations: () => [], querySelectorAll: () => [] };
+    new Function('window', 'document', 'addEventListener', CONTROL_SHIM.slice(8, -9))(win, document, (type: string, fn: (e: unknown) => void) => { listeners[type] = fn; });
+    const wheel = (target: unknown, over: Record<string, unknown> = {}) => {
+      let prevented = false;
+      listeners.wheel({ target, deltaX: 0, deltaY: 30, deltaMode: 0, clientX: 120, clientY: 80, ctrlKey: false, metaKey: false, preventDefault: () => { prevented = true; }, ...over });
+      return prevented;
+    };
+
+    // Over a plain card the page has nothing to scroll, so the canvas moves.
+    expect(wheel(card)).toBe(true);
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'wheel', dx: 0, dy: 30, x: 120, y: 80, zoom: false });
+    // Inside a list that can still scroll down, the list scrolls and nothing is sent.
+    const before = sent.length;
+    expect(wheel(row)).toBe(false);
+    expect(sent.length).toBe(before);
+    // At its end, or scrolling up from its top, the canvas moves again.
+    expect(wheel(row, { deltaY: -30 })).toBe(true);
+    list.scrollTop = 1600;
+    expect(wheel(row)).toBe(true);
+    // A pinch always zooms the canvas, and lines are turned into pixels.
+    list.scrollTop = 0;
+    expect(wheel(row, { ctrlKey: true, deltaY: 2, deltaMode: 1 })).toBe(true);
+    expect(sent.at(-1)).toMatchObject({ nekkoPreview: 'wheel', dy: 32, zoom: true });
+
+    // Space is the hand outside a field or button, once per press.
+    const key = (type: string, target: unknown) => { let prevented = false; listeners[type]({ code: 'Space', target, preventDefault: () => { prevented = true; } }); return prevented; };
+    expect(key('keydown', body)).toBe(true);
+    key('keydown', body);
+    expect(sent.filter((m) => m.nekkoPreview === 'hand')).toEqual([{ nekkoPreview: 'hand', down: true }]);
+    key('keyup', body);
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'hand', down: false });
+    expect(key('keydown', { tagName: 'BUTTON' })).toBe(false);
+    expect(key('keydown', { tagName: 'DIV', isContentEditable: true })).toBe(false);
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'hand', down: false });
+    // Leaving the page lets go.
+    key('keydown', body);
+    listeners.blur({});
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'hand', down: false });
   });
 });
 

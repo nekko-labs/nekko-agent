@@ -17,10 +17,12 @@ struct FixturePhoneHTTP: PhoneHTTP {
         let stream = AsyncThrowingStream<String, Error> { c in
             let t = Task {
                 for w in words {
-                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    do { try await Task.sleep(nanoseconds: 150_000_000) } catch { c.finish(); return }
                     c.yield(#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\#(w)"}}"#)
+                    c.yield("")
                 }
                 c.yield(#"data: {"type":"message_stop"}"#)
+                c.yield("")
                 c.finish()
             }
             c.onTermination = { _ in t.cancel() }

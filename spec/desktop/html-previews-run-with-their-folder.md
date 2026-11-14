@@ -29,6 +29,10 @@ Requested 2026-11-11: "when opening a design in the library, it doesn't load sin
 
 The page reads nothing outside its folder and reaches no network until the user allows it for that preview. Its origin is opaque, so even on the Local Web UI's host it can't read the UI's cookies or session token. A Content-Security-Policy does not govern WebRTC, so a script could still open a peer connection while offline; what it could send is limited to its own folder. On a Local Web UI bound beyond loopback, the preview port is reachable on that network too, protected by the unguessable path.
 
+## The design canvas's control script (2026-11-13)
+
+`[implemented, not yet released]` A page served for Library's design canvas (`serveHtmlPreview(path, { controls: true })`) gets one more inline script after the storage stand-in. It answers the frame directly above it, and nothing else, over `postMessage`: asked `probe`, `pause` or `play`, it replies with seven values (running or paused animations, media elements, `requestAnimationFrame` calls so far, whether it is paused, and the page's scroll width and height). Pausing pauses the document's animations and playing media and holds `requestAnimationFrame` callbacks; playing releases them. It reads no cookie, storage, location or content. A page served without `controls` (the file pane, chat cards) is unchanged. Details and the trust reasoning: [Library](library-and-first-visit-guide.md#designs-open-on-a-canvas-with-their-versions), [decision 0091](../../docs/decisions/0091-the-design-canvas-controls-a-served-design-over-postmessage.md).
+
 ## Status and verification
 
 Implemented 2026-11-11, not yet released.

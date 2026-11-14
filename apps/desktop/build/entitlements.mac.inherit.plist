@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Hardened-runtime entitlements for everything the Developer ID app signs
+    except its main executable.
+
+    The hardened runtime is mandatory for notarization, and it switches off
+    several things Electron and Nekko Agent genuinely need. Each exception below is
+    here for a reason; check the note before pruning one.
+
+    `entitlementsInherit`: the Electron helpers (which are the ones that
+    actually run V8), nekkod and the rest of Resources/bin. The same keys as
+    entitlements.mac.plist without its restricted ones (keychain-access-groups,
+    com.apple.application-identifier, com.apple.developer.*): only the main
+    executable has a provisioning profile, and macOS refuses to launch a
+    Developer ID binary carrying one of those without a profile authorizing it.
+    Change one, change both.
+  -->
+
+  <!-- V8 compiles JavaScript at runtime. Without these the renderer helper
+       crashes on launch under the hardened runtime. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Originally for @lydell/node-pty's prebuilt .node, which is gone:
+       terminals run in nekkod (Rust) and electron-builder.yml has no
+       asarUnpack any more. Kept until someone confirms on a notarized build
+       that nothing the app or the inheriting nekkod loads still needs it
+       (a follow-up, not a change to make blind). -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!-- Nekko Agent spawns the user's shell, coding agents, and MCP servers as child
+       processes, and has to be able to hand them an environment. -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+
+  <!-- Reading and writing the user's chosen project folders. -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+
+  <!-- Outbound: model providers, Ollama/LM Studio/vLLM, the update feed.
+       Inbound: the local host server the phone relay pairs against. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <key>com.apple.security.network.server</key>
+  <true/>
+
+  <!-- QrScanner.tsx calls getUserMedia to pair a phone by QR code. Pairs with
+       NSCameraUsageDescription in the mac.extendInfo block. -->
+  <key>com.apple.security.device.camera</key>
+  <true/>
+
+  <!-- Desktops (macOS Spaces): main/spaces.ts switches desktops by sending
+       Mission Control's shortcuts to System Events through osascript. Apple
+       events are blocked under the hardened runtime without this; pairs with
+       NSAppleEventsUsageDescription in mac.extendInfo. Accessibility is asked
+       for separately, only when the user picks "Allow and switch". -->
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
+</dict>
+</plist>

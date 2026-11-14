@@ -8,7 +8,9 @@ import {
   dockPane,
   movePane,
   movePaneToEdge,
+  openingShare,
   removePane,
+  SUB_PANEL_SHARE,
   resizeSplit,
   splitPane,
   swapPanes,
@@ -62,6 +64,30 @@ describe('splitPane', () => {
     const root = splitPane(nested, 'c', 'down', pane('d'));
     expect(allPanes(root).map((p) => p.id)).toEqual(['a', 'b', 'c', 'd']);
     expect(extent(root)).toEqual({ across: 2, down: 3 });
+  });
+
+  it('gives the new pane the share it is asked for, on either side', () => {
+    const right = splitPane(pane('a'), 'a', 'right', pane('b'), 0.6);
+    expect(kids(right)).toEqual(['a', 'b']);
+    expect(isSplit(right) && right.sizes).toEqual([0.4, 0.6]);
+    const left = splitPane(pane('a'), 'a', 'left', pane('b'), 0.6);
+    expect(kids(left)).toEqual(['b', 'a']);
+    expect(isSplit(left) && left.sizes).toEqual([0.6, 0.4]);
+  });
+
+  it('takes its share out of the neighbour alone when joining a split', () => {
+    const root = splitPane(splitPane(pane('a'), 'a', 'right', pane('b')), 'b', 'right', pane('c'), 0.6);
+    expect(kids(root)).toEqual(['a', 'b', 'c']);
+    const sizes = isSplit(root) ? root.sizes : [];
+    expect(sizes[0]).toBe(0.5);
+    expect(sizes[1]).toBeCloseTo(0.2);
+    expect(sizes[2]).toBeCloseTo(0.3);
+  });
+
+  it('opens sub-panels at 60% and a second chat evenly', () => {
+    expect(SUB_PANEL_SHARE).toBe(0.6);
+    for (const kind of ['file', 'terminal', 'browser', 'diff', 'pr', 'files'] as const) expect(openingShare(kind)).toBe(0.6);
+    expect(openingShare('chat')).toBe(0.5);
   });
 
   it('leaves the tree alone when the target pane is gone', () => {

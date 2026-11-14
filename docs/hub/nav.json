@@ -100,6 +100,12 @@
           "description": "Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM)."
         },
         {
+          "slug": "fusion-routing",
+          "title": "Fusion routing and model tiers",
+          "source": "docs/fusion-routing.md",
+          "description": "Keep Auto on one provider, opt into Fusion strategies, classify model capabilities and target Small or Medium local subagents."
+        },
+        {
           "slug": "subscriptions",
           "title": "Subscription sign-in",
           "source": "docs/SUBSCRIPTIONS.md",
@@ -140,6 +146,12 @@
           "title": "Two chats on a folding phone",
           "source": "docs/folding-phones.md",
           "description": "Two panes on a foldable or an iPad: two chats at once, Monitors beside a chat, and the layouts for each posture."
+        },
+        {
+          "slug": "carplay",
+          "title": "Nekko Agent in CarPlay",
+          "source": "docs/carplay.md",
+          "description": "Hear what your agents are doing and tell them what to do by voice from your car's screen."
         },
         {
           "slug": "sync-encryption",

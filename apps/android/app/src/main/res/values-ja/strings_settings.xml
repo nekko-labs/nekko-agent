@@ -472,4 +472,8 @@
     <string name="service_note_failed">要求に失敗しました。</string>
     <string name="service_note_restart_accepted">再起動は受け付けられましたが、まだ確認されていません。再接続してサービスの状態を更新し、Nekko Agent が動いているか確認してください。</string>
     <string name="service_note_install_accepted">インストールは受け付けられましたが、まだ確認されていません。再接続してバージョンを確認してください。</string>
+    <!-- Computer page: connection intent and the Models filter (#2059). -->
+    <string name="computer_connect_to">%1$s に接続</string>
+    <string name="computer_connect_footer">オフにしても、ペアリング、保存済みのチャット、下書き、送信待ちのメッセージは残ります。オンに戻すまで、このスマートフォンは接続しません。</string>
+    <string name="computer_no_models_in_group">このグループにモデルはありません。</string>
 </resources>

@@ -472,4 +472,8 @@
     <string name="service_note_failed">请求失败。</string>
     <string name="service_note_restart_accepted">重启已被接受，尚未确认。请重新连接并刷新服务状态，确认 Nekko Agent 正在运行。</string>
     <string name="service_note_install_accepted">安装已被接受，尚未确认。请重新连接并检查版本。</string>
+    <!-- Computer page: connection intent and the Models filter (#2059). -->
+    <string name="computer_connect_to">连接到 %1$s</string>
+    <string name="computer_connect_footer">关闭后，配对、已保存的聊天、草稿和待发送的消息都会保留。在你重新开启之前，这台手机不会连接。</string>
+    <string name="computer_no_models_in_group">此分组中没有模型。</string>
 </resources>

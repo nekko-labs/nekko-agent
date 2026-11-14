@@ -10,7 +10,6 @@ import {
 } from './orgModel.js';
 import './cloud.css';
 
-const PLANS_URL = 'https://nekkoagent.com/pricing';
 /** Cloud status events can arrive every second while syncing; the lists need no more than this. */
 const EVENT_REFRESH_MS = 3000;
 
@@ -23,7 +22,8 @@ export interface OrgHandlers {
   onRemoveMember(member: OrgMember): void;
   onSetSharing(on: boolean): void;
   onGoToSync(): void;
-  onSeePlans(): void;
+  /** Absent while plans and billing are switched off (#2724). */
+  onSeePlans?: () => void;
 }
 
 export interface OrgViewProps extends OrgHandlers {
@@ -55,7 +55,7 @@ export function OrganizationView(p: OrgViewProps) {
       {p.gate === 'needs-plan' && (
         <div className="sync-row mt-(--q-inline)" data-testid="org-needs-plan">
           <p className="text-sm text-ink-soft">Organizations are part of Nekko Cloud Pro and Team.</p>
-          <button className="btn btn-ghost shrink-0 py-1! text-xs!" onClick={p.onSeePlans}>See plans</button>
+          {p.onSeePlans && <button className="btn btn-ghost shrink-0 py-1! text-xs!" onClick={p.onSeePlans}>See plans</button>}
         </div>
       )}
       {p.gate === 'needs-setup' && (
@@ -358,7 +358,8 @@ export function OrganizationSettings() {
     },
     onSetSharing: (on) => void act('share', () => setSharing(window.nekko, detail!.id, on)),
     onGoToSync: () => document.getElementById('sync')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-    onSeePlans: () => void window.nekko.openPath(PLANS_URL),
+    // Upgrade lives under the account in Sync.
+    onSeePlans: status?.account?.features?.billing ? () => document.getElementById('sync')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined,
   };
 
   return (

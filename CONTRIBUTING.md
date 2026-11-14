@@ -58,6 +58,22 @@ npm run typecheck   # every TypeScript workspace
 with `npx vitest run --project apps/desktop`, or run one package as before with
 `npm test -w @nekko-agent/desktop`. The engine's tests are `cargo test --workspace`.
 
+The CLI's MCP stdio integration also starts a real local `nekkod` in a temporary
+profile. `npm run build:web` and the typecheck-only bootstrap do **not** build it.
+For a focused CLI test run without launching the app:
+
+```bash
+cargo build -p nekkod
+npm run build:core
+npm run build -w nekko-agent
+npm test -w nekko-agent
+```
+
+A shared/custom Cargo target is not discovered automatically from a worktree:
+set `NEKKOD_PATH` to that target's built `nekkod` (`nekkod.exe` on Windows).
+A missing binary fails the integration with these prerequisites, not a skipped
+status assertion or a mock engine.
+
 On native Windows Node, the macOS entitlement and Linux/macOS runner-image **execution
 fixtures** report explicit POSIX-only skips. They require Bash plus POSIX paths,
 permissions and symlinks; a Windows `bash.exe` or WSL launcher is not sufficient.

@@ -518,4 +518,8 @@
     <string name="service_note_failed">Request failed.</string>
     <string name="service_note_restart_accepted">Restart accepted, not yet verified. Reconnect and refresh service status to check that Nekko Agent is running.</string>
     <string name="service_note_install_accepted">Install accepted, not yet verified. Reconnect and check the version to verify installation.</string>
+    <!-- Computer page: connection intent and the Models filter (#2059). -->
+    <string name="computer_connect_to">Connect to %1$s</string>
+    <string name="computer_connect_footer">Turning this off keeps the pairing, saved chats, drafts and messages waiting to send. This phone won’t connect until you turn it on again.</string>
+    <string name="computer_no_models_in_group">No models in this group.</string>
 </resources>
