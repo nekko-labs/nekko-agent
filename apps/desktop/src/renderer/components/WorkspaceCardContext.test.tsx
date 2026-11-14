@@ -157,7 +157,8 @@ describe('workspace card model line and attention', () => {
       expect(html).not.toContain('border-color:');
     }
     expect(render({ status: 'input' })).toContain('var(--attention)');
-    expect(render({ isActive: true })).toContain('font-medium text-ink');
+    expect(render({ isActive: true })).toContain('font-semibold text-ink');
+    expect(render({ isActive: false })).toContain('font-semibold text-ink');
   });
 });
 

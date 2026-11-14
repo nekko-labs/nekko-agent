@@ -199,6 +199,12 @@ Utilization lists each enabled cloud provider on its own row, with its logo. In 
 
 These 2026-10-13 changes are implemented and unit/fixture interaction tested. Matching captures exist, but image/motion inspection remains pending; earlier walkthrough pictures are not visual proof of this batch.
 
+### Read subagents in the Agents panel
+
+Agent titles are semibold so they stand out from their metadata. Each subagent beneath a parent shows its own saved model first, followed by its provider; hover for the full model ID. Clicking a child still opens that child's chat.
+
+The panel shows two children per parent by default. **Show more (N)** reveals the rest with an accordion; **Show less** returns to two. Under **Settings → Customize → Agents wall**, turn on **Always expand subagents** to start lists fully expanded. Turn it off for the two-row default. The setting is saved; individual Show more/Show less choices are temporary and do not change it.
+
 ### Find a chat
 
 The magnifier beside **+** at the top of the Agents panel opens a chat finder. It starts with your latest chats, newest first, each with how long ago it was used (days up to 30, then months). Type to filter by title, first prompt or latest reply; the search runs once you pause typing, or straight away with Enter or the Nekko button. Click a chat (or press Enter) to open it. **X** or Esc closes the finder. Incognito chats are never listed.

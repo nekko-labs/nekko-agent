@@ -59,6 +59,7 @@ app.whenReady().then(async () => {
     // Hidden Chromium can leave CSS motion at time zero; stills want the settled frame (SVG SMIL is untouched).
     await run(`(() => { const style = document.createElement('style'); style.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; }'; document.head.append(style); })()`);
     await run(SEED);
+    await run(`window.nekko.updateSettings({ expandSubagents: true }).then(settings => layoutFixture.store.setState({ settings }))`);
     await run(`layoutFixture.store.getState().refreshSessions()`);
     await sleep(700);
     await run(`layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } })`);
