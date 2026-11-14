@@ -792,6 +792,7 @@ function makeWebClient(): NekkoApi {
     computerRead: async () => null,
     computerModelServer: async () => null,
     createSessionOn: () => Promise.reject(new Error('Connected computers are in the desktop app.')),
+    connectFleetComputer: () => Promise.reject(new Error('Connected computers are in the desktop app.')),
     computerCatalog: async () => null,
     onComputersUpdated: () => () => {},
     listRemoteDevices: () => call(IpcChannels.remoteDevices),

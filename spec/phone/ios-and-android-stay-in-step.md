@@ -75,7 +75,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
-| Full system-permissions checklist in onboarding and Settings (no video) | Notifications-only onboarding; checklist not yet implemented | [#2251](https://github.com/nekko-labs/nekko-agent/issues/2251) |
 | Computer controls: Cloud fleet group | Waits with Nekko Cloud (#2122); service management, the Models filter and Connect to <computer> landed (2026-11-12/13) | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
 | Connectors page (with the brand logos the iPhone has had since 2026-11-09) | Missing | [#2109](https://github.com/nekko-labs/nekko-agent/issues/2109) |
 | Edit photos in image chats: attach photos to a prompt, Edit under a made picture | Not implemented on Android | [#2230](https://github.com/nekko-labs/nekko-agent/issues/2230) |
@@ -108,4 +107,4 @@ Nothing is recorded as a true OS exclusive yet.
 
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
-| Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Planned | [#2453](https://github.com/nekko-labs/nekko-agent/issues/2453) |
+| Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Same folds (2026-11-13); the system bar hides the keyboard | None |

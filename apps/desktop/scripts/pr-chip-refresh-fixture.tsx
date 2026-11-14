@@ -31,7 +31,7 @@ Promise.all([import('react'), import('react-dom/client'), import('../src/rendere
     e('p', { className: 'text-sm leading-6' }, 'Both PRs are open and will merge once CI passes: ', e(PrLinkChip, { href: urls[0], label: '#2628' }), ' and ', e(PrLinkChip, { href: urls[1], label: '#2629' }), '.'));
   createRoot(document.getElementById('root')!).render(e('main', { style: { height: '100vh', display: 'flex', background: 'var(--paper)', color: 'var(--ink)' } },
     e('section', { style: { width: 440, maxWidth: '100%', height: '100%', display: 'flex', flexDirection: 'row' } },
-      e(AgentSidebar, { onOpenChat: () => {}, onOpenTerminal: () => {}, selectedId: 'done-0', onCreate: async () => {}, orientation: 'vertical' })),
+      e(AgentSidebar, { onOpenChat: () => {}, onOpenTerminal: () => {}, selectedId: 'done-0', onCreate: async () => {} })),
     reply));
   (window as any).prRefreshFixture = { reads, merge: () => { for (const u of urls) state[u] = 'merged'; } };
 });

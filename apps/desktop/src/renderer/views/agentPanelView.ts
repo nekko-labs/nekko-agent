@@ -235,3 +235,33 @@ export function dateGroupOf(at: number, now: number): string {
   if (at >= today - 30 * day) return 'date:month';
   return 'date:older';
 }
+
+/**
+ * Which kind of window the Agents panel lists, picked in the switcher at its
+ * top. Agents is the agent cards; Terminals and Photos and videos are those
+ * cards on their own; Browsers and Files list the agents and open each one's
+ * Browser or Files drawer. Remembered per window, like the view.
+ */
+export type AgentPanelShows = 'agents' | 'terminals' | 'media' | 'browsers' | 'files';
+
+export const AGENT_PANEL_SHOWS: ReadonlyArray<{ id: AgentPanelShows; label: string }> = [
+  { id: 'agents', label: 'Agents' },
+  { id: 'terminals', label: 'Terminals' },
+  { id: 'media', label: 'Photos and videos' },
+  { id: 'browsers', label: 'Browsers' },
+  { id: 'files', label: 'Files' },
+];
+
+export const AGENT_PANEL_SHOWS_KEY = 'nekko.agentPanelShows';
+
+export function parseAgentPanelShows(raw: string | null): AgentPanelShows {
+  return AGENT_PANEL_SHOWS.find((s) => s.id === raw)?.id ?? 'agents';
+}
+
+export function readAgentPanelShows(): AgentPanelShows {
+  try { return parseAgentPanelShows(localStorage.getItem(AGENT_PANEL_SHOWS_KEY)); } catch { return 'agents'; }
+}
+
+export function saveAgentPanelShows(shows: AgentPanelShows): void {
+  try { localStorage.setItem(AGENT_PANEL_SHOWS_KEY, shows); } catch { /* private mode */ }
+}

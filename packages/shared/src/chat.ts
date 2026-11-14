@@ -455,8 +455,11 @@ export interface Session {
    * How the last turn failed, for a chat opened after the `error` event has gone.
    * Cleared when the next turn starts, or by Dismiss (null). It only applies
    * while `afterMessageId` is still the transcript's last message.
+   * `continueAt` (epoch ms): the user asked to carry on by themselves when the
+   * usage limit behind this failure resets; nekkod resumes the chat then
+   * (`limit_resume.rs`). Going with the failure, it is dropped the same ways.
    */
-  turnFailure?: { message: string; afterMessageId?: string } | null;
+  turnFailure?: { message: string; afterMessageId?: string; continueAt?: number } | null;
   /**
    * The plan the agent itself wrote for this chat, via the `update_plan` tool:
    * what it decided to do after reading the request, kept live as it works.
@@ -600,7 +603,13 @@ export type AgentEvent =
    * the window, or for a typed `/compact`): `running` while it summarizes,
    * then `done`, or `failed` with Claude Code's reason.
    */
-  | { type: 'claude_code_compacting'; sessionId: string; state: 'running' | 'done' | 'failed'; error?: string };
+  | { type: 'claude_code_compacting'; sessionId: string; state: 'running' | 'done' | 'failed'; error?: string }
+  /**
+   * The usage limit this chat was waiting on reset, and nekkod is continuing
+   * it as the user asked (`turnFailure.continueAt`). The desktop shows it as a
+   * reminder.
+   */
+  | { type: 'limit_reset'; sessionId: string; continuing: boolean };
 
 /**
  * What a session is waiting on a person for, right now.

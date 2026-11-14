@@ -417,6 +417,7 @@ export const IpcChannels = {
   computersSetIcon: 'computers:setIcon',
   computersCreateSession: 'computers:createSession',
   computersStats: 'computers:stats',
+  computersConnectFleet: 'computers:connectFleet',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -1356,6 +1357,12 @@ export interface NekkoApi {
   computerModelServer(id: string, channel: 'model:load' | 'model:unload' | 'engine:unloadAll' | 'engine:settings', args?: unknown[]): Promise<unknown>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
+  /**
+   * Connect to one of your own computers from an organization's list, with no
+   * pairing (decision 0102). Answers its row in the Computers list; rejects
+   * with what to do next.
+   */
+  connectFleetComputer(orgId: string, deviceId: string): Promise<import('./computers.js').ComputerStatus>;
   /** Set the icon in that machine's own settings; empty removes it. */
   setComputerIcon(id: string, icon: string): Promise<import('./computers.js').ComputerStatus[]>;
   /** Its providers and folders; null when it has never answered. */

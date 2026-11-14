@@ -34,7 +34,7 @@ export function ThemeStep() {
           <span className="block text-sm font-semibold">Nekko in your chats</span>
           <span className="block text-xs text-ink-soft">Sits on each chat and watches you type.</span>
         </span>
-        <input type="checkbox" role="switch" className="setup-switch" checked={settings.mascotEnabled} onChange={(e) => void update({ mascotEnabled: e.target.checked })} />
+        <input type="checkbox" role="switch" className="quiet-switch" checked={settings.mascotEnabled} onChange={(e) => void update({ mascotEnabled: e.target.checked })} />
       </label>
     </div>
   );

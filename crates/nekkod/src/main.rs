@@ -43,6 +43,7 @@ mod downloads;
 mod engine;
 mod federation;
 mod feedback;
+mod fleet;
 mod gcp;
 mod harness;
 mod hub;
@@ -51,6 +52,7 @@ mod image_turns;
 mod installs;
 mod keys;
 mod library;
+mod limit_resume;
 mod local_relay;
 mod logs;
 mod machine;
@@ -292,6 +294,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 Box::pin(async move { library::shareable_models(&library).await })
             })
         },
+        // How this account's other desktops reach this one, while remote access is on.
+        connect: {
+            let remote = remote.clone();
+            Some(Arc::new(move || fleet::connect_info(&remote)))
+        },
     });
     {
         // Abandoned downloads can be GBs each (#1035).
@@ -480,6 +487,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     }
     remote.start();
     computers.start(ctx.clone());
+    fleet::start(remote.clone(), computers.clone(), cloud.clone(), &hub);
     {
         // A chat's turn, approvals and answers go through the router, as the UI's do.
         let ctx = ctx.clone();

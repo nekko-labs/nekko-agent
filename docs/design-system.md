@@ -109,6 +109,8 @@ Move 8px at most. Animate `opacity` and `transform`, never blur, bounce or overs
 - **Buttons**: slim. 28 tall, 12 of padding each side, 14/500 label, 8 radius. Never pad a `.btn` taller. One primary per view. Secondary is a neutral wash (`.btn` / `.btn-ghost`), not an outline. Destructive is words in `--danger-text` until the confirmation.
 - **Tabs** (`QuietTabs`): the label in `--ink-soft`, the selected one in `--ink` on a wash pill that slides.
 - **Fields** (`quiet-field`): no border at rest, a faint wash, the `--ring` halo and an accent edge on focus.
+- **Switches** (`Toggle`, `quiet-switch`): one size everywhere, a 36x20 track and a 16px knob, faint off and accent on. Never draw a switch of your own: render `Toggle`, or put `quiet-switch` on a checkbox input or an `aria-hidden` span with `data-on`.
+- **Empty list**: one faint line that says what is missing and where to add it. No illustration or dashed card inside a panel.
 - **Removal**: anything that removes or reverts offers Undo in a toast instead of a confirm dialog, unless it cannot be undone.
 
 ## Copy
@@ -119,7 +121,7 @@ Move 8px at most. Animate `opacity` and `transform`, never blur, bounce or overs
 
 ## Building blocks
 
-Use these instead of re-declaring markup (`components/primitives/`): `Group`, `Row`, `QuietTabs`, `Rule`, `StatusDot`, `Toggle`, `StatusIcon`, `WallMascot`, and the Gentleface icons. CSS utilities: `quiet-row`, `quiet-tab`, `quiet-field`, `quiet-rule`, `quiet-group-label`.
+Use these instead of re-declaring markup (`components/primitives/`): `Group`, `Row`, `QuietTabs`, `Rule`, `StatusDot`, `Toggle`, `StatusIcon`, `WallMascot`, and the Gentleface icons. CSS utilities: `quiet-row`, `quiet-tab`, `quiet-field`, `quiet-rule`, `quiet-group-label`, `quiet-switch`.
 
 ## Checklist for a screen
 

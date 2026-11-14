@@ -54,6 +54,8 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 
 **Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
 
+**Your own computers, with no link.** When your computers share themselves with your organization in Nekko Cloud (Settings, Phone pairing, Organization), any of them signed in to the same account and unlocked can open a chat on another without a pairing link. In the organization's Computers list, hover one of your own online computers and choose **Open chat**. It connects with your account's keys, adds the computer to Settings, Computers (as *Opened from your organization*) and opens a new chat there. The other computer needs **Remote access** on; otherwise its row says so. A teammate's computer is listed but can't be opened. Nothing is paired and nothing is saved: the link ends when you restart, sign out or lock, and the other computer cuts it within 15 seconds if it stops sharing, signs out, or your account removes this device. The same rules apply as for any connected computer above.
+
 **Keeping a computer awake for its agents.** A run you start on another computer stops when that computer falls asleep. On the computer that runs the agents, turn on *Keep this computer awake while agents run* (Settings, Computers). While any agent runs there it won't go to sleep on its own, and once the last one finishes it sleeps as usual. Closing the lid still sleeps it.
 
 ## How it works

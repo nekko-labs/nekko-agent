@@ -2,9 +2,10 @@ import React from 'react';
 
 /**
  * Line-art placeholders for the Agent board's empty areas: the grid with
- * no agents on it, the automations list with nothing scheduled, the insights
- * box before any usage exists. Drawn in the same hand as the mascot (thin
- * ink strokes, round caps, no fills to speak of) and in the theme's tokens,
+ * no agents on it, the insights box before any usage exists. (The
+ * automations list says "Nothing scheduled" in one line instead.) Drawn in
+ * the same hand as the mascot (thin ink strokes, round caps, no fills to
+ * speak of) and in the theme's tokens,
  * so they sit on either theme without a separate asset.
  */
 
@@ -30,24 +31,6 @@ export function AgentsEmptyArt({ className = 'h-28 w-44' }: { className?: string
       <path d="M93 29 h2" {...stroke} />
       <rect x="130" y="60" width="34" height="34" rx="8" {...dashed} />
       <path d="M147 69v16M139 77h16" {...stroke} style={{ color: 'var(--accent)' }} />
-    </svg>
-  );
-}
-
-/** A clock with a looping arrow and a small calendar page: scheduled, recurring, background. */
-export function AutomationsEmptyArt({ className = 'h-24 w-40' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 160 96" className={className} aria-hidden="true">
-      <circle cx="52" cy="48" r="30" {...stroke} />
-      <circle cx="52" cy="48" r="24" {...dashed} />
-      <path d="M52 30v18l12 8" {...stroke} />
-      <circle cx="52" cy="48" r="1.8" fill="currentColor" />
-      <path d="M92 26 a22 22 0 1 1 -8 36" {...faint} />
-      <path d="M86 56 l-3 7 l7 -2" {...faint} />
-      <rect x="104" y="36" width="40" height="40" rx="6" {...stroke} />
-      <path d="M104 48h40M114 30v10M134 30v10" {...stroke} />
-      <path d="M113 58h8M127 58h8M113 68h8" {...faint} />
-      <path d="M127 68 l3 3 l6 -6" {...stroke} style={{ color: 'var(--accent)' }} />
     </svg>
   );
 }

@@ -70,12 +70,6 @@ app.whenReady().then(async () => {
     await sleep(500);
     assert.deepEqual(await rows(), report.initial);
     report.checks.push('Enter restores selection');
-    await run("document.querySelector('[aria-label=\"Show agents in a row\"]').click()");
-    assert.deepEqual(await rows(), report.initial);
-    await shot('selected-agent-horizontal');
-    await run("document.querySelector('[aria-label=\"Show agents in a column\"]').click()");
-    await rows();
-    report.checks.push('Horizontal panel keeps the same selected-row treatment');
     if (process.env.NEKKO_EXPECT_SELECTION === '1') {
       for (const row of report.initial) {
         assert.equal(row.background === 'rgba(0, 0, 0, 0)', !row.active);

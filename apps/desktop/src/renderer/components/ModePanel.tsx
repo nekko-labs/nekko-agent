@@ -353,7 +353,7 @@ export function ModePanel({
     {narrow && fly === f && <div className="mode-inline-fly">{flyBody(f)}</div>}
   </>);
   const sw = (on: boolean, onClick: () => void, label: string, disabled = false) => (
-    <button role="switch" aria-checked={on} aria-label={label} className="mode-switch" disabled={disabled} onClick={onClick} />
+    <button role="switch" aria-checked={on} aria-label={label} className="quiet-switch mt-px" disabled={disabled} onClick={onClick} />
   );
   const tiles = <T extends string>(label: string, value: T, options: Array<[T, string, ReactNode, Record<string, string>?]>, pick: (v: T) => void) => (
     <div className={`mode-tiles${label === 'Approvals' ? ' mode-approval-tiles' : ''}`} role="radiogroup" aria-label={label}>

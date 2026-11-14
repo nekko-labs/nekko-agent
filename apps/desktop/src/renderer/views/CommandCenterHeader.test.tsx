@@ -75,7 +75,7 @@ describe('Agents header placement', () => {
     expect(LAYOUT_LABEL).toEqual({ focus: 'Single agent', grid: 'Multi-agent' });
   });
   it('leaves the agent panel controls out of the title bar, open or closed', () => {
-    const closed = { ...DEFAULT_WALL_STATE, agentPanel: { show: false, orientation: 'vertical' as const } };
+    const closed = { ...DEFAULT_WALL_STATE, agentPanel: { show: false } };
     for (const wall of [closed, DEFAULT_WALL_STATE]) {
       const html = renderToStaticMarkup(<WallToolbar wall={wall} setWall={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
       expect(html).not.toContain('Show the agent panel');

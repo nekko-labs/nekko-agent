@@ -52,7 +52,6 @@ export const ShieldIcon = (p: P) => (<S {...p}><path d="M12 22s8-4 8-10V5l-8-3-8
 /** A frame with its panel down the left side: show or hide a left side panel. */
 export const PanelLeftIcon = (p: P) => (<S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /></S>);
 /** A curved two-headed arrow swinging between a frame's left side and its top: move a panel between them. */
-export const PanelSwapIcon = (p: P) => (<S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7.5 16.5Q7.5 7.5 16.5 7.5" /><path d="M14 5.5l2.5 2-2.5 2M5.5 14l2 2.5 2-2.5" /></S>);
 export const PanelIcon = (p: P) => (<S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M15 3v18" /></S>);
 export const PinIcon = (p: P) => (<S {...p}><path d="M12 17v5M9 3h6l-1 6 3 3H7l3-3z" /></S>);
 export const FileIcon = (p: P) => (<S {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></S>);

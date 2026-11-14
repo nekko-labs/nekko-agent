@@ -133,16 +133,7 @@ export function McpServerList({ onLeave }: { onLeave?: () => void }) {
                       <span className="block truncate text-2xs text-ink-faint">{sub}</span>
                     </span>
                     {/* Enable/disable switch */}
-                    <span
-                      className="relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors"
-                      style={{ background: s.enabled ? 'var(--accent)' : 'color-mix(in srgb, var(--ink-faint) 40%, transparent)' }}
-                      aria-hidden="true"
-                    >
-                      <span
-                        className="absolute h-3 w-3 rounded-full bg-white shadow-(--shadow-sm) transition-transform"
-                        style={{ transform: s.enabled ? 'translateX(14px)' : 'translateX(2px)' }}
-                      />
-                    </span>
+                    <span className="quiet-switch" data-on={s.enabled} aria-hidden="true" />
                   </button>
                 );
               })}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Workflow, WorkflowRun } from '@nekko-agent/shared';
-import { decideRunNotice, parseWorkflowRunLink, workflowRunLink } from './notificationPolicy.js';
+import { decideNotification, decideRunNotice, parseWorkflowRunLink, workflowRunLink } from './notificationPolicy.js';
 
 const wf: Pick<Workflow, 'id' | 'name' | 'notify' | 'steps'> = {
   id: 'w1',
@@ -44,5 +44,19 @@ describe('workflow run notices', () => {
     for (const raw of ['nekko-agent://workflow/run?workflow=w', 'nekko-agent://session/open?id=a', 'https://workflow/run?workflow=w&run=r', 'nope']) {
       expect(parseWorkflowRunLink(raw)).toBeNull();
     }
+  });
+});
+
+describe('usage limit reset reminder', () => {
+  const chatCtx = { enabled: true, windowHidden: true, visibleSessionId: null, titleOf: () => 'Fix the build' };
+
+  it('says the limit reset and the chat is carrying on', () => {
+    expect(decideNotification({ type: 'limit_reset', sessionId: 's1', continuing: true }, chatCtx)).toEqual({
+      sessionId: 's1', kind: 'limit-reset', title: 'Usage limit reset', body: 'Fix the build: continuing where it stopped.',
+    });
+  });
+
+  it('stays quiet for the chat already on screen', () => {
+    expect(decideNotification({ type: 'limit_reset', sessionId: 's1', continuing: true }, { ...chatCtx, windowHidden: false, visibleSessionId: 's1' })).toBeNull();
   });
 });
