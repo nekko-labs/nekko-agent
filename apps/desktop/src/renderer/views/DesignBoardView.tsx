@@ -6,6 +6,7 @@ import { PlusIcon, CloseIcon, ExternalIcon, TrashIcon } from '../icons.js';
 import { Modal } from '../components/primitives/index.js';
 import { ArtifactPreview, isolatedDocument } from '../components/ArtifactPreview.js';
 import { hasAppChrome } from '../chrome.js';
+import { DESIGN_GUIDE, PageGuideButton, PageIntro, usePageIntro } from '../components/PageIntro.js';
 
 /**
  * Design board: create designs two ways, both first-class.
@@ -39,6 +40,7 @@ export function DesignBoardView() {
     : workspaces[0]?.id ?? null;
 
   const [board, setBoard] = useState<DesignBoard | null>(null);
+  const intro = usePageIntro('design');
   const [zoom, setZoom] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
   const [mode, setMode] = useState<'sketch' | 'prompt' | 'live' | null>(null);
@@ -121,18 +123,22 @@ export function DesignBoardView() {
     if (selected === pageId) setSelected(null);
   };
 
+  const guide = intro.show && <PageIntro guide={DESIGN_GUIDE} onClose={intro.close} />;
   if (!wsId) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+        {guide}
         <div className="grid h-14 w-14 place-items-center rounded-2xl text-2xl" style={{ background: 'var(--accent-soft)' }}>🎨</div>
         <h2 className="text-xl font-semibold">Design</h2>
         <p className="max-w-sm text-sm text-ink-faint">Add a project folder first (from a chat's <b>+</b> menu). Then sketch or describe a design here and watch it become a working prototype.</p>
+        <PageGuideButton name="Design" onClick={intro.open} />
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-w-0 flex-col">
+      {guide}
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
         {!hasAppChrome && <h1 className="view-title">Design</h1>}
         {workspaces.length > 1 && (
@@ -146,6 +152,7 @@ export function DesignBoardView() {
           </button>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <PageGuideButton name="Design" onClick={intro.open} />
           <label className="hidden items-center gap-2 text-2xs text-ink-faint sm:flex">
             Zoom
             <input type="range" min={0.5} max={1.5} step={0.1} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
