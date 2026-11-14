@@ -417,6 +417,7 @@ export const IpcChannels = {
   computersSetIcon: 'computers:setIcon',
   computersCreateSession: 'computers:createSession',
   computersStats: 'computers:stats',
+  computersConnectFleet: 'computers:connectFleet',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',

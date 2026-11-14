@@ -189,6 +189,7 @@ fn config(h: &Host, code: Option<String>) -> Config {
         name: "MacBook".into(),
         key: signing_key(7),
         pair_code: code,
+        fleet: None,
     }
 }
 
@@ -336,4 +337,172 @@ async fn a_dead_route_moves_on_to_the_next() {
     settled(&client, |s| *s == State::Online).await;
     assert_eq!(client.status().route.as_deref(), Some(h.url.as_str()));
     client.stop();
+}
+
+// ------------------------------------------------------------------ the fleet
+//
+// A desktop of the same account connecting with no code (decision 0102). The
+// gate here stands in for Nekko Cloud's (nekko-cloud `fleet_gate.rs` tests the
+// real proof): it admits a proof naming the expected account and this exact
+// handshake, and it can be told the account changed.
+
+use nekko_remote::fleet::{Admitted, Binding, FleetGate, FleetSigner, link_device_id};
+
+const ACCOUNT_DEVICE: &str = "7e1f0a9c-2b3d-4e5f-8a6b-9c0d1e2f3a4b";
+
+#[derive(Default)]
+struct TestGate {
+    /// The account changed (signed out, locked, new epoch, revoked, sharing off).
+    revoked: std::sync::atomic::AtomicBool,
+    /// Each binding the gate was shown.
+    seen: Mutex<Vec<Binding>>,
+}
+
+impl FleetGate for TestGate {
+    fn admit(&self, fleet: &Value, b: &Binding) -> Result<Admitted, &'static str> {
+        self.seen.lock().unwrap().push(b.clone());
+        if self.revoked.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("fleet-epoch");
+        }
+        // The proof must be for this exchange, every part of it.
+        let proof = &fleet["proof"];
+        let same = proof["room"] == b.room.as_str()
+            && proof["challenge"] == b.challenge.as_str()
+            && proof["hostEph"] == b.host_eph.as_str()
+            && proof["clientEph"] == b.client_eph.as_str()
+            && proof["helloKey"] == b.hello_key.as_str();
+        if fleet["accountId"] != "acct-1" {
+            return Err("fleet-account");
+        }
+        if !same {
+            return Err("invalid");
+        }
+        Ok(Admitted {
+            device_id: fleet["deviceId"].as_str().unwrap_or_default().to_string(),
+            org_id: "org-1".into(),
+            key_id: 1,
+            name: "MacBook".into(),
+        })
+    }
+    fn still(&self, _: &Admitted) -> bool {
+        !self.revoked.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// A signer that proves `account` and copies the binding (what the real one seals).
+fn signer(account: &'static str, device: &'static str) -> FleetSigner {
+    Arc::new(move |b: &Binding| {
+        Some(json!({ "v": 1, "accountId": account, "deviceId": device, "proof": {
+            "room": b.room, "challenge": b.challenge, "hostEph": b.host_eph, "clientEph": b.client_eph, "helloKey": b.hello_key,
+        }}))
+    })
+}
+
+fn fleet_config(h: &Host, account: &'static str) -> Config {
+    Config {
+        device_id: link_device_id(ACCOUNT_DEVICE),
+        fleet: Some(signer(account, ACCOUNT_DEVICE)),
+        ..config(h, None)
+    }
+}
+
+fn gate_on(h: &Host) -> Arc<TestGate> {
+    let gate = Arc::new(TestGate::default());
+    h.svc.set_fleet_gate(gate.clone());
+    gate
+}
+
+#[tokio::test]
+async fn a_fleet_device_connects_with_no_code_and_never_reaches_the_registry() {
+    let h = host().await;
+    let gate = gate_on(&h);
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let client = Client::start(fleet_config(&h, "acct-1"), tx);
+    settled(&client, |s| *s == State::Online).await;
+
+    let id = link_device_id(ACCOUNT_DEVICE);
+    let status = client.status();
+    assert_eq!(status.device["kind"], "computer");
+    assert_eq!(status.device["fleet"], true);
+    assert_eq!(status.device["changeKey"], json!(nekko_remote::proof::public_key(&signing_key(7))));
+    // A prompt, as a chat sends one, reaches the computer under the fleet id.
+    let reply = client.call("chat:send", json!([{ "sessionId": "s1", "text": "hello" }])).await.unwrap();
+    assert_eq!(reply["echo"][0]["text"], "hello");
+    assert!(h.calls.lock().unwrap().iter().any(|(d, c, _)| d == &id && c == "chat:send"));
+    // Known to the phone gate as a computer, with its HELLO key as the Change key.
+    let d = h.svc.device(&id).expect("admitted");
+    assert!(d.computer);
+    assert_eq!(d.key.as_deref(), status.device["changeKey"].as_str());
+    // Nothing written: no registry entry and no saved HELLO key.
+    assert_eq!(h.svc.devices(), json!([]));
+    assert!(!h._dir.path().join("remote-hello-keys.json").exists());
+    assert_eq!(h.svc.status()["fleet"][0]["id"], json!(id));
+    // The gate saw the handshake the agent ran, not what the device claimed.
+    let b = gate.seen.lock().unwrap()[0].clone();
+    assert_eq!(b.room, h.room);
+    assert_eq!(b.hello_key, nekko_remote::proof::public_key(&signing_key(7)));
+    client.stop();
+}
+
+#[tokio::test]
+async fn without_a_gate_or_for_another_account_a_fleet_device_is_refused() {
+    let h = host().await;
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let client = Client::start(fleet_config(&h, "acct-1"), tx.clone());
+    assert_eq!(settled(&client, |s| matches!(s, State::Denied(_))).await, State::Denied("fleet-off".into()));
+
+    gate_on(&h);
+    let other = Client::start(fleet_config(&h, "acct-2"), tx);
+    assert_eq!(settled(&other, |s| matches!(s, State::Denied(_))).await, State::Denied("fleet-account".into()));
+    assert!(h.svc.device(&link_device_id(ACCOUNT_DEVICE)).is_none());
+}
+
+#[tokio::test]
+async fn a_proof_made_for_another_handshake_is_refused() {
+    let h = host().await;
+    gate_on(&h);
+    // A proof copied from some other exchange: the challenge doesn't match.
+    let replayed: FleetSigner = Arc::new(|b: &Binding| {
+        Some(json!({ "v": 1, "accountId": "acct-1", "deviceId": ACCOUNT_DEVICE, "proof": {
+            "room": b.room, "challenge": "AAAAAAAAAAAAAAAAAAAAAAAA", "hostEph": b.host_eph, "clientEph": b.client_eph, "helloKey": b.hello_key,
+        }}))
+    });
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let client = Client::start(Config { fleet: Some(replayed), ..fleet_config(&h, "acct-1") }, tx);
+    assert_eq!(settled(&client, |s| matches!(s, State::Denied(_))).await, State::Denied("invalid".into()));
+}
+
+#[tokio::test]
+async fn a_fleet_id_can_never_be_paired_and_a_fleet_hello_never_pairs() {
+    let h = host().await;
+    gate_on(&h);
+    // A pairing that names a fleet id is refused, code or not.
+    let code = h.svc.pair_computer()["code"].as_str().unwrap().to_string();
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let squatter =
+        Client::start(Config { device_id: link_device_id(ACCOUNT_DEVICE), ..config(&h, Some(code)) }, tx.clone());
+    assert_eq!(settled(&squatter, |s| matches!(s, State::Denied(_))).await, State::Denied("invalid".into()));
+    // A fleet HELLO bringing a code is refused too: the two never mix.
+    let code = h.svc.pair_computer()["code"].as_str().unwrap().to_string();
+    let mixed = Client::start(Config { pair_code: Some(code), ..fleet_config(&h, "acct-1") }, tx);
+    assert_eq!(settled(&mixed, |s| matches!(s, State::Denied(_))).await, State::Denied("invalid".into()));
+    assert_eq!(h.svc.devices(), json!([]));
+}
+
+#[tokio::test]
+async fn when_the_account_changes_the_live_link_is_cut_and_cannot_return() {
+    let h = host().await;
+    let gate = gate_on(&h);
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let client = Client::start(fleet_config(&h, "acct-1"), tx);
+    settled(&client, |s| *s == State::Online).await;
+    let id = link_device_id(ACCOUNT_DEVICE);
+    assert!(h.svc.recheck_fleet().is_empty(), "nothing changed, nothing cut");
+
+    gate.revoked.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(h.svc.recheck_fleet(), vec![id.clone()]);
+    assert!(h.svc.device(&id).is_none(), "the phone gate no longer knows it");
+    // The redial is refused sealed, and stays refused.
+    h.close.send((1001, "going away".into())).unwrap();
+    assert_eq!(settled(&client, |s| matches!(s, State::Denied(_))).await, State::Denied("fleet-epoch".into()));
 }
