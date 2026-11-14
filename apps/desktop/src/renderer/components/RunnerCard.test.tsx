@@ -91,8 +91,12 @@ describe('RunnerCard', () => {
     expect(html).toContain('Starting a VM');
     expect(html).toContain('data-running-job="busy-mac"');
     for (const label of ['In progress', 'Queued', 'Slots', 'Working on', '<code']) expect(html).not.toContain(label);
+    // Completed jobs wait behind one closed row.
+    expect(html).toContain('Completed · 2 jobs');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('data-recent-job');
     expect(html).toContain('This Mac is on battery, below what this mode allows.');
-    for (const gone of ['Completed', 'data-runner-facts', 'Connect to a workflow', 'This network is not one you trust']) expect(html).not.toContain(gone);
+    for (const gone of ['data-runner-facts', 'Connect to a workflow', 'This network is not one you trust']) expect(html).not.toContain(gone);
     // An idle slot without a VM says nothing the panel needs.
     expect(render(view({ slots: [] }), null, undefined, true)).not.toContain('data-runner-slots');
   });
@@ -126,22 +130,26 @@ describe('RunnerCard', () => {
     expect(html).not.toContain('role="progressbar"');
   });
 
-  it('a queued job can be accepted or declined, and either undone', () => {
+  it('a queued job can be started now or skipped, and either undone', () => {
     const q = { repo: 'o/r', runId: 9, jobId: 90, workflow: 'ci', job: 'lint', createdAt: null };
     const fresh = render(view({ queue: [{ ...q, declined: false, accepted: false }] }));
-    expect(fresh).toContain('>Accept now<');
-    expect(fresh).toContain('>Decline<');
+    expect(fresh).toContain('>Start now<');
+    expect(fresh).toContain('>Skip<');
+    // A decision waiting on you: never hidden until hover.
+    expect(fresh).not.toMatch(/quiet-row-action[^"]*"[^>]*>(Start now|Skip)</);
     const declined = render(view({ queue: [{ ...q, declined: true, accepted: false }] }));
-    expect(declined).toContain('Declined: this Mac starts no VM for it');
+    expect(declined).toContain('Skipped: this Mac starts no VM for it');
     expect(declined).toContain('>Undo<');
-    expect(render(view({ queue: [{ ...q, declined: false, accepted: true }] }))).toContain('Accepted: a VM starts for it now');
-    // A hard limit Runner first keeps: Accept now is off, with the reason.
+    expect(render(view({ queue: [{ ...q, declined: false, accepted: true }] }))).toContain('Starting: a VM starts for it now');
+    // A hard limit Runner first keeps: Start now is off, with the reason.
     const hot = render(view({ acceptWhy: ['thermalCritical'], queue: [{ ...q, declined: false, accepted: false }] }));
     expect(hot).toMatch(/disabled=""[^>]*title="[^"]*hot[^"]*"|title="[^"]*hot[^"]*"[^>]*disabled=""/i);
   });
 
   it('error_card_shows_the_daemons_sentence', () => {
-    expect(render(view({ state: 'error', error: 'No VM image yet.', slots: [] }))).toMatch(/role="alert"[^>]*>[^<]*No VM image yet\./);
+    const html = render(view({ state: 'error', error: 'No VM image yet.', slots: [] }));
+    expect(html).toMatch(/role="alert"[^>]*>[^<]*No VM image yet\./);
+    expect(html).toContain('>Open settings</button>');
   });
 
   it('an off runner still shows the daemon error', () => {

@@ -48,6 +48,8 @@ const hhmmss = (ts: number) => `${hhmm(ts)}:${two(new Date(ts * 1000).getSeconds
 
 /** A text action inside a row: faint until the row is hovered or focused, always shown on touch. */
 const ROW_ACTION = 'quiet-row-action shrink-0 rounded-md px-2 py-0.5 text-xs text-ink-soft hover:bg-[var(--q-wash)] hover:text-ink disabled:opacity-50';
+/** A queued job's actions: the row action's look, never hidden. */
+const QUEUED_ACTION = ROW_ACTION.replace('quiet-row-action ', '');
 const LOG_STYLE: React.CSSProperties = { background: 'var(--surface-2)' };
 
 const openExternally = (url: string) => window.nekko.openPath(url).catch(() => {});
@@ -267,7 +269,7 @@ function RunningJob({ slot, runnerId, now, compact = false }: { slot: SlotView; 
   );
 }
 
-/** A job waiting for a runner with this one's labels: Accept now or Decline, or undo either. */
+/** A job waiting for a runner with this one's labels: Start now or Skip, or undo either. Always shown: it is a decision waiting on you. */
 function QueuedRow({ job: q, view, now }: { job: QueuedJob; view: RunnerView; now: number }) {
   const act = useJobAction(view.config.id);
   // Shown at once; the daemon's view catches up on its next tick.
@@ -290,16 +292,16 @@ function QueuedRow({ job: q, view, now }: { job: QueuedJob; view: RunnerView; no
       <span className="flex-1" />
       {declined || accepted ? (
         <>
-          <span className="min-w-0 truncate text-ink-soft">{declined ? 'Declined: this Mac starts no VM for it' : 'Accepted: a VM starts for it now'}</span>
+          <span className="min-w-0 truncate text-ink-soft">{declined ? 'Skipped: this Mac starts no VM for it' : 'Starting: a VM starts for it now'}</span>
           <button className="shrink-0 text-accent hover:underline disabled:opacity-50" disabled={act.busy} onClick={() => void send('undo')}>Undo</button>
         </>
       ) : (
         <span className="flex shrink-0 items-center">
-          <button className={ROW_ACTION} disabled={act.busy || blocked !== null} title={blocked ?? 'Start a VM for it now, as if the runner were in Runner first'} onClick={() => void send('accept')}>
-            Accept now
+          <button className={`${QUEUED_ACTION} text-accent!`} disabled={act.busy || blocked !== null} title={blocked ?? 'Start a VM for it now, as if the runner were in Runner first'} onClick={() => void send('accept')}>
+            Start now
           </button>
-          <button className={ROW_ACTION} disabled={act.busy} title="This Mac starts no VM for it; another runner may take it" onClick={() => void send('decline')}>
-            Decline
+          <button className={QUEUED_ACTION} disabled={act.busy} title="This Mac starts no VM for it; another runner may take it" onClick={() => void send('decline')}>
+            Skip
           </button>
         </span>
       )}
@@ -312,17 +314,35 @@ function QueuedRow({ job: q, view, now }: { job: QueuedJob; view: RunnerView; no
  * page) the last few that ended. Empty groups are left out.
  */
 function Jobs({ view, now, compact }: { view: RunnerView; now: number; compact: boolean }) {
+  const [showDone, setShowDone] = useState(false);
   const queue = view.queue ?? [];
   const running = view.slots.filter((s) => s.state === 'running' || s.state === 'draining');
-  const recent = compact ? [] : view.recent;
+  const recent = view.recent;
   if (!queue.length && !running.length && !recent.length) return null;
-  // The panel is one flat list: each row's dot already says queued or running.
+  // The panel is one flat list (each row's dot says queued or running), and completed jobs wait behind one row.
   if (compact) {
     return (
-      <ul className="text-xs text-ink-soft" data-runner-jobs>
-        {running.map((s, i) => <RunningJob key={s.vm ?? i} slot={s} runnerId={view.config.id} now={now} compact />)}
-        {queue.map((q) => <QueuedRow key={`${q.repo}-${q.jobId}`} job={q} view={view} now={now} />)}
-      </ul>
+      <div className="text-xs text-ink-soft" data-runner-jobs>
+        {(running.length > 0 || queue.length > 0) && (
+          <ul>
+            {running.map((s, i) => <RunningJob key={s.vm ?? i} slot={s} runnerId={view.config.id} now={now} compact />)}
+            {queue.map((q) => <QueuedRow key={`${q.repo}-${q.jobId}`} job={q} view={view} now={now} />)}
+          </ul>
+        )}
+        {recent.length > 0 && (
+          <section data-runner-completed>
+            <button className="flex items-center gap-2 py-1 hover:text-ink" aria-expanded={showDone} onClick={() => setShowDone(!showDone)}>
+              <ChevronIcon className={`h-3 w-3 shrink-0 text-ink-faint transition-transform ${showDone ? 'rotate-90' : ''}`} />
+              {`Completed · ${recent.length} ${recent.length === 1 ? 'job' : 'jobs'}`}
+            </button>
+            {showDone && (
+              <ul>
+                {recent.map((l, i) => <RecentJob key={`${l.ts}-${i}`} line={l} runnerId={view.config.id} rerun={view.config.settings.rerunLostJobs} />)}
+              </ul>
+            )}
+          </section>
+        )}
+      </div>
     );
   }
   return (
@@ -458,8 +478,8 @@ function SizeNoticeRow({ view, beginReply }: { view: RunnerView; beginReply(): (
  * settings; one line for an error, the image build, missing tools or a suggested VM size; why it
  * waits; the slots not running a job; the jobs; and one line of facts.
  * `compact` is the Automations panel: it leaves out idle slots without a VM,
- * the facts line, completed jobs and Connect to a workflow, which stay on the
- * CI runners page.
+ * the facts line and Connect to a workflow (they stay on the CI runners page),
+ * and keeps completed jobs behind one Completed row.
  *
  * `beginReply` is called as a request starts and returns where its answer goes,
  * so the section can drop an answer a newer push has already overtaken.
@@ -515,7 +535,12 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
         </div>
 
         {/* Any state: an Off runner on a Mac without VM support still carries why. */}
-        {view.error && <p role="alert" className="text-xs" style={{ color: 'var(--danger-text)' }}>{view.error}</p>}
+        {view.error && (
+          <p role="alert" className="text-xs" style={{ color: 'var(--danger-text)' }}>
+            {view.error}{' '}
+            <button className="underline hover:no-underline" onClick={onSettings}>Open settings</button>
+          </p>
+        )}
         {image && settingUp && <ImageRow image={image} onSetup={onSetup} />}
         {missingTools.length > 0 && <MissingToolsRow tools={missingTools} onAddTools={onAddTools} />}
         <SizeNoticeRow view={view} beginReply={beginReply} />
