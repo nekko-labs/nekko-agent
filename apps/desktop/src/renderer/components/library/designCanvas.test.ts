@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FRAME, FRAME_MAX, MARGIN, WHEEL_MAX, ZOOM, fitView, frameSize, isAnimating, readPreviewHand, readPreviewState, readPreviewWheel, zoomAt } from './designCanvasView.js';
+import { FRAME, FRAME_MAX, KEY_STEP, MARGIN, TARGETS_MAX, WHEEL_MAX, ZOOM, dotSpacing, fitView, frameSize, isAnimating, keyAction, readPreviewHand, readPreviewState, readPreviewTargets, readPreviewWheel, zoomAt } from './designCanvasView.js';
 
 const state = (over: Record<string, unknown> = {}) => ({ nekkoPreview: 'state', animations: 0, media: 0, frames: 0, paused: false, width: 1440, height: 900, ...over });
 
@@ -63,5 +63,33 @@ describe('design canvas view', () => {
     expect(readPreviewHand({ nekkoPreview: 'hand', down: true })).toBe(true);
     expect(readPreviewHand({ nekkoPreview: 'hand', down: false })).toBe(false);
     for (const bad of [null, { nekkoPreview: 'hand' }, { nekkoPreview: 'hand', down: 1 }, { nekkoPreview: 'wheel', down: true }]) expect(readPreviewHand(bad)).toBeNull();
+  });
+
+  it('reads clickable boxes cut to the frame and drops anything malformed', () => {
+    const frame = { width: 1440, height: 900 };
+    expect(readPreviewTargets({ nekkoPreview: 'targets', boxes: [[10, 20, 80, 30], [1400, 880, 100, 100], [-50, 10, 60, 20], [2000, 10, 50, 50], [1, 2, 3], ['1', 2, 3, 4], [0, 0, NaN, 4], 'x'] }, frame))
+      .toEqual([[10, 20, 80, 30], [1400, 880, 40, 20], [0, 10, 10, 20]]);
+    expect(readPreviewTargets({ nekkoPreview: 'targets', boxes: Array.from({ length: TARGETS_MAX + 50 }, () => [0, 0, 10, 10]) }, frame)).toHaveLength(TARGETS_MAX);
+    for (const bad of [null, {}, { nekkoPreview: 'targets' }, { nekkoPreview: 'targets', boxes: 'all' }, { nekkoPreview: 'state', boxes: [] }]) expect(readPreviewTargets(bad, frame)).toBeNull();
+  });
+
+  it('moves and zooms from the keyboard, leaving modified keys to the app', () => {
+    const view = { z: 0.5, x: 100, y: 40 };
+    const canvas = { width: 1000, height: 600 };
+    const key = (k: string, over: Record<string, boolean> = {}) => keyAction({ key: k, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...over }, view, canvas);
+    expect(key('ArrowRight')).toEqual({ ...view, x: 100 - KEY_STEP.near });
+    expect(key('ArrowUp', { shiftKey: true })).toEqual({ ...view, y: 40 + KEY_STEP.far });
+    expect((key('+') as { z: number }).z).toBeCloseTo(0.5 * ZOOM.step);
+    expect((key('-') as { z: number }).z).toBeCloseTo(0.5 / ZOOM.step);
+    expect((key('1') as { z: number }).z).toBe(1);
+    expect(key('0')).toBe('fit');
+    expect(key('0', { metaKey: true })).toBeNull();
+    expect(key('=', { ctrlKey: true })).toBeNull();
+    expect(key('a')).toBeNull();
+  });
+
+  it('keeps the dotted surface between 12 and 36 pixels at every zoom', () => {
+    for (const z of [ZOOM.min, 0.25, 0.5, 1, 2, ZOOM.max]) expect(dotSpacing(z)).toBeGreaterThanOrEqual(12), expect(dotSpacing(z)).toBeLessThanOrEqual(36);
+    expect(dotSpacing(1)).toBe(18);
   });
 });
