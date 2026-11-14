@@ -60,7 +60,9 @@ class SkillMenuAfterTextTest {
         val box = compose.onNode(hasContentDescription("Message"))
         box.performTextInput("Help me with this /")
         shot("slash-after-text")
-        compose.onNodeWithContentDescription("Skills on your computer").assertIsDisplayed()
+        // The app's own label, so a rename can't break the test again (#1315: AN-29 renamed it).
+        val menu = InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.chat_saved_prompts_and_skills)
+        compose.onNodeWithContentDescription(menu).assertIsDisplayed()
 
         box.performTextInput("pl")
         compose.onNodeWithText("/plan").performClick()
