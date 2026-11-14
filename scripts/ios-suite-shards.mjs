@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { BATCH_BRANCH, BATCH_CONTEXT } from './ios-batch.mjs';
 
-export const SUITE_SHARDS = ['fixtures', 'pairing', 'journeys'];
+export const SUITE_SHARDS = ['fixtures', 'fixtures-heavy', 'pairing', 'journeys'];
 
 export function validateShard(shard) {
   if (!SUITE_SHARDS.includes(shard)) throw new Error(`Unknown Native iOS suite shard: ${shard}`);
@@ -46,6 +46,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
     console.log(JSON.stringify(outcome));
     if (outcome.state !== 'success' && !outcome.superseded) process.exitCode = 1;
   } else {
-    throw new Error('Usage: ios-suite-shards.mjs shard <fixtures|pairing|journeys> | report');
+    throw new Error('Usage: ios-suite-shards.mjs shard <fixtures|fixtures-heavy|pairing|journeys> | report');
   }
 }

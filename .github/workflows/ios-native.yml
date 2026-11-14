@@ -172,12 +172,12 @@ jobs:
     # !cancelled(): a skipped or failed picker must not skip this job.
     if: ${{ !inputs.streaming_baseline_ref && !inputs.relay_baseline_ref && !inputs.photos_baseline_ref && !inputs.baseline_ref && !inputs.groups_baseline_ref && !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'deploy:ios') && contains(fromJSON('["deploy:ios","ci:theme"]'), github.event.label.name))) }}
     runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
-    # Isolate the ~40-minute fixture suite from the themed pairing retries and
+    # Isolate the fixture suites (two legs, #1165) from the themed pairing retries and
     # the remaining live journeys (#2035). Keep every leg's existing time budget.
     strategy:
       fail-fast: false
       matrix:
-        shard: [fixtures, pairing, journeys]
+        shard: [fixtures, fixtures-heavy, pairing, journeys]
     env:
       SHARD: ${{ matrix.shard }}
     timeout-minutes: 85
@@ -301,7 +301,19 @@ jobs:
           # A failed live run prints its stack's own logs (fake model, relay, agent): the phone's
           # screenshots alone can't say why the computer stopped answering.
           stack_logs() { for f in "$NEKKO_ITEST_LOGDIR"/*.log; do echo "::group::$1 $(basename "$f")"; tail -n 120 "$f"; echo "::endgroup::"; done; }
+          # On a hosted 3-vCPU Mac the fixture suites run serially, and together they took 71 of this leg's
+          # 85 minutes with no retries (nightly 43484823985). The slowest classes in that run (about 31
+          # minutes) are a leg of their own (#1165). New suites still land in `fixtures`.
+          HEAVY=(MarkdownTests FirstRunTests AuditTrailTests ThemeLanguageTests PermissionChecklistUITests TurnDetailsTests IconThemeEvidenceTests)
           if [ "$SHARD" = fixtures ]; then
+            SELECT=(-skip-testing:NekkoNativeUITests/LiveRelayTests)
+            for c in "${HEAVY[@]}"; do SELECT+=("-skip-testing:NekkoNativeUITests/$c"); done
+          fi
+          if [ "$SHARD" = fixtures-heavy ]; then
+            SELECT=()
+            for c in "${HEAVY[@]}"; do SELECT+=("-only-testing:NekkoNativeUITests/$c"); done
+          fi
+          if [ "$SHARD" = fixtures ] || [ "$SHARD" = fixtures-heavy ]; then
             # The first-run suite is the only one split across simulator clones: its tests set all state by
             # launch argument, open no host ports and leave evidence only in the one xcresult. One worker per
             # 2 vCPUs and 6 GB of the VM, at most 4; a hosted 3-vCPU Mac gets 1, so it stays serial. At 4 GB a
@@ -312,7 +324,7 @@ jobs:
             [ "$WORKERS" -lt 2 ] || PARALLEL=(-parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS")
             echo "First-run suite: ${PARALLEL[*]}"
             TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
-              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests \
+              xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building "${SELECT[@]}" \
               "${PARALLEL[@]}" -retry-tests-on-failure -test-iterations 2 || failed=1
             # A failing test gets one retry above: XCTest can hang minutes at "Setting up automation session"
             # before the app launches. Then a fresh boot, since every simulator loss so far followed this long suite.
