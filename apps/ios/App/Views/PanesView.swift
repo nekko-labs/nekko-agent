@@ -221,7 +221,7 @@ struct PanesView: View {
                     }
                 }
                 .overlay { if display.isSplit { divider(geo, display) } }
-                .overlay(alignment: geo.tabEdge) { if !display.isSplit { edgeTab(display, posture) } }
+                .overlay(alignment: geo.tabEdge) { if !display.isSplit { edgeTab(display, posture).offset(y: geo.tabOffset) } }
             }
             footer(display, posture)
         }
@@ -387,6 +387,8 @@ struct PaneGeometry {
     private(set) var hingeGap: CGRect?
     /// Which edge the edge tab sits on: the side the hidden pane is on.
     private(set) var tabEdge: Alignment = .trailing
+    /// Moves the edge tab off a horizontal hinge (tabletop) to the middle of the top half, where it can be tapped.
+    private(set) var tabOffset: CGFloat = 0
 
     init(display: PaneDisplay, size: CGSize, hinge: CGRect?, split: Double) {
         self.size = size
@@ -398,6 +400,9 @@ struct PaneGeometry {
             for id in ids { rects[id] = full }
             shown = [display.shownId]
             tabEdge = ids.first == display.shownId ? .trailing : .leading
+            if let h = hinge, h.width > h.height, h.minY > 0, h.maxY < size.height {
+                tabOffset = (h.minY / 2 - size.height / 2).rounded()
+            }
         case .sideBySide:
             if let h = hinge, h.height >= h.width, h.minX > 0, h.maxX < size.width {
                 rects[ids[0]] = CGRect(x: 0, y: 0, width: h.minX, height: size.height)
@@ -480,7 +485,11 @@ struct PaneColumn: View {
             }
         }
         // Touching a pane gives it the focus (its composer takes the keyboard).
-        .modifier(FocusOnTouch { host.focus(id) })
+        .modifier(FocusOnTouch(focused: { host.layout.focusedId }) { atTouch in
+            // Next turn, so the redraw can't drop the tapped control's own action (#1314), and only if
+            // that action didn't move the focus itself (New chat focuses the pane it opens in).
+            DispatchQueue.main.async { if host.layout.focusedId == atTouch { host.focus(id) } }
+        })
         .overlay {
             // The focused pane wears a faint accent glow at its top and bottom edges
             // (into the status bar and home indicator), not a border.
@@ -547,21 +556,24 @@ struct PaneColumn: View {
 /// rows' NavigationLinks never fired (iPad and iPhone Duo); this UIKit tap recognizer
 /// neither cancels touches nor blocks other recognizers.
 struct FocusOnTouch: ViewModifier {
-    let focus: () -> Void
+    /// The focused pane, read when the touch begins: before the tapped control's action can change it.
+    let focused: () -> String?
+    let focus: (_ focusedAtTouch: String?) -> Void
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content.gesture(Recognizer(focus: focus))
+            content.gesture(Recognizer(focused: focused, focus: focus))
         } else {
-            content.simultaneousGesture(TapGesture().onEnded(focus))
+            content.simultaneousGesture(TapGesture().onEnded { focus(focused()) })
         }
     }
 
     @available(iOS 18.0, *)
     struct Recognizer: UIGestureRecognizerRepresentable {
-        let focus: () -> Void
+        let focused: () -> String?
+        let focus: (_ focusedAtTouch: String?) -> Void
 
-        func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+        func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator(focused: focused) }
 
         func makeUIGestureRecognizer(context: Context) -> UITapGestureRecognizer {
             let tap = UITapGestureRecognizer()
@@ -572,10 +584,18 @@ struct FocusOnTouch: ViewModifier {
         }
 
         func handleUIGestureRecognizerAction(_ recognizer: UITapGestureRecognizer, context: Context) {
-            if recognizer.state == .ended { focus() }
+            if recognizer.state == .ended { focus(context.coordinator.atTouch) }
         }
 
         final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+            let focused: () -> String?
+            var atTouch: String?
+            init(focused: @escaping () -> String?) { self.focused = focused }
+
+            func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+                atTouch = focused()
+                return true
+            }
             func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
         }
     }
