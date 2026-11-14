@@ -80,12 +80,12 @@ function MascotGallery() {
 function Fixture() {
   const [epoch, setEpoch] = useState(0);
   const [route, setRoute] = useState('command');
-  // opts: empty wall, show the dock (Budget only), theme preset, horizontal agent panel.
+  // opts: empty wall, show the dock (Budget only), theme preset.
   // opts.question: beta waits on a question. opts.many: enough grouped chats to
   // overflow the panel. opts.resumable: alpha ends on an assistant reply with work.
   // opts.plan: alpha carries an agent plan; opts.expired: the dock shows Utilization with an expired sign-in.
   // opts.dockAll: a right-side dock with four panels to reorder.
-  const reset = (opts: { empty?: boolean; dock?: boolean; dockAll?: boolean; preset?: string; horizontal?: boolean; question?: boolean; many?: boolean; plan?: boolean; planOpen?: boolean; expired?: boolean; focus?: boolean } = {}) => {
+  const reset = (opts: { empty?: boolean; dock?: boolean; dockAll?: boolean; preset?: string; question?: boolean; many?: boolean; plan?: boolean; planOpen?: boolean; expired?: boolean; focus?: boolean } = {}) => {
     expiredFixture = !!opts.expired;
     records = [makeSession('alpha', 'Fix wall and composer styling', opts.many ? 'ws-a' : undefined), makeSession('beta', 'Analyze post-merge perf trace', opts.many ? 'ws-a' : undefined), makeSession('outside', 'Chat not on the wall')];
     if (opts.many) for (let i = 0; i < 18; i++) records.push(makeSession(`extra-${i}`, `Grouped chat ${i + 1}`, i % 2 ? 'ws-a' : 'ws-b'));
@@ -96,8 +96,7 @@ function Fixture() {
     const root = opts.empty ? null : { id: 'split', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'pane-alpha', kind: 'chat', refId: 'alpha' }, { id: 'pane-beta', kind: 'chat', refId: 'beta' }] };
     const dock = opts.dockAll ? { ...DEFAULT_WALL_STATE.dock, show: true, side: 'right', monitorOrder: ['vitals', 'hardware', 'budget', 'utilization', 'automations'], panels: { vitals: true, automations: false, utilization: true, budget: true, hardware: true } }
       : opts.dock || opts.expired ? { ...DEFAULT_WALL_STATE.dock, show: true, panels: { vitals: false, automations: false, utilization: !!opts.expired, budget: !opts.expired, hardware: false } } : { ...DEFAULT_WALL_STATE.dock, show: false };
-    const agentPanel = opts.horizontal ? { show: true, orientation: 'horizontal' } : undefined;
-    useStore.setState({ view: 'command', providers: opts.expired ? [provider, claude] : [provider], models, activeProviderId: 'fixture', sessions: records.map(summarizeSession), terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: null, settings: { providers: opts.expired ? [provider, claude] : [provider], workspaceFolders: [], workspaces: opts.many ? [{ id: 'ws-a', name: 'nekko-agent', path: 'C:/fixture/a' }, { id: 'ws-b', name: 'mynichi', path: 'C:/fixture/b' }] : [], theme: 'dark', themePreset: opts.preset, experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root, hero: opts.empty ? null : 'alpha', autoAdd: false, watermark: Date.now(), dock, ...(opts.focus ? { layout: { ...DEFAULT_WALL_STATE.layout, mode: 'focus' } } : {}), ...(agentPanel ? { agentPanel } : {}) } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: !!opts.planOpen } as any);
+    useStore.setState({ view: 'command', providers: opts.expired ? [provider, claude] : [provider], models, activeProviderId: 'fixture', sessions: records.map(summarizeSession), terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: null, settings: { providers: opts.expired ? [provider, claude] : [provider], workspaceFolders: [], workspaces: opts.many ? [{ id: 'ws-a', name: 'nekko-agent', path: 'C:/fixture/a' }, { id: 'ws-b', name: 'mynichi', path: 'C:/fixture/b' }] : [], theme: 'dark', themePreset: opts.preset, experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root, hero: opts.empty ? null : 'alpha', autoAdd: false, watermark: Date.now(), dock, ...(opts.focus ? { layout: { ...DEFAULT_WALL_STATE.layout, mode: 'focus' } } : {}) } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: !!opts.planOpen } as any);
     records.forEach(putCachedSession); setRoute('command'); setEpoch(e => e + 1);
   };
   Object.assign(window, { integration: { reset, calls, route: setRoute, state: () => useStore.getState(), records: () => records } });

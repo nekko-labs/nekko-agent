@@ -13,7 +13,7 @@ User intent: a search button beside the Agents panel's +, in the same accent and
 - **Age label**: Today under a day, then 1 day … 30 days, then 1 month, 2 months … (whole 30-day months).
 - **Cost**: the search filters the chat summaries already in the renderer store; no IPC, no host work, no network. Beyond the title it matches only the first prompt and latest reply, which the summaries carry, not full transcripts.
 
-Not verified: packaged app, native window chrome, row-orientation panel, and very large chat histories (thousands of chats) for frame timing.
+Not verified: packaged app, native window chrome, and very large chat histories (thousands of chats) for frame timing.
 
 ## Search chats: messages, artifacts, groups, providers and dates
 

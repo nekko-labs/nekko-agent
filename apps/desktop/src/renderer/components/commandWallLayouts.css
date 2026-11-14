@@ -241,13 +241,11 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
    measures how far they sit from the column's top and bottom. Only beside the
    wall: stacked above it (narrow), the measurement includes the panel itself. */
 @media (min-width: 721px) {
-  .wall-agent-workspace[data-tabs='left'] > .wall-agents-presence[data-orientation='vertical'] { margin-top: var(--wall-panes-top, 0px); margin-bottom: var(--wall-panes-bottom, 0px); }
+  .wall-agent-workspace[data-tabs='left'] > .wall-agents-presence { margin-top: var(--wall-panes-top, 0px); margin-bottom: var(--wall-panes-bottom, 0px); }
 }
-.wall-agent-workspace[data-tabs='top'] { flex-direction: column; gap: 0; }
 /* The Agents panel's own controls: icon buttons whose meaning shows in a hover
-   tooltip (HoverTip), so they never change size under the pointer. A stack in
-   a column panel, a row in a row panel or when collapsed beside the wall
-   (AgentPanelControls animates the move). */
+   tooltip (HoverTip), so they never change size under the pointer. A row in
+   the open panel's header, a stack when collapsed beside the wall. */
 .agent-panel-controls { display: flex; flex-direction: row; justify-content: flex-end; align-items: center; gap: 4px; }
 .agent-panel-controls[data-stacked] { flex-direction: column; }
 .agent-panel-pill {
@@ -274,29 +272,23 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .hover-tip[data-instant] { animation: none; }
 /* Collapsed: the controls hold the panel's corner so the way back is where it was. */
 .agent-panel-collapsed { display: flex; flex-shrink: 0; align-items: flex-start; padding: 4px 2px; }
-.agent-panel-collapsed[data-orientation='horizontal'] { justify-content: flex-start; }
 
 @media (prefers-reduced-motion: reduce) {
   .agent-panel-pill, .hover-tip { transition: none; animation: none; }
 }
-/* The Agents panel as a row: each project is a strip of cards, the strip
-   scrolls sideways, and the row stays about one card tall. */
-.agent-panel-row { max-height: 168px; padding-block: 0; }
-.agent-panel-row .collapse-wrap > div { padding-bottom: 0; }
-.agent-panel-row > * { flex: 0 0 auto; margin-bottom: 0 !important; }
-.agent-panel-row .collapse-wrap > div { display: flex; flex-direction: row; gap: 8px; }
-.agent-panel-row .collapse-wrap > div > * { flex: 0 0 240px; min-width: 0; }
-/* A closed group hides its cards completely. In the row its strip collapses to
-   nothing (a 0fr grid row leaves the cards' width behind), and in the column
-   no card stays clickable under the header. */
-.agent-panel-row .collapse-wrap.collapsed { display: none; }
+/* The window-type switcher under the panel's header: one segment per kind of
+   window (Agents, Terminals, Photos and videos, Browsers, Files), sharing the
+   panel's width. */
+.agent-panel-shows { display: flex; width: 100%; }
+.agent-panel-shows.slide-toggle-icons button { flex: 1 1 0; width: auto; min-width: 0; }
+/* A closed group hides its cards completely: no card stays clickable under the header. */
 [data-agent-panel] .collapse-wrap.collapsed { visibility: hidden; pointer-events: none; }
 [data-agent-panel] .collapse-wrap.collapsed > div { padding-block: 0; }
 /* The column panel is bounded by the wall's height, so its list scrolls with
    the mouse wheel instead of growing past the window. */
 .wall-agent-workspace[data-tabs='left'] > .agent-panel-host,
 .wall-agent-workspace[data-tabs='left'] > .agent-panel-host > aside { min-height: 0; max-height: 100%; }
-.agent-panel-host [data-agent-panel][data-orientation='vertical'] { min-height: 0; max-height: 100%; }
+.agent-panel-host [data-agent-panel] { min-height: 0; max-height: 100%; }
 .wall-agent-workspace[data-tabs='left'] > .wall-focus-agents { flex-direction: column; width: clamp(140px, 22vw, 260px); overflow-x: hidden; overflow-y: auto; }
 .wall-agent-workspace[data-tabs='left'] .wall-focus-agent { width: 100%; min-width: 0; flex-shrink: 0; }
 @media (max-width: 720px) {
@@ -318,22 +310,17 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* Keep the drop surface stationary while its contents make room. */
 .agent-panel-group { position: relative; padding-top: 0; transition: padding-top 140ms var(--ease-out); }
 .agent-panel-group[data-group-gap] { padding-top: 36px; }
-.agent-panel-row > .agent-panel-group { position: relative; padding-top: 0; padding-left: 0; transition: padding-left 140ms var(--ease-out); }
-.agent-panel-row > .agent-panel-group[data-group-gap] { padding-left: 48px; }
 @media (prefers-reduced-motion: reduce) {
-  .agent-panel-group, .agent-panel-row > .agent-panel-group { transition: none; }
+  .agent-panel-group { transition: none; }
 }
 
 /* Presence changes are reversible CSS transitions, never queued animations. */
 .wall-agents-presence { display: flex; flex: 0 0 auto; min-width: 0; min-height: 0; max-height: 100%; opacity: 1; transform: translateX(0); interpolate-size: allow-keywords; width: max-content; overflow: visible; clip-path: inset(0 -10px); transition: width 220ms ease-out, transform 220ms ease-out; }
-.wall-agents-presence[data-orientation='horizontal'] { width: 100%; height: auto; transition: height 220ms ease-out, transform 220ms ease-out; }
 .wall-agents-presence > .agent-panel-host { min-height: 0; max-height: 100%; }
 .wall-agents-presence > .agent-panel-host > aside { min-height: 0; max-height: 100%; }
 .wall-agents-presence[data-panel-open='false'] { clip-path: inset(0); width: 0; transform: translateX(-100%); pointer-events: none; }
-.wall-agents-presence[data-orientation='horizontal'][data-panel-open='false'] { width: 100%; height: 0; transform: translateY(-100%); }
 @starting-style {
   .wall-agents-presence[data-panel-open='true'] { width: 0; transform: translateX(-100%); }
-  .wall-agents-presence[data-orientation='horizontal'][data-panel-open='true'] { width: 100%; height: 0; transform: translateY(-100%); }
 }
 /* Below md the list is an absolute drawer that this wrapper contains (its
    transform), so it keeps its old sizing: sized to the Agents button and
@@ -346,13 +333,10 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .agent-panel-group + .agent-panel-group { margin-top: 20px; }
 .agent-panel-group + .agent-panel-group::before { content: ""; position: absolute; inset-inline: 8px; top: -10px; height: 1px; background: color-mix(in srgb, var(--line) 65%, transparent); pointer-events: none; }
 .agent-panel-group-heading { margin-bottom: 4px; }
-/* Keep the active group visible until its own rows end. The row dock scrolls sideways. */
+/* Keep the active group visible until its own rows end. */
 .agent-panel-list .agent-panel-group-heading { position: sticky; top: 0; z-index: 1; background: var(--paper); }
 .agent-panel-list .agent-panel-group-heading:hover { background: var(--surface-2); }
 .agent-panel-group-label { font-size: var(--text-sm); line-height: 20px; color: var(--accent); }
-.agent-panel-row { column-gap: 24px; }
-.agent-panel-row > .agent-panel-group + .agent-panel-group { margin-top: 0; }
-.agent-panel-row > .agent-panel-group + .agent-panel-group::before { inset-inline: auto; inset-inline-start: -12px; top: 8px; bottom: 8px; width: 1px; height: auto; }
 
 .hover-tip-multiline { max-width: min(420px, calc(100vw - 16px)); white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 400; }
 
@@ -366,9 +350,6 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
   .agent-list-resize:hover > .pane-grip { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .agent-list-resize > .pane-grip { transition: none; } }
-/* Five stacked controls must not set the row's height below its cards. */
-[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] > div { display: grid; grid-template-columns: repeat(2, 28px); gap: 4px; }
-[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] .agent-panel-controls { display: contents; }
 
 /* ---------- Zones ---------- */
 /* A zone is a slim name bar over its window. The bar is the zone's handle:

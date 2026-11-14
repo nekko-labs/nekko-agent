@@ -55,7 +55,7 @@ app.whenReady().then(async () => {
     report.fullSessionReads = await run('groupLimitFixture.reads()');
     assert.equal(report.fullSessionReads, 0);
     report.checks.push('Listing and expansion do not fetch full transcripts');
-    // Reset component state for matching narrow and horizontal captures.
+    // Reset component state for a matching narrow capture.
     await win.reload(); await sleep(1500);
     win.setContentSize(480, 1100); await sleep(300);
     await run("document.querySelector('[aria-label=\"Open agent list\"]').click()");
@@ -70,11 +70,6 @@ app.whenReady().then(async () => {
       report.checks.push('Narrow Show more is visible and hit-testable');
     }
     win.setContentSize(1440, 1100); await sleep(300);
-    await run("document.querySelector('[aria-label=\"Show agents in a row\"]').click()");
-    await sleep(300); await frameAlphaEnd('nearest');
-    await shot('groups-horizontal');
-    report.horizontal = await counts();
-    assert.deepEqual(report.horizontal, report.initial);
     if (limited) {
       for (const groupBy of ['status', 'date', 'computer', 'none']) {
         await run(`groupLimitFixture.group(${JSON.stringify(groupBy)})`); await sleep(300);

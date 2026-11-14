@@ -25,6 +25,7 @@ import { needsProviderSetup } from '../components/providers/providerSetup.js';
 import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.js';
 
 import { allPanes, type PaneKind } from '../layout.js';
+import { useWallLogs } from '../wallLogs.js';
 import {
   addZone,
   applySnap,
@@ -504,13 +505,12 @@ export function CommandCenterView() {
         }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} onOpenChat={openChat} onOpenModels={() => setView('models')} />
-        <div ref={agentWorkspaceRef} className="wall-agent-workspace" data-tabs={agentsPresent && panel.orientation === 'horizontal' ? 'top' : 'left'}>
-      {!panel.show && <div className="agent-panel-collapsed" data-orientation={panel.orientation}>
-        <AgentPanelControls show={false} orientation={panel.orientation}
-          onToggle={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }))}
-          onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))} />
+        <div ref={agentWorkspaceRef} className="wall-agent-workspace" data-tabs="left">
+      {!panel.show && <div className="agent-panel-collapsed">
+        <AgentPanelControls show={false}
+          onToggle={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }))} />
       </div>}
-      {agentsPresent && <div className="wall-agents-presence" data-orientation={panel.orientation} data-panel-open={panel.show} inert={!panel.show} aria-hidden={!panel.show}><AgentSidebar onCreate={async (kind, projectId, shell) => {
+      {agentsPresent && <div className="wall-agents-presence" data-panel-open={panel.show} inert={!panel.show} aria-hidden={!panel.show}><AgentSidebar onCreate={async (kind, projectId, shell) => {
         const id = kind === 'terminal' ? await newTerminal(projectId, shell) : await newChat({ kind: 'chat', chatType: kind === 'image' || kind === 'video' ? kind : 'multimodal' }, projectId);
         await addFromToolbar(kind === 'terminal' ? 'terminal' : 'chat', id, true);
         setCompletedId(null);
@@ -524,9 +524,16 @@ export function CommandCenterView() {
           void addFromToolbar('chat', id);
         }
       }} onOpenTerminal={(id) => { setCompletedId(null); void addFromToolbar('terminal', id); }}
-        orientation={panel.orientation}
+        onOpenCompanion={(id, kind) => {
+          setCompletedId(null);
+          // Show the agent, then slide its Browser or Files drawer out (never
+          // closing it: picking the open one again leaves it open).
+          void addFromToolbar('chat', id).then(() => {
+            const drawer = useWallLogs.getState();
+            if (drawer.sessionId !== id || drawer.kind !== kind || drawer.closing) drawer.toggle(id, kind);
+          }).catch(reportAddFailure);
+        }}
         zoneTints={agentTints}
-        onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))}
         onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} /></div>}
       <div className="wall-column">
       {completedId ? <div className="panel panel-ring flex min-h-0 flex-1 flex-col overflow-hidden"><button className="btn btn-ghost self-start" onClick={() => setCompletedId(null)}>Back to active agents</button><ChatPane key={completedId} sessionId={completedId} readOnly /></div> : <CommandWall

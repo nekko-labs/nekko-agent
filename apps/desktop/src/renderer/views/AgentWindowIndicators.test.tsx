@@ -126,15 +126,13 @@ describe('agent window indicators', () => {
 describe('chat panel groups', () => {
   it('hides a closed group\'s cards completely and keeps them out of the tab order', () => {
     const board = stylesheet('components/commandWallLayouts.css');
-    expect(cssRule(board, '.agent-panel-row .collapse-wrap.collapsed').display).toBe('none');
     expect(cssRule(board, '[data-agent-panel] .collapse-wrap.collapsed')).toMatchObject({ visibility: 'hidden', 'pointer-events': 'none' });
     // Source pin: groups collapse on click (pane state); the rendered open group is not inert.
     expect(read('./WorkspacesView.tsx')).toMatch(/inert=\{isCollapsed \|\| undefined\}/);
     expect(renderSidebar({ sessions: [agentSummary('a')] })).toMatch(/<div class="collapse-wrap " data-group-cards="true">/);
   });
-  // Source pin: wheel scrolling needs a DOM event; the row layout itself is rendered.
-  it('turns the wheel into sideways scrolling in the row (source pin)', () => {
-    expect(renderSidebar({ orientation: 'horizontal' })).toContain('class="agent-panel-row ');
-    expect(read('./WorkspacesView.tsx')).toMatch(/onWheel=\{horizontal \? scrollRowWithWheel : undefined\}/);
+  it('has no row layout to scroll sideways', () => {
+    expect(renderSidebar()).not.toContain('agent-panel-row');
+    expect(read('./WorkspacesView.tsx')).not.toMatch(/scrollRowWithWheel|horizontal/);
   });
 });

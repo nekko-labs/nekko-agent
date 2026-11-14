@@ -42,12 +42,9 @@ app.whenReady().then(async () => {
     await run(`document.querySelector('[data-agent-group="ws-a"] [data-sidebar-group]').click()`);
     await sleep(250);
     report.collapsed = await run(`document.querySelector('[data-agent-group="ws-a"] [data-group-cards]').hasAttribute('data-collapsed')`);
-    await run(`integration.reset({ many: true, horizontal: true }); localStorage.setItem('nekko.agentPanelView', JSON.stringify({ groupBy: 'project' }))`);
-    await sleep(500);
-    report.horizontal = await run(`(() => { const list = document.querySelector('[data-agent-panel-list]'); return { position: getComputedStyle(list.querySelector('.agent-panel-group-heading')).position, scrollable: list.scrollWidth > list.clientWidth }; })()`);
     report.hidden = !win.isVisible();
     if (process.env.NEKKO_ASSERT_STICKY === '1') {
-      if (!report.collapsed || report.horizontal.position === 'sticky' || !report.horizontal.scrollable) throw Error('Collapse or horizontal row behavior regressed');
+      if (!report.collapsed) throw Error('Collapse behavior regressed');
       const heading = report.within.groups.find(g => g.key === first.key).heading;
       if (Math.abs(heading.top - report.within.list.top) > 3) throw Error(`Group header did not stick: ${heading.top} vs ${report.within.list.top}`);
       if (report.handoff) {
