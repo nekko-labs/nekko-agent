@@ -22,6 +22,7 @@ import {
   reasonText,
   networkText,
   recommendationText,
+  sizeNotice,
   suggestedSizeRow,
   runnerActivity,
   runnerSubtitle,
@@ -217,10 +218,24 @@ describe('runner helpers', () => {
     expect(recommendationText(host)).toBe('');
   });
 
+  it('puts a different suggested size on the card after 2 jobs, keyed so Not now holds until it changes', () => {
+    const at = (s: RunnerView['suggestedSize']) => sizeNotice(view({ host: { ...host, cpusPerVm: 6 }, suggestedSize: s }, { memoryPerVmMb: 10240 }));
+    expect(at(null)).toBeNull();
+    expect(at({ jobs: 1, cpus: 6, memoryMb: 14336, reasons: [] })).toBeNull();
+    expect(at({ jobs: 2, cpus: 6, memoryMb: 10240, reasons: [] })).toBeNull();
+    const why = ['The jobs swapped up to 16.4 GB.'];
+    expect(at({ jobs: 2, cpus: 6, memoryMb: 14336, reasons: why })).toEqual({
+      line: 'Your last 2 jobs suggest 6 vCPUs, 14 GB per VM (now 6 vCPUs, 10 GB).',
+      reasons: why,
+      key: '6x14336',
+      apply: { cpusPerVm: 6, memoryPerVmMb: 14336 },
+    });
+  });
+
   it('shows the suggested size, and Apply only when it differs', () => {
     const at = (s: RunnerView['suggestedSize']) => suggestedSizeRow(view({ host: { ...host, cpusPerVm: 6 }, suggestedSize: s }, { memoryPerVmMb: 10240 }));
     expect(at(null)).toBeNull();
-    expect(at({ jobs: 1, cpus: 6, memoryMb: 10240, reasons: [] })).toEqual({ line: 'Suggested size after 3 jobs at this size (1 so far).', reasons: [], apply: null });
+    expect(at({ jobs: 1, cpus: 6, memoryMb: 10240, reasons: [] })).toEqual({ line: 'Suggested size after 2 jobs at this size (1 so far).', reasons: [], apply: null });
     expect(at({ jobs: 4, cpus: 6, memoryMb: 10240, reasons: [] })).toEqual({ line: 'Fits your last 4 jobs.', reasons: [], apply: null });
     const why = ['The biggest job used 5.4 GB at most and never swapped.'];
     expect(at({ jobs: 4, cpus: 6, memoryMb: 8192, reasons: why })).toEqual({

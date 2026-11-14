@@ -7,10 +7,9 @@ import { CloudSignIn } from './CloudSignIn.js';
 import { RecoveryKeyDialog } from './RecoveryKeyDialog.js';
 import { DeleteAccountDialog } from './DeleteAccountDialog.js';
 import { SyncVisual } from './SyncVisual.js';
+import { PlanRow, TeamSwitches } from './PlanAndBilling.js';
 import { LogOutIcon } from '../../gentleface-icons.js';
 import './cloud.css';
-
-const PLANS_URL = 'https://nekkoagent.com/pricing';
 
 /** Settings → Sync: Nekko Cloud sign-in and end-to-end encrypted chat sync. */
 export function SyncSettings() {
@@ -79,11 +78,13 @@ export function SyncSettings() {
           </div>
         </div>
       )}
+      {/* Hidden until the Nekko team switches billing on (#2724). */}
+      {status?.account?.features?.billing && <PlanRow plan={status.account.plan} />}
+      {status?.account?.staff && <TeamSwitches />}
 
       {phase === 'needs-plan' && (
         <div className="sync-row">
           <p className="text-sm text-ink-soft">Sync is part of Nekko Cloud Pro and Team. Your chats stay on this computer until then.</p>
-          <button className="btn btn-primary shrink-0 py-1! text-xs!" onClick={() => void window.nekko.openPath(PLANS_URL)}>See plans</button>
         </div>
       )}
 

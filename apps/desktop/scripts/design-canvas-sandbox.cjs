@@ -1,6 +1,7 @@
 // Full-App journey for the design canvas: a design with three versions (the newest animated, in CSS and
-// in a requestAnimationFrame loop) and a still one, opened from Library and served by the real preview
-// server (@nekko-agent/profile/html-preview). Synthetic bridge, isolated profile, hidden, off-screen,
+// in a requestAnimationFrame loop) and a still one, shown live on Library's tiles and opened from Library,
+// served by the real preview server (@nekko-agent/profile/html-preview). A chat also names a fourth
+// version that was never written, which Library must leave out. Synthetic bridge, isolated profile, hidden, off-screen,
 // non-focusable window; every request off this machine is cancelled and recorded.
 // Launch: NEKKO_LAYOUT_SANDBOX=design-canvas-sandbox.cjs NEKKO_LAYOUT_FRAME_SRC=web node layout-evidence-integration.cjs
 // NEKKO_DESIGN_BASELINE=1 (with NEKKO_TEST_SOURCE=<unchanged checkout>) captures the same designs in the old file pane.
@@ -37,7 +38,8 @@ const DESIGNS = {
   // The newest: a wide canvas of seven frames, a spinner in CSS and a counter driven by requestAnimationFrame.
   'checkout-design-v3.html': page('Checkout, with the paying state', 2880, [frameBox('Cart', '#fff'), frameBox('Address', '#fff'), frameBox('Payment', '#fff'), frameBox('Paying', '#fdf6fa', '<div class="spin"></div>'), frameBox('Done', '#f1faf3', '<span id="ticks">0</span>'), frameBox('Declined', '#fdf1ef'), frameBox('Empty cart', '#fff')].join(''),
     '<script>let n=0;const t=document.getElementById("ticks");const loop=()=>{t.textContent=String(++n);requestAnimationFrame(loop)};requestAnimationFrame(loop);document.addEventListener("click",()=>{document.body.dataset.clicked="yes"})</script>'),
-  'login.html': page('Login', 1280, [frameBox('Sign in', '#fff'), frameBox('Wrong password', '#fdf1ef')].join('')),
+  // Three things to click: a button, a link and a card with a pointer cursor (its text inherits the cursor and is not counted again).
+  'login.html': page('Login', 1280, [frameBox('Sign in', '#fff', '<button>Sign in</button><a href="#forgot">Forgot password</a>'), frameBox('Wrong password', '#fdf1ef', '<div style="cursor:pointer;padding:12px"><b>Try again</b></div>')].join('')),
 };
 
 app.whenReady().then(async () => {
@@ -88,8 +90,15 @@ app.whenReady().then(async () => {
       localStorage.removeItem('nekko.libraryLayout'); localStorage.removeItem('nekko.libraryCollapsed');
       const f = layoutFixture, urls = ${js(urls)}, sources = ${js(Object.fromEntries(Object.entries(DESIGNS).map(([n, h]) => [file(n), h])))};
       f.records.forEach(r => { r.messages = []; f.putCachedSession(r); });
+      // A chat that names a version it never wrote, and a report, so Designs has another kind to lead.
+      const now = Date.now(), chat = f.records[0];
+      chat.messages = [
+        { id: 'gq', role: 'user', content: 'Try another checkout', createdAt: now - 2000 },
+        { id: 'ga', role: 'assistant', content: '[Checkout v4](' + ${js(file('checkout-design-v4.html'))} + ') and [Notes](' + ${js(project + '/reports/notes.md')} + ')', createdAt: now - 1000 },
+      ];
+      chat.updatedAt = now; f.putCachedSession(chat);
       f.asked = [];
-      f.bridge.listDir = async (p) => (p === ${js(project + '/nekko-designs')} ? ${js(listing)} : []);
+      f.bridge.listDir = async (p) => (p === ${js(project + '/nekko-designs')} ? ${js(listing)} : p === ${js(project + '/reports')} ? [{ name: 'notes.md', path: ${js(project + '/reports/notes.md')}, dir: false }] : []);
       f.bridge.listComments = async () => [];
       f.bridge.readFile = async (p) => ({ content: sources[p] ?? '', truncated: false, binary: false });
       f.bridge.openPath = async p => { f.lastOpenPath = p; };
@@ -100,9 +109,18 @@ app.whenReady().then(async () => {
       f.store.getState().setView('artifacts');
     })()`);
     await sleep(1200);
-    win.setContentSize(1440, 900); await sleep(300);
+    win.setContentSize(1440, 900); await sleep(2600);
     await shot('library');
-    await check(`document.querySelectorAll('[data-artifact-row]').length === 2 && ${row('Checkout design')}.textContent.includes('3 versions') && !${row('Login')}.textContent.includes('versions')`, 'versions-are-one-design');
+    await check(`document.querySelectorAll('[data-artifact-row]').length === 3 && ${row('Checkout design')}.textContent.includes('3 versions') && !${row('Login')}.textContent.includes('versions')`, 'versions-are-one-design-and-the-unwritten-one-is-left-out');
+    await check(`document.querySelector('[data-library-group]').dataset.libraryGroup === 'design' && document.querySelector('[data-artifact-kind]').dataset.artifactKind === 'design'`, 'designs-lead');
+    if (!baseline) {
+      await check(`document.querySelectorAll('[data-library-group="design"] [data-live-preview="page"] iframe[data-ready]').length === 2`, 'design-tiles-show-the-pages-themselves');
+      await check(`[...document.querySelectorAll('[data-library-group="design"] iframe')].every(f => f.getAttribute('sandbox') === 'allow-scripts allow-forms allow-modals' && getComputedStyle(f).pointerEvents === 'none' && f.tabIndex === -1)`, 'tile-pages-are-sandboxed-and-inert');
+      const tileFrames = win.webContents.mainFrame.framesInSubtree.filter(f => f.url.startsWith(origin));
+      const held = await Promise.all(tileFrames.map(f => f.executeJavaScript(`document.getAnimations().every(a => a.playState !== 'running')`)));
+      report.checks['tiles-hold-their-motion'] = tileFrames.length === 2 && held.every(Boolean);
+      if (!report.checks['tiles-hold-their-motion']) throw Error('tiles-hold-their-motion');
+    }
 
     // The newest version opens on the canvas, whole and fitted.
     await run(`(${baseline ? `document.querySelector('[data-artifact-row]')` : row('Checkout design')}).click()`); await sleep(2600);
@@ -110,7 +128,7 @@ app.whenReady().then(async () => {
     await check(`!!document.querySelector('[data-design-canvas] iframe') && document.querySelector('[data-design-canvas] iframe').src === ${js(urls[`${file('checkout-design-v3.html')}|true`].url)}`, 'opens-the-newest-version-on-the-canvas');
     await check(`JSON.stringify(layoutFixture.asked.at(-1)) === ${js(JSON.stringify({ p: file('checkout-design-v3.html'), internet: false, controls: true }))}`, 'served-offline-with-the-viewer-script');
     await check(`${frameStyle}.width === '2880px' && parseInt(${frameStyle}.height) >= 800 && ${zoom} > 20 && ${zoom} < 60`, 'whole-design-laid-out-and-fitted');
-    await check(`document.querySelector('[data-design-canvas] iframe').getAttribute('sandbox') === 'allow-scripts allow-forms allow-modals' && ${frameStyle}.pointerEvents === 'none'`, 'sandboxed-and-inert-until-interact');
+    await check(`document.querySelector('[data-design-canvas] iframe').getAttribute('sandbox') === 'allow-scripts allow-forms allow-modals' && ${frameStyle}.pointerEvents === 'auto' && !document.querySelector('[data-design-interact]')`, 'sandboxed-and-clickable-from-the-start');
     await check(`[...document.querySelectorAll('[role="radiogroup"][aria-label="Version"] [role="radio"]')].map(r => r.textContent.trim() + (r.getAttribute('aria-checked') === 'true' ? '*' : '')).join(' ') === 'v1 v2 v3*'`, 'version-switcher-lists-all-three');
 
     // It is moving, so Play/Pause is offered, and pausing holds both the CSS animation and the frame loop.
@@ -147,15 +165,53 @@ app.whenReady().then(async () => {
       await click('[data-design-zoom]'); await sleep(200);
       await check(`${zoom} === ${fitted}`, 'fit-returns-the-whole-design');
 
-      // Interact hands the pointer to the design, and takes it back.
-      await click('[data-design-interact]'); await sleep(150);
-      await check(`${frameStyle}.pointerEvents === 'auto' && document.querySelector('[data-design-interact]').getAttribute('aria-pressed') === 'true'`, 'interact-gives-the-design-the-pointer');
-      await click('[data-design-interact]'); await sleep(150);
+      // The design takes the pointer at once; the space around it still drags the canvas. A hidden window
+      // paints nothing, so the browser has no hit-test data for the design's own process and routes real
+      // input to the page around it: the click is checked as a hit test on both sides instead.
+      const box = await run(`(() => { const f = document.querySelector('[data-design-canvas] iframe'), r = f.getBoundingClientRect(), c = document.querySelector('[data-design-canvas]').getBoundingClientRect(), z = r.width / f.offsetWidth; return { x: Math.round(r.left + 120 * z), y: Math.round(r.top + 200 * z), px: 120, py: 200, bx: Math.round(c.left + c.width / 2), by: Math.round(c.bottom - 30) }; })()`);
+      await check(`(() => { const e = document.elementFromPoint(${box.x}, ${box.y}); return e?.tagName === 'IFRAME' && getComputedStyle(e).pointerEvents === 'auto'; })()`, 'the-design-is-under-the-pointer-and-takes-it');
+      await expectDesign(`document.elementFromPoint(${box.px}, ${box.py})?.closest('.frame') ? 'frame' : 'none'`, 'the-design-has-its-screen-at-that-point', 'frame');
+      if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3');
+      const cdp = (type, x, y) => win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
+      const resting = await run(`${frameStyle}.transform`);
+      await cdp('mouseMoved', box.bx, box.by); await cdp('mousePressed', box.bx, box.by);
+      for (let i = 1; i <= 6; i++) { await cdp('mouseMoved', box.bx - i * 20, box.by - i * 5); await sleep(30); }
+      await cdp('mouseReleased', box.bx - 120, box.by - 30); await sleep(200);
+      await check(`${frameStyle}.transform !== ${js(resting)}`, 'dragging-the-space-around-moves-the-canvas');
+
+      // What a long drag costs: 120 pointer moves on the space around the design while the app
+      // records the gap between its painted frames. Measured, not checked: the numbers go in the report.
+      await run(`(() => { window.__gaps = []; window.__stopGaps = false; let last = performance.now(); const tick = (t) => { window.__gaps.push(t - last); last = t; if (!window.__stopGaps) requestAnimationFrame(tick); }; requestAnimationFrame(tick); })()`);
+      await win.webContents.debugger.sendCommand('Performance.enable');
+      const metrics = async () => Object.fromEntries((await win.webContents.debugger.sendCommand('Performance.getMetrics')).metrics.map(m => [m.name, m.value]));
+      const m0 = await metrics();
+      const dragStart = Date.now();
+      await cdp('mouseMoved', box.bx, box.by); await cdp('mousePressed', box.bx, box.by);
+      for (let i = 1; i <= 120; i++) { await cdp('mouseMoved', box.bx - (i % 40) * 6, box.by - (i % 20) * 3); await sleep(4); }
+      await cdp('mouseReleased', box.bx, box.by);
+      const dragMs = Date.now() - dragStart;
+      await sleep(200);
+      const m1 = await metrics();
+      const spent = k => Math.round((m1[k] - m0[k]) * 10000) / 10;
+      report.perf = { dragMoves: 120, dragMs, scriptMs: spent('ScriptDuration'), taskMs: spent('TaskDuration'), styleRecalcs: m1.RecalcStyleCount - m0.RecalcStyleCount, layouts: m1.LayoutCount - m0.LayoutCount, ...(await run(`(() => { window.__stopGaps = true; const g = window.__gaps.slice(2).sort((a, b) => a - b); const q = p => Math.round(g[Math.min(g.length - 1, Math.floor(g.length * p))] * 10) / 10; return { frames: g.length, medianFrameMs: q(0.5), p95FrameMs: q(0.95), maxFrameMs: q(1) }; })()`)) };
+      await click('[data-design-zoom]'); await sleep(200);
+
+      // A scroll over the design moves the canvas; the page passes it up.
+      const beforeWheel = await run(`${frameStyle}.transform`);
+      await inDesign(`document.body.dispatchEvent(new WheelEvent('wheel', { deltaX: 160, deltaY: 0, clientX: 200, clientY: 200, bubbles: true, cancelable: true }))`); await sleep(200);
+      await check(`${frameStyle}.transform !== ${js(beforeWheel)}`, 'scrolling-over-the-design-moves-the-canvas');
+
+      // Space held in the design turns it into a handle; letting go hands the pointer back.
+      await inDesign(`document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true, cancelable: true }))`); await sleep(150);
+      await check(`${frameStyle}.pointerEvents === 'none' && document.querySelector('[data-design-canvas]').hasAttribute('data-design-hand')`, 'space-in-the-design-drags-the-canvas');
+      await inDesign(`document.body.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space', key: ' ', bubbles: true }))`); await sleep(150);
+      await check(`${frameStyle}.pointerEvents === 'auto' && !document.querySelector('[data-design-canvas]').hasAttribute('data-design-hand')`, 'letting-go-of-space-hands-back-the-pointer');
+      await click('[data-design-zoom]'); await sleep(200);
 
       // An older version, which is still: no Play/Pause.
       await run(`[...document.querySelectorAll('[role="radiogroup"][aria-label="Version"] [role="radio"]')][0].click()`); await sleep(2400);
       await check(`document.querySelector('[data-design-canvas] iframe').src === ${js(urls[`${file('checkout-design.html')}|true`].url)} && !document.querySelector('[data-design-playback]')`, 'older-version-opens-without-playback');
-      await check(`document.querySelector('[aria-label="Close preview"]').parentElement.textContent.includes('checkout-design.html') && ${frameStyle}.width === '1440px'`, 'header-names-the-version-open');
+      await check(`document.querySelector('[data-library-back]').parentElement.textContent.includes('checkout-design.html') && ${frameStyle}.width === '1440px'`, 'header-names-the-version-open');
       await shot('design-v1');
 
       // Source shows the file itself, and Canvas comes back.
@@ -170,6 +226,43 @@ app.whenReady().then(async () => {
       await run(`${row('Login')}.click()`); await sleep(3600);
       await check(`!!document.querySelector('[data-design-canvas] iframe') && !document.querySelector('[data-design-playback]') && !document.querySelector('[role="radiogroup"][aria-label="Version"]')`, 'still-design-has-no-playback-or-versions');
       await shot('design-still');
+
+      // Highlight clickable: the page reports its button, link and pointer card; the canvas outlines them over the design, placed with it.
+      await check(`document.querySelector('[data-design-highlight]').getAttribute('aria-pressed') === 'false' && !document.querySelector('[data-design-targets]')`, 'highlight-starts-off');
+      await click('[data-design-highlight]'); await sleep(800);
+      await check(`document.querySelectorAll('[data-design-targets] span').length === 3`, 'highlight-outlines-the-three-clickable-parts');
+      await check(`document.querySelector('[data-design-targets]').style.transform === ${frameStyle}.transform && getComputedStyle(document.querySelector('[data-design-targets]')).pointerEvents === 'none'`, 'outlines-sit-on-the-design-and-let-the-pointer-through');
+      await shot('design-highlight');
+      // The page changes: a new button appears, and the outlines follow.
+      await inDesign(`document.querySelector('.screen').insertAdjacentHTML('beforeend', '<button>Use a passkey</button>')`); await sleep(800);
+      await check(`document.querySelectorAll('[data-design-targets] span').length === 4`, 'outlines-follow-a-change-in-the-design');
+
+      // Keyboard: arrows move by 60 pixels, 1 shows 100%, 0 fits again. The dots move with the design.
+      const at = await run(`${frameStyle}.transform`);
+      const x0 = Number(/translate\(([-\d.]+)px/.exec(at)[1]);
+      await run(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', bubbles: true, cancelable: true }))`); await sleep(150);
+      await check(`Math.abs(Number(/translate\\(([-\\d.]+)px/.exec(${frameStyle}.transform)[1]) - ${x0 - 60}) < 0.5`, 'arrow-key-moves-the-canvas');
+      await check(`document.querySelector('[data-design-canvas]').style.backgroundPosition.startsWith(${js(`${x0 - 60}px`)})`, 'dots-move-with-the-design');
+      await run(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true, cancelable: true }))`); await sleep(250);
+      await check(`${zoom} === 100`, 'one-shows-actual-size');
+      await run(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true, cancelable: true }))`); await sleep(250);
+      const fittedStill = await run(zoom);
+      await check(`${zoom} < 100`, 'zero-fits-again');
+      // Double-click on the space around the design zooms in there; with Shift, back out.
+      await run(`(() => { const c = document.querySelector('[data-design-canvas]').getBoundingClientRect(); document.querySelector('[data-design-canvas]').dispatchEvent(new MouseEvent('dblclick', { clientX: c.left + c.width / 2, clientY: c.bottom - 20, bubbles: true })); })()`); await sleep(250);
+      await check(`${zoom} > ${fittedStill}`, 'double-click-zooms-in');
+      await click('[data-design-zoom]'); await sleep(200);
+      await click('[data-design-highlight]'); await sleep(200);
+      await check(`!document.querySelector('[data-design-targets]') && document.querySelector('[data-design-highlight]').getAttribute('aria-pressed') === 'false'`, 'highlight-turns-off');
+      // A recording: the canvas moved by the keyboard, then the clickable parts outlined.
+      const keyFrames = [];
+      const press = key => run(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ${js(key)}, bubbles: true, cancelable: true }))`);
+      for (const key of ['+', '+', 'ArrowLeft', 'ArrowLeft', 'ArrowUp', 'ArrowUp', 'ArrowRight', 'ArrowDown']) { await press(key); await sleep(120); keyFrames.push(await grab()); }
+      await click('[data-design-highlight]');
+      for (let i = 0; i < 6; i++) { await sleep(150); keyFrames.push(await grab()); }
+      await press('0'); await sleep(200); keyFrames.push(await grab());
+      await click('[data-design-highlight]'); await sleep(200);
+      const keyGif = path.join(out, 'design-keys-and-highlight.gif'); writeGif(keyGif, keyFrames, 25); report.captures.push(keyGif);
 
       win.setContentSize(430, 932); await sleep(600);
       await check(`!!document.querySelector('[data-design-canvas] iframe') && ${zoom} < 40 && document.querySelector('[data-design-controls]').getBoundingClientRect().right <= 431`, 'narrow-window-fits-the-design');

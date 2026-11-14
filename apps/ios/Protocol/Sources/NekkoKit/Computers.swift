@@ -258,6 +258,8 @@ public final class ComputersStore {
     public let drafts: DraftStore
     /// The active computer's prompts waiting to be delivered, kept on disk.
     public let outbox: Outbox
+    /// Answers and one-time approvals bound to the original request.
+    public let responses: PendingResponses
     private let offlineFiles: OfflineFiles?
 
     public var active: Computer? { computers.first { $0.id == activeId } }
@@ -344,6 +346,7 @@ public final class ComputersStore {
         var defaultsNow: () -> RemoteDefaults = { RemoteDefaults() }
         outbox = Outbox(files: offlineFiles, drafts: drafts, caller: { reach() }, defaults: { defaultsNow() },
                         newId: newId, now: now, pollInterval: outboxPoll, confirmTimeout: outboxConfirmTimeout)
+        responses = PendingResponses(files: offlineFiles, caller: { reach() }, newId: newId)
         reach = { [weak self] in
             guard let self, self.conn == .online else { return nil }
             return self.client
@@ -354,8 +357,9 @@ public final class ComputersStore {
 
     /// Deliver the outbox now (connected, back in the foreground, Send now).
     public func flushOutbox() {
-        guard conn == .online, !outbox.items.isEmpty else { return }
-        Task { await outbox.flush() }
+        guard conn == .online else { return }
+        Task { await responses.flush() }
+        if !outbox.items.isEmpty { Task { await outbox.flush() } }
     }
 
     /// Calls the active computer at call time; throws when none is connected.
@@ -697,6 +701,7 @@ public final class ComputersStore {
         if wasActive {
             drafts.load(nil)
             outbox.load(nil)
+            responses.load(nil)
             transcripts.load(nil)
             offlineComputer = nil
         }
@@ -768,6 +773,7 @@ public final class ComputersStore {
         if offlineComputer != id {
             drafts.load(id)
             outbox.load(id)
+            responses.load(id)
             transcripts.load(id)
             offlineComputer = id
         }
@@ -892,6 +898,7 @@ public final class ComputersStore {
                 if safetyExit?.computerId == computerId { safetyExit = nil }
                 Task {
                     await refresh()
+                    await responses.flush()
                     await outbox.flush()
                 }
                 registerPushNow()

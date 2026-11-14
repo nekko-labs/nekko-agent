@@ -158,6 +158,11 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
     { suggestedSize: { jobs: 6, cpus: 4, memoryMb: 8 * GB, reasons: ['The biggest job used 5.4 GB at most and never swapped.'] } },
     { memoryPerVmMb: 12 * GB },
   )],
+  // Two jobs at 4 vCPUs and 10 GB swapped: the card suggests more memory (#2700).
+  'size-notice': async () => [view(
+    { today: { jobs: 2, seconds: 78 * 60 }, suggestedSize: { jobs: 2, cpus: 4, memoryMb: 14 * GB, reasons: ['The jobs swapped up to 4.7 GB.'] } },
+    { memoryPerVmMb: 10 * GB },
+  )],
   'settings-unsampled': async () => [view({ host: unsampled, state: 'waiting', reasons: ['hostStateUnknown'] })],
 };
 
@@ -187,7 +192,7 @@ const images: Record<string, ImageView | null> = {
   'setup-resume': image({ stage: 'xcode', doneStages: toXcode, canResume: true }),
   'setup-rebuild': READY, ready: download, 'ready-left-off': download, 'ready-second-runner': download, 'card-ready': READY,
   'rebuild-cancelled': image({ ...download, info: READY.info }),
-  'missing-tools': NO_TOOLS, 'missing-tools-install': NO_TOOLS, 'connect-busy': NONE, 'image-retry': NONE,
+  'missing-tools': NO_TOOLS, 'missing-tools-install': NO_TOOLS, 'size-notice': READY, 'connect-busy': NONE, 'image-retry': NONE,
 };
 const plans: Record<string, ImagePlan> = { 'setup-no-xcode': { xcode: null, freeGb: 369.4, needsGb: 110, cachedMacos: false } };
 const PLAN: ImagePlan = { xcode: '27.2', freeGb: 369.4, needsGb: 110, cachedMacos: false };

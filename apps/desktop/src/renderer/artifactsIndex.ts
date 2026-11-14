@@ -9,9 +9,9 @@ import { chatArtifacts } from './chatArtifacts.js';
  * whoever put them there.
  *
  * Worked out in the renderer from transcripts and a folder listing, so nothing
- * new is stored and the host keeps one source of truth: the chat. Only paths
- * are listed; a file that has since been deleted still shows and simply fails
- * to open.
+ * new is stored and the host keeps one source of truth: the chat. A path a
+ * chat named but that is not on disk (deleted since, or never written) is
+ * dropped once its folder has been listed: see `presentPaths`.
  */
 
 export type ArtifactKind = 'doc' | 'web' | 'design' | 'diagram' | 'data' | 'office' | 'image';
@@ -176,6 +176,44 @@ export async function readDesignsFolder(
   const top = await list(`${projectPath.replace(/[\\/]+$/, '')}/${DESIGNS_FOLDER}`);
   const nested = await Promise.all(top.filter((e) => e.dir).slice(0, FOLDER_LIMIT.subfolders).map((e) => list(e.path)));
   return [...top, ...nested.flat()].filter((e) => !e.dir).slice(0, FOLDER_LIMIT.files);
+}
+
+/** Folders listed at once when checking which files are still there. */
+const PRESENCE_BATCH = 8;
+
+/**
+ * The paths (lower-cased) that are still on disk, or cannot be checked: each
+ * file's folder is listed once (names only, nothing opened), and a file whose
+ * folder lists without it is gone. A folder that cannot be listed counts its
+ * files as present, so a slow or refused read never hides anything.
+ */
+export async function presentPaths(
+  listDir: (path: string) => Promise<Array<{ name: string }>>,
+  paths: readonly string[],
+): Promise<Set<string>> {
+  const byFolder = new Map<string, string[]>();
+  for (const p of paths) {
+    const slash = p.replaceAll('\\', '/').lastIndexOf('/');
+    if (slash <= 0) continue;
+    const folder = p.slice(0, slash);
+    byFolder.set(folder, [...(byFolder.get(folder) ?? []), p]);
+  }
+  const present = new Set(paths.filter((p) => p.replaceAll('\\', '/').lastIndexOf('/') <= 0).map((p) => p.toLowerCase()));
+  const folders = [...byFolder];
+  for (let i = 0; i < folders.length; i += PRESENCE_BATCH) {
+    await Promise.all(folders.slice(i, i + PRESENCE_BATCH).map(async ([folder, files]) => {
+      let names: Set<string> | null = null;
+      try {
+        const listed = await listDir(folder);
+        if (Array.isArray(listed)) names = new Set(listed.map((e) => String(e?.name ?? '').toLowerCase()));
+      } catch { /* Unknown, so kept. */ }
+      for (const f of files) {
+        const name = f.slice(f.replaceAll('\\', '/').lastIndexOf('/') + 1).toLowerCase();
+        if (!names || names.has(name)) present.add(f.toLowerCase());
+      }
+    }));
+  }
+  return present;
 }
 
 /** Folder designs join the chat index; a path a chat already produced keeps its chat. */
