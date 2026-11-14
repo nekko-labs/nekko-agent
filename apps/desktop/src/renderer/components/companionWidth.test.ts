@@ -8,6 +8,8 @@ function memory() {
 
 describe('companion column width', () => {
   it('defaults, clamps and survives garbage', () => {
+    // A companion opened beside a chat takes the larger part of the window.
+    expect(COMPANION_DEFAULT).toBe(0.6);
     expect(readCompanionWidth('s', memory())).toBe(COMPANION_DEFAULT);
     expect(clampCompanion(0.05)).toBe(COMPANION_MIN);
     expect(clampCompanion(2)).toBe(COMPANION_MAX);

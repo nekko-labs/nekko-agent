@@ -40,6 +40,30 @@ xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative \
 Native protocol, app and UI checks remain in the Native iOS workflow. A headless
 protocol check does not establish physical-device, APNs delivery or store readiness.
 
+## Offline native preview acceptance (#1095)
+
+`PreviewsTests` renders the real cards/window/WebKit/table views through a
+Debug-only isolated `-uiTestPreviews` route. It uses synthetic protocol responses,
+not actual files, credentials, network services or paired computers. The existing
+CI fixture shard includes this suite and `PreviewEvidenceTests` automatically.
+For focused local testing, generate the project and use a disposable simulator:
+
+```sh
+TEST_RUNNER_NEKKO_ITEST_THEME=dark xcodebuild \
+  -project apps/ios/NekkoNative.xcodeproj -scheme NekkoNative \
+  -destination 'platform=iOS Simulator,id=YOUR_DISPOSABLE_SIMULATOR_UDID' \
+  -parallel-testing-enabled NO \
+  -only-testing:NekkoNativeUITests/PreviewsTests \
+  -only-testing:NekkoNativeTests/PreviewEvidenceTests \
+  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" test
+```
+
+Repeat with `light` for matched theme evidence. The explicit 30-second WebKit
+functional-readiness bound accounts for measured cold simulator navigation; it
+is not a product performance gate, test retry or claim of live/device acceptance.
+Review the [preview spec](../../spec/phone/iphone-chat-tables-and-link-previews.md)
+for the remaining PDF/image, hardware, VoiceOver and live-relay boundaries.
+
 ## Failed native test diagnostics
 
 The existing `native-ios-evidence-<shard>` workflow artifact includes
