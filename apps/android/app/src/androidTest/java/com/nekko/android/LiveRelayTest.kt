@@ -95,10 +95,11 @@ class LiveRelayTest {
             // The pairing celebration covers the app until it goes; Let's go closes it early
             // (FirstRunJourneyTest does the same). Taps meant for step 3 otherwise land on it.
             closePairCelebration()
-            // Step 3, right after the first pairing: notifications (granted above, so nothing is asked).
+            // Step 3 is the permission checklist. Alerts were granted above; Continue
+            // completes onboarding without requesting anything else.
             waitFor(hasText("Step 3 of 3"), 30_000)
             shot("1a-first-run-notifications")
-            tap(hasText("Allow notifications"))
+            tap(hasTestTag("permissions.continue"))
 
             waitFor(hasText("New chat"), 30_000)
             shot("2-chats")
