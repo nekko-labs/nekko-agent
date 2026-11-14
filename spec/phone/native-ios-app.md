@@ -8,6 +8,36 @@ split-from: SPEC.md (2026-10-22)
 
 **User intent:** Philip asked (2026-10-16) to finish the native SwiftUI iPhone app using Orca's mobile app as the competitive reference, **Tailscale first** and on the Nekko relay, following the Android app's connection approach. It replaces the read-only direct-HTTPS foundation, which never shipped: one transport, the end-to-end encrypted relay, as on Android. Competitive notes: [reports/ios-native-competitive-2026-10-16.md](reports/ios-native-competitive-2026-10-16.md).
 
+## First-attempt failure diagnostics (#2767, #831, #1048)
+
+`[implemented; script tests and local failed/passing xcresult export verified;
+next failing CI/live-journey export unverified]` Native iOS retains the summary
+and Xcode diagnostic export for each failed or unreadable result bundle in the
+existing shard artifact's `diagnostics/<result-name>/` folder. Clean passing
+results are skipped, so a successful retry neither hides the first failure nor
+creates redundant diagnostics. An export failure is recorded and collection
+continues without changing the original test verdict. Collection uses the job's
+result bundles, not a new capture from a user's running simulator. Xcode's
+host-wide `simctl_diagnostics` archive is excluded before files enter an upload
+path; raw staging stays outside that path and is removed. No new macOS job, test
+retry, test-timeout increase or assertion change is added. This provides
+the next launch/testmanager investigation evidence; it does not fix or close the
+intermittent queue/fork or notification failures.
+
+## Simulator Keychain verification (#1096)
+
+`[verified 2026-11-14 on an isolated iPhone 17 Pro / iOS 26.5, Xcode 27.2]`
+Unsigned runtime tests reproduce `nil` reads in the original save/overwrite test.
+A disposable Security-framework probe reports update/add/read all returning
+`-34018` (`errSecMissingEntitlement`). With ad-hoc signing and unchanged
+assertions, both Keychain tests pass. The probe preserves SecureStore's
+`AfterFirstUnlockThisDeviceOnly`, non-synchronizing attributes and reports status
+codes, not credentials. Supported simulator test commands use
+`CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM=""` (see
+[the iOS README](../../apps/ios/README.md)). No plaintext fallback, skipped
+assertion or weaker entitlement policy was introduced. Hardware, release signing,
+managed-relay availability and intermittent live journeys remain separate gates.
+
 ## Image chats (2026-11-08, #2162)
 
 `[implemented; focused package checks passed with Linux compatibility shims; final Xcode/native evidence and hardware verification pending]`: New chat selects Chat or Image, discovers only eligible local image models on supporting hosts, edits generation parameters and creates an image session using existing create/options calls. Image turns use signed Change authorization, not text send/queue. Summary badges and assistant-image replies use existing scoped session-photo viewing. Unsupported hosts and offline image requests fail visibly without text fallback. Image parameters/kind survive saved metadata; unsupported inputs and fractional CFG require explicit correction (whole-number default 4), not rounding. See [image host contract](image-chats.md) and [readiness matrix](../../reports/voice-image-readiness.md). No installation/removal, arbitrary file/image read or cloud-upload authority is added.
@@ -115,7 +145,7 @@ The default list groups by activity (Needs input, Draft, Building, Verifying, Wa
   - **Outbox** (NekkoKit `Outbox`): a prompt sent while the computer is offline or reconnecting is saved before Send returns and shown in the transcript as *Waiting to send* with Edit (back into the message box), Delete and Send now. The composer stays usable offline and its button reads *Send when online*. New chat works offline too (*Start when online*): the chat is listed under *Waiting to send* and created when the computer is back. Online sends are on disk the same way until the computer has them, so a crash, a kill or a dropped connection mid-send loses nothing.
   - **Exactly once:** each prompt carries a `clientMessageId` (a UUID) on `chat:send` and `chat:queue`. The computer (the Rust daemon, the only engine since the TS host was removed) remembers the newest 200 per chat in `clientMessageIds`, saved in the same write as the user message or the queue entry, and answers a repeat without a second turn or queue entry; a repeat while the first is still running resolves at once. The phone treats a prompt as delivered only when the chat it reads back lists the id, so a lost answer means "send again", never "maybe twice". A computer from before this change refuses the unknown key: the open chat then sends as before, and the outbox gives the prompt back asking to update the computer rather than risk a duplicate.
   - **Sync:** the outbox delivers in order, one prompt at a time, on connect, on return to the foreground and on a network change, and iOS may also wake the app for it (`BGAppRefreshTask`). A chat that is running gets the prompt in its queue. A refusal (chat deleted, no model, the computer's own error, this phone unpaired) puts the prompt back in its draft with the reason shown above the message box.
-  - **Never queued:** approvals and question answers; offline they say *Reconnect to answer*.
+  - **Pending response messages** `[#2476; implemented, native verification pending]`: answers and one-time Allow/Deny responses are saved immediately per computer as messages, separate from prompt outbox items. Each carries a stable local UUID and the original request identifier, response payload, and a snapshot of the full question (including its timestamp/options) or approval (including tool name/input/reason/severity). They survive chat navigation/restart and automatically attempt delivery on reconnect/foreground outbox flush. A fresh `chat:pending` read must still match the exact original session/request before sending. Changed or resolved inputs become *No longer pending*, never approvals for a new call. Failed sends retain Retry and Cancel; Cancel deletes the unsent response and restores its form if still pending. In-flight sends cannot be recalled; successful replies remain Sent messages. A lost acknowledgement with a resolved request is shown as no longer pending, not falsely confirmed delivered. No new wire channel or exactly-once-delivery claim. Monitors, notification/voice actions and guarded Always allow policy changes remain online-only. UI evidence and native/device acceptance remain unverified until the PR evidence is inspected.
   - **Visible state:** "N waiting" on chat rows, the connection banner and the composer say prompts go when the computer is back, and the widget, the Watch glance and its complication show "N waiting to send".
   - **Privacy:** the files live under Application Support (`Offline/`), encrypted until the iPhone is first unlocked after a restart, excluded from iCloud and computer backups, and deleted with Forget (that computer's) and Forget everything. Nothing new leaves the phone except the id.
   - **Read offline** (OF-5, NekkoKit `SavedTranscripts`) `[2026-10-20; Linux-tested; simulator journey on macOS CI; not yet on a device]`: the phone keeps the last **20** chats opened, at most **5 MB** per computer and **1 MB** per chat, evicting the least recently opened first; a chat longer than 1 MB keeps its newest messages and counts the rest with the ones the computer already holds back. A copy is saved each time the computer sends an open chat (written only when it changed), and opening a saved copy counts as opening it. While the computer can't be reached the chat reads from that copy, read-only, under *Saved copy from 10:42. It updates when Mac answers.* above the composer; the menu's model, tool policy, changes, rename and complete are disabled until it answers, and what is sent waits in the outbox as above. What is kept: title, model, folder, tool policy and the messages as the phone shows them (text, reasoning, tool steps and their already-clipped output, skills). **Photos are never stored**, only how many a message had; nor the computer's queue, running state or outbox ids. Files: `Transcripts/<computer>.<chat hash>.json` plus an index per computer under Application Support, protection *until first unlock*, excluded from backups. Forget deletes that computer's copies, *Forget everything* deletes all, a chat deleted from the phone or missing from the computer's next full list loses its copy, and a chat the computer says is deleted drops it on open. **On by default** (decided 2026-10-19) with *Settings → Offline → Keep recent chats to read offline*; turning it off deletes every copy on every computer.

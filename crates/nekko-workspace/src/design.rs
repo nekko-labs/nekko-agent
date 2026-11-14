@@ -385,6 +385,74 @@ pub fn follow_folder(data_dir: &Path, workspace: Option<&Value>, folder: Option<
     Ok(board(&ws, &store))
 }
 
+/// First line of the index file, which marks it as the app's: a README the
+/// person wrote themselves never starts with it and is never overwritten.
+pub const INDEX_MARKER: &str =
+    "<!-- Kept by Nekko Agent from the Design board. Edits to this file are overwritten. -->";
+
+fn cell(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ").replace('|', "\\|")
+}
+
+/// The text of `nekko-designs/README.md`: each board card as a row of label,
+/// file (relative to the folder) and open notes, so an agent on any provider
+/// reads what designs exist and what is pinned to them without a tool.
+pub fn index_text(dir: &str, board: &Value) -> String {
+    let pages = board.get("pages").and_then(Value::as_array).cloned().unwrap_or_default();
+    let prefix = format!("{}/", dir.replace('\\', "/").trim_end_matches('/'));
+    let mut out = format!(
+        "{INDEX_MARKER}\n# Designs\n\nThe designs on this project's Design board. Open a file to build from it; the highest version of a design (-v2, -v3) is current. Notes are changes the person pinned and has not resolved yet.\n"
+    );
+    let mut rows = String::new();
+    let mut live = String::new();
+    for p in &pages {
+        let label = cell(p.get("label").and_then(Value::as_str).unwrap_or("Untitled"));
+        if let Some(file) = file_of(p) {
+            let norm = file.replace('\\', "/");
+            let shown = norm.strip_prefix(&prefix).unwrap_or(&norm);
+            let notes: Vec<String> = p
+                .get("notes")
+                .and_then(Value::as_array)
+                .map(|n| n.iter().filter_map(|n| n.get("text").and_then(Value::as_str)).map(cell).collect())
+                .unwrap_or_default();
+            rows.push_str(&format!("| {label} | {} | {} |\n", cell(shown), notes.join("; ")));
+        } else if let Some(url) = p.get("url").and_then(Value::as_str).filter(|u| !u.is_empty()) {
+            live.push_str(&format!("- {label}: {}\n", cell(url)));
+        }
+    }
+    if rows.is_empty() && live.is_empty() {
+        out.push_str("\nNo designs on the board yet.\n");
+    }
+    if !rows.is_empty() {
+        out.push_str(&format!("\n| Label | File | Notes |\n| --- | --- | --- |\n{rows}"));
+    }
+    if !live.is_empty() {
+        out.push_str(&format!("\n## Live pages\n\n{live}"));
+    }
+    out
+}
+
+/// Keep `nekko-designs/README.md` in step with the board. Does nothing when
+/// the project has no designs folder, when the README is not the app's own,
+/// or when it already says the same. Returns whether it wrote.
+pub fn write_index(folder: &str, board: &Value) -> Result<bool, String> {
+    let dir = path::join(&[folder, "nekko-designs"]);
+    if !nekko_tools::nodefs::exists(&dir) {
+        return Ok(false);
+    }
+    let file = path::join(&[&dir, "README.md"]);
+    let existing = if nekko_tools::nodefs::exists(&file) { nekko_tools::nodefs::read_utf8(&file).ok() } else { None };
+    if existing.as_deref().is_some_and(|t| !t.starts_with(INDEX_MARKER)) {
+        return Ok(false);
+    }
+    let text = index_text(&dir, board);
+    if existing.as_deref() == Some(text.as_str()) {
+        return Ok(false);
+    }
+    nekko_tools::nodefs::write_utf8(&file, &text)?;
+    Ok(true)
+}
+
 /// Does the name end in `.html` or `.htm`, any case?
 fn is_html(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();

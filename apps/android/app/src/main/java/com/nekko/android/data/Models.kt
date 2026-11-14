@@ -101,6 +101,8 @@ data class ComputersState(
     val imageGeneration: Boolean = false,
     /** When this phone stopped remote access on the active computer (SK-8); null otherwise. */
     val remoteStoppedAt: Long? = null,
+    /** When this phone quit Nekko Agent on the active computer (SK-8); null otherwise. */
+    val remoteQuitAt: Long? = null,
     /** The active computer's phone protocol from its welcome (IO-32); null until it has welcomed this phone. */
     val hostProtocol: Int? = null,
     /**

@@ -538,6 +538,9 @@ fn rig_with(name: &str, mode: &str, cli: bool, daemon: Value, extra: &[(&str, Op
     env.extend_from_slice(extra);
     let d = start_with_env(&data, daemon, &env);
     let events = record_events(d.port);
+    // As in turn_rig_env: boot also writes providers, so let it finish before
+    // a fixture replaces them with its Claude account's policy settings.
+    boot_settled(&data);
     Rig { t: TurnRig { data, workspace, d, events }, bin }
 }
 
@@ -796,8 +799,8 @@ async fn claude_title_bridge_rechecks_rename_privacy_and_policy_at_dispatch() {
                 .and_then(|text| serde_json::from_str(&text).ok())
         })
         .await;
-        assert_eq!(probe["offered"], true);
-        assert_eq!(probe["note"], true);
+        assert_eq!(probe["offered"], true, "{change}: {probe}");
+        assert_eq!(probe["note"], true, "{change}: {probe}");
         if change == "policy" {
             write_settings(&rig, json!({ "providers": [title_provider(false)] })).await;
         } else {

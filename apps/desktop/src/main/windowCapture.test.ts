@@ -1,13 +1,13 @@
 import { runInNewContext } from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REFUSAL, hwndFromSourceId, printWindowCapture } from './printWindowCapture.js';
-const fake = vi.hoisted(() => ({ sources: vi.fn(), execute: vi.fn(), grant: vi.fn(), destroy: vi.fn(), options: vi.fn() }));
-vi.mock('electron', () => ({ desktopCapturer: { getSources: fake.sources }, BrowserWindow: class {
+const fake = vi.hoisted(() => ({ sources: vi.fn(), execute: vi.fn(), grant: vi.fn(), destroy: vi.fn(), options: vi.fn(), screen: vi.fn(() => 'granted') }));
+vi.mock('electron', () => ({ desktopCapturer: { getSources: fake.sources }, systemPreferences: { getMediaAccessStatus: fake.screen }, BrowserWindow: class {
   constructor(options: unknown) { fake.options(options); }
   webContents = { session: { setDisplayMediaRequestHandler: fake.grant }, executeJavaScript: fake.execute, loadURL: vi.fn() };
   loadURL = vi.fn(); isDestroyed = () => false; destroy = fake.destroy;
 } }));
-import { __setPrintWindow, captureWindow } from './windowCapture.js';
+import { __setPrintWindow, captureWindow, SCREEN_RECORDING_REFUSED } from './windowCapture.js';
 
 describe('PrintWindow fallback helper', () => {
   it('reads the HWND only from a desktopCapturer window id', () => {
@@ -28,6 +28,19 @@ describe('PrintWindow fallback helper', () => {
 const source = { id: 'window:123:0', name: 'Actual app', thumbnail: { isEmpty: () => false, getSize: () => ({ width: 1000, height: 700 }), toPNG: () => Buffer.from('png') } };
 beforeEach(() => { fake.sources.mockReset(); fake.sources.mockResolvedValue([source]); fake.execute.mockReset(); fake.execute.mockResolvedValue({ width: 1000, height: 700, data: Buffer.from('png').toString('base64') }); fake.grant.mockClear(); fake.destroy.mockClear(); fake.options.mockClear(); });
 describe('actual desktop window capture', () => {
+  it('explains a refused macOS Screen Recording grant and still offers the owned window', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    try {
+      fake.sources.mockRejectedValue(new Error('Failed to get sources.'));
+      fake.screen.mockReturnValue('denied');
+      await expect(captureWindow('mac', { action: 'list' })).rejects.toThrow(SCREEN_RECORDING_REFUSED);
+      const owned = { id: 3, isDestroyed: () => false } as unknown as import('electron').BrowserWindow;
+      expect(await captureWindow('mac', { action: 'list' }, undefined, owned)).toEqual({ windows: [{ id: 'nekko:3', title: 'Nekko Browser (owned by this chat)' }], warning: SCREEN_RECORDING_REFUSED });
+      fake.screen.mockReturnValue('granted'); // granted but failing: keep the original error
+      await expect(captureWindow('mac', { action: 'list' })).rejects.toThrow('Failed to get sources.');
+    } finally { Object.defineProperty(process, 'platform', platform); fake.screen.mockReturnValue('granted'); }
+  });
   it('lists only windows, without revealing thumbnails', async () => {
     expect(await captureWindow('a', { action: 'list' })).toEqual({ windows: [{ id: source.id, title: source.name }] });
     expect(fake.sources).toHaveBeenCalledWith(expect.objectContaining({ types: ['window'], thumbnailSize: { width: 0, height: 0 } }));

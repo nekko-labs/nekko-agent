@@ -416,6 +416,9 @@ jobs:
         if: always()
         working-directory: apps/ios
         run: |
+          # Keep the failed first attempt's process/testmanager logs even if a
+          # retry passes. A diagnostic export must not mask the test verdict.
+          node ../../scripts/ios-failure-diagnostics.mjs evidence || echo "Failure diagnostic collection could not finish"
           mkdir -p evidence/shots
           for r in evidence/*.xcresult; do
             [ -d "$r" ] || continue
@@ -437,6 +440,7 @@ jobs:
           name: native-ios-evidence-${{ matrix.shard }}
           path: |
             apps/ios/evidence/shots/**
+            apps/ios/evidence/diagnostics/**
           if-no-files-found: warn
   report-batch:
     # A matrix's needs result covers ALL legs, including failed/cancelled legs.

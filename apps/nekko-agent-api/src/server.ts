@@ -1,6 +1,8 @@
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerAccount, type SignInConfig } from "./account.js";
+import { registerBilling, type Stripe } from "./billing.js";
+import { DEFAULT_STAFF_EMAILS, type Features, registerFeatures } from "./features.js";
 import type { Alert } from "./alerts.js";
 import type { Db } from "./db.js";
 import { registerDonations } from "./donations.js";
@@ -39,6 +41,10 @@ export interface ServerOptions {
   orgsEnabled?: boolean;
   /** Lower-case emails; when non-empty only these accounts may create orgs, accept invites or use the org fleet. */
   orgsAllowedEmails?: string[];
+  /** Stripe plans and billing (issue #2724); without it the /v1/billing routes are absent. */
+  stripe?: Stripe;
+  /** Lower-case emails of Nekko team accounts, who switch unreleased features on. Defaults to DEFAULT_STAFF_EMAILS. */
+  staffEmails?: string[];
   /** Sends signup confirmation emails; without it signups still save and the email is skipped. */
   mailer?: Mailer;
   /** This service's public origin, for the links in emails. */
@@ -71,6 +77,10 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const logger = opts.logger ? { serializers: LOG_SERIALIZERS, ...(typeof opts.logger === "object" ? opts.logger : {}) } : false;
   const app = Fastify({ logger, trustProxy: (_addr: string, hop: number) => hop === 0, bodyLimit: 8 * 1024 });
   const origins = new Set(opts.allowedOrigins);
+  const features: Features = {
+    staff: new Set((opts.staffEmails ?? DEFAULT_STAFF_EMAILS).map((e) => e.trim().toLowerCase()).filter(Boolean)),
+    available: new Set(opts.stripe ? ["billing"] as const : []),
+  };
   const { max, windowMs } = opts.rateLimit ?? { max: 5, windowMs: 60 * 60 * 1000 };
   const hits = new Map<string, { count: number; resetAt: number }>();
 
@@ -171,7 +181,9 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     registerSync(scope, opts.db);
     if (opts.fleetEnabled) registerFleet(scope, opts.db);
     if (opts.orgsEnabled) registerOrgs(scope, opts.db, { allowedEmails: opts.orgsAllowedEmails });
-    registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs }, { driver: opts.machines?.driver, deleteAuthUser: opts.deleteAuthUser });
+    registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs }, { driver: opts.machines?.driver, deleteAuthUser: opts.deleteAuthUser, stripe: opts.stripe }, features);
+    registerFeatures(scope, opts.db, features);
+    if (opts.stripe) registerBilling(scope, opts.db, opts.stripe, features, opts.publicUrl ?? DEFAULT_PUBLIC_URL);
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
   registerFeedback(app, opts.db, opts.feedbackRateLimit ?? { max: 10, windowMs: 60 * 60 * 1000 }, opts.feedbackScreenshotLimit);
