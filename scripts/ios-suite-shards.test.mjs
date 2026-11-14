@@ -13,7 +13,8 @@ const shardBody = name => {
   assert.ok(match, `Missing guarded ${name} suite`);
   return match[1];
 };
-const selectors = body => body.match(/-(?:only|skip)-testing:[\w/]+/g) ?? [];
+// Literal selectors only: the HEAVY loop's `.../$c` is checked on its own below.
+const selectors = body => body.match(/-(?:only|skip)-testing:[\w/]+(?![\w/$])/g) ?? [];
 const live = 'NekkoNativeUITests/LiveRelayTests';
 // The pre-shard workflow's exact selection. Keep the fixture suite open-ended:
 // listing today's fixture classes would silently omit the next added suite.
@@ -25,6 +26,9 @@ const originalSelectors = [
     'testChatsOnTheComputerAndOnThisIPhoneInOneList', 'testPairFromADeepLink'].map(name => `-only-testing:${live}/${name}`),
 ];
 
+const heavy = suiteJob.match(/^          HEAVY=\(([^)]+)\)$/m)[1].split(' ');
+const fixtureRun = suiteJob.match(/^          if \[ "\$SHARD" = fixtures \] \|\| \[ "\$SHARD" = fixtures-heavy \]; then\n([\s\S]*?)^          fi$/m)[1];
+
 test('shard selector union equals the original selection without duplicates or stray invocations', () => {
   const assigned = SUITE_SHARDS.flatMap(name => selectors(shardBody(name)));
   assert.deepEqual(assigned, originalSelectors);
@@ -34,16 +38,27 @@ test('shard selector union equals the original selection without duplicates or s
   assert.deepEqual(selectors(shardBody('journeys')), originalSelectors.slice(2));
 });
 
-test('fixtures still select ALL unit/UI suites except live tests, including future suites', () => {
-  const fixture = shardBody('fixtures');
-  assert.deepEqual(selectors(fixture), [`-skip-testing:${live}`]);
-  assert.doesNotMatch(fixture, /-only-testing:|-skip-testing:(?!NekkoNativeUITests\/LiveRelayTests)/);
-  // XCTest's target/class prefix semantics: adding a non-live suite needs no CI edit.
-  const selected = test => !test.startsWith(`${live}/`);
-  for (const name of ['NekkoNativeTests/NewUnitTests/testFuture', 'NekkoNativeUITests/NewFixtureTests/testFuture', 'FutureTestTarget/FutureSuite/testFuture']) {
-    assert.ok(selected(name), name);
+test('the two fixture legs split every non-live suite between them, and future suites land in fixtures', () => {
+  const fixtureLeg = shardBody('fixtures');
+  const heavyLeg = shardBody('fixtures-heavy');
+  assert.deepEqual(selectors(fixtureLeg), [`-skip-testing:${live}`]);
+  assert.match(fixtureLeg, /for c in "\$\{HEAVY\[@\]\}"; do SELECT\+=\("-skip-testing:NekkoNativeUITests\/\$c"\); done/);
+  assert.match(heavyLeg, /SELECT=\(\)\n\s+for c in "\$\{HEAVY\[@\]\}"; do SELECT\+=\("-only-testing:NekkoNativeUITests\/\$c"\); done/);
+  assert.ok(heavy.length > 0 && new Set(heavy).size === heavy.length);
+  // A renamed or deleted class would silently drop from the heavy leg: each must still exist.
+  for (const name of heavy) {
+    assert.match(readFileSync(new URL(`../apps/ios/UITests/${name}.swift`, import.meta.url), 'utf8'), new RegExp(`class ${name}\\b`));
   }
-  assert.equal(selected(`${live}/testFutureLiveJourney`), false);
+  // XCTest's target/class prefix semantics: each non-live test runs in exactly one leg, with no CI edit for new suites.
+  const legs = test => [!test.startsWith(`${live}/`) && !heavy.some(c => test.startsWith(`NekkoNativeUITests/${c}/`)),
+    heavy.some(c => test.startsWith(`NekkoNativeUITests/${c}/`))];
+  for (const name of ['NekkoNativeTests/NewUnitTests/testFuture', 'NekkoNativeUITests/NewFixtureTests/testFuture', 'FutureTestTarget/FutureSuite/testFuture']) {
+    assert.deepEqual(legs(name), [true, false], name);
+  }
+  for (const name of heavy) assert.deepEqual(legs(`NekkoNativeUITests/${name}/testAnything`), [false, true], name);
+  assert.deepEqual(legs(`${live}/testFutureLiveJourney`), [false, false]);
+  assert.match(fixtureRun, /test-without-building "\$\{SELECT\[@\]\}"/);
+  const fixture = fixtureRun;
   assert.match(fixture, /TEST_RUNNER_NEKKO_UI_THEMES="\$THEMES"/);
   assert.match(fixture, /-retry-tests-on-failure -test-iterations 2 \|\| failed=1/);
   assert.match(fixture, /-parallel-testing-worker-count "\$WORKERS"/);
