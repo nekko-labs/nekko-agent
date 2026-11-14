@@ -50,7 +50,20 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
   document.documentElement.dataset.theme = 'dark';
   const root = createRoot(document.getElementById('root')!);
   root.render(React.createElement(UpdateProvider, null, React.createElement(App)));
-  (window as any).layoutFixture = { store: useStore, records, bridge, settings, putCachedSession, emitAgent, showTheme: async () => {
+  (window as any).layoutFixture = { store: useStore, records, bridge, settings, putCachedSession, emitAgent, showSubagentPanel: async () => {
+    const { AgentSidebar } = await import('../src/renderer/views/WorkspacesView');
+    root.render(React.createElement('div', { style: { height: '100vh', position: 'relative', display: 'flex' } },
+      React.createElement(AgentSidebar, { selectedId: 'a', onOpenChat: id => { (window as any).layoutFixture.openedChild = id; }, onOpenTerminal: () => {}, onCreate: async () => {} })));
+  }, showSubagentSettings: async () => {
+    const { WallLayoutSettings } = await import('../src/renderer/views/WallLayoutSettings');
+    const Settings = () => {
+      const s = useStore(state => state.settings);
+      return React.createElement('main', { style: { padding: 40, maxWidth: 720, margin: 'auto' } },
+        React.createElement('h2', { className: 'text-base font-semibold' }, 'Customize · Agents wall'),
+        React.createElement(WallLayoutSettings, { settings: s!, update: async p => { const settings = await window.nekko.updateSettings(p); useStore.setState({ settings }); } }));
+    };
+    root.render(React.createElement(Settings));
+  }, showTheme: async () => {
     const { ThemeStep } = await import('../src/renderer/components/onboarding/ThemeStep');
     root.render(React.createElement('main', { style: { padding: 24, minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)' } },
       React.createElement('div', { style: { maxWidth: 640, margin: 'auto' } }, React.createElement(ThemeStep))));

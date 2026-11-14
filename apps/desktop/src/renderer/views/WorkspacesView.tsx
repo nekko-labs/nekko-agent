@@ -1,3 +1,4 @@
+import { SubagentList } from '../components/SubagentList.js';
 import { terminalPresentation } from '../components/terminalActivity.js';
 import { HoverTip } from '../components/HoverTip.js';
 import { CreateMenuRows } from '../components/CreateMenu.js';
@@ -24,7 +25,7 @@ import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../com
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
-import { sidebarWorkspaces, unopenedChats, subagentRows } from './unopenedChats.js';
+import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
@@ -962,16 +963,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onRenameStart={s ? () => setRenamingId(s.id) : undefined}
                           onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
-                        {/* Sub-agents this chat spawned, one line each. */}
-                        {s && subagentRows(kids).map((kid, i, rows) => (
-                          <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
-                            session={kid}
-                            status={statuses.get(kid.id)}
-                            isActive={kid.id === selectedId}
-                            last={i === rows.length - 1}
-                            onOpen={() => onOpenChat(kid.id)}
-                          /></div>
-                        ))}
+                        {s && <SubagentList children={kids} statuses={statuses} selectedId={selectedId}
+                          expandByDefault={settings?.expandSubagents === true} activeRowRef={activeRowRef} onOpen={onOpenChat} />}
                       </div>
                     );
                   })}
@@ -1165,31 +1158,6 @@ function CompletedRow({
       >
         {completedDate(at, now)}
       </time>
-    </button>
-  );
-}
-
-/**
- * One sub-agent under its parent's card: a single line, no details of its own.
- * A tree elbow ties it to the card above (a tee for every row but the last),
- * and its status icon (rocket, check, question) sits where a bullet would.
- */
-function SubAgentRow({
-  session, status, isActive, last, onOpen,
-}: {
-  session: SessionSummary; status: AgentStatus | undefined; isActive: boolean; last: boolean; onOpen: () => void;
-}) {
-  return (
-    <button
-      onClick={onOpen}
-      data-subagent-row={session.id}
-      className={`subagent-row relative flex items-center gap-1.5 rounded-lg py-1 pl-7 pr-2 text-left text-xs transition-colors duration-150 ${
-        isActive ? 'bg-accent-soft text-ink' : 'text-ink-soft hover:bg-surface-2'
-      }`}
-    >
-      <span aria-hidden data-subagent-tree={last ? 'last' : 'tee'} className="subagent-tree" />
-      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, wakeSourcesOf(session))} />
-      <span className="min-w-0 flex-1 truncate" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
     </button>
   );
 }

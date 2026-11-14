@@ -205,6 +205,8 @@ export interface AppNotice {
 }
 
 export interface AppSettings {
+  /** Start each Agents-panel subagent list expanded; otherwise show two. */
+  expandSubagents?: boolean;
   /** Fusion's ranking policy; permission remains per-chat. */
   fusion?: import('./fusion.js').FusionSettings;
   /**

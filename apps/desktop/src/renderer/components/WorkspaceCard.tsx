@@ -323,7 +323,7 @@ function WorkspaceCardImpl({
         {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
-          : <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
+          : <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
             {title}
           </span>}
         {/* A title-only card has no room for both: its PR says more than the time. */}

@@ -8,6 +8,14 @@ import { WallLayoutSettings, wallLayoutPatch } from './WallLayoutSettings.js';
 const settings = { commandWall: toWallSetting({ ...DEFAULT_WALL_STATE, autoAdd: false, layout: { mode: 'grid', rows: 3, cols: 4, fixedGrid: true } }) } as AppSettings;
 
 describe('wall layout settings', () => {
+  it('defaults subagent expansion off and reflects the saved choice', () => {
+    const html = renderToStaticMarkup(<WallLayoutSettings settings={settings} update={() => {}} />);
+    expect(html).toContain('Always expand subagents');
+    expect(html).toContain('Off shows two until expanded.');
+    expect(html).toMatch(/id="expand-subagents"[^>]*type="checkbox"/);
+    expect(html).not.toMatch(/id="expand-subagents"[^>]*checked/);
+    expect(renderToStaticMarkup(<WallLayoutSettings settings={{ ...settings, expandSubagents: true }} update={() => {}} />)).toMatch(/id="expand-subagents"[^>]*checked=""/);
+  });
   it('offers Focused and Dynamic, and a Fixed grid toggle with bounded rows and columns', () => {
     const html = renderToStaticMarkup(<WallLayoutSettings settings={settings} update={() => {}} />);
     expect(html).toContain('<option value="grid" selected="">Dynamic</option>');
