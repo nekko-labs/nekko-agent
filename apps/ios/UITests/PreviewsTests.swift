@@ -4,6 +4,9 @@ import XCTest
 /// No paired computer, network service, real files or credentials.
 @MainActor
 final class PreviewsTests: XCTestCase {
+    // A functional-readiness bound, not a performance budget: isolated iOS 27
+    // WebKit diagnostics measured cold scheme navigation beyond 15 seconds.
+    private let webReadyTimeout: TimeInterval = 30
     private func launch(large: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
@@ -20,18 +23,22 @@ final class PreviewsTests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 10))
         XCTAssertTrue(card.label.contains("Release prototype"))
         XCTAssertGreaterThanOrEqual(card.frame.height, 44)
-        attach(app, "preview-cards")
         card.tap()
-        let demo = app.webViews.buttons["Try prototype"]
-        XCTAssertTrue(demo.waitForExistence(timeout: 15))
+        // Query the real button's role/name, not a WKWebView ancestry: Xcode 27
+        // reports an intermittent legacy Other/modern WebView wrapper mismatch.
+        let demo = app.buttons["Try prototype"]
+        XCTAssertTrue(demo.waitForExistence(timeout: webReadyTimeout), app.debugDescription)
         attach(app, "preview-html-before-interaction")
         demo.tap()
-        XCTAssertTrue(app.webViews.buttons["Prototype confirmed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Prototype confirmed"].waitForExistence(timeout: 5))
         attach(app, "preview-html-interacted")
         app.buttons["preview.reload"].tap()
-        XCTAssertTrue(demo.waitForExistence(timeout: 15), "reload rereads the source and resets the prototype")
+        XCTAssertTrue(demo.waitForExistence(timeout: webReadyTimeout), "reload rereads the source and resets the prototype")
         app.buttons["preview.done"].tap()
         XCTAssertTrue(card.waitForExistence(timeout: 5))
+        // Capture the card after the real preview round trip, not while its
+        // asynchronous thumbnail can still be loading on a cold WebKit start.
+        attach(app, "preview-cards")
         let notes = app.buttons.matching(identifier: "preview.card").element(boundBy: 1)
         if !notes.isHittable { app.swipeUp() }
         notes.tap()
@@ -47,9 +54,9 @@ final class PreviewsTests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 10))
         XCTAssertTrue(card.label.contains("localhost:5173"))
         card.tap()
-        XCTAssertTrue(app.webViews.buttons["Try prototype"].waitForExistence(timeout: 15))
-        app.webViews.buttons["Try prototype"].tap()
-        XCTAssertTrue(app.webViews.buttons["Prototype confirmed"].exists)
+        XCTAssertTrue(app.buttons["Try prototype"].waitForExistence(timeout: webReadyTimeout))
+        app.buttons["Try prototype"].tap()
+        XCTAssertTrue(app.buttons["Prototype confirmed"].exists)
         attach(app, "preview-loopback")
         app.buttons["preview.done"].tap()
         app.buttons["Unavailable"].tap()

@@ -30,7 +30,7 @@ area: phone
 
 ## Native acceptance coverage (2026-11-14, #1095)
 
-`[implemented; native test results and visual inspection pending]` A Debug-only
+`[implemented; native evidence inspected; final measured-readiness light/dark runs pending]` A Debug-only
 `-uiTestPreviews` route renders the production `AssistantReply`, `PreviewCard`,
 `PreviewWindow`, isolated WebKit and Markdown table views. Its in-memory
 `PreviewLoader` reader admits only two explicit synthetic artifact paths and one
@@ -43,9 +43,19 @@ or public network request in this fixture. It is not end-to-end relay evidence.
 `PreviewsTests` exercises interactive HTML, reload/reset, Done returning to the
 reply, Markdown-file opening, loopback preview, failure/retry, and expanded table
 navigation at accessibility text size. `PreviewEvidenceTests` pins the synthetic
-reader's scope. Screenshots and actual native interaction results must be
-inspected before marking those acceptance checks verified; protocol tests alone
-do not suffice. This new evidence fixture has no before state and does not
+reader's scope. Dark-mode native suite passes 6/6 (three interaction journeys plus three reader
+isolation tests) on an isolated iPhone 17 Pro / iOS 27.0 with Xcode 27.2. Nine
+actual native dark frames and nine light frames from the preceding 6/6 light run
+were inspected. Tests query real button role/name without depending on Xcode’s
+intermittent legacy Other/modern WebView wrapper classification; interaction assertions remain unchanged. Scoped WebKit diagnostics measured
+correct 200/DOM completion but cold navigation longer than the initial guessed
+15-second wait. The new functional tests use an explicit 30-second readiness
+bound, not sleeps, retries or a product performance gate. This does not verify
+load-time performance or intermittent reliability. Cards are captured after return from
+the preview so the cold-start thumbnail is not mistaken for the settled state.
+The HTML preserves the artifact’s authored colors rather than recoloring it
+when the app theme changes. Final light/dark measured-readiness runs and evidence
+publication are still pending; protocol tests alone do not suffice. This new evidence fixture has no before state and does not
 redesign product UI.
 
 ## Acceptance
