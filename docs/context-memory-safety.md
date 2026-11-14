@@ -44,6 +44,12 @@ Do not use memory to store passwords, API keys or other secrets. The instruction
 
 Native local file tools also have the app's `~/.nekko-agent` root available under the current policy; it is not an added project folder. Container chats do not gain that host access. Review the active permission mode and sandbox before letting an agent operate on sensitive work.
 
+### Deleting files
+
+A delete (`rm`, `rmdir`, `unlink`, `Remove-Item`, `del`, `rd`) runs without asking, in Guardrails and YOLO, when every path it names is inside the chat's own worktree (a chat that works in a Nekko worktree, `.git/nekko-worktrees/<name>`) or the app's scratch folder, `~/.nekko-agent/scratch`. Paths are checked with links followed. Everywhere else, including your own repository checkout and the rest of `~/.nekko-agent` (settings, chats, memory), a delete still asks. Deleting the worktree's own `.git` file, the worktree folder itself or anything outside it asks. In Claude Agent chats only absolute paths count, because Nekko cannot see where Claude Code's shell has moved to.
+
+Some deletes are refused in every mode, YOLO included, and cannot be approved: a delete with no path, a delete of `/`, a drive (`C:\`), a mount point or a folder right under a root (`/usr`, `/tmp`), your home folder or a folder above it, `rm --no-preserve-root`, and a recursive delete whose path starts with a variable (`rm -rf "$DIR/"` deletes `/` when `DIR` is empty). Write the path out instead. The refusal names the reason, for example "Blocked by guardrail (Delete of the home folder)".
+
 Git configuration changes receive special scrutiny because apparently read-only Git commands can invoke configured programs. File edits still go through these gates, including [batch replacements](/docs/file-recovery#how-do-batch-file-edits-work).
 
 ## How do I give the agent an API key without it seeing the key?

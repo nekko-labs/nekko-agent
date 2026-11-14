@@ -18,7 +18,7 @@ use crate::allowlist::{Dialect, runs_git};
 use crate::bash::{Utf8Carry, shell, spawn_code, tree::Tree};
 use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
 use crate::gitguard::{harden_git_command, hardened_git_env};
-use crate::guardrails::{Action, NOT_READ_ONLY, classify_command, default_guardrails};
+use crate::guardrails::{Action, NOT_READ_ONLY, classify_command_scoped, default_guardrails};
 use crate::sandbox::{asks_everything, first_workspace, process_cwd, resolve_path};
 use nekko_js as js;
 use serde_json::Value;
@@ -443,7 +443,17 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                     &default_rules
                 }
             };
-            let decision = classify_command(&command, rules);
+            let cwd = if js::truthy(a.get("cwd")) {
+                resolve_path(a.get("cwd"), ctx)
+            } else {
+                Ok(ctx
+                    .default_cwd
+                    .clone()
+                    .or_else(|| first_workspace(ctx).map(str::to_string))
+                    .unwrap_or_else(process_cwd))
+            };
+            let scope = crate::delete_guard::scope_for(ctx, cwd.clone().ok());
+            let decision = classify_command_scoped(&command, rules, Dialect::host(), &scope);
             // "Not a read-only command" says nothing the prompt's own wording does not.
             let labels = decision
                 .matches
@@ -474,11 +484,7 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 }
             }
             let Some(sid) = session(ctx) else { return Ok(ToolResult::err(call, NO_CHAT)) };
-            let cwd = if js::truthy(a.get("cwd")) {
-                resolve_path(a.get("cwd"), ctx)?
-            } else {
-                ctx.default_cwd.clone().or_else(|| first_workspace(ctx).map(str::to_string)).unwrap_or_else(process_cwd)
-            };
+            let cwd = cwd?;
             let workspace_id = ctx.workspaces.iter().find(|w| w.path == cwd).map(|w| w.id.clone());
             let name = match a.get("name") {
                 Some(Value::String(n)) if !js::trim(n).is_empty() => {
