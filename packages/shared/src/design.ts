@@ -17,9 +17,11 @@ export interface DesignNote {
  * One card on the design board. Two kinds:
  * - 'live' (default when absent): a snapshot of a running page, rendered as a
  *   scaled read-only preview of `url`.
- * - 'concept': an AI-generated design; `html` is the self-contained prototype
- *   (rendered via iframe srcdoc) and `file` points at the copy written into
- *   the workspace so agents and users can keep working on it as code.
+ * - 'concept': a design; `html` is the self-contained prototype (rendered via
+ *   iframe srcdoc) and `file` is its file in the workspace's `nekko-designs/`
+ *   folder, which agents and users keep working on as code. The board follows
+ *   that folder: an edit to the file shows on the card, and an HTML file
+ *   saved there becomes a card.
  */
 export interface DesignPage {
   id: string;
@@ -34,8 +36,8 @@ export interface DesignPage {
   revisions?: { id: string; html: string; createdAt: number }[];
   /** Concepts: the prompt that produced (or last refined) the html. */
   prompt?: string;
-  /** Concepts: where this came from. */
-  origin?: 'prompt' | 'sketch';
+  /** Concepts: where this came from. `file`: found in the project's `nekko-designs/` folder, saved there by an agent or a person. */
+  origin?: 'prompt' | 'sketch' | 'file';
   /** Concepts: absolute path of the prototype file written into the workspace. */
   file?: string;
   /** Persistent notes the user pinned to this page. */

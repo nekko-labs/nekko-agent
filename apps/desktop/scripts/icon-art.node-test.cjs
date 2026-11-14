@@ -139,9 +139,27 @@ test('Android launcher uses the current opaque ARGB palette without recoloring w
 test('every live favicon, logo and social-card reference is cache-busted consistently', () => {
   for (const file of ['apps/website/index.html', 'apps/website/privacy.html', 'scripts/build-docs.mjs']) {
     const source = text(file);
-    const refs = [...source.matchAll(/(?:favicon\.svg|logo\.svg|og\.png)\?v=([^"\s]+)/g)];
+    const refs = [...source.matchAll(/(?:favicon\.svg|logo\.svg)\?v=([^"\s]+)/g)];
     assert.ok(refs.length >= 2);
     for (const ref of refs) assert.equal(ref[1], 'plum-white-2');
+  }
+  // Social cards are regenerated independently from the unchanged site icons.
+  for (const file of ['apps/website/index.html', 'scripts/build-docs.mjs']) {
+    const refs = [...text(file).matchAll(/og\.png\?v=([^"`\s]+)/g)];
+    assert.ok(refs.length >= 1, `${file} references the site card`);
+    for (const ref of refs) assert.equal(ref[1], 'plum-3');
+  }
+  const docsBuilder = text('scripts/build-docs.mjs');
+  const cardVersion = /const OG_VERSION = '([^']+)'/.exec(docsBuilder)?.[1];
+  assert.equal(cardVersion, '2');
+  assert.match(docsBuilder, /\/og\/docs-.*\.jpg\?v=\$\{OG_VERSION\}/);
+  for (const page of ['beta', 'status', 'privacy']) {
+    const refs = [...text(`apps/website/${page}.html`).matchAll(/https:\/\/nekkoagent\.com\/og\/([^?]+)\.jpg\?v=([^"\s]+)/g)];
+    assert.equal(refs.length, 2, `${page} has Open Graph and Twitter cards`);
+    for (const ref of refs) {
+      assert.equal(ref[1], page);
+      assert.equal(ref[2], cardVersion);
+    }
   }
   const html = text('apps/desktop/src/renderer/index.html');
   assert.match(html, /rel="icon" type="image\/svg\+xml" href="\.\/icon.svg\?v=plum-white-2"/);

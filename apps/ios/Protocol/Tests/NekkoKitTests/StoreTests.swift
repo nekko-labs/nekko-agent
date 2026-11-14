@@ -684,6 +684,15 @@ final class ChatModelTests: XCTestCase {
         c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
         await settle()
         XCTAssertEqual(chat.turn.approval?.severity, .high)
+        c.pendingReply = { [weak chat] in
+            var p: [String: JSONValue] = [:]
+            if let a = chat?.turn.approval {
+                p["approval"] = ["call": ["id": .string(a.call.id), "name": .string(a.call.name), "input": .object(a.call.input)],
+                                 "reason": .string(a.reason), "severity": .string(a.severity.rawValue)]
+            }
+            if let q = chat?.turn.question { p["question"] = PendingResponses.request(q) }
+            return ["s": .object(p)]
+        }
         try await chat.approve(true)
         XCTAssertNil(chat.turn.approval)
         XCTAssertEqual(c.callsTo(Channels.toolApprove).last, ["s", "t", true])
@@ -731,20 +740,35 @@ final class ChatModelTests: XCTestCase {
         chat.stop()
     }
 
-    func testAFailedAnswerKeepsTheCardSoItCanBeRetried() async throws {
+    func testAFailedResponseKeepsTheMessageSoItCanBeRetriedOrCancelled() async throws {
         let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
         await chat.start()?.value
         c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
         await settle()
         c.replies[Channels.toolApprove] = { _ in throw RelayError("offline") }
-        do { try await chat.approve(true); XCTFail("expected a failure") } catch {}
+        c.pendingReply = { [weak chat] in
+            var p: [String: JSONValue] = [:]
+            if let a = chat?.turn.approval {
+                p["approval"] = ["call": ["id": .string(a.call.id), "name": .string(a.call.name), "input": .object(a.call.input)],
+                                 "reason": .string(a.reason), "severity": .string(a.severity.rawValue)]
+            }
+            if let q = chat?.turn.question { p["question"] = PendingResponses.request(q) }
+            return ["s": .object(p)]
+        }
+        try await chat.approve(true)
+        XCTAssertEqual(chat.responseMessages.first?.status, "failed")
+        XCTAssertNil(chat.responseApproval)
         XCTAssertEqual(chat.turn.approval?.call.id, "t", "the computer is still waiting, so the card stays")
 
         c.event(["type": "question", "sessionId": "s", "request": ["callId": "q", "questions": [["id": "x", "question": "Which?", "options": [["label": "A"]]]]]])
         await settle()
         c.replies[Channels.chatAnswer] = { _ in throw RelayError("offline") }
-        do { try await chat.answer([AskAnswer(questionId: "x", labels: ["A"])]); XCTFail("expected a failure") } catch {}
+        try await chat.answer([AskAnswer(questionId: "x", labels: ["A"])])
+        XCTAssertEqual(chat.responseMessages.last?.status, "failed")
+        XCTAssertNil(chat.responseQuestion)
+        chat.cancelResponse(chat.responseMessages.last!.id)
+        XCTAssertEqual(chat.responseQuestion?.callId, "q")
         XCTAssertEqual(chat.turn.question?.callId, "q")
         chat.stop()
     }

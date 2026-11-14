@@ -408,7 +408,8 @@ class ComputersRepository(
             val id = existing?.id ?: newId()
             store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair, hostKey)))
             // The computer's routes may have changed since (another Wi-Fi, LAN addresses on or off).
-            val next = if (existing != null) list.map { if (it.id == id) it.copy(relayUrl = link.relayUrl, alts = link.alts) else it }
+            // Paired again: connecting is on again too.
+            val next = if (existing != null) list.map { if (it.id == id) it.copy(relayUrl = link.relayUrl, alts = link.alts, connectionDisabled = null) else it }
             else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now(), alts = link.alts)
             saveIndex(next)
             _state.update { it.copy(computers = next) }
@@ -489,6 +490,7 @@ class ComputersRepository(
                 quitFromPhone = false,
                 imageGeneration = false,
                 remoteStoppedAt = null,
+                remoteQuitAt = null,
                 lastError = null,
                 savedListAt = null,
                 hostProtocol = null,
@@ -515,6 +517,15 @@ class ComputersRepository(
         // Opening the app away from the computer: the list as it was, marked as saved.
         if (taken == null) chatListCache?.load(id)?.let { saved ->
             _state.update { it.copy(summaries = saved.summaries, workspaces = saved.folders, savedListAt = saved.savedAt) }
+        }
+        // Turned off on this phone: it is the active one, with its saved chats, drafts and queued
+        // prompts, but it isn't dialed until "Connect to" is on again.
+        if (computer.connectionDisabled == true) {
+            taken?.client?.close()
+            logStatus(RelayState.IDLE)
+            _state.update { it.copy(conn = RelayState.IDLE) }
+            syncFleet()
+            return@withLock
         }
         val c = taken?.client ?: dial(computer, secret, hostKey)
         client = c
@@ -657,7 +668,8 @@ class ComputersRepository(
     private suspend fun syncFleet() {
         if (!stayConnected) return
         val s = _state.value
-        val wanted = s.computers.map { it.id }.filter { it != s.activeId }.toSet()
+        // A computer turned off on this phone gets no link (#2059).
+        val wanted = s.computers.filter { it.id != s.activeId && it.connectionDisabled != true }.map { it.id }.toSet()
         (links.keys + s.peers.keys).filter { it !in wanted }.forEach { dropLink(it) }
         for (id in wanted) if (!links.containsKey(id) && !_state.value.peers.containsKey(id)) openLink(id)
     }
@@ -845,6 +857,30 @@ class ComputersRepository(
         cache.save(id, SavedChatList(now(), p.summaries, p.workspaces))
     }
 
+    /** "Connect to <name>" (#2059): on unless turned off on this phone. Connection intent, not reachability. */
+    fun connectionEnabled(id: String): Boolean = _state.value.computers.firstOrNull { it.id == id }?.connectionDisabled != true
+
+    /**
+     * Turn connecting to [id] on or off on this phone. Off keeps its pairing, saved chats, drafts
+     * and queued prompts, closes its link and stops reconnecting; on dials it again (as the active
+     * computer, or as a fleet link beside it).
+     */
+    suspend fun setConnectionEnabled(id: String, enabled: Boolean) {
+        lock.withLock {
+            val list = _state.value.computers
+            if (list.none { it.id == id }) return
+            val updated = list.map { if (it.id == id) it.copy(connectionDisabled = if (enabled) null else true) else it }
+            saveIndex(updated)
+            _state.update { it.copy(computers = updated) }
+        }
+        val active = _state.value.activeId == id
+        if (enabled) {
+            if (active) connect(id) else lock.withLock { syncFleet() }
+        } else {
+            if (active) disconnect() else { dropLink(id); lock.withLock { syncFleet() } }
+        }
+    }
+
     /** Drop the live connection (the pairing stays). */
     fun disconnect() {
         connJob?.cancel(); connJob = null
@@ -982,6 +1018,7 @@ class ComputersRepository(
         } catch (e: RelayException) {
             if (e.refusal != null || !e.afterSend) throw e
         }
+        _state.update { it.copy(remoteQuitAt = now()) }
     }
 
     /**
@@ -1094,6 +1131,11 @@ class ComputersRepository(
     fun reconnect() {
         client?.reconnect()
         links.values.forEach { it.client.reconnect() }
+    }
+
+    /** Dial one computer again now (the connection row's *Retry*), the active one or a fleet link. */
+    fun reconnect(id: String) {
+        if (id == _state.value.activeId) client?.reconnect() else links[id]?.client?.reconnect()
     }
 
     /** The phone's network, for the route choice; the next connection starts from it too. */

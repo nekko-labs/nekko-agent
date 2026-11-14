@@ -45,6 +45,52 @@ async fn generates_a_design_on_the_default_provider() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn the_design_board_follows_the_projects_designs_folder() {
+    let data = std::env::temp_dir().join(format!("nekkod-design-folder-{}", std::process::id()));
+    let project = data.join("project");
+    let designs = project.join("nekko-designs");
+    std::fs::create_dir_all(&designs).unwrap();
+    let d = start_with(&data);
+    let folder = json!({ "id": "w1", "name": "Shop", "path": project.to_string_lossy(), "addedAt": 1 });
+    let (status, saved) = post(d.port, "settings:update", json!([{ "workspaces": [folder] }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{saved}");
+    let (_, empty) = post(d.port, "design:get", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(empty, json!({ "workspaceId": "w1", "pages": [] }));
+
+    // An agent saves a design into the folder with its file tools: the board shows it.
+    let file = designs.join("checkout-design.html");
+    std::fs::write(&file, "<!doctype html><title>Checkout</title><p>v1</p>").unwrap();
+    let (status, board) = post(d.port, "design:get", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{board}");
+    let page = board["pages"][0].clone();
+    assert_eq!(board["pages"].as_array().unwrap().len(), 1, "{board}");
+    assert_eq!(
+        (page["kind"].clone(), page["origin"].clone(), page["label"].clone()),
+        (json!("concept"), json!("file"), json!("Checkout"))
+    );
+    assert_eq!(std::path::Path::new(page["file"].as_str().unwrap()), file);
+
+    // It edits the file: the card shows the edit, and the earlier HTML can be restored.
+    std::fs::write(&file, "<!doctype html><title>Checkout</title><p>v2</p>").unwrap();
+    let (_, edited) = post(d.port, "design:get", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(edited["pages"][0]["id"], page["id"]);
+    assert!(edited["pages"][0]["html"].as_str().unwrap().ends_with("<p>v2</p>"), "{edited}");
+    assert!(edited["pages"][0]["revisions"][0]["html"].as_str().unwrap().ends_with("<p>v1</p>"), "{edited}");
+
+    // Removing the card keeps the file and does not bring the card back.
+    let (_, removed) = post(d.port, "design:removePage", json!(["w1", page["id"]]), Some(TOKEN)).await;
+    assert_eq!(removed["pages"], json!([]));
+    let (_, after) = post(d.port, "design:get", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(after["pages"], json!([]));
+    assert!(file.exists());
+    // A workspace with no saved folder still has its (empty) board.
+    let (status, other) = post(d.port, "design:get", json!(["w9"]), Some(TOKEN)).await;
+    assert_eq!((status, other), (200, json!({ "workspaceId": "w9", "pages": [] })));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn suggests_replies_and_fills_prompt_parts_on_the_chats_model() {
     let data = std::env::temp_dir().join(format!("nekkod-side-{}", std::process::id()));
     let sessions = data.join("sessions");

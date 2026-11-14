@@ -106,6 +106,21 @@ pub fn parse_worktree(stdout: &str, cwd: &str) -> Option<Value> {
     Some(json!({ "name": name, "path": path }))
 }
 
+/// The GitHub repository an `origin` url names (`https://github.com/o/r.git`,
+/// `git@github.com:o/r.git`, `ssh://git@github.com/o/r`), so a reply's bare
+/// `#123` can name a PR in the chat's own repo. None for any other host.
+pub fn github_remote(url: &str) -> Option<Value> {
+    static R: OnceLock<Regex> = OnceLock::new();
+    let r = R.get_or_init(|| {
+        Regex::new(r"^(?:https?:\/\/(?:[^@\/]+@)?|ssh:\/\/(?:[^@\/]+@)?|[^@\/:]+@)github\.com[:\/]([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$")
+            .expect("pattern compiles")
+    });
+    let url = js::trim(url);
+    let m = r.find(url)?;
+    let g = |i: usize| m.group(i).map(|r| url[r].to_string());
+    Some(json!({ "owner": g(1)?, "repo": g(2)? }))
+}
+
 /// Git status reads, cached and coalesced per folder.
 pub struct Git {
     cache: Mutex<HashMap<String, (Value, u64, u64)>>,
@@ -198,6 +213,12 @@ impl Git {
         {
             status["worktree"] = w;
         }
+        let origin = run(&self.git, &["remote", "get-url", "origin"], TIMEOUT, Some(path), 64 * 1024).await;
+        if origin.ok
+            && let Some(gh) = github_remote(&origin.stdout)
+        {
+            status["github"] = gh;
+        }
         if let Some(branch) = status.get("branch").and_then(Value::as_str).map(str::to_string) {
             // A slow lookup finishes in the background and shows on the next poll.
             let prs = self.prs.clone();
@@ -229,6 +250,29 @@ mod tests {
         );
         let keys: Vec<_> = s.as_object().unwrap().keys().cloned().collect();
         assert_eq!(keys, ["workspaceId", "repo", "dirtyCount", "ahead", "behind", "updatedAt", "head", "branch"]);
+    }
+
+    #[test]
+    fn reads_the_github_repo_from_an_origin_url() {
+        let want = Some(json!({ "owner": "nekko-labs", "repo": "nekko-agent" }));
+        for url in [
+            "https://github.com/nekko-labs/nekko-agent.git\n",
+            "https://github.com/nekko-labs/nekko-agent",
+            "https://x-access-token:abc@github.com/nekko-labs/nekko-agent.git",
+            "git@github.com:nekko-labs/nekko-agent.git",
+            "ssh://git@github.com/nekko-labs/nekko-agent/",
+        ] {
+            assert_eq!(github_remote(url), want, "{url}");
+        }
+        for url in [
+            "https://gitlab.com/a/b.git",
+            "git@github.example.com:a/b.git",
+            "https://github.com/a",
+            "/srv/git/a.git",
+            "",
+        ] {
+            assert_eq!(github_remote(url), None, "{url}");
+        }
     }
 
     #[test]

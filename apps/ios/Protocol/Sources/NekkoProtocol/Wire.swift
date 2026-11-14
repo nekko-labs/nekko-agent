@@ -512,6 +512,16 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public static func visible(_ list: JSONValue?) -> [SessionSummary] {
         (list?.array ?? []).compactMap(from).filter(\.isVisible).sorted { $0.updatedAt > $1.updatedAt }
     }
+
+    /// The sub-agents each chat spawned and has not completed, oldest first: the
+    /// rows under a chat in the list, as the desktop sidebar's `childrenOf`.
+    public static func subagents(_ list: JSONValue?) -> [String: [SessionSummary]] {
+        var byParent: [String: [SessionSummary]] = [:]
+        for s in (list?.array ?? []).compactMap(from) where !s.archived {
+            if let parent = s.parentSessionId { byParent[parent, default: []].append(s) }
+        }
+        return byParent.mapValues { kids in kids.sorted { ($0.createdAt ?? $0.updatedAt) < ($1.createdAt ?? $1.updatedAt) } }
+    }
 }
 
 /// One group of the chat list as the desktop's agent sidebar draws it:

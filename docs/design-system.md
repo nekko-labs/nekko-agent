@@ -58,7 +58,7 @@ Geist for the interface, Geist Mono for code, paths and numbers in tables (Setti
 A component reads a token, never a hex value, `rgb()`, a Tailwind palette class (`text-red-400`) or `white`/`black`, and never `var(--token, #fallback)`: the token always exists. The one exception is third-party marks (provider and connector logos) in the `*Icons.tsx` files.
 
 - **Neutrals** build the screen: `--paper`, `--surface`, `--surface-2`, `--line`, and the three ink tiers. Light is Light Nekko; dark is Dusk (`#0B0C14` page, `#1D1F2C` raised, `#252735` line).
-- **Plum** marks intent: the one primary button (`.btn-primary`: the accent fill, deep plum `#190019` with a `#854F6C` edge in dark in the Nekko themes), focus (`--ring`), what is selected (title in `--accent` plus a check, or `--accent-soft` behind a row), links, the on state of a toggle, chart series one. Never headings, icons at rest, decorative borders, badges that only inform, secondary buttons or hover.
+- **Plum** marks intent: the one primary button (`.btn-primary`: the accent fill, deep plum `#190019` with a `#854F6C` edge in dark in the Nekko themes), focus (`--ring`), what is selected (title in `--accent` plus a check, or `--accent-soft` behind a row), links, the on state of a toggle, chart series one. Never headings, icons at rest, decorative borders, badges that only inform, secondary buttons or hover. One exception: the composer's bar items (attach, folders, permissions, model, effort, context) light up in `--accent` on an `--accent-soft` wash with a soft accent glow on hover and while their menu is open.
 - **Petrol** (`--info`: `#1F6680` light, `#6BB8D4` dark) is information: notices, "New", tips, chart series three. `--accent-2` is chart series two.
 - **State**: `--success`, `--warning`, `--danger`, `--attention` (an agent waiting on you), `--neutral`. Each has a base value for glyphs, dots and meter fills, a `-text` value for words (`--danger-text`; it passes 4.5:1 where the base value does not), and a `-soft` tint used only when the user must act.
 
@@ -80,7 +80,7 @@ Everything else (connected, expiring, offline) is a dot and a word: `StatusDot` 
 
 - Control icons are **Gentleface** (MIT, bundled in `gentleface-icons.tsx`), line at 16px. New ones go in [ASSETS.md](../ASSETS.md).
 - Each plays its motion **once** on the control's hover, focus or press, then rests. Never loop. Decorative and disabled icons stay still. Reduced motion stops playback.
-- `--ink-soft` at rest, `--ink` on hover, `--accent` only when the control is on.
+- `--ink-soft` at rest, `--ink` on hover, `--accent` only when the control is on (the composer's bar items are the one exception, see Colour).
 - Status glyphs and the Nekko mascot are ours; provider logos keep their own marks.
 - **Phones** keep their platform's symbol set for controls (SF Symbols on iOS, Material Symbols Outlined on Android, line weight; the Gentleface PR and permission marks where both apps bundle them), coloured by the same rule: `inkSoft` at rest, the accent only for a selected check, a link or the screen's main action. Agent status is always our glyphs (`ChatStatusIcon`, `LiveStatusGlyph` on iOS, `StatusGlyph` on Android). The theme's accent is also UIKit's window tint on iOS, so popovers, menus and alerts never fall back to system blue.
 
@@ -109,6 +109,8 @@ Move 8px at most. Animate `opacity` and `transform`, never blur, bounce or overs
 - **Buttons**: slim. 28 tall, 12 of padding each side, 14/500 label, 8 radius. Never pad a `.btn` taller. One primary per view. Secondary is a neutral wash (`.btn` / `.btn-ghost`), not an outline. Destructive is words in `--danger-text` until the confirmation.
 - **Tabs** (`QuietTabs`): the label in `--ink-soft`, the selected one in `--ink` on a wash pill that slides.
 - **Fields** (`quiet-field`): no border at rest, a faint wash, the `--ring` halo and an accent edge on focus.
+- **Switches** (`Toggle`, `quiet-switch`): one size everywhere, a 36x20 track and a 16px knob, faint off and accent on. Never draw a switch of your own: render `Toggle`, or put `quiet-switch` on a checkbox input or an `aria-hidden` span with `data-on`.
+- **Empty list**: one faint line that says what is missing and where to add it. No illustration or dashed card inside a panel.
 - **Removal**: anything that removes or reverts offers Undo in a toast instead of a confirm dialog, unless it cannot be undone.
 
 ## Copy
@@ -119,7 +121,7 @@ Move 8px at most. Animate `opacity` and `transform`, never blur, bounce or overs
 
 ## Building blocks
 
-Use these instead of re-declaring markup (`components/primitives/`): `Group`, `Row`, `QuietTabs`, `Rule`, `StatusDot`, `Toggle`, `StatusIcon`, `WallMascot`, and the Gentleface icons. CSS utilities: `quiet-row`, `quiet-tab`, `quiet-field`, `quiet-rule`, `quiet-group-label`.
+Use these instead of re-declaring markup (`components/primitives/`): `Group`, `Row`, `QuietTabs`, `Rule`, `StatusDot`, `Toggle`, `StatusIcon`, `WallMascot`, and the Gentleface icons. CSS utilities: `quiet-row`, `quiet-tab`, `quiet-field`, `quiet-rule`, `quiet-group-label`, `quiet-switch`.
 
 ## Checklist for a screen
 
@@ -138,4 +140,4 @@ Use these instead of re-declaring markup (`components/primitives/`): `Group`, `R
 
 ## Migrating older screens
 
-Older screens still use `card` tiles, bordered rows and filled pills. Move a screen over when you touch it: the card becomes a `Group`, bordered rows become `Row`, a pill becomes a dot and a word. Reference screens already moved: the model picker, the Models page, all of Settings (`SettingsSection`, `SettingRow` and `ChoiceList` in `components/SettingsSection.tsx`), the model library and change review.
+Older screens still use `card` tiles, bordered rows and filled pills. Move a screen over when you touch it: the card becomes a `Group`, bordered rows become `Row`, a pill becomes a dot and a word. Reference screens already moved: the model picker, the Models page and its add-provider setup (`KeyFlow` for key-only providers), all of Settings (`SettingsSection`, `SettingRow` and `ChoiceList` in `components/SettingsSection.tsx`), the model library and change review.

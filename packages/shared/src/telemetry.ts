@@ -4,7 +4,7 @@
  */
 export const TELEMETRY_PROMISES = [
   'Off unless you turn it on. Turn it off any time in Settings.',
-  'Anonymous: a random id, the app version and your OS. No name, email, IP location or account.',
+  'Anonymous: a random id, your app version, OS and hardware, and which features, models and modes you use. No name, email, IP location or account.',
   'Never your chats, prompts, files, folder names or model replies.',
   'Error reports are scrubbed of secrets, personal details and file paths.',
   'Never sold or shared. Used only to fix bugs and decide what to build.',

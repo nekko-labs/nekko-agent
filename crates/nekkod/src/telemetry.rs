@@ -3,8 +3,12 @@
 //!
 //! What a report may hold, and nothing else:
 //! - a random install id (a new one each time it is turned on), the app
-//!   version, edition, OS, OS version and CPU type;
-//! - which features get used ([`EVENTS`]), with the few properties each allows;
+//!   version, edition, OS, OS version and CPU type, and the local hour and
+//!   weekday the event happened (never the time zone);
+//! - the machine at start ([`hardware`]): CPU model and cores, RAM, GPU name
+//!   and VRAM, rounded to whole gigabytes;
+//! - which features, models and modes get used ([`EVENTS`]), with the few
+//!   properties each allows;
 //! - errors and crashes, with every string scrubbed ([`scrub`]): secrets,
 //!   emails, phone numbers, card numbers, IP addresses and the user's name are
 //!   replaced, and file paths are cut to their last part. An error carries
@@ -43,12 +47,35 @@ const FRAMES_MAX: usize = 30;
 
 /// Each event the app may send, with the properties it may carry.
 const EVENTS: &[(&str, &[&str])] = &[
-    ("app_started", &[]),
-    ("turn_started", &["provider", "local", "offline", "mode", "sandbox"]),
+    ("app_started", &["cpu", "cpu_cores", "ram_gb", "gpu", "gpu_count", "vram_gb", "unified", "backends"]),
+    ("app_opened", &[]),
+    ("app_closed", &["running_seconds"]),
+    (
+        "turn_started",
+        &[
+            "provider",
+            "local",
+            "offline",
+            "mode",
+            "sandbox",
+            "model",
+            "permission",
+            "subagent",
+            "running_agents",
+            "connectors",
+            "mcp_servers",
+        ],
+    ),
+    ("voice_used", &["engine"]),
+    ("runner_job", &["result", "seconds"]),
     ("screen_viewed", &["screen"]),
+    ("click", &["screen", "control"]),
     ("feature_used", &["feature"]),
     ("error", &["source", "message", "stack"]),
 ];
+
+/// Events only the engine sends; `telemetry:capture` refuses them from the UI.
+const ENGINE_ONLY: &[&str] = &["app_started", "turn_started", "voice_used", "runner_job"];
 
 #[derive(Default)]
 struct State {
@@ -109,6 +136,10 @@ fn push(event: &str, props: &Value, mut s: std::sync::MutexGuard<'static, State>
         };
         p.insert((*k).into(), v);
     }
+    // Time-of-day use: the local hour and weekday only, never the zone.
+    let now = chrono::Local::now();
+    p.insert("local_hour".into(), json!(chrono::Timelike::hour(&now)));
+    p.insert("weekday".into(), json!(now.format("%a").to_string()));
     p.insert("$process_person_profile".into(), json!(false));
     p.insert("$geoip_disable".into(), json!(true));
     let ev = json!({
@@ -183,6 +214,24 @@ pub fn error_stack(text: &str) -> String {
     frames.take(FRAMES_MAX).collect::<Vec<_>>().join("\n")
 }
 
+/// `app_started`'s properties from `machine:profile`: model names and counts,
+/// memory in whole gigabytes. Never serial numbers, host names or paths.
+pub fn hardware(profile: &Value) -> Value {
+    let gb = |v: &Value| v.as_f64().map(|b| (b / 1_073_741_824.0).round() as u64);
+    let gpus = profile["gpus"].as_array().cloned().unwrap_or_default();
+    let backends: Vec<&str> = profile["backends"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+    json!({
+        "cpu": profile["cpu"]["model"],
+        "cpu_cores": profile["cpu"]["cores"],
+        "ram_gb": gb(&profile["ramBytes"]),
+        "gpu": gpus.first().map_or(Value::Null, |g| g["name"].clone()),
+        "gpu_count": gpus.len(),
+        "vram_gb": gb(&json!(gpus.iter().filter_map(|g| g["vramBytes"].as_f64()).sum::<f64>())),
+        "unified": profile["unified"],
+        "backends": backends.join(","),
+    })
+}
+
 /// Send what is queued. Kept for the next try when the send fails.
 async fn flush() {
     let key = key();
@@ -235,7 +284,8 @@ pub fn start(ctx: Ctx) {
         let settings = ctx.settings.clone();
         let mut changes = settings.store.subscribe();
         configure(&changes.borrow_and_update());
-        capture("app_started", &Value::Null);
+        let profile = serde_json::to_value(ctx.machine.profile(false).await).unwrap_or(Value::Null);
+        capture("app_started", &hardware(&profile));
         let mut tick = tokio::time::interval(FLUSH_EVERY);
         loop {
             tokio::select! {
@@ -253,11 +303,14 @@ pub async fn route(channel: &str, args: &[Value]) -> Result<Value, String> {
     match channel {
         "telemetry:capture" => {
             let event = args.first().and_then(Value::as_str).unwrap_or_default();
-            // The engine sends these itself; the UI cannot.
-            if event == "app_started" || event == "turn_started" {
+            if ENGINE_ONLY.contains(&event) {
                 return Err(format!("{event} is not a UI event"));
             }
             capture(event, args.get(1).unwrap_or(&Value::Null));
+            // The app is quitting: send now rather than at the next minute.
+            if event == "app_closed" {
+                flush().await;
+            }
             Ok(Value::Null)
         }
         "telemetry:status" => {
@@ -306,6 +359,20 @@ mod tests {
         assert_eq!(error_stack("at crates/nekkod/src/x.rs:4:9"), "x.rs:4:9");
     }
 
+    #[test]
+    fn hardware_keeps_models_and_whole_gigabytes_only() {
+        let profile = json!({ "format": 1, "probedAt": 5, "hostname": "philips-mac", "cpu": { "model": "Apple M4 Max", "cores": 16 },
+            "ramBytes": 137438953472.0, "unified": true, "backends": ["metal", "cpu"],
+            "gpus": [{ "name": "Apple M4 Max", "vramBytes": 137438953472.0, "cores": 40, "serial": "X1" }] });
+        assert_eq!(
+            hardware(&profile),
+            json!({ "cpu": "Apple M4 Max", "cpu_cores": 16, "ram_gb": 128, "gpu": "Apple M4 Max", "gpu_count": 1,
+                "vram_gb": 128, "unified": true, "backends": "metal,cpu" })
+        );
+        assert_eq!(hardware(&Value::Null)["gpu_count"], 0);
+        assert!(ENGINE_ONLY.iter().all(|e| EVENTS.iter().any(|(k, _)| k == e)));
+    }
+
     // One test: the state is process-wide.
     #[test]
     fn off_unless_on_and_only_known_events_and_properties() {
@@ -326,6 +393,8 @@ mod tests {
         assert!(p.get("path").is_none() && p.get("chat").is_none());
         assert_eq!(p["$process_person_profile"], false);
         assert_eq!(p["$geoip_disable"], true);
+        assert!(p["local_hour"].as_u64().is_some_and(|h| h < 24), "{p}");
+        assert_eq!(p["weekday"].as_str().map(str::len), Some(3));
 
         capture(
             "error",

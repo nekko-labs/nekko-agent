@@ -1436,6 +1436,9 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         if let Err(e) = audit::append(&self.runners_dir, line) {
             eprintln!("runner: cannot write the audit log: {e}");
         }
+        // Opt-in usage reports: how a job ended and how long it took. Never the repo or workflow.
+        let result = serde_json::to_value(line.result).unwrap_or_default();
+        crate::telemetry::capture("runner_job", &serde_json::json!({ "result": result, "seconds": line.seconds }));
         if let Some(r) = self.runners.iter_mut().find(|r| r.record.config.id == line.runner_id) {
             r.recent.push_front(line.clone());
             r.recent.truncate(RECENT);

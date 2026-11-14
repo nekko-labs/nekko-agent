@@ -16,6 +16,9 @@ import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type Age
 import { GroupActivity } from '../components/GroupActivity.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
+import { FolderOpenIcon, GfBotsIcon, GfGlobeIcon, GfImageIcon, GfTerminalIcon } from '../gentleface-icons.js';
+import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
+import { useWallLogs } from '../wallLogs.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../completionExit.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
@@ -32,8 +35,8 @@ import { isLiveState, onLiveStateTick } from '../liveStateTicker.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
-  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelView, saveAgentPanelView, statusGroupOf, wakeSourcesOf,
-  type AgentPanelView, type SortableCard,
+  AGENT_PANEL_SHOWS, DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelShows, readAgentPanelView, saveAgentPanelShows, saveAgentPanelView, statusGroupOf, wakeSourcesOf,
+  type AgentPanelShows, type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
 /** Something being dragged in the sidebar (a project or a workspace). */
@@ -145,26 +148,49 @@ export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): A
   }
 }
 
-/** How the Agents tab lays out its panel of agent cards. */
-export type AgentPanelOrientation = 'vertical' | 'horizontal';
+/** The switcher's segments: one Gentleface icon per kind of window. */
+const SHOWS_ICON: Record<AgentPanelShows, (p: { className?: string }) => React.ReactElement> = {
+  agents: GfBotsIcon,
+  terminals: GfTerminalIcon,
+  media: GfImageIcon,
+  browsers: GfGlobeIcon,
+  files: FolderOpenIcon,
+};
+const SHOWS_OPTIONS: ReadonlyArray<SlideOption<AgentPanelShows>> = AGENT_PANEL_SHOWS.map(({ id, label }) => {
+  const Icon = SHOWS_ICON[id];
+  return { id, label, content: <Icon className="h-4 w-4" /> };
+});
+/** What each window kind's empty panel says. */
+const SHOWS_EMPTY: Record<AgentPanelShows, string> = {
+  agents: 'No active agents',
+  terminals: 'No terminals open',
+  media: 'No photo or video chats',
+  browsers: 'No agents to open a browser beside',
+  files: 'No agents whose files to browse',
+};
 
 type SidebarActions = {
   onOpenChat: (id: string) => void;
   onOpenTerminal: (id: string) => void;
   selectedId: string | null;
   onCreate: (kind: 'chat' | 'image' | 'video' | 'terminal', projectId?: string, shell?: string) => Promise<void>;
-  /** A column beside the wall, or a row of cards above it. */
-  orientation?: AgentPanelOrientation;
-  onOrientation?: (orientation: AgentPanelOrientation) => void;
+  /** Open an agent with its Browser or Files drawer out (the Browsers and Files views). */
+  onOpenCompanion?: (sessionId: string, kind: 'browser' | 'files') => void;
   /** Hide the panel; the Agents toolbar offers it back. */
   onClosePanel?: () => void;
   /** The colour of the zone showing each agent on the board, by chat or terminal id. */
   zoneTints?: Map<string, number>;
 };
 
-/** The Agent board's list of agents: one card per active agent, grouped, beside or above the wall. */
-export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, orientation = 'vertical', onOrientation, onClosePanel, zoneTints }: SidebarActions) {
-  const horizontal = orientation === 'horizontal';
+/**
+ * The Agent board's panel beside the wall. A switcher at its top picks which
+ * kind of window it lists: the agent cards (grouped), terminals, photo and
+ * video chats, or the agents' browsers and files.
+ */
+export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, onOpenCompanion, onClosePanel, zoneTints }: SidebarActions) {
+  const [shows, setShowsState] = useState<AgentPanelShows>(readAgentPanelShows);
+  const setShows = (next: AgentPanelShows) => { setShowsState(next); saveAgentPanelShows(next); };
+  const drawer = useWallLogs(useShallow((d) => ({ sessionId: d.closing ? null : d.sessionId, kind: d.kind })));
   const {
     sessions, terminals, workspaces, settings,
     refreshSessions, refreshTerminals,
@@ -342,8 +368,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       if (!previous.has(group)) return previous;
       const next = new Set(previous); next.delete(group); return next;
     });
-    if (!horizontal && window.innerWidth < 768) setMobileNav(true);
-  }, [completionTipSessionId, showTips, horizontal, sessions, view.groupBy]);
+    if (window.innerWidth < 768) setMobileNav(true);
+  }, [completionTipSessionId, showTips, sessions, view.groupBy]);
   useLayoutEffect(() => {
     if (!showTips || !completionTipSessionId) return;
     const frame = requestAnimationFrame(() => {
@@ -410,15 +436,6 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const closeNewMenuSoon = () => {
     window.clearTimeout(newMenuTimer.current);
     newMenuTimer.current = window.setTimeout(() => setNewMenuOpen(false), 220);
-  };
-  /**
-   * The row scrolls sideways, but a mouse wheel only scrolls down: turn the
-   * wheel's vertical travel into horizontal scrolling while the row can move.
-   */
-  const scrollRowWithWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || el.scrollWidth <= el.clientWidth) return;
-    el.scrollLeft += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
   };
   const closeNewMenu = () => {
     window.clearTimeout(newMenuTimer.current);
@@ -516,11 +533,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const shownDone = (s: SessionSummary) => view.showAutomations || !s.taskId;
   const order = (items: Entry[]) => (view.sortBy === 'manual' ? items : [...items].sort((a, b) => compareCards(view)(sortable(a), sortable(b))));
   const utilityEntries = buckets.flatMap((b) => bucketEntries(b.key));
-  const utilityGroups: PanelGroup[] = [
-    { key: '__terminals', name: 'Terminals', items: order(utilityEntries.filter((e) => utilityKind(e) === 'terminal')), done: [] },
-    { key: '__media', name: 'Photos and videos', items: order(utilityEntries.filter((e) => utilityKind(e) === 'media')), done: [] },
-  ].filter((g) => g.items.length > 0);
-  const groups: PanelGroup[] = [...utilityGroups, ...(() => {
+  // Terminals and photo and video chats each have their own view in the switcher.
+  const utilityGroup = (kind: 'terminal' | 'media', key: string, name: string): PanelGroup[] => {
+    const items = order(utilityEntries.filter((e) => utilityKind(e) === kind));
+    return items.length > 0 ? [{ key, name, items, done: [], bare: true }] : [];
+  };
+  const agentGroups = (): PanelGroup[] => {
     if (view.groupBy === 'project') {
       return buckets.flatMap((b): PanelGroup[] => {
         const items = order(bucketEntries(b.key).filter(shown));
@@ -555,7 +573,22 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       }),
       ...completed,
     ];
-  })()];
+  };
+  const groups: PanelGroup[] = shows === 'terminals' ? utilityGroup('terminal', '__terminals', 'Terminals')
+    : shows === 'media' ? utilityGroup('media', '__media', 'Photos and videos')
+      : shows === 'agents' ? agentGroups()
+        : [];
+  /** Browsers and Files: one row per active agent, in the panel's order, whose drawer that row opens. */
+  const companionKind = shows === 'browsers' ? 'browser' as const : shows === 'files' ? 'files' as const : null;
+  const companionAgents = companionKind
+    ? order(buckets.flatMap((b) => bucketEntries(b.key)).filter((e) => !!e.s && !utilityKind(e))).flatMap((e) => (e.s ? [e.s] : []))
+    : [];
+  const folderName = (s: SessionSummary) => (settings?.workspaces ?? []).find((p) => p.id === s.workspaceId)?.name ?? remoteFolders.find((p) => p.id === s.workspaceId)?.name;
+  const openCompanion = (id: string, kind: 'browser' | 'files') => {
+    if (onOpenCompanion) onOpenCompanion(id, kind);
+    else onOpenChat(id);
+    setMobileNav(false);
+  };
 
   /** The open agent's top-level row: its own card, its terminal, or the parent of the open subagent. */
   const holdsSelection = (e: Entry) =>
@@ -619,7 +652,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   useLayoutEffect(() => {
     const frame = requestAnimationFrame(() => activeRowRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }));
     return () => cancelAnimationFrame(frame);
-  }, [selectedId, collapsed, showCompleted, horizontal]);
+  }, [selectedId, collapsed, showCompleted, shows]);
 
   // --- Sidebar drag-and-drop (reorder projects; reorder / re-file workspaces) ---
   const startDrag = (e: React.DragEvent, item: DragItem) => {
@@ -681,18 +714,17 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     // `min()` guards the mobile overlay, where the chosen width could be wider
     // than the screen it slides over.
     <div
-      className={`panel flex ${horizontal ? 'h-auto w-full flex-row items-stretch' : 'h-full flex-col'}`}
-      style={horizontal ? undefined : { width: `min(${sidebarW}px, 82vw)` }}
+      className="panel flex h-full flex-col"
+      style={{ width: `min(${sidebarW}px, 82vw)` }}
       data-agent-panel
-      data-orientation={orientation}
+      data-shows={shows}
     >
-      <div className={horizontal ? 'flex shrink-0 flex-col items-center justify-center gap-1 border-r border-line px-2 py-2' : 'flex items-center justify-between px-3 py-2'} data-agent-panel-header>
-        {/* A column panel keeps show/hide and orientation at its left and the
-            + at its right; a row panel stacks all three in its left strip. */}
-        {!horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
-        <div className={`relative flex shrink-0 items-center ${horizontal ? 'flex-col gap-1' : 'gap-0.5'}`} ref={newMenuRef}>
-          {horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
-          <button
+      <div className="flex items-center justify-between px-3 py-2" data-agent-panel-header>
+        {/* Show/hide at the left, the panel's own actions at the right. */}
+        <AgentPanelControls show onToggle={() => onClosePanel?.()} />
+        <div className="relative flex shrink-0 items-center gap-0.5" ref={newMenuRef}>
+          {/* Group, sort and show apply to the agent cards only. */}
+          {shows === 'agents' && <button
             ref={viewButtonRef}
             className={`agent-panel-view btn btn-ghost px-2 py-1 ${viewMenu ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
             title="View options: group, sort and show"
@@ -704,7 +736,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
             onClick={openViewMenuFromButton}
           >
             <SlidersIcon className="h-4 w-4" />
-          </button>
+          </button>}
           <HoverTip label={`Search chats (${SHORTCUTS.searchChats.label})`}><span className="inline-flex"><button
             ref={finderButtonRef}
             className={`agent-panel-view btn btn-ghost px-2 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
@@ -756,10 +788,35 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           )}
         </div>
       </div>
-      <div ref={listRef} className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
+      <div className="px-3 pb-2" data-agent-panel-shows>
+        <SlideToggle label="Show windows" options={SHOWS_OPTIONS} value={shows} onChange={setShows} iconOnly className="agent-panel-shows" />
+      </div>
+      <div ref={listRef} className="agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3" data-agent-panel-list>
+        {groups.length === 0 && companionAgents.length === 0 && (
+          <p className="px-3 py-2 text-xs text-ink-faint" data-agent-panel-empty>{SHOWS_EMPTY[shows]}</p>
+        )}
+        {companionKind && companionAgents.map((s) => {
+          const Icon = companionKind === 'browser' ? GfGlobeIcon : FolderOpenIcon;
+          const open = drawer.sessionId === s.id && drawer.kind === companionKind;
+          const folder = folderName(s);
+          return (
+            <div key={s.id} ref={open || s.id === selectedId ? activeRowRef : undefined}><button
+              type="button"
+              data-companion-row={s.id}
+              aria-current={open || undefined}
+              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 ${open ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
+              title={companionKind === 'browser' ? `Open a browser beside ${s.title || 'this agent'}` : `Browse ${s.title || 'this agent'}'s working folder`}
+              onClick={() => openCompanion(s.id, companionKind)}
+            >
+              <Icon className={`h-4 w-4 shrink-0 ${open ? 'text-accent' : 'text-ink-faint'}`} />
+              <span className="min-w-0 flex-1 truncate text-sm" dir="auto">{s.title || 'Untitled chat'}</span>
+              {folder && <span className="max-w-[40%] shrink-0 truncate text-2xs text-ink-faint" dir="auto">{folder}</span>}
+            </button></div>
+          );
+        })}
         {groups.map((b) => {
           const { items, done } = b;
-          const byProject = view.groupBy === 'project' && !utilityGroups.includes(b);
+          const byProject = view.groupBy === 'project' && shows === 'agents';
           // The Completed group is its own fold: open means its rows show.
           const completedGroup = b.key === COMPLETED_GROUP;
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
@@ -837,7 +894,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   no room in the row layout either, not just squashed to 0fr. */}
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
                 <div className="min-h-0 space-y-1 overflow-hidden pb-1">
-                  {items.length === 0 && !completedGroup && (
+                  {items.length === 0 && !completedGroup && !b.bare && (
                     <p className="px-4 py-1 text-2xs text-ink-faint"><span aria-hidden="true">–</span><span className="sr-only">No active agents</span></p>
                   )}
                   {visible.map((entry) => {
@@ -988,7 +1045,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     <div
       // The Agents tab panel takes the column's height and no more, so its card
       // list overflows into its own scroller and the mouse wheel scrolls it.
-      className={`flex min-w-0 shrink-0 ${horizontal ? 'w-full' : 'agent-panel-host min-h-0 self-stretch'}`}
+      className="agent-panel-host flex min-h-0 min-w-0 shrink-0 self-stretch"
       style={{ gap: 'var(--pane-gap)', minHeight: 0 }}
     >
       {viewMenu && <AgentPanelViewMenu x={viewMenu.x} y={viewMenu.y} view={view} onChange={setView} onClose={closeViewMenu} />}
@@ -1015,9 +1072,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         </ContextAction>
       </ContextMenu>}
       {mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
-      {/* A row of cards needs no drawer on a narrow screen: it is already out of the way. */}
-      {horizontal && <aside className="flex w-full min-w-0">{Sidebar}</aside>}
-      {!horizontal && <><div className="md:hidden">
+      <div className="md:hidden">
         <button className="btn btn-ghost" aria-label="Open agent list" aria-expanded={mobileNav}
           style={!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
           onClick={() => setMobileNav(true)}>Agents</button>
@@ -1075,7 +1130,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           aria-hidden
           className="pane-grip absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
         />
-      </div></>}
+      </div>
     </div>
   );
 }

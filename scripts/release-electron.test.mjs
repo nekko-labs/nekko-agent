@@ -87,8 +87,15 @@ test('recovery workflow checks out tag source and retains signing/publication ga
   const build = steps.find(s => s.name === 'Build and publish installers');
   assert.match(build.run, /-c\.electronDist=\$ELECTRON_DIST/);
   assert.match(build.run, /-c\.mac\.notarize=true/);
-  assert.ok(steps.some(s => s.name === 'Verify the signed app'));
-  assert.ok(steps.some(s => s.name === 'Check the virtualization entitlement'));
+  // A Developer ID build with restricted entitlements passes every pre-launch check and still does not open without its profile (#2688).
+  const verify = steps.find(s => s.name === 'Verify the signed app');
+  assert.match(verify.run, /ELECTRON_RUN_AS_NODE=1 "\$bin" -e 'process\.exit\(0\)'/);
+  assert.match(steps.find(s => s.name === 'Check the entitlements').run, /check-mac-entitlements\.sh "\$app" --signed/);
+  assert.match(steps.find(s => s.name === 'Validate macOS signing configuration').run, /APPLE_API_ISSUER MACOS_PROVISIONING_PROFILE; do\n\s*\[ -n/);
+  const profile = steps.find(s => s.name === 'Install the macOS provisioning profile');
+  assert.match(profile.run, /> "\$profile"\n/);
+  assert.match(profile.run, /check-provisioning-profile\.cjs "\$profile"/);
+  assert.ok(steps.indexOf(profile) < steps.indexOf(build));
   assert.equal(workflow.jobs['publish-release'].needs, 'release');
   assert.match(workflow.jobs['publish-release'].steps[0].run, /tag_name=\$RELEASE_TAG/);
   for (const job of ['nekkod-npm', 'publish-web', 'publish-cli']) assert.equal(workflow.jobs[job].if, '${{ !inputs.release_tag }}');

@@ -56,6 +56,9 @@ const BY_EXT: Record<string, Meta> = {
   zip: { color: '#afb42b', label: 'ZIP' }, tar: { color: '#afb42b', label: 'TAR' }, gz: { color: '#afb42b', label: 'GZ' },
   lock: { color: '#787878', label: 'LOCK' }, env: { color: '#fdd835', label: 'ENV' },
   csv: { color: '#27ae60', label: 'CSV' }, tsv: { color: '#27ae60', label: 'TSV' },
+  swift: { color: '#f05138', label: 'SW' }, kt: { color: '#a97bff', label: 'KT' }, kts: { color: '#a97bff', label: 'KT' },
+  m: { color: '#438eff', label: 'M' }, mm: { color: '#438eff', label: 'MM' }, gradle: { color: '#02303a', label: 'GR' },
+  vue: { color: '#41b883', label: 'VUE' }, svelte: { color: '#ff3e00', label: 'SV' }, plist: { color: '#9e9e9e', label: 'PL' },
 };
 
 const GENERIC: Meta = { color: '#9e9e9e', label: '' };
@@ -72,7 +75,7 @@ export function FileTypeIcon({ name, size = 16 }: { name: string; size?: number 
   const m = fileMeta(name);
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center rounded-[3px] font-bold leading-none"
+      className="inline-flex shrink-0 items-center justify-center overflow-hidden whitespace-nowrap rounded-[3px] font-bold leading-none"
       style={{
         width: size,
         height: size,

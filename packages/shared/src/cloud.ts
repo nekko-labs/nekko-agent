@@ -31,7 +31,13 @@ export interface SyncDevice {
 
 export interface CloudStatus {
   signedIn: boolean;
-  account: { email: string; plan: 'free' | 'pro' | 'team' | string; canSync: boolean } | null;
+  account: {
+    email: string; plan: 'free' | 'pro' | 'team' | string; canSync: boolean;
+    /** A Nekko team account, which may switch unreleased Cloud features (decision 0092). */
+    staff?: boolean;
+    /** Unreleased Cloud features switched on for this account. */
+    features?: { billing?: boolean };
+  } | null;
   /** A browser sign-in (GitHub, Google, Apple) is waiting for its callback. */
   oauthPending: boolean;
   /** Where this device's keys live ("macOS Keychain"…). */
@@ -170,7 +176,19 @@ export interface FleetComputerView {
   /** Checked against this account's own record of the device. */
   verified: boolean;
   ownerEmail?: string;
+  /** Whether this desktop can open a chat on it (decision 0102). Absent from an older engine. */
+  reach?: FleetReach;
 }
+
+/**
+ * - `ready`: one of your own computers, with remote access on: it can be opened here.
+ * - `you`: this computer.
+ * - `other-account`: another member's computer: listed, not openable.
+ * - `unverified`: its key isn't the one your account record lists.
+ * - `no-remote`: remote access is off there, or its build is older.
+ * - `locked`: it uses an account key this computer doesn't hold yet.
+ */
+export type FleetReach = 'ready' | 'you' | 'other-account' | 'unverified' | 'no-remote' | 'locked';
 
 /** `fleet:list`. `error` is plain text for the person; `rejected` counts descriptors that failed to decrypt. */
 export interface FleetList {
@@ -194,3 +212,11 @@ export interface FleetSharingResult {
 export interface FleetStatus {
   sharing: Array<{ orgId: string; state: FleetSharingState; lastHeartbeat: number | string | null; error?: string }>;
 }
+
+/** A plan on sale through Stripe (#2724); `amount` in the currency's smallest unit. */
+export interface BillingPlan { id: 'pro' | 'team'; amount: number; currency: string; interval: string }
+
+export type TeamFeatureKey = 'billing';
+/** off: nobody; team: Nekko team accounts only; on: everyone. */
+export type TeamFeatureState = 'off' | 'team' | 'on';
+export interface TeamFeatures { features: Record<TeamFeatureKey, TeamFeatureState>; available: TeamFeatureKey[] }

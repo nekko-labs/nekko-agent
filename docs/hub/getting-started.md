@@ -227,7 +227,11 @@ The selected agent has a tinted background across its row, so you can spot the c
 
 By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. A card whose agent opened a pull request shows it as a chip at its bottom right, with the PR icon in the colour of its state: green when open, gray for a draft, purple when merged, red when closed. With several PRs it shows the most current one and **+N**; hover the count to see them all, and click a PR to open it. Use the sliders button to group by project, date or computer instead.
 
-In the vertical Agents panel, the group heading stays at the top of the list while you scroll its agents, then yields to the next group. The horizontal row keeps its usual sideways scrolling.
+The group heading stays at the top of the list while you scroll its agents, then yields to the next group.
+
+### Switching what the Agents panel lists
+
+A row of icons at the top of the Agents panel picks which kind of window it lists: **Agents**, **Terminals**, **Photos and videos**, **Browsers** and **Files**. Click an icon, or use the arrow keys once it has focus; hover an icon for its name. Agents shows the agent cards described above. Terminals and Photos and videos show just those. Browsers and Files list your agents: pick one to show it with its Browser or Files drawer open beside it. The panel remembers your choice.
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Animations > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 
@@ -259,7 +263,7 @@ Click a file link to open the file in a window beside the chat. Code is coloured
 
 ### Agent panel shortcuts
 
-Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
+Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video chats are listed under their own icons at the top of the panel.
 
 The Agent Board header also has a single **+**: hover or click it for the same three choices. Both menus use a neutral light/dark background and highlight the hovered or keyboard-focused row in your primary color. The shortcut appears beside every choice:
 

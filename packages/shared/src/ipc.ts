@@ -417,6 +417,7 @@ export const IpcChannels = {
   computersSetIcon: 'computers:setIcon',
   computersCreateSession: 'computers:createSession',
   computersStats: 'computers:stats',
+  computersConnectFleet: 'computers:connectFleet',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -484,6 +485,11 @@ export const IpcChannels = {
   cloudCancelOAuth: 'cloud:cancelOAuth',
   cloudSignOut: 'cloud:signOut',
   cloudDeleteAccount: 'cloud:deleteAccount',
+  cloudBillingPlans: 'cloud:billingPlans',
+  cloudBillingCheckout: 'cloud:billingCheckout',
+  cloudBillingPortal: 'cloud:billingPortal',
+  cloudTeamFeatures: 'cloud:teamFeatures',
+  cloudSetTeamFeature: 'cloud:setTeamFeature',
   syncTurnOn: 'sync:turnOn',
   syncConfirmRecoveryKey: 'sync:confirmRecoveryKey',
   syncRestore: 'sync:restore',
@@ -620,6 +626,15 @@ export interface NekkoApi {
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
   /** Erase the Nekko Cloud account (`DELETE /v1/account`), then forget it on this device. */
   cloudDeleteAccount(): Promise<import('./cloud.js').CloudStatus>;
+  /** Plans on sale (#2724); refused unless billing is on for this account. */
+  cloudBillingPlans(): Promise<{ plans: import('./cloud.js').BillingPlan[] }>;
+  /** A Stripe Checkout page for `plan`, to open in the browser. */
+  cloudBillingCheckout(plan: 'pro'): Promise<{ url: string }>;
+  /** Stripe's Customer Portal for this account, to open in the browser. */
+  cloudBillingPortal(): Promise<{ url: string }>;
+  /** Nekko team accounts only (decision 0092): each unreleased feature's switch. */
+  cloudTeamFeatures(): Promise<import('./cloud.js').TeamFeatures>;
+  cloudSetTeamFeature(key: import('./cloud.js').TeamFeatureKey, state: import('./cloud.js').TeamFeatureState): Promise<import('./cloud.js').TeamFeatures>;
   /** Settings > Connections: the switch and each connection's counts. */
   connectionsStatus(): Promise<import('./connections.js').ConnectionsStatus>;
   /** A connection's recent events, newest first. */
@@ -627,7 +642,7 @@ export interface NekkoApi {
   /** Forget every logged event. */
   connectionsClear(): Promise<import('./connections.js').ConnectionsStatus>;
   /** Opt-in reports: queue a UI event (`screen_viewed`, `feature_used`, `error`); ignored while reports are off. */
-  telemetryCapture(event: 'screen_viewed' | 'feature_used' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
+  telemetryCapture(event: 'screen_viewed' | 'click' | 'feature_used' | 'app_opened' | 'app_closed' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
   /** Whether reports are on, whether this build has a project to send to, and how many events wait. */
   telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
@@ -1342,6 +1357,12 @@ export interface NekkoApi {
   computerModelServer(id: string, channel: 'model:load' | 'model:unload' | 'engine:unloadAll' | 'engine:settings', args?: unknown[]): Promise<unknown>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
+  /**
+   * Connect to one of your own computers from an organization's list, with no
+   * pairing (decision 0102). Answers its row in the Computers list; rejects
+   * with what to do next.
+   */
+  connectFleetComputer(orgId: string, deviceId: string): Promise<import('./computers.js').ComputerStatus>;
   /** Set the icon in that machine's own settings; empty removes it. */
   setComputerIcon(id: string, icon: string): Promise<import('./computers.js').ComputerStatus[]>;
   /** Its providers and folders; null when it has never answered. */

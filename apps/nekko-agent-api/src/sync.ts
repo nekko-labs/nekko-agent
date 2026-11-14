@@ -10,6 +10,11 @@ import type { Db } from "./db.js";
  * revisions, plans and ownership.
  */
 
+/** The collection of synced Library files: its replaced revisions are kept (see `HISTORY_DAYS`). */
+export const LIBRARY_COLLECTION = "library";
+/** How long a replaced revision of a Library record, a deleted share or a share's old version is kept. */
+export const HISTORY_DAYS = 30;
+
 /** Stored bytes allowed per account. */
 export const SYNC_QUOTA: Record<Plan, number> = { free: 0, pro: 5 * 2 ** 30, team: 20 * 2 ** 30 };
 /** One sealed object at most (a transcript is split into parts well under this). */
@@ -38,7 +43,7 @@ export function bytes(value: unknown, min: number, max = min): Buffer | null {
   return buf;
 }
 
-const isPositiveInt = (v: unknown, max = Number.MAX_SAFE_INTEGER): v is number =>
+export const isPositiveInt = (v: unknown, max = Number.MAX_SAFE_INTEGER): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= max;
 
 interface ObjectRow {
@@ -367,14 +372,25 @@ export function registerSync(app: FastifyInstance, db: Db): void {
           results.push({ objectId: o.objectId, status: "stale-key", currentKeyId: keyId });
           continue;
         }
-        const { rows } = await tx.query<{ revision: string; size: number }>(
-          "select revision, octet_length(blob) as size from sync_objects where user_id = $1 and collection = $2 and object_id = $3",
+        const { rows } = await tx.query<{ revision: string; size: number; key_id: number }>(
+          "select revision, octet_length(blob) as size, key_id from sync_objects where user_id = $1 and collection = $2 and object_id = $3",
           [caller.userId, o.collection, o.objectId],
         );
         const have = rows[0] ? Number(rows[0].revision) : 0;
         if (o.revision !== have + 1) {
           results.push({ objectId: o.objectId, status: "conflict", revision: have });
           continue;
+        }
+        // A Library file's replaced revision is kept for HISTORY_DAYS (and still counts toward storage).
+        const kept = o.collection === LIBRARY_COLLECTION && !!rows[0];
+        if (kept) {
+          await tx.query(
+            `insert into sync_object_history (user_id, collection, object_id, revision, key_id, blob)
+             select user_id, collection, object_id, revision, key_id, blob from sync_objects
+              where user_id = $1 and collection = $2 and object_id = $3
+             on conflict do nothing`,
+            [caller.userId, o.collection, o.objectId],
+          );
         }
         await tx.query(
           `insert into sync_objects (user_id, collection, object_id, revision, key_id, blob) values ($1, $2, $3, $4, $5, $6)
@@ -383,7 +399,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
              seq = nextval('sync_change_seq'), updated_at = now()`,
           [caller.userId, o.collection, o.objectId, o.revision, o.keyId, o.blob],
         );
-        delta += o.blob.length - (rows[0]?.size ?? 0);
+        delta += o.blob.length - (kept ? 0 : rows[0]?.size ?? 0);
         results.push({ objectId: o.objectId, status: "ok", revision: o.revision });
       }
       const { rows: usage } = await tx.query<{ bytes: string }>(
@@ -392,7 +408,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
          returning bytes`,
         [caller.userId, delta],
       );
-      if (Number(usage[0].bytes) > SYNC_QUOTA[caller.plan]) {
+      if (Number(usage[0].bytes) + await shareBytes(tx, caller.userId) > SYNC_QUOTA[caller.plan]) {
         // Roll the whole push back.
         throw Object.assign(new Error("quota"), { statusCode: 413 });
       }
@@ -437,6 +453,35 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     return { objects: page, next: page.length ? page[page.length - 1].seq : since, more };
   });
 
+  // A synced Library file's earlier revisions, newest first: sealed, so only the
+  // owner's devices can open one (under the revision and key it was sealed with).
+  app.get("/v1/sync/history/:collection/:objectId", async (req, reply) => {
+    const caller = await guard(req, reply, false);
+    if (!caller) return;
+    const { collection, objectId } = req.params as { collection: string; objectId: string };
+    if (collection !== LIBRARY_COLLECTION || !OBJECT_ID.test(objectId)) return reply.code(404).send({ error: "not-found" });
+    const { rows } = await db.query<{ revision: string; key_id: number; size: number; superseded_at: Date }>(
+      `select revision, key_id, octet_length(blob) as size, superseded_at from sync_object_history
+        where user_id = $1 and collection = $2 and object_id = $3 order by revision desc`,
+      [caller.userId, collection, objectId],
+    );
+    return { revisions: rows.map((r) => ({ revision: Number(r.revision), keyId: r.key_id, size: r.size, supersededAt: new Date(r.superseded_at).toISOString() })) };
+  });
+
+  app.get("/v1/sync/history/:collection/:objectId/:revision", async (req, reply) => {
+    const caller = await guard(req, reply, false);
+    if (!caller) return;
+    const { collection, objectId, revision } = req.params as { collection: string; objectId: string; revision: string };
+    const rev = Number(revision);
+    if (collection !== LIBRARY_COLLECTION || !OBJECT_ID.test(objectId) || !isPositiveInt(rev)) return reply.code(404).send({ error: "not-found" });
+    const { rows } = await db.query<{ key_id: number; blob: Buffer }>(
+      "select key_id, blob from sync_object_history where user_id = $1 and collection = $2 and object_id = $3 and revision = $4",
+      [caller.userId, collection, objectId, rev],
+    );
+    if (!rows[0]) return reply.code(404).send({ error: "not-found" });
+    return { collection, objectId, revision: rev, keyId: rows[0].key_id, blob: Buffer.from(rows[0].blob).toString("base64url") };
+  });
+
   // Delete everything synced: objects, keyrings, wraps and devices. The
   // account itself stays. Works on any plan, from a device that holds the
   // keys, or (someone locked out who wants to start over) right after a
@@ -454,6 +499,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     await db.transaction(async (tx) => {
       await tx.query("delete from org_fleet_computers where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_objects where user_id = $1", [caller.userId]);
+      await tx.query("delete from sync_object_history where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_keyrings where user_id = $1", [caller.userId]);
       await tx.query("update api_tokens set device_id = null, sync_proven_key_id = null where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_devices where user_id = $1", [caller.userId]);
@@ -461,6 +507,16 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     });
     return reply.code(204).send();
   });
+}
+
+/** Bytes the account's shared files and their kept versions hold; they count toward the same storage. */
+export async function shareBytes(db: Db, userId: string): Promise<number> {
+  const { rows } = await db.query<{ bytes: string }>(
+    `select coalesce((select sum(octet_length(blob)) from library_shares where user_id = $1), 0)
+          + coalesce((select sum(octet_length(v.blob)) from library_share_versions v join library_shares s on s.id = v.share_id where s.user_id = $1), 0) as bytes`,
+    [userId],
+  );
+  return Number(rows[0]?.bytes ?? 0);
 }
 
 async function insertWrap(db: Db, userId: string, keyId: number, deviceId: string, wrap: Buffer): Promise<"ok" | "exists" | "unknown-device"> {

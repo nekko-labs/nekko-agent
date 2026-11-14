@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_connection.xml. -->
+<resources>
+    <string name="conn_tailscale">Tailscale</string>
+    <string name="conn_word_tailscale_off">Tailscale オフ</string>
+    <string name="conn_word_offline">オフライン</string>
+    <string name="conn_word_no_answer">応答なし</string>
+    <string name="conn_word_not_found">見つかりません</string>
+    <string name="conn_word_refused">拒否</string>
+    <string name="conn_word_key_changed">キー変更</string>
+    <string name="conn_word_stopped">停止</string>
+    <string name="conn_word_quit">終了</string>
+    <string name="conn_word_update">更新</string>
+    <string name="conn_state_online">オンライン</string>
+    <string name="conn_state_connecting">接続中</string>
+    <string name="conn_state_off">オフ</string>
+    <string name="conn_show_fix">解決方法を表示します</string>
+    <string name="conn_hide_fix">解決方法を隠します</string>
+    <string name="conn_retry">再試行</string>
+    <string name="conn_try_again">もう一度試す</string>
+    <string name="conn_open_tailscale">Tailscale を開く</string>
+    <string name="conn_details">詳細</string>
+    <string name="conn_names_and">%1$s と %2$s</string>
+    <string name="conn_names_list">%1$s、%2$s</string>
+    <string name="conn_tailscale_line">%1$s に届くよう Tailscale をオンにしてください。</string>
+    <string name="conn_waits_one">送信待ちのプロンプトが 1 件あります。</string>
+    <string name="conn_waits_other">送信待ちのプロンプトが %1$d 件あります。</string>
+    <string name="conn_stopped_line">ここでリモートアクセスを停止しました。</string>
+    <string name="conn_stopped_line_at">%1$s にここでリモートアクセスを停止しました。</string>
+    <string name="conn_stopped_fix">%1$s でオンにしてから、もう一度試してください。</string>
+    <string name="conn_quit_line">%1$s の Nekko Agent を終了しました。</string>
+    <string name="conn_quit_line_at">%2$s に %1$s の Nekko Agent を終了しました。</string>
+    <string name="conn_quit_fix">そちらで開いてください。この電話は試行を続けます。</string>
+    <string name="conn_key_line">ペアリングキーが %1$s と一致しなくなりました。</string>
+    <string name="conn_key_fix">新しいコードでもう一度ペアリングしてください。</string>
+    <string name="conn_update_computer_line">%1$s の Nekko Agent は古いバージョンです。</string>
+    <string name="conn_update_computer_fix">そちらで更新すると、ここのすべてを使えます。</string>
+    <string name="conn_update_phone_line">このアプリは %1$s の Nekko Agent より古いバージョンです。</string>
+    <string name="conn_update_phone_fix">Google Play から更新してください。</string>
+    <string name="conn_not_found_line">%1$s が見つかりません。</string>
+    <string name="conn_not_found_relay">リレーが見つかりません。</string>
+    <string name="conn_not_found_fix">%1$s で電話の接続方法を変更してから、もう一度ペアリングしてください。</string>
+    <string name="conn_no_answer_tailnet_line">%1$s がテールネットで応答しません。</string>
+    <string name="conn_no_answer_tailnet_fix">電源が入っていて、同じテールネットにサインインしていますか？</string>
+    <string name="conn_no_answer_line">今は %1$s に接続できません。</string>
+    <string name="conn_no_answer_fix">この電話は試行を続けます。</string>
+    <string name="conn_offline_line">%1$s はオフラインです。</string>
+    <string name="conn_offline_fix">リモートアクセスをオンにして、そちらで Nekko Agent を開いてください。</string>
+    <string name="conn_update_required_line">%1$s はこのアプリを受け付けなくなりました。</string>
+    <string name="conn_update_required_fix">Google Play から更新してください。</string>
+    <string name="conn_removed_line">%1$s がこの電話を削除しました。</string>
+    <string name="conn_unknown_line">%1$s はこの電話を認識しなくなりました。</string>
+</resources>

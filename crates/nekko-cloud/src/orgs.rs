@@ -56,6 +56,9 @@ pub struct HostInfo {
     pub name: Arc<dyn Fn() -> String + Send + Sync>,
     /// The local models this computer can serve right now (no cloud providers).
     pub models: Arc<dyn Fn() -> ModelFuture + Send + Sync>,
+    /// How this account's other devices reach its relay agent, while remote
+    /// access is on (decision 0102). Sealed under the account keyring.
+    pub connect: Option<Arc<dyn Fn() -> Option<crate::ConnectInfo> + Send + Sync>>,
 }
 
 /// How sharing with one org is going, for `fleet:status`.
@@ -717,6 +720,7 @@ impl Cloud {
             app_version,
             models,
             host_key: b64_encode(&key.public()),
+            connect: self.connect_facts(),
         })
     }
 
@@ -781,7 +785,9 @@ impl Cloud {
             }
             self.set_share(org_id, "publishing", None, false);
             let revision = share.revision + 1;
-            let plain = facts.plaintext(&now_rfc3339());
+            let connect =
+                facts.connect.as_ref().and_then(|_| self.seal_connect_for(org_id, &facts.device_id, revision));
+            let plain = facts.plaintext(&now_rfc3339(), connect.as_ref().map(|(k, b)| (*k, b.as_str())));
             let blob = seal_descriptor(&ring, org_id, key_id, &facts.device_id, revision, &plain)
                 .map_err(|err| err.to_string())?;
             let body = json!({ "orgKeyId": key_id, "revision": revision, "descriptor": blob });
@@ -985,6 +991,7 @@ impl Cloud {
         let me = self.account_id().unwrap_or_default();
         let trusted = self.account_record();
         let mut computers = Vec::new();
+        let mut targets = Vec::new();
         let mut rejected = 0;
         for row in &rows {
             let seen_key = format!("{org_id}/{}", row["deviceId"].as_str().unwrap_or(""));
@@ -1016,12 +1023,27 @@ impl Cloud {
                 "you": row["you"].as_bool().unwrap_or(false),
                 "verified": open.verified,
             });
+            let you = row["you"].as_bool().unwrap_or(false);
+            let reach = self.reach(org_id, d, open.revision, you, open.verified, &me);
+            c["reach"] = json!(reach.word());
+            if let crate::fleet_link::Reach::Ready(t) = reach {
+                targets.push(t);
+            }
             if d.account_id != me
                 && let Some(email) = emails.get(&d.account_id)
             {
                 c["ownerEmail"] = json!(email);
             }
             computers.push(c);
+        }
+        {
+            // Only what this list says is reachable now: a computer gone from it is gone here too.
+            let mut live = lock(&self.live);
+            let prefix = crate::fleet_link::target_key(org_id, "");
+            live.fleet_targets.retain(|k, _| !k.starts_with(&prefix));
+            for t in targets {
+                live.fleet_targets.insert(crate::fleet_link::target_key(org_id, &t.device_id), t);
+            }
         }
         Ok(
             json!({ "orgId": org_id, "orgKeyId": org_key_id, "hasKey": true, "computers": computers, "rejected": rejected }),
@@ -1054,11 +1076,13 @@ mod tests {
                 size_bytes: Some(7),
             }],
             host_key: HOST.into(),
+            connect: None,
         }
     }
 
     fn row(ring: &Keyring, key_id: u32, revision: u64, user: &str, f: &HostFacts) -> Value {
-        let blob = seal_descriptor(ring, ORG, key_id, DEV, revision, &f.plaintext("2026-11-11T10:00:00Z")).unwrap();
+        let blob =
+            seal_descriptor(ring, ORG, key_id, DEV, revision, &f.plaintext("2026-11-11T10:00:00Z", None)).unwrap();
         json!({ "deviceId": DEV, "userId": user, "orgKeyId": key_id, "revision": revision, "descriptor": blob,
                 "seenAt": "2026-11-11T10:00:00Z", "online": true, "you": false })
     }

@@ -29,10 +29,9 @@ Promise.all([import('react'), import('react-dom/client'), import('../src/rendere
   let select: (id: string | null) => void;
   function Fixture() {
     const [selected, setSelected] = React.useState<string | null>(null);
-    const [orientation, setOrientation] = React.useState<'vertical' | 'horizontal'>('vertical');
     select = setSelected;
     return <main style={{ height: '100vh', display: 'flex', padding: 12, background: 'var(--paper)', color: 'var(--ink)' }}>
-      <AgentSidebar selectedId={selected} onOpenChat={setSelected} onOpenTerminal={setSelected} onCreate={async () => {}} orientation={orientation} onOrientation={setOrientation} />
+      <AgentSidebar selectedId={selected} onOpenChat={setSelected} onOpenTerminal={setSelected} onCreate={async () => {}} />
       <div style={{ padding: 24 }}><h1>Agent groups</h1><p>65 agents per project. Completed chats stay folded until opened.</p></div>
     </main>;
   }

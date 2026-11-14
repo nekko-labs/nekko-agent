@@ -643,7 +643,16 @@ pub fn decide(
         let command = input.get("command").and_then(serde_json::Value::as_str).unwrap_or_default();
         // Claude Code's Bash tool runs bash (Git Bash on Windows).
         let dialect = if tool == "PowerShell" { nekko_tools::Dialect::PowerShell } else { nekko_tools::Dialect::Posix };
-        let d = nekko_tools::classify_command_in(command, rules, dialect);
+        // Claude Code's shell keeps its own working directory, which Nekko
+        // cannot see: only absolute paths count as inside a delete root.
+        let folders: Vec<String> = roots.iter().map(|r| r.to_string_lossy().into_owned()).collect();
+        let app = nekko_js::home_dir().map(|h| h.join(".nekko-agent").to_string_lossy().into_owned());
+        let scope = nekko_tools::DeleteScope {
+            cwd: None,
+            roots: nekko_tools::delete_roots(folders.iter().map(String::as_str), app.as_deref()),
+            home: None,
+        };
+        let d = nekko_tools::classify_command_scoped(command, rules, dialect, &scope);
         let why = d.matches.iter().find(|m| m.rule_id != nekko_tools::NOT_READ_ONLY).map(|m| m.label.clone());
         if d.action == Action::Deny {
             return Decision::Deny(format!("Blocked by a guardrail rule ({}).", why.unwrap_or_else(|| "deny".into())));
@@ -769,6 +778,35 @@ mod tests {
     }
 
     #[test]
+    fn deletes_that_could_wipe_a_drive_are_refused_and_worktree_deletes_run() {
+        for mode in ["ask", "guardrails", "yolo", "plan"] {
+            for command in ["rm -rf /", "rm -rf ~", "rm -rf \"$HOME\"", "rm -rf"] {
+                let x = d(mode, "Bash", serde_json::json!({ "command": command }));
+                assert!(matches!(x, Decision::Deny(_)), "{mode} {command:?}: {x:?}");
+            }
+        }
+        // A chat folder in a Nekko chat worktree: an absolute path inside it runs.
+        let dir = std::env::temp_dir().join(format!("nekkod-harness-delete-{}", std::process::id()));
+        let wt = dir.join("repo").join(".git").join("nekko-worktrees").join("brisk-amber-otter");
+        std::fs::create_dir_all(wt.join("build")).unwrap();
+        std::fs::write(wt.join(".git"), "gitdir: x\n").unwrap();
+        let wt = PathBuf::from(nekko_tools::real_location(&wt.to_string_lossy()));
+        let rules = nekko_tools::default_guardrails();
+        let bash = |mode: &str, command: String| {
+            decide(mode, "Bash", &serde_json::json!({ "command": command }), &rules, std::slice::from_ref(&wt))
+        };
+        let inside = format!("rm -rf {}", wt.join("build").to_string_lossy());
+        assert_eq!(bash("guardrails", inside.clone()), Decision::Allow);
+        assert_eq!(bash("yolo", inside.clone()), Decision::Allow);
+        assert!(asks(&bash("ask", inside)));
+        // Claude Code's working directory is its own, so a relative path asks.
+        assert!(asks(&bash("guardrails", "rm -rf build".into())));
+        // A plain repository folder is not a delete root.
+        assert!(asks(&d("guardrails", "Bash", serde_json::json!({ "command": format!("rm -rf {}", abs("build")) }))));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn ask_mode_asks_for_everything() {
         assert!(asks(&d("ask", "Bash", serde_json::json!({ "command": "npm test" }))));
         assert!(asks(&d("ask", "Edit", serde_json::json!({ "file_path": abs("a.rs") }))));
@@ -812,7 +850,9 @@ mod tests {
     fn yolo_asks_only_for_destructive_commands_and_outside_edits() {
         assert_eq!(d("yolo", "Bash", serde_json::json!({ "command": "git push origin main" })), Decision::Allow);
         assert_eq!(d("yolo", "WebFetch", serde_json::json!({})), Decision::Allow);
-        assert!(asks(&d("yolo", "Bash", serde_json::json!({ "command": "rm -rf /" }))));
+        assert!(asks(&d("yolo", "Bash", serde_json::json!({ "command": "rm -rf build" }))));
+        // A delete that could wipe the drive is refused, not asked about (#2780).
+        assert!(matches!(d("yolo", "Bash", serde_json::json!({ "command": "rm -rf /" })), Decision::Deny(_)));
         assert!(asks(&d("yolo", "Write", serde_json::json!({ "file_path": abs("../../etc/x") }))));
     }
 

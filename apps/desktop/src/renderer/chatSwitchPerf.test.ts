@@ -57,7 +57,7 @@ describe('guarded wall selection', () => {
     const active = { id: 'live', title: 'Live', archivedAt: undefined } as never;
     const done = { id: 'old', title: 'Old', archivedAt: 1 } as never;
     page.useStore.setState({ sessions: [active, done] });
-    page.render({ commandWall: { agentPanel: { show: true, orientation: 'vertical' } } as never });
+    page.render({ commandWall: { agentPanel: { show: true } } as never });
     const onOpenChat = stubProps.sidebar!.onOpenChat as (id: string) => void;
     const created = vi.fn();
     const nekko = (globalThis as { window: { nekko: unknown } }).window.nekko;

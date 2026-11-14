@@ -292,13 +292,11 @@ fun Composer(
             } else if (sendsLater != null) {
                 Text(sendsLater, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(horizontal = 4.dp).testTag("composer.sendsLater"))
             }
-            // One box the width of the screen: the message on top, + and Send inside it below.
+            // The message on top, + and Send below it, with no card around them (#2417, the iPhone's #2416):
+            // the bar's top line already sets it apart from the transcript.
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(p.surface)
-                    .border(1.dp, p.line, RoundedCornerShape(16.dp))
                     .padding(6.dp)
                     .testTag("composer.card"),
             ) {

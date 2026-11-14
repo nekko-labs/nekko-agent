@@ -315,10 +315,6 @@ function FindingRow({ finding, on, onSend }: { finding: PrivacyFinding; on: bool
 
 function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
   return (
-    <button role="switch" aria-checked={on} aria-label={label} title={label} onClick={onToggle}
-      className="relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors"
-      style={{ background: on ? 'var(--accent)' : 'color-mix(in srgb, var(--ink-faint) 40%, transparent)' }}>
-      <span className="absolute h-3 w-3 rounded-full bg-white shadow-(--shadow-sm) transition-transform" style={{ transform: on ? 'translateX(14px)' : 'translateX(2px)' }} />
-    </button>
+    <button type="button" role="switch" aria-checked={on} aria-label={label} title={label} onClick={onToggle} className="quiet-switch" />
   );
 }

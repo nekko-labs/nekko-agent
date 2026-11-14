@@ -15,6 +15,7 @@ on:
       - apps/desktop/scripts/after-pack.cjs
       - apps/desktop/scripts/sign-mac.cjs
       - apps/desktop/scripts/sign-mac-dry-run.cjs
+      - apps/desktop/scripts/check-provisioning-profile.cjs
       - apps/desktop/scripts/stage-daemon.mjs
       - scripts/check-mac-entitlements.sh
       - crates/nekkod/vm/**
@@ -105,8 +106,9 @@ jobs:
         run: npm run dist -w @nekko-agent/desktop -- --publish never
 
       # The unsigned path (after-pack.cjs re-signs nekko-vm with its own
-      # entitlements): only nekko-vm may carry the virtualization entitlement.
-      - name: Check the virtualization entitlement (unsigned build)
+      # entitlements): only nekko-vm may carry the virtualization entitlement,
+      # and nothing may carry a restricted one, since there is no profile.
+      - name: Check the entitlements (unsigned build)
         if: runner.os == 'macOS'
         shell: bash
         run: scripts/check-mac-entitlements.sh "$(find apps/desktop/release -maxdepth 2 -name '*.app' -print -quit)"

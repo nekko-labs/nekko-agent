@@ -41,7 +41,7 @@ export function saveCollapsedKinds(kinds: ReadonlySet<ArtifactKind>): void {
 
 /**
  * The kind of file each setup answer ("What do you mostly do?") makes most
- * often, which Library shows first. Just exploring keeps the usual order.
+ * often, which Library shows right after Designs. Just exploring keeps the usual order.
  */
 export const LEAD_KIND: Partial<Record<WorkProfile, ArtifactKind>> = {
   developer: 'web',
@@ -51,11 +51,14 @@ export const LEAD_KIND: Partial<Record<WorkProfile, ArtifactKind>> = {
   business: 'office',
 };
 
-/** Groups in their usual order, with the setup answer's kind moved to the front when it has files. */
+/** The kind Library always shows first, whatever the setup answer. */
+export const TOP_KIND: ArtifactKind = 'design';
+
+/** Groups in their usual order: Designs first, then the setup answer's kind when it has files. */
 export function orderForProfile<G extends { kind: { id: ArtifactKind } }>(groups: readonly G[], profile?: WorkProfile | null): G[] {
   const lead = profile ? LEAD_KIND[profile] : undefined;
-  const first = groups.find((g) => g.kind.id === lead);
-  return first ? [first, ...groups.filter((g) => g !== first)] : [...groups];
+  const firsts = [TOP_KIND, lead].map((id) => groups.find((g) => g.kind.id === id)).filter((g): g is G => !!g);
+  return [...new Set([...firsts, ...groups])];
 }
 
 /** How many of a kind's newest files the previews show under All before "See all". */

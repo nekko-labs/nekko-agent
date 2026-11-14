@@ -82,14 +82,24 @@ fn job(cpus: u8, memory_mb: u32) -> Usage {
 }
 
 #[test]
-fn no_suggestion_before_three_jobs_at_this_size() {
+fn no_suggestion_before_two_jobs_at_this_size() {
     let s = settings(6, 10240);
-    // Two at this size, and one at another size that does not count.
-    let jobs = [job(6, 10240), job(6, 10240), job(4, 10240)];
+    // One at this size, and two at another size that do not count.
+    let jobs = [job(6, 10240), job(4, 10240), job(4, 8192)];
     let out = suggest_size(&jobs, &s, &mac());
     assert_eq!(out.jobs, SUGGEST_MIN_JOBS - 1);
     assert_eq!((out.cpus, out.memory_mb), (6, 10240));
     assert!(out.reasons.is_empty());
+}
+
+#[test]
+fn two_jobs_that_swapped_are_enough_for_more_memory() {
+    // This Mac's Native iOS jobs on 2026-11-12: 6 vCPUs, 10 GB, peaks near 9 GB and gigabytes swapped.
+    let s = settings(6, 10240);
+    let swapped = Usage { mem_peak_mb: 9080, compressed_peak_mb: 4521, swap_out_mb: 16793, ..job(6, 10240) };
+    let out = suggest_size(&[swapped; 2], &s, &mac());
+    assert_eq!(out.jobs, SUGGEST_MIN_JOBS);
+    assert!(out.memory_mb > 10240, "{out:?}");
 }
 
 #[test]

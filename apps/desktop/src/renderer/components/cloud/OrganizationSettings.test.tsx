@@ -5,7 +5,8 @@ import type { CloudStatus, FleetComputerView, FleetList, OrgDetail, OrgSummary }
 import { OrganizationView, type OrgViewProps } from './OrganizationSettings.js';
 import { Toggle } from '../primitives/Toggle.js';
 import {
-  canManage, lastSeen, loadFleet, loadOrgs, orgErrorText, orgGate, setSharing, sortComputers, splitModels, type OrgApi,
+  canManage, canOpen, lastSeen, loadFleet, loadOrgs, openOnComputer, orgErrorText, orgGate, reachNote, setSharing, sortComputers, splitModels,
+  type FleetOpenApi, type OrgApi,
 } from './orgModel.js';
 
 const NOW = Date.parse('2026-11-11T12:00:00Z');
@@ -31,7 +32,7 @@ function props(over: Partial<OrgViewProps> = {}): OrgViewProps {
   const detail = over.detail === undefined ? org() : over.detail;
   return {
     gate: 'ready', loading: false, orgs: detail ? [detail as OrgSummary] : [], invites: [], detail, fleet: null, error: '', fleetError: '', busy: '', now: NOW,
-    onSelect: noop, onCreate: noop, onAccept: noop, onInvite: noop, onRevokeInvite: noop, onRemoveMember: noop, onSetSharing: noop, onGoToSync: noop, onSeePlans: noop,
+    onSelect: noop, onCreate: noop, onAccept: noop, onInvite: noop, onRevokeInvite: noop, onRemoveMember: noop, onSetSharing: noop, onGoToSync: noop,
     ...over,
   };
 }
@@ -67,7 +68,9 @@ describe('Organization section gating', () => {
     expect(html(props({ gate: 'needs-setup', detail: null }))).toContain('Turn on sync first');
     const plan = html(props({ gate: 'needs-plan', detail: null }));
     expect(plan).toContain('Pro and Team');
-    expect(plan).toContain('See plans');
+    // Nothing to buy until plans and billing are switched on (#2724).
+    expect(plan).not.toContain('See plans');
+    expect(html(props({ gate: 'needs-plan', detail: null, onSeePlans: noop }))).toContain('See plans');
   });
 
   it('derives the gate from the cloud status', () => {
@@ -143,11 +146,11 @@ describe('An organization', () => {
     expect(canManage('member')).toBe(false);
   });
 
-  it('shows the sharing switch off by default, with its one-line explanation and no Connect or Run', () => {
+  it('shows the sharing switch off by default, with its one-line explanation and no Connect or Run without a ready computer', () => {
     const out = html(props());
     expect(out).toContain('Share this computer with Nekko Labs');
     expect(out).toMatch(/role="switch"[^>]*aria-checked="false"|aria-checked="false"[^>]*role="switch"/);
-    expect(out).toContain('Lists this computer and its local models for members of Nekko Labs. Your chats are not uploaded, and nobody can run anything on it yet.');
+    expect(out).toContain('Lists this computer and its local models for members of Nekko Labs. With Remote access on, your own other computers can open chats on it. Your chats are not uploaded.');
     expect(out).not.toMatch(/>(Connect|Run)</);
   });
 
@@ -280,5 +283,71 @@ describe('Loading and errors', () => {
   it('never uses an em dash in its copy', () => {
     const out = html(props({ fleet: fleet([computer()]) })) + html(props({ gate: 'locked', detail: null })) + html(props({ detail: null }));
     expect(out).not.toContain(String.fromCharCode(0x2014));
+  });
+});
+
+describe('Opening a chat on a listed computer (decision 0102)', () => {
+  const rows = (cs: FleetComputerView[], over: Partial<OrgViewProps> = {}) => html(props({ fleet: fleet(cs), onOpenChat: async () => {}, ...over }));
+
+  it('offers Open chat only on your own online computers that are ready', () => {
+    const out = rows([computer({ reach: 'ready' })]);
+    expect(out).toContain('data-testid="org-open-chat"');
+    expect(out).toContain('aria-label="Open a chat on Philip-PC"');
+    expect(out).toContain('Open chat');
+    for (const c of [
+      computer({ reach: 'ready', online: false }),
+      computer({ reach: 'you', you: true }),
+      computer({ reach: 'other-account', ownerEmail: 'sam@example.com' }),
+      computer({ reach: 'no-remote' }),
+      computer({ reach: 'unverified' }),
+      computer({ reach: 'locked' }),
+      computer({ reach: undefined }),
+    ]) {
+      expect(rows([c]), c.reach).not.toContain('org-open-chat');
+    }
+    // No handler wired (an older window): nothing to press.
+    expect(html(props({ fleet: fleet([computer({ reach: 'ready' })]) }))).not.toContain('org-open-chat');
+  });
+
+  it('says in one line why an online computer cannot be opened, and nothing otherwise', () => {
+    expect(reachNote(computer({ reach: 'other-account', ownerEmail: 'sam@example.com' }))).toBe('Shared by sam@example.com. Only they can open chats on it.');
+    expect(reachNote(computer({ reach: 'no-remote' }))).toBe('Turn on Remote access on Philip-PC to open chats on it from here.');
+    expect(reachNote(computer({ reach: 'unverified' }))).toContain('Not verified');
+    expect(reachNote(computer({ reach: 'locked' }))).toContain('Open Sync');
+    // Offline already says so; this computer, a ready one and an older engine need nothing.
+    expect(reachNote(computer({ reach: 'no-remote', online: false }))).toBeNull();
+    expect(reachNote(computer({ reach: 'you', you: true }))).toBeNull();
+    expect(reachNote(computer({ reach: 'ready' }))).toBeNull();
+    expect(reachNote(computer({}))).toBeNull();
+    const out = rows([computer({ reach: 'no-remote' })]);
+    expect(out.match(/data-testid="org-reach-note"/g)).toHaveLength(1);
+    expect(canOpen(computer({ reach: 'ready' }))).toBe(true);
+    expect(canOpen(computer({ reach: 'ready', you: true }))).toBe(false);
+  });
+
+  it('connects with no code, then starts the chat on that computer', async () => {
+    const calls: string[] = [];
+    const api: FleetOpenApi = {
+      connectFleetComputer: vi.fn(async (orgId: string, deviceId: string) => {
+        calls.push(`connect ${orgId} ${deviceId}`);
+        return { id: 'f7e1f0a9c2b3', name: 'Philip-PC', relayUrl: 'ws://gomi:4400', alts: [], pairedAt: 1, color: 0, fleet: orgId, state: 'online' as const, route: null, read: true, change: true };
+      }),
+      createSessionOn: vi.fn(async (computerId: string) => {
+        calls.push(`session ${computerId}`);
+        return { id: 'computer:f7e1f0a9c2b3:s1' } as Awaited<ReturnType<FleetOpenApi['createSessionOn']>>;
+      }),
+    };
+    const s = await openOnComputer(api, 'org1', 'dev-1');
+    expect(s.id).toBe('computer:f7e1f0a9c2b3:s1');
+    expect(calls).toEqual(['connect org1 dev-1', 'session f7e1f0a9c2b3']);
+    // A refusal stops before any chat is made, and carries its sentence.
+    const refused: FleetOpenApi = { ...api, connectFleetComputer: vi.fn(async () => { throw new Error('Philip-PC stopped sharing with this organization.'); }) };
+    calls.length = 0;
+    await expect(openOnComputer(refused, 'org1', 'dev-1')).rejects.toThrow('stopped sharing');
+    expect(calls).toEqual([]);
+  });
+
+  it('says on the share switch that your own computers can open chats here', () => {
+    expect(html(props())).toContain('your own other computers can open chats on it');
   });
 });

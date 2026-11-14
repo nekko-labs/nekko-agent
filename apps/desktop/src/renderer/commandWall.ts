@@ -102,7 +102,7 @@ export interface CommandWallState {
   watermark: number;
   composer: ComposerDock;
   tabs?: 'top' | 'left' | 'hidden';
-  /** The panel of agent cards beside (or above) the wall. */
+  /** The panel of agent cards beside the wall. */
   agentPanel?: AgentPanelPrefs;
   /** Snap to grid: windows stay evenly spaced, and dividers snap back to even spacing. */
   snap?: boolean;
@@ -116,13 +116,13 @@ export interface CommandWallState {
 
 export interface AgentPanelPrefs {
   show: boolean;
-  orientation: 'vertical' | 'horizontal';
 }
-export const DEFAULT_AGENT_PANEL: AgentPanelPrefs = { show: true, orientation: 'vertical' };
+export const DEFAULT_AGENT_PANEL: AgentPanelPrefs = { show: true };
 
 export function readAgentPanel(raw: unknown): AgentPanelPrefs {
   const p = raw && typeof raw === 'object' ? (raw as Partial<AgentPanelPrefs>) : {};
-  return { show: p.show !== false, orientation: p.orientation === 'horizontal' ? 'horizontal' : 'vertical' };
+  // A saved `orientation` from the retired row layout is dropped: the panel is always a column.
+  return { show: p.show !== false };
 }
 
 /** Below this width the wall stacks its windows one above the other: a phone, or a very narrow window. */

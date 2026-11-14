@@ -78,15 +78,19 @@ pub struct JobTool {
 
 /// The tools every image gets, and the runner card offers to add to an image without them.
 /// `ios-native.yml` runs `node` before `actions/setup-node` (to pick the appearances) and
-/// reports a batch with `gh` and `jq`, as GitHub's hosted Macs allow (#1845).
-pub const JOB_TOOLS: [JobTool; 3] = [
+/// reports a batch with `gh` and `jq`, as GitHub's hosted Macs allow (#1845). `actions/cache`
+/// compresses with zstd only when it finds `zstd` and `gtar`, as on hosted Macs; without them it
+/// falls back to `/usr/bin/tar` and gzip, and its caches are bigger and slower to save (#2701).
+pub const JOB_TOOLS: [JobTool; 5] = [
     JobTool { command: "node", formula: "node", system_since: None },
     JobTool { command: "gh", formula: "gh", system_since: None },
     JobTool { command: "jq", formula: "jq", system_since: Some(15) },
+    JobTool { command: "zstd", formula: "zstd", system_since: None },
+    JobTool { command: "gtar", formula: "gnu-tar", system_since: None },
 ];
 /// Where a job's PATH finds a tool, relative to a guest volume's root.
 const TOOL_DIRS: [&str; 3] = ["opt/homebrew/bin", "usr/local/bin", "usr/bin"];
-const TOOLS_LABEL: &str = "Installing node, gh and jq";
+const TOOLS_LABEL: &str = "Installing node, gh, jq, zstd and gtar";
 /// What the boot script logs when the runner hands back.
 const RUNNER_RAN: &str = "runner exited with";
 const UPDATE_MACOS: &str = "Update this Mac to macOS 27 to set it up here.";
@@ -411,9 +415,7 @@ fn xcode_steps(kind: Kind) -> Vec<Step> {
             false,
             minutes(20),
         ),
-        // `actions/cache` compresses with zstd only when it finds `gtar` and `zstd`, as on hosted Macs.
-        step("Installing zstd and GNU tar", "/opt/homebrew/bin/brew install zstd gnu-tar", false, minutes(10)),
-        step(TOOLS_LABEL, &format!("/opt/homebrew/bin/brew install {}", tool_formulas()), false, minutes(15)),
+        step(TOOLS_LABEL, &format!("/opt/homebrew/bin/brew install {}", tool_formulas()), false, minutes(20)),
         step("Removing the Homebrew allowance", "rm -f /etc/sudoers.d/build", true, minutes(1)),
     ]);
     steps

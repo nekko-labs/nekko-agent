@@ -10,6 +10,10 @@
 // then notarizes. Ad-hoc signing here would just be overwritten, and `--deep`
 // is the wrong tool besides, so skip it.
 //
+// The unsigned path signs with no entitlements (nekko-vm aside), so the main
+// executable's restricted ones and the provisioning profile never apply: a
+// local build without CSC_LINK still launches, with no Touch ID passkeys.
+//
 // No-op on Windows/Linux.
 const { execFileSync } = require('node:child_process');
 const { existsSync } = require('node:fs');

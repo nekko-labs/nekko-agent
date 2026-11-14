@@ -316,6 +316,21 @@ fn folder_path(folders: &[Value], id: &str) -> Option<String> {
 }
 
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
+    let board = route_inner(ctx, channel, args).await?;
+    // Every design call answers with the board; the project's index of it
+    // (`nekko-designs/README.md`) follows, for agents that read files only.
+    if channel.starts_with("design:") && board.get("pages").is_some() {
+        let id = args.first().map(nekko_js::display).unwrap_or_default();
+        if let Some(folder) = folder_path(&folders(ctx).await, &id) {
+            let shown = board.clone();
+            // The index is a courtesy: a folder that cannot be written never fails the call.
+            let _ = blocking(move || design::write_index(&folder, &shown)).await;
+        }
+    }
+    Ok(board)
+}
+
+async fn route_inner(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     let ws = &ctx.workspace;
     let args = args.to_vec();
     match channel {
@@ -459,6 +474,17 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 .await?
         }
         "design:generate" => generate_design(ctx, ws.data_dir.clone(), args).await,
+        // The board follows the project's designs folder; a folder that cannot
+        // be read still opens the board as it was saved.
+        "design:get" => {
+            let dir = ws.data_dir.clone();
+            let folder = folder_path(&folders(ctx).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
+            blocking(move || {
+                design::follow_folder(&dir, arg(&args, 0), folder.as_deref())
+                    .unwrap_or_else(|_| design::get(&dir, arg(&args, 0)))
+            })
+            .await
+        }
         _ => data_route(ws.data_dir.clone(), channel, args).await,
     }
 }
@@ -472,7 +498,6 @@ async fn data_route(dir: PathBuf, channel: &str, args: Vec<Value>) -> Result<Val
         "comments:list" => Ok(comments::list(&dir, arg(&args, 0))),
         "comment:add" => comments::add(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2), arg(&args, 3)),
         "comment:resolve" => comments::resolve(&dir, arg(&args, 0), arg(&args, 1)),
-        "design:get" => Ok(design::get(&dir, arg(&args, 0))),
         "design:updatePage" => {
             design::update_page(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2).unwrap_or(&Value::Null))
         }

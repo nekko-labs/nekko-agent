@@ -110,8 +110,8 @@ export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
 export interface CommandWallSetting {
   /** Agent tab placement, independent of window layout. */
   tabs?: 'top' | 'left' | 'hidden';
-  /** The Agents tab's panel of agent cards: shown or closed, a column or a row. */
-  agentPanel?: { show: boolean; orientation: 'vertical' | 'horizontal' };
+  /** The Agents tab's panel of agent cards: shown or closed. */
+  agentPanel?: { show: boolean };
   layout?: WallLayout;
   dock?: MonitorsDock;
   hero?: string | null;
@@ -205,6 +205,8 @@ export interface AppNotice {
 }
 
 export interface AppSettings {
+  /** Fusion's ranking policy; permission remains per-chat. */
+  fusion?: import('./fusion.js').FusionSettings;
   /**
    * Default off. The user has Anthropic's own permission to use the
    * approval-gated features (scheduled runs, Nekko tools, the context note,

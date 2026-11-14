@@ -8,11 +8,10 @@
 //!
 //! - `auto`: one step lighter on the chat's provider (Opus to Sonnet), or a
 //!   local model already loaded in memory when the chat may route to local
-//!   models anyway (Fusion or the Nekko router).
+//!   models anyway (Fusion only).
 //! - `auto-same-provider`: one step lighter, never leaving the chat's provider.
 //! - `auto-local`: a local chat model on this computer (loaded first), else the
-//!   same-provider pick. Choosing it is the opt-in that lets a cloud chat
-//!   delegate to a local model; a cloud-only chat still cannot.
+//!   same-provider pick. It never grants provider switching permission.
 //! - `inherit`: the chat's own model, as before.
 //!
 //! An auto pick never names a stronger model than the parent's, and when no
@@ -22,7 +21,7 @@
 //! Claude Code chats run their own sub-agents; [`claude_code_env`] gives them
 //! the same choice through `CLAUDE_CODE_SUBAGENT_MODEL`.
 
-use nekko_messaging::auto::{is_chat_model, tier};
+use nekko_messaging::auto::{is_chat_model, tier_with_overrides};
 use serde_json::{Value, json};
 
 pub use nekko_turn::plan::subagent_preference as preference;
@@ -31,19 +30,12 @@ pub use nekko_turn::plan::subagent_preference as preference;
 /// that a small variant of a top family (`gpt-5-mini`) is light, and Fable
 /// is above Opus.
 fn model_tier(m: &Value) -> i32 {
-    let id = id_of(m).unwrap_or_default().to_lowercase();
-    if ["mini", "nano", "flash", "lite", "haiku", "small"].iter().any(|w| id.contains(w)) {
-        2
-    } else if id.contains("fable") {
-        6
-    } else {
-        tier(m)
-    }
+    tier_with_overrides(m, None)
 }
 
 /// The parent's model is the top tier: worth a lighter child.
 pub fn is_top_tier(model_id: &str) -> bool {
-    model_tier(&json!({ "id": model_id })) >= 5
+    model_tier(&json!({ "id": model_id })) >= 4
 }
 
 /// Shared leading plus trailing characters, so `claude-opus-5-5` is closest
@@ -81,7 +73,13 @@ pub fn lighter_model(parent_id: &str, models: &[Value]) -> Option<String> {
     for m in models {
         let Some(id) = id_of(m) else { continue };
         let t = model_tier(m);
-        if id == parent_id || !is_chat_model(m) || is_top_tier(id) || t >= parent_tier || t < 2 {
+        if id == parent_id
+            || !is_chat_model(m)
+            || m.pointer("/availability/status").and_then(Value::as_str).is_some_and(|s| s != "ready")
+            || is_top_tier(id)
+            || t >= parent_tier
+            || t < 2
+        {
             continue;
         }
         let key = (likeness(parent_id, id), t, version(id));
@@ -92,25 +90,46 @@ pub fn lighter_model(parent_id: &str, models: &[Value]) -> Option<String> {
     best.map(|(_, id)| id.to_string())
 }
 
-/// A local chat model: loaded ones first, then the strongest, in list order.
-/// `loaded_only` skips models that would have to be loaded first.
-pub fn local_model(models: &[Value], loaded_only: bool) -> Option<String> {
-    let mut best: Option<(bool, i32, &str)> = None;
-    for m in models {
-        let Some(id) = id_of(m) else { continue };
-        if !is_chat_model(m) {
+/// Capability-targeted automatic selection, sharing suggestions with the UI.
+/// Exact tier first, then nearest smaller; loaded status breaks ties only.
+/// Unknown models do not participate in tier routing. Explicit picks bypass it.
+pub fn tiered_model(
+    parent_id: &str,
+    parent_provider: &str,
+    models: &[Value],
+    settings: &Value,
+    loaded_only: bool,
+    local: bool,
+) -> Option<String> {
+    use nekko_messaging::auto::{capability, capability_rank, tier_with_overrides};
+    let overrides = settings.pointer("/fusion/modelTiers");
+    let target = settings.pointer("/orchestration/subagentTier").and_then(Value::as_str);
+    if !local && target.is_none_or(|t| t == "smaller") && overrides.is_none() {
+        return lighter_model(parent_id, models);
+    }
+    let parent = json!({"id": parent_id, "providerId": parent_provider});
+    let parent_tier = tier_with_overrides(&parent, overrides);
+    let wanted = target.and_then(capability_rank).map(|t| t.min(parent_tier)).unwrap_or(parent_tier - 1);
+    let mut best: Option<((i32, bool, usize), String)> = None;
+    for model in models {
+        let Some(id) = id_of(model) else { continue };
+        let loaded = model.get("loaded") == Some(&Value::Bool(true));
+        if !is_chat_model(model) || (loaded_only && !loaded) {
             continue;
         }
-        let loaded = m.get("loaded") == Some(&Value::Bool(true));
-        if loaded_only && !loaded {
+        if model.pointer("/availability/status").and_then(Value::as_str).is_some_and(|s| s != "ready") {
             continue;
         }
-        let key = (loaded, model_tier(m));
-        if best.is_none_or(|(l, t, _)| key > (l, t)) {
-            best = Some((key.0, key.1, id));
+        let Some(rank) = capability(model, overrides).and_then(|t| capability_rank(&t)) else { continue };
+        if rank > wanted {
+            continue;
+        }
+        let key = (rank, loaded, likeness(parent_id, id));
+        if best.as_ref().is_none_or(|(k, _)| key > *k) {
+            best = Some((key, id.to_string()));
         }
     }
-    best.map(|(_, _, id)| id.to_string())
+    best.map(|(_, id)| id)
 }
 
 /// `CLAUDE_CODE_SUBAGENT_MODEL` for a Claude Code chat on `model`: the saved
@@ -135,6 +154,20 @@ pub fn claude_code_env(orchestration: Option<&Value>, providers: &[Value], model
         return None;
     }
     let model = model.unwrap_or_default();
+    if let Some(target) = orchestration.and_then(|o| o.get("subagentTier")).and_then(Value::as_str) {
+        let parent_tier = model_tier(&json!({"id": model}));
+        let requested = nekko_messaging::auto::capability_rank(target);
+        return requested
+            .map(|t| {
+                match t.min(parent_tier) {
+                    2 => "haiku",
+                    3 => "sonnet",
+                    _ => "opus",
+                }
+                .to_string()
+            })
+            .or_else(|| is_top_tier(model).then(|| "sonnet".to_string()));
+    }
     is_top_tier(model).then(|| "sonnet".to_string())
 }
 
@@ -166,20 +199,6 @@ mod tests {
     }
 
     #[test]
-    fn local_prefers_what_is_loaded() {
-        let list = vec![
-            json!({ "id": "qwen3-32b", "loaded": false }),
-            json!({ "id": "llama-3.1-8b", "loaded": true }),
-            json!({ "id": "nomic-embed-text", "loaded": true }),
-        ];
-        assert_eq!(local_model(&list, false).as_deref(), Some("llama-3.1-8b"));
-        assert_eq!(local_model(&list, true).as_deref(), Some("llama-3.1-8b"));
-        let none_loaded = vec![json!({ "id": "qwen3-32b" }), json!({ "id": "phi-4-mini" })];
-        assert_eq!(local_model(&none_loaded, true), None);
-        assert_eq!(local_model(&none_loaded, false).as_deref(), Some("qwen3-32b"));
-    }
-
-    #[test]
     fn claude_code_subagents_follow_the_preference() {
         let providers = vec![json!({ "id": "cc", "kind": "claude-code" }), json!({ "id": "oa", "kind": "openai" })];
         assert_eq!(claude_code_env(None, &providers, Some("opus")).as_deref(), Some("sonnet"));
@@ -192,5 +211,35 @@ mod tests {
         // A route on another provider is not something Claude Code can run.
         let elsewhere = json!({ "delegationRoute": { "providerId": "oa", "modelId": "gpt-5-mini" } });
         assert_eq!(claude_code_env(Some(&elsewhere), &providers, Some("opus")), None);
+    }
+
+    #[test]
+    fn requested_tier_prefers_medium_over_loaded_small_and_never_exceeds_parent() {
+        let models = vec![
+            json!({"id":"qwen-8b", "providerId":"local", "loaded":true}),
+            json!({"id":"qwen-32b", "providerId":"local"}),
+            json!({"id":"llama-70b", "providerId":"local"}),
+        ];
+        let settings = json!({"orchestration":{"subagentTier":"medium"}});
+        assert_eq!(tiered_model("gpt-5", "cloud", &models, &settings, false, true).as_deref(), Some("qwen-32b"));
+        assert_eq!(tiered_model("gpt-5", "cloud", &models, &settings, true, true).as_deref(), Some("qwen-8b"));
+        let stronger = json!({"orchestration":{"subagentTier":"frontier"}});
+        assert_eq!(
+            tiered_model("claude-sonnet", "cloud", &models, &stronger, false, true).as_deref(),
+            Some("qwen-32b")
+        );
+    }
+
+    #[test]
+    fn custom_classification_is_provider_scoped_and_non_chat_models_are_excluded() {
+        let models =
+            vec![json!({"id":"custom", "providerId":"local"}), json!({"id":"embedding-small", "providerId":"local"})];
+        let settings = json!({"orchestration":{"subagentTier":"medium"}, "fusion":{"modelTiers":{"local::custom":"medium", "local::embedding-small":"medium"}}});
+        assert_eq!(tiered_model("gpt-5", "cloud", &models, &settings, false, true).as_deref(), Some("custom"));
+        assert_eq!(tiered_model("gpt-5", "cloud", &models, &json!({}), false, true), None);
+        assert_eq!(
+            claude_code_env(Some(&json!({"subagentTier":"small"})), &[], Some("opus")).as_deref(),
+            Some("haiku")
+        );
     }
 }

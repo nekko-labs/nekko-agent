@@ -1,4 +1,4 @@
-import { cloudError, type CloudStatus, type FleetList, type FleetModel, type NekkoApi, type Org, type OrgDetail, type OrgList, type OrgRole, type OrgSummary } from '@nekko-agent/shared';
+import { cloudError, type CloudStatus, type FleetComputerView, type FleetList, type FleetModel, type NekkoApi, type Org, type OrgDetail, type OrgList, type OrgRole, type OrgSummary, type Session } from '@nekko-agent/shared';
 
 /** How often the Computers list is refreshed while the Organization section is on screen. */
 export const FLEET_POLL_MS = 15_000;
@@ -125,4 +125,34 @@ export async function loadFleet(api: OrgApi, org: Pick<OrgSummary, 'id' | 'hasKe
 export async function setSharing(api: OrgApi, orgId: string, on: boolean): Promise<boolean> {
   const r = await api.fleetSetSharing(orgId, on);
   return r.sharing;
+}
+
+/** Whether a listed computer can be opened from here: one of your own, online, ready (decision 0102). */
+export const canOpen = (c: Pick<FleetComputerView, 'you' | 'online' | 'reach'>) => !c.you && c.online && c.reach === 'ready';
+
+/**
+ * Why an online computer can't be opened from here, in one line, or null when
+ * it can (or when nothing needs saying: this computer, an offline one, an older engine).
+ */
+export function reachNote(c: Pick<FleetComputerView, 'you' | 'online' | 'reach' | 'name' | 'ownerEmail'>): string | null {
+  if (c.you || !c.online) return null;
+  switch (c.reach) {
+    case 'other-account': return `Shared by ${c.ownerEmail ?? 'another member'}. Only they can open chats on it.`;
+    case 'no-remote': return `Turn on Remote access on ${c.name} to open chats on it from here.`;
+    case 'unverified': return 'Not verified against your account, so it can\'t be opened from here.';
+    case 'locked': return 'This computer needs your account\'s newest key first. Open Sync.';
+    default: return null;
+  }
+}
+
+/** The slice of `window.nekko` that opens a chat on a listed computer. */
+export type FleetOpenApi = Pick<NekkoApi, 'connectFleetComputer' | 'createSessionOn'>;
+
+/**
+ * Open a chat on one of your own computers from an organization's list: connect
+ * with the account's keys (no pairing), then start a chat over there.
+ */
+export async function openOnComputer(api: FleetOpenApi, orgId: string, deviceId: string): Promise<Session> {
+  const computer = await api.connectFleetComputer(orgId, deviceId);
+  return api.createSessionOn(computer.id);
 }

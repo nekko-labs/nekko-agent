@@ -6,6 +6,7 @@ import { PlusIcon, CloseIcon, ExternalIcon, TrashIcon } from '../icons.js';
 import { Modal } from '../components/primitives/index.js';
 import { ArtifactPreview, isolatedDocument } from '../components/ArtifactPreview.js';
 import { hasAppChrome } from '../chrome.js';
+import { DESIGN_GUIDE, PageGuideButton, PageIntro, usePageIntro } from '../components/PageIntro.js';
 
 /**
  * Design board: create designs two ways, both first-class.
@@ -15,7 +16,9 @@ import { hasAppChrome } from '../chrome.js';
  * 2) DESCRIBE: write a prompt and watch a design pop up, then refine it
  *    iteratively with follow-up prompts (a Claude Design-style loop).
  * Generated concepts are mirrored into the workspace's nekko-designs/ folder
- * as real HTML files, so agents (and you) keep iterating on them as code.
+ * as real HTML files, so agents (and you) keep iterating on them as code. The
+ * board follows that folder: a design an agent saves there becomes a card, and
+ * an edit to a card's file shows on the card when the board next loads.
  * The board still holds live snapshots of the app's real pages: each is a
  * scaled read-only preview that reloads as agents edit the UI, with notes and
  * comments that feed the prompt (Add to prompt / Run now).
@@ -37,6 +40,7 @@ export function DesignBoardView() {
     : workspaces[0]?.id ?? null;
 
   const [board, setBoard] = useState<DesignBoard | null>(null);
+  const intro = usePageIntro('design');
   const [zoom, setZoom] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
   const [mode, setMode] = useState<'sketch' | 'prompt' | 'live' | null>(null);
@@ -119,18 +123,22 @@ export function DesignBoardView() {
     if (selected === pageId) setSelected(null);
   };
 
+  const guide = intro.show && <PageIntro guide={DESIGN_GUIDE} onClose={intro.close} />;
   if (!wsId) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+        {guide}
         <div className="grid h-14 w-14 place-items-center rounded-2xl text-2xl" style={{ background: 'var(--accent-soft)' }}>🎨</div>
         <h2 className="text-xl font-semibold">Design</h2>
         <p className="max-w-sm text-sm text-ink-faint">Add a project folder first (from a chat's <b>+</b> menu). Then sketch or describe a design here and watch it become a working prototype.</p>
+        <PageGuideButton name="Design" onClick={intro.open} />
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-w-0 flex-col">
+      {guide}
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
         {!hasAppChrome && <h1 className="view-title">Design</h1>}
         {workspaces.length > 1 && (
@@ -144,6 +152,7 @@ export function DesignBoardView() {
           </button>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <PageGuideButton name="Design" onClick={intro.open} />
           <label className="hidden items-center gap-2 text-2xs text-ink-faint sm:flex">
             Zoom
             <input type="range" min={0.5} max={1.5} step={0.1} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
@@ -220,6 +229,13 @@ export function DesignBoardView() {
       )}
     </div>
   );
+}
+
+/** Where a concept came from: drawn, described, or found in the project's designs folder. */
+export function conceptOrigin(page: Pick<DesignPage, 'origin'>, glyph = true): string {
+  if (page.origin === 'file') return 'from the designs folder';
+  const text = page.origin === 'sketch' ? 'from a sketch' : 'from a prompt';
+  return glyph ? `${page.origin === 'sketch' ? '✏️' : '✨'} ${text}` : text;
 }
 
 /** First-run hero: the two ways to create, front and center. */
@@ -326,7 +342,7 @@ function PageCard({
         <button className="min-w-0 flex-1 text-left" onClick={onOpen}>
           <div className="truncate text-xs font-medium">{page.label}</div>
           <div className="truncate text-2xs text-ink-faint">
-            {concept ? `${page.origin === 'sketch' ? '✏️ from a sketch' : '✨ from a prompt'}` : page.url}
+            {concept ? conceptOrigin(page) : page.url}
           </div>
         </button>
         {page.notes.length > 0 && <span className="chip text-2xs" title={`${page.notes.length} note(s)`}>📌 {page.notes.length}</span>}
@@ -608,7 +624,7 @@ function PageSheet({
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">{page.label}</div>
-          <div className="truncate text-2xs text-ink-faint">{concept ? (page.origin === 'sketch' ? 'concept · from a sketch' : 'concept · from a prompt') : page.url}</div>
+          <div className="truncate text-2xs text-ink-faint">{concept ? `concept · ${conceptOrigin(page, false)}` : page.url}</div>
         </div>
         {concept && onOpenFile && (
           <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Open the prototype file" onClick={onOpenFile}><ExternalIcon className="h-3.5 w-3.5" /></button>
@@ -620,7 +636,8 @@ function PageSheet({
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Close" onClick={onClose}><CloseIcon className="h-3.5 w-3.5" /></button>
       </div>
 
-      {concept && <ArtifactPreview source={page.html ?? ''} title={page.label} />}
+      {/* shrink-0 with an auto height: the preview's own minimum height is then the room it takes in the scrolling sheet, so Previous versions and Refine start below it. */}
+      {concept && <div className="shrink-0"><ArtifactPreview source={page.html ?? ''} title={page.label} /></div>}
       {concept && (page.revisions?.length ?? 0) > 0 && <details className="p-3 text-xs">
         <summary>Previous versions ({page.revisions?.length})</summary>
         {page.revisions?.map((revision) => <button key={revision.id} className="chip chip-action my-1 block" onClick={() => { if (window.confirm('Restore this version? The current design will be kept in history.')) void onRestore(revision.html); }}>

@@ -294,4 +294,7 @@
     <string name="photo_actions">Fotoaktionen</string>
     <!-- Save to Photos on Android 9, when storage access was refused. -->
     <string name="chat_save_needs_storage">Erlaube den Speicherzugriff, um es in Fotos zu sichern.</string>
+    <!-- Folded by default in the transcript (#2453). -->
+    <string name="chat_progress_note">Fortschrittsnotiz</string>
+    <string name="chat_conversation_summary">Zusammenfassung des Gesprächs</string>
 </resources>

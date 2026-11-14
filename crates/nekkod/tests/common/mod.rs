@@ -201,8 +201,9 @@ pub async fn scripted_model_with_titles(
             async move {
                 // Title calls are answered by content, so their timing never shifts the script.
                 let titling = request["messages"].as_array().is_some_and(|m| {
-                    m.iter()
-                        .any(|m| m["content"].as_str().is_some_and(|c| c.starts_with("Name this chat for a sidebar list")))
+                    m.iter().any(|m| {
+                        m["content"].as_str().is_some_and(|c| c.starts_with("Name this chat for a sidebar list"))
+                    })
                 });
                 seen.lock().unwrap().push(request);
                 let next = if titling {

@@ -78,7 +78,7 @@ app.whenReady().then(async () => {
       await run(`${sidebarCard('Chat not on the wall')}.click()`); await sleep(600);
       await check(`off-wall chat opens in the grid (${t})`, "document.querySelector('[data-wall-layout]').dataset.wallLayout==='grid' && !!document.querySelector('[data-grid-cell=\"chat:outside\"]') && document.querySelector('[data-wall-selected]')?.dataset.gridCell==='chat:outside'");
       await capture(`grid-select-${t}`);
-      // Panel close button and orientation toggle.
+      // Panel close button.
       await reset(); await theme(t);
       await check(`panel has no Agents header text (${t})`, "!document.querySelector('[data-agent-panel]')?.querySelector('span.text-sm.font-semibold')");
       await run("document.querySelector('[aria-label=\"Close the agent panel\"]')?.click()"); await sleep(400);
@@ -86,9 +86,6 @@ app.whenReady().then(async () => {
       await capture(`panel-closed-${t}`);
       await run("document.querySelector('[aria-label=\"Show the agent panel\"]')?.click()"); await sleep(400);
       await check(`panel reopens (${t})`, "!!document.querySelector('[data-agent-panel]')");
-      await run("document.querySelector('[aria-label=\"Show agents in a row\"]')?.click()"); await sleep(500);
-      await check(`horizontal panel sits inline above the wall (${t})`, "(()=>{const p=document.querySelector('[data-agent-panel]');return p?.dataset.orientation==='horizontal'&&p.getBoundingClientRect().height<200})()");
-      await capture(`panel-horizontal-${t}`);
       // Add window: next to the composer, with an arrow to the new slot, no edge rails.
       await reset(); await theme(t);
       report.overflow = await run("(()=>{const c=document.querySelector('.wall-column');const r=c.getBoundingClientRect();return {sw:c.scrollWidth,cw:c.clientWidth,wide:[...c.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>r.right+1).slice(0,6).map(e=>e.className+':'+Math.round(e.getBoundingClientRect().right-r.right)), kids:[...c.children].map(e=>e.className+' w'+Math.round(e.getBoundingClientRect().width)+' sw'+e.scrollWidth), crect:Math.round(r.width)}})()");

@@ -619,10 +619,33 @@ async fn admit(
     if !sandbox {
         facts.insert("hookRules".into(), settings.get("hooks").filter(|h| h.is_array()).cloned().unwrap_or(json!([])));
     }
-    // Opt-in usage reports: the provider's kind only, never its name, model or the prompt.
+    // Opt-in usage reports: the provider's kind (never its name), the model id,
+    // modes and counts. Never the prompt, folders or connector accounts.
+    let connector_kinds: Vec<&str> = settings
+        .get("connectors")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|c| nekko_js::truthy(c.get("connected")))
+        .filter_map(|c| c.get("kind").and_then(Value::as_str))
+        .collect();
+    let permission = session
+        .get("mode")
+        .and_then(Value::as_str)
+        .or_else(|| settings.get("defaultChatMode").and_then(Value::as_str))
+        .unwrap_or("guardrails");
     crate::telemetry::capture(
         "turn_started",
-        &json!({ "provider": kind, "local": is_local(kind), "offline": offline, "mode": mode_name, "sandbox": sandbox }),
+        &json!({
+            "provider": kind, "local": is_local(kind), "offline": offline, "mode": mode_name, "sandbox": sandbox,
+            "model": model_id,
+            "permission": permission,
+            "subagent": session.get("parentSessionId").is_some_and(|p| !p.is_null()),
+            // Other chats with a turn running as this one starts.
+            "running_agents": crate::routes::running_chats(ctx).len(),
+            "connectors": connector_kinds.join(","),
+            "mcp_servers": settings.get("mcpServers").and_then(Value::as_array).map_or(0, Vec::len),
+        }),
     );
     // The turn runs its tools in this daemon's container for the chat (turns.rs).
     facts.insert("sandbox".into(), json!(sandbox));
@@ -650,6 +673,10 @@ async fn admit(
     facts.insert("thinking".into(), json!(thinking));
     // The loaded window, for the loop to keep a long run inside (nekko-loop fit.rs).
     facts.insert("contextWindow".into(), json!(crate::providers::context_window_for(ctx, &provider, model_id).await));
+    // The system prompt profile for this model (decision 0095).
+    let window = facts.get("contextWindow").and_then(Value::as_f64);
+    let choice = crate::prompt_profile::resolve(&settings, s(&provider, "id"), kind, model_id, window);
+    facts.insert("promptProfile".into(), choice.to_json());
     // False for a model the provider lists without image input: pictures go as a note.
     facts.insert("imageInput".into(), json!(crate::providers::image_input_for(ctx, &provider, model_id).await));
     if let Some(p) = &resolved {
@@ -676,6 +703,7 @@ async fn admit(
         &settings,
         &[
             "systemInstructions",
+            "promptProfiles",
             "turnWrapper",
             "aboutUser",
             "orchestration",

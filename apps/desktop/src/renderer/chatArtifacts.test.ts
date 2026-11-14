@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chatArtifacts, fileUrlPath, livePreview } from './chatArtifacts.js';
+import { chatArtifacts, fileUrlPath, livePreview, namedOutputPath } from './chatArtifacts.js';
 
 describe('chat artifacts', () => {
   it('uses descriptive labels and resolves local paths once', () => {
@@ -46,5 +46,29 @@ describe('chat artifacts', () => {
   });
   it('ignores localhost and file URLs inside code', () => {
     expect(chatArtifacts('`http://localhost:3000` `[a](file:///C:/a.html)`\n```\nnpm run dev # http://localhost:5173\n[b](http://localhost:8080)\n```')).toEqual([]);
+  });
+  it('treats a code span naming a page, image or PDF as a link to it', () => {
+    const reply = '**Design:** `reports/ios-connection-strip-design.html`. It has mock phones. See also `docs/strip.png` and `out/spec.pdf`.';
+    expect(chatArtifacts(reply, '/repo')).toEqual([
+      { path: '/repo/reports/ios-connection-strip-design.html', title: 'Ios connection strip design', filename: 'ios-connection-strip-design.html' },
+      { path: '/repo/docs/strip.png', title: 'Strip', filename: 'strip.png' },
+      { path: '/repo/out/spec.pdf', title: 'Spec', filename: 'spec.pdf' },
+    ]);
+    expect(chatArtifacts('`C:\\work\\out\\page.htm`')[0].path).toBe('C:/work/out/page.htm');
+    expect(chatArtifacts('`file:///tmp/page.html`')[0].path).toBe('/tmp/page.html');
+  });
+  it('keeps source files, commands, URLs and fenced code as code', () => {
+    for (const code of ['src/App.tsx', 'AGENTS.md', 'npm run build', 'open reports/a.html', 'https://example.com/a.html', 'http://localhost:3000/a.html', '//server/a.html', 'a.html#top'])
+      expect(namedOutputPath(code)).toBeNull();
+    expect(chatArtifacts('Edit `src/App.tsx` and `package.json`.\n```\nreports/a.html\n`b.html`\n```', '/repo')).toEqual([]);
+    expect(chatArtifacts('`reports/a.html`')).toEqual([]);
+  });
+  it('picks up a bare output path in prose, but not a bare filename or part of a URL', () => {
+    expect(chatArtifacts('Saved the mock to nekko-designs/strip/index.html.', '/repo')).toEqual([{ path: '/repo/nekko-designs/strip/index.html', title: 'Strip', filename: 'index.html' }]);
+    expect(chatArtifacts('Edit index.html, then see https://example.com/docs/a.html and a.html.bak or x/reports/b.html5', '/repo')).toEqual([]);
+  });
+  it('lists files in the order the reply names them and counts each once', () => {
+    const out = chatArtifacts('`b/one.html` then [Two](b/two.md) then b/three.png and [same](b/one.html)', '/repo');
+    expect(out.map(a => a.filename)).toEqual(['one.html', 'two.md', 'three.png']);
   });
 });

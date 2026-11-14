@@ -125,10 +125,10 @@ function CompanionResizer({ sessionId }: { sessionId: string }) {
       tabIndex={0}
       title="Drag to resize · double-click to reset"
       onPointerDown={onPointerDown}
-      onDoubleClick={() => commit(0.38)}
+      onDoubleClick={() => commit(COMPANION_DEFAULT)}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft') { e.preventDefault(); commit(Math.min(0.75, share + 0.04)); }
-        if (e.key === 'ArrowRight') { e.preventDefault(); commit(Math.max(0.2, share - 0.04)); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); commit(clampCompanion(share + 0.04)); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); commit(clampCompanion(share - 0.04)); }
       }}
     />
   );
@@ -153,7 +153,7 @@ import type { AgentWindowSelection } from './AgentWindowPicker.js';
 import { AgentLogsDrawer } from './AgentLogsDrawer.js';
 import { layoutWithLogsDrawer, overlayLogsDrawer, useWallLogs } from '../wallLogs.js';
 import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
-import { readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
+import { COMPANION_DEFAULT, clampCompanion, readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
 import { Shown } from './ModeViews.js';

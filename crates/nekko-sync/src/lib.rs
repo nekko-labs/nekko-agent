@@ -51,6 +51,7 @@
 mod b64;
 mod descriptor;
 mod donation;
+mod fleet_link;
 mod hkdf;
 mod join;
 mod pad;
@@ -63,6 +64,9 @@ pub use descriptor::{
     FLEET_COLLECTION, MAX_REVISION, descriptor_aad, open_descriptor, org_scope, seal_descriptor, seal_descriptor_with,
 };
 pub use donation::{DONATION_VERSION, Donation, seal_donation, seal_donation_with};
+pub use fleet_link::{
+    connect_aad, hello_proof_aad, open_connect, open_hello_proof, seal_connect, seal_connect_with, seal_hello_proof,
+};
 pub use join::{JoinCode, unwrap_join, wrap_for_join, wrap_for_join_with};
 pub use pad::{frame, padme, unframe};
 pub use record::{

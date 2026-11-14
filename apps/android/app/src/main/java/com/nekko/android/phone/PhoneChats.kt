@@ -23,6 +23,8 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         val errors: Map<String, String> = emptyMap(),
         /** What this phone's chats used, by provider, model and day (#2114); never sent anywhere. */
         val usage: com.nekko.protocol.PhoneUsageLedger = com.nekko.protocol.PhoneUsageLedger(),
+        /** How this phone's models talk (Customize, #2426); from their next reply. */
+        val tone: com.nekko.protocol.PhoneTone = com.nekko.protocol.PhoneTone.STANDARD,
     )
     private val mutable = MutableStateFlow(State())
     val state = mutable.asStateFlow()
@@ -36,6 +38,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     private val providersSlot = "phone.providers.v1"
     private val chatsSlot = "phone.chats.v1"
     private val usageSlot = "phone.usage.v1"
+    private val toneSlot = "phone.tone.v1"
     private fun keySlot(id: String) = "phone.provider.key.$id"
     private fun id() = UUID.randomUUID().toString()
     private fun now() = System.currentTimeMillis()
@@ -49,7 +52,14 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         }
         val usage = secrets.get(usageSlot)?.let { runCatching { com.nekko.protocol.PhoneUsageLedger.from(Json.parseToJsonElement(it)) }.getOrNull() }
             ?: com.nekko.protocol.PhoneUsageLedger()
-        synchronized(gate) { mutable.value = State(ready = true, providers = providers, chats = chats, usage = usage) }
+        val tone = com.nekko.protocol.PhoneTone.parse(secrets.get(toneSlot))
+        synchronized(gate) { mutable.value = State(ready = true, providers = providers, chats = chats, usage = usage, tone = tone) }
+    }
+
+    /** The tone for the next reply of every chat on this phone; saved messages are never rewritten. */
+    suspend fun setTone(tone: com.nekko.protocol.PhoneTone) = lock.withLock {
+        synchronized(gate) { mutable.update { it.copy(tone = tone) } }
+        secrets.set(toneSlot, tone.wire)
     }
     private suspend fun saveProviders() = secrets.set(providersSlot, json.encodeToString(ListSerializer(PhoneProvider.serializer()), mutable.value.providers))
     private suspend fun saveChats() = secrets.set(chatsSlot, json.encodeToString(ListSerializer(PhoneChat.serializer()), mutable.value.chats))
@@ -220,7 +230,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                             if (old.messages.lastOrNull()?.role != "assistant" || old.messages.dropLast(1).lastOrNull()?.role != "user") return@prepare null
                             old.messages.dropLast(1)
                         } else old.messages + PhoneMessage(id(), "user", text.trim(), now())
-                        val req = PhoneProviders.chatRequest(p, key, old.modelId, messages)
+                        val req = PhoneProviders.chatRequest(p, key, old.modelId, messages, system = mutable.value.tone.systemPrompt)
                         ranOn = Triple(p.id, p.label, old.modelId)
                         val next = old.copy(title = if (old.messages.isEmpty()) text.trim().lineSequence().first().take(60) else old.title, updatedAt = now(), messages = messages + PhoneMessage(attempt, "assistant", "", now(), STREAMING))
                         mutable.update { s -> s.copy(chats = s.chats.map { if (it.id == chatId) next else it }, running = s.running + chatId, errors = s.errors - chatId) }

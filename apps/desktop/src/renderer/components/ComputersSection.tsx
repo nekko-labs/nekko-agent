@@ -32,7 +32,9 @@ const ROUTE_LABEL: Record<string, string> = { lan: 'on this network', tailscale:
 export function computerDetail(c: ComputerStatus): string {
   const route = c.state === 'online' && c.route ? ` ${ROUTE_LABEL[relayRoute(c.route)] ?? ''}` : '';
   const watching = c.state === 'online' && !c.change ? `. ${c.name} allows watching only.` : '';
-  return `${STATE_LABEL[c.state]}${route}${watching}`;
+  // Opened from an organization's list with your account's keys: not paired, and not kept after a restart.
+  const fleet = c.fleet ? '. Opened from your organization' : '';
+  return `${STATE_LABEL[c.state]}${route}${watching}${fleet}`;
 }
 
 /** The link that lets another computer connect here, or why there can't be one yet. */
@@ -108,7 +110,10 @@ export function ComputersSection() {
   };
 
   const forget = async (c: ComputerStatus) => {
-    if (!confirm(`Remove ${c.name}? Its agents leave this computer's list. They keep running there.`)) return;
+    const ask = c.fleet
+      ? `Disconnect ${c.name}? Its agents leave this computer's list and keep running there. You can open it again from your organization.`
+      : `Remove ${c.name}? Its agents leave this computer's list. They keep running there.`;
+    if (!confirm(ask)) return;
     setComputers(await window.nekko.forgetComputer(c.id));
   };
 
@@ -176,7 +181,7 @@ export function ComputersSection() {
                 )}
                 <p className="mt-(--q-tight) truncate text-xs text-ink-faint">{computerDetail(c)}</p>
               </div>
-              <button className="btn btn-ghost quiet-row-action py-1 text-xs text-danger-text" onClick={() => void forget(c)}>Remove</button>
+              <button className="btn btn-ghost quiet-row-action py-1 text-xs text-danger-text" onClick={() => void forget(c)}>{c.fleet ? 'Disconnect' : 'Remove'}</button>
             </li>
           ))}
         </ul>

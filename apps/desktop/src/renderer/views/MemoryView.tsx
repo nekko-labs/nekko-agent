@@ -3,9 +3,11 @@ import type { MemoryEntry, MemoryScope } from '@nekko-agent/shared';
 import { PlusIcon, TrashIcon } from '../icons.js';
 import { hasAppChrome } from '../chrome.js';
 import { useStore } from '../store.js';
+import { MEMORY_GUIDE, PageGuideButton, PageIntro, usePageIntro } from '../components/PageIntro.js';
 
 export function MemoryView() {
   const [scope, setScope] = useState<MemoryScope>('global');
+  const intro = usePageIntro('memory');
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [editing, setEditing] = useState<MemoryEntry | null>(null);
 
@@ -45,10 +47,13 @@ export function MemoryView() {
 
   return (
     <div className="flex h-full">
+      {intro.show && <PageIntro guide={MEMORY_GUIDE} onClose={intro.close} />}
       <aside className="flex w-72 flex-col border-r border-line">
-        <div className="flex items-center justify-between p-4">
+        <div className="flex items-center justify-between gap-2 p-4">
           {!hasAppChrome && <h1 className="view-title">Memory</h1>}
-          <button className="btn btn-primary ml-auto px-3 py-1" onClick={() => setEditing(blank())}><PlusIcon /></button>
+          <span className="ml-auto" />
+          <PageGuideButton name="Memory" onClick={intro.open} />
+          <button className="btn btn-primary px-3 py-1" onClick={() => setEditing(blank())}><PlusIcon /></button>
         </div>
         <div className="px-3">
           <div className="flex rounded-xl p-1" style={{ background: 'var(--surface-2)' }}>

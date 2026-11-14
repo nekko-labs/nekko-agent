@@ -14,6 +14,14 @@ After pairing your first computer, the permissions checklist explains what Nekko
 
 Denied access can be restored in system Settings. If Settings opens its home page, find Nekko Agent there (under **Apps** on newer iOS versions). Device restrictions or missing hardware may prevent a feature. Photo and file pickers need no blanket library or storage permission. Allowing microphone or speech access here does not start recording. You can revisit the checklist at any time.
 
+## Pending answers and approvals on iPhone
+
+If your computer is reconnecting, you can still submit an answer or a one-time **Allow** or **Deny** response inside its chat. It appears as a pending response message with its request identifier and stays on your phone when you leave the chat or restart the app.
+
+The phone tries again when connected, but only while the exact original question or tool call is still pending on that computer. **Retry** tries delivery again; **Cancel** removes an unsent response and lets you answer the original request again if it is still waiting. A response already sending cannot be recalled. After confirmation it reads **Sent**.
+
+If the request changed or was answered elsewhere, the message says **No longer pending** instead of applying your answer to a different action. If the connection dropped after the computer accepted it, the phone may not be able to confirm delivery; a missing request is not treated as proof that this phone sent it. **Always allow this tool** changes, voice actions, and responses from Monitors still need a live connection.
+
 ## Draft photos and appearance on iPhone
 
 Photos added with **+ → Photos** or **Paste image** appear inside the message composer. Tap a thumbnail to preview it, or its remove button to leave it out. Adding or removing a photo saves the draft immediately on the phone; reopening the app restores its text and attachments. Photos stay local until you send the message.
@@ -45,6 +53,8 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 **Its Model Server from here.** While the Monitors panel watches a connected computer, Local models can load a model there, unload one or all, and set how many stay loaded, when an idle one unloads and whether a chat may load one, unless that Model Server keeps its own model settings.
 
 **Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
+
+**Your own computers, with no link.** When your computers share themselves with your organization in Nekko Cloud (Settings, Phone pairing, Organization), any of them signed in to the same account and unlocked can open a chat on another without a pairing link. In the organization's Computers list, hover one of your own online computers and choose **Open chat**. It connects with your account's keys, adds the computer to Settings, Computers (as *Opened from your organization*) and opens a new chat there. The other computer needs **Remote access** on; otherwise its row says so. A teammate's computer is listed but can't be opened. Nothing is paired and nothing is saved: the link ends when you restart, sign out or lock, and the other computer cuts it within 15 seconds if it stops sharing, signs out, or your account removes this device. The same rules apply as for any connected computer above.
 
 **Keeping a computer awake for its agents.** A run you start on another computer stops when that computer falls asleep. On the computer that runs the agents, turn on *Keep this computer awake while agents run* (Settings, Computers). While any agent runs there it won't go to sleep on its own, and once the last one finishes it sleeps as usual. Closing the lid still sleeps it.
 
@@ -128,6 +138,8 @@ New chat and phone-only chat support Markdown formatting while you type. Effort 
 The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
 
 Each chat row on the iPhone and on Android reads like the desktop's agent card. Under the title: the provider's logo and the model (*Opus 5.5*), then, while the chat is still in progress (working, waiting on you or watching), how full its context window is, such as *45k/1M*, in green, amber from 60% and red from 85%. At the bottom right, a chip for its pull requests: the one that matters most (open before draft, merged or closed), with GitHub's glyph and colour for its state, and *+2* when there are more. **View → Card details** turns each of these off.
+
+On the iPhone a row is two lines at most, with no preview of the conversation and no divider lines: the title and when it last moved, then those facts. Under a chat, each sub-agent it spawned gets its own line, hanging from the chat on a thin tree line as on the desktop, with its status, its title and, at the end, the model it runs on (*Haiku 5.5*). Tap one to open the sub-agent's chat; **View → Card details → Sub-agents** hides them. Android still shows the preview and no sub-agent lines.
 
 From New chat's folder picker, choose **Manage folders** to add a computer path or remove a saved folder. Removing never deletes files. Stars select default folders for future chats: the first is primary, and the others are supporting folders. An explicit folder choice overrides those defaults for the current chat. Changing supporting folders may ask for device authentication; multi-folder starts wait for an online computer rather than queue a start that could lose folder context.
 
@@ -366,6 +378,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > with the shared text or link. You can edit it on the New chat screen; after you start the chat it
 > waits in the message box and you send it yourself. Nekko never sends shared text on its own, and
 > it is kept only in memory until then. Text and links only for now, up to 20,000 characters.
+> **Customize** (Android): **Settings → Customize**, or **Customize…** at the bottom of the chat
+> list's view menu. **Experience** picks Simple or Detailed, the **Tone** of models running on this
+> phone (Default, Friendly, Professional, Concise or Explanatory; agents on your computer keep its
+> own tone) and the look. **Skills** lists your computer's skills: type `/name` in a chat to run one.
+>
 > **Vibration** (Android): while the app is open, the phone vibrates when the agent needs your
 > approval (two pulses) or asks you a question (one long pulse). In **Settings → Vibration** you can
 > also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them
