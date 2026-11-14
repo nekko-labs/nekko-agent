@@ -72,11 +72,11 @@ app.whenReady().then(async () => {
     }
     if (!baseline) {
       await run(`document.querySelector('[data-artifact-row]').click()`); await sleep(350);
-      await check(`document.body.innerText.includes('Quarterly report') && [...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Back to Library')`, 'narrow-preview-back-control');
+      await check(`document.body.innerText.includes('Quarterly report') && !!document.querySelector('[data-library-back]')`, 'narrow-preview-back-control');
       await shot('narrow-preview');
       await click('Open file');
       await check(`layoutFixture.lastOpenPath === '/reports/quarterly.md'`, 'open-file-exact-path');
-      await click('Back to Library'); await sleep(100);
+      await run(`document.querySelector('[data-library-back]').click()`); await sleep(100);
       await check(`!!document.querySelector('[data-artifact-kind]') && ![...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Open file')`, 'back-restores-list');
       await run(`document.querySelector('[data-artifact-row]').click()`); await sleep(100);
       await click('Open chat'); await sleep(200);

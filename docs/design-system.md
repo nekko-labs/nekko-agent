@@ -138,4 +138,4 @@ Use these instead of re-declaring markup (`components/primitives/`): `Group`, `R
 
 ## Migrating older screens
 
-Older screens still use `card` tiles, bordered rows and filled pills. Move a screen over when you touch it: the card becomes a `Group`, bordered rows become `Row`, a pill becomes a dot and a word. Reference screens already moved: the model picker, the Models page, all of Settings (`SettingsSection`, `SettingRow` and `ChoiceList` in `components/SettingsSection.tsx`), the model library and change review.
+Older screens still use `card` tiles, bordered rows and filled pills. Move a screen over when you touch it: the card becomes a `Group`, bordered rows become `Row`, a pill becomes a dot and a word. Reference screens already moved: the model picker, the Models page and its add-provider setup (`KeyFlow` for key-only providers), all of Settings (`SettingsSection`, `SettingRow` and `ChoiceList` in `components/SettingsSection.tsx`), the model library and change review.

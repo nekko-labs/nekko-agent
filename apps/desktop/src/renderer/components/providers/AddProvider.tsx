@@ -4,8 +4,11 @@ import { PROVIDER_DEFAULTS, oauthProviderOffered } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { SubscriptionSignIn } from '../SubscriptionSignIn.js';
 import { ProviderChoices } from './ProviderChoices.js';
-import { CLOUD_PROVIDER_PRESETS, providerSetupDefaults, vertexEndpoint, type ProviderSetupKind } from './providerPresets.js';
+import { CLOUD_PROVIDER_PRESETS, KEY_SOURCES, SETUP_LINES, providerSetupDefaults, vertexEndpoint, type ProviderSetupKind } from './providerPresets.js';
 import { CheckIcon } from '../../icons.js';
+import { QuietTabs } from '../primitives/Quiet.js';
+import { KeyFlow, type KeyCheck } from './KeyFlow.js';
+import { ProviderMark } from './ProviderMark.js';
 import { CLAUDE_API_KINDS, ClaudeSetup, isClaudeKind, type ClaudeChoice, type ClaudeConnected } from '../claude/ClaudeSetup.js';
 
 /** Provider kinds offered by the generic add form, local servers first. */
@@ -160,8 +163,6 @@ export function AddProvider({
   // inside a workspace leaves it blank.
   const [workspaceId, setWorkspaceId] = useState('');
   const oauthProvider = apiKeyOnly ? undefined : SUBSCRIPTION_KINDS[kind];
-  // Anthropic's key field waits behind the disclosure only while a Claude sign-in sits beside it.
-  const keyBehindSignIn = kind === 'anthropic' && oauthProvider !== undefined;
 
   // Claude is one choice: Subscription (Claude Code) or API, whose form opens
   // from the API column's Connect button. The wizard's API-key-only Claude
@@ -184,6 +185,7 @@ export function AddProvider({
     setBaseUrl(providerSetupDefaults(k).baseUrl);
     setLabel(providerSetupDefaults(k).label);
     setApiKey('');
+    setKeyCheck({ state: 'idle' });
     setWorkspaceId('');
   };
 
@@ -194,8 +196,9 @@ export function AddProvider({
     setChoice(k);
     setBaseUrl(providerSetupDefaults(k).baseUrl);
     setLabel(providerSetupDefaults(k).label);
-    setUseApiKey(false);
+    setUseApiKey(apiKeyOnly);
     setApiKey('');
+    setKeyCheck({ state: 'idle' });
     setWorkspaceId('');
     setGoogleProject('');
     setGoogleLocation('global');
@@ -203,6 +206,8 @@ export function AddProvider({
 
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  // The guided key flow's own progress: checking, failed, connected.
+  const [keyCheck, setKeyCheck] = useState<KeyCheck>({ state: 'idle' });
 
   // A completed sign-in only hands back a sanitized status (tokenKey, not the
   // token). The provider saves with auth: 'subscription'; the host injects the
@@ -225,19 +230,19 @@ export function AddProvider({
     }
   };
 
-  const draft = (): ProviderConfig => ({
+  const draft = (key = apiKey): ProviderConfig => ({
     id: `${choice}-${Date.now().toString(36)}`,
     kind,
     label: label || defaults.label,
     baseUrl,
-    apiKey: apiKey.trim() || undefined,
-    auth: preset ? 'apikey' : undefined,
+    apiKey: key.trim() || undefined,
+    auth: preset || KEY_SOURCES[choice] ? 'apikey' : undefined,
     workspaceId: kind === 'anthropic' ? workspaceId.trim() || undefined : undefined,
     enabled: true,
   });
 
-  const validInput = () => {
-    const message = preset && !apiKey.trim() ? `Enter your ${preset.label} API key.`
+  const validInput = (key = apiKey) => {
+    const message = preset && !key.trim() ? `Enter your ${preset.label} API key.`
       : kind === 'vertex' && (!googleProject.trim() || !/^[a-z0-9-]+$/.test(googleProject.trim()) || !/^[a-z0-9-]+$/.test(googleLocation.trim())) ? 'Enter a Google Cloud project ID and a valid location.' : undefined;
     if (message) { setResult({ ok: false, message }); return false; }
     return true;
@@ -254,15 +259,19 @@ export function AddProvider({
     } finally { setTesting(false); }
   };
 
-  const save = async () => {
-    if (!validInput()) return;
+  /** Check, then save. `key` comes from the key flow, which may run before its state lands. */
+  const save = async (key = apiKey) => {
+    if (!validInput(key)) return;
+    const guided = keySource !== undefined;
     setTesting(true);
+    if (guided) setKeyCheck({ state: 'checking' });
     try {
-      const config = draft();
+      const config = draft(key);
       const check = await window.nekko.testProviderConfig(config);
-      setResult(check);
       if (!check.ok) {
-        pushToast('error', check.message || `Could not connect ${config.label}.`);
+        const message = check.message || `Could not connect ${config.label}.`;
+        if (guided) setKeyCheck({ state: 'failed', message });
+        else { setResult(check); pushToast('error', message); }
         return;
       }
       await window.nekko.saveProvider(config);
@@ -272,22 +281,46 @@ export function AddProvider({
         setClaudeConnected({ title: 'Claude is connected', detail: `Using ${config.label} (${API_SOURCE[config.kind] ?? 'API'}), billed to that account.` });
         setClaudeApiOpen(false);
         setResult(null);
+        setKeyCheck({ state: 'idle' });
         await useStore.getState().refreshProviders();
         return;
       }
+      if (guided) {
+        // Let the last step show its check before the panel closes.
+        setKeyCheck({ state: 'connected' });
+        setTimeout(onDone, 900);
+        return;
+      }
+      setResult(check);
       onDone();
     } catch (error) {
       const message = String(error);
-      setResult({ ok: false, message });
-      pushToast('error', `Could not save: ${message}`);
+      if (guided) setKeyCheck({ state: 'failed', message });
+      else { setResult({ ok: false, message }); pushToast('error', `Could not save: ${message}`); }
     } finally { setTesting(false); }
   };
 
+  // Where the kind has a sign-in, the key flow waits behind "Use a key instead".
+  const signInFirst = oauthProvider !== undefined && !useApiKey;
+  const keySource = showFields && defaults.needsKey && !signInFirst ? KEY_SOURCES[choice] : undefined;
+  const line = KEY_SOURCES[choice]?.line ?? SETUP_LINES[choice] ?? preset?.description;
+  const title = kind === 'anthropic' && choice === 'anthropic' ? 'Claude API' : defaults.label;
+  const plainKeyField = (defaults.needsKey || optionalKey) && !keySource && !signInFirst;
+
   return (
-    <div className={bare ? 'min-w-0' : 'card mt-5 min-w-0 p-5'}>
-      <div className="grid grid-cols-2 gap-3">
+    <div className={bare ? 'min-w-0' : 'provider-setup-form min-w-0'}>
+      <div className="flex min-w-0 flex-col gap-5">
         {!fixedKind && (
-          <div className="col-span-2"><ProviderChoices value={claude ? 'anthropic' : choice} onPick={pick} scope={scope} /></div>
+          <ProviderChoices value={claude ? 'anthropic' : choice} onPick={pick} scope={scope} />
+        )}
+        {!claude && !bare && (
+          <div className="provider-setup-heading">
+            <ProviderMark kind={choice} tile />
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold">{title}</h2>
+              {line && <p className="text-xs text-ink-faint">{line}</p>}
+            </div>
+          </div>
         )}
         {claude && (
           <ClaudeSetup
@@ -301,129 +334,125 @@ export function AddProvider({
           />
         )}
         {claude && showFields && (
-          <div className="col-span-2 claude-api-kinds" role="radiogroup" aria-label="Where your Claude API account is">
-            {CLAUDE_API_KINDS.map((k) => (
-              <button key={k} type="button" role="radio" aria-checked={kind === k} className={`btn ${kind === k ? 'btn-outline' : 'btn-ghost'}`} onClick={() => pickFields(k)}>
-                {API_SOURCE[k]}
-              </button>
-            ))}
-          </div>
+          <QuietTabs
+            role="radiogroup"
+            label="Where your Claude API account is"
+            className="claude-api-kinds"
+            value={kind}
+            onChange={(k) => pickFields(k)}
+            items={CLAUDE_API_KINDS.map((k) => ({ value: k, label: API_SOURCE[k] ?? k }))}
+          />
         )}
         {showFields && <>
-        {preset && <div className="col-span-2 space-y-2">
-          <h2 className="text-base font-semibold">{preset.label}</h2>
-          <p className="text-xs text-ink-soft">{preset.description}</p>
-          <a className="text-xs text-accent hover:underline" href={preset.keyUrl} target="_blank" rel="noreferrer">Get your {preset.label} API key</a>
+        {/* The heading already says what the sign-in is for; the button and its consent note are all that is left to say. */}
+        {oauthProvider && !useApiKey && (
+          <div className="min-w-0">
+            <SubscriptionSignIn oauthProvider={oauthProvider} onConnected={connectSubscription} />
+          </div>
+        )}
+        {kind === 'vertex' && <div className="min-w-0 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block min-w-0 text-xs font-medium text-ink-soft">Google Cloud project ID
+              <input className="quiet-field mt-2" value={googleProject} placeholder="my-google-project" onChange={(e) => { setGoogleProject(e.target.value); setBaseUrl(vertexEndpoint(e.target.value, googleLocation)); }} />
+            </label>
+            <label className="block min-w-0 text-xs font-medium text-ink-soft">Google Cloud location
+              <input className="quiet-field mt-2" value={googleLocation} placeholder="global" onChange={(e) => { setGoogleLocation(e.target.value); setBaseUrl(vertexEndpoint(googleProject, e.target.value)); }} />
+            </label>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs text-ink-soft">On the computer running Nekko Agent, sign in to Google:</p>
+            <pre className="provider-setup-code">gcloud auth application-default login</pre>
+            <a className="text-xs text-accent hover:underline" href="https://cloud.google.com/docs/authentication/provide-credentials-adc" target="_blank" rel="noreferrer" title="Or set GOOGLE_APPLICATION_CREDENTIALS on that computer. Enable Vertex AI and Claude in your project first. Nekko uses your Google credentials, never Claude Code credentials.">Other ways to sign in to Google</a>
+          </div>
         </div>}
-        {kind === 'vertex' && <div className="col-span-2 min-w-0 space-y-3">
-          <h2 className="text-base font-semibold">Google Cloud Vertex AI</h2>
-          <p className="text-xs text-ink-soft">Run Claude on your Google Cloud project, billed to Google Cloud. This is not a Claude subscription sign-in or a Gemini API key.</p>
-          <label className="block text-xs font-medium text-ink-soft">Google Cloud project ID
-            <input className="input mt-1" value={googleProject} placeholder="my-google-project" onChange={(e) => { setGoogleProject(e.target.value); setBaseUrl(vertexEndpoint(e.target.value, googleLocation)); }} />
-          </label>
-          <label className="block text-xs font-medium text-ink-soft">Google Cloud location
-            <input className="input mt-1" value={googleLocation} placeholder="global" onChange={(e) => { setGoogleLocation(e.target.value); setBaseUrl(vertexEndpoint(googleProject, e.target.value)); }} />
-          </label>
-          <p className="text-xs text-ink-soft">On the computer running Nekko Agent, sign in to Google using Application Default Credentials:</p>
-          <pre className="overflow-x-auto rounded-lg p-2 text-xs" style={{ background: 'var(--surface-2)' }}>gcloud auth application-default login</pre>
-          <p className="text-xs text-ink-faint">Or set GOOGLE_APPLICATION_CREDENTIALS on that computer. Enable Vertex AI and access to Claude in your project, then test the connection. Nekko uses your Google credentials, never Claude Code credentials.</p>
-          <a className="text-xs text-accent hover:underline" href="https://cloud.google.com/docs/authentication/provide-credentials-adc" target="_blank" rel="noreferrer">Google credentials setup guide</a>
-        </div>}
-        {CLAUDE_API_KINDS.includes(kind) && <label className="col-span-2 text-xs font-medium text-ink-soft">
+        {CLAUDE_API_KINDS.includes(kind) && <label className="min-w-0 text-xs font-medium text-ink-soft">
           Connection name
-          <input className="input mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Work API, Personal, or Client A" />
-          <span className="mt-1 block text-2xs font-normal text-ink-faint">The account's name in the model picker. Each API connection is billed separately.</span>
+          <input className="quiet-field mt-2" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Work API, Personal, or Client A" />
+          <span className="mt-1 block text-2xs font-normal text-ink-faint">Its name in the model picker. Each API connection is billed separately.</span>
         </label>}
-        <details className="col-span-2 min-w-0">
-          <summary className="cursor-pointer text-xs text-ink-soft">Connection settings{ oauthProvider ? ' (optional)' : CLAUDE_API_KINDS.includes(kind) ? ' — server address' : ' — server address and name'}</summary>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-        {!CLAUDE_API_KINDS.includes(kind) && <label className="text-xs font-medium text-ink-soft">
-          Label
-          <input className="input mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={defaults.label} />
-        </label>}
-        <label className="text-xs font-medium text-ink-soft">
-          Base URL
-          <input className="input mt-1" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
-        </label>
-          </div>
-        </details>
-        {oauthProvider && (
-          <div className="col-span-2 rounded-xl border p-4" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>
-            <p className="text-sm font-medium">
-              {oauthProvider === 'openrouter'
-                ? 'Connect with OpenRouter sign-in'
-                : `Use your ${oauthProvider === 'claude' ? 'Claude' : 'ChatGPT'} subscription`}
-            </p>
-            <p className="mt-0.5 text-xs text-ink-faint">
-              {oauthProvider === 'claude'
-                ? 'Sign in with your Claude account.'
-                : oauthProvider === 'chatgpt'
-                  ? 'Sign in with your ChatGPT Plus, Pro, or Business account to run on your existing plan, with no API usage fees.'
-                  : 'Approving in the browser creates a key on your OpenRouter account and saves it here — no copy-pasting. Or paste a key below instead.'}
-            </p>
-            <div className="mt-2">
-              <SubscriptionSignIn oauthProvider={oauthProvider} onConnected={connectSubscription} />
-            </div>
-          </div>
-        )}
-        {(defaults.needsKey || optionalKey) && (!keyBehindSignIn || useApiKey) && (
-          <label className="col-span-2 text-xs font-medium text-ink-soft">
-            API key{optionalKey && !defaults.needsKey ? ' (optional)' : ''}
-            <input className="input mt-1" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={preset ? `${preset.label} API key` : "sk-…"} />
-          </label>
-        )}
-        {kind === 'anthropic' && (!keyBehindSignIn || useApiKey) && (
-          <label className="col-span-2 text-xs font-medium text-ink-soft">
+        {/* Before the key: the key flow connects as soon as a key lands. */}
+        {kind === 'anthropic' && !signInFirst && (
+          <label className="min-w-0 text-xs font-medium text-ink-soft">
             Workspace ID (optional)
             <input
-              className="input mt-1 text-xs"
+              className="quiet-field mt-2"
               value={workspaceId}
               onChange={(e) => setWorkspaceId(e.target.value)}
               placeholder="wrkspc_…"
             />
             <span className="mt-1 block font-normal text-ink-faint">
-              Only for an organization-level key. A key created inside a workspace needs none.
+              Only for an organization-level key.
             </span>
           </label>
         )}
-        {keyBehindSignIn && (
+        {keySource && (
+          <KeyFlow
+            name={choice === 'anthropic' ? 'Anthropic' : defaults.label}
+            source={keySource}
+            value={apiKey}
+            onChange={(k) => { setApiKey(k); if (keyCheck.state === 'failed') setKeyCheck({ state: 'idle' }); }}
+            onConnect={(k) => void save(k)}
+            check={keyCheck}
+          />
+        )}
+        {plainKeyField && (
+          <label className="min-w-0 text-xs font-medium text-ink-soft">
+            API key{optionalKey && !defaults.needsKey ? ' (optional)' : ''}
+            <input className="quiet-field mt-2" type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={preset ? `${preset.label} API key` : 'sk-…'} />
+          </label>
+        )}
+        {oauthProvider && defaults.needsKey && (
           <button
-            className="col-span-2 justify-self-start text-xs text-ink-faint hover:text-ink"
-            onClick={() => setUseApiKey((v) => !v)}
+            type="button"
+            className="self-start text-xs text-ink-soft hover:text-ink"
+            onClick={() => { setUseApiKey((v) => !v); setKeyCheck({ state: 'idle' }); }}
           >
-            {useApiKey ? 'Back to subscription sign-in' : 'Use an API key instead (billed per token)'}
+            {useApiKey ? (oauthProvider === 'openrouter' ? 'Sign in instead' : 'Back to subscription sign-in') : 'Use a key you already have'}
           </button>
         )}
+        <details className="provider-setup-more min-w-0">
+          <summary>Connection settings</summary>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            {!CLAUDE_API_KINDS.includes(kind) && <label className="min-w-0 text-xs font-medium text-ink-soft">
+              Name
+              <input className="quiet-field mt-2" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={defaults.label} />
+            </label>}
+            <label className="min-w-0 text-xs font-medium text-ink-soft">
+              Server address
+              <input className="quiet-field mt-2" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+            </label>
+          </div>
+        </details>
         </>}
       </div>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0 text-xs">
-          {result && (
-            <span style={{ color: result.ok ? 'var(--success)' : 'var(--danger)' }} className="inline-flex items-center gap-2">
-              {result.ok && <CheckIcon className="h-3.5 w-3.5" />}
-              {result.ok ? 'Connected' : result.message}
-            </span>
-          )}
+      {/* Sign-ins and the key flow finish by themselves; only the plain forms
+          (Vertex, Bedrock, Foundry, an OpenAI-compatible server, local
+          servers) need Test and Connect. */}
+      {(showFields && !keySource && !signInFirst) || onCancel ? (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 text-xs">
+            {result && (
+              <span className={`inline-flex items-center gap-2 ${result.ok ? 'text-success-text' : 'text-danger-text'}`} role={result.ok ? 'status' : 'alert'}>
+                {result.ok && <CheckIcon className="h-3.5 w-3.5" />}
+                {result.ok ? 'Connected' : result.message}
+              </span>
+            )}
+          </div>
+          <div className="flex min-w-0 flex-wrap gap-2">
+            {onCancel && <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>}
+            {showFields && !keySource && !signInFirst && (
+              <>
+                <button className="btn" onClick={test} disabled={testing}>
+                  {testing ? 'Testing…' : 'Test connection'}
+                </button>
+                <button className="btn btn-primary" onClick={() => void save()} disabled={testing}>
+                  {testing ? 'Connecting…' : 'Connect'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex min-w-0 flex-wrap gap-2">
-          <button className="btn btn-ghost" onClick={onCancel ?? onDone}>Cancel</button>
-          {/* Where a sign-in sits beside the key, the sign-in completes the
-              add itself; test/save only make sense once the API-key path is
-              revealed. ChatGPT has no API-key path, so its sign-in always
-              completes. OpenRouter keeps both paths: sign in, or paste a key
-              and save. */}
-          {showFields && (oauthProvider === undefined || kind === 'openrouter' || (keyBehindSignIn && useApiKey)) && (
-            <>
-              <button className="btn btn-outline" onClick={test} disabled={testing}>
-                {testing ? 'Testing…' : 'Test connection'}
-              </button>
-              <button className="btn btn-primary" onClick={save} disabled={testing}>
-                {testing ? 'Connecting…' : 'Connect provider'}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      ) : null}
     </div>
   );
 }

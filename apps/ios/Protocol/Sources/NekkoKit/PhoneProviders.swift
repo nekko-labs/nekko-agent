@@ -59,8 +59,8 @@ public enum PhoneProviders {
         Kind(id: "bedrock", label: "Claude in Amazon Bedrock", wire: .anthropic,
              defaultUrl: "https://bedrock-mantle.us-east-1.api.aws/anthropic",
              urlRequired: true, keyName: "Bedrock API key", keyOptional: false,
-             hint: "A Bedrock API key. Put your region in the address.",
-             catalog: claude.map { PhoneModel(id: "anthropic.\($0.id)", name: $0.name) }),
+             hint: "A short-lived Bedrock token, sent as x-api-key to Mantle Messages. Put your region in the address.",
+             catalog: claude.filter { $0.id != "claude-sonnet-4-6" }.map { PhoneModel(id: "anthropic.\($0.id)", name: $0.name) }),
         Kind(id: "foundry", label: "Claude in Microsoft Foundry", wire: .anthropic,
              defaultUrl: "https://YOUR_RESOURCE.services.ai.azure.com/anthropic",
              urlRequired: true, keyName: "Resource key", keyOptional: false,
@@ -101,12 +101,13 @@ public enum PhoneProviders {
     public static let system = "You are Nekko Agent, answering on the user’s iPhone. In this chat you have no tools: you can’t see the user’s computers, files or the web. Answer in Markdown."
 
     public enum Problem: Error, Equatable, LocalizedError {
-        case label, key, url, unknownKind
+        case label, key, url, unknownKind, model
         public var errorDescription: String? {
             switch self {
             case .label: return String(localized: "Give the provider a name.")
             case .key: return String(localized: "Paste the key.")
             case .url: return String(localized: "The address must be a full https:// address.")
+            case .model: return String(localized: "Choose a valid model and reply token limit.")
             case .unknownKind: return String(localized: "This kind of provider can’t run on the iPhone.")
             }
         }
@@ -120,19 +121,45 @@ public enum PhoneProviders {
         var url = (baseUrl?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? kind.defaultUrl
         while url.hasSuffix("/") { url.removeLast() }
         guard let parsed = URL(string: url), parsed.scheme == "https", let host = parsed.host, !host.isEmpty,
-              !url.contains(" "), !url.contains("YOUR_") else { throw Problem.url }
+              safeURL(url), !url.contains("YOUR_") else { throw Problem.url }
         let secret = key?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if secret.isEmpty && !kind.keyOptional { throw Problem.key }
+        guard headerValue(secret), headerValue(workspaceId ?? "") else { throw Problem.key }
         let workspace = workspaceId?.trimmingCharacters(in: .whitespacesAndNewlines)
         return PhoneProvider(id: id, kind: kind.id, label: label, baseUrl: url,
                              workspaceId: kind.id == "anthropic" && workspace?.isEmpty == false ? workspace : nil)
+    }
+
+    /// Validate persisted metadata again before attaching a credential.
+    public static func validate(_ p: PhoneProvider, key: String?) throws {
+        guard p.enabled else { throw Problem.unknownKind }
+        guard p.baseUrl == p.baseUrl.trimmingCharacters(in: .whitespacesAndNewlines) else { throw Problem.url }
+        _ = try make(id: p.id, kind: p.kind, label: p.label, baseUrl: p.baseUrl, key: key, workspaceId: p.workspaceId)
+    }
+
+    public static func headerValue(_ value: String) -> Bool {
+        value.unicodeScalars.allSatisfy { (32...126).contains($0.value) }
+    }
+
+    /// Also used by the platform transport for requests from any caller.
+    public static func safeURL(_ value: String) -> Bool {
+        guard let c = URLComponents(string: value), c.scheme == "https", let host = c.host, !host.isEmpty,
+              c.user == nil, c.password == nil, c.query == nil, c.fragment == nil,
+              c.port == nil || (1...65535).contains(c.port!),
+              !value.contains("\\"), !value.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.contains($0) || CharacterSet.controlCharacters.contains($0) }),
+              value.range(of: "(?i)%(2e|2f|5c|0[0-9a-f]|1[0-9a-f]|7f)", options: .regularExpression) == nil,
+              !c.path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }) else { return false }
+        return true
     }
 
     // MARK: Requests
 
     /// A chat turn's request: the whole conversation, streamed back.
     public static func chatRequest(_ p: PhoneProvider, key: String?, model: String, messages: [PhoneMessage],
-                                   system: String? = PhoneProviders.system, maxTokens: Int = PhoneProviders.maxTokens) -> PhoneRequest {
+                                   system: String? = PhoneProviders.system, maxTokens: Int = PhoneProviders.maxTokens) throws -> PhoneRequest {
+        try validate(p, key: key)
+        guard !model.isEmpty, model.utf8.count <= 1024, !model.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }), maxTokens > 0,
+              p.wire != .vertex || model.range(of: "^[a-zA-Z0-9_-][a-zA-Z0-9@._-]*$", options: .regularExpression) != nil else { throw Problem.model }
         let turns: [JSONValue] = messages.compactMap { m in
             let text = m.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return nil }
@@ -153,7 +180,8 @@ public enum PhoneProviders {
         case .openai:
             var all = turns
             if let system { all.insert(.object(["role": "system", "content": .string(system)]), at: 0) }
-            var body: [String: JSONValue] = ["model": .string(model), "stream": true, "messages": .array(all)]
+            var body: [String: JSONValue] = ["model": .string(model), "stream": true, "messages": .array(all),
+                                                  p.kind == "openai" ? "max_completion_tokens" : "max_tokens": .int(Int64(maxTokens))]
             // Ask for the reply's token count at the end of the stream, where it is known to be
             // accepted: an OpenAI-compatible server may turn down a field it doesn't know.
             if usageKinds.contains(p.kind) { body["stream_options"] = ["include_usage": true] }
@@ -165,23 +193,26 @@ public enum PhoneProviders {
     static let usageKinds: Set<String> = ["openai", "openrouter"]
 
     /// The models list, or nil for a kind that has none to read.
-    public static func modelsRequest(_ p: PhoneProvider, key: String?) -> PhoneRequest? {
+    public static func modelsRequest(_ p: PhoneProvider, key: String?) throws -> PhoneRequest? {
+        try validate(p, key: key)
         guard let kind = kind(p.kind), kind.listsModels else { return nil }
+        var h = headers(p, key: key)
+        h["Accept"] = "application/json"
         switch p.wire {
-        case .anthropic: return PhoneRequest(method: "GET", url: "\(p.baseUrl)/v1/models?limit=1000", headers: headers(p, key: key))
-        case .openai: return PhoneRequest(method: "GET", url: "\(p.baseUrl)/models", headers: headers(p, key: key))
+        case .anthropic: return PhoneRequest(method: "GET", url: "\(p.baseUrl)/v1/models?limit=1000", headers: h)
+        case .openai: return PhoneRequest(method: "GET", url: "\(p.baseUrl)/models", headers: h)
         case .vertex: return nil
         }
     }
 
     static func headers(_ p: PhoneProvider, key: String?) -> [String: String] {
-        var h = ["Content-Type": "application/json"]
+        var h = ["Content-Type": "application/json", "Accept": "text/event-stream"]
         let key = key ?? ""
         switch p.wire {
         case .anthropic:
             h["x-api-key"] = key
             h["anthropic-version"] = "2023-06-01"
-            if let w = p.workspaceId { h["anthropic-workspace-id"] = w }
+            if p.kind == "anthropic", let w = p.workspaceId { h["anthropic-workspace-id"] = w }
         case .vertex:
             h["Authorization"] = "Bearer \(key)"
         case .openai:
@@ -195,9 +226,9 @@ public enum PhoneProviders {
 
     /// The chat models in a models list, in the order given (Anthropic's is newest first).
     public static func models(from data: Data, kind: String) -> [PhoneModel] {
-        guard let list = (try? JSONValue.parse(data))?["data"]?.array else { return [] }
+        guard data.count <= 2_000_000, let list = (try? JSONValue.parse(data))?["data"]?.array else { return [] }
         let all = list.compactMap { m -> PhoneModel? in
-            guard let id = m.str("id"), !id.isEmpty else { return nil }
+            guard let id = m.str("id"), !id.isEmpty, id.utf8.count <= 1024, !id.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
             return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id)
         }
         guard kind == "openai" else { return all }
@@ -206,17 +237,14 @@ public enum PhoneProviders {
         return all.filter { m in !skip.contains { m.id.contains($0) } }.sorted { $0.id > $1.id }
     }
 
-    /// What a failed answer says, in its own words where it has some.
+    /// A safe status explanation; provider error bodies may echo credentials.
     public static func failure(status: Int, body: Data) -> String {
-        let v = try? JSONValue.parse(body)
-        let message = v?["error"]?.str("message") ?? v?.str("message") ?? v?["error"]?.string
-            ?? v?.array?.first?["error"]?.str("message")
-        let said = message.map { ": \($0)" } ?? ""
+        // Never persist an untrusted response body, which can echo a credential.
         switch status {
-        case 401, 403: return String(localized: "The provider turned the key down (\(status))\(said)")
-        case 404: return String(localized: "The provider doesn’t know that address or model (404)\(said)")
-        case 429: return String(localized: "The provider is rate limiting this key (429)\(said)")
-        default: return String(localized: "The provider answered \(status)\(said)")
+        case 401, 403: return String(localized: "The provider turned the key down (\(status))")
+        case 404: return String(localized: "The provider doesn’t know that address or model (404)")
+        case 429: return String(localized: "The provider is rate limiting this key (429)")
+        default: return String(localized: "The provider answered \(status)")
         }
     }
 }
@@ -287,7 +315,63 @@ public enum PhoneStreamEvent: Equatable, Sendable {
 
 /// Reads a provider's server-sent events, Anthropic's and OpenAI's, one line at a time.
 public struct PhoneStreamParser: Sendable {
+    public static let maxFrameBytes = 1_000_000
+    public static let maxStreamBytes = 8_000_000
+    public static let maxTextBytes = 2_000_000
+    private var data: [String] = []
+    private var event = ""
+    private var frameBytes = 0
+    private var streamBytes = 0
+    private var textBytes = 0
+    private var terminal = false
     public init() {}
+
+    public mutating func line(_ line: String) -> [PhoneStreamEvent] {
+        guard !terminal else { return [] }
+        let size = line.utf8.count + 1
+        frameBytes += size
+        streamBytes += size
+        guard frameBytes <= Self.maxFrameBytes, streamBytes <= Self.maxStreamBytes else {
+            terminal = true
+            return [.failed("The provider's stream is too large.")]
+        }
+        if !line.isEmpty {
+            let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            var value = parts.count > 1 ? String(parts[1]) : ""
+            if value.hasPrefix(" ") { value.removeFirst() }
+            if parts.first == "data" { data.append(value) }
+            if parts.first == "event" { event = value }
+            return []
+        }
+        defer { data = []; event = ""; frameBytes = 0 }
+        if event == "error" { terminal = true; return [.failed("The provider stopped with an error. Test the provider and retry.")] }
+        guard !data.isEmpty else { return [] }
+        let payload = data.joined(separator: "\n")
+        guard payload == "[DONE]" || (try? JSONValue.parse(payload))?.object != nil else {
+            terminal = true
+            return [.failed("The provider sent an unreadable stream.")]
+        }
+        if payload != "[DONE]", let v = try? JSONValue.parse(payload) {
+            if let choices = v["choices"], choices.array == nil || choices.array?.contains(where: { $0.object == nil }) == true {
+                terminal = true
+                return [.failed("The provider sent an unreadable stream.")]
+            }
+            if v.str("type") == "content_block_delta" && v["delta"]?.object == nil {
+                terminal = true
+                return [.failed("The provider sent an unreadable stream.")]
+            }
+        }
+        let events = read("data: " + payload)
+        for e in events {
+            switch e {
+            case .done, .failed: terminal = true
+            case .text(let text): textBytes += text.utf8.count
+            case .usage: break
+            }
+        }
+        guard textBytes <= Self.maxTextBytes else { terminal = true; return [.failed("The provider's reply is too large.")] }
+        return events
+    }
 
     public func read(_ line: String) -> [PhoneStreamEvent] {
         let line = line.trimmingCharacters(in: .whitespaces)
@@ -295,8 +379,8 @@ public struct PhoneStreamParser: Sendable {
         let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
         if payload == "[DONE]" { return [.done] }
         guard let v = try? JSONValue.parse(payload) else { return [] }
-        if let error = v["error"] {
-            return [.failed(error.str("message") ?? error.string ?? String(localized: "The provider stopped with an error."))]
+        if v["error"] != nil && v["error"] != .null || v.str("type") == "error" {
+            return [.failed("The provider stopped with an error. Test the provider and retry.")]
         }
         switch v.str("type") {
         case "content_block_delta":
@@ -306,7 +390,7 @@ public struct PhoneStreamParser: Sendable {
             // The prompt's tokens, cache reads and writes included: all of them are billed.
             guard let u = v["message"]?["usage"], u.object != nil else { return [] }
             let input = ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].compactMap { u.long($0) }
-            return [.usage(input: input.isEmpty ? nil : input.reduce(0, +), output: u.long("output_tokens"))]
+            return [.usage(input: input.isEmpty ? nil : input.filter { $0 >= 0 }.reduce(0) { total, value in total.addingReportingOverflow(value).overflow ? Int64.max : total + value }, output: u.long("output_tokens"))]
         case "message_delta":
             // The reply's tokens so far (a running total).
             guard let out = v["usage"]?.long("output_tokens") else { return [] }
@@ -337,8 +421,8 @@ public struct PhoneTokenCount: Equatable, Sendable {
 
     public mutating func add(_ e: PhoneStreamEvent) {
         guard case .usage(let i, let o) = e else { return }
-        if let i { input = i }
-        if let o { output = o }
+        if let i, i >= 0 { input = min(i, 1_000_000_000) }
+        if let o, o >= 0 { output = min(o, 1_000_000_000) }
         reported = true
     }
 }

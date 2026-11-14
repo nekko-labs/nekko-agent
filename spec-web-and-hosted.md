@@ -131,7 +131,7 @@ The managed edition. Everything the OSS app does, plus convenience that only a h
 ### 4.3 Payments & plans (Stripe), planned
 - **Stripe Checkout** for subscription start; **Stripe Customer Portal** for management; **webhooks** drive entitlement state (`active`, `past_due`, `canceled`).
 - Entitlements gate cloud-only features (sync, relay, managed connectors). The OSS app never checks a license, paid features are server-side only.
-- **Not built yet.** The earlier prototype's billing module (`cloud/src/billing.ts`) was deleted with it in #815. Plans are set by hand in `apps/nekko-agent-api` (`users.plan`) until Stripe is wired in there.
+- **In progress (#2724).** `apps/nekko-agent-api/src/billing.ts` has Checkout, Portal and the signed webhook, hidden behind a team-only switch until launch (decision 0092). See [spec/platform/plans-and-billing.md](spec/platform/plans-and-billing.md). The earlier prototype's module was deleted in #815.
 - Plans (draft, see §6): Free (OSS, BYO everything), Pro (individual), Team.
 - Free trial of Pro; annual discount.
 

@@ -96,9 +96,9 @@ app.whenReady().then(async () => {
     } else {
       await check(`document.querySelectorAll('[data-artifact-row]').length === 22`, 'all-files-listed');
       await check(`document.querySelector('[data-library-layout]').dataset.libraryLayout === 'large' && !!document.querySelector('[data-library-canvas]')`, 'opens-on-large-previews');
-      await check(`document.querySelector('[data-library-group]').dataset.libraryGroup === 'web' && document.querySelector('[data-artifact-kind]').dataset.artifactKind === 'web'`, 'developer-leads-with-web-pages');
+      await check(`[...document.querySelectorAll('[data-library-group]')].slice(0, 2).map(g => g.dataset.libraryGroup).join() === 'design,web' && [...document.querySelectorAll('[data-artifact-kind]')].slice(0, 2).map(g => g.dataset.artifactKind).join() === 'design,web'`, 'designs-then-the-developers-web-pages');
       await check(`[...document.querySelectorAll('.library-fold')].every(f => f.hasAttribute('data-open'))`, 'groups-start-expanded');
-      await check(`[...document.querySelector('[role="radiogroup"][aria-label="Show"]').querySelectorAll('[role="radio"]')].map(b => b.textContent.replace(/\\s+\\d+$/, '').trim()).join('|') === 'All|Web pages|Documents|Designs|Data|Office files|Images'`, 'type-slider-all-then-kinds');
+      await check(`[...document.querySelector('[role="radiogroup"][aria-label="Show"]').querySelectorAll('[role="radio"]')].map(b => b.textContent.replace(/\\s+\\d+$/, '').trim()).join('|') === 'All|Designs|Web pages|Documents|Data|Office files|Images'`, 'type-slider-all-then-kinds');
       await shot('desktop-large');
       for (const [label, name] of [['Small icons', 'small'], ['Full cards', 'cards'], ['List', 'list']]) {
         await radio('Layout', label); await sleep(600);
@@ -107,9 +107,9 @@ app.whenReady().then(async () => {
       }
       await check(`!document.querySelector('[data-library-canvas]') && document.querySelector('.library-list').getBoundingClientRect().width > 1000`, 'list-spans-the-page');
       await run(`document.querySelector('[data-artifact-row]').click()`); await sleep(600);
-      await check(`document.querySelector('.library-list').getBoundingClientRect().width < 400 && !!document.querySelector('[aria-label="Close preview"]')`, 'list-preview-narrows-list');
+      await check(`document.querySelector('.library-list').getBoundingClientRect().width < 400 && !!document.querySelector('[data-library-back]')`, 'list-preview-narrows-list');
       await shot('desktop-list-preview');
-      await run(`document.querySelector('[aria-label="Close preview"]').click()`); await sleep(600);
+      await run(`document.querySelector('[data-library-back]').click()`); await sleep(600);
       await check(`document.querySelector('.library-list').getBoundingClientRect().width > 1000`, 'closing-preview-widens-list');
       await radio('Layout', 'Large icons'); await sleep(600);
       await run(`document.querySelector('[data-library-group="web"] h2 button').click()`); await sleep(400);
@@ -121,10 +121,16 @@ app.whenReady().then(async () => {
       await shot('desktop-documents');
       await radio('Show', 'All'); await sleep(600);
       await run(`document.querySelector('[data-library-tile] button').click()`); await sleep(400);
-      await check(`!!document.querySelector('[aria-label="Close preview"]') && !document.querySelector('[data-library-canvas]')`, 'tile-opens-preview');
+      await check(`!!document.querySelector('[data-library-back]') && !document.querySelector('[data-library-canvas]')`, 'tile-opens-preview');
       await shot('desktop-preview');
-      await run(`document.querySelector('[aria-label="Close preview"]').click()`); await sleep(300);
+      await run(`document.querySelector('[data-library-back]').click()`); await sleep(300);
       await check(`!!document.querySelector('[data-library-canvas]')`, 'close-returns-to-previews');
+      if (!baseline) {
+        await run(`document.querySelector('[data-library-tile] button').click()`); await sleep(400);
+        await check(`(() => { const back = document.querySelector('[data-library-back]').getBoundingClientRect(), pane = document.querySelector('[data-library-back]').closest('section').getBoundingClientRect(); return back.left - pane.left < 40 && back.top - pane.top < 40; })()`, 'back-sits-top-left');
+        await run(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`); await sleep(300);
+        await check(`!!document.querySelector('[data-library-canvas]') && !document.querySelector('[data-library-back]')`, 'escape-returns-to-previews');
+      }
       win.setContentSize(430, 932); await sleep(400);
       await shot('narrow-default');
       await check(`!!document.querySelector('[data-artifact-row]') && !document.querySelector('[data-library-canvas]')?.offsetParent`, 'narrow-keeps-the-list');

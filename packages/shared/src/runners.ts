@@ -505,7 +505,7 @@ export function recommendationText(h: HostView): string {
 }
 
 /** Jobs at the current size before the daemon suggests a size (`SUGGEST_MIN_JOBS` in nekko-runner). */
-export const SUGGEST_MIN_JOBS = 3;
+export const SUGGEST_MIN_JOBS = 2;
 
 const sizeLabel = (cpus: number, memoryMb: number) => `${cpus} vCPUs, ${Math.round(memoryMb / 1024)} GB`;
 
@@ -527,6 +527,22 @@ export function suggestedSizeRow(v: RunnerView): { line: string; reasons: string
     line: `Suggested for your jobs: ${sizeLabel(s.cpus, s.memoryMb)} (now ${sizeLabel(now.cpus, now.memoryMb)}).`,
     reasons: s.reasons,
     apply: { cpusPerVm: s.cpus, memoryPerVmMb: s.memoryMb },
+  };
+}
+
+/**
+ * The runner card's line when the daemon suggests a size other than the saved one, or `null`.
+ * `key` names this suggestion, so **Not now** hides it until the suggestion changes.
+ */
+export function sizeNotice(v: RunnerView): { line: string; reasons: string[]; key: string; apply: Pick<RunnerSettings, 'cpusPerVm' | 'memoryPerVmMb'> } | null {
+  const row = suggestedSizeRow(v);
+  const s = v.suggestedSize;
+  if (!row?.apply || !s) return null;
+  return {
+    line: `Your last ${s.jobs} jobs suggest ${sizeLabel(s.cpus, s.memoryMb)} per VM (now ${sizeLabel(v.host.cpusPerVm, v.config.settings.memoryPerVmMb)}).`,
+    reasons: row.reasons,
+    key: `${s.cpus}x${s.memoryMb}`,
+    apply: row.apply,
   };
 }
 

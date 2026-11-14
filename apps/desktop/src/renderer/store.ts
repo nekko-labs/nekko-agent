@@ -24,6 +24,7 @@ import {
   resizeSplit,
   retargetPane as retargetInTree,
   splitPane as splitInTree,
+  openingShare,
   type Direction,
   type PaneKind,
   type WbNode,
@@ -492,7 +493,7 @@ function openInActive(s: UiState, pane: WbPane): Partial<UiState> {
     activeWorkspaceId: active.id,
     workspaces: s.workspaces.map((w) =>
       w.id === active.id
-        ? { ...w, root: splitInTree(w.root, target, dir, pane), activePaneId: pane.id }
+        ? { ...w, root: splitInTree(w.root, target, dir, pane, openingShare(pane.kind)), activePaneId: pane.id }
         : w,
     ),
   };
@@ -1226,7 +1227,7 @@ export const useStore = create<UiState>((set, get) => ({
       if (!dir) return workspaces === s.workspaces ? {} : { workspaces };
       const pane: WbPane = { id: newPaneId(), kind, refId };
       opened = true;
-      return { workspaces: workspaces.map((w) => (w.id === ws.id ? { ...w, root: splitInTree(w.root, hit!.paneId, dir, pane) } : w)) };
+      return { workspaces: workspaces.map((w) => (w.id === ws.id ? { ...w, root: splitInTree(w.root, hit!.paneId, dir, pane, openingShare(pane.kind)) } : w)) };
     });
     return opened;
   },
@@ -1410,7 +1411,7 @@ export const useStore = create<UiState>((set, get) => ({
       return {
         ...updateWorkspace(s, ws.id, (w) => ({
           ...w,
-          root: splitInTree(w.root, paneId, dir, pane),
+          root: splitInTree(w.root, paneId, dir, pane, openingShare(kind)),
           activePaneId: pane.id,
         })),
         activeWorkspaceId: ws.id,

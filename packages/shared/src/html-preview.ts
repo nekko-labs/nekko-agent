@@ -22,8 +22,12 @@ export interface HtmlPreviewOptions {
   controls?: boolean;
 }
 
-/** What the design canvas asks a served page, as `{ nekkoPreview: <command> }`. */
-export type PreviewCommand = 'probe' | 'pause' | 'play';
+/**
+ * What the design canvas asks a served page, as `{ nekkoPreview: <command> }`.
+ * `targets` starts reporting where the clickable parts are (again whenever the
+ * page changes) and `untargets` stops it.
+ */
+export type PreviewCommand = 'probe' | 'pause' | 'play' | 'targets' | 'untargets';
 
 /** A served page's answer to a `PreviewCommand`, and its report once loaded. */
 export interface PreviewState {
@@ -38,6 +42,35 @@ export interface PreviewState {
   /** The page's full scroll size, in CSS pixels. */
   width: number;
   height: number;
+}
+
+/**
+ * A scroll or pinch over the design that the page had no use for, passed up so
+ * the canvas moves (or zooms, when `zoom`) as it would over its own surface.
+ * `x`/`y` are where the pointer is in the page, in its own CSS pixels.
+ */
+export interface PreviewWheel {
+  nekkoPreview: 'wheel';
+  dx: number;
+  dy: number;
+  x: number;
+  y: number;
+  zoom: boolean;
+}
+
+/**
+ * Where the design's clickable parts are (links, buttons, fields, anything with a
+ * pointer cursor), as `[x, y, width, height]` boxes in the page's own CSS pixels.
+ */
+export interface PreviewTargets {
+  nekkoPreview: 'targets';
+  boxes: Array<[number, number, number, number]>;
+}
+
+/** Space pressed or let go inside the design: while it is down the canvas drags. */
+export interface PreviewHand {
+  nekkoPreview: 'hand';
+  down: boolean;
 }
 
 export interface HtmlPreviewServed {

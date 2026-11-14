@@ -130,7 +130,8 @@ export function PrLinkChip({ href, label, onContextMenu }: { href: string; label
       onContextMenu={onContextMenu}
     >
       <span style={{ color: pr ? prTone(pr) : 'var(--ink-faint)' }} className="inline-flex"><PrStatusIcon status={status} /></span>
-      <span className="min-w-0 truncate text-ink">{label ?? fallback}</span>
+      {/* The label takes the state's hue too, as on the agent card's chip; ink until the state is read. */}
+      <span style={{ color: pr ? prTone(pr) : 'var(--ink)' }} className="min-w-0 truncate">{label ?? fallback}</span>
       <span className="sr-only"> ({STATUS_LABEL[status]})</span>
     </a>
   );
@@ -150,7 +151,7 @@ export function IssueLinkChip({ href, label }: { href: string; label: React.Reac
       className="pr-link-chip mx-0.5 inline-flex max-w-full cursor-pointer items-center gap-1 rounded-full border border-line px-2 py-px align-[-0.15em] text-sm font-medium leading-5 no-underline hover:bg-surface-2 focus-visible:outline focus-visible:outline-accent"
     >
       <span style={{ color: look ? look.tone : 'var(--ink-faint)' }} className="inline-flex"><GfIcon name={look ? look.icon : 'record'} className="h-3.5 w-3.5" /></span>
-      <span className="min-w-0 truncate text-ink">{label}</span>
+      <span style={{ color: look ? look.tone : 'var(--ink)' }} className="min-w-0 truncate">{label}</span>
       {look && <span className="sr-only"> ({look.label})</span>}
     </a>
   );

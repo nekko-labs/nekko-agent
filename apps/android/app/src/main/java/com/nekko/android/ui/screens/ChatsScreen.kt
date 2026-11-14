@@ -116,7 +116,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.ComputersRepository
-import com.nekko.android.ui.components.ConnectionBanner
+import com.nekko.android.ui.components.ConnectionRow
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
@@ -214,7 +214,7 @@ fun ChatsScreen(
     val modelName: (String) -> String = { id -> s.models.values.firstNotNullOfOrNull { l -> l.firstOrNull { it.id == id }?.name } ?: id }
     val res = LocalResources.current
     val newChat = stringResource(R.string.chats_new_chat)
-    // The banner's ⋮: sign out this phone, stop remote access, quit (SK-8).
+    // The connection row's ⋮: sign out this phone, stop remote access, quit (SK-8).
     val exits = rememberSafetyExits(repo)
     var pulling by remember { mutableStateOf(false) }
     val active = s.active
@@ -418,7 +418,7 @@ fun ChatsScreen(
         )
     }
 
-    // The quit confirmation, for the banner's ⋮ and the computer menu alike.
+    // The quit confirmation, for the connection row's ⋮ and the computer menu alike.
     active?.let { SafetyExitDialogs(exits, it.name) }
 
     Box(Modifier.fillMaxSize()) {
@@ -489,7 +489,15 @@ fun ChatsScreen(
                             state = list,
                             contentPadding = PaddingValues(top = if (searching) 0.dp else pill.topInset(simple.pill), bottom = 96.dp),
                         ) {
-                            item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
+                            // One slim row of every computer and its connection; hidden while the list shows only this phone's own chats.
+                            if (all.shown.singleOrNull()?.isPhone != true) {
+                                item(key = "connection-row") {
+                                    ConnectionRow(
+                                        s, waiting = outbox.waiting.size, onPair = onPair, onDetails = onComputers,
+                                        onRetry = { id -> repo.reconnect(id) }, onTryAgain = { exits.reconnect() }, exits = exits,
+                                    )
+                                }
+                            }
                             // Offline mode: what waits on the phone, and chats started offline not created yet.
                             if (outbox.waiting.isNotEmpty() && s.conn != RelayState.ONLINE) {
                                 item(key = "outbox-note") {
@@ -507,10 +515,6 @@ fun ChatsScreen(
                                 items(pendingNew, key = { "pending:${it.chatKey}" }) { item ->
                                     PendingNewChatRow(item, sending = item.id == outbox.sendingId, onDelete = { repo.outbox.remove(item.id) })
                                 }
-                            }
-                            // The phone and the computer speak different protocol versions (IO-32): which side to update.
-                            s.protocolCheck.message(active.name)?.let { text ->
-                                item(key = "protocol") { Notice(text, Tone.WARNING, Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("protocol-banner")) }
                             }
                             s.savedListAt?.let { at ->
                                 item(key = "saved-list") {

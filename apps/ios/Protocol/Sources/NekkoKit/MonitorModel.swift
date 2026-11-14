@@ -13,7 +13,7 @@ public protocol MonitorBackend: AnyObject {
     func unsubscribe(_ id: UUID)
     /// The computer's name, for messages.
     var computerName: String { get }
-    /// Connected now: approvals and answers are never sent later.
+    /// Monitors is online-only; pending response messages are composed inside the chat.
     var isOnline: Bool { get }
 }
 

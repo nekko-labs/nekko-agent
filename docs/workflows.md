@@ -62,8 +62,9 @@ your default model is not local.
 | Allowlist | Use only the tools each step lists. |
 | Full workspace | Use every tool, under your default chat mode. The default, and what existing scheduled tasks use. |
 
-Shell steps and action steps you write in the editor are not agent tools; they
-run under every setting.
+Shell steps and action steps you write in the editor are not agent tools; the
+tool-access setting does not restrict them. Untrusted PR-checkout runs separately
+refuse shell and nested-workflow steps, as described below.
 
 ### Allowlists
 
@@ -177,5 +178,11 @@ an outside contributor, is untrusted, and its run never executes the PR's code:
 - The step is told those checks are unavailable, so a review reports
   *lint/audit skipped: untrusted PR* instead of failing.
 
-Shell steps you write are not agent tools: they run as written for every PR,
-so keep them out of a scheduled task that reviews other people's PRs.
+Shell and nested-workflow steps **fail before execution** in an untrusted
+PR-checkout run. A tool allowlist cannot restrict a direct shell command, and a
+nested run would lose the PR's trust context. Use read-only prompt or skill steps
+to review an untrusted PR instead. Trusted PRs and manual runs are unchanged.
+
+This restriction requires **Check out the pull request** to be on. It does not
+turn arbitrary scheduled tasks into a sandbox or restrict fixed connector action
+steps; review their inputs and authority separately.
