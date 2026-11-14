@@ -47,6 +47,9 @@ pub struct Config {
     pub key: SigningKey,
     /// The one-time code, on the first connection only.
     pub pair_code: Option<String>,
+    /// A computer of the same account found through an org's fleet: every
+    /// HELLO carries the proof this makes (decision 0102). Never with a code.
+    pub fleet: Option<crate::fleet::FleetSigner>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,6 +300,20 @@ impl Shared {
         });
         if let (Some(code), Some(o)) = (lock(&self.pair).clone(), hello.as_object_mut()) {
             o.insert("pair".into(), json!(code));
+        }
+        if let Some(signer) = &cfg.fleet {
+            let binding = crate::fleet::Binding {
+                room: cfg.room.clone(),
+                challenge: nonce.to_string(),
+                host_eph: host_eph.to_string(),
+                client_eph: ours.public.clone(),
+                hello_key: crate::proof::public_key(&cfg.key),
+            };
+            // Signed out or locked here: say nothing, and the handshake runs out.
+            let Some(proof) = signer(&binding) else { return };
+            if let Some(o) = hello.as_object_mut() {
+                o.insert("fleet".into(), proof);
+            }
         }
         let sealed = json!({ "eph": ours.public, "enc": e2e::seal_with_iv(&key, &hello, e2e::random_iv()) });
         let mut conn = lock(&self.conn);

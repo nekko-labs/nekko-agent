@@ -26,6 +26,7 @@
 //! Merging is per chat, newest `updatedAt` wins; a chat a turn is running in
 //! is never overwritten (its local copy is newer by the time it saves).
 
+mod fleet_link;
 mod http;
 mod org_records;
 mod orgs;
@@ -49,6 +50,7 @@ use std::time::Duration;
 use vault::Vault;
 use zeroize::Zeroize;
 
+pub use fleet_link::{ConnectInfo, FleetAdmitted, FleetTarget, HelloBinding};
 pub use http::client;
 pub use org_records::LocalModel;
 pub use orgs::{HEARTBEAT, HostInfo, ModelFuture};
@@ -131,6 +133,11 @@ struct Live {
     orgs: Option<Vec<Value>>,
     /// How sharing with each org is going.
     shares: BTreeMap<String, orgs::ShareLive>,
+    /// Computers of this account that can be reached, from the last fleet
+    /// lists (`org/device`), with how to reach them (decision 0102).
+    fleet_targets: BTreeMap<String, fleet_link::FleetTarget>,
+    /// A fleet HELLO named a device or epoch this computer hadn't heard of: reading the account again.
+    fleet_catching_up: bool,
 }
 
 pub struct Cloud {
@@ -630,6 +637,8 @@ impl Cloud {
             let mut live = lock(&self.live);
             live.remote = None;
             live.orgs = None;
+            // How to reach this account's computers goes with the sign-in.
+            live.fleet_targets.clear();
         }
         Ok(self.changed())
     }

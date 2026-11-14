@@ -6,11 +6,11 @@ status: in-progress
 
 # Organizations and the shared computer fleet
 
-Tracking: umbrella [#2585](https://github.com/nekko-labs/nekko-agent/issues/2585); Cloud API [#2586](https://github.com/nekko-labs/nekko-agent/issues/2586), engine [#2587](https://github.com/nekko-labs/nekko-agent/issues/2587), desktop [#2588](https://github.com/nekko-labs/nekko-agent/issues/2588). Decision: [0086](../../docs/decisions/0086-organizations-own-the-computer-fleet.md). Builds on the [account-synced computer fleet](../phone/account-synced-computer-fleet.md).
+Tracking: umbrella [#2585](https://github.com/nekko-labs/nekko-agent/issues/2585); Cloud API [#2586](https://github.com/nekko-labs/nekko-agent/issues/2586), engine [#2587](https://github.com/nekko-labs/nekko-agent/issues/2587), desktop [#2588](https://github.com/nekko-labs/nekko-agent/issues/2588). Decisions: [0086](../../docs/decisions/0086-organizations-own-the-computer-fleet.md), and [0102](../../docs/decisions/0102-fleet-links-open-on-the-account-keys.md) for opening a listed computer ([#2799](https://github.com/nekko-labs/nekko-agent/issues/2799)). Builds on the [account-synced computer fleet](../phone/account-synced-computer-fleet.md).
 
 ## Goal
 
-A team in Nekko Cloud. Philip creates the organization "Nekko Labs", this Windows PC shares itself with it, and his laptop, signed in to the same account and unlocked once (recovery key or approval), lists the PC under Nekko Labs > Computers with its name, OS, online or offline state and the local models it can serve. No pairing code, QR or link. **Discovery only:** connecting to a listed computer and running a model on it is a later slice, and the app must not offer it yet.
+A team in Nekko Cloud. Philip creates the organization "Nekko Labs", this Windows PC shares itself with it, and his laptop, signed in to the same account and unlocked once (recovery key or approval), lists the PC under Nekko Labs > Computers with its name, OS, online or offline state and the local models it can serve. No pairing code, QR or link. Then, from the laptop, he opens a chat on the PC and sends it prompts, still with no code: a computer of **your own account** in the list can be opened (decision 0102). Another member's computer is listed but can't be opened.
 
 ## Acceptance criteria
 
@@ -20,6 +20,7 @@ A team in Nekko Cloud. Philip creates the organization "Nekko Labs", this Window
 - Sharing a computer with an org is a per-org switch, **off by default**, separate from chat sync consent. It lists the computer and its local models for that org's members, uploads no chats and lets no one run anything.
 - A member sees only computers sealed under the org's current key, published by current members from live, unrevoked devices. Removing a member or revoking a device makes their computers disappear. A non-member cannot tell whether an org exists.
 - The server never holds key material or readable descriptors.
+- Opening a chat on a listed computer: only for a computer of your own account that is online, shares with that org, has remote access on and is verified against the account record. No code. Its relay details are sealed under the account keyring, so other members never see them. The computer lets the device in only while both hold the account's current keys, the device is in the account record and sharing stays on; when any of that changes, the live connection is cut within 15 seconds, not only the listing. Nothing is added to the computer's paired devices, and nothing about the link is saved on either side.
 
 ## Implemented: Cloud API slice (#2586)
 
@@ -31,11 +32,21 @@ A team in Nekko Cloud. Philip creates the organization "Nekko Labs", this Window
 - Deleting an account deletes the orgs it alone owns; its other memberships and computers go with it. Sync deletion and device revocation remove that device's org computers.
 - Tested with Fastify and PGlite request tests using synthetic envelopes. They check server policy, not encryption, key handling, UI or real-device behavior.
 
+## Implemented: opening your own listed computer, engine (#2799)
+
+Decision 0102. `crates/nekko-sync/src/fleet_link.rs` (the two sealed envelopes), `crates/nekko-cloud/src/fleet_link.rs` (the connect block in the descriptor, the HELLO proof, the computer's check and catch-up), `crates/nekko-remote/src/fleet.rs` and `service.rs` (fleet admission beside the paired registry, recheck and kick), `crates/nekkod/src/fleet.rs` (the wiring, the 15-second recheck) and `computers:connectFleet [orgId, deviceId]` in `crates/nekkod/src/computers.rs`, which opens an in-memory link that the Computers list, chats and the Model Server provider treat like a paired computer.
+
+- `fleet:list` rows carry `reach`: `ready`, `you`, `other-account`, `unverified`, `no-remote` (remote access off there, or an older build) or `locked`.
+- Refusals the desktop shows: `fleet-off` (sharing off there), `fleet-locked` (signed out or locked there), `fleet-epoch` / `fleet-device` (that computer hasn't caught up with this device yet: it reads the account again and the desktop retries once after 3 seconds), `fleet-account`.
+- The connect block carries the computer's relay address as remote access has it. LAN alternatives that a pairing link adds are not in it yet.
+- Verified: unit tests for both envelopes, the descriptor field and the never-saved link; loopback tests of a real client and relay agent core with a stand-in gate; and `crates/nekko-cloud/tests/live_fleet_connect.rs` against `npm run dev:local`: two devices of one account, a chat turn through the link with a canned reply in place of a model, a replayed or misbound proof refused, and the live link cut when sharing goes off and when the connecting device is revoked. **Not verified:** the desktop UI (next PR), two real computers, a real model, production.
+
 ## Planned
 
 - **Engine (#2587):** the org keyring as an `org-key` sync record in the creator's account (synced even with chat sync off), descriptor sealing under the org keyring, the sharing switch, heartbeat and republish, rotation after a removal, and the `org:*` and `fleet:*` channels.
 - **Desktop (#2588):** the Organization section, the Computers list and the sharing switch, following the design system.
 - **Another member's account receives the org key:** designed in decision 0086 (a one-time code and a join wrap), not built. Until then a member without the key sees the roster but not the computers.
 - **Invite email** (Resend), role changes and ownership transfer.
-- **Connecting to a listed computer** and running a model on it, with mutual authentication and live-session revocation (item 3 of the account fleet spec).
+- **Desktop UI for opening a listed computer:** an *Open chat* action on your own online computers in the Organization Computers list, and a one-line reason on the rest.
+- **Phones** open a listed computer with the same proof (separate issues per OS).
 - Production: set `NEKKO_ORGS_ENABLED=1` and `NEKKO_ORGS_ALLOWED_EMAILS=philip@nekkolabs.com`. The external crypto review in `docs/SYNC-ENCRYPTION.md` still applies before any broader release.

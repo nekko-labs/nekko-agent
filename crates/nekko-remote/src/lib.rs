@@ -14,6 +14,7 @@ pub mod card;
 pub mod chat_links;
 pub mod client;
 pub mod e2e;
+pub mod fleet;
 pub mod hello;
 pub mod jsobj;
 pub mod phone;
