@@ -2,6 +2,7 @@ import React from 'react';
 import { ConnectorGrid } from '../components/ConnectorGrid.js';
 import { MessagingChannels } from '../components/MessagingChannels.js';
 import { hasAppChrome } from '../chrome.js';
+import { CONNECTORS_GUIDE, PageGuideButton, PageIntro, usePageIntro } from '../components/PageIntro.js';
 
 /**
  * The Connectors tab: a header plus the shared connector grid (also reused by
@@ -9,14 +10,19 @@ import { hasAppChrome } from '../chrome.js';
  * messaging channels (Telegram) that drive chats rather than fetch context.
  */
 export function ConnectorsView() {
+  const intro = usePageIntro('connectors');
   return (
     <div className="h-full overflow-y-auto">
+      {intro.show && <PageIntro guide={CONNECTORS_GUIDE} onClose={intro.close} />}
       <div className="@container mx-auto max-w-5xl px-4 pt-3 pb-8">
         {!hasAppChrome && <h1 className="view-title">Connectors</h1>}
-        <p className="mt-1 text-xs text-ink-soft">
-          Pull issues, messages, and docs into context. Credentials are stored locally and validated on
-          connect.
-        </p>
+        <div className="mt-1 flex items-start justify-between gap-3">
+          <p className="text-xs text-ink-soft">
+            Pull issues, messages, and docs into context. Credentials are stored locally and validated on
+            connect.
+          </p>
+          <PageGuideButton name="Connectors" onClick={intro.open} />
+        </div>
         <div className="mt-4">
           <ConnectorGrid />
         </div>

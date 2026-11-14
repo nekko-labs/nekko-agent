@@ -26,7 +26,7 @@ Nekko Agent therefore has three built-in prompt profiles:
 
 ## Does Nekko Agent have persistent memory?
 
-**Yes.** Nekko stores global and workspace memory notes as Markdown and provides a manager for reviewing, editing and deleting them. A chat can use all memory, only its project folders' memory, or no memory. An incognito chat reads no memory.
+**Yes.** Nekko stores global and workspace memory notes as Markdown and provides a manager for reviewing, editing and deleting them. A chat can use all memory, only its project folders' memory, or no memory. An incognito chat reads no memory. The first time you open the Memory page, a short guide explains it; **Memory guide** on the page opens it again.
 
 Eligible chats can expose the `remember` tool for durable preferences. A save appears in a memory card; a correction under the same title replaces the note. The Memory surface may need enabling in Settings. The tool is not available in incognito, memory-off, folders-only or delegated child chats, and workflow tool policy can exclude it.
 
