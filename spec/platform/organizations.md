@@ -41,12 +41,15 @@ Decision 0102. `crates/nekko-sync/src/fleet_link.rs` (the two sealed envelopes),
 - The connect block carries the computer's relay address as remote access has it. LAN alternatives that a pairing link adds are not in it yet.
 - Verified: unit tests for both envelopes, the descriptor field and the never-saved link; loopback tests of a real client and relay agent core with a stand-in gate; and `crates/nekko-cloud/tests/live_fleet_connect.rs` against `npm run dev:local`: two devices of one account, a chat turn through the link with a canned reply in place of a model, a replayed or misbound proof refused, and the live link cut when sharing goes off and when the connecting device is revoked. **Not verified:** the desktop UI (next PR), two real computers, a real model, production.
 
+## Implemented: opening your own listed computer, desktop (#2799)
+
+Settings > Phone pairing > Organization > Computers: an online computer of your own account whose row says `reach: ready` has an **Open chat** row action (faint until hover or focus, as every row action). It calls `computers:connectFleet`, then `computers:createSession` on that computer, and opens the new chat. While it dials it reads *Connecting…*; a refusal shows its sentence on that row in the danger tone and no chat is made. An online row that can't be opened says why in one faint line: another member's (*Shared by …*), remote access off there, not verified, or this computer lacks the newest key. Offline rows and this computer say nothing more. The share switch explains that with Remote access on your own other computers can open chats on it. In Settings > Computers a fleet link reads *Opened from your organization* and its action is **Disconnect**. Design: `nekko-designs/fleet-connect-design.html`. User guide: `docs/REMOTE.md` ("Your own computers, with no link"). Phones: not yet (iOS #2804, Android #2805).
+
 ## Planned
 
 - **Engine (#2587):** the org keyring as an `org-key` sync record in the creator's account (synced even with chat sync off), descriptor sealing under the org keyring, the sharing switch, heartbeat and republish, rotation after a removal, and the `org:*` and `fleet:*` channels.
 - **Desktop (#2588):** the Organization section, the Computers list and the sharing switch, following the design system.
 - **Another member's account receives the org key:** designed in decision 0086 (a one-time code and a join wrap), not built. Until then a member without the key sees the roster but not the computers.
 - **Invite email** (Resend), role changes and ownership transfer.
-- **Desktop UI for opening a listed computer:** an *Open chat* action on your own online computers in the Organization Computers list, and a one-line reason on the rest.
 - **Phones** open a listed computer with the same proof (separate issues per OS).
 - Production: set `NEKKO_ORGS_ENABLED=1` and `NEKKO_ORGS_ALLOWED_EMAILS=philip@nekkolabs.com`. The external crypto review in `docs/SYNC-ENCRYPTION.md` still applies before any broader release.
