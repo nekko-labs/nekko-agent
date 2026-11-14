@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- NekkoNative.entitlements plus the CarPlay voice-based conversational app entitlement
+         (iOS 26.4+). Apple grants it per app: until it is on the App ID, signing with this
+         file fails, so project.yml keeps pointing at NekkoNative.entitlements. Once granted,
+         point CODE_SIGN_ENTITLEMENTS here (spec/phone/carplay.md, Release). Keep the rest in
+         step with NekkoNative.entitlements. -->
+    <key>aps-environment</key><string>development</string>
+    <key>com.apple.security.application-groups</key>
+    <array><string>group.dev.nekkolabs.nekkoagent</string></array>
+    <key>com.apple.developer.carplay-voice-based-conversation</key><true/>
+</dict>
+</plist>

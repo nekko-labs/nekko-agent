@@ -365,6 +365,15 @@ final class RunActivities {
         trailing = nil
     }
 
+    /// Every chat the card would list now, before its level trims it: CarPlay's Work tab.
+    func currentChats(now: Date = Date()) -> [LiveChat] {
+        guard let src = source() else { return [] }
+        return liveChats(src, now: now).filter { c in
+            guard c.state == .done || c.state == .failed, let at = c.finishedAt else { return true }
+            return now.timeIntervalSince(at) <= LiveCardRules.finishedTail
+        }
+    }
+
     private func liveChats(_ src: Source, now: Date) -> [LiveChat] {
         src.summaries.compactMap { s in
             guard !s.archived, !dismissed.contains(s.id) else { return nil }
