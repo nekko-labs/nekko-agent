@@ -12,6 +12,17 @@ describe('compact providers', () => {
     expect(html).not.toContain('models-connected');
     expect(html).not.toContain('provider-choices');
   });
+  it('names each provider and marks the one whose setup is open', () => {
+    const html = renderToStaticMarkup(<ProviderShortcuts onAdd={() => {}} open="gemini" />);
+    expect(html).toContain('>Google Gemini</span>');
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(html).toMatch(/aria-label="Add Google Gemini" aria-pressed="true"/);
+  });
+  it('shows the More providers when a setup opens on one of them', () => {
+    const html = renderToStaticMarkup(<ProviderShortcuts onAdd={() => {}} open="vertex" />);
+    expect(html).toContain('Add Claude on Vertex AI');
+    expect(html).not.toContain('More providers');
+  });
   it('shows all three local runtimes without a redundant overflow', () => {
     const html = renderToStaticMarkup(<ProviderShortcuts localOnly onAdd={() => {}} />);
     for (const name of ['Ollama', 'LM Studio', 'vLLM']) expect(html).toContain(`Add ${name}`);

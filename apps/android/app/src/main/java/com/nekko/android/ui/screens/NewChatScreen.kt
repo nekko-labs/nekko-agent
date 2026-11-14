@@ -483,12 +483,22 @@ private fun Label(icon: androidx.compose.ui.graphics.vector.ImageVector, text: S
 @Composable
 private fun Chip(label: String, selected: Boolean, icon: String? = null, onClick: () -> Unit) {
     val p = Nekko.palette
+    // Quiet choices (#2417, the iPhone's #2416): no outline and no solid fill; the chosen one is
+    // tinted and named in the accent, with a check. The touch target stays at least 48 dp.
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        leadingIcon = computerIconRes(icon)?.let { { ComputerIcon(icon) } },
-        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = p.accent, selectedLabelColor = p.accentInk, selectedLeadingIconColor = p.accentInk),
+        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium) },
+        leadingIcon = computerIconRes(icon)?.let { { ComputerIcon(icon) } }
+            ?: if (selected) ({ Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }) else null,
+        border = null,
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            labelColor = p.ink,
+            selectedContainerColor = p.accentSoft,
+            selectedLabelColor = p.accent,
+            selectedLeadingIconColor = p.accent,
+        ),
         modifier = Modifier.heightIn(min = 48.dp),
     )
 }

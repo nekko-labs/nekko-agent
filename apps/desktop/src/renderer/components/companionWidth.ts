@@ -2,8 +2,11 @@
  * The width of an agent's companion column on the wall, as a share of its
  * window. Kept per chat in localStorage, so dragging one agent's column does
  * not move every other agent's, and a reload keeps it.
+ *
+ * A document, terminal or browser opened beside a chat is what you are about
+ * to read, so by default it takes the larger part of the window (60%).
  */
-export const COMPANION_DEFAULT = 0.38;
+export const COMPANION_DEFAULT = 0.6;
 export const COMPANION_MIN = 0.2;
 export const COMPANION_MAX = 0.75;
 const KEY = 'nekko.companionWidth';

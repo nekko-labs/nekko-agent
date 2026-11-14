@@ -138,6 +138,7 @@ public final class ChatModel {
     /// This chat's subagent chats (the list hides them), for the delegation rows' status and model.
     public private(set) var children: [SessionSummary] = []
 
+    private let computerId: String?
     private let store: ComputersStore
     private let now: () -> Int64
     private var subscription: UUID?
@@ -155,6 +156,7 @@ public final class ChatModel {
     public init(sessionId: String, store: ComputersStore, now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }) {
         self.sessionId = sessionId
         self.store = store
+        self.computerId = store.activeId
         self.now = now
     }
 
@@ -605,20 +607,38 @@ public final class ChatModel {
         Task { _ = try? await r.call(Channels.chatAbort, [.string(id)]) }
     }
 
-    /// Approvals and answers are never queued: they are time-sensitive and safety-relevant.
-    public static let reconnectToAnswer = "Reconnect to answer. Approvals and answers are never sent later."
+    /// Guarded policy changes still require a live connection and fresh authentication.
+    public static let reconnectToAnswer = "Reconnect to answer here. Open the chat to keep a pending response."
+
+    public var responseMessages: [ResponseMessage] {
+        store.activeId == computerId ? store.responses.messages(for: sessionId) : []
+    }
+    public var responseApproval: Approval? {
+        guard let a = turn.approval, !store.responses.contains(sessionId, approval: a) else { return nil }
+        return a
+    }
+    public var responseQuestion: AskRequest? {
+        guard let q = turn.question, !store.responses.contains(sessionId, question: q) else { return nil }
+        return q
+    }
+    public func retryResponse(_ id: String) {
+        guard store.activeId == computerId else { return }
+        store.responses.retry(id)
+        if store.conn != .online { store.reconnect() }
+    }
+    public func cancelResponse(_ id: String) {
+        guard store.activeId == computerId else { return }
+        store.responses.cancel(id)
+    }
 
     public func approve(_ ok: Bool) async throws {
-        guard let a = turn.approval else { return }
-        guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
-        turn.approval = nil
-        cardChanges += 1
-        do {
-            _ = try await store.remote().call(Channels.toolApprove, [.string(sessionId), .string(a.call.id), .bool(ok)])
-        } catch {
-            // The computer is still waiting: keep the card so the user can try again.
-            if turn.approval == nil { turn.approval = a }
-            throw store.readable(error)
+        guard store.activeId == computerId else { throw RelayError("This chat belongs to another computer.") }
+        guard let a = responseApproval else { return }
+        store.responses.approve(sessionId, approval: a, ok: ok)
+        await store.responses.flush()
+        if responseMessages.contains(where: { $0.callId == a.call.id && $0.status == "sent" }) {
+            if turn.approval?.call.id == a.call.id { turn.approval = nil }
+            cardChanges += 1
         }
     }
 
@@ -663,15 +683,13 @@ public final class ChatModel {
     }
 
     public func answer(_ answers: [AskAnswer]) async throws {
-        guard let q = turn.question else { return }
-        guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
-        do {
-            _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
+        guard store.activeId == computerId else { throw RelayError("This chat belongs to another computer.") }
+        guard let q = responseQuestion else { return }
+        store.responses.answer(sessionId, question: q, answers: answers)
+        await store.responses.flush()
+        if responseMessages.contains(where: { $0.callId == q.callId && $0.status == "sent" }) {
             if turn.question?.callId == q.callId { turn.question = nil }
             cardChanges += 1
-        } catch {
-            // Keep the mounted card, including all previous page choices, for retry.
-            throw store.readable(error)
         }
     }
 

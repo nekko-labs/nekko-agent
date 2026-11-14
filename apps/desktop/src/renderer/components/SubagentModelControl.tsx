@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  DEFAULT_ORCHESTRATION, SUBAGENT_MODEL_CHOICES, getStrategy, isChatModel, isLocalProvider, subagentModelChoice,
+  DEFAULT_ORCHESTRATION, MODEL_CAPABILITIES, SUBAGENT_MODEL_CHOICES, getStrategy, isChatModel, isLocalProvider, subagentModelChoice,
 } from '@nekko-agent/shared';
 import type { AppSettings, ModelInfo, OrchestrationSettings, ProviderConfig, SubagentModelChoice } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
@@ -11,7 +11,9 @@ import { CheckIcon } from '../icons.js';
 export function subagentModelLabel(o: OrchestrationSettings | undefined, models: Record<string, ModelInfo[] | null>): string {
   const route = o?.delegationRoute;
   if (route) return models[route.providerId]?.find((m) => m.id === route.modelId)?.name ?? route.modelId;
-  return SUBAGENT_MODEL_CHOICES.find((c) => c.id === subagentModelChoice(o))!.label;
+  const label = SUBAGENT_MODEL_CHOICES.find((c) => c.id === subagentModelChoice(o))!.label;
+  const tier = o?.subagentTier;
+  return tier && tier !== 'smaller' && o?.subagentModel !== 'inherit' ? `${label} · ${tier[0]!.toUpperCase()}${tier.slice(1)}` : label;
 }
 
 /** The settings patch for a pick: an auto choice clears a saved model, a model replaces the choice. */
@@ -30,12 +32,14 @@ export function subagentModelPatch(o: OrchestrationSettings | undefined, pick: S
  * sits inside the model selector's popover. Hidden on Solo, where nothing
  * delegates.
  */
-export function SubagentModelControl({ settingsOverride, update, defaultOpen = false }: {
+export function SubagentModelControl({ settingsOverride, update, defaultOpen = false, fusionAllowed }: {
   /** Settings to read instead of the store's (the Settings page passes its own copy). */
   settingsOverride?: AppSettings;
   /** Save a patch; defaults to the app's settings update. */
   update?: (patch: Partial<AppSettings>) => Promise<void>;
   defaultOpen?: boolean;
+  /** Undefined on the global settings page. */
+  fusionAllowed?: boolean;
 }) {
   const storeSettings = useStore((s) => s.settings);
   const refreshSettings = useStore((s) => s.refreshSettings);
@@ -107,15 +111,28 @@ export function SubagentModelControl({ settingsOverride, update, defaultOpen = f
   const cloud = section('Cloud', false);
   const localSection = section('Local', true);
 
-  return <div className="min-w-0" data-subagent-model-control>
+  return <div className="min-w-0 shrink-0" data-subagent-model-control>
     <button type="button" className="quiet-row text-xs" aria-expanded={open} aria-controls="subagent-model-list" onClick={() => { setOpen(!open); setQuery(''); }} title="The model sub-agents run on, in every chat">
       <span className="text-ink-faint">Subagents</span>
       <span className="min-w-0 flex-1 truncate text-right text-ink" data-subagent-model-label>{subagentModelLabel(orchestration, byProvider)}</span>
       <span className="ctl-caret shrink-0" aria-hidden="true">{open ? '▴' : '▾'}</span>
     </button>
-    {open && <div id="subagent-model-list" className="px-1 pb-1">
+    {open && <div id="subagent-model-list" className="max-h-64 overflow-y-auto overscroll-contain px-1 pb-1">
+      <label className="mb-2 flex flex-wrap items-center gap-2 px-3 text-xs">
+        <span className="flex-1 text-ink-soft">Capability target</span>
+        <select className="quiet-field w-auto max-w-[60%] shrink-0 text-xs" aria-label="Subagent capability target" value={orchestration?.subagentTier ?? 'smaller'} disabled={!!route || choice === 'inherit'} onChange={(e) => {
+          const patch = { orchestration: { ...DEFAULT_ORCHESTRATION, ...orchestration, subagentTier: e.target.value as OrchestrationSettings['subagentTier'] } };
+          setError(null);
+          void (update ? update(patch) : window.nekko.updateSettings(patch).then(() => refreshSettings())).catch((e) => setError(`Could not save: ${String(e)}`));
+        }}>
+          <option value="smaller">Smaller than parent</option>
+          {MODEL_CAPABILITIES.map((tier) => <option key={tier} value={tier}>{tier[0]!.toUpperCase() + tier.slice(1)}</option>)}
+        </select>
+        <span className="w-full text-2xs text-ink-faint">Target tier, then smaller; never above the parent.</span>
+      </label>
+      {fusionAllowed === false && <p className="mb-2 px-3 text-2xs text-ink-faint">Provider locked. Local preferences wait for Fusion; exact cross-provider picks are refused.</p>}
       <input className="quiet-field mb-1 w-full text-xs" placeholder="Search subagent models" aria-label="Filter subagent models" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus={!defaultOpen} />
-      <div className="max-h-48 overflow-y-auto overscroll-contain" role="listbox" aria-label="Subagent model">
+      <div role="listbox" aria-label="Subagent model">
         {choices.map((c) => <button key={c.id} type="button" role="option" aria-selected={choice === c.id} className="quiet-row items-start text-xs" onClick={() => void save(c.id)} data-subagent-choice={c.id}>
           <span className="flex min-w-0 flex-1 flex-col">
             <span className={`font-medium ${choice === c.id ? 'text-accent' : 'text-ink'}`}>{c.id.startsWith('auto') ? `✨ ${c.label}` : c.label}{c.id === 'auto' && <span className="ml-2 text-2xs font-normal text-ink-faint">Default</span>}</span>

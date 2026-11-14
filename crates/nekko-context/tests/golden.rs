@@ -153,6 +153,7 @@ fn builds_the_turn_context_exactly_as_the_ts_host_does() {
                 turn_wrapper: p["turnWrapper"].as_str(),
                 about_user: p["aboutUser"].as_str(),
                 checkout_notice: p["checkoutNotice"].as_str(),
+                ..Default::default()
             })
         })
         .collect();

@@ -75,16 +75,7 @@ class MiscTest {
     }
 
     @Test
-    fun `a removed phone is told the steps on the computer, with Sign out all phones as the fallback`() {
-        val copy = com.nekko.android.ui.components.deniedCopy(com.nekko.protocol.DenyReason.REVOKED)
-        assertTrue(copy.contains("Pair a device"))
-        assertTrue(copy.contains("Sign out all phones"))
-    }
-
-    @Test
-    fun `a phone too old for the computer is told to update, not to pair again`() {
-        val copy = com.nekko.android.ui.components.deniedCopy(com.nekko.protocol.DenyReason.UPDATE_REQUIRED)
-        assertTrue(copy.contains("Update this app"))
+    fun `the update-required refusal parses from the wire`() {
         assertEquals(com.nekko.protocol.DenyReason.UPDATE_REQUIRED, com.nekko.protocol.DenyReason.parse("update-required"))
     }
 

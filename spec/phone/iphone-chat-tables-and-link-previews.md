@@ -28,6 +28,35 @@ area: phone
 - **No network.** A `WKContentRuleList` blocks every URL, then allows only the two app schemes, `about:`, `data:` and `blob:`; the view is not created until that list has compiled, and a failed compile refuses to open the preview. The navigation delegate cancels any navigation off the app schemes; only a link the user tapped to an ordinary web or mail address leaves, to Safari or Mail. `target=_blank` opens in the same view.
 - The phone never reaches the computer's files or ports: the computer reads them and only for what the agent linked in that chat. The bytes stay in memory on the phone (no disk cache), and Reload forgets them.
 
+## Native acceptance coverage (2026-11-14, #1095)
+
+`[verified on an isolated iPhone 17 Pro / iOS 27.0 simulator, Xcode 27.2]` A Debug-only
+`-uiTestPreviews` route renders the production `AssistantReply`, `PreviewCard`,
+`PreviewWindow`, isolated WebKit and Markdown table views. Its in-memory
+`PreviewLoader` reader admits only two explicit synthetic artifact paths and one
+exact loopback URL; unknown paths, real chat IDs and unknown URLs fail. The route
+is included in `NativeFixtureRoute.isolated` and skips normal transports and
+lifecycle side effects. Release builds retain the normal computer-backed loader.
+There is no paired computer, actual localhost server, real file read, credentials,
+or public network request in this fixture. It is not end-to-end relay evidence.
+
+`PreviewsTests` exercises interactive HTML, reload/reset, Done returning to the
+reply, Markdown-file opening, loopback preview, failure/retry, and expanded table
+navigation at accessibility text size. `PreviewEvidenceTests` pins the synthetic
+reader's scope. Each light/dark native suite passes 6/6 (three interaction journeys plus three reader
+isolation tests) on an isolated iPhone 17 Pro / iOS 27.0 with Xcode 27.2. Actual native light/dark frames were inspected, including final-run cards,
+interactive HTML and the horizontally panned large-text table. Tests query real button role/name without depending on Xcode’s
+intermittent legacy Other/modern WebView wrapper classification; interaction assertions remain unchanged. Scoped WebKit diagnostics measured
+correct 200/DOM completion but cold navigation longer than the initial guessed
+15-second wait. The new functional tests use an explicit 30-second readiness
+bound, not sleeps, retries or a product performance gate. This does not verify
+load-time performance or intermittent reliability. Cards are captured after return from
+the preview so the cold-start thumbnail is not mistaken for the settled state.
+The HTML preserves the artifact’s authored colors rather than recoloring it
+when the app theme changes. Published native evidence is retained in [PR #2779](https://github.com/nekko-labs/nekko-agent/pull/2779);
+protocol tests alone do not suffice. This new evidence fixture has no before state and does not
+redesign product UI.
+
 ## Acceptance
 
 - Unit tests (Linux, `swift test` in `apps/ios/Protocol`): table parsing (alignment, optional outer pipes, escaped pipes, ragged rows, fences, no delimiter, VoiceOver labels); link classification for each path and URL shape above; card extraction and titles; scheme round trips including Windows drives, spaces and `#`; origin pinning for loopback requests; decoding both replies; error wording; the loader's cache, reload, per-chat forgetting, byte limit, cut text and slot limit.
