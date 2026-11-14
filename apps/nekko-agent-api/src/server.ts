@@ -2,7 +2,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerAccount, type SignInConfig } from "./account.js";
 import { registerBilling, type Stripe } from "./billing.js";
-import { DEFAULT_STAFF_EMAILS, type Features, registerFeatures } from "./features.js";
+import { DEFAULT_STAFF_EMAILS, type Feature, type Features, registerFeatures } from "./features.js";
 import type { Alert } from "./alerts.js";
 import type { Db } from "./db.js";
 import { registerDonations } from "./donations.js";
@@ -13,6 +13,7 @@ import { parseSignup, recordSignup } from "./signups.js";
 import type { DeleteAuthUser } from "./supabase.js";
 import { registerFleet } from "./fleet.js";
 import { registerOrgs } from "./orgs.js";
+import { registerShares } from "./shares.js";
 import { registerSync } from "./sync.js";
 
 export interface ServerOptions {
@@ -79,7 +80,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const origins = new Set(opts.allowedOrigins);
   const features: Features = {
     staff: new Set((opts.staffEmails ?? DEFAULT_STAFF_EMAILS).map((e) => e.trim().toLowerCase()).filter(Boolean)),
-    available: new Set(opts.stripe ? ["billing"] as const : []),
+    // library-multiplayer joins once the service runs its relay (#2751).
+    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud"]),
   };
   const { max, windowMs } = opts.rateLimit ?? { max: 5, windowMs: 60 * 60 * 1000 };
   const hits = new Map<string, { count: number; resetAt: number }>();
@@ -179,6 +181,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   app.register(async (scope) => {
     await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
     registerSync(scope, opts.db);
+    registerShares(scope, opts.db, features);
     if (opts.fleetEnabled) registerFleet(scope, opts.db);
     if (opts.orgsEnabled) registerOrgs(scope, opts.db, { allowedEmails: opts.orgsAllowedEmails });
     registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs }, { driver: opts.machines?.driver, deleteAuthUser: opts.deleteAuthUser, stripe: opts.stripe }, features);
