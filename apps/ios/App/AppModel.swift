@@ -38,6 +38,10 @@ final class AppModel {
     private let activities = RunActivities()
     /// The card's mic: its own microphone use, apart from any composer's (they share one microphone).
     private let cardDictation = Dictation()
+    /// Nekko in CarPlay (`CarPlaySceneDelegate`): what the driver's words do, and the Results list.
+    @ObservationIgnored private(set) lazy var car: CarSession = makeCar()
+    /// The car's microphone, apart from the composer's and the card's: phone-first.
+    @ObservationIgnored let carDictation = Dictation()
     private let talker = NekkoVoiceRunner()
     private let voiceDispatcher = NekkoVoiceDispatcher()
     private var voiceComputerId: String?
@@ -934,5 +938,118 @@ enum CardVoiceDelivery {
         let online = await waitOnline()
         return try await outbox.sendWaiting(chatId: sessionId, text: text, wait: online ? 10 : 0,
                                             beforeEnqueue: { permit.commit(if: allowed) })
+    }
+}
+
+// MARK: CarPlay
+
+extension AppModel {
+    /// What the car lists: the chats the Lock Screen card is built from (every computer
+    /// and this iPhone), before its level trims them, with what the car speaks.
+    func carChats(now: Date = Date()) -> [CarChat] {
+        let summaries = Dictionary((store.chats(on: nil) + phone.summaries).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return activities.currentChats(now: now).map { c in
+            let computerId = store.computerId(ofChat: c.id)
+            let name = computerId.flatMap { id in store.computers.first { $0.id == id }?.name } ?? String(localized: "This iPhone")
+            let reply = MarkdownParser.plainText(summaries[c.id]?.lastReplyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return CarChat(id: c.id, title: c.title.isEmpty ? c.short : c.title, state: c.state, step: c.step, callId: c.callId,
+                           severity: c.severity, computerId: computerId ?? "phone", computerName: name, reply: reply,
+                           startedAt: c.startedAt,
+                           // The outbox and approvals reach the active computer only.
+                           actionable: computerId != nil && computerId == store.activeId)
+        }
+    }
+
+    /// The car's screen connected: open the relay as a tap on a system surface does
+    /// (the car is one), so the list is current without the phone being unlocked.
+    func carConnected() {
+        start(force: true)
+        store.resume()
+        car.startDrive()
+    }
+
+    func carDisconnected() {
+        carDictation.discard()
+        car.reset()
+    }
+
+    /// One utterance from the car's microphone, phone-first (`Dictation.carMode`).
+    func carCapture() async throws -> String {
+        start(force: true)
+        store.resume()
+        carDictation.carMode = true
+        // Off screen iOS holds a permission prompt until the app opens: refuse instead of waiting.
+        carDictation.promptsAllowed = UIApplication.shared.applicationState == .active
+        return try await carDictation.captureOnce(store: store, computerId: store.activeId)
+    }
+
+    /// A chat's answer to what the driver just sent from its Talk: its new reply once it
+    /// stops working, what it needs when it stops for you, nil when it is still working
+    /// after `CarSession.replyWait`.
+    func carAwaitReply(_ chatId: String, before: String) async throws -> String? {
+        let deadline = Date().addingTimeInterval(CarSession.replyWait)
+        var sawWork = false
+        while Date() < deadline {
+            try Task.checkCancellation()
+            if let c = carChats().first(where: { $0.id == chatId }) {
+                if c.state == .working { sawWork = true }
+                if sawWork, c.state == .needsYou {
+                    return c.callId != nil ? "\(c.title) needs you, to allow \(c.step)." : "\(c.title) has a question for you. \(c.step)"
+                }
+                if c.state != .working, c.state != .needsYou, !c.reply.isEmpty, c.reply != before { return c.reply }
+            }
+            try await Task.sleep(nanoseconds: 500_000_000)
+        }
+        return nil
+    }
+
+    fileprivate func makeCar() -> CarSession {
+        let car = CarSession(actions: CarActions(
+            send: { [weak self] id, text in
+                guard let self else { throw CancellationError() }
+                self.start(force: true)
+                self.store.resume()
+                let online = await self.waitOnline(seconds: 10)
+                // The outbox, as the card's voice: saved before it is sent, so an offline computer gets it later.
+                return try await self.store.outbox.sendWaiting(chatId: id, text: text, wait: online ? 10 : 0) ? .delivered : .queued
+            },
+            newChat: { [weak self] text in
+                guard let self else { throw CancellationError() }
+                guard let provider = self.store.defaults.defaultProviderId, let model = self.store.defaults.defaultModelId else {
+                    throw RelayError("\(self.store.active?.name ?? "Your computer") has no default model yet")
+                }
+                self.start(force: true)
+                self.store.resume()
+                let online = await self.waitOnline(seconds: 10)
+                let item = self.store.outbox.add(chatId: nil, text: text, newChat: NewChatSpec(providerId: provider, modelId: model))
+                self.store.flushOutbox()
+                let deadline = Date().addingTimeInterval(online ? 10 : 0)
+                while self.store.outbox.items.contains(where: { $0.id == item.id }), Date() < deadline {
+                    try await Task.sleep(nanoseconds: 200_000_000)
+                }
+                return self.store.outbox.items.contains(where: { $0.id == item.id }) ? .queued : .delivered
+            },
+            answer: { [weak self] id, callId, allow in try await self?.carCall(Channels.toolApprove, [.string(id), .string(callId), .bool(allow)], chat: id) },
+            stop: { [weak self] id in try await self?.carCall(Channels.chatAbort, [.string(id)], chat: id) },
+            unlocked: { UIApplication.shared.isProtectedDataAvailable },
+            computerName: { [weak self] in self?.store.active?.name }
+        ))
+        car.chats = { [weak self] in self?.carChats() ?? [] }
+        return car
+    }
+
+    /// An approval answer or a stop from the car, on the active computer, holding
+    /// background time until it is sent. Throws so the car's Results can say it failed.
+    private func carCall(_ channel: String, _ args: [JSONValue], chat sessionId: String) async throws {
+        let time = BackgroundTime("nekko.car")
+        defer { time.end() }
+        start(force: true)
+        store.resume()
+        guard await waitOnline(seconds: 10), let r = try? store.remote() else {
+            throw RelayError("Couldn't reach \(store.active?.name ?? "your computer")")
+        }
+        _ = try await r.call(channel, args)
+        if channel == Channels.toolApprove { notifier.clear(sessionId: sessionId) }
+        await store.refreshAttention()
     }
 }

@@ -148,6 +148,12 @@
           "description": "Two panes on a foldable or an iPad: two chats at once, Monitors beside a chat, and the layouts for each posture."
         },
         {
+          "slug": "carplay",
+          "title": "Nekko Agent in CarPlay",
+          "source": "docs/carplay.md",
+          "description": "Hear what your agents are doing and tell them what to do by voice from your car's screen."
+        },
+        {
           "slug": "sync-encryption",
           "title": "Encrypted sync",
           "source": "docs/SYNC-ENCRYPTION.md",

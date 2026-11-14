@@ -48,6 +48,8 @@ targets:
       # The chat's preview window and cards (#1095): an isolated WKWebView, and PDFs.
       - sdk: WebKit.framework
       - sdk: PDFKit.framework
+      # Nekko in CarPlay (App/CarPlay): templates on the car's screen.
+      - sdk: CarPlay.framework
       - target: NekkoWidgets
         embed: true
       - target: NekkoShare
