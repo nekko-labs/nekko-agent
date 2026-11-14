@@ -30,7 +30,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress, usageLimitResetAt } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -80,6 +80,7 @@ import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSee
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
 import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure } from './agent-console/interruption.js';
+import { ContinueAtReset } from './agent-console/ContinueAtReset.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
@@ -1216,6 +1217,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           break;
         case 'approval_resolved':
           setApproval((current) => approvalAfterResult(current, e.callId));
+          break;
+        case 'limit_reset':
+          // nekkod is continuing the chat as asked, so the saved schedule is
+          // spent; the notice goes when the resumed reply starts streaming.
+          loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
           break;
         case 'tool_result':
           // Parallel work can finish while another tool is still waiting on us.
@@ -2993,6 +2999,17 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   const canResume = canContinueReply;
                   const interruption = describeInterruption(errorNotice, canResume);
                   const tone = interruption.paused ? 'var(--warning)' : 'var(--danger)';
+                  // A used-up usage limit with a known reset can carry on by itself then.
+                  const now = Date.now();
+                  const hasPrompt = !!session?.messages.some((m) => m.role === 'user');
+                  const resetAt = hasPrompt && !readOnly && !session?.incognito ? usageLimitResetAt(errorNotice, providerLimits, now) : null;
+                  const armedAt = session?.turnFailure?.continueAt ?? null;
+                  const scheduleContinue = (at: number | null) => {
+                    const turnFailure = { message: errorNotice, afterMessageId: lastMsgId, ...(at ? { continueAt: at } : {}) };
+                    window.nekko.setSessionOptions(sessionId, { turnFailure })
+                      .then((s) => { if (s) { putCachedSession(s); setSession(s); } })
+                      .catch((err) => useStore.getState().pushToast('error', `Could not ${at ? 'schedule' : 'cancel'} the continue: ${String(err)}`));
+                  };
                   return (
                   <div
                     className="fade-in flex flex-col gap-2 rounded-xl border px-3 py-2 text-xs"
@@ -3018,12 +3035,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 empty:hidden">
-                    {session?.messages.some((m) => m.role === 'user') && (
+                    {hasPrompt && (
                       <button className="btn btn-primary shrink-0 px-3 py-0.5 text-2xs"
                         title="Retry using the saved conversation and work" onClick={() => void resumeRun()}>
                         Retry
                       </button>
                     )}
+                    <ContinueAtReset resetAt={resetAt} armedAt={armedAt} now={now} onSchedule={scheduleContinue} />
                     {cuts.deleteLast && !readOnly && (
                       <button className="btn btn-outline shrink-0 px-3 py-0.5 text-2xs" data-notice-delete
                         title="Delete your last message and anything after it, then write it again (for example without the picture)"

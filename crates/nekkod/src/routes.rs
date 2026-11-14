@@ -752,6 +752,8 @@ impl Table {
                     || (channel == "session:setOptions"
                         && arg(&args, 1).get("archivedAt").is_some_and(|v| !v.is_null()));
                 let id = str_arg(&args, 0).unwrap_or_default().to_string();
+                // Continue at the limit's reset, or not any more (limit_resume.rs).
+                let failure_changed = channel == "session:setOptions" && arg(&args, 1).get("turnFailure").is_some();
                 let protected: Option<ProtectedSession> = if channel == "sessions:clearHistory" {
                     let (turns, image_turns, admission) =
                         (ctx.turns.clone(), ctx.image_turns.clone(), ctx.admission.clone());
@@ -773,6 +775,9 @@ impl Table {
                     args,
                 )
                 .await?;
+                if failure_changed {
+                    crate::limit_resume::follow(ctx, &id, &result);
+                }
                 if closing {
                     stop_chat(ctx, &id).await?;
                 }

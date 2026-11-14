@@ -134,7 +134,8 @@ export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): A
     // would then clear a "working" it set (hub.rs files these as Kind::Meta).
     case 'session_meta':
     case 'compaction':
-    case 'claude_code_background': return undefined;
+    case 'claude_code_background':
+    case 'limit_reset': return undefined;
     case 'tool_approval_required':
     case 'question':
     case 'secret_request': return 'input';

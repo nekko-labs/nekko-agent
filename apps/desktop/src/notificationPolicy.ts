@@ -16,7 +16,7 @@ export interface Notice {
   /** The chat a click opens; for a workflow run, `run:<id>` (it opens `link`). */
   sessionId: string;
   /** `safety-exit`: a phone signed out, stopped remote access or quit the app (SK-4). */
-  kind: 'finished' | 'failed' | 'question' | 'approval' | 'run-failed' | 'run-finished' | 'safety-exit';
+  kind: 'finished' | 'failed' | 'question' | 'approval' | 'run-failed' | 'run-finished' | 'safety-exit' | 'limit-reset';
   title: string;
   body: string;
   /** Where a click goes, when not the chat (a workflow run). */
@@ -46,6 +46,13 @@ export function decideNotification(event: AgentEvent, ctx: NotificationContext):
       return { sessionId: event.sessionId, kind: 'question', title: 'Nekko Agent needs a secret', body: `${chat}: ${event.request.name}` };
     case 'tool_approval_required':
       return { sessionId: event.sessionId, kind: 'approval', title: 'Approval needed', body: `${chat}: ${event.reason || event.call.name}` };
+    case 'limit_reset':
+      return {
+        sessionId: event.sessionId,
+        kind: 'limit-reset',
+        title: 'Usage limit reset',
+        body: `${chat}: ${event.continuing ? 'continuing where it stopped.' : 'open it and press Retry to carry on.'}`,
+      };
     default:
       return null;
   }

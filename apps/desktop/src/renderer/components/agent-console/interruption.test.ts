@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeInterruption, shouldShowPersistedInterruption, reconcileInterruptionNotice, savedTurnFailure, PERSISTED_INTERRUPTION } from './interruption.js';
+import { describeInterruption, formatResetTime, shouldShowPersistedInterruption, reconcileInterruptionNotice, savedTurnFailure, PERSISTED_INTERRUPTION } from './interruption.js';
 
 describe('describeInterruption', () => {
   it('treats an intentional stop as a pause, not an error', () => {
@@ -95,5 +95,15 @@ describe('savedTurnFailure', () => {
     expect(savedTurnFailure({ messages: [], turnFailure: failure })).toBeNull();
     expect(savedTurnFailure({ messages: [tool], turnFailure: null })).toBeNull();
     expect(savedTurnFailure({ messages: [tool] })).toBeNull();
+  });
+});
+
+describe('formatResetTime', () => {
+  const now = new Date(2026, 10, 15, 10, 0).getTime();
+
+  it('shows the time alone today, the weekday this week and the date after', () => {
+    expect(formatResetTime(new Date(2026, 10, 15, 15, 0).getTime(), now, 'en-US')).toBe('3:00 PM');
+    expect(formatResetTime(new Date(2026, 10, 16, 9, 30).getTime(), now, 'en-US')).toBe('Mon 9:30 AM');
+    expect(formatResetTime(new Date(2026, 10, 25, 10, 0).getTime(), now, 'en-US')).toBe('Nov 25 10:00 AM');
   });
 });
