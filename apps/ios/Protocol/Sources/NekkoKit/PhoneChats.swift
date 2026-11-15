@@ -248,7 +248,15 @@ public final class PhoneChats {
         guard let p = provider(providerId), p.enabled, let kind = PhoneProviders.kind(p.kind) else { return String(localized: "Unknown provider.") }
         if kind.listsModels {
             let list = await loadModels(providerId)
-            return modelErrors[providerId] ?? (list.isEmpty ? String(localized: "The provider listed no models.") : nil)
+            if let why = modelErrors[providerId] ?? (list.isEmpty ? String(localized: "The provider listed no models.") : nil) { return why }
+            // OpenRouter and Ollama Cloud list models to anyone; ask something a bad key is refused on.
+            guard let check = try? PhoneProviders.keyCheckRequest(p, key: key(providerId)) else { return nil }
+            do {
+                let (status, body) = try await http.send(check)
+                return status == 401 || status == 403 ? PhoneProviders.failure(status: status, body: body) : nil
+            } catch {
+                return String(localized: "Could not reach the provider to check the key. Try again.")
+            }
         }
         models[providerId] = kind.catalog
         guard let model = kind.catalog.first?.id else { return nil }

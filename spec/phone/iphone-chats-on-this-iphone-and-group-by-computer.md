@@ -44,6 +44,7 @@ Philip asked (2026-11-04):
 - With a computer paired and a provider on this iPhone, a chat on each shows in one list; the iPhone's row reads *This iPhone* with its mark, the computer's its name.
 - Group by → Computer shows a heading per place with the right chats; with one place the option is not offered.
 - A Claude API key that is refused is not kept, and Add shows a safe status explanation.
+- A wrong OpenRouter or Ollama Cloud key is refused at Add even though their model lists answer without a key (OpenRouter's `/key`, Ollama Cloud a chat for a model that does not exist) (#2854).
 - Tapping *Sign in with OpenRouter* and approving in the browser adds OpenRouter with its models and no typing; cancelling the browser leaves the sheet as it was. `[implemented 2026-11-16, request/exchange tested in NekkoKit; not yet tried against a live OpenRouter account]`
 - A reply streams in on the iPhone, Stop keeps what arrived, and Try again after a failed reply sends the conversation again without the failed reply.
 - Unit tests: `PhoneChatsTests` (NekkoKit), `ChatListLayoutTests` (NekkoProtocol). UI: `LiveRelayTests.testChatsOnTheComputerAndOnThisIPhoneInOneList`.

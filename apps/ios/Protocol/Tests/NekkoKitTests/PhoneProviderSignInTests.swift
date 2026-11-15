@@ -44,3 +44,30 @@ final class PhoneProviderSignInTests: XCTestCase {
         XCTAssertEqual(PhoneProviders.models(from: list, kind: "gemini").map(\.id), ["models/gemini-2.5-flash"])
     }
 }
+
+@MainActor
+final class PhoneProviderKeyCheckTests: XCTestCase {
+    /// OpenRouter and Ollama Cloud list models without a valid key, so Test asks them something a bad key is refused on.
+    func testOpenModelListsStillCheckTheKey() async throws {
+        for (kind, url) in [("openrouter", "https://openrouter.ai/api/v1/key"), ("ollama-cloud", "https://ollama.com/v1/chat/completions")] {
+            for (status, fails) in [(401, true), (404, false), (200, false)] {
+                let http = FakePhoneHTTP()
+                http.answers = [(200, [#"{"data":[{"id":"m1"}]}"#]), (status, ["{}"])]
+                let s = PhoneChats(secrets: MemoryStore(), files: MemoryOfflineFiles(), http: http)
+                let p = try s.add(kind: kind, label: kind, baseUrl: nil, key: "k")
+                let why = await s.test(p.id)
+                XCTAssertEqual(why != nil, fails, "\(kind) \(status)")
+                XCTAssertEqual(http.requests.last?.url, url)
+                XCTAssertEqual(http.requests.last?.headers["Authorization"], "Bearer k")
+            }
+        }
+        // Kinds whose list needs the key make no second request.
+        let http = FakePhoneHTTP()
+        http.answers = [(200, [#"{"data":[{"id":"m1"}]}"#])]
+        let s = PhoneChats(secrets: MemoryStore(), files: MemoryOfflineFiles(), http: http)
+        let p = try s.add(kind: "gemini", label: "Gemini", baseUrl: nil, key: "k")
+        let why = await s.test(p.id)
+        XCTAssertNil(why)
+        XCTAssertEqual(http.requests.count, 1)
+    }
+}

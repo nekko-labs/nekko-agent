@@ -254,6 +254,23 @@ public enum PhoneProviders {
         }
     }
 
+    /// For kinds whose models list answers without a valid key: a request a bad key is
+    /// refused on (401/403). Ollama Cloud's asks for a model that doesn't exist, so it costs nothing.
+    public static func keyCheckRequest(_ p: PhoneProvider, key: String?) throws -> PhoneRequest? {
+        try validate(p, key: key)
+        var h = headers(p, key: key)
+        h["Accept"] = "application/json"
+        switch p.kind {
+        case "openrouter": return PhoneRequest(method: "GET", url: "\(p.baseUrl)/key", headers: h)
+        case "ollama-cloud":
+            return PhoneRequest(url: "\(p.baseUrl)/chat/completions", headers: h, body: .object([
+                "model": .string("nekko-key-check"), "max_tokens": .int(1),
+                "messages": .array([.object(["role": .string("user"), "content": .string(".")])]),
+            ]))
+        default: return nil
+        }
+    }
+
     static func headers(_ p: PhoneProvider, key: String?) -> [String: String] {
         var h = ["Content-Type": "application/json", "Accept": "text/event-stream"]
         let key = key ?? ""
