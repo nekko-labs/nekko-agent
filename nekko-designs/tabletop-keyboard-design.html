@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tabletop keyboard: when it does not fit the lower half</title>
+<style>
+:root{color-scheme:light dark;--paper:#faf8f5;--surface-2:#f1eeeb;--ink:#25202a;--ink-soft:#625b68;--ink-faint:#756d7a;--line:#ded7df;--accent:#5a2352;--info:#1f6680;--danger:#b3403d;--ok:#2f7d57}
+@media (prefers-color-scheme:dark){:root{--paper:#0b0c14;--surface-2:#1d1f2c;--ink:#ecebf0;--ink-soft:#b2afbd;--ink-faint:#8f8c9b;--line:#252735;--accent:#d6a4c8;--info:#6bb8d4;--danger:#ef6f6c;--ok:#5fbf8f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-2);color:var(--ink);font:14px/1.5 system-ui,-apple-system,sans-serif}
+header{padding:40px 40px 8px;max-width:1000px}h1{margin:0;font-size:24px;font-weight:600}header p{margin:8px 0;color:var(--ink-soft)}
+.canvas{display:flex;gap:32px;padding:20px 40px 40px;align-items:flex-start;overflow-x:auto}
+.frame{flex:0 0 auto;width:360px}
+.cap{font-size:13px;margin-bottom:8px}.cap b{font-weight:600}.cap span{display:block;color:var(--ink-soft);font-size:12px}
+.rec .cap b:after{content:" Recommended";margin-left:8px;font-size:11px;color:#fff;background:var(--ok);padding:1px 8px;border-radius:9px}
+.rec .dev{outline:3px solid var(--ok);outline-offset:4px}
+/* iPad Pro 13 landscape stand-in, 1376 x 1032 pt, drawn at 0.2619 (y points x .2619 = px) */
+.dev{position:relative;width:360px;height:270px;background:var(--paper);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:9px}
+.dev div{position:absolute;left:0;right:0}
+.up{background:transparent}.tr{background:repeating-linear-gradient(0deg,var(--line) 0 1px,transparent 1px 14px);opacity:.7}
+.hinge{background:repeating-linear-gradient(45deg,#c0392b55 0 4px,#c0392b22 4px 8px);border-top:1px solid var(--danger);border-bottom:1px solid var(--danger);color:var(--danger);text-align:center;line-height:6px;font-size:7px}
+.kb{background:var(--ink-faint);opacity:.45}.kb.fl{left:75px;right:75px;border-radius:6px;opacity:.55}
+.cmp{background:var(--accent);color:#fff;display:flex;align-items:center;padding:0 8px;border-radius:5px;left:6px;right:6px}
+.cmp.on{outline:2px solid var(--danger)}
+.lbl{color:var(--ink);font-size:8px;padding:1px 6px;background:none}
+.note{font-size:12px;color:var(--ink-soft);margin-top:8px}.note i{font-style:normal;color:var(--danger)}.note u{text-decoration:none;color:var(--ok)}
+.legend{padding:0 40px;font-size:12px;color:var(--ink-soft)}
+</style>
+<header><h1>Tabletop: keyboard plus composer taller than the lower half</h1>
+<p>Issue #2802. Frames at the iPad Pro 13 stand-in (1032 pt tall): hinge 504 to 528, lower half 504 pt, keyboard about 565 pt so its top is always at y=467, 61 pt above the hinge's lower edge. Composer 113 pt as built (top at 354), 44 pt as one line. The system keyboard cannot be shortened, so every option has keys over the hinge except D and E.</p></header>
+<p class="legend">Red hatch = hinge (no taps). Grey = keyboard. Purple = composer. Red outline = composer or keyboard over the hinge.</p>
+<div class="canvas">
+
+<div class="frame"><div class="cap"><b>A. Accept crossing (today)</b><span>Spec layout abandoned, ordinary layout above the keyboard</span></div>
+<div class="dev"><div class="tr" style="top:0;height:93px"></div><div class="cmp" style="top:93px;height:30px"><span>Composer 113 pt, top y=354</span></div><div class="kb" style="top:122px;bottom:0"><span class="lbl" style="position:absolute;top:60px">keyboard 565 pt</span></div><div class="hinge" style="top:132px;height:6px">hinge</div></div>
+<div class="note">Transcript 354 pt. Composer is in the upper half, keyboard covers the hinge. <i>Contradicts the spec; hinge keys unreliable.</i></div></div>
+
+<div class="frame"><div class="cap"><b>B. One-line composer</b><span>Composer shrinks to 44 pt when it cannot fit</span></div>
+<div class="dev"><div class="tr" style="top:0;height:110px"></div><div class="cmp" style="top:110px;height:12px"><span>one line, 44 pt</span></div><div class="kb" style="top:122px;bottom:0"></div><div class="hinge" style="top:132px;height:6px">hinge</div></div>
+<div class="note">Transcript 423 pt, still above the hinge. <i>Keyboard still crosses the hinge</i>, because composer size does not change where the keyboard top is.</div></div>
+
+<div class="frame"><div class="cap"><b>C. Transcript yields the upper half</b><span>Composer grows into the upper half as a writing area, transcript shows the last message</span></div>
+<div class="dev"><div class="tr" style="top:0;height:28px"></div><div class="cmp" style="top:30px;height:92px"><span>Expanded editor, up to y=467</span></div><div class="kb" style="top:122px;bottom:0"></div><div class="hinge" style="top:132px;height:6px">hinge</div></div>
+<div class="note">Best typing room. <i>Same hinge crossing by the keyboard</i>, and the conversation is hidden while writing.</div></div>
+
+<div class="frame"><div class="cap"><b>D. Floating keyboard in the lower half</b><span>iPad only: undock the keyboard, composer docked under the hinge</span></div>
+<div class="dev"><div class="tr" style="top:0;height:136px"></div><div class="hinge" style="top:132px;height:6px">hinge</div><div class="cmp" style="top:140px;height:26px"><span>Composer below hinge</span></div><div class="kb fl" style="top:170px;height:90px"></div></div>
+<div class="note"><u>Nothing on the hinge.</u> Needs the system's floating keyboard, which iPhone does not have, so no help on the real target.</div></div>
+
+<div class="frame rec"><div class="cap"><b>E. Fit, else fall back to B</b><span>Spec layout when the keyboard fits the lower half; otherwise B (one-line composer above the keyboard)</span></div>
+<div class="dev"><div class="tr" style="top:0;height:110px"></div><div class="cmp" style="top:110px;height:12px"><span>one line, 44 pt</span></div><div class="kb" style="top:122px;bottom:0"></div><div class="hinge" style="top:132px;height:6px">hinge</div></div>
+<div class="note"><u>Why:</u> a real folding iPhone's keyboard (about 300 pt of a 420 pt half) fits and keeps the spec layout; only the oversized iPad stand-in falls back, so nothing is built for hardware that does not exist.</div></div>
+
+</div></html>
