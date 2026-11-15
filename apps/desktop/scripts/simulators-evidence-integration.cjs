@@ -21,8 +21,7 @@ async function main() {
     fs.mkdirSync(source, { recursive: true });
     const tar = cp.spawnSync('git', ['archive', base, 'apps/desktop/src', 'packages/shared/src'], { cwd: repo, maxBuffer: 1 << 30 });
     cp.execFileSync('tar', ['-x', '-C', source], { input: tar.stdout });
-    // The base has no Simulators.tsx: the status line is simply absent there.
-    fixture = fixture.replace(/\/\/ SIMULATOR-STATUS-IMPORT\n.*\n/, 'const SimulatorStatus = (_: any) => null;\n')
+    fixture = fixture
       .replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer'))
       .replace("'./monitors-trio-chrome'", JSON.stringify(path.join(__dirname, 'monitors-trio-chrome')));
     shared = path.join(source, 'packages/shared/src/index.ts');
