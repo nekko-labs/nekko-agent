@@ -190,6 +190,11 @@ const api: NekkoApi = {
   machineDismissNudge: (task) => inv(IpcChannels.machineDismissNudge, task ?? null),
   getGpuStats: heldWhileHidden(() => inv(IpcChannels.gpuStats), pageHidden),
   getSystemStats: () => inv(IpcChannels.systemStats),
+  simulatorsState: () => inv(IpcChannels.simulatorsState),
+  simulatorsShutdown: (id) => inv(IpcChannels.simulatorsShutdown, id),
+  simulatorsBoot: (id) => inv(IpcChannels.simulatorsBoot, id),
+  simulatorsOpen: (id) => inv(IpcChannels.simulatorsOpen, id),
+  simulatorsScreenshot: (id) => inv(IpcChannels.simulatorsScreenshot, id),
 
   listSessions: () => inv(IpcChannels.sessionsList),
   nextAgentWatchAt: (sessionId) => inv(IpcChannels.sessionNextWatch, sessionId),
@@ -564,6 +569,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, tasks: import('@nekko-agent/shared').AutomationTask[]) => cb(tasks);
     bus.on(IpcEvents.tasksUpdated, listener);
     return () => bus.removeListener(IpcEvents.tasksUpdated, listener);
+  },
+  onSimulatorsUpdated: (cb) => {
+    const listener = (_: unknown, e: import('@nekko-agent/shared').SimulatorsUpdated) => cb(e ?? {});
+    bus.on(IpcEvents.simulatorsUpdated, listener);
+    return () => bus.removeListener(IpcEvents.simulatorsUpdated, listener);
   },
   onBackgroundUpdated: (cb) => {
     const listener = (_: unknown, state: import('@nekko-agent/shared').BackgroundState) => cb(state);

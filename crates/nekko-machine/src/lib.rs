@@ -22,6 +22,7 @@ pub mod probe;
 pub mod profile;
 pub mod readiness;
 pub mod recommend;
+pub mod simulators;
 pub mod temps;
 
 pub use parse::{GpuDevice, GpuStats};
