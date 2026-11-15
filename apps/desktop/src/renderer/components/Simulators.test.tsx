@@ -9,7 +9,7 @@ vi.mock('../store.js', () => ({
   }),
 }));
 
-import { SimulatorRows, SimulatorChipSegment, SimulatorSection, SimulatorStatus, autoOpenKey, simulatorRowDetail } from './Simulators.js';
+import { SimulatorRows, SimulatorChipSegment, SimulatorSection, SimulatorStatus, autoOpenKey, openSimulatorAndChat, openTitle, simulatorRowDetail } from './Simulators.js';
 import { resetSimulatorsForTest, simulatorsSnapshot, subscribeSimulators, onSimulatorUsed } from '../simulators.js';
 
 const NOW = Date.UTC(2026, 10, 15, 9, 0, 0);
@@ -48,6 +48,40 @@ describe('Simulators group in the Hardware monitor', () => {
     expect(html.match(/>Shut down</g)?.length).toBe(3);
   });
 
+  it('folds to its header, which keeps the count and CPU', () => {
+    const open = renderToStaticMarkup(<SimulatorRows state={STATE} />);
+    expect(open).toContain('aria-expanded="true"');
+    expect(open).toContain('data-simulator-auto-shutdown');
+    const folded = renderToStaticMarkup(<SimulatorRows state={STATE} collapsed />);
+    expect(folded).toContain('aria-expanded="false"');
+    expect(folded).toContain('3 running · 102% CPU');
+    expect(folded).not.toContain('Nekko-1314-iPad');
+    expect(folded).not.toContain('data-simulator-auto-shutdown');
+  });
+
+  it('offers auto shutdown after 5 and 15 minutes as well', () => {
+    const html = renderToStaticMarkup(<SimulatorRows state={STATE} />);
+    for (const label of ['Never', 'After 5 min', 'After 15 min', 'After 30 min', 'After 1 hour', 'After 4 hours']) expect(html).toContain(`>${label}<`);
+  });
+
+  it('Open opens the chat that used the device and the device’s window', () => {
+    const simulatorsOpen = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('window', { nekko: { simulatorsOpen } });
+    const opened: string[] = [];
+    const used = STATE.devices[0];
+    openSimulatorAndChat(used, (id) => opened.push(id));
+    expect(opened).toEqual(['chat-a']);
+    expect(simulatorsOpen).toHaveBeenCalledWith('A205885C');
+    expect(openTitle(used)).toBe('Open the chat using Nekko-1314-iPad and Nekko-1314-iPad’s window'.replace('’', "'"));
+    // Nobody's: the window only. A headless emulator an agent used: the chat only.
+    openSimulatorAndChat(STATE.devices[1], (id) => opened.push(id));
+    expect(opened).toEqual(['chat-a']);
+    expect(simulatorsOpen).toHaveBeenCalledTimes(2);
+    openSimulatorAndChat({ ...STATE.devices[2], lastUse: { sessionId: 'chat-b', at: NOW } }, (id) => opened.push(id));
+    expect(opened).toEqual(['chat-a', 'chat-b']);
+    expect(simulatorsOpen).toHaveBeenCalledTimes(2);
+  });
+
   it('says how long a device has been up beside its use', () => {
     expect(simulatorRowDetail(device({ lastUse: undefined, model: 'iPad Pro', os: 'iOS 26.5' }), NOW)).toBe('95% CPU · iPad Pro · iOS 26.5 · up 10 h');
   });
@@ -59,7 +93,7 @@ describe('the chat’s simulator', () => {
     const html = renderToStaticMarkup(<SimulatorSection sessionId="chat-a" state={STATE} />);
     expect(html).toContain('data-simulator-section');
     expect(html).toContain('data-simulator-screen');
-    expect(html).toContain('Open in Simulator');
+    expect(html).toContain('Open window');
   });
 
   it('says above the composer that the chat’s simulator is running', () => {

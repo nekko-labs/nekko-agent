@@ -334,16 +334,57 @@ pub async fn boot(udid: &str) -> Result<(), String> {
         .ok_or_else(|| "Could not start the simulator again".into())
 }
 
-/// Bring Simulator.app forward on this device. iOS only: a headless Android
-/// emulator has no window to show.
+/// The selected Xcode's Developer folder: `DEVELOPER_DIR`, else `xcode-select -p`.
+async fn developer_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("DEVELOPER_DIR").filter(|d| !d.is_empty()) {
+        return Some(PathBuf::from(dir));
+    }
+    let out = run(Path::new("xcode-select"), &["-p"], Duration::from_secs(5)).await?;
+    let dir = String::from_utf8_lossy(&out).trim().to_string();
+    (!dir.is_empty()).then(|| PathBuf::from(dir))
+}
+
+/// The `open` arguments that show one iOS device in its own window.
+///
+/// Xcode 27 has no Simulator.app: DeviceHub (`Xcode.app/Contents/Applications`)
+/// replaced it and takes `devices://device/open?id=<udid>`. Older Xcodes keep
+/// Simulator.app in `Developer/Applications`, which takes `-CurrentDeviceUDID`
+/// (honoured only when it is not running yet). The app is named by path, so
+/// the selected Xcode's viewer opens when several are installed.
+fn open_args(developer_dir: Option<&Path>, udid: &str, exists: impl Fn(&Path) -> bool) -> Vec<String> {
+    if let Some(dev) = developer_dir {
+        if let Some(hub) =
+            dev.parent().map(|contents| contents.join("Applications/DeviceHub.app")).filter(|p| exists(p))
+        {
+            return vec!["-a".into(), hub.to_string_lossy().into_owned(), format!("devices://device/open?id={udid}")];
+        }
+        let sim = dev.join("Applications/Simulator.app");
+        if exists(&sim) {
+            return vec![
+                "-a".into(),
+                sim.to_string_lossy().into_owned(),
+                "--args".into(),
+                "-CurrentDeviceUDID".into(),
+                udid.into(),
+            ];
+        }
+    }
+    ["-a", "Simulator", "--args", "-CurrentDeviceUDID", udid].map(String::from).to_vec()
+}
+
+/// Show this device in Xcode's device viewer (DeviceHub, or Simulator.app
+/// before Xcode 27). iOS only: a headless Android emulator has no window.
 pub async fn open(device: &Device) -> Result<(), String> {
-    if device.kind != Kind::Ios {
+    if device.kind != Kind::Ios || !is_udid(&device.id) {
         return Err("Only an iOS simulator has a window to open".into());
     }
-    run(Path::new("open"), &["-a", "Simulator", "--args", "-CurrentDeviceUDID", &device.id], Duration::from_secs(15))
+    let dev = developer_dir().await;
+    let args = open_args(dev.as_deref(), &device.id, |p| p.exists());
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    run(Path::new("open"), &args, Duration::from_secs(15))
         .await
         .map(|_| ())
-        .ok_or_else(|| "Could not open Simulator".into())
+        .ok_or_else(|| "Could not open the simulator's window. Is Xcode installed?".into())
 }
 
 /// A screenshot of the device's screen: (mime type, bytes).
@@ -439,5 +480,35 @@ mod tests {
         assert!(is_udid("937C0078-69EC-4BEF-8C34-710DA0A4F98F"));
         assert!(!is_udid("937C0078-69EC-4BEF-8C34-710DA0A4F98"));
         assert!(!is_udid("937C0078x69EC-4BEF-8C34-710DA0A4F98F"));
+    }
+
+    #[test]
+    fn open_uses_devicehub_from_xcode_27_and_simulator_before() {
+        let udid = "937C0078-69EC-4BEF-8C34-710DA0A4F98F";
+        let dev = Path::new("/Applications/Xcode.app/Contents/Developer");
+        // Xcode 27: DeviceHub beside Developer, no Simulator.app (2026-11-15, Xcode 27.2).
+        let hub = open_args(Some(dev), udid, |p| p.ends_with("Applications/DeviceHub.app"));
+        assert_eq!(
+            hub,
+            [
+                "-a",
+                "/Applications/Xcode.app/Contents/Applications/DeviceHub.app",
+                "devices://device/open?id=937C0078-69EC-4BEF-8C34-710DA0A4F98F"
+            ]
+        );
+        // Older Xcode: Simulator.app inside Developer/Applications.
+        let sim = open_args(Some(dev), udid, |p| p.ends_with("Applications/Simulator.app"));
+        assert_eq!(
+            sim,
+            [
+                "-a",
+                "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app",
+                "--args",
+                "-CurrentDeviceUDID",
+                udid
+            ]
+        );
+        // Neither found: by name, as before.
+        assert_eq!(open_args(None, udid, |_| false), ["-a", "Simulator", "--args", "-CurrentDeviceUDID", udid]);
     }
 }

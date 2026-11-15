@@ -42,7 +42,7 @@ const bridge: any = {
 const chat = { id: 'chat-a', title: 'iPad PanesTests', createdAt: 1, updatedAt: 1, workspaceId: 'ws', messages: [] } as any;
 useStore.setState({
   sessions: [], settingsLoaded: true,
-  settings: { providers: [], guardrails: [], workspaces: [{ id: 'ws', name: 'nekko-agent', path: '/fixture/repo' }], monitors: { cpu: true, memory: true, gpu: false, vram: false }, connectors: [] } as any,
+  settings: { providers: [], guardrails: [], workspaces: [{ id: 'ws', name: 'nekko-agent', path: '/fixture/repo' }], monitors: { cpu: true, memory: true, gpu: false, vram: false }, connectors: [], simulatorAutoShutdownMinutes: 15 } as any,
 } as any);
 
 function Fixture() {

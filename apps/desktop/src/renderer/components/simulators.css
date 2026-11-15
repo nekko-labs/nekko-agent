@@ -36,3 +36,16 @@
   .monitors-dock .simulator-rows .simulator-link:hover { background: transparent; color: var(--ink-soft); }
   .monitors-dock .simulator-rows .simulator-action:hover:not(:disabled) { background: var(--q-wash); }
 }
+
+/* The group's header folds it (#2826): a chevron that turns, no box. */
+.simulator-group-head { border-radius: 6px; }
+.simulator-chevron { transform: rotate(90deg); transition: transform var(--dur-fast) var(--ease-out); }
+.simulator-rows[data-collapsed] .simulator-chevron { transform: rotate(0deg); }
+.simulator-group-head:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
+.simulator-group-body { animation: simulator-screen-in var(--dur-fast) var(--ease-out); }
+.monitors-dock .simulator-rows .simulator-group-head { padding: 0; color: inherit; }
+@media (hover: hover) { .monitors-dock .simulator-rows .simulator-group-head:hover { background: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  .simulator-chevron { transition: none; }
+  .simulator-group-body { animation: simulator-fade var(--dur-fast) linear; }
+}

@@ -47,6 +47,16 @@ app.whenReady().then(async () => {
       await run(`(()=>{const g=document.querySelector('[data-monitor="hardware"] [data-simulator-rows]');let e=g;while(e&&e.scrollHeight<=e.clientHeight)e=e.parentElement;if(e)e.scrollTop=e.scrollHeight})()`);
       await sleep(300);
       await shot(`hardware-simulators-${theme}`, '.monitors-dock__monitor[data-monitor="hardware"]', 2);
+      // Fold the group by its header (#2826), shoot, and unfold it again for the next theme.
+      const head = '[data-monitor="hardware"] [data-simulator-rows] > button[aria-expanded]';
+      if (await rect(head)) {
+        await run(`document.querySelector(${js(head)}).click()`);
+        await sleep(300);
+        report.checks[`${theme}Folded`] = await run(`(()=>({ expanded: document.querySelector(${js(head)})?.getAttribute('aria-expanded'), rows: document.querySelectorAll('[data-monitor="hardware"] [data-simulator-row]').length }))()`);
+        await shot(`hardware-folded-${theme}`, '.monitors-dock__monitor[data-monitor="hardware"]', 2);
+        await run(`document.querySelector(${js(head)}).click()`);
+        await sleep(300);
+      }
       await shot(`composer-${theme}`, '[data-shot="composer"]');
       // Hover the chip: renderer input, not OS input.
       const chip = await rect('.monitor-chip button[aria-label="Resource monitors"]');
