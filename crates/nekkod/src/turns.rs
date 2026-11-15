@@ -1346,11 +1346,24 @@ impl Turns {
         };
 
         // On disk while the turn runs, so a restart knows it was cut off.
+        // `afterMessageId` is the last message before the turn's own (its
+        // prompt, or for a wake-up the end of the turn before it), where a
+        // window stops the saved transcript while it draws the live reply.
         if let Some(obj) = lock(&session).as_object_mut() {
-            obj.insert("activeRun".into(), json!({ "startedAt": nekko_js::now_ms() }));
+            let mut run = json!({ "startedAt": nekko_js::now_ms() });
+            if let Some(id) =
+                obj.get("messages").and_then(Value::as_array).and_then(|m| m.last()).and_then(|m| m.get("id"))
+            {
+                run["afterMessageId"] = id.clone();
+            }
+            obj.insert("activeRun".into(), run);
             obj.remove("turnFailure");
         }
         persist(&store, &session, incognito).await;
+        // A wake-up saved no prompt, so nothing has told the windows a turn began.
+        if wake && !incognito {
+            say(json!({ "type": "session_meta", "sessionId": session_id }));
+        }
 
         let turn_from = lock(&session).get("messages").and_then(Value::as_array).map_or(0, Vec::len);
         let started_at = nekko_js::now_ms();

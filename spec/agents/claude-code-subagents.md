@@ -32,3 +32,19 @@ Now each sub-agent is an ordinary child chat, made from what Claude Code prints:
 Old chats keep the `Agent` rows they were saved with.
 
 Decision: [0042](../../docs/decisions/0042-claude-code-sub-agents-are-child-chats.md).
+
+## While the chat waits on its sub-agents
+
+`[implemented 2026-11-15, #2840; unit and end-to-end daemon tests against a scripted Claude Code, the stream shape checked against a live Claude Code 2.1.319; not yet watched in a live chat]`
+
+**User intent.** Philip, on a Claude Agent chat (Claude plan) that started three background sub-agents and ended its turn: "while the agent is waiting for agents to progress, it should show in the building status. There's no indicator in the chat for their progress." And: "the first message back ... didn't have a timestamp and showed done. if that's the end of the turn, it should have the turn details."
+
+**What was wrong.** After its turn's `result`, Claude Code keeps printing its background sub-agents' own lines (and `task_progress`, `task_updated`, `commands_changed`). nekkod's idle watch takes them as a wake-up and runs a wake-up turn that only feeds the child chats until a sub-agent reports back, so the parent had no reply of its own on screen: the Agents panel filed it under Done, and the chat said nothing. When the reply after a sub-agent's report did stream, the chat stopped the saved transcript at the last user message, as it does for any live reply. A wake-up has no user message, so the whole turn before it vanished and the reply showed as the first message back, as its live copy: no timestamp, "Done." and no turn details until the chat was read again.
+
+**Now:**
+
+- **Agents panel.** A chat counts as working while any of its sub-agents works, so it stays in Building (or Verifying) with the working rocket. A sub-agent waiting on you still lifts it to Needs input, and a chat's own state (working, an error) stands otherwise.
+- **In the chat.** Under the finished turn, the chat says **Waiting on N sub-agents** and lists each working one with the working glyph, its title and what it is doing now (its latest tool, thought or sentence, as the delegation row says it). A row opens that sub-agent's chat. Claude Code's other background tasks are counted after them ("and 2 other background tasks"); with no sub-agent working, the line reads as before, "Claude Code is still running N background tasks". It shows only while the chat has no reply of its own streaming.
+- **The reply after a report.** nekkod saves where each turn's own messages start (`activeRun.afterMessageId`: its prompt, or for a wake-up the last message of the turn before it) and says `session_meta` when a wake-up starts. The chat stops the saved transcript there while the reply streams, so the reply streams under the turn before it and lands as a normal reply, with its time and turn details.
+
+**Not yet.** The Local Web UI gets all three (it runs the desktop renderer); the phones still show neither the sub-agent list nor the lifted status.

@@ -437,6 +437,19 @@ export function takeFinishedRun(sessionId: string): LiveRun | undefined {
   return run;
 }
 
+/**
+ * Pin a running turn to the last saved message before its own
+ * (`activeRun.afterMessageId`), once. A turn nobody sent (a Claude Code
+ * wake-up) has no prompt of its own to stop the transcript at, and the
+ * finished run keeps the pin, so the boundary holds until its reply is saved.
+ */
+export function anchorLiveRun(sessionId: string, transcriptThroughId: string): void {
+  const run = runs.get(sessionId);
+  if (!run || run.transcriptThroughId) return;
+  runs.set(sessionId, { ...run, transcriptThroughId });
+  markDirty(sessionId);
+}
+
 /** Every session with a turn in flight. */
 export function runningSessionIds(): string[] {
   return [...runs.keys()];

@@ -1273,6 +1273,12 @@ async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
     assert_eq!(approval["call"]["executedBy"], "claude-code");
     let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
     assert_eq!(running, json!(["s_cc"]));
+    // With no prompt of its own, the wake-up names the end of the turn before
+    // it, where a window stops the saved transcript while it streams (#2840).
+    let s = saved(&rig);
+    let first_end =
+        s["messages"].as_array().unwrap().iter().find(|m| m.get("turnStats").is_some()).expect("the first turn's end");
+    assert_eq!(s["activeRun"]["afterMessageId"], first_end["id"], "{s}");
     let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cc", "toolu_wake", true]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{body}");
     until("the wake-up turn to end", Duration::from_secs(30), || async {

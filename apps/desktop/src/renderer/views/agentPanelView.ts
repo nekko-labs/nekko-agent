@@ -198,6 +198,20 @@ export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phas
   return phase === 'verifying' || phase === 'shipping' ? 'status:verifying' : 'status:building';
 }
 
+type ChatStatus = 'working' | 'input' | 'error' | 'done' | 'idle' | undefined;
+
+/**
+ * A chat's status with its sub-agents', which have no card of their own: one
+ * waiting on you makes the chat wait on you, and one working keeps an idle
+ * chat working. A Claude Agent chat ends its turn while the sub-agents it
+ * started in the background run on, and it is not done until they report back.
+ */
+export function statusWithSubagents(own: ChatStatus, kids: ReadonlyArray<ChatStatus>): ChatStatus {
+  if (kids.includes('input')) return 'input';
+  if (own && own !== 'done' && own !== 'idle') return own;
+  return kids.includes('working') ? 'working' : own;
+}
+
 export type GroupActivityKind = 'building' | 'verifying' | 'watching';
 
 /**
