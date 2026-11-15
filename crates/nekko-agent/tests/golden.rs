@@ -502,3 +502,21 @@ async fn cloud_presets_list_models_with_vendor_paths_and_auth() {
         assert!(sent[0].headers.contains(&("Authorization".into(), "Bearer fixture-key".into())));
     }
 }
+
+// ollama.com lists models without auth, so the connection test also needs a chat it refuses for a bad key.
+#[tokio::test]
+async fn ollama_cloud_test_rejects_a_key_the_model_list_cannot() {
+    for (status, ok) in [(401, false), (404, true)] {
+        let transport = FakeTransport::queue(vec![
+            json!({ "status": 200, "body": "{\"data\":[{\"id\":\"glm-5.2\"}]}" }),
+            json!({ "status": status, "body": "{}" }),
+        ]);
+        let config = serde_json::from_value(json!({ "id": "cloud", "kind": "openai-compat", "label": "Ollama Cloud", "baseUrl": "https://ollama.com/v1", "apiKey": "fixture-key", "enabled": true })).unwrap();
+        let result =
+            OpenAiCompatProvider::new(config, Io { transport: transport.clone(), ..Default::default() }).test().await;
+        assert_eq!(serde_json::to_value(&result).unwrap()["ok"], ok, "status {status}");
+        let sent = transport.sent();
+        assert_eq!(sent[1].url, "https://ollama.com/v1/chat/completions");
+        assert!(sent[1].headers.contains(&("Authorization".into(), "Bearer fixture-key".into())));
+    }
+}

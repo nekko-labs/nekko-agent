@@ -274,6 +274,22 @@ impl OpenAiCompatProvider {
             Err(e) => return reach(&e),
         };
         if res.ok() {
+            // Ollama Cloud lists its models to anyone, so a listed model proves
+            // nothing about the key. A chat for a model that doesn't exist is
+            // refused for a bad key (401) and costs nothing for a good one.
+            let ollama_cloud =
+                reqwest::Url::parse(&self.config.base_url).ok().is_some_and(|url| url.host_str() == Some("ollama.com"));
+            if ollama_cloud {
+                let body = json!({ "model": "nekko-key-check", "max_tokens": 1, "messages": [{ "role": "user", "content": "." }] });
+                let req = HttpRequest::post(format!("{}/chat/completions", self.base()), self.headers(), body);
+                match self.io.transport.send(&req).await {
+                    Err(e) => return reach(&e),
+                    Ok(r) if r.status == 401 || r.status == 403 => {
+                        return TestResult::fail("Ollama rejected this key. Check it or make a new one at ollama.com.");
+                    }
+                    Ok(_) => {}
+                }
+            }
             return TestResult::ok("Connected");
         }
         let detail = extract_api_error(&res.text().await);
