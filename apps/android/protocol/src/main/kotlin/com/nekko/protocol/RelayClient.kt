@@ -166,6 +166,12 @@ class RelayConfig(
      * HELLO goes unsigned and the computer asks this phone to pair again.
      */
     val helloSigner: HelloSigner? = null,
+    /**
+     * A computer of your own opened from an organization's list (decision 0102):
+     * every HELLO carries the `fleet` object this makes for the handshake. Null
+     * (signed out or locked) says nothing, and the handshake runs out. Never with a pairing code.
+     */
+    val fleetHello: ((FleetBinding) -> JsonObject?)? = null,
 ) {
     /** The relay address first, then the alternates. */
     val routes: List<String> get() = listOf(relayUrl) + alts
@@ -656,6 +662,11 @@ class RelayClient(
             seq = 0
         }
         if (wasOnline) setStatus(RelayStatus(RelayState.CONNECTING))
+        var fleet: JsonObject? = null
+        config.fleetHello?.let { make ->
+            val helloKey = config.helloSigner?.let { java.util.Base64.getEncoder().encodeToString(it.publicKey()) } ?: return
+            fleet = make(FleetBinding(config.room, challenge, hostEph, ours.public, helloKey)) ?: return
+        }
         val hello = buildJsonObject {
             put("type", "hello")
             put("deviceId", config.deviceId)
@@ -670,6 +681,7 @@ class RelayClient(
                 put("sig", helloSig)
             }
             pairCode?.let { put("pair", it) }
+            fleet?.let { put("fleet", it) }
         }
         val env = buildJsonObject { put("eph", ours.public); put("enc", E2E.seal(key, hello)) }
         synchronized(sendLock) { c.send(env.toString()) }
