@@ -20,11 +20,12 @@ Anyone using Nekko Agent, on any device, can tell Nekko Labs something is broken
 The sheet on desktop, the Local Web UI and Docker is one form that opens up as it is used, styled like the Scheduled Tasks editor. iPhone, iPad and Android keep the three-section sheet above.
 
 - **Always there:** the choice of **Good** or **Needs improvement** (nothing preselected) and the contributing line linking to `CONTRIBUTING.md`. Nothing else shows until a choice is made.
-- **After choosing Needs improvement:** Summary, Description, Screenshots, Include app info (its switch at the far right), **Other ways** (collapsed, with the agent prompt, the GitHub issue forms and the email line as separate options inside one border) and Send.
+- **After choosing Needs improvement:** Summary, Description, optional contact details, Include app info (its switch at the far right), **Other ways** (collapsed, with the agent prompt, the GitHub issue forms and the email line as separate options inside one border) and Send.
 - **After choosing Good:** Summary, Description, optional contact details, **Give us a GitHub star!**, the email line and Send. Both kinds offer optional contact details.
 - **The email line:** plain text, "Email us at feedback@nekkoagent.com". A Copy button appears on hovering the address, or on keyboard focus.
-- **Good and screenshots:** Praise rarely needs screenshots or app info, so they are not offered, and any set before changing to Good are not sent. Text typed before changing the choice stays.
-- **Screenshots:** optional, by drop, paste or the file picker. Up to 3, each up to 5 MB, so at most 15 MB a note. PNG, JPG and JPEG only, proven by the file's first bytes as well as its extension (`feedbackScreenshotProblem`). A refused file says why, in view, and the rest are kept. Each added screenshot shows a thumbnail; one that can't be drawn shows a picture icon instead of a broken image, and stays on the note. The sheet warns that screenshots can show names, chats or file paths.
+- **Good and app info:** Praise rarely needs app info, so it is not offered, and a switch left on before changing to Good sends nothing. Text typed before changing the choice stays.
+- **Screenshots: hidden (2026-11, #2287).** `SCREENSHOTS_ENABLED = false` in `FeedbackSheet.tsx` removes the section from the form, and pasting or dropping an image attaches nothing, so every note is sent without screenshots. The code (`FeedbackScreenshots.tsx`) is kept, and setting the flag to `true` brings back the behaviour below, offered under Needs improvement only.
+- **Screenshots, when enabled:** optional, by drop, paste or the file picker. Up to 3, each up to 5 MB, so at most 15 MB a note. PNG, JPG and JPEG only, proven by the file's first bytes as well as its extension (`feedbackScreenshotProblem`). A refused file says why, in view, and the rest are kept. Each added screenshot shows a thumbnail; one that can't be drawn shows a picture icon instead of a broken image, and stays on the note. The sheet warns that screenshots can show names, chats or file paths.
 - **Required:** the choice, Summary (up to 120 characters) and Description. Send names the first thing missing, and pressing it with something missing shows each problem and moves focus to the first.
 - **The note's text is unchanged on the wire.** The form joins everything into `message`, as `Needs improvement: <summary>`, a blank line, then the description (`feedbackNote` in `packages/shared/src/feedback.ts`). The 4,000 limit therefore covers the whole note, and the count under the description shows the whole note from the start.
 - **Wording stays positive:** "Needs improvement" and "needs work", never "broken" or a thumbs down. Good has a star-eyed Nekko and Needs improvement a wrench.
@@ -57,6 +58,8 @@ The same text on every app (`packages/shared/src/feedback.ts` is the reference; 
 
 ### With screenshots
 
+Unused while the desktop form hides screenshots (see above); the route and `nekkod`'s forwarding stay in place for when they return.
+
 `POST /v1/feedback/screenshots`, the same body plus `screenshots`. `nekkod` sends here only when a note has screenshots. A separate route means a Nekko Cloud from before screenshots answers 404, and `nekkod` turns that into an error ("Nekko Cloud can't take screenshots yet") rather than a note that arrives without its images.
 
 ```json
@@ -73,7 +76,7 @@ The same text on every app (`packages/shared/src/feedback.ts` is the reference; 
 ## Privacy boundary
 
 - No account, token, device id, device name or model, locale, IP, chat content or file path is automatically sent or stored, apart from what a person includes in their note or chosen screenshots. Optional name and email are sent only when typed into those fields, as part of the note, for feedback follow-up only (no marketing/signup). The request is unauthenticated even when someone is signed in.
-- Notes, optional contact details, and screenshots may identify their sender. The sheet says so beside the picker. Nekko Cloud strips image metadata, such as location in a phone photo, before storing a screenshot, never stores its file name, and deletes it after 90 days.
+- Notes, optional contact details, and screenshots may identify their sender. When screenshots are enabled, the sheet says so beside the picker. Nekko Cloud strips image metadata, such as location in a phone photo, before storing a screenshot, never stores its file name, and deletes it after 90 days.
 - The server does not request-log the route, keeps rate-limit counts in memory only, and stores each note with only the day it arrived (`feedback` table: `message`, `app_info`, `received_on`; screenshots hang off the note and add no time or sender), so a note can't be lined up with account activity by time.
 - People are told what app info contains before they switch it on.
 
@@ -97,6 +100,8 @@ The same text on every app (`packages/shared/src/feedback.ts` is the reference; 
 - Android sheet: in progress (see #1004).
 
 - Screenshots on desktop and the Local Web UI: implemented 2026-11-06 (#1860) end to end: the form, `nekkod` forwarding them to `POST /v1/feedback/screenshots`, and Nekko Cloud checking, stripping and storing them. Tested: the API against PGlite with real PNG and JPEG bytes (metadata removed, a corrupt file refused with nothing stored, the per-IP limit, 90-day retention); Rust unit tests for the forwarding and the 404 and bad-screenshot errors. Not run against the deployed API, which needs a `fly deploy` before the app ships (until then the app shows "Nekko Cloud can't take screenshots yet" and stores nothing). The privacy policy page does not mention screenshots or their 90 days yet.
+
+- Screenshots hidden on desktop and the Local Web UI (#2287): the form no longer offers them and every note goes to `POST /v1/feedback` without images. The `nekkod` and Nekko Cloud sides above are unchanged.
 
 - Not built: reading the notes anywhere but the database, an integrated reply inbox (optional typed email now permits manual follow-up), log attachments, screenshots on the phone apps.
 
