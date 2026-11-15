@@ -64,6 +64,7 @@ describe('development launcher safety', () => {
     expect(text).toContain('http://localhost:5173');
     expect(text).toContain('.nekko-agent');
     expect(text).toMatch(/q.*Enter.*stop cleanly/);
+    expect(text).toMatch(/r\s+restart with what is on disk/);
     expect(text).not.toContain('\x1b[');
     const off: string = devBanner({ api: { url: 'http://127.0.0.1:1439', enabled: false } });
     expect(off).toContain('(off: switch it on in Settings > Server)');
@@ -109,6 +110,10 @@ describe('development launcher wiring (source checks until the launcher is refac
     expect(source).toContain('env.NEKKO_DEV_STOP_FILE = stopFile');
     expect(source).toContain("'/T', '/F'");
     expect(source).toContain('process.kill(-child.pid');
+  });
+  it('restarts the whole of npm run dev on r, after the same clean stop', () => {
+    expect(source).toContain("key.toLowerCase() === 'r' && !stopping");
+    expect(source).toContain("spawnSync('npm', ['run', 'dev'], { cwd: resolve('../..')");
   });
   it('tells the app where to report in for the banner', () => {
     expect(source).toContain('env.NEKKO_DEV_READY_FILE = readyFile');

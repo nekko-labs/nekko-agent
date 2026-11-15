@@ -152,7 +152,19 @@ const cleanup = () => {
   try { rmSync(readyFile, { force: true }); } catch {}
   if (keys) try { process.stdin.setRawMode(false); } catch {}
 };
-child.on('exit', code => { cleanup(); process.exit(stopping ? 0 : code ?? 1); });
+let restarting = false;
+child.on('exit', code => {
+  cleanup();
+  if (restarting) {
+    // The whole of `npm run dev` again, so a pull's new dependencies, engine
+    // and main process are all picked up, in this same terminal.
+    // shortcut: each restart nests one more idle launcher process; re-exec in place if that ever matters.
+    process.stdin.pause();
+    console.log('[nekko] Restarting with what is on disk...');
+    process.exit(spawnSync('npm', ['run', 'dev'], { cwd: resolve('../..'), stdio: 'inherit', shell: process.platform === 'win32' }).status ?? 1);
+  }
+  process.exit(stopping ? 0 : code ?? 1);
+});
 
 /** End electron-vite, Electron, the engine and anything they started. */
 const killTree = () => {
@@ -193,9 +205,10 @@ if (keys) {
   process.stdin.resume();
   process.stdin.on('data', (data) => {
     const key = data.toString();
-    if (key === '\r' || key === '\n' || key.toLowerCase() === 'q' || key === '\x03') stop();
+    if (key.toLowerCase() === 'r' && !stopping) { restarting = true; stop(); }
+    else if (key === '\r' || key === '\n' || key.toLowerCase() === 'q' || key === '\x03') { restarting = false; stop(); }
   });
-  console.log('[nekko] Press Enter or q to stop Nekko Agent cleanly (twice to force).');
+  console.log('[nekko] Press Enter or q to stop Nekko Agent cleanly (twice to force), r to restart after a pull.');
 }
 
 // Once the app reports in, say what is running and how to stop it, after
