@@ -52,6 +52,14 @@ waiting on the user. Below the list, **Completed · N jobs** (N is the runner's 
 opens the same completed rows as the page; each opens to its steps, job log and VM log. A
 runner error ends with an **Open settings** link to the runner's settings sheet.
 
+**An idle runner names its last job** `[implemented 2026-11-15; unit tests and hidden renderer capture at 390px against synthetic data]`.
+Philip asked (2026-11-15) for the runners to show their PR and the CI action they serve, in the
+Automations panel and on the CI runners page. Running and queued jobs already carried both in
+their rows. A runner with nothing running or queued (Waiting, Ready, Off) now shows one faint
+line under its header: **Last job**, the workflow and job linked to the job on GitHub, and
+**PR #N** linked to the pull request when the job had one. The repo is in its tooltip. It is
+the newest line of the runner's recent list, so a daemon that sends no recent jobs shows nothing.
+
 **View CI runners** opens Automations, reveals its CI section for that visit,
 and scrolls/focuses it after runner data loads. The panel shows a short empty state
 instead of the setup wizard. Loading and service failures are explicit; unsupported

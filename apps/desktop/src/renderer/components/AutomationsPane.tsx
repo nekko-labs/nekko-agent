@@ -109,7 +109,7 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
       <h2 className="py-1 text-sm font-semibold">Scheduled tasks</h2>
       {sorted.length === 0 ? (
         <p className="py-2 text-xs text-ink-faint" data-automations-empty>
-          Nothing scheduled. Pick <span className="text-ink-soft">Automate</span> in a chat&rsquo;s + menu to add one.
+          All clear. Nothing scheduled.
         </p>
       ) : (
         <div className="flex flex-col" role="list">

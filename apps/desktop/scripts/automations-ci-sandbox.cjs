@@ -28,6 +28,13 @@ app.whenReady().then(async () => {
       await capture(`automations-${width}`);
       await check(`no horizontal overflow at ${width}`, 'document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll("main section")].every(e=>e.scrollWidth<=e.clientWidth+1)');
     }
+    await run("integration.show('idle')"); await sleep(400);
+    await capture('automations-idle-390');
+    if (!baseline) {
+      await check('an idle runner names its last job and PR', "!!document.querySelector('[data-runner-last-job]') && document.querySelector('[data-runner-last-job]').textContent.includes('Desktop · Unit tests') && document.querySelector('[data-runner-last-job]').textContent.includes('PR #2823')");
+      await check('the dock leaves the switch round and borderless', "(s=>s.borderTopWidth==='0px'&&parseFloat(s.borderTopLeftRadius)>=10)(getComputedStyle(document.querySelector('.monitors-dock .quiet-switch')))");
+    }
+    await run('integration.show()'); await sleep(300);
     await run('integration.full()'); await sleep(400);
     // The runners are their own page in the Automations sub-navigation; a baseline without it shows them in the list.
     await click('CI runners', '[data-workflows-subnav] button'); await sleep(300);

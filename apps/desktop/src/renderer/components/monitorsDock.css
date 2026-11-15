@@ -36,7 +36,8 @@
 .monitors-dock__toolbar { flex-shrink: 0; flex-wrap: wrap; }
 .monitors-dock__count { margin-right: auto; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 .monitors-dock__background { display: flex; flex-shrink: 0; min-width: 0; padding: 0 12px 8px; }
-.monitors-dock button,
+/* Switches keep their own look (.quiet-switch in styles.css). */
+.monitors-dock button:not(.quiet-switch),
 .monitors-dock input[type='number'] {
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -47,10 +48,10 @@
 }
 .monitors-dock button { cursor: pointer; }
 @media (hover: hover) {
-  .monitors-dock button:hover:not(:disabled) { background: var(--surface); }
+  .monitors-dock button:not(.quiet-switch):hover:not(:disabled) { background: var(--surface); }
 }
 .monitors-dock button:disabled { opacity: .5; cursor: default; }
-.monitors-dock button:focus-visible,
+.monitors-dock button:not(.quiet-switch):focus-visible,
 .monitors-dock input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .monitors-dock__configure { position: relative; }
 /* The dock's show/hide icon, top right of the header: the agent panel's pill,
