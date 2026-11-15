@@ -20,6 +20,7 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 80 && !await run('!!window.toastFixtureReady'); i++) await sleep(100);
     await sleep(800);
     report.checks.toasts = await run('document.querySelectorAll("[data-toast]").length');
+    report.checks.cursor = await run('getComputedStyle(document.querySelector("[data-toast]")).cursor + "/" + getComputedStyle(document.querySelector("[data-toast] button")).cursor');
     report.checks.hidden = !win.isVisible() && !win.isFocused();
     fs.writeFileSync(path.join(out, 'toasts.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG());
     report.captures.push('toasts.png');
