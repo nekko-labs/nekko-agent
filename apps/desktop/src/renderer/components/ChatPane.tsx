@@ -59,6 +59,7 @@ import type { PendingApproval } from './agent-console/index.js';
 import { SubagentModelControl } from './SubagentModelControl.js';
 import { replyIconState } from './agent-console/ReplyStatus.js';
 import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/LiveTurn.js';
+import { turnActivityLabel } from './agent-console/TurnActivityStatus.js';
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
 import { MediaAgentWelcome } from './MediaAgentIntro.js';
 import { ImageModeControls } from './agent-console/ImageModeControls.js';
@@ -550,8 +551,8 @@ const LiveUsageChip = memo(function LiveUsageChip({
  * how long it has been at it.
  */
 const LiveReplyStatus = memo(function LiveReplyStatus({
-  sessionId, startedAt, ...status
-}: Omit<React.ComponentProps<typeof ReplyStatus>, 'status' | 'elapsed'> & { sessionId: string; startedAt: number }) {
+  sessionId, startedAt, backgroundTasks = 0, ...status
+}: Omit<React.ComponentProps<typeof ReplyStatus>, 'status' | 'elapsed'> & { sessionId: string; startedAt: number; backgroundTasks?: number }) {
   const run = useLiveRun(sessionId, !usePaneVisible());
   const [elapsed, setElapsed] = useState(0);
   const [nextWakeAt, setNextWakeAt] = useState<number | null>(null);
@@ -576,7 +577,10 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
     return () => clearInterval(t);
   }, [status.streaming, startedAt]);
   const liveRate = status.streaming ? liveTokenRate(run) : null;
-  const label = status.streaming ? shortLiveStatus(run?.activity) || 'Working' : '';
+  // Agrees with the turn status line: "Starting" or "Writing reply" for half an hour reads as hung or busy
+  // when Claude Code is only waiting on its own background work.
+  const waiting = !!run && turnActivityLabel(run, undefined, backgroundTasks).startsWith('Waiting on');
+  const label = !status.streaming ? '' : waiting ? 'Waiting on background tasks' : shortLiveStatus(run?.activity) || 'Working';
   return <ReplyStatus {...status} tps={liveRate?.rate ?? status.tps} estimatedRate={!!liveRate} status={label} iconState={status.streaming ? replyIconState(run?.activity) : 'idle'} elapsed={status.streaming ? elapsed : 0} nextWakeAt={nextWakeAt} now={now} />;
 });
 
@@ -2980,9 +2984,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {/* The reply being written: repaints once a frame on its own. */}
                 {imageMode
                   ? <ImageLiveTurn sessionId={sessionId} streaming={streaming} />
-                  : <LiveTurn sessionId={sessionId} held={held} prs={prs} priorPrUrls={priorPrUrls} onImageClick={setLightbox} pendingCallId={approval?.call.id} />}
+                  : <LiveTurn sessionId={sessionId} held={held} prs={prs} priorPrUrls={priorPrUrls} onImageClick={setLightbox} pendingCallId={approval?.call.id} backgroundTasks={claudeBackground} />}
                 <LiveReplyStatus
                   sessionId={sessionId}
+                  backgroundTasks={claudeBackground}
                   startedAt={turnStart.current}
                   streaming={streaming}
                   tps={tps}

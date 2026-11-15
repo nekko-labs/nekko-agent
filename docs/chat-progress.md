@@ -4,7 +4,7 @@ Agent chats show verification progress above the footer pull-request panel in th
 
 ## Tool duration versus the ongoing reply
 
-While a reply is active, a status line outside the collapsible steps identifies running tools, thinking, model response/wait, approval, pause or retry. It stays visible in both Simple and Expert modes. **Turn elapsed** measures the entire reply, not just the last tool.
+While a reply is active, a status line outside the collapsible steps identifies running tools, thinking, model response/wait, approval, pause or retry. It stays visible in both Simple and Expert modes. **Turn elapsed** measures the entire reply, not just the last tool. In a Claude Agent chat, Claude Code can keep a reply open after it stops writing, until background commands or sub-agents it started finish. The status then reads **Waiting on N background tasks** instead of a model wait; open Agent Monitor to see them.
 
 A tool's duration freezes when that call returns—even if it returned an error and the assistant continues working. For example, a fixed **1.1s** tool time can sit beside an increasing turn timer. That is not evidence that the tool is still running. The turn status disappears when the reply ends; it does not diagnose a quiet provider as stuck or infer background CI progress from a command's output.
 
