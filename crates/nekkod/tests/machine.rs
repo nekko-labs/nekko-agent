@@ -132,6 +132,17 @@ async fn machine_channels_are_served_without_a_backend() {
         assert_eq!(fs, json!({ "quiet": false, "state": "free" }));
     }
 
+    // Booted simulators (#2814): a list, possibly empty, each device with its
+    // CPU, and an unknown one refused rather than acted on.
+    let (status, sims) = post(d.port, "simulators:state", json!([])).await;
+    assert_eq!(status, 200, "{sims}");
+    for dev in sims["devices"].as_array().expect("devices") {
+        assert!(dev["id"].is_string() && dev["cpuPct"].is_number() && dev["upSecs"].is_number(), "{dev}");
+        assert!(["ios", "android"].contains(&dev["kind"].as_str().unwrap_or_default()), "{dev}");
+    }
+    let (status, gone) = post(d.port, "simulators:shutdown", json!(["no-such-device"])).await;
+    assert_ne!(status, 200, "{gone}");
+
     // Low memory: the level, and with detail, the daemon's own share and the
     // biggest app. Closing is refused for Nekko and the system.
     let (status, mem) = post(d.port, "memory:state", json!([{ "detail": true }])).await;

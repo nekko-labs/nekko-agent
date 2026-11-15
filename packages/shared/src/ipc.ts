@@ -133,6 +133,15 @@ export const IpcChannels = {
   /** Whether someone is using this computer (input, a chat they started), for background work and New chat's machine pick. */
   activityState: 'activity:state',
   systemStats: 'system:stats',
+  /** Booted iOS simulators and Android emulators, their CPU and the chat that last used each (#2814). */
+  simulatorsState: 'simulators:state',
+  /** Shut a booted simulator down; iOS can be booted again (`simulators:boot`) as the Undo. */
+  simulatorsShutdown: 'simulators:shutdown',
+  simulatorsBoot: 'simulators:boot',
+  /** Bring Simulator.app forward on a device. */
+  simulatorsOpen: 'simulators:open',
+  /** A screenshot of a device's screen, read on demand for the chat's Simulator panel. */
+  simulatorsScreenshot: 'simulators:screenshot',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
   monitorSummary: 'monitor:summary',
 
@@ -549,6 +558,8 @@ export const IpcEvents = {
   tasksUpdated: 'tasks:updated',
   /** `BackgroundState` changed: a background turn started, ended, paused or resumed. */
   backgroundUpdated: 'background:updated',
+  /** Booted simulators changed, or a chat started on one (`SimulatorsUpdated`). */
+  simulatorsUpdated: 'simulators:updated',
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
   /** The image builder's `ImageView`, after any change. */
@@ -885,6 +896,12 @@ export interface NekkoApi {
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
   getSystemStats(): Promise<import('./monitor.js').SystemStats | null>;
+  /** Booted simulators and emulators (`simulators:state`). Absent where the host has none to show. */
+  simulatorsState?(): Promise<import('./simulators.js').SimulatorsState>;
+  simulatorsShutdown?(id: string): Promise<{ ok: boolean; canUndo: boolean }>;
+  simulatorsBoot?(id: string): Promise<{ ok: boolean }>;
+  simulatorsOpen?(id: string): Promise<{ ok: boolean }>;
+  simulatorsScreenshot?(id: string): Promise<import('./simulators.js').SimulatorShot>;
 
   listSessions(): Promise<Session[]>;
   /** Earliest deadline of this chat's active durable watches, or null. */
@@ -1500,6 +1517,8 @@ export interface NekkoApi {
   /** Fires when the automation-task list changes (created/updated/fired/deleted). */
   onTasksUpdated(cb: (tasks: AutomationTask[]) => void): () => void;
   onBackgroundUpdated(cb: (state: import('./background.js').BackgroundState) => void): () => void;
+  /** Booted simulators changed, or a chat started on one. */
+  onSimulatorsUpdated?(cb: (e: import('./simulators.js').SimulatorsUpdated) => void): () => void;
   /** Fires when any training/goal run changes (experiments, hints, status). */
   onTrainingUpdated(cb: (runs: TrainingRun[]) => void): () => void;
   /** Fires when a workflow is edited or any run advances a step. */

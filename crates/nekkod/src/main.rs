@@ -89,6 +89,7 @@ mod service_management;
 mod settings;
 mod side;
 mod sideband;
+mod simulators;
 mod skill_sources;
 mod small_services;
 mod spawn;
@@ -206,6 +207,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     }
     let settings = settings::Settings::new(data_dir.clone(), hub.clone());
     let accounts = Arc::new(accounts::Accounts::new(data_dir.clone(), hub.clone(), settings.store.clone()));
+    simulators::init(&data_dir, hub.clone(), settings.store.clone(), sessions.clone());
     // Older builds signed in to Claude plans; delete what they left (claude_plan.rs).
     match claude_plan::migrate(&data_dir, &settings.store, nekko_oauth::now_ms()) {
         Ok(done) if !done.is_empty() => eprintln!(

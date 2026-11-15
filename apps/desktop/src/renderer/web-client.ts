@@ -64,6 +64,7 @@ function makeWebClient(): NekkoApi {
   const downloadsUpdatedCbs = new Set<(jobs: import('@nekko-agent/shared').DownloadJob[]) => void>();
   const modelsUpdatedCbs = new Set<(e: { providerId: string }) => void>();
   const backgroundCbs = new Set<(state: import('@nekko-agent/shared').BackgroundState) => void>();
+  const simulatorsCbs = new Set<(e: import('@nekko-agent/shared').SimulatorsUpdated) => void>();
   const skillsUpdatedCbs = new Set<(catalog: import('@nekko-agent/shared').VaizerCatalog) => void>();
   const replayCbs = new Set<(r: AgentReplay) => void>();
   // Narrowing the agent event stream: only over the server's own socket to nekkod.
@@ -77,6 +78,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.changesUpdated) changesCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.tasksUpdated) tasksCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.backgroundUpdated) backgroundCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.simulatorsUpdated) simulatorsCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.runnerImageChanged) imageCbs.forEach((cb) => cb(payload));
@@ -509,6 +511,11 @@ function makeWebClient(): NekkoApi {
     machineDismissNudge: (task) => call(IpcChannels.machineDismissNudge, task ?? null),
     getGpuStats: () => call(IpcChannels.gpuStats),
     getSystemStats: () => call(IpcChannels.systemStats),
+    simulatorsState: () => call(IpcChannels.simulatorsState),
+    simulatorsShutdown: (id) => call(IpcChannels.simulatorsShutdown, id),
+    simulatorsBoot: (id) => call(IpcChannels.simulatorsBoot, id),
+    simulatorsOpen: (id) => call(IpcChannels.simulatorsOpen, id),
+    simulatorsScreenshot: (id) => call(IpcChannels.simulatorsScreenshot, id),
 
     listSessions: () => call(IpcChannels.sessionsList),
     nextAgentWatchAt: (sessionId) => call(IpcChannels.sessionNextWatch, sessionId),
@@ -898,6 +905,10 @@ function makeWebClient(): NekkoApi {
     onBackgroundUpdated: (cb) => {
       backgroundCbs.add(cb);
       return () => backgroundCbs.delete(cb);
+    },
+    onSimulatorsUpdated: (cb) => {
+      simulatorsCbs.add(cb);
+      return () => simulatorsCbs.delete(cb);
     },
     onTrainingUpdated: (cb) => {
       trainingCbs.add(cb);

@@ -2499,6 +2499,10 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 continue;
             }
         };
+        if let Some(Out::Event(e) | Out::Loop(e, _)) = &out {
+            // Which chat is using which simulator (simulators.rs).
+            crate::simulators::observe(&f.session_id, e);
+        }
         let (event, snapshot) = match out {
             None | Some(Out::End) => break,
             Some(Out::Event(e)) => {

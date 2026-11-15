@@ -411,6 +411,14 @@ export interface AppSettings {
   /** Minutes without input before the user counts as away (default 5). */
   automationIdleMinutes?: number;
   /**
+   * Shut down a booted simulator an agent used once no agent has touched it
+   * for this many minutes and it is nearly idle (#2814). Unset or 0 is never.
+   * A simulator no agent used (one you booted) is never shut down.
+   */
+  simulatorAutoShutdownMinutes?: number | null;
+  /** Open the chat's Simulator panel when its agent starts using a simulator (default on). */
+  simulatorPanelAutoOpen?: boolean;
+  /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
    * the event as JSON on stdin (see crates/nekko-tools/src/hooks.rs).
    */

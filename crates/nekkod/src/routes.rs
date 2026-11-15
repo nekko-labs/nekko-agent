@@ -736,6 +736,10 @@ impl Table {
             crate::activity::CHANNELS,
             handler!(|ctx, channel, args| crate::activity::route(ctx, channel, &args).await),
         );
+        t.add(
+            crate::simulators::CHANNELS,
+            handler!(|ctx, channel, args| crate::simulators::route(channel, &args).await),
+        );
         t.add(crate::background::CHANNELS, handler!(|ctx, channel, args| Ok(ctx.turns.background_state())));
         t.add(&["resource:queue"], handler!(|ctx, channel, args| ctx.resource_queue.route(&args).await));
         t.add(
