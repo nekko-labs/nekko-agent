@@ -2,6 +2,7 @@ import { SubagentRoute } from './SubagentRoute.js';
 import { chatArtifacts } from '../chatArtifacts.js';
 import { MonitorArtifacts } from './MonitorArtifacts.js';
 import { MonitorProject } from './MonitorProject.js';
+import { SimulatorSection } from './Simulators.js';
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { QueuedPrompt, Session } from '@nekko-agent/shared';
 import { DEFAULT_ORCHESTRATION, agentMonitorRelevant, getStrategy, queueItemPayload } from '@nekko-agent/shared';
@@ -90,6 +91,7 @@ export function PlanRail({ sessionId, session, onMinimize }: {
         {onMinimize && <button type="button" className="-mr-1 grid h-5 w-5 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" data-plan-minimize onClick={onMinimize} title="Minimize Agent Monitor" aria-label="Minimize Agent Monitor"><MinimizeIcon className="h-3.5 w-3.5" /></button>}
       </header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
+        <SimulatorSection sessionId={sessionId} />
         <MonitorArtifacts key={sessionId} sessionId={sessionId} artifacts={artifacts} hydrated={!!session && session.id === sessionId && Array.isArray(session.messages)} />
         <MonitorProject sessionId={sessionId} projectPath={basePath} />
         <section>
