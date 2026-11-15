@@ -736,6 +736,7 @@ impl Table {
             crate::activity::CHANNELS,
             handler!(|ctx, channel, args| crate::activity::route(ctx, channel, &args).await),
         );
+        t.add(crate::servers::CHANNELS, handler!(|ctx, channel, args| crate::servers::route(channel, &args).await));
         t.add(
             crate::simulators::CHANNELS,
             handler!(|ctx, channel, args| crate::simulators::route(channel, &args).await),

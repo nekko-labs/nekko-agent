@@ -133,6 +133,8 @@ export const IpcChannels = {
   /** Whether someone is using this computer (input, a chat they started), for background work and New chat's machine pick. */
   activityState: 'activity:state',
   systemStats: 'system:stats',
+  /** The web pages served on this computer (dev servers), for the Agents panel's Browsers view (#2824). Local only. */
+  serversList: 'servers:list',
   /** Booted iOS simulators and Android emulators, their CPU and the chat that last used each (#2814). */
   simulatorsState: 'simulators:state',
   /** Shut a booted simulator down; iOS can be booted again (`simulators:boot`) as the Undo. */
@@ -896,6 +898,8 @@ export interface NekkoApi {
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
   getSystemStats(): Promise<import('./monitor.js').SystemStats | null>;
+  /** The web pages served on this computer (`servers:list`). Absent where the host cannot look. */
+  serversList?(): Promise<import('./servers.js').ServedSites>;
   /** Booted simulators and emulators (`simulators:state`). Absent where the host has none to show. */
   simulatorsState?(): Promise<import('./simulators.js').SimulatorsState>;
   simulatorsShutdown?(id: string): Promise<{ ok: boolean; canUndo: boolean }>;

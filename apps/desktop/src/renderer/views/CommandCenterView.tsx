@@ -533,6 +533,10 @@ export function CommandCenterView() {
             if (drawer.sessionId !== id || drawer.kind !== kind || drawer.closing) drawer.toggle(id, kind);
           }).catch(reportAddFailure);
         }}
+        onOpenWindow={(kind, refId) => {
+          setCompletedId(null);
+          void addFromToolbar(kind, refId).catch(reportAddFailure);
+        }}
         zoneTints={agentTints}
         onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} /></div>}
       <div className="wall-column">

@@ -12,7 +12,12 @@ import { FolderIcon } from '../icons.js';
  * workspace can hold several of these rooted at different places. Files open
  * into their own window, so the explorer stays put.
  */
-export function ExplorerPane({ paneId, root }: { paneId: string; root: string }) {
+export function ExplorerPane({ paneId, root, named }: {
+  paneId: string;
+  root: string;
+  /** The window around it already names the folder (a Files window on the wall), so the explorer does not say it again. */
+  named?: boolean;
+}) {
   const openFilePane = useStore((s) => s.openFilePane);
   const projects = useStore((s) => s.settings?.workspaces ?? []);
   const retargetPane = useStore((s) => s.retargetPane);
@@ -45,10 +50,10 @@ export function ExplorerPane({ paneId, root }: { paneId: string; root: string })
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-line px-2 py-1 text-2xs text-ink-faint">
+      {!named && <div className="flex shrink-0 items-center gap-2 border-b border-line px-2 py-1 text-2xs text-ink-faint">
         <FolderIcon className="h-3 w-3 shrink-0" />
         <span className="min-w-0 truncate" title={root}>{name}</span>
-      </div>
+      </div>}
       <div className="min-h-0 flex-1 overflow-auto py-1">
         <DirTree root={root} onOpen={openFilePane} />
       </div>
