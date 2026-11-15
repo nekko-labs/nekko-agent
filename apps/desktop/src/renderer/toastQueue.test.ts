@@ -57,6 +57,41 @@ describe('store toasts', () => {
     expect(useStore.getState().toasts).toEqual([]);
   });
 
+  it('folds an identical message into the one showing, with a count, as the newest', () => {
+    const { pushToast } = useStore.getState();
+    pushToast('error', 'Could not open Simulator');
+    pushToast('info', 'saved');
+    pushToast('error', 'Could not open Simulator');
+    pushToast('error', 'Could not open Simulator');
+    expect(live().map((x) => [x.message, x.count])).toEqual([['saved', undefined], ['Could not open Simulator', 3]]);
+  });
+
+  it('keeps the same text of a different kind apart', () => {
+    const { pushToast } = useStore.getState();
+    pushToast('info', 'done');
+    pushToast('success', 'done');
+    expect(live()).toHaveLength(2);
+  });
+
+  it('restarts an info timeout when it repeats', () => {
+    const { pushToast } = useStore.getState();
+    pushToast('info', 'saved');
+    vi.advanceTimersByTime(TOAST_MS - 1000);
+    pushToast('info', 'saved');
+    vi.advanceTimersByTime(TOAST_MS - 1000);
+    expect(live().map((x) => x.count)).toEqual([2]);
+    vi.advanceTimersByTime(1000);
+    expect(live()).toEqual([]);
+  });
+
+  it('starts fresh once the earlier copy is dismissed', () => {
+    const { pushToast } = useStore.getState();
+    pushToast('error', 'failed');
+    useStore.getState().dismissToast(useStore.getState().toasts[0].id);
+    pushToast('error', 'failed');
+    expect(live().map((x) => x.count)).toEqual([undefined]);
+  });
+
   it('gives toasts pushed in the same millisecond distinct ids', () => {
     const { pushToast } = useStore.getState();
     pushToast('info', 'a');

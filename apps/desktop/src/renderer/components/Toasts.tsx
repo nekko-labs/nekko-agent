@@ -7,7 +7,8 @@ const COLOR = { info: 'var(--info)', error: 'var(--danger)', success: 'var(--suc
 /**
  * Bottom-left notifications (errors, confirmations). At most a few show at
  * once (the store pushes older ones out); infos time out, errors stay until
- * clicked or closed. A dismissed toast fades down briefly before it goes.
+ * clicked or closed. A message that repeats shows once with a ×N count. A
+ * dismissed toast fades down briefly before it goes.
  */
 export function Toasts() {
   const { toasts, dismissToast } = useStore(useShallow((s) => ({ toasts: s.toasts, dismissToast: s.dismissToast })));
@@ -26,6 +27,12 @@ export function Toasts() {
         >
           <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: COLOR[t.kind] }} />
           <span className="min-w-0 flex-1 text-sm leading-snug [overflow-wrap:anywhere]">{t.message}</span>
+          {(t.count ?? 1) > 1 && (
+            // Keyed by the count so each repeat replays the quiet fade.
+            <span key={t.count} aria-label={`${t.count} times`} className="fade-in shrink-0 text-sm leading-snug tabular-nums text-ink-faint">
+              ×{t.count}
+            </span>
+          )}
           {t.kind === 'error' && (
             <button
               type="button"
