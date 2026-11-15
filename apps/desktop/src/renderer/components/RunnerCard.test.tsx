@@ -146,6 +146,20 @@ describe('RunnerCard', () => {
     expect(hot).toMatch(/disabled=""[^>]*title="[^"]*hot[^"]*"|title="[^"]*hot[^"]*"[^>]*disabled=""/i);
   });
 
+  it('an idle runner names its last job: the action and the PR, on the page and in the panel', () => {
+    const idle = view({ state: 'waiting', slots: [], recent: [
+      { ts: now - 600, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'CI', job: 'gate', result: 'finished', seconds: 60, reason: [], url: 'https://github.com/nekko-labs/nekko-agent/actions/runs/7/job/8', pr: { number: 2823, url: 'https://github.com/nekko-labs/nekko-agent/pull/2823' } },
+    ] });
+    for (const compact of [false, true]) {
+      const html = render(idle, null, undefined, compact);
+      expect(html).toContain('data-runner-last-job');
+      expect(html).toMatch(/href="https:\/\/github.com\/nekko-labs\/nekko-agent\/actions\/runs\/7\/job\/8"[^>]*>CI · gate<\/a>/);
+      expect(html).toMatch(/href="https:\/\/github.com\/nekko-labs\/nekko-agent\/pull\/2823"[^>]*>PR #(<!-- -->)?2823<\/a>/);
+    }
+    // Busy: the job rows already carry it, so it is not said twice.
+    expect(render(view())).not.toContain('data-runner-last-job');
+  });
+
   it('error_card_shows_the_daemons_sentence', () => {
     const html = render(view({ state: 'error', error: 'No VM image yet.', slots: [] }));
     expect(html).toMatch(/role="alert"[^>]*>[^<]*No VM image yet\./);

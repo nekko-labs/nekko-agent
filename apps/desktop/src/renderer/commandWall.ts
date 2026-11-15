@@ -38,9 +38,13 @@ import {
 
 export type WallFilter = 'all' | 'chat' | 'terminal';
 
-/** Only chats and shells belong in the wall tree; dashboard monitors live in the Monitors dock. */
-export type WallKind = 'chat' | 'terminal';
-export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal'];
+/**
+ * What the wall tree holds: chats and shells, and a Browser or Files window
+ * opened from the Agents panel without an agent (#2824). Dashboard monitors
+ * live in the Monitors dock.
+ */
+export type WallKind = 'chat' | 'terminal' | 'browser' | 'files';
+export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal', 'browser', 'files'];
 
 export type { WallLayout, WallLayoutMode, MonitorsDock, MonitorsSide, MonitorKey } from '@nekko-agent/shared';
 export { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK };

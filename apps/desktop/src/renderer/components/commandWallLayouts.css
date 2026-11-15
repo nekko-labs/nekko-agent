@@ -322,10 +322,17 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 @starting-style {
   .wall-agents-presence[data-panel-open='true'] { width: 0; transform: translateX(-100%); }
 }
-/* Below md the list is an absolute drawer that this wrapper contains (its
-   transform), so it keeps its old sizing: sized to the Agents button and
-   clipped, it cut the drawer off and clicks fell through to the windows. */
-@media (max-width: 767px) { .wall-agents-presence { width: auto; overflow: visible; clip-path: none; } }
+/* Below md the list is an absolute drawer (inset-y-0, z-30). The wrapper's
+   transform made it the drawer's containing block (so the drawer was only as
+   tall as the Agents button row, clipping every row and letting clicks fall
+   through to the chat) and a stacking context. Below md the wrapper is a plain
+   static box with no transform, so the drawer sizes to the main column and
+   stacks above the windows. The slide only matters at md and up, where the
+   list is a docked column. */
+@media (max-width: 767px) {
+  .wall-agents-presence, .wall-agents-presence[data-panel-open='true'] { position: static; width: auto; overflow: visible; clip-path: none; transform: none; transition: none; }
+  @starting-style { .wall-agents-presence[data-panel-open='true'] { transform: none; } }
+}
 @media (prefers-reduced-motion: reduce) { .wall-agents-presence { transition: none; transform: none; } }
 
 /* Give sections breathing room without changing card density or drop padding.

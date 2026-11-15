@@ -51,6 +51,16 @@ export interface SimulatorShot {
   at: number;
 }
 
+/** Auto shutdown's choices, in minutes (0 is Never) (#2814, 5 and 15 added in #2826). */
+export const SIMULATOR_AUTO_SHUTDOWN_CHOICES: ReadonlyArray<readonly [number, string]> = [
+  [0, 'Never'],
+  [5, 'After 5 min'],
+  [15, 'After 15 min'],
+  [30, 'After 30 min'],
+  [60, 'After 1 hour'],
+  [240, 'After 4 hours'],
+];
+
 /** Below this a device counts as quiet (percent of a core). */
 export const SIMULATOR_QUIET_CPU = 3;
 /** Quiet and untouched this long reads as idle. */

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { BootedSimulator, SimulatorsState } from '@nekko-agent/shared';
 import {
+  SIMULATOR_AUTO_SHUTDOWN_CHOICES,
   simulatorDetail,
   simulatorDuration,
   simulatorIdleLabel,
@@ -8,7 +9,7 @@ import {
   simulatorsCpu,
   simulatorsForSession,
 } from '@nekko-agent/shared';
-import { PhoneIcon } from '../icons.js';
+import { ChevronIcon, PhoneIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { onSimulatorUsed, refreshSimulators, useSimulators } from '../simulators.js';
 import { StatusDot } from './primitives/index.js';
@@ -19,7 +20,8 @@ import './simulators.css';
  *
  *  - `SimulatorRows`: the Simulators group in the Hardware monitor and in the
  *    monitor chip's panel. One row per device: name, CPU, the chat that last
- *    used it or how long it has sat idle, Open and Shut down.
+ *    used it or how long it has sat idle, Open (the chat and the device's
+ *    window) and Shut down. Its header folds it; Auto shutdown sits under it.
  *  - `SimulatorChipSegment`: the phone glyph and count on the monitor chip.
  *  - `SimulatorSection`: the chat's Simulator panel, at the top of its Agent
  *    Monitor, with a live view of the screen.
@@ -73,6 +75,51 @@ function openInSimulator(d: BootedSimulator) {
   window.nekko.simulatorsOpen?.(d.id).catch((e) => useStore.getState().pushToast('error', String(e).replace(/^Error:\s*/, '')));
 }
 
+/**
+ * A row's Open: the chat that last used the device, and the device's own
+ * window (DeviceHub, or Simulator before Xcode 27) on top of it. A device no
+ * agent used opens its window only; a headless emulator opens its chat only.
+ */
+export function openSimulatorAndChat(d: BootedSimulator, openChat: (sessionId: string) => void) {
+  if (d.lastUse) openChat(d.lastUse.sessionId);
+  if (d.canOpen) openInSimulator(d);
+}
+
+const COLLAPSED_KEY = 'nekko.simulators.collapsed';
+
+function readCollapsed(): boolean {
+  try { return localStorage.getItem(COLLAPSED_KEY) === '1'; } catch { return false; }
+}
+
+/** The group's folded state, remembered across restarts (both surfaces share it). */
+function useCollapsed(): [boolean, () => void] {
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const toggle = () => setCollapsed((c) => {
+    try { localStorage.setItem(COLLAPSED_KEY, c ? '0' : '1'); } catch { /* private mode */ }
+    return !c;
+  });
+  return [collapsed, toggle];
+}
+
+/** When idle simulators an agent used shut down by themselves (`simulatorAutoShutdownMinutes`). */
+export function SimulatorAutoShutdown() {
+  const minutes = useStore((s) => s.settings?.simulatorAutoShutdownMinutes) ?? 0;
+  const change = (value: number) => {
+    window.nekko.updateSettings({ simulatorAutoShutdownMinutes: value || null })
+      .then(() => useStore.getState().refreshSettings())
+      .catch(() => {});
+  };
+  return (
+    <label className="mt-1 flex items-center justify-between gap-2 text-2xs text-ink-soft" title="Shut down simulators an agent used once no agent has touched them for this long and they are nearly idle" data-simulator-auto-shutdown>
+      <span>Auto shutdown</span>
+      <select className="input w-auto py-0.5 text-2xs" value={minutes} onChange={(e) => change(Number(e.target.value))}>
+        {SIMULATOR_AUTO_SHUTDOWN_CHOICES.map(([m, label]) => <option key={m} value={m}>{label}</option>)}
+        {!SIMULATOR_AUTO_SHUTDOWN_CHOICES.some(([m]) => m === minutes) && <option value={minutes}>After {minutes} min</option>}
+      </select>
+    </label>
+  );
+}
+
 /** The second line of a device's row: who used it, or how long it has idled, and how long it has been up. */
 export function simulatorRowDetail(d: BootedSimulator, now: number): string {
   const idle = simulatorIdleLabel(d, now);
@@ -80,21 +127,29 @@ export function simulatorRowDetail(d: BootedSimulator, now: number): string {
   return [cpuText(d.cpuPct), idle ?? used ?? simulatorDetail(d), `up ${simulatorDuration(d.upSecs * 1000)}`].filter(Boolean).join(' · ');
 }
 
-/** The Simulators group: one row per booted device. Nothing at all while none is booted. */
-export function SimulatorRows({ state, dense = true }: { state?: SimulatorsState | null; dense?: boolean }) {
+/**
+ * The Simulators group: one row per booted device, then Auto shutdown.
+ * Its header folds it to one line (count and CPU), remembered. Nothing at
+ * all while none is booted.
+ */
+export function SimulatorRows({ state, dense = true, collapsed: collapsedProp }: { state?: SimulatorsState | null; dense?: boolean; collapsed?: boolean }) {
   const live = useSimulators();
   const s = state === undefined ? live : state;
   const { busy, undo, shutdown, restore } = useShutdown();
   const openChat = useStore((st) => st.openChatPane);
+  const [collapsedSaved, toggle] = useCollapsed();
+  const collapsed = collapsedProp ?? collapsedSaved;
   const devices = s?.devices ?? [];
   if (!devices.length && !undo) return null;
   const now = s?.sampledAt ?? Date.now();
   return (
-    <section className="simulator-rows" data-simulator-rows aria-label="Simulators">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="quiet-group-label">Simulators</span>
-        {devices.length > 0 && <span className="text-2xs tabular-nums text-ink-faint">{devices.length} running · {cpuText(simulatorsCpu(s))}</span>}
-      </div>
+    <section className="simulator-rows" data-simulator-rows data-collapsed={collapsed || undefined} aria-label="Simulators">
+      <button type="button" className="simulator-group-head flex w-full min-w-0 items-baseline gap-1 text-left" aria-expanded={!collapsed} onClick={toggle} title={collapsed ? 'Show simulators' : 'Hide simulators'}>
+        <ChevronIcon className="simulator-chevron h-3 w-3 shrink-0 self-center text-ink-faint" />
+        <span className="quiet-group-label min-w-0 flex-1">Simulators</span>
+        {devices.length > 0 && <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{devices.length} running · {cpuText(simulatorsCpu(s))}</span>}
+      </button>
+      {!collapsed && <div className="simulator-group-body">
       <ul className="mt-1">
         {devices.map((d) => {
           const idle = simulatorIdleLabel(d, now);
@@ -110,7 +165,7 @@ export function SimulatorRows({ state, dense = true }: { state?: SimulatorsState
               </span>
               {/* Stacked, so a narrow panel keeps room for the name. */}
               <span className="simulator-row-actions flex shrink-0 flex-col items-end">
-                {d.canOpen && <button type="button" className="simulator-action text-2xs" style={{ color: 'var(--ink-soft)' }} onClick={() => openInSimulator(d)} title={`Show ${d.name} in Simulator`}>Open</button>}
+                {(d.canOpen || d.lastUse) && <button type="button" className="simulator-action text-2xs" style={{ color: 'var(--ink-soft)' }} onClick={() => openSimulatorAndChat(d, openChat)} title={openTitle(d)}>Open</button>}
                 <button type="button" className="simulator-action text-2xs" style={{ color: 'var(--danger-text)' }} disabled={busy === d.id} onClick={() => void shutdown(d)} title={`Shut down ${d.name}`}>
                   {busy === d.id ? 'Stopping…' : 'Shut down'}
                 </button>
@@ -119,6 +174,8 @@ export function SimulatorRows({ state, dense = true }: { state?: SimulatorsState
           );
         })}
       </ul>
+      {devices.length > 0 && <SimulatorAutoShutdown />}
+      </div>}
       {undo && (
         <p className="mt-1 flex items-center gap-2 text-2xs text-ink-faint" role="status">
           <span className="min-w-0 flex-1 truncate">Shut down {undo.name}</span>
@@ -127,6 +184,13 @@ export function SimulatorRows({ state, dense = true }: { state?: SimulatorsState
       )}
     </section>
   );
+}
+
+/** The row's Open tooltip: what it will open. */
+export function openTitle(d: BootedSimulator): string {
+  const chat = d.lastUse ? `the chat using ${d.name}` : null;
+  const win = d.canOpen ? `${d.name}'s window` : null;
+  return `Open ${[chat, win].filter(Boolean).join(' and ')}`;
 }
 
 /** The monitor chip's phone glyph and count. Nothing while no device is booted. */
@@ -213,7 +277,7 @@ export function SimulatorSection({ sessionId, state }: { sessionId: string; stat
         <>
           <LiveScreen key={device.id} device={device} />
           <div className="mt-2 flex items-center justify-end gap-1">
-            {device.canOpen && <button type="button" className="btn btn-ghost px-2 text-2xs" onClick={() => openInSimulator(device)}>Open in Simulator</button>}
+            {device.canOpen && <button type="button" className="btn btn-ghost px-2 text-2xs" onClick={() => openInSimulator(device)} title={`Show ${device.name} in its own window`}>Open window</button>}
             <button type="button" className="btn btn-ghost px-2 text-2xs" style={{ color: 'var(--danger-text)' }} disabled={busy === device.id} onClick={() => void shutdown(device)}>{busy === device.id ? 'Shutting down…' : 'Shut down'}</button>
           </div>
         </>

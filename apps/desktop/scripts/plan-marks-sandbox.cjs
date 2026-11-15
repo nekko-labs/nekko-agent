@@ -80,9 +80,9 @@ app.whenReady().then(async () => {
     const sheet = await run(`(() => { const r = document.querySelector('[data-plan-sheet]')?.getBoundingClientRect(); return r ? { x: Math.max(0, Math.floor(r.x) - 8), y: Math.max(0, Math.floor(r.y) - 8), width: Math.ceil(r.width) + 16, height: Math.ceil(r.height) + 16 } : null; })()`);
     if (sheet) await shot('plan-sheet', sheet);
     await check('no verification chips beside the steps', `!document.querySelector('[data-plan-chip="verify"]')`);
-    await check('the running check shows the working ripple on its bullet', `!!document.querySelector('[data-plan-substep="step_2:check"] [data-plan-check="active"] .plan-working')`);
-    await check('a pending check on a done step is a plain bullet', `!document.querySelector('[data-plan-substep="step_3:check"] .plan-working')`);
-    await check('the failed check shows on its bullet', `document.querySelector('[data-plan-substep="step_5:check"] [data-plan-check="failed"]')?.getAttribute('aria-label') === 'Check failed on iOS'`);
+    await check('the running check shows the working ripple on its bullet', `!!document.querySelector('[data-plan-step-id="step_2"] [data-plan-check="active"] .plan-working')`);
+    await check('a pending check on a done step is a plain bullet', `!document.querySelector('[data-plan-step-id="step_3"] .plan-working')`);
+    await check('the failed check shows on its bullet', `document.querySelector('[data-plan-step-id="step_5"] [data-plan-check="failed"]')?.getAttribute('aria-label') === 'Check failed on iOS'`);
     await check('each sub-agent row has a tree line, the last an elbow', `(() => { const t = [...document.querySelectorAll('[data-agent-panel] [data-subagent-row] [data-subagent-tree]')].map(e => e.dataset.subagentTree); return t.length === 4 && t.slice(0, 3).every(x => x === 'tee') && t[3] === 'last'; })()`);
     await check('the status icon leads each sub-agent row', `[...document.querySelectorAll('[data-agent-panel] [data-subagent-row]')].every(b => b.children[1]?.getAttribute('role') === 'img')`);
     await check('the running sub-agent wears the rocket in front', `!!document.querySelector('[data-agent-panel] [data-subagent-row="k4"] > .status-rocket')`);

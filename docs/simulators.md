@@ -12,6 +12,8 @@ is using it and what it costs, and lets you stop it.
 - **Hardware monitor** on the Agent board: a **Simulators** group with each device, its
   CPU, the chat that last used it ("used by iPad tests, 2 min ago", which opens that
   chat) or "idle 9 days" when nothing has touched it, and how long it has been up.
+  Click the group's name to fold it to one line (the count and total CPU); it stays
+  folded until you unfold it.
 - **In the chat**: when the chat's agent starts on a simulator, a **Simulator** panel
   opens at the top of the chat's Agent Monitor with a live view of the screen. It opens
   once per simulator; close it and it stays closed until the agent moves to another one.
@@ -21,11 +23,12 @@ is using it and what it costs, and lets you stop it.
 
 - **Shut down** stops a simulator. For an iOS simulator, **Undo** boots it again for a
   few seconds afterwards.
-- **Open** shows an iOS simulator in Apple's Simulator app.
-- **Auto shutdown** (under the list in the Hardware monitor) stops
-  simulators an agent used once no agent has touched them for 30 minutes, 1 hour or 4
-  hours and they are nearly idle. It is off by default, and it never stops a simulator
-  you booted yourself.
+- **Open** opens the chat that is using the simulator and, for an iOS simulator, its
+  window in Xcode's device app (DeviceHub from Xcode 27, Simulator before it). For an
+  emulator with no window it opens the chat only.
+- **Auto shutdown** (under the list) stops simulators an agent used once no agent has
+  touched them for 5, 15 or 30 minutes, 1 hour or 4 hours and they are nearly idle. It
+  is off by default, and it never stops a simulator you booted yourself.
 
 ## Turning the panel off
 

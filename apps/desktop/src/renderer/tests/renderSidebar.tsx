@@ -17,9 +17,9 @@ export function agentSummary(id: string, patch: Partial<SessionSummary> = {}): S
 }
 
 /** `shows` picks the switcher's window kind (Agents unless given), as a saved choice would. */
-export function renderSidebar(opts: { shows?: AgentPanelShows; sessions?: SessionSummary[]; settings?: Partial<AppSettings> } = {}): string {
+export function renderSidebar(opts: { shows?: AgentPanelShows; sessions?: SessionSummary[]; settings?: Partial<AppSettings>; onOpenWindow?: (kind: 'browser' | 'files', refId: string) => void } = {}): string {
   useStore.setState({ settings: { workspaces: [PROJECT], ...opts.settings } as AppSettings, sessions: opts.sessions ?? [agentSummary('s1')] });
   localStorage.setItem(AGENT_PANEL_SHOWS_KEY, opts.shows ?? 'agents');
   const noop = () => {};
-  return renderToStaticMarkup(<AgentSidebar onOpenChat={noop} onOpenTerminal={noop} onCreate={async () => {}} selectedId={null} onClosePanel={noop} />);
+  return renderToStaticMarkup(<AgentSidebar onOpenChat={noop} onOpenTerminal={noop} onCreate={async () => {}} selectedId={null} onClosePanel={noop} onOpenWindow={opts.onOpenWindow} />);
 }

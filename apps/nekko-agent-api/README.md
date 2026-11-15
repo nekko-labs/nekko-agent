@@ -361,6 +361,21 @@ fly deploy --ha=false
 `--ha=false` keeps it to one machine (Fly makes two by default). Neon's project
 should be in `aws-us-east-1`, next to the `iad` region in `fly.toml`.
 
+### From GitHub Actions
+
+`.github/workflows/deploy-cloud.yml` deploys without a laptop. It runs only
+when dispatched by hand (Actions > Deploy cloud > Run workflow, pick `api` or
+`relay`) and waits for approval on the `production` environment. One-time setup:
+
+1. `fly tokens create deploy -a nekko-agent-api` (and one for
+   `nekko-agent-relay` once that app exists; a deploy token is per app).
+2. Repo Settings > Environments > New environment `production`, add a required
+   reviewer, and add the secret `FLY_API_TOKEN` there (not as a repo secret).
+   A token covers one app, so to deploy both services use an org-scoped token
+   (`fly tokens create org`) instead.
+3. Create the Fly apps and set their secrets first (above); the workflow only
+   runs `flyctl deploy`.
+
 ## Cost
 
 Fly has no spending cap or billing alert; usage past the credits is billed to

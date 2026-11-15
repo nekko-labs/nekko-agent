@@ -190,6 +190,7 @@ const api: NekkoApi = {
   machineDismissNudge: (task) => inv(IpcChannels.machineDismissNudge, task ?? null),
   getGpuStats: heldWhileHidden(() => inv(IpcChannels.gpuStats), pageHidden),
   getSystemStats: () => inv(IpcChannels.systemStats),
+  serversList: () => inv(IpcChannels.serversList),
   simulatorsState: () => inv(IpcChannels.simulatorsState),
   simulatorsShutdown: (id) => inv(IpcChannels.simulatorsShutdown, id),
   simulatorsBoot: (id) => inv(IpcChannels.simulatorsBoot, id),
