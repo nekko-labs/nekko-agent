@@ -6,7 +6,7 @@ Use a cloud model without pairing or keeping a computer online. These are device
 
 1. Open **Settings → Models on this iPhone → Add a provider**. Before pairing, the welcome screen also has **Or use a model provider on this iPhone**.
 2. Alternatively, open **New chat → Run on → This iPhone**, tap the model chip, then **Add a provider**. The phone is offered before a provider is configured.
-3. Choose the provider and paste your own API credential. A Claude/ChatGPT subscription is not an API key.
+3. Choose the provider. **OpenRouter:** tap **Sign in with OpenRouter** and approve in the browser; the key comes back by itself. **Claude API, OpenAI, Google Gemini, Ollama Cloud:** tap **Open** for the key page, copy a key, come back and tap **Paste**; it is checked and added by itself. Other kinds: paste your own API credential. A Claude/ChatGPT subscription is not an API key.
 4. For providers with an address field, replace every placeholder and use the final HTTPS endpoint. Redirects are refused, even to another path on the same host.
 5. Add checks the model list, or requests a short streamed test reply for providers without a list. Pick a model, type a message and start the chat.
 
@@ -14,7 +14,9 @@ Use a cloud model without pairing or keeping a computer online. These are device
 | --- | --- |
 | Claude API | API key; optional Anthropic workspace ID |
 | OpenAI | OpenAI API key; models are discovered from the API |
-| OpenRouter | OpenRouter key; models are discovered from the API |
+| OpenRouter | Browser sign-in (or an OpenRouter key); models are discovered from the API |
+| Google Gemini | Google AI Studio key; OpenAI-compatible endpoint, models discovered |
+| Ollama Cloud | ollama.com key; models discovered from `https://ollama.com/v1` |
 | Claude in Amazon Bedrock | Mantle address such as `https://bedrock-mantle.us-east-1.api.aws/anthropic`; short-lived Bedrock token, sent in **x-api-key**, not Authorization. No SigV4/IAM-role login in the phone app. |
 | Claude in Microsoft Foundry | `https://YOUR_RESOURCE.services.ai.azure.com/anthropic`; resource key. Deployment names must match the offered model IDs; custom deployment names are not configurable. |
 | Claude on Vertex AI | `https://aiplatform.googleapis.com/v1/projects/YOUR_PROJECT/locations/global`; Google access token with model access (usually expires in about an hour). |

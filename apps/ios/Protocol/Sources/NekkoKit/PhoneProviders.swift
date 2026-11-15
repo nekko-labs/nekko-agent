@@ -31,6 +31,10 @@ public enum PhoneProviders {
         public let hint: String
         /// The models this kind serves when it has no models list to read.
         public let catalog: [PhoneModel]
+        /// Where the key is made, for the guided setup: open it, copy, come back, paste.
+        public var keyPage: String? = nil
+        /// OpenRouter: a browser sign-in hands the key back, nothing to copy.
+        public var signIn = false
         /// It lists its own models (`GET /v1/models` or `/models`).
         public var listsModels: Bool { catalog.isEmpty }
     }
@@ -49,13 +53,24 @@ public enum PhoneProviders {
     public static let kinds: [Kind] = [
         Kind(id: "anthropic", label: "Claude API", wire: .anthropic, defaultUrl: "https://api.anthropic.com",
              urlRequired: false, keyName: "API key", keyOptional: false,
-             hint: "An API key from console.anthropic.com.", catalog: []),
+             hint: "An API key from console.anthropic.com.", catalog: [],
+             keyPage: "https://console.anthropic.com/settings/keys"),
         Kind(id: "openai", label: "OpenAI", wire: .openai, defaultUrl: "https://api.openai.com/v1",
              urlRequired: false, keyName: "API key", keyOptional: false,
-             hint: "An API key from platform.openai.com.", catalog: []),
+             hint: "An API key from platform.openai.com.", catalog: [],
+             keyPage: "https://platform.openai.com/api-keys"),
         Kind(id: "openrouter", label: "OpenRouter", wire: .openai, defaultUrl: "https://openrouter.ai/api/v1",
              urlRequired: false, keyName: "API key", keyOptional: false,
-             hint: "An API key from openrouter.ai: one key for many model makers.", catalog: []),
+             hint: "An API key from openrouter.ai: one key for many model makers.", catalog: [],
+             keyPage: "https://openrouter.ai/settings/keys", signIn: true),
+        Kind(id: "gemini", label: "Google Gemini", wire: .openai, defaultUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+             urlRequired: false, keyName: "API key", keyOptional: false,
+             hint: "A Google AI Studio key, billed apart from Google AI plans.", catalog: [],
+             keyPage: "https://aistudio.google.com/apikey"),
+        Kind(id: "ollama-cloud", label: "Ollama Cloud", wire: .openai, defaultUrl: "https://ollama.com/v1",
+             urlRequired: false, keyName: "API key", keyOptional: false,
+             hint: "Models hosted by Ollama, on an ollama.com key. No Ollama app needed.", catalog: [],
+             keyPage: "https://ollama.com/settings/keys"),
         Kind(id: "bedrock", label: "Claude in Amazon Bedrock", wire: .anthropic,
              defaultUrl: "https://bedrock-mantle.us-east-1.api.aws/anthropic",
              urlRequired: true, keyName: "Bedrock API key", keyOptional: false,
@@ -90,6 +105,39 @@ public enum PhoneProviders {
 
     public static func kind(_ id: String) -> Kind? { kinds.first { $0.id == id } }
 
+    // MARK: OpenRouter sign-in (PKCE; the answer is an API key)
+
+    /// Where the sign-in comes back to; the app's own scheme, caught by the web session.
+    public static let openRouterCallback = "nekko-agent://openrouter-key"
+
+    public static func openRouterAuthorizeURL(challenge: String) -> URL {
+        var c = URLComponents(string: "https://openrouter.ai/auth")!
+        c.queryItems = [URLQueryItem(name: "callback_url", value: openRouterCallback),
+                        URLQueryItem(name: "code_challenge", value: challenge),
+                        URLQueryItem(name: "code_challenge_method", value: "S256")]
+        return c.url!
+    }
+
+    /// The code from the callback, if it is ours and carries one.
+    public static func openRouterCode(from callback: URL) -> String? {
+        guard callback.absoluteString.hasPrefix(openRouterCallback),
+              let code = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "code" })?.value,
+              !code.isEmpty else { return nil }
+        return code
+    }
+
+    public static func openRouterKeyRequest(code: String, verifier: String) -> PhoneRequest {
+        PhoneRequest(url: "https://openrouter.ai/api/v1/auth/keys",
+                     headers: ["Content-Type": "application/json", "Accept": "application/json"],
+                     body: .object(["code": .string(code), "code_verifier": .string(verifier), "code_challenge_method": "S256"]))
+    }
+
+    public static func openRouterKey(from data: Data) -> String? {
+        guard data.count <= 100_000, let key = (try? JSONValue.parse(data))?["key"]?.string,
+              !key.isEmpty, headerValue(key) else { return nil }
+        return key
+    }
+
     /// Where a provider's key is kept in the Keychain.
     public static func keyName(_ providerId: String) -> String { "phone-provider-key.\(providerId)" }
 
@@ -101,7 +149,7 @@ public enum PhoneProviders {
     public static let system = "You are Nekko Agent, answering on the user’s iPhone. In this chat you have no tools: you can’t see the user’s computers, files or the web. Answer in Markdown."
 
     public enum Problem: Error, Equatable, LocalizedError {
-        case label, key, url, unknownKind, model
+        case label, key, url, unknownKind, model, signIn
         public var errorDescription: String? {
             switch self {
             case .label: return String(localized: "Give the provider a name.")
@@ -109,6 +157,7 @@ public enum PhoneProviders {
             case .url: return String(localized: "The address must be a full https:// address.")
             case .model: return String(localized: "Choose a valid model and reply token limit.")
             case .unknownKind: return String(localized: "This kind of provider can’t run on the iPhone.")
+            case .signIn: return String(localized: "OpenRouter didn’t hand back a key. Try again.")
             }
         }
     }
@@ -190,7 +239,7 @@ public enum PhoneProviders {
     }
 
     /// The OpenAI-wire kinds asked for `stream_options.include_usage`.
-    static let usageKinds: Set<String> = ["openai", "openrouter"]
+    static let usageKinds: Set<String> = ["openai", "openrouter", "gemini"]
 
     /// The models list, or nil for a kind that has none to read.
     public static func modelsRequest(_ p: PhoneProvider, key: String?) throws -> PhoneRequest? {
@@ -231,9 +280,9 @@ public enum PhoneProviders {
             guard let id = m.str("id"), !id.isEmpty, id.utf8.count <= 1024, !id.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
             return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id)
         }
-        guard kind == "openai" else { return all }
-        // OpenAI lists every model it serves; keep the ones that chat.
-        let skip = ["embedding", "whisper", "tts", "dall-e", "moderation", "image", "audio", "realtime", "transcribe", "search", "davinci", "babbage", "sora"]
+        guard kind == "openai" || kind == "gemini" else { return all }
+        // OpenAI and Gemini list every model they serve; keep the ones that chat.
+        let skip = ["embedding", "whisper", "tts", "dall-e", "moderation", "image", "audio", "realtime", "transcribe", "search", "davinci", "babbage", "sora", "imagen", "veo", "aqa"]
         return all.filter { m in !skip.contains { m.id.contains($0) } }.sorted { $0.id > $1.id }
     }
 

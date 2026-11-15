@@ -159,6 +159,14 @@ public final class PhoneChats {
         return p
     }
 
+    /// OpenRouter's sign-in answers with a code; swap it for the API key it stands for.
+    public func openRouterKey(code: String, verifier: String) async throws -> String {
+        let (status, body) = try await http.send(PhoneProviders.openRouterKeyRequest(code: code, verifier: verifier))
+        guard (200..<300).contains(status) else { throw PhoneProviders.Problem.signIn }
+        guard let key = PhoneProviders.openRouterKey(from: body) else { throw PhoneProviders.Problem.signIn }
+        return key
+    }
+
     /// A new key for a provider (a Vertex AI token runs out in an hour).
     public func setKey(_ providerId: String, _ key: String) {
         guard provider(providerId) != nil, PhoneProviders.headerValue(key) else { return }
