@@ -6,6 +6,7 @@ import { useStore } from '../store.js';
 import { useShown } from '../simpleMode.js';
 import { ChevronIcon } from '../icons.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
+import { SimulatorChipSegment, SimulatorRows } from './Simulators.js';
 
 /**
  * Resource monitoring: one sampler, two surfaces.
@@ -459,6 +460,7 @@ export function ResourceHud() {
           {(monitors.gpu || monitors.vram) && !gpu && (
             <p className="mt-2 border-t border-line pt-2 text-ink-faint">No GPU stats available on this machine.</p>
           )}
+          <div className="mt-2 empty:hidden"><SimulatorRows /></div>
         </div>
       )}
 
@@ -470,6 +472,7 @@ export function ResourceHud() {
         onClick={() => setOpen((o) => !o)}
       >
         <BackgroundChip state={background} compact />
+        <SimulatorChipSegment />
         {!anyOn && <span className="text-ink-faint">Monitors off</span>}
         {monitors.cpu && (
           <span className="flex items-center gap-1">

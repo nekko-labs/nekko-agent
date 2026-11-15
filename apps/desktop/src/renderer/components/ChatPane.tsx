@@ -31,7 +31,7 @@ import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
 import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress, usageLimitResetAt } from '@nekko-agent/shared';
-import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
+import type { AutoProviderPick, BootedSimulator, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
@@ -120,6 +120,7 @@ import { starAskAfterReply } from '../starAsk.js';
 import { ShieldCheckIcon } from '../icons.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
+import { SimulatorStatus, useSimulatorAutoOpen } from './Simulators.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 // The first-chat intro brings Remotion with it, so it loads only when it shows.
@@ -731,6 +732,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // On the wall the plan sheet carries the Agent Monitor's sub-agents and task links, so the rail stays closed there.
   const wideEnoughForRail = paneWidth >= PLAN_RAIL_MIN_PANE && !(commandCenter && surface === 'full');
   const planRailOpen = planRailWanted && wideEnoughForRail;
+  // A simulator this chat's agent started on opens the Simulator panel at the
+  // top of the Agent Monitor, once per device (Simulators.tsx). The line above
+  // the composer reopens it, or shows Simulator itself where there is no room.
+  useSimulatorAutoOpen(sessionId);
+  const showSimulator = (device: BootedSimulator) => {
+    if (wideEnoughForRail && surface !== 'composer') useStore.getState().setPlanRail(sessionId, true);
+    else if (device.canOpen) void window.nekko.simulatorsOpen?.(device.id).catch(() => {});
+  };
   const planSteps = useMemo(() => { const p = planProgress(session?.agentPlan); return { done: p.done + p.skipped, total: p.total }; }, [session?.agentPlan]);
   // A small window (a cell on the Agent board wall, a sliver of a split)
   // folds the two control rows into one summary chip, so the transcript keeps
@@ -3319,6 +3328,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                 </div>
               )}
+                 <SimulatorStatus sessionId={sessionId} onOpen={showSimulator} />
                  <ActiveWatchChips sessionId={sessionId} />
                  {subagentChildren.map(child => <ActiveWatchChips key={child.id} sessionId={child.id} owner={child.title || "Sub-agent"} />)}
                  {/* Attachments ride inside the composer, at the top, separated by

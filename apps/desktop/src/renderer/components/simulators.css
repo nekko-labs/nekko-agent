@@ -1,0 +1,38 @@
+/* Booted simulators (Simulators.tsx, #2814). Rows have no border or resting
+   background; their actions stay faint until the row is hovered or focused,
+   and are always visible under a finger. */
+.simulator-row-actions { opacity: 0.55; transition: opacity var(--dur-fast) var(--ease-out); }
+.group\/sim:hover .simulator-row-actions,
+.group\/sim:focus-within .simulator-row-actions { opacity: 1; }
+@media (hover: none) { .simulator-row-actions { opacity: 1; } }
+
+.simulator-screen { animation: simulator-screen-in var(--dur-med) var(--ease-out); }
+@keyframes simulator-screen-in { from { opacity: 0; transform: translateY(4px); } }
+
+.simulator-status { transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+@media (hover: hover) { .simulator-status:hover { background: var(--q-wash); color: var(--ink); } }
+.simulator-status:active { transform: scale(0.97); }
+[data-simulator-status] { animation: simulator-screen-in var(--dur-med) var(--ease-out); }
+
+@media (prefers-reduced-motion: reduce) {
+  .simulator-screen, [data-simulator-status] { animation: simulator-fade var(--dur-med) linear; }
+  .simulator-status:active { transform: none; }
+}
+@keyframes simulator-fade { from { opacity: 0; } }
+
+.simulator-action { padding: 2px 4px; border-radius: 6px; line-height: 1.3; transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+@media (hover: hover) { .simulator-action:hover:not(:disabled) { background: var(--q-wash); } }
+.simulator-action:active:not(:disabled) { transform: scale(0.97); }
+.simulator-action:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
+
+/* Inside the Hardware monitor the dock styles every button as a bordered
+   box; the Simulators group keeps its quiet text buttons, and as a grid item
+   it may shrink so long names truncate instead of widening the dock. */
+.simulator-rows { min-width: 0; }
+.monitors-dock .simulator-rows button { border: 0; background: transparent; font-size: var(--text-2xs); }
+.monitors-dock .simulator-rows .simulator-link { padding: 0; color: var(--ink-faint); }
+.monitors-dock .simulator-rows .simulator-action { padding: 2px 4px; }
+@media (hover: hover) {
+  .monitors-dock .simulator-rows .simulator-link:hover { background: transparent; color: var(--ink-soft); }
+  .monitors-dock .simulator-rows .simulator-action:hover:not(:disabled) { background: var(--q-wash); }
+}

@@ -4,6 +4,7 @@ import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, P
 import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
+import { useSimulators } from '../simulators.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
 import { accountEmailOf, useAccountEmails } from '../accountEmails.js';
 import { BUDGET_RANGE_LABEL, attributionRange, budgetRange, localRuntimeMetrics, utilizationProviders } from './monitorMetrics.js';
@@ -18,6 +19,7 @@ import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import { HoverTip } from './HoverTip.js';
 import './monitorsDock.css';
+import { SimulatorRows } from './Simulators.js';
 import type { OAuthStatus } from '@nekko-agent/shared';
 import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
@@ -802,6 +804,8 @@ function Hardware({ providers }: { providers: ProviderConfig[] }) {
   const monitors = useMonitors();
   const { system, gpu } = useResourceSample();
   const rows = hardwareRows(monitors, system, gpu);
+  // Simulators run on this computer only: a connected computer's are not read.
+  const watched = useWatchedComputer();
   return <div className="monitors-dock__metrics monitors-dock__hardware">
     {rows.map((row) => <div className="monitors-dock__meter" key={row.label}>
       <div className="monitors-dock__meter-head"><strong>{row.label}</strong>{formatTemperature(row.temp) && <span className="monitors-dock__temp" data-temp-tone={temperatureTone(row.temp!)} style={{ color: TEMP_COLOR[temperatureTone(row.temp!)] }} aria-label={`${row.label} temperature ${formatTemperature(row.temp)}`} title="Sensor temperature"><ThermometerGlyph />{formatTemperature(row.temp)}</span>}</div>
@@ -809,7 +813,28 @@ function Hardware({ providers }: { providers: ProviderConfig[] }) {
         {row.value != null && <span style={{ width: `${Math.max(0, Math.min(100, row.value))}%`, background: row.color }} />}
       </div><span className="monitors-dock__reading">{row.text}</span>
     </div>)}
+    {!watched && <SimulatorRows />}
+    {!watched && <SimulatorAutoShutdown />}
   </div>;
+}
+
+const AUTO_SHUTDOWN_CHOICES: Array<[number, string]> = [[0, 'Never'], [30, 'After 30 min'], [60, 'After 1 hour'], [240, 'After 4 hours']];
+
+/** When idle simulators an agent used shut down by themselves. Shown only while one is booted. */
+function SimulatorAutoShutdown() {
+  const booted = (useSimulators()?.devices.length ?? 0) > 0;
+  const minutes = useStore((s) => s.settings?.simulatorAutoShutdownMinutes) ?? 0;
+  if (!booted) return null;
+  const change = (value: number) => {
+    window.nekko.updateSettings({ simulatorAutoShutdownMinutes: value || null })
+      .then(() => useStore.getState().refreshSettings())
+      .catch(() => {});
+  };
+  return <label className="monitors-dock__metric-row" title="Shut down idle simulators an agent used, once no agent has touched them for that long and they are nearly idle"><span>Auto shutdown</span>
+    <select className="input w-auto py-0.5 text-2xs" value={minutes} onChange={(e) => change(Number(e.target.value))}>
+      {AUTO_SHUTDOWN_CHOICES.map(([m, label]) => <option key={m} value={m}>{label}</option>)}
+      {!AUTO_SHUTDOWN_CHOICES.some(([m]) => m === minutes) && <option value={minutes}>After {minutes} min</option>}
+    </select></label>;
 }
 
 function ThermometerGlyph() {
