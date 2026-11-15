@@ -53,6 +53,13 @@ const bridge: any = {
   // opts.expired: the Claude subscription's sign-in has expired.
   getLimitsProblem: async (key: string) => (expiredFixture && key === 'claude' ? { kind: 'auth_expired', at: Date.now() } : null),
   getLimits: async () => null,
+  // The Browsers view's served pages and a Files window's listing (#2824).
+  serversList: async () => ({ servers: [
+    { url: 'http://localhost:5173/', port: 5173, title: 'Shop admin', process: 'node', cwd: 'C:/fixture/shop/web' },
+    { url: 'http://localhost:4000/', port: 4000, title: 'Docs preview', process: 'node', cwd: 'C:/fixture/docs' },
+    { url: 'http://localhost:8000/', port: 8000, process: 'python', cwd: 'C:/temp' },
+  ] }),
+  listDir: async (dir: string) => ['src', 'public', 'package.json', 'README.md', 'vite.config.ts'].map((name) => ({ name, path: `${dir}/${name}`, dir: !name.includes('.') })),
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if (key in target) return target[key]; if (key.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 
@@ -85,7 +92,8 @@ function Fixture() {
   // overflow the panel. opts.resumable: alpha ends on an assistant reply with work.
   // opts.plan: alpha carries an agent plan; opts.expired: the dock shows Utilization with an expired sign-in.
   // opts.dockAll: a right-side dock with four panels to reorder.
-  const reset = (opts: { empty?: boolean; dock?: boolean; dockAll?: boolean; preset?: string; question?: boolean; many?: boolean; plan?: boolean; planOpen?: boolean; expired?: boolean; focus?: boolean } = {}) => {
+  // opts.folders: three connected folders, one a cloned repository (#2824).
+  const reset = (opts: { empty?: boolean; dock?: boolean; dockAll?: boolean; preset?: string; question?: boolean; many?: boolean; plan?: boolean; planOpen?: boolean; expired?: boolean; focus?: boolean; folders?: boolean } = {}) => {
     expiredFixture = !!opts.expired;
     records = [makeSession('alpha', 'Fix wall and composer styling', opts.many ? 'ws-a' : undefined), makeSession('beta', 'Analyze post-merge perf trace', opts.many ? 'ws-a' : undefined), makeSession('outside', 'Chat not on the wall')];
     if (opts.many) for (let i = 0; i < 18; i++) records.push(makeSession(`extra-${i}`, `Grouped chat ${i + 1}`, i % 2 ? 'ws-a' : 'ws-b'));
@@ -96,7 +104,7 @@ function Fixture() {
     const root = opts.empty ? null : { id: 'split', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'pane-alpha', kind: 'chat', refId: 'alpha' }, { id: 'pane-beta', kind: 'chat', refId: 'beta' }] };
     const dock = opts.dockAll ? { ...DEFAULT_WALL_STATE.dock, show: true, side: 'right', monitorOrder: ['vitals', 'hardware', 'budget', 'utilization', 'automations'], panels: { vitals: true, automations: false, utilization: true, budget: true, hardware: true } }
       : opts.dock || opts.expired ? { ...DEFAULT_WALL_STATE.dock, show: true, panels: { vitals: false, automations: false, utilization: !!opts.expired, budget: !opts.expired, hardware: false } } : { ...DEFAULT_WALL_STATE.dock, show: false };
-    useStore.setState({ view: 'command', providers: opts.expired ? [provider, claude] : [provider], models, activeProviderId: 'fixture', sessions: records.map(summarizeSession), terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: null, settings: { providers: opts.expired ? [provider, claude] : [provider], workspaceFolders: [], workspaces: opts.many ? [{ id: 'ws-a', name: 'nekko-agent', path: 'C:/fixture/a' }, { id: 'ws-b', name: 'mynichi', path: 'C:/fixture/b' }] : [], theme: 'dark', themePreset: opts.preset, experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root, hero: opts.empty ? null : 'alpha', autoAdd: false, watermark: Date.now(), dock, ...(opts.focus ? { layout: { ...DEFAULT_WALL_STATE.layout, mode: 'focus' } } : {}) } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: !!opts.planOpen } as any);
+    useStore.setState({ view: 'command', providers: opts.expired ? [provider, claude] : [provider], models, activeProviderId: 'fixture', sessions: records.map(summarizeSession), terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: null, settings: { providers: opts.expired ? [provider, claude] : [provider], workspaceFolders: [], workspaces: opts.folders ? [{ id: 'ws-shop', name: 'shop', path: 'C:/fixture/shop', repo: { provider: 'github', fullName: 'acme/shop' } }, { id: 'ws-docs', name: 'docs', path: 'C:/fixture/docs' }, { id: 'ws-notes', name: 'notes', path: 'C:/fixture/notes' }] : opts.many ? [{ id: 'ws-a', name: 'nekko-agent', path: 'C:/fixture/a' }, { id: 'ws-b', name: 'mynichi', path: 'C:/fixture/b' }] : [], theme: 'dark', themePreset: opts.preset, experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root, hero: opts.empty ? null : 'alpha', autoAdd: false, watermark: Date.now(), dock, ...(opts.focus ? { layout: { ...DEFAULT_WALL_STATE.layout, mode: 'focus' } } : {}) } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: !!opts.planOpen } as any);
     records.forEach(putCachedSession); setRoute('command'); setEpoch(e => e + 1);
   };
   Object.assign(window, { integration: { reset, calls, route: setRoute, state: () => useStore.getState(), records: () => records } });

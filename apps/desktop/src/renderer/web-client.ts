@@ -511,6 +511,7 @@ function makeWebClient(): NekkoApi {
     machineDismissNudge: (task) => call(IpcChannels.machineDismissNudge, task ?? null),
     getGpuStats: () => call(IpcChannels.gpuStats),
     getSystemStats: () => call(IpcChannels.systemStats),
+    serversList: () => call(IpcChannels.serversList),
     simulatorsState: () => call(IpcChannels.simulatorsState),
     simulatorsShutdown: (id) => call(IpcChannels.simulatorsShutdown, id),
     simulatorsBoot: (id) => call(IpcChannels.simulatorsBoot, id),

@@ -239,8 +239,10 @@ export function dateGroupOf(at: number, now: number): string {
 /**
  * Which kind of window the Agents panel lists, picked in the switcher at its
  * top. Agents is the agent cards; Terminals and Photos and videos are those
- * cards on their own; Browsers and Files list the agents and open each one's
- * Browser or Files drawer. Remembered per window, like the view.
+ * cards on their own. Browsers lists the pages served on this computer and
+ * Files the connected folders, each opening a window of its own with no agent
+ * needed (#2824), then the agents, whose Browser or Files drawer a row opens.
+ * Remembered per window, like the view.
  */
 export type AgentPanelShows = 'agents' | 'terminals' | 'media' | 'browsers' | 'files';
 
