@@ -223,6 +223,12 @@ export interface AppSettings {
   voice?: import('./voice.js').VoiceSettings;
   /** User-authored additions to the built-in system instructions. */
   systemInstructions?: string;
+  /** System prompt sizing (decision 0095). Keys: `<providerId>::<modelId>` and `<providerId>`; a missing key or `auto` is automatic. */
+  promptProfiles?: {
+    auto?: boolean;
+    models?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
+    providers?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
+  };
   /** Server-side instructions applied to every user turn. Empty disables them. */
   turnWrapper?: string;
   /** User-provided background/preferences, sent to the selected chat provider. */

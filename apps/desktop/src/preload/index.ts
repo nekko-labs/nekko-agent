@@ -243,6 +243,7 @@ const api: NekkoApi = {
   toggleContextItem: (sessionId, itemId, included, pinned) =>
     inv(IpcChannels.contextToggle, sessionId, itemId, included, pinned),
   setContextPrefs: (sessionId, prefs) => inv(IpcChannels.contextSetPrefs, sessionId, prefs),
+  promptProfileTexts: () => inv(IpcChannels.contextPromptProfiles),
 
   buildSpec: (sessionId) => inv(IpcChannels.specBuild, sessionId),
   buildSpecDoc: (sessionId, docId, workspaceId) => inv(IpcChannels.specBuildDoc, sessionId, docId, workspaceId),

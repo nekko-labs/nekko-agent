@@ -198,6 +198,7 @@ export const IpcChannels = {
   contextPreview: 'context:preview',
   contextToggle: 'context:toggle',
   contextSetPrefs: 'context:setPrefs',
+  contextPromptProfiles: 'context:promptProfiles',
   sessionSetAttachments: 'session:setAttachments',
   specBuild: 'spec:build',
   specBuildDoc: 'spec:buildDoc',
@@ -1018,6 +1019,8 @@ export interface NekkoApi {
   previewContext(sessionId: string, attachedPaths: string[]): Promise<ContextBundle>;
   toggleContextItem(sessionId: string, itemId: string, included: boolean, pinned: boolean): Promise<ContextBundle>;
   setContextPrefs(sessionId: string, prefs: import('./chat.js').ContextPrefs): Promise<void>;
+  /** The built-in system prompt text of each profile (decision 0095). */
+  promptProfileTexts(): Promise<Record<import('./context.js').PromptProfileName, string>>;
 
   /** Build/refresh the primary spec doc in the chat's workspace from the conversation. */
   buildSpec(sessionId: string): Promise<{ ok: boolean; path?: string; message?: string }>;
