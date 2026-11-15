@@ -29,6 +29,28 @@ final class PhoneDirectCloudTests: XCTestCase {
         }
     }
 
+    /// The Add sheet for a key-page kind (Claude API) and the sign-in kind (OpenRouter).
+    func testProviderSetupEvidence() {
+        for theme in ["light", "dark"] {
+            let chat = launch("-uiTestPhoneComposer", theme: theme)
+            XCTAssertTrue(chat.buttons["phoneChat.model"].waitForExistence(timeout: 10))
+            chat.buttons["phoneChat.model"].tap()
+            let add = chat.buttons["phoneModel.addProvider"]
+            XCTAssertTrue(add.waitForExistence(timeout: 5))
+            add.tap()
+            XCTAssertTrue(chat.buttons["addPhoneProvider.save"].waitForExistence(timeout: 5))
+            attach(chat, "\(theme)-provider-claude")
+            chat.buttons["addPhoneProvider.kind"].firstMatch.tap()
+            let openRouter = chat.buttons["OpenRouter"].firstMatch
+            if openRouter.waitForExistence(timeout: 3) {
+                openRouter.tap()
+                _ = chat.buttons["addPhoneProvider.signIn"].waitForExistence(timeout: 3)
+                attach(chat, "\(theme)-provider-openrouter")
+            }
+            chat.terminate()
+        }
+    }
+
     func testDirectTextChatWithoutComputer() {
         let app = launch("-uiTestPhoneProvider", theme: "light")
         let newChat = app.navigationBars.buttons["New chat"]
