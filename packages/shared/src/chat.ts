@@ -449,8 +449,12 @@ export interface Session {
    * Set while a turn is running, cleared when it ends. A session that still
    * carries this when the host starts was cut off by a crash or a quit, and the
    * host marks its last reply interrupted so the chat offers Continue.
+   * `afterMessageId` is the last message before the turn's own: its prompt,
+   * or, for a turn nobody sent (a Claude Code wake-up), the end of the turn
+   * before it. A window stops the saved transcript there while it draws the
+   * live reply.
    */
-  activeRun?: { startedAt: number };
+  activeRun?: { startedAt: number; afterMessageId?: string };
   /**
    * How the last turn failed, for a chat opened after the `error` event has gone.
    * Cleared when the next turn starts, or by Dismiss (null). It only applies

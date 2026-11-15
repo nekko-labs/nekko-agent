@@ -5,7 +5,7 @@ import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
 import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { computerBlock, useComputerOf } from './ComputerChip.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
-import { ClaudeBackgroundTasks, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
+import { ChatBackgroundWork, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { shouldShowFirstPromptIntro } from '../firstPromptIntroGate.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
@@ -37,7 +37,7 @@ import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
-import { beginResumedRun, clearLiveRun, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
+import { anchorLiveRun, beginResumedRun, clearLiveRun, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
@@ -2608,8 +2608,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // While the live run draws the newest turn (streaming, or held until its
   // persisted copy has replaced it), stop at its prompt or the saved resume
   // boundary: only the new checkpointed tail would duplicate the live steps.
+  // A turn nobody sent (a Claude Code wake-up after a background sub-agent
+  // reported back) has no prompt of its own: nekkod names the message it
+  // follows, so the turn before it stays on screen instead of everything
+  // after the last prompt. The run keeps it once known, for its held copy.
   const liveTurn = streaming || !!held;
-  const transcriptThroughId = (getLiveRun(sessionId) ?? held)?.transcriptThroughId;
+  const runAnchor = streaming ? session?.activeRun?.afterMessageId : undefined;
+  useEffect(() => { if (runAnchor) anchorLiveRun(sessionId, runAnchor); }, [sessionId, runAnchor]);
+  const transcriptThroughId = (getLiveRun(sessionId) ?? held)?.transcriptThroughId ?? runAnchor;
   const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages, transcriptThroughId) : messages), [messages, liveTurn, transcriptThroughId]);
   const rows = useMemo(
     () => (settled ? toTranscriptRows(settled, extractPrUrls, collectSessionPrUrls, prs) : []),
@@ -2986,7 +2992,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   persisted={!streaming && !![...(session?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.turnStats}
                   blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : secretAsk ? `Waiting for ${secretAsk.name}` : null}
                 />
-                {!streaming && <ClaudeBackgroundTasks tasks={claudeBackground} />}
+                {!streaming && <ChatBackgroundWork tasks={claudeBackground} subAgents={subagentChildren} />}
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
                 {remoteBlock && <div role="status" data-computer-block className="mx-auto mb-1 w-full max-w-3xl rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>{remoteBlock}</div>}
                 {question && <div className="conversation-question" data-agent-question>

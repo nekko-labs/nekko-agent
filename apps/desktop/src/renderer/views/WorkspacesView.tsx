@@ -37,7 +37,7 @@ import { isLiveState, onLiveStateTick } from '../liveStateTicker.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
-  AGENT_PANEL_SHOWS, DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelShows, readAgentPanelView, saveAgentPanelShows, saveAgentPanelView, statusGroupOf, wakeSourcesOf,
+  AGENT_PANEL_SHOWS, DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelShows, readAgentPanelView, saveAgentPanelShows, saveAgentPanelView, statusGroupOf, statusWithSubagents, wakeSourcesOf,
   type AgentPanelShows, type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
@@ -478,6 +478,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     for (const kids of m.values()) kids.sort((a, b) => a.createdAt - b.createdAt);
     return m;
   }, [sessions]);
+  // A sub-agent has no card of its own: its question, or its work, lifts the parent's.
+  const chatStatus = (id: string): AgentStatus | undefined =>
+    statusWithSubagents(statuses.get(id), (childrenOf.get(id) ?? []).map((kid) => statuses.get(kid.id)));
 
   // Closing a workspace only closes its windows, not the saved conversation.
   // Keep those chats reachable without reopening every transcript at startup.
@@ -565,10 +568,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         ...completed,
       ];
     }
-    // A sub-agent has no card of its own, so its question lifts the parent's.
-    const kidIsWaiting = (e: Entry) => !!e.s && !!childrenOf.get(e.s.id)?.some((k) => statuses.get(k.id) === 'input');
     const groupOf = view.groupBy === 'status'
-      ? (e: Entry) => statusGroupOf(e.s, kidIsWaiting(e) ? 'input' : e.s ? statuses.get(e.s.id) : undefined)
+      ? (e: Entry) => statusGroupOf(e.s, e.s ? chatStatus(e.s.id) : undefined)
       : (e: Entry) => { const c = sortable(e); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
     const defs = view.groupBy === 'status' ? STATUS_GROUPS : DATE_GROUPS;
     return [
@@ -875,7 +876,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           const completedGroup = b.key === COMPLETED_GROUP;
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
           const completedOpen = completedGroup || showCompleted.has(b.key);
-          const activity = view.groupBy === 'status' ? groupActivityOf(b.key, items.map((e) => (e.s ? statuses.get(e.s.id) : undefined))) : null;
+          const activity = view.groupBy === 'status' ? groupActivityOf(b.key, items.map((e) => (e.s ? chatStatus(e.s.id) : undefined))) : null;
           const tipHere = showTips && done.some((s) => s.id === completionTipSessionId);
           const visible = visibleItems(b);
           const completedRows = visibleDone(b);
@@ -983,7 +984,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           workspace={w}
                           session={s}
                           terminal={entry.t}
-                          status={s ? statuses.get(s.id) : undefined}
+                          status={s ? chatStatus(s.id) : undefined}
                           isActive={(s?.id ?? entry.t?.id) === selectedId}
                           now={now}
                           projects={settings?.workspaces ?? []}
