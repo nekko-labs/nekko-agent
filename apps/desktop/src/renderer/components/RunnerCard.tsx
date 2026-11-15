@@ -32,7 +32,8 @@ import {
 import { StatusDot, Toggle } from './primitives/index.js';
 import type { StatusTone } from '../tokens.js';
 import { connectToWorkflow } from './RunnerReady.js';
-import { ChevronIcon, GearIcon } from '../icons.js';
+import { ChevronIcon } from '../icons.js';
+import { SettingsIcon } from '../gentleface-icons.js';
 import { useStore } from '../store.js';
 
 const TONE: Record<RunnerState, StatusTone> = {
@@ -373,6 +374,18 @@ function Jobs({ view, now, compact }: { view: RunnerView; now: number; compact: 
   );
 }
 
+/** An idle runner's latest job: its action (workflow and job, linked to the run) and its PR, so the runner says what it last served. */
+function LastJob({ line: l }: { line: AuditLine }) {
+  const name = [l.workflow, l.job].filter(Boolean).join(' · ') || 'A job';
+  return (
+    <p className="flex min-w-0 items-center gap-2 text-xs text-ink-faint" title={l.repo ?? undefined} data-runner-last-job>
+      <span className="shrink-0">Last job</span>
+      <span className="min-w-0 truncate">{l.url ? <ExternalLink url={l.url}>{name}</ExternalLink> : name}</span>
+      {l.pr && <ExternalLink url={l.pr.url}>PR #{l.pr.number}</ExternalLink>}
+    </p>
+  );
+}
+
 /** One slot that is not running a job: what it does, and its VM's name and live log once it has one. */
 function SlotRow({ slot: s, runnerId, compact }: { slot: SlotLine; runnerId: string; compact: boolean }) {
   const [open, setOpen] = useState(false);
@@ -506,6 +519,9 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
   const slots = slotLines(view, now).filter((s) => !s.busy && (!compact || (s.vm && !idleVms.has(s.vm))));
   const stateLabel = `${STATE_LABELS[state] ?? state}${compact && idleVms.size ? ` · ${idleVms.size} idle` : ''}`;
   const reasons = (state === 'waiting' || state === 'draining') ? view.reasons.slice(0, compact ? 1 : undefined) : [];
+  // A running or queued job already shows its action and PR in the job rows; an idle runner names its latest one.
+  const busyJobs = (view.queue?.length ?? 0) > 0 || view.slots.some((s) => s.state === 'running' || s.state === 'draining');
+  const last = busyJobs ? undefined : view.recent[0];
 
   const setEnabled = async (enabled: boolean) => {
     setBusy(true);
@@ -529,7 +545,7 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
           <span className="ml-auto flex shrink-0 items-center gap-1">
             <Toggle value={config.settings.enabled} disabled={busy} onChange={(v) => void setEnabled(v)} label={`Runner on for ${name}`} />
             <button className={`btn btn-ghost px-1.5!${compact ? ' quiet-row-action' : ''}`} aria-label={`Runner settings for ${name}`} title="Runner settings" onClick={onSettings}>
-              <GearIcon className="h-3.5 w-3.5" />
+              <SettingsIcon className="h-3.5 w-3.5" />
             </button>
           </span>
         </div>
@@ -549,6 +565,7 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
             {reasons.map((r) => <li key={r}>{reasonText(r).sentence}</li>)}
           </ul>
         )}
+        {last && <LastJob line={last} />}
       </div>
 
       {slots.length > 0 && (

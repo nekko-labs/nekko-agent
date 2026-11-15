@@ -23,7 +23,7 @@ describe('automations pane and the run policy', () => {
     expect(html).toContain('data-ci-runners');
     expect(html).toContain('View CI runners');
     expect(html).toContain('Loading CI runners');
-    expect(html).toContain('Nothing scheduled');
+    expect(html).toContain('All clear. Nothing scheduled.');
   });
 
   it('says a due task is waiting for you to be away, not "due now"', () => {
