@@ -16,6 +16,7 @@ import { formatBytes } from '../runtimes/verdict.js';
 import { groupDownloads, isActive, type DownloadGroup } from '../engine/downloadGroups.js';
 import { Progress, Step } from '../engine/FirstLocalModel.js';
 import { ensureRecommendedOffload } from './imageOffload.js';
+import { pictureModelBlurb } from '../engine/pictureModelText.js';
 
 /**
  * A Photo chat with no picture model: two or three models picked for this
@@ -31,14 +32,6 @@ import { ensureRecommendedOffload } from './imageOffload.js';
 
 const POLL_MS = 5000;
 const MAX_CARDS = 3;
-
-/** One line on what each recommended model is good at. */
-const BLURB: Record<string, string> = {
-  'qwen-image': 'Best quality, and good at lettering inside pictures.',
-  'z-image-turbo': 'Fast, with natural-looking pictures.',
-  'flux2-klein-4b': 'Small and quick, and it can also edit photos.',
-  'qwen-image-edit-2511': 'Precise edits that follow your instructions.',
-};
 
 const base = (p: string) => p.split(/[\\/]/).pop()?.toLowerCase() ?? '';
 
@@ -357,7 +350,7 @@ export function PhotoSetupSteps({
                   <span className="text-sm font-semibold">{c.name}</span>
                   <span className="shrink-0 text-xs text-ink-faint">{formatBytes(c.downloadBytes)}</span>
                 </span>
-                <span className="text-xs text-ink-soft">{BLURB[c.modelId] ?? (c.capabilities.includes('edit') ? 'Creates and edits pictures.' : 'Creates pictures from a description.')}</span>
+                <span className="text-xs text-ink-soft">{pictureModelBlurb(c)}</span>
                 <span className="text-xs" style={{ color: off ? 'var(--danger)' : 'var(--ink-faint)' }}>{photoFitLine(c, recs)}</span>
               </button>
             );
