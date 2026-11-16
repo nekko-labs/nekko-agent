@@ -418,6 +418,42 @@ fn every_picture_task_is_answered_with_a_model_that_can_do_it() {
 }
 
 #[test]
+fn a_picture_time_is_only_ever_one_that_was_measured() {
+    use nekko_machine::measured::machine_key;
+    use nekko_machine::recommend::ImageMeasured;
+    let card = rtx_5090();
+    let before = rec(&card, bundled_feed());
+    let pick = image(&before, "imageCreate").pick.clone().unwrap();
+    assert_eq!(pick.time, None, "nothing measured, nothing said");
+    assert!(!serde_json::to_string(&pick).unwrap().contains("\"time\""));
+
+    // A run on this class of hardware, at the size and steps it was made at.
+    let mut owned = bundled_feed().clone();
+    owned.image_measured.push(ImageMeasured {
+        hardware: before.hardware.class_id.clone().unwrap(),
+        model: pick.model_id.clone(),
+        quant: pick.quant.clone(),
+        seconds: 18.0,
+        width: 1024,
+        height: 1024,
+        steps: 20,
+    });
+    let t = image(&rec(&card, &owned), "imageCreate").pick.clone().unwrap().time.unwrap();
+    assert_eq!(
+        (t.seconds, t.basis, t.samples, t.width, t.steps),
+        (18.0, SpeedBasis::Measured, None, Some(1024), Some(20))
+    );
+
+    // Three pictures made here replace it: the median, with no size claimed.
+    let mut local = LocalSpeeds::default();
+    for s in [21.0, 26.0, 24.0] {
+        local.add_picture(&format!("/models/image/{}", pick.files[0]), &machine_key(&card), s, 1);
+    }
+    let t = image(&recommend(&card, &owned, &local), "imageCreate").pick.clone().unwrap().time.unwrap();
+    assert_eq!((t.seconds, t.basis, t.samples, t.width), (24.0, SpeedBasis::MeasuredHere, Some(3), None));
+}
+
+#[test]
 fn a_big_nvidia_card_keeps_every_file_on_the_gpu() {
     // Q8_0 of Qwen Image would leave little room: the comfortable Q4_K_M wins.
     assert_eq!(image_pick(&rtx_5090(), "imageCreate"), want("qwen-image", "Q4_K_M", false, Placement::Gpu));

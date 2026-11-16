@@ -148,6 +148,23 @@ export interface ImageRecommendedOption {
   /** Fits only with the model's `offloadToCpu` preset on: set it when installing. */
   offloadToCpu: boolean;
   fit: RecommendationFit;
+  /** How long one picture or clip takes, when something measured it. Never an estimate. */
+  time?: ImageTime;
+}
+
+/**
+ * Seconds for one picture or clip.
+ * - `measuredHere`: the median of this machine's own, at the sizes and steps they were made at.
+ * - `measured`: one run on this class of hardware, at `width` x `height` and `steps`.
+ */
+export interface ImageTime {
+  seconds: number;
+  basis: 'measuredHere' | 'measured';
+  /** Pictures a `measuredHere` figure is the median of. */
+  samples?: number;
+  width?: number;
+  height?: number;
+  steps?: number;
 }
 
 export interface ImageTaskRecommendation {

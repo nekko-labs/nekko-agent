@@ -275,12 +275,7 @@ impl ApiServer {
         let (stop, stopped) = watch::channel(false);
         let counters = Arc::new(Counters::default());
         let (token, token_rx) = watch::channel::<Arc<str>>(str_of(settings, "token").into());
-        let app = App {
-            ctx: ctx.clone(),
-            token: token_rx,
-            counters: counters.clone(),
-            stop: stopped.clone(),
-        };
+        let app = App { ctx: ctx.clone(), token: token_rx, counters: counters.clone(), stop: stopped.clone() };
         let served = serve(listener, app, stopped);
         let mut live = lock(&self.live);
         live.running = Some(Running { stop, served, token });

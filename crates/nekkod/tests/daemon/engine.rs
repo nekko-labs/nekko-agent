@@ -670,6 +670,11 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     assert_eq!(drawn, fake_base64(expected.as_bytes()), "{reply}");
     assert_eq!(reply["generated"]["seed"], 42);
     assert_eq!(reply["generated"]["modelId"], json!(id));
+    // How long the picture took is kept against the model's file, for the recommendations.
+    let measured: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("measured-speeds.json")).unwrap()).unwrap();
+    let samples = measured["pictures"]["tiny-sd.gguf"]["samples"].as_array().expect("a timed picture");
+    assert!(samples.len() == 1 && samples[0].as_f64().unwrap() > 0.0, "{measured}");
     let (_, photo) = post(d.port, "session:photo", json!(["s_img", reply["id"], 0]), Some(TOKEN)).await;
     assert_eq!(photo, image, "the actual generated assistant attachment is readable without image:fetch");
 

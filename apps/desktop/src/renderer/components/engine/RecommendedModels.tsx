@@ -5,6 +5,7 @@ import type { ImageRecommendedOption, LocalModel, Recommendations, TaskRecommend
 import { CheckIcon, ChevronIcon } from '../../icons.js';
 import { formatBytes } from '../runtimes/verdict.js';
 import { fitText, hardwareText, isDownloaded, memoryText, nudgeTitle, speedText } from './recommendationText.js';
+import { pictureTimeText } from './pictureModelText.js';
 
 /**
  * "What should I run here", answered per task before anything is downloaded.
@@ -245,7 +246,7 @@ export function imageFitText(p: ImageRecommendedOption): { text: string; title: 
     : { text: 'Tight fit', title: `Leaves about ${formatBytes(p.headroomBytes)}, by an estimate: it should run, with little to spare.` };
 }
 
-/** One picture task's pick: no speed (none is measured), and its supporting files counted in the download. */
+/** One picture task's pick: its supporting files counted in the download, and a time only when one was measured. */
 function ImageRecommendationRow({
   label,
   p,
@@ -262,6 +263,7 @@ function ImageRecommendationRow({
   onDownload: (result?: { ok: boolean; message: string }) => void;
 }) {
   const fit = imageFitText(p);
+  const time = pictureTimeText(p);
   const ok = p.fit === 'fits' && !p.offloadToCpu;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-recommendation={p.modelId} data-image-recommendation>
@@ -284,6 +286,12 @@ function ImageRecommendationRow({
           </span>
           {' · '}
           {formatBytes(p.downloadBytes)} download, with its supporting files · {p.license}
+          {time && (
+            <>
+              {' · '}
+              <span className="text-ink-soft" title={time.title} data-picture-time={p.time?.basis}>{time.text}</span>
+            </>
+          )}
         </p>
       </div>
       <div className="shrink-0">

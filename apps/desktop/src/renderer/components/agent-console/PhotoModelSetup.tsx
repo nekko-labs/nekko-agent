@@ -16,7 +16,7 @@ import { formatBytes } from '../runtimes/verdict.js';
 import { groupDownloads, isActive, type DownloadGroup } from '../engine/downloadGroups.js';
 import { Progress, Step } from '../engine/FirstLocalModel.js';
 import { ensureRecommendedOffload } from './imageOffload.js';
-import { pictureModelBlurb } from '../engine/pictureModelText.js';
+import { pictureModelBlurb, pictureTimeText } from '../engine/pictureModelText.js';
 
 /**
  * A Photo chat with no picture model: two or three models picked for this
@@ -95,8 +95,14 @@ export function photoSetupPhase(input: {
   return { kind: 'choose' };
 }
 
-/** The fit in words. Memory is an estimate and no speed is measured, so nothing says "runs well". */
+/** The fit in words, then how long a picture takes when that was measured. Memory is an estimate, so nothing says "runs well". */
 export function photoFitLine(o: ImageRecommendedOption, recs: Recommendations): string {
+  const time = o.fit === 'tooBig' ? null : pictureTimeText(o);
+  const fit = photoFitWords(o, recs);
+  return time ? `${fit} About ${time.text.replace(/^~/, '')}${o.time?.basis === 'measured' ? ' on a computer like this' : ''}.` : fit;
+}
+
+function photoFitWords(o: ImageRecommendedOption, recs: Recommendations): string {
   const where = recs.hardware.device ? `your ${recs.hardware.device}` : 'this computer';
   if (o.fit === 'tooBig') return 'Too large for this computer.';
   if (o.offloadToCpu) return `Fits ${where} by keeping part of it in system memory, so pictures take longer.`;

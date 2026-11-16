@@ -7,7 +7,7 @@ import { RecommendedModels, imageFitText } from './RecommendedModels.js';
 import { CheckIcon } from '../../icons.js';
 import { familyKind, groupModelFamilies, gpuGuidance, setUpPictureModels, shelveCatalog, type FamilyKind, type LibraryModel, type ModelFamily } from './modelFamilies.js';
 import { VoiceSettings } from '../VoiceSettings.js';
-import { pictureModelBlurb } from './pictureModelText.js';
+import { pictureModelBlurb, pictureTimeText } from './pictureModelText.js';
 
 /**
  * Models, one surface.
@@ -140,9 +140,10 @@ export function ModelsHome({
     const setUp = setUpModelOf(f, picks);
     const pick = smallest ? undefined : setUp;
     const fit = pick ? setUpFitText(pick) : gpuGuidance(smallest?.sizeBytes ?? (sizes.length ? Math.min(...sizes) : undefined), memory, smallest);
-    const title = pick ? 'From the recommendations for this machine, with its supporting files counted' : smallest ? 'Planner result for the smallest downloaded variant' : 'Estimate from file size, not a measured context limit';
+    const time = setUp ? pictureTimeText(setUp) : null;
+    const title = time ? time.title : pick ? 'From the recommendations for this machine, with its supporting files counted' : smallest ? 'Planner result for the smallest downloaded variant' : 'Estimate from file size, not a measured context limit';
     return <button key={f.key} className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-2" style={{ background: selected?.key === f.key ? 'var(--accent-soft)' : undefined }} aria-pressed={selected?.key === f.key} onClick={() => { setSelectedKey(f.key); setRepoId(null); }}>
-      <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium">{setUp?.name ?? f.name}</p><p className="mt-0.5 text-2xs text-ink-faint" data-model-line>{setUp ? pictureModelBlurb(setUp) : `${f.local.length ? `${f.local.length} downloaded · ` : ''}${f.catalog.length} source${f.catalog.length === 1 ? '' : 's'}`}</p><p className="mt-1 text-2xs text-ink-soft" title={title}>{fit}{!pick && !smallest && memory?.kind !== 'ram' && fit !== 'GPU fit unknown' ? ' (estimated)' : ''}</p></div>
+      <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium">{setUp?.name ?? f.name}</p><p className="mt-0.5 text-2xs text-ink-faint" data-model-line>{setUp ? pictureModelBlurb(setUp) : `${f.local.length ? `${f.local.length} downloaded · ` : ''}${f.catalog.length} source${f.catalog.length === 1 ? '' : 's'}`}</p><p className="mt-1 text-2xs text-ink-soft" title={title}>{fit}{!pick && !smallest && memory?.kind !== 'ram' && fit !== 'GPU fit unknown' ? ' (estimated)' : ''}{time ? ` · ${time.text}` : ''}</p></div>
       {f.local.length > 0 && <span className="shrink-0 text-success" aria-label="Downloaded"><CheckIcon className="h-4 w-4" /></span>}
     </button>;
   };
