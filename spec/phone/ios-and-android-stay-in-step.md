@@ -85,7 +85,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
-| New chat as a composer (the desktop's bottom row: +, folder, asks-first, mic, Start) | A form; only its Chat / Image toggle matches the iPhone's (#2448) | [#2459](https://github.com/nekko-labs/nekko-agent/issues/2459) |
 | Answers and approvals written offline kept as pending response messages, sent only to the same still-pending request, with Retry and Cancel (iPhone #2499, 2026-11-13) | Not implemented on Android | [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) |
 | Add a model provider in one tap: OpenRouter sign-in, a guided key for the rest, a wrong key refused at setup (iPhone #2853, #2855, 2026-11-16) | Provider form only | [#2852](https://github.com/nekko-labs/nekko-agent/issues/2852) |
 | CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | No Android Auto app | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |

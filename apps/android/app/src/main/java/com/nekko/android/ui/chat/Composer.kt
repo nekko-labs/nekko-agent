@@ -159,6 +159,8 @@ fun Composer(
     footer: (@Composable () -> Unit)? = null,
     onVoiceConversation: (() -> Unit)? = null,
     voiceControls: (@Composable (com.nekko.android.voice.VoiceComposer) -> Unit)? = null,
+    /** The line over the box that sets it apart from a transcript; New chat has none (#2459). */
+    topLine: Boolean = true,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -246,7 +248,7 @@ fun Composer(
     }
 
     Column(modifier.fillMaxWidth().background(p.paper)) {
-        HorizontalDivider(color = p.line)
+        if (topLine) HorizontalDivider(color = p.line)
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (queued.isNotEmpty()) {
                 QueueList(queued, queuedPrompts, onEditQueued, if (running) onInterrupt else null) { error = it }

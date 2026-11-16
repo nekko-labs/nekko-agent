@@ -105,9 +105,10 @@ class LiveRelayTest {
             shot("2-chats")
             tap(hasText("New chat"))
 
-            waitFor(hasText("Start on", substring = true), 20_000)
+            // New chat is a message box (#2459): the first prompt goes from there once a model is picked.
+            waitFor(hasTestTag("newChat.composer"), 20_000)
+            waitGone(hasText("Pick a model for this chat."), 20_000)
             shot("3-new-chat")
-            tap(hasText("Start on", substring = true))
 
             send("Say hello")
             waitFor(hasText("Hello from your computer."), 30_000)

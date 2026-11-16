@@ -131,3 +131,20 @@ The iPhone's plan sheet (PlanSheet.swift, the desktop's `PlanSheet.tsx`) on Andr
   - **The step's bullet** carries the agent's check: a sun while worked or checking, a pause after a stopped reply, a tick, a red X, a warning, a ring, a struck ring. With http(s) evidence, the bullet opens it.
 - **Simple mode** hides the PR chips when PR status is hidden.
 
+### New chat as a composer (#2459, 2026-11-16)
+
+`[implemented; emulator-verified (ComposerEvidenceTest: the box and its model row; a prompt typed, a folder picked, Start makes the chat in that folder and the prompt goes after it), not on a physical phone]`
+
+- **The box:** online, New chat opens on the chat's own message box (`Composer`, without the line over it, in a rounded frame) instead of the form. The first prompt is typed there, with photos from **+** (up to 4, as in a chat). The Chat / Image toggle stays at the box's top right (#2448).
+- **The bottom row:** **+**, the folder (*None* or one of the computer's saved folders), Simple's asks-first icon (the chat's mode dialog, picked before the chat exists), and Start where Send is.
+- **Below the box:** the model (it opens the model list in a sheet) and the effort (*Computer default* or a level the model takes), then *Starts on <computer>*. Run on and Automatic stay under the box.
+- **Start:**
+  1. `session:create` (in the folder);
+  2. `session:setOptions` with the model and effort;
+  3. the mode, when it differs from the computer's default. A mode the computer wants confirmed on the phone (step-up) stays at its default; the chat's own control changes it.
+  4. the prompt and its photos go through the outbox, which sends at once while the computer answers;
+  5. the chat opens.
+  A failure keeps the prompt and photos in the box, with the reason.
+- **The mic:** **+ → Dictate**, as in a chat, when dictation is on (Settings → Dictation); the words are typed into the box. It needs the computer connected.
+- **Not yet:** videos in New chat. The **+** menu reads *Photos and videos*, as in a chat, but New chat's picker takes photos only: a clip goes to a chat that already exists. Offline New chat is unchanged (its first message waits in the outbox).
+

@@ -4,9 +4,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalResources
 import com.nekko.android.R
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -49,6 +52,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,6 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,6 +92,7 @@ import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Channels
+import com.nekko.protocol.PcSettings
 import com.nekko.protocol.Effort
 import com.nekko.protocol.LocalProviders
 import com.nekko.protocol.MachinePick
@@ -139,6 +145,10 @@ fun NewChatScreen(
     /** Run on was used here, so the row stays while the other computer connects and lists its models. */
     var switched by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var modelsOpen by remember { mutableStateOf(false) }
+    var modeOpen by remember { mutableStateOf(false) }
+    /** Asks-first picked here (#2459); null follows the computer's default. */
+    var mode by rememberSaveable { mutableStateOf<PcSettings.ChatMode?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     /** Automatic (2026-11-05): a local-model chat starts on a free computer. Off once a computer is picked by hand. */
     var autoOn by rememberSaveable { mutableStateOf(true) }
@@ -251,34 +261,79 @@ fun NewChatScreen(
         }
     }
 
-    val start: () -> Unit = start@{
-        val chosen = pick
-        if (chosen == null) {
-            error = res.getString(R.string.chats_pick_model)
-            return@start
-        }
-        val pid = chosen.providerId
-        val mid = chosen.modelId
+    /**
+     * Start (#2459): make the chat with its model, effort and asks-first, then hand the first
+     * prompt and its photos to the outbox, which sends it at once while the computer answers, and
+     * open the chat. A failure keeps what was typed in the box, with the reason.
+     */
+    val start: suspend (String, List<String>) -> Unit = start@{ text, images ->
+        val chosen = pick ?: throw IllegalStateException(res.getString(R.string.chats_pick_model))
         busy = true
         error = null
-        scope.launch {
-            try {
-                val r = repo.remote()
-                val created = r.call(Channels.SESSION_CREATE, *listOfNotNull(workspaceId?.let { JsonPrimitive(it) }).toTypedArray())
-                val session = Session.from(created) ?: throw IllegalStateException(res.getString(R.string.chats_not_created))
-                val level = effort
-                r.call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(session.id), buildJsonObject {
-                    put("providerId", pid)
-                    put("modelId", mid)
-                    if (level != null) put("effort", level)
-                })
-                onCreated(session.id)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                error = e.message ?: res.getString(R.string.chats_start_failed)
-                busy = false
+        try {
+            val r = repo.remote()
+            val created = r.call(Channels.SESSION_CREATE, *listOfNotNull(workspaceId?.let { JsonPrimitive(it) }).toTypedArray())
+            val session = Session.from(created) ?: throw IllegalStateException(res.getString(R.string.chats_not_created))
+            val level = effort
+            r.call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(session.id), buildJsonObject {
+                put("providerId", chosen.providerId)
+                put("modelId", chosen.modelId)
+                if (level != null) put("effort", level)
+            })
+            // A mode the computer wants confirmed (step-up) stays at its default; the chat's own control changes it.
+            mode?.takeIf { it != repo.state.value.pcSettings.effectiveMode }?.let { m ->
+                try { repo.setChatMode(session.id, m) } catch (e: CancellationException) { throw e } catch (_: Exception) {}
             }
+            if (text.isNotBlank() || images.isNotEmpty()) {
+                repo.outbox.add(session.id, text, images = images)
+                repo.outbox.flushSoon()
+            }
+            onCreated(session.id)
+        } finally {
+            busy = false
+        }
+    }
+
+    if (modelsOpen) {
+        androidx.compose.material3.ModalBottomSheet(onDismissRequest = { modelsOpen = false }, containerColor = p.paper) {
+            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp).testTag("newChat.models")) {
+                ModelList(
+                    groups = groups,
+                    favorites = c.defaults.favoriteModels,
+                    query = query,
+                    onQuery = { query = it },
+                    selected = pick,
+                    onPick = {
+                        pick = it
+                        touched = true
+                        autoChoseModel = false
+                        error = null
+                        modelsOpen = false
+                        // A local model picked: Automatic asks again.
+                        if (LocalProviders.isLocal(c.providers.firstOrNull { pr -> pr.id == it.providerId }?.kind)) {
+                            autoPick = null
+                            autoRun++
+                        }
+                    },
+                    onRetry = {
+                        scope.launch {
+                            try {
+                                repo.loadAllModels(force = true)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                // Shown per provider.
+                            }
+                        }
+                    },
+                )
+            }
+        }
+    }
+    if (modeOpen) {
+        com.nekko.android.ui.chat.ChatModeDialog(mode, c.pcSettings.effectiveMode, active?.name.orEmpty(), onDismiss = { modeOpen = false }) { m ->
+            mode = m
+            modeOpen = false
         }
     }
 
@@ -331,75 +386,26 @@ fun NewChatScreen(
                         )
                     }
                     !online -> OfflineNewChat(repo, active.name, phonePick, c.workspaces, shared, onQueued)
-                    else -> NCard {
-                        Label(Icons.Outlined.Memory, stringResource(R.string.chats_model_from, active.name))
-                        if (phonePickMissing && !touched) {
-                            Text(
-                                stringResource(R.string.chats_default_missing, active.name, phonePick?.modelId.toString()),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = p.warning,
-                            )
-                        }
-                        ModelList(
-                            groups = groups,
-                            favorites = c.defaults.favoriteModels,
-                            query = query,
-                            onQuery = { query = it },
-                            selected = pick,
-                            onPick = {
-                                pick = it
-                                touched = true
-                                autoChoseModel = false
-                                error = null
-                                // A local model picked: Automatic asks again.
-                                if (LocalProviders.isLocal(c.providers.firstOrNull { pr -> pr.id == it.providerId }?.kind)) {
-                                    autoPick = null
-                                    autoRun++
-                                }
-                            },
-                            onRetry = {
-                                scope.launch {
-                                    try {
-                                        repo.loadAllModels(force = true)
-                                    } catch (e: CancellationException) {
-                                        throw e
-                                    } catch (_: Exception) {
-                                        // Shown per provider.
-                                    }
-                                }
-                            },
-                        )
-                        val chosen = pick
-                        if (chosen != null && LocalSimple.current.shown("effort")) {
-                            Label(Icons.Outlined.Speed, stringResource(R.string.chats_effort))
-                            Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.effort"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Chip(stringResource(R.string.chats_computer_default), effort == null) { effort = null }
-                                Effort.levels(chosen.modelId).forEach { e -> Chip(effortLabel(e), effort == e.wire) { effort = e.wire } }
-                            }
-                        }
-                        if (c.workspaces.isNotEmpty()) {
-                            Label(Icons.Outlined.Folder, stringResource(R.string.chats_folder))
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Chip(stringResource(R.string.chats_folder_none), workspaceId == null) { workspaceId = null }
-                                c.workspaces.forEach { w -> Chip(w.name, w.id == workspaceId) { workspaceId = w.id } }
-                            }
-                        }
-                        error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = p.danger) }
-                        Button(
-                            onClick = start,
-                            enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        ) {
-                            if (busy) {
-                                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp), color = p.accentInk)
-                            } else {
-                                Icon(Icons.Outlined.Computer, contentDescription = null, modifier = Modifier.size(18.dp))
-                            }
-                            Spacer(Modifier.size(8.dp))
-                            Text(stringResource(R.string.chats_start_on, active.name), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
+                    else -> NewChatComposer(
+                        repo = repo,
+                        computer = active.name,
+                        shared = shared,
+                        blocked = if (pick == null) stringResource(R.string.chats_pick_model) else null,
+                        warning = if (phonePickMissing && !touched) stringResource(R.string.chats_default_missing, active.name, phonePick?.modelId.toString()) else null,
+                        modelName = pick?.let { pk -> groups.firstOrNull { it.provider.id == pk.providerId }?.models?.firstOrNull { it.id == pk.modelId }?.name ?: pk.modelId },
+                        onOpenModels = { modelsOpen = true },
+                        effortLevels = pick?.let { Effort.levels(it.modelId) }.orEmpty(),
+                        effort = effort,
+                        onEffort = { effort = it },
+                        workspaces = c.workspaces,
+                        workspaceId = workspaceId,
+                        onWorkspace = { workspaceId = it },
+                        mode = mode ?: c.pcSettings.effectiveMode,
+                        onMode = { modeOpen = true },
+                        onStart = start,
+                    )
                 }
+                error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = p.danger, modifier = Modifier.padding(top = 8.dp)) }
                 if (showRunOn) {
                     Spacer(Modifier.size(12.dp))
                     NCard {
@@ -735,5 +741,166 @@ private fun OfflineNewChat(
             enabled = pick != null && text.isNotBlank(),
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("newChat.startWhenOnline"),
         ) { Text(stringResource(R.string.chats_start_when_online)) }
+    }
+}
+
+
+/**
+ * New chat as the chat's own message box (#2459, the iPhone's clean start): the first prompt is
+ * typed here, with photos from **+**; the folder and Simple's asks-first after **+**, Start where
+ * Send is; the model and effort in the box's bottom row. Start makes the chat and sends the prompt.
+ */
+@Composable
+private fun NewChatComposer(
+    repo: ComputersRepository,
+    computer: String,
+    shared: String?,
+    blocked: String?,
+    warning: String?,
+    modelName: String?,
+    onOpenModels: () -> Unit,
+    effortLevels: List<Effort>,
+    effort: String?,
+    onEffort: (String?) -> Unit,
+    workspaces: List<WorkspaceFolder>,
+    workspaceId: String?,
+    onWorkspace: (String?) -> Unit,
+    mode: PcSettings.ChatMode,
+    onMode: () -> Unit,
+    onStart: suspend (String, List<String>) -> Unit,
+) {
+    val p = Nekko.palette
+    val simple = LocalSimple.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val resources = LocalResources.current
+    val lock = com.nekko.android.lock.LocalAppLock.current
+    val scope = rememberCoroutineScope()
+    // Photos stay on the phone until Start, as in a chat.
+    val photos = remember { com.nekko.android.chat.PhotoTray<androidx.compose.ui.graphics.ImageBitmap>() }
+    val photoState by photos.state.collectAsStateWithLifecycle()
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(com.nekko.android.chat.PhotoTray.MAX_PHOTOS),
+    ) { uris ->
+        lock?.returned()
+        val n = photos.begin(uris.size)
+        uris.take(n).forEach { uri ->
+            scope.launch {
+                try {
+                    val (url, preview) = com.nekko.android.chat.ImageAttachments.encode(context.contentResolver, uri)
+                    photos.added(url, preview)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    photos.failed(resources.getString(R.string.chats_photo_unreadable))
+                }
+            }
+        }
+    }
+    // The mic, as in a chat (Settings → Dictation): the words are typed into the box.
+    val prefs = com.nekko.android.ui.security.LocalPhonePrefs.current
+    val dictationOn = prefs?.flow(com.nekko.android.voice.Dictation.ENABLED)?.collectAsStateWithLifecycle()?.value == true
+    val dictation = remember(prefs) {
+        prefs?.let { pr ->
+            com.nekko.android.voice.DictationController(
+                scope = scope,
+                caller = repo.caller,
+                hardware = com.nekko.android.voice.AndroidMic(context),
+                settings = { pr.get(com.nekko.android.voice.Dictation.ENGINE) to pr.get(com.nekko.android.voice.Dictation.LANGUAGE) },
+                computer = {
+                    val st = repo.state.value
+                    com.nekko.android.voice.DictationController.computerVoice(repo.caller, st.conn == RelayState.ONLINE, st.pcSettings.voiceEnabled)
+                },
+                computerName = { repo.state.value.active?.name ?: computer },
+            )
+        }
+    }
+    DisposableEffect(dictation) { onDispose { dictation?.cancel() } }
+    val mic = rememberMic(dictation.takeIf { dictationOn }, repo.state) { repo.state.value.conn == RelayState.ONLINE }
+    val attach = com.nekko.android.ui.chat.AttachUi(
+        state = photoState,
+        onPickFiles = {
+            lock?.expectReturn()
+            pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+        },
+        onTakePhoto = null,
+        onRemove = photos::remove,
+        take = photos::take,
+        restore = photos::restore,
+        clearError = photos::clearError,
+    )
+    Column(Modifier.testTag("newChat.composer")) {
+        warning?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.warning, modifier = Modifier.padding(bottom = 6.dp)) }
+        com.nekko.android.ui.chat.Composer(
+            modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)).border(1.dp, p.line, androidx.compose.foundation.shape.RoundedCornerShape(20.dp)),
+            topLine = false,
+            running = false,
+            blocked = blocked,
+            queued = emptyList(),
+            onSend = { text, _, images -> onStart(text, images) },
+            onStop = {},
+            initialText = shared,
+            attach = attach,
+            mic = mic,
+            leading = {
+                if (workspaces.isNotEmpty()) NewChatFolderChip(workspaces, workspaceId, onWorkspace)
+                if (!simple.expert && simple.shown("asks")) com.nekko.android.ui.chat.ComposerAsksIcon(mode, enabled = true, onClick = onMode)
+            },
+            footer = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    TextButton(onClick = onOpenModels, modifier = Modifier.heightIn(min = 48.dp).testTag("newChat.model")) {
+                        Icon(Icons.Outlined.Memory, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(6.dp))
+                        Text(modelName ?: stringResource(R.string.chats_choose_model), color = if (modelName == null) p.inkFaint else p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (effortLevels.isNotEmpty() && simple.shown("effort")) {
+                        var open by remember { mutableStateOf(false) }
+                        Box {
+                            TextButton(onClick = { open = true }, modifier = Modifier.heightIn(min = 48.dp).testTag("newChat.effort")) {
+                                Icon(Icons.Outlined.Speed, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.size(6.dp))
+                                Text(effortLevels.firstOrNull { it.wire == effort }?.let { effortLabel(it) } ?: stringResource(R.string.chats_computer_default), color = p.ink, maxLines = 1)
+                            }
+                            androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = p.surface) {
+                                androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.chats_computer_default)) }, onClick = { onEffort(null); open = false })
+                                effortLevels.forEach { e -> androidx.compose.material3.DropdownMenuItem(text = { Text(effortLabel(e)) }, onClick = { onEffort(e.wire); open = false }) }
+                            }
+                        }
+                    }
+                }
+            },
+        )
+        Text(stringResource(R.string.chats_starts_on, computer), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+    }
+}
+
+/** The new chat's folder after **+** (#2459): None or one of the computer's saved folders. */
+@Composable
+private fun NewChatFolderChip(workspaces: List<WorkspaceFolder>, selected: String?, onPick: (String?) -> Unit) {
+    val p = Nekko.palette
+    var open by remember { mutableStateOf(false) }
+    val name = workspaces.firstOrNull { it.id == selected }?.name ?: stringResource(R.string.chats_folder_none)
+    val label = stringResource(R.string.chats_folder)
+    Box {
+        Row(
+            Modifier
+                .heightIn(min = 48.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .clickable(role = androidx.compose.ui.semantics.Role.Button) { open = true }
+                .padding(horizontal = 8.dp)
+                .testTag("newChat.folder")
+                .semantics(mergeDescendants = true) {
+                    contentDescription = label
+                    stateDescription = name
+                },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(androidx.compose.ui.res.painterResource(R.drawable.composer_folder), contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+            Text(name, style = MaterialTheme.typography.labelLarge, color = if (selected == null) p.inkSoft else p.ink, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, modifier = Modifier.widthIn(max = 140.dp))
+        }
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = p.surface) {
+            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.chats_folder_none)) }, onClick = { onPick(null); open = false })
+            workspaces.forEach { w -> androidx.compose.material3.DropdownMenuItem(text = { Text(w.name) }, onClick = { onPick(w.id); open = false }, modifier = Modifier.testTag("newChat.folder.${w.id}")) }
+        }
     }
 }
