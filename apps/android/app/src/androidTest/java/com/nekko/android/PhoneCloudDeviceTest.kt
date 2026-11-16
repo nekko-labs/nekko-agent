@@ -58,12 +58,22 @@ class PhoneCloudDeviceTest {
         compose.onNodeWithTag("phone.providers").performClick()
         compose.onNodeWithTag("phone.add").performClick()
         shot("add-provider")
+        // Claude API is guided (#2852): its key page and Paste, no name or address to fill.
+        compose.onNodeWithTag("phone.openKeyPage").assertExists()
+        compose.onNodeWithTag("phone.paste").assertExists()
+        assertEquals(0, compose.onAllNodesWithTag("phone.url").fetchSemanticsNodes().size)
+        compose.onNodeWithTag("phone.kind").performClick()
+        compose.onNodeWithTag("phone.kind.openrouter").performClick()
+        compose.onNodeWithTag("phone.signIn").assertExists()
+        shot("add-provider-openrouter")
+        compose.onNodeWithTag("phone.kind").performClick()
+        compose.onNodeWithTag("phone.kind.anthropic").performClick()
         compose.onNodeWithTag("phone.key").performTextInput("synthetic-device-key")
         compose.onNodeWithTag("phone.save").performClick()
         compose.waitUntil(5000) { phone.state.value.providers.size == 1 }
         compose.onNodeWithText("Test", useUnmergedTree = true).performClick()
-        compose.waitUntil(5000) { http.requests.isNotEmpty() }
-        compose.onNodeWithText("Connection works.").assertExists()
+        // The key was checked before it was kept (#2852); Test asks again.
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Connection works.").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Dismiss").performClick()
         compose.onNodeWithText("New key").performClick()
         compose.onNodeWithTag("phone.newKey").performTextInput("replacement-key")

@@ -12,12 +12,19 @@ data class PhoneRequest(val url: String, val headers: Map<String, String>, val b
 
 /** Direct phone APIs only. No subscription harnesses, local servers, tools or relay. */
 object PhoneProviders {
-    data class Kind(val id: String, val label: String, val defaultUrl: String, val catalog: List<PhoneModel> = emptyList(), val keyOptional: Boolean = false, val hint: String = "Use your own provider API key.")
+    /**
+     * [keyPage]: where the key is made, for the guided setup (open it, copy, come back, Paste);
+     * such kinds need no name or address. [signIn]: OpenRouter's browser sign-in hands the key back.
+     */
+    data class Kind(val id: String, val label: String, val defaultUrl: String, val catalog: List<PhoneModel> = emptyList(), val keyOptional: Boolean = false, val hint: String = "Use your own provider API key.", val keyPage: String? = null, val signIn: Boolean = false)
     private val claude = listOf("opus-5-5", "sonnet-5-5", "fable-5-1", "haiku-5-5", "opus-4-8", "sonnet-4-6").map { PhoneModel("claude-$it", "Claude $it") }
     val kinds = listOf(
-        Kind("anthropic", "Claude API", "https://api.anthropic.com"),
-        Kind("openai", "OpenAI", "https://api.openai.com/v1"),
-        Kind("openrouter", "OpenRouter", "https://openrouter.ai/api/v1"),
+        Kind("anthropic", "Claude API", "https://api.anthropic.com", hint = "An API key from console.anthropic.com.", keyPage = "https://console.anthropic.com/settings/keys"),
+        Kind("openai", "OpenAI", "https://api.openai.com/v1", hint = "An API key from platform.openai.com.", keyPage = "https://platform.openai.com/api-keys"),
+        Kind("openrouter", "OpenRouter", "https://openrouter.ai/api/v1", hint = "An API key from openrouter.ai: one key for many model makers.", keyPage = "https://openrouter.ai/settings/keys", signIn = true),
+        // Both speak the OpenAI route with a bearer key (#2852, the iPhone's #2853).
+        Kind("gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", hint = "A Google AI Studio key, billed apart from Google AI plans.", keyPage = "https://aistudio.google.com/apikey"),
+        Kind("ollama-cloud", "Ollama Cloud", "https://ollama.com/v1", hint = "Models hosted by Ollama, on an ollama.com key. No Ollama app needed.", keyPage = "https://ollama.com/settings/keys"),
         // Mantle Messages uses x-api-key, not the OpenAI route's Authorization header.
         Kind("bedrock", "Claude in Amazon Bedrock", "https://bedrock-mantle.us-east-1.api.aws/anthropic", claude.filterNot { it.id == "claude-sonnet-4-6" }.map { it.copy(id = "anthropic.${it.id}") }, hint = "Bedrock bearer token. Set your region in the address."),
         Kind("foundry", "Claude in Microsoft Foundry", "https://YOUR_RESOURCE.services.ai.azure.com/anthropic", claude, hint = "Resource key. Set your resource in the address."),
@@ -65,7 +72,7 @@ object PhoneProviders {
             put(if (p.kind == "openai") "max_completion_tokens" else "max_tokens", maxTokens)
             if (a) system?.let { put("system", it) }
             if (p.kind == "vertex") put("anthropic_version", "vertex-2023-10-16")
-            if (p.kind in setOf("openai", "openrouter")) putJsonObject("stream_options") { put("include_usage", true) }
+            if (p.kind in USAGE_KINDS) putJsonObject("stream_options") { put("include_usage", true) }
             putJsonArray("messages") {
                 if (!a && system != null) add(buildJsonObject { put("role", "system"); put("content", system) })
                 messages.filter { it.text.isNotBlank() && it.role in setOf("user", "assistant") }.forEach { m -> add(buildJsonObject { put("role", m.role); put("content", m.text) }) }
@@ -81,13 +88,72 @@ object PhoneProviders {
     fun models(body: String, kind: String): List<PhoneModel> {
         require(body.length <= 2_000_000) { "The provider's model list is too large." }
         val data = (Json.parseToJsonElement(body) as? JsonObject)?.get("data") as? JsonArray ?: return emptyList()
-        val skip = listOf("embedding", "whisper", "tts", "dall-e", "moderation", "image", "audio", "realtime", "transcribe", "search", "davinci", "babbage", "sora")
+        // OpenAI and Gemini list every model they serve; keep the ones that chat.
+        val skip = listOf("embedding", "whisper", "tts", "dall-e", "moderation", "image", "audio", "realtime", "transcribe", "search", "davinci", "babbage", "sora", "imagen", "veo", "aqa")
         return data.mapNotNull { e ->
             val o = e as? JsonObject ?: return@mapNotNull null
             val id = o.string("id") ?: return@mapNotNull null
-            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind == "openai" && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id)
+            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind in setOf("openai", "gemini") && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id)
         }.distinctBy { it.id }
     }
+    /** Kinds whose stream reports token use when asked (`stream_options.include_usage`). */
+    private val USAGE_KINDS = setOf("openai", "openrouter", "gemini")
+
+    /**
+     * For kinds whose model list answers without a valid key: a request a bad key is refused on
+     * (401/403). Ollama Cloud's asks for a model that doesn't exist, so it costs nothing.
+     */
+    fun keyCheckRequest(p: PhoneProvider, key: String?): PhoneRequest? {
+        validate(p, key)
+        val h = headers(p, key) + ("Accept" to "application/json")
+        return when (p.kind) {
+            "openrouter" -> PhoneRequest(p.baseUrl.trimEnd('/') + "/key", h, method = "GET")
+            "ollama-cloud" -> PhoneRequest(p.baseUrl.trimEnd('/') + "/chat/completions", h, buildJsonObject {
+                put("model", "nekko-key-check"); put("max_tokens", 1)
+                putJsonArray("messages") { add(buildJsonObject { put("role", "user"); put("content", ".") }) }
+            })
+            else -> null
+        }
+    }
+
+    // OpenRouter sign-in (PKCE; the answer is an API key).
+    /** Where the sign-in comes back to: the app's own scheme, which MainActivity already takes. */
+    const val OPENROUTER_CALLBACK = "nekko-agent://openrouter-key"
+    const val SIGN_IN_FAILED = "OpenRouter didn’t hand back a key. Try again."
+
+    fun pkceVerifier(random: java.security.SecureRandom = java.security.SecureRandom()): String =
+        java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32).also(random::nextBytes))
+
+    fun pkceChallenge(verifier: String): String =
+        java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
+
+    fun openRouterAuthorizeUrl(challenge: String): String {
+        fun enc(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
+        return "https://openrouter.ai/auth?callback_url=${enc(OPENROUTER_CALLBACK)}&code_challenge=${enc(challenge)}&code_challenge_method=S256"
+    }
+
+    /** The code from the callback, if it is ours and carries one. */
+    fun openRouterCode(callback: String): String? {
+        if (!callback.startsWith(OPENROUTER_CALLBACK)) return null
+        val query = callback.substringAfter('?', "").substringBefore('#')
+        return query.split('&').firstNotNullOfOrNull { part ->
+            val (k, v) = part.split('=', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+            if (k == "code") runCatching { java.net.URLDecoder.decode(v, "UTF-8") }.getOrNull() else null
+        }?.takeIf { it.isNotEmpty() }
+    }
+
+    fun openRouterKeyRequest(code: String, verifier: String) = PhoneRequest(
+        "https://openrouter.ai/api/v1/auth/keys",
+        mapOf("Content-Type" to "application/json", "Accept" to "application/json"),
+        buildJsonObject { put("code", code); put("code_verifier", verifier); put("code_challenge_method", "S256") },
+    )
+
+    fun openRouterKey(body: String): String? {
+        if (body.length > 100_000) return null
+        val key = (runCatching { Json.parseToJsonElement(body) }.getOrNull() as? JsonObject)?.string("key") ?: return null
+        return key.takeIf { k -> k.isNotEmpty() && k.all { it.code in 32..126 } }
+    }
+
     // Never echo response bodies: an untrusted endpoint may echo credentials in an error.
     fun failure(status: Int, body: String = "") = when (status) {
         401, 403 -> "The provider turned the key down ($status). Replace the key and test again."

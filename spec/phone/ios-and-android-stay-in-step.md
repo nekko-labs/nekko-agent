@@ -62,7 +62,7 @@ Both phones keep in-chat answers and one-time Allow/Deny as pending response mes
 | --- | --- | --- | --- |
 | No-computer entry | This iPhone in place/filter and Run on; empty model picker links to setup | This phone from Chats and first run, even without provider/computer | iPhone remains separate PR #2462; Android latest 91c5e4c1e synthetic matrix 18 pass / 2 expected skips plus 36 focused passes |
 | Direct text providers | Claude API, OpenAI, OpenRouter, Mantle Messages, Foundry, Vertex, HTTPS compatible | Same seven kinds | No live paid authentication/entitlement checks; Foundry custom deployment names unsupported; Vertex tokens manually renewed |
-| One-tap provider setup ([#2851](https://github.com/nekko-labs/nekko-agent/issues/2851)) | OpenRouter browser sign-in returns a key; Claude API, OpenAI, Gemini and Ollama Cloud open their key page and take the key back with one Paste; Gemini and Ollama Cloud kinds | Not yet: a form with a pasted key ([#2852](https://github.com/nekko-labs/nekko-agent/issues/2852)) | OpenRouter sign-in not yet tried against a live account |
+| One-tap provider setup ([#2851](https://github.com/nekko-labs/nekko-agent/issues/2851)) | OpenRouter browser sign-in returns a key; Claude API, OpenAI, Gemini and Ollama Cloud open their key page and take the key back with one Paste; Gemini and Ollama Cloud kinds | The same, with a wrong key turned down at setup ([#2852](https://github.com/nekko-labs/nekko-agent/issues/2852), 2026-11-16; the browser opens outside the app, no Custom Tab) | OpenRouter sign-in not yet tried against a live account |
 | Provider lifecycle and streaming | Setup, Test, rekey, disable/remove; Stop/Retry; stale callback fencing | Same behaviors | Android JVM regression tests plus native synthetic transport checks; not live provider proof |
 | Privacy and retention | Device-held Keychain keys and local transcripts | Keystore-sealed separate credential slots and local transcripts | Direct HTTPS, no relay/computer/Nekko Cloud; provider may retain text; Forget is local only; storage is not transactional |
 | Reply recovery | Persists partial text per delta with interrupted marker | Persists at attempt start/cleanup; process death can lose partial text | Durability differs; do not promise identical process-kill recovery |
@@ -85,7 +85,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
-| Add a model provider in one tap: OpenRouter sign-in, a guided key for the rest, a wrong key refused at setup (iPhone #2853, #2855, 2026-11-16) | Provider form only | [#2852](https://github.com/nekko-labs/nekko-agent/issues/2852) |
 | CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | No Android Auto app | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 
 Android features the iPhone lacks have not been audited yet.
