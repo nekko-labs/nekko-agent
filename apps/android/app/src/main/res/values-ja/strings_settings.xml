@@ -540,4 +540,24 @@
     <string name="tailscale_later">後で</string>
     <string name="tailscale_step_done">完了</string>
     <string name="tailscale_step_not_done">未完了</string>
+    <!-- This phone's connectors (#2109). -->
+    <string name="connectors_title">コネクタ</string>
+    <string name="connectors_intro">使っているサービスを接続します。各トークンはこの電話に封印して保管され、そのサービスにだけ送られます。コンピュータ、リレー、Nekko Cloud には送られません。コンピュータは自分のコネクタを持ちます。</string>
+    <string name="connectors_git">Git プロバイダー</string>
+    <string name="connectors_tasks">プロジェクト管理</string>
+    <string name="connectors_prs_from">プルリクエストの取得元</string>
+    <string name="connectors_prs_from_detail">プルリクエスト画面にはこのプロバイダーのものが表示されます。</string>
+    <string name="connectors_connected_as">%1$s として接続済み</string>
+    <string name="connectors_connected">接続済み</string>
+    <string name="connectors_git_detail">プルリクエストとチェック</string>
+    <string name="connectors_tasks_detail">未完了のタスク</string>
+    <string name="connectors_options">%1$s のオプション</string>
+    <string name="connectors_new_token">新しいトークン</string>
+    <string name="connectors_disconnect">接続を解除</string>
+    <string name="connectors_disconnect_title">%1$s の接続を解除しますか？</string>
+    <string name="connectors_disconnect_text">トークンはこの電話から削除されます。</string>
+    <string name="connectors_connect">接続</string>
+    <string name="connectors_connect_title">%1$s を接続</string>
+    <string name="connectors_kept_here">この電話にのみ保管され、キーストアで封印されます。</string>
+    <string name="connectors_row_detail">Git プロバイダーとプロジェクトツール</string>
 </resources>

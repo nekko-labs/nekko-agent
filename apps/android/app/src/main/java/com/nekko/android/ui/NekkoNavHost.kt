@@ -116,6 +116,7 @@ object Routes {
     const val FILES = "settings/files"
     const val LOGS = "settings/logs"
     const val PROVIDERS = "settings/providers"
+    const val CONNECTORS = "settings/connectors"
     const val SIMPLE_MODE = "settings/simple"
     const val CUSTOMIZE = "settings/customize"
     const val PERMISSIONS = "settings/permissions"
@@ -331,6 +332,10 @@ fun NekkoNavHost(
             }
             composable(Routes.AUTOMATIONS) {
                 AutomationsScreen(repo = repo, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.CONNECTORS) {
+                val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                com.nekko.android.ui.screens.ConnectorsScreen(app.connectors, onBack = { nav.popBackStack() })
             }
             composable(Routes.PROVIDERS) {
                 ProvidersScreen(repo = repo, onBack = { nav.popBackStack() })

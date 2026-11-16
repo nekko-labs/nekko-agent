@@ -586,4 +586,24 @@
     <string name="tailscale_later">Later</string>
     <string name="tailscale_step_done">Done</string>
     <string name="tailscale_step_not_done">Not done yet</string>
+    <!-- This phone's connectors (#2109). -->
+    <string name="connectors_title">Connectors</string>
+    <string name="connectors_intro">Connect the services you work in. Each token stays sealed on this phone and is sent only to its own service, never to a computer, the relay or Nekko Cloud. Your computers keep their own connectors.</string>
+    <string name="connectors_git">Git providers</string>
+    <string name="connectors_tasks">Project management</string>
+    <string name="connectors_prs_from">Pull requests from</string>
+    <string name="connectors_prs_from_detail">The Pull requests screen lists this provider’s.</string>
+    <string name="connectors_connected_as">Connected as %1$s</string>
+    <string name="connectors_connected">Connected</string>
+    <string name="connectors_git_detail">Pull requests and checks</string>
+    <string name="connectors_tasks_detail">Your open tasks</string>
+    <string name="connectors_options">Options for %1$s</string>
+    <string name="connectors_new_token">New token</string>
+    <string name="connectors_disconnect">Disconnect</string>
+    <string name="connectors_disconnect_title">Disconnect %1$s?</string>
+    <string name="connectors_disconnect_text">Its token is deleted from this phone.</string>
+    <string name="connectors_connect">Connect</string>
+    <string name="connectors_connect_title">Connect %1$s</string>
+    <string name="connectors_kept_here">Kept on this phone only, sealed by its keystore.</string>
+    <string name="connectors_row_detail">Git providers and project tools</string>
 </resources>
