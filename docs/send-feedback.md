@@ -55,7 +55,7 @@ Nekko Agent is open source. The sheet links to the [contributing guide](https://
 
 ## Support with a GitHub star
 
-Choose **Good → Give us a GitHub star!**, or open **Settings → Help out the Nekko Team → Support by starring the project on GitHub**. The same settings group also holds **Help improve Nekko Agent**; that usage-report opt-in remains independent and off unless you enable it.
+Choose **Good → Give us a GitHub star!**, or open **Settings → Help out the Nekko Team → Support by starring the project on GitHub**. Once you have starred it, both read **Thanks for the Star!**. The same settings group also holds **Help improve Nekko Agent**; that usage-report opt-in remains independent and off unless you enable it.
 
 With GitHub connected in Connectors, Nekko checks which account is connected and whether it already stars the project. **Give a star** adds it through GitHub’s API only after your click. Starring is public. A confirmed star stays visibly selected with a happy Nekko; your first newly confirmed star gets one short thank-you animation (disabled for reduced motion). An existing star is thanked without replaying the animation.
 

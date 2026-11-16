@@ -21,7 +21,7 @@ The sheet on desktop, the Local Web UI and Docker is one form that opens up as i
 
 - **Always there:** the choice of **Good** or **Needs improvement** (nothing preselected) and the contributing line linking to `CONTRIBUTING.md`. Nothing else shows until a choice is made.
 - **After choosing Needs improvement:** Summary, Description, optional contact details, Include app info (its switch at the far right), **Other ways** (collapsed, with the agent prompt, the GitHub issue forms and the email line as separate options inside one border) and Send.
-- **After choosing Good:** Summary, Description, optional contact details, **Give us a GitHub star!**, the email line and Send. Both kinds offer optional contact details.
+- **After choosing Good:** Summary, Description, optional contact details, **Give us a GitHub star!** (**Thanks for the Star!** once GitHub shows the connected account starring, here and in Settings, with no star button), the email line and Send. Both kinds offer optional contact details.
 - **The email line:** plain text, "Email us at feedback@nekkoagent.com". A Copy button appears on hovering the address, or on keyboard focus.
 - **Good and app info:** Praise rarely needs app info, so it is not offered, and a switch left on before changing to Good sends nothing. Text typed before changing the choice stays.
 - **Screenshots: hidden (2026-11, #2287).** `SCREENSHOTS_ENABLED = false` in `FeedbackSheet.tsx` removes the section from the form, and pasting or dropping an image attaches nothing, so every note is sent without screenshots. The code (`FeedbackScreenshots.tsx`) is kept, and setting the flag to `true` brings back the behaviour below, offered under Needs improvement only.

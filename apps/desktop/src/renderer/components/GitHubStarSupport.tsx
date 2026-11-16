@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SUPPORT_REPOSITORY_URL } from '@nekko-agent/shared';
-import { CheckIcon, StarIcon } from '../icons.js';
+import { StarIcon } from '../icons.js';
 import { refreshSupportStar, useSupportStar } from '../supportStar.js';
 import { StarryNekko } from './StarryNekko.js';
 
@@ -28,17 +28,19 @@ export function GitHubStarSupport({ feedback = false }: { feedback?: boolean }) 
           {starred ? <StarryNekko size={36} /> : <StarIcon className="h-6 w-6 text-ink-soft" />}
         </span>
         <div className="min-w-0 flex-1 basis-48">
-          <Heading className={`${feedback ? 'text-sm' : 'text-base'} font-semibold text-ink`}>{feedback ? 'Give us a GitHub star!' : 'Support by starring the project on GitHub'}</Heading>
+          <Heading className={`${feedback ? 'text-sm' : 'text-base'} font-semibold text-ink`}>{starred ? 'Thanks for the Star!' : feedback ? 'Give us a GitHub star!' : 'Support by starring the project on GitHub'}</Heading>
           <p className="mt-(--q-tight) text-xs text-ink-faint" role="status">
             {busy ? 'Checking with GitHub…' : starred ? `Thank you, @${status.login}! Nekko is happy you’re here.`
               : status?.state === 'not-starred' ? `Star as @${status.login}. It helps more people find Nekko Agent.`
                 : status?.reason ?? 'A little star helps more people find Nekko Agent.'}
           </p>
         </div>
-        <button type="button" className={`btn ${starred ? 'btn-ghost' : 'btn-primary'} shrink-0 py-1 text-xs`} aria-pressed={starred} disabled={busy || starred || !status} data-testid="support-star-action"
-          onClick={() => { if (status?.state === 'not-starred') void refreshSupportStar(true); else void open(); }}>
-          {starred ? <><CheckIcon className="h-4 w-4" /> Starred</> : status?.state === 'not-starred' ? 'Give a star' : 'Open GitHub'}
-        </button>
+        {!starred && (
+          <button type="button" className="btn btn-primary shrink-0 py-1 text-xs" disabled={busy || !status} data-testid="support-star-action"
+            onClick={() => { if (status?.state === 'not-starred') void refreshSupportStar(true); else void open(); }}>
+            {status?.state === 'not-starred' ? 'Give a star' : 'Open GitHub'}
+          </button>
+        )}
       </div>
       <div className="mt-(--q-inline) flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-ink-faint">
         <span>Starring is public on GitHub. We only add a star when you ask.</span>
