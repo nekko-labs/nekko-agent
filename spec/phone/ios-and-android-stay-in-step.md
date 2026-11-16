@@ -73,7 +73,7 @@ Tools, attachments, local models, subscription harnesses and cross-device sync a
 
 ## Android is behind the iPhone today
 
-Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([report](../../reports/android-ios-parity-2026-11-07.md)), and again on 2026-11-09 against the changes since, by reading the code, not on a device.
+Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([report](../../reports/android-ios-parity-2026-11-07.md)), again on 2026-11-09, and on 2026-11-16 against every iOS change since 2026-11-13, by reading the code, not on a device.
 
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
@@ -88,6 +88,12 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
 | New chat as a composer (the desktop's bottom row: +, folder, asks-first, mic, Start) | A form; only its Chat / Image toggle matches the iPhone's (#2448) | [#2459](https://github.com/nekko-labs/nekko-agent/issues/2459) |
+| Chat rows: quiet two lines, the PR chip at the end, sub-agents under their chat with their models (iPhone #2513, 2026-11-13) | One title line with a preview; no sub-agents | [#2509](https://github.com/nekko-labs/nekko-agent/issues/2509) |
+| Answers and approvals written offline kept as pending response messages, sent only to the same still-pending request, with Retry and Cancel (iPhone #2499, 2026-11-13) | Not implemented on Android | [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) |
+| Add a model provider in one tap: OpenRouter sign-in, a guided key for the rest, a wrong key refused at setup (iPhone #2853, #2855, 2026-11-16) | Provider form only | [#2852](https://github.com/nekko-labs/nekko-agent/issues/2852) |
+| Videos from the message box's + menu, up to 2 clips (iPhone #2635) | Photos only | [#2777](https://github.com/nekko-labs/nekko-agent/issues/2777) |
+| Set up Tailscale after pairing over it, each step checked live (iPhone #2720, 2026-11-13) | Not implemented on Android | [#2856](https://github.com/nekko-labs/nekko-agent/issues/2856) |
+| CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | No Android Auto app | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 
 Android features the iPhone lacks have not been audited yet.
 
