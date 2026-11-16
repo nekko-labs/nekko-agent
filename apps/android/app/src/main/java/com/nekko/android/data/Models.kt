@@ -75,6 +75,8 @@ data class ComputersState(
     val route: String? = null,
     val denied: DenyReason? = null,
     val summaries: List<SessionSummary> = emptyList(),
+    /** The sub-agents each of the active computer's chats spawned and hasn't completed, oldest first, by parent id (#2509). */
+    val subagents: Map<String, List<SessionSummary>> = emptyMap(),
     val summariesLoading: Boolean = false,
     /** The active computer's own list has been read since it became active (not the phone's saved copy). */
     val summariesLoaded: Boolean = false,
@@ -130,6 +132,8 @@ data class Peer(
     val detail: String? = null,
     val denied: DenyReason? = null,
     val summaries: List<SessionSummary> = emptyList(),
+    /** Its chats' running sub-agents, by parent id (#2509). */
+    val subagents: Map<String, List<SessionSummary>> = emptyMap(),
     val activity: Map<String, Activity> = emptyMap(),
     val workspaces: List<WorkspaceFolder> = emptyList(),
     /** The computer answered on this link (not only a saved list). */

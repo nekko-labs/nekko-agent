@@ -99,7 +99,7 @@ class ChatListLayoutTest {
     }
 
     @Test fun `saved views keep what is still valid`() {
-        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.DATE, showPreviews = false)
+        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.DATE, showSubagents = false)
         assertEquals(v, ChatListView.parse(v.encoded()))
         val partial = ChatListView.parse("""{"groupBy":"status","sortBy":"created","showCompleted":false}""")
         assertEquals(ChatListView.GroupBy.STATUS, partial.groupBy)
@@ -188,5 +188,16 @@ class ChatListLayoutTest {
         assertEquals("the phone's colour is never a computer's", 0x5b8defL, ComputerColors.computer(5))
         assertTrue(ChatPlace.isPhoneChat("phone:abc"))
         assertFalse(ChatPlace.isPhoneChat("abc"))
+    }
+
+    @Test fun `sub-agents sit under their parent, oldest first, completed ones left out`() {
+        val raw = Json.parseToJsonElement(
+            """[{"id":"p","title":"Ship it","updatedAt":9},
+               {"id":"k2","title":"Write the notes","updatedAt":8,"createdAt":5,"parentSessionId":"p","modelId":"gpt-5-mini"},
+               {"id":"k1","title":"Run the tests","updatedAt":3,"createdAt":2,"parentSessionId":"p","modelId":"claude-haiku-5-5"},
+               {"id":"k0","title":"Old one","updatedAt":1,"parentSessionId":"p","archivedAt":4}]""",
+        )
+        assertEquals(listOf("p"), SessionSummary.visible(raw).map { it.id })
+        assertEquals(mapOf("p" to listOf("k1", "k2")), SessionSummary.subagents(raw).mapValues { (_, v) -> v.map { it.id } })
     }
 }

@@ -378,6 +378,8 @@ data class SessionSummary(
     val running: Boolean = false,
     /** What the chat's latest telling tool call says it is doing (`phase`: building, verifying, shipping…). */
     val phase: String? = null,
+    /** When it was made (ms), when the computer says; orders a chat's sub-agents oldest first. */
+    val createdAt: Long? = null,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -410,6 +412,7 @@ data class SessionSummary(
                 exchangeCount = o.long("exchangeCount")?.takeIf { it >= 0 },
                 running = o["activeRun"].let { it != null && it !is JsonNull },
                 phase = o.str("phase"),
+                createdAt = o.long("createdAt"),
                 contextUsed = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
                 contextWindow = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )
@@ -422,6 +425,16 @@ data class SessionSummary(
         /** Every top-level chat, completed ones included, newest first. */
         fun visible(list: JsonElement?): List<SessionSummary> =
             list.arr()?.mapNotNull { from(it) }?.filter { it.isVisible }?.sortedByDescending { it.updatedAt } ?: emptyList()
+
+        /**
+         * The sub-agents each chat spawned and hasn't completed, oldest first, by their parent's id:
+         * the rows under a chat in the list (#2509, the iPhone's `subagents`, the desktop sidebar's
+         * `childrenOf`). From the same `sessions:summaries` answer [visible] reads.
+         */
+        fun subagents(list: JsonElement?): Map<String, List<SessionSummary>> =
+            list.arr()?.mapNotNull { from(it) }?.filter { !it.archived && it.parentSessionId != null }
+                ?.groupBy { it.parentSessionId!! }
+                ?.mapValues { (_, kids) -> kids.sortedBy { it.createdAt ?: it.updatedAt } } ?: emptyMap()
     }
 }
 

@@ -8,7 +8,9 @@ class CardDetailsTest {
     @Test fun preferencesMigrateAndRoundTrip() {
         val old = ChatListView.parse("""{"showEmptyGroups":true,"showPreviews":false}""")
         assertTrue(old.showEmptyGroups)
-        assertFalse(old.showPreviews)
+        // #2509: previews are gone; a saved choice is ignored, and sub-agents show by default.
+        assertTrue(old.showSubagents)
+        assertEquals(old.copy(showEmptyGroups = false), ChatListView.STANDARD)
         assertTrue(old.showModel && old.showContext && old.showPullRequests && old.showUpdated)
         val hidden = ChatListView.STANDARD.copy(showModel = false, showContext = false, showPullRequests = false, showUpdated = false)
         assertEquals(hidden, ChatListView.parse(hidden.encoded()))
