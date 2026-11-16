@@ -9,7 +9,7 @@ Tracks [#2249](https://github.com/nekko-labs/nekko-agent/issues/2249).
 
 ## Intent and scope
 
-The last new-user onboarding step, after pairing, walks through each system permission in a guided, themed checklist. The same page is available from **Settings → Device access → Permissions**, without interrupting existing users after an upgrade. The user chose a checklist only, no video. Nekko sits beside the title and reacts: she blinks while waiting, cheers when a row is allowed and looks startled at a denial. Her expression is decoration, never proof that access has been granted.
+The last new-user onboarding step, after pairing, walks through each system permission in a guided, themed checklist. The same page is available from **Settings → Device access → Permissions**, without interrupting existing users after an upgrade. The user chose a checklist only, no video. Nekko sits beside the title and reacts: he blinks while waiting, cheers when a row is allowed and looks startled at a denial. His expression is decoration, never proof that access has been granted.
 
 ## Guided flow
 

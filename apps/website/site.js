@@ -562,7 +562,7 @@
   document.addEventListener('click', (e) => { if (!nav.contains(e.target)) set(false); });
 })();
 
-// ---- beta sign-up, hosted by Nekko: she peeks over the card and reacts.
+// ---- beta sign-up, hosted by Nekko: he peeks over the card and reacts.
 //      idle: blinks now and then · watching: eyes follow the typing ·
 //      eager: happy eyes over the button · confused: a bad email ·
 //      celebrate: hop and sparkles once signed up ----
@@ -1125,11 +1125,11 @@
 })();
 
 // ---- why Nekko: Nekko peeks over the pillar demos. One Nekko for the whole
-//      tour: her drawing is cloned from the beta card's peek so the two stay
-//      identical. She blinks now and then; when the active pillar changes she
+//      tour: his drawing is cloned from the beta card's peek so the two stay
+//      identical. He blinks now and then; when the active pillar changes he
 //      blinks once and glances toward the list (left, or down when the demo is
-//      stacked above it). Under reduced motion she stays still. Only her eyes
-//      change: the frame and the videos around her are never touched. ----
+//      stacked above it). Under reduced motion he stays still. Only his eyes
+//      change: the frame and the videos around him are never touched. ----
 (() => {
   const host = document.querySelector('[data-pillar-peek]');
   const art = document.querySelector('[data-beta] .nekko-peek-svg');

@@ -5113,3 +5113,14 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
   .permissions-menu, .permission-detail, .permission-mark, .permission-choice[aria-checked='true'] .permission-glyph, .permission-choice[aria-checked='true'] .permission-check { animation: none; }
   .permission-choice:active:not(:disabled), .permission-info:active { transform: none; }
 }
+
+/* Nekko in every dark theme (spec/brand/colour-palette.md, "Nekko, the mascot"):
+   the peeking Nekko takes the reference colours instead of the theme's panel
+   and text colours. Light themes leave these unset, so he keeps following the
+   theme there. The fixed pixel head (Mascot.tsx) already uses these values. */
+[data-theme='dark'] {
+  --nekko-face: #16161c;
+  --nekko-line: #f3e8ee;
+  --nekko-eyes: #ffffff;
+  --nekko-mouth: #854f6c;
+}

@@ -1204,11 +1204,15 @@ html { -webkit-tap-highlight-color: transparent; }
   --grad-fun: linear-gradient(100deg, #190019 0%, #3a1438 100%); --btn-ink: #ffffff;
 }
 :root[data-theme='white'] { --ink: #000000; }
+/* Nekko, White look: a white cat with a black line and eyes. */
+:root[data-theme='white'] { --mascot-face: #ffffff; --mascot-line: #190019; --mascot-eyes: #190019; }
+:root[data-theme='white'] .nekko-peek { --peek-face: #ffffff; --peek-line: #190019; --peek-eyes: #190019; }
 :root[data-theme='dark'] {
   --bg: #0c0c11; --bg-2: #16161c; --ink: #ffffff; --muted: #a3a1b0;
   --line: #26262f; --accent: #c99bb3; --accent-2: #c99bb3;
   --sticker: #854f6c; --peach-soft: #190019;
-  --mascot-line: #854f6c; --mascot-eyes: #854f6c;
+  /* Nekko, Dark look: matches the peeking Nekko (black face, pale line, white eyes). */
+  --mascot-face: #16161c; --mascot-line: #f3e8ee; --mascot-eyes: #ffffff;
   --grad-text: linear-gradient(110deg, #854f6c 0%, #e6d0dc 100%);
 }
 :root[data-theme='dark'] body {
@@ -1274,9 +1278,9 @@ video { filter: brightness(1.0001); }
 .pillar-tour.is-timed .pillar-item.is-active .pillar-line { display: block; }
 .pillar-stage { display: flex; flex-direction: column; }
 /* Nekko peeks over the top-right corner of the demo box, paws on its edge, like
-   over the beta card. She sits on .pillar-frame (outside .pillar-media, which
-   clips), and the frame keeps her headroom whether or not she has loaded, so
-   nothing moves when she appears. Her drawing, colours, moods and the phone
+   over the beta card. He sits on .pillar-frame (outside .pillar-media, which
+   clips), and the frame keeps his headroom whether or not he has loaded, so
+   nothing moves when he appears. His drawing, colours, moods and the phone
    size are the beta peek's (.nekko-peek). */
 .pillar-frame { position: relative; padding-top: 80px; }
 .pillar-peek { top: -2px; }

@@ -31,8 +31,8 @@ describe('Pixel Nekko', () => {
     expect(markup).toContain('viewBox="0 0 32 32"');
     expect(markup).toContain('shape-rendering="crispEdges"');
     expect(markup).toContain('focusable="false"');
-    expect(markup).toContain('fill="#190019"');
-    expect(markup).toContain('stroke="#ffffff"');
+    expect(markup).toContain('fill="#16161c"');
+    expect(markup).toContain('stroke="#f3e8ee"');
   });
 
   it('shares the head and all eye frames across desktop surfaces without spy accessories', () => {
