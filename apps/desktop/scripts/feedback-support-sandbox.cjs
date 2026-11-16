@@ -45,7 +45,7 @@ app.whenReady().then(async () => {
       await check('narrow viewport does not overflow', 'document.documentElement.scrollWidth <= innerWidth');
       win.setContentSize(1280, 900); await sleep(250);
       await run("document.querySelector('[data-testid=support-star-action]').click()"); await sleep(80);
-      await check('explicit click writes exactly once and confirms selected state', "window.starWrites===1 && document.querySelector('[data-testid=support-star-action]').getAttribute('aria-pressed')==='true'");
+      await check('explicit click writes exactly once and thanks without a button', "window.starWrites===1 && !document.querySelector('[data-testid=support-star-action]') && document.querySelector('[data-testid=github-star-support]').textContent.includes('Thanks for the Star!')");
       await check('first star celebrates', "!!document.querySelector('.support-star-celebrate')");
       fs.mkdirSync(path.join(out,'motion'),{recursive:true});
       for(let i=0;i<18;i++){fs.writeFileSync(path.join(out,'motion',String(i).padStart(3,'0')+'.png'),(await win.capturePage(undefined,{stayHidden:true})).toPNG());await sleep(65);}
@@ -53,7 +53,7 @@ app.whenReady().then(async () => {
       await check('animation ends', "!document.querySelector('.support-star-celebrate')");
       await run("window.dispatchEvent(new Event('nekko:feedback'))"); await sleep(100);
       await run("document.querySelector('[data-testid=feedback-kind-good]').click()"); await sleep(180);
-      await check('feedback shares confirmed star without replay', "document.querySelector('[role=dialog] [data-testid=support-star-action]').getAttribute('aria-pressed')==='true' && !document.querySelector('.support-star-celebrate') && window.starWrites===1");
+      await check('feedback shares confirmed star without replay', "document.querySelector('[role=dialog] [data-testid=github-star-support]').textContent.includes('Thanks for the Star!') && !document.querySelector('[role=dialog] [data-testid=support-star-action]') && !document.querySelector('.support-star-celebrate') && window.starWrites===1");
       await shot('feedback-starred');
       const fill = async (selector,value) => run("(()=>{const e=document.querySelector("+js(selector)+"); const proto=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto,'value').set.call(e,"+js(value)+");e.dispatchEvent(new Event('input',{bubbles:true}));})()");
       await fill('#feedback-summary','A thoughtful little helper'); await fill('#feedback-description','The project makes local work easier.');
@@ -69,9 +69,9 @@ app.whenReady().then(async () => {
       await shot('feedback-success');
       await run("document.querySelector('[aria-label=Close]').click()"); await sleep(80);
       await run("window.starState={state:'unavailable',reason:'Connect your GitHub account in Connectors to check or add a star here.'};window.dispatchEvent(new Event('focus'))"); await sleep(120);
-      await check('unknown status is not selected', "document.querySelector('[data-testid=support-star-action]').getAttribute('aria-pressed')==='false'");
+      await check('unknown status still offers GitHub', "document.querySelector('[data-testid=support-star-action]').textContent==='Open GitHub'");
       await run("document.querySelector('[data-testid=support-star-action]').click()"); await sleep(80);
-      await check('browser fallback does not claim success', "window.openedUrl==='https://github.com/nekko-labs/nekko-agent' && window.starWrites===1 && document.querySelector('[data-testid=support-star-action]').getAttribute('aria-pressed')==='false'");
+      await check('browser fallback does not claim success', "window.openedUrl==='https://github.com/nekko-labs/nekko-agent' && window.starWrites===1 && !!document.querySelector('[data-testid=support-star-action]')");
       await shot('settings-unavailable');
       await win.webContents.debugger.attach('1.3');
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
