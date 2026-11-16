@@ -38,7 +38,8 @@ Full workspace typecheck/build and all 1362 desktop tests pass. Native fixture c
 
 A settled chat with an open PR offers **Watch CI and merge when passing** below
 reply status. Choose it to request a normal agent continuation that verifies the
-PR and arms a durable watch while waiting. **Skip** dismisses that reply's offer
-without starting background work. A registered watcher shows its PR and wake
+PR and arms a durable watch while waiting. **Skip** dismisses the offer without
+starting background work. Either answer is remembered for that PR in that chat,
+so later replies and watcher wake-ups don't ask again. A registered watcher shows its PR and wake
 deadline in chat; detailed watcher history remains in the transcript. This does
 not bypass review requirements, approvals, draft blockers or merge protections.
