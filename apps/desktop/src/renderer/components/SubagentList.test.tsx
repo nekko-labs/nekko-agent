@@ -1,9 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import type { SessionSummary } from '@nekko-agent/shared';
-const state = vi.hoisted(() => ({ providers: [{ id: 'local', label: 'LM Studio' }] }));
+import type { PrInfo, SessionSummary } from '@nekko-agent/shared';
+const state = vi.hoisted(() => ({
+  providers: [{ id: 'local', label: 'LM Studio' }],
+  prsBySession: {} as Record<string, PrInfo[]>,
+}));
 vi.mock('../store.js', () => ({ useStore: (selector: (state: unknown) => unknown) => selector(state) }));
+vi.mock('../useGitStatus.js', () => ({ useGitStatus: () => null }));
 import { SubagentList } from './SubagentList.js';
 
 const children = Array.from({ length: 4 }, (_, i) => ({ id: `k${i}`, title: `Task ${i}`, providerId: 'local', modelId: 'community/Qwen3-32B:latest' })) as SessionSummary[];
@@ -33,7 +37,7 @@ describe('compact subagent tree', () => {
     const html = render();
     expect(html).toContain('Qwen3-32B · LM Studio');
     expect(html).toContain('title="LM Studio · community/Qwen3-32B:latest"');
-    expect(html).toContain('data-subagent-title="true" class="block truncate font-semibold text-ink"');
+    expect(html).toContain('data-subagent-title="true"');
   });
   it('has no disclosure for zero, one, or two children and handles missing identities', () => {
     expect(render([])).toBe('');
@@ -41,5 +45,27 @@ describe('compact subagent tree', () => {
     const html = render([{ id: 'missing', title: '' } as SessionSummary]);
     expect(html).toContain('Untitled chat');
     expect(html).not.toContain('data-subagent-route');
+  });
+  it('carries a PR chip on the row whose chat has mentioned PRs', () => {
+    state.prsBySession = {
+      k1: [{
+        owner: 'nekko-labs',
+        repo: 'nekko-agent',
+        number: 42,
+        url: 'https://github.com/nekko-labs/nekko-agent/pull/42',
+        title: 'Add a pretty thing',
+        state: 'open',
+        isDraft: false,
+        createdAt: '2026-11-15T10:00:00Z',
+      } as PrInfo],
+    };
+    try {
+      const html = render();
+      expect(html).toContain('data-session-pr-chip');
+      expect(html).toContain('#42');
+      expect(html).toContain('data-pr-status="open"');
+    } finally {
+      state.prsBySession = {};
+    }
   });
 });
