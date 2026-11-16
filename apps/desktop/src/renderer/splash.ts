@@ -10,8 +10,9 @@
  * Everything is drawn in one full-window SVG on a 120 BPM beat (B = 500ms),
  * animating only transform and opacity.
  *
- * A reload is not a launch: it gets a quiet cover in the app's own background
- * colour instead, so it never lights up a dark screen (`playReloadCover`).
+ * The app no longer plays it: both a launch and a reload get a quiet cover in
+ * the app's own background colour (`playReloadCover`), so neither lights up a
+ * dark screen or leaves a theme-coloured frame over the app.
  */
 import { BRAND_HEAD } from './components/BrandMark.js';
 import { CHUNKY_CELLS, CHUNKY_SIZE, FINE_PATH, MID_PATH } from './splashCells.js';
@@ -109,10 +110,6 @@ function logoPlacement(W: number, H: number) {
 const idle = (timeout: number) => new Promise<void>((r) => (window.requestIdleCallback ? window.requestIdleCallback(() => r(), { timeout }) : setTimeout(r, 200)));
 /** `ready` and a quiet moment after it, or 6 seconds, whichever comes first. */
 const settled = (ready: Promise<unknown>, quiet: number) => Promise.race([ready.then(() => idle(quiet)), new Promise((r) => setTimeout(r, 6000))]);
-
-/** Whether this page load came from a reload rather than a launch. */
-export const pageWasReloaded = () =>
-  (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload';
 
 /** A solid cover in the app's own background, with a faint logo so a slow load doesn't read as a hang. */
 function reloadCover(): HTMLDivElement {
