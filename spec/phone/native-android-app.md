@@ -145,5 +145,6 @@ The iPhone's plan sheet (PlanSheet.swift, the desktop's `PlanSheet.tsx`) on Andr
   4. the prompt and its photos go through the outbox, which sends at once while the computer answers;
   5. the chat opens.
   A failure keeps the prompt and photos in the box, with the reason.
-- **Not yet:** the mic. New chat has no dictation on Android yet; the chat's own box keeps it. Offline New chat is unchanged (its first message waits in the outbox).
+- **The mic:** **+ → Dictate**, as in a chat, when dictation is on (Settings → Dictation); the words are typed into the box. It needs the computer connected.
+- **Not yet:** videos in New chat. The **+** menu reads *Photos and videos*, as in a chat, but New chat's picker takes photos only: a clip goes to a chat that already exists. Offline New chat is unchanged (its first message waits in the outbox).
 

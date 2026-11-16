@@ -925,7 +925,7 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
  * tapped (Android shows its own prompt), then starts or stops dictation.
  */
 @Composable
-private fun rememberMic(
+internal fun rememberMic(
     d: DictationController?,
     updates: kotlinx.coroutines.flow.Flow<*>? = null,
     /** Routes the words through the chat's voice commands ("Nekko, send"); else they are typed. */

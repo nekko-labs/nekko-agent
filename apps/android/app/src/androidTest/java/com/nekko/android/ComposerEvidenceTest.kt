@@ -125,14 +125,22 @@ class ComposerEvidenceTest {
         if (before) return
         val repo = repo()
         var created: String? = null
+        // Dictation on (Settings → Dictation): the mic is in New chat's box too.
+        prefs.set(com.nekko.android.voice.Dictation.ENABLED, true)
         compose.setContent {
             NekkoTheme(dark = false) {
-                CompositionLocalProvider(LocalAppLock provides appLock, LocalSimple provides rememberSimpleView(prefs)) {
+                CompositionLocalProvider(LocalAppLock provides appLock, LocalSimple provides rememberSimpleView(prefs), com.nekko.android.ui.security.LocalPhonePrefs provides prefs) {
                     NewChatScreen(repo, onBack = {}, onPair = {}, onCreated = { created = it })
                 }
             }
         }
         compose.waitUntil(10_000) { compose.onAllNodes(androidx.compose.ui.test.hasText("Text model"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        // As in a chat, the mic is + → Dictate (the stop button shows while it listens).
+        compose.onNode(androidx.compose.ui.test.hasContentDescription("Add")).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(androidx.compose.ui.test.hasText("Dictate")).fetchSemanticsNodes().isNotEmpty() }
+        shot("new-chat-plus")
+        InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+        compose.waitUntil(5_000) { compose.onAllNodes(androidx.compose.ui.test.hasText("Dictate")).fetchSemanticsNodes().isEmpty() }
         compose.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("Tidy the settings page")
         compose.onNodeWithTag("newChat.folder").performClick()
         compose.onNodeWithTag("newChat.folder.app").performClick()

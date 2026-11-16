@@ -52,6 +52,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -386,6 +387,7 @@ fun NewChatScreen(
                     }
                     !online -> OfflineNewChat(repo, active.name, phonePick, c.workspaces, shared, onQueued)
                     else -> NewChatComposer(
+                        repo = repo,
                         computer = active.name,
                         shared = shared,
                         blocked = if (pick == null) stringResource(R.string.chats_pick_model) else null,
@@ -750,6 +752,7 @@ private fun OfflineNewChat(
  */
 @Composable
 private fun NewChatComposer(
+    repo: ComputersRepository,
     computer: String,
     shared: String?,
     blocked: String?,
@@ -793,6 +796,26 @@ private fun NewChatComposer(
             }
         }
     }
+    // The mic, as in a chat (Settings → Dictation): the words are typed into the box.
+    val prefs = com.nekko.android.ui.security.LocalPhonePrefs.current
+    val dictationOn = prefs?.flow(com.nekko.android.voice.Dictation.ENABLED)?.collectAsStateWithLifecycle()?.value == true
+    val dictation = remember(prefs) {
+        prefs?.let { pr ->
+            com.nekko.android.voice.DictationController(
+                scope = scope,
+                caller = repo.caller,
+                hardware = com.nekko.android.voice.AndroidMic(context),
+                settings = { pr.get(com.nekko.android.voice.Dictation.ENGINE) to pr.get(com.nekko.android.voice.Dictation.LANGUAGE) },
+                computer = {
+                    val st = repo.state.value
+                    com.nekko.android.voice.DictationController.computerVoice(repo.caller, st.conn == RelayState.ONLINE, st.pcSettings.voiceEnabled)
+                },
+                computerName = { repo.state.value.active?.name ?: computer },
+            )
+        }
+    }
+    DisposableEffect(dictation) { onDispose { dictation?.cancel() } }
+    val mic = rememberMic(dictation.takeIf { dictationOn }, repo.state) { repo.state.value.conn == RelayState.ONLINE }
     val attach = com.nekko.android.ui.chat.AttachUi(
         state = photoState,
         onPickFiles = {
@@ -817,6 +840,7 @@ private fun NewChatComposer(
             onStop = {},
             initialText = shared,
             attach = attach,
+            mic = mic,
             leading = {
                 if (workspaces.isNotEmpty()) NewChatFolderChip(workspaces, workspaceId, onWorkspace)
                 if (!simple.expert && simple.shown("asks")) com.nekko.android.ui.chat.ComposerAsksIcon(mode, enabled = true, onClick = onMode)
