@@ -4294,8 +4294,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .greeting-nekko-slot { position: relative; display: block; flex: 0 0 64px; width: 64px; height: 60px; pointer-events: none; }
 /* The paws straddle viewBox y=25 at the border, 18px below the greeting. */
 .greeting-nekko { position: absolute; z-index: 3; left: -18px; top: 14.5px; display: block; width: 80px; height: 75px; pointer-events: none; }
-.clean-start-greeting h2 { display: flex; align-items: center; width: 300px; min-height: 60px; font-size: var(--text-xl); font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
-@media (max-width: 600px) { .clean-start-greeting { gap: 12px; } .clean-start-greeting h2 { width: 230px; max-width: calc(100vw - 130px); } }
+.clean-start-greeting h2 { display: flex; align-items: center; min-width: 300px; width: max-content; max-width: 100%; min-height: 60px; white-space: nowrap; font-size: var(--text-xl); font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+@media (max-width: 600px) { .clean-start-greeting { gap: 12px; } .clean-start-greeting h2 { width: 230px; min-width: 0; max-width: calc(100vw - 130px); white-space: normal; } }
 .clean-start-greeting p { margin-top: 4px; font-size: var(--text-sm); color: var(--ink-faint); }
 /* Solid, readable controls above the decorative field. Never dim their text. */
 [data-clean-start] .clean-start-model { max-width: 100%; color: var(--ink); }
