@@ -18,7 +18,7 @@ Denied access can be restored in system Settings. If Settings opens its home pag
 
 If your computer is reconnecting, you can still submit an answer or a one-time **Allow** or **Deny** response inside its chat. It appears as a pending response message with its request identifier and stays on your phone when you leave the chat or restart the app.
 
-The phone tries again when connected, but only while the exact original question or tool call is still pending on that computer. **Retry** tries delivery again; **Cancel** removes an unsent response and lets you answer the original request again if it is still waiting. A response already sending cannot be recalled. After confirmation it reads **Sent**.
+The phone tries again when connected, but only while the exact original question or tool call is still pending on that computer. **Retry** tries delivery again; **Cancel** removes an unsent response and lets you answer the original request again if it is still waiting. A response already sending cannot be recalled. After confirmation it reads **Sent** (on Android the message then leaves the message box; the chat shows the result).
 
 If the request changed or was answered elsewhere, the message says **No longer pending** instead of applying your answer to a different action. If the connection dropped after the computer accepted it, the phone may not be able to confirm delivery; a missing request is not treated as proof that this phone sent it. **Always allow this tool** changes, voice actions, and responses from Monitors still need a live connection.
 

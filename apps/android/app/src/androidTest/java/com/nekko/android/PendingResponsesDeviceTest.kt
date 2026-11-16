@@ -47,7 +47,7 @@ import org.junit.runner.RunWith
 /**
  * #2497: Allow tapped while the computer is away stays in the chat as a message, *Pending ·
  * sends when connected*, with Retry and Cancel; back online it goes once, after `chat:pending`
- * shows the same approval still waiting, and reads *Sent*. Run with `-e nekkoRevision before`
+ * shows the same approval still waiting; once sent it leaves the composer. Run with `-e nekkoRevision before`
  * on main for the comparison (no assertions there). Screenshots under `evidence/`.
  */
 @RunWith(AndroidJUnit4::class)
@@ -87,14 +87,14 @@ class PendingResponsesDeviceTest {
         computer.goOnline()
         if (after) {
             compose.waitUntil(15_000) { computer.approved.isNotEmpty() }
-            compose.waitUntil(5_000) { compose.onAllNodes(hasText("Sent")).fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("chat.response")).fetchSemanticsNodes().isEmpty() }
             assertEquals(listOf("call-1"), computer.approved)
         }
         settle()
         shot("3-back-online")
     }
 
-    /** Online, Allow goes at once and reads Sent: the card leaving must not cut the send short (LiveRelayTest's Deny). */
+    /** Online, Allow goes at once and leaves no message behind: the card leaving must not cut the send short (LiveRelayTest's Deny). */
     @Test fun allowTappedOnlineIsSentAtOnce() {
         val repo = repo()
         val vm = ChatViewModel("s1", repo, null, null)
@@ -103,7 +103,7 @@ class PendingResponsesDeviceTest {
         compose.onNode(hasText("Allow")).performClick()
         if (after) {
             compose.waitUntil(10_000) { computer.approved.isNotEmpty() }
-            compose.waitUntil(5_000) { compose.onAllNodes(hasText("Sent")).fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("chat.response")).fetchSemanticsNodes().isEmpty() }
             assertEquals(listOf("call-1"), computer.approved)
         }
     }

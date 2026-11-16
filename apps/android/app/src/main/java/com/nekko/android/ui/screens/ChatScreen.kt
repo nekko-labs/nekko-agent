@@ -715,7 +715,9 @@ private fun ChatScreenContent(
             val controls: @Composable () -> Unit = {
                 // Answers and approvals kept until the computer takes them (#2497); their cards step aside meanwhile.
                 val responses by vm.responses.collectAsStateWithLifecycle()
-                responses.forEach { m ->
+                // Only what hasn't gone yet: a sent one leaves (the chat shows what came of it), so it
+                // never crowds out the next card's buttons.
+                responses.filter { it.unsent }.forEach { m ->
                     com.nekko.android.ui.chat.ResponseMessageRow(m, onRetry = { vm.retryResponse(m.id) }, onCancel = { vm.cancelResponse(m.id) })
                 }
                 val allowWords = stringResource(R.string.response_allow)
