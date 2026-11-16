@@ -168,6 +168,16 @@ class ComputersRepository(
         now = now,
     )
 
+    /**
+     * Answers and one-time approvals written while the computer was away, bound to the request
+     * they answer and sent only if it still waits unchanged (decision 0081, #2497).
+     */
+    val responses = PendingResponses(
+        files = offlineFiles,
+        connection = { client.takeIf { _state.value.conn == RelayState.ONLINE } },
+        newId = newId,
+    )
+
     init {
         // A chat started offline now exists, and a delivered prompt changed its chat: read the list again.
         outbox.onDelivered = { _, _ -> scheduleSummaries() }
@@ -439,6 +449,7 @@ class ComputersRepository(
             if (_state.value.activeId == id) {
                 drafts.load(null)
                 outbox.load(null)
+                responses.load(null)
                 transcripts.load(null)
             }
             offlineFiles?.remove(id)
@@ -474,6 +485,7 @@ class ComputersRepository(
         if (drafts.computerId != id) {
             drafts.load(id)
             outbox.load(id)
+            responses.load(id)
         }
         if (transcripts.computerId != id) transcripts.load(id)
         if (loggedComputer != id) {
@@ -539,7 +551,9 @@ class ComputersRepository(
                     logStatus(s.state, s.detail, s.denied)
                     if (s.state == RelayState.ONLINE) scope.launch {
                         refresh()
-                        // Back in reach: what was written offline goes now, in order.
+                        // Back in reach: answers and approvals first (each checked against what still
+                        // waits), then what was written offline, in order.
+                        responses.flush()
                         outbox.flush()
                     }
                 }

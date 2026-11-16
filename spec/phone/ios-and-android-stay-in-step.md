@@ -50,9 +50,9 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Built 2026-11-09 ([#2423](https://github.com/nekko-labs/nekko-agent/issues/2423)): inline card, link to the repository only, verified in Native iOS CI, not on a device | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | Both: the native store rating request once on the App Store and Google Play (planned). |
 | Open your own computer from an organization's list with no pairing ([spec](../platform/organizations.md), desktop since #2806) | Separate issue #2804 | Protocol layer only (`FleetLink`, unit-tested); no Cloud sign-in, keyring unlock or org list in the app | [#2835](https://github.com/nekko-labs/nekko-agent/issues/2835) |
 
-## Pending response messages (#2476, not shipped)
+## Pending response messages (#2476, #2497)
 
-The lower stack layer implements iOS pending in-chat answers and one-time Allow/Deny messages. Android parity is tracked in [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) and the upper stack layer. Neither branch implementation nor an uninspected capture is release verification.
+Both phones keep in-chat answers and one-time Allow/Deny as pending response messages: the iPhone since #2499 (2026-11-13), Android since [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) (2026-11-16, JVM-tested and emulator-verified, not on a physical phone).
 
 ## Direct cloud text chats (#2414, not shipped)
 
@@ -85,7 +85,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
-| Answers and approvals written offline kept as pending response messages, sent only to the same still-pending request, with Retry and Cancel (iPhone #2499, 2026-11-13) | Not implemented on Android | [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) |
 | Add a model provider in one tap: OpenRouter sign-in, a guided key for the rest, a wrong key refused at setup (iPhone #2853, #2855, 2026-11-16) | Provider form only | [#2852](https://github.com/nekko-labs/nekko-agent/issues/2852) |
 | CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | No Android Auto app | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 

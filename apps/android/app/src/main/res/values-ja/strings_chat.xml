@@ -330,4 +330,16 @@
     <string name="plan_subagent">サブエージェント</string>
     <string name="plan_subagents">サブエージェント</string>
     <string name="plan_subagents_label">サブエージェント：実行中 %1$d、完了 %2$d</string>
+    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
+    <string name="response_waiting">保留中 · 接続したら送信</string>
+    <string name="response_sending">送信中…</string>
+    <string name="response_sent">送信済み</string>
+    <string name="response_stale">保留中ではなくなりました</string>
+    <string name="response_failed">返信を送信できませんでした</string>
+    <string name="response_stale_detail">元のリクエストは保留中ではなくなりました。</string>
+    <string name="response_request_id">リクエスト ID: %1$s</string>
+    <string name="response_retry">再試行</string>
+    <string name="response_cancel">キャンセル</string>
+    <string name="response_allow">%1$s を許可</string>
+    <string name="response_deny">%1$s を拒否</string>
 </resources>

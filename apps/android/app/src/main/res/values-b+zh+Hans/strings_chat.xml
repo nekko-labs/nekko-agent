@@ -330,4 +330,16 @@
     <string name="plan_subagent">子智能体</string>
     <string name="plan_subagents">子智能体</string>
     <string name="plan_subagents_label">子智能体：%1$d 个运行中，%2$d 个已完成</string>
+    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
+    <string name="response_waiting">待发送 · 连接后发送</string>
+    <string name="response_sending">正在发送…</string>
+    <string name="response_sent">已发送</string>
+    <string name="response_stale">已不再等待</string>
+    <string name="response_failed">无法发送回复</string>
+    <string name="response_stale_detail">原始请求已不再等待。</string>
+    <string name="response_request_id">请求标识：%1$s</string>
+    <string name="response_retry">重试</string>
+    <string name="response_cancel">取消</string>
+    <string name="response_allow">允许 %1$s</string>
+    <string name="response_deny">拒绝 %1$s</string>
 </resources>

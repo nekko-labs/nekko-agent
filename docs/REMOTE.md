@@ -14,7 +14,7 @@ After pairing your first computer, the permissions checklist explains what Nekko
 
 Denied access can be restored in system Settings. If Settings opens its home page, find Nekko Agent there (under **Apps** on newer iOS versions). Device restrictions or missing hardware may prevent a feature. Photo and file pickers need no blanket library or storage permission. Allowing microphone or speech access here does not start recording. You can revisit the checklist at any time.
 
-## Pending answers and approvals on iPhone
+## Pending answers and approvals on iPhone and Android
 
 If your computer is reconnecting, you can still submit an answer or a one-time **Allow** or **Deny** response inside its chat. It appears as a pending response message with its request identifier and stays on your phone when you leave the chat or restart the app.
 
