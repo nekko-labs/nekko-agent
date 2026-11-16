@@ -39,6 +39,7 @@ class NekkoApp : Application() {
 
     lateinit var phoneChats: com.nekko.android.phone.PhoneChats
     lateinit var connectors: com.nekko.android.data.Connectors
+    lateinit var pullRequests: com.nekko.android.data.PullRequests
         private set
     lateinit var computers: ComputersRepository
         private set
@@ -82,6 +83,7 @@ class NekkoApp : Application() {
         phoneChats = com.nekko.android.phone.PhoneChats(AndroidSecureStore(this), com.nekko.android.phone.DirectPhoneHTTP(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
         // This phone's own connectors (#2109): tokens sealed here, sent only to their service.
         connectors = com.nekko.android.data.Connectors(AndroidSecureStore(this), com.nekko.android.data.DirectConnectorHTTP())
+        pullRequests = com.nekko.android.data.PullRequests(connectors, AndroidSecureStore(this))
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
         // Notify me about: each kind starts as the old single switch was.

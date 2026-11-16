@@ -194,6 +194,8 @@ fun ChatsScreen(
     onPair: () -> Unit,
     onComputers: () -> Unit,
     onSettings: () -> Unit,
+    /** The phone's own git provider's pull requests (#2109). */
+    onPullRequests: () -> Unit = {},
     /** The Monitors row at the bottom of the list (the computer's hardware, running chats, what needs you). */
     onMonitors: (() -> Unit)? = null,
     /** Set when the list is one of an open folding phone's two panes: its header actions. */
@@ -472,6 +474,7 @@ fun ChatsScreen(
                                 s, all, exits, compact = pane != null,
                                 onSearch = { searching = true },
                                 onComputers = onComputers,
+                                onPullRequests = onPullRequests,
                                 onFilter = { id ->
                                     setFilter(id.orEmpty())
                                     // A computer picked: it becomes the active one too, as on the iPhone.
@@ -688,6 +691,7 @@ private fun ComputerPill(
     compact: Boolean,
     onSearch: () -> Unit,
     onComputers: () -> Unit,
+    onPullRequests: () -> Unit,
     /** A place id to show only it, or null for every place. */
     onFilter: (String?) -> Unit,
 ) {
@@ -784,6 +788,12 @@ private fun ComputerPill(
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 onClick = { close(); onSearch() },
                 modifier = Modifier.testTag("chats.menu.search"),
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.prs_menu)) },
+                leadingIcon = { Icon(androidx.compose.ui.res.painterResource(R.drawable.connector_github), contentDescription = null, modifier = Modifier.size(20.dp), tint = androidx.compose.material3.LocalContentColor.current) },
+                onClick = { close(); onPullRequests() },
+                modifier = Modifier.testTag("chats.menu.pullRequests"),
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.chats_computers)) },

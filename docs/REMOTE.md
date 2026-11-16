@@ -257,7 +257,12 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Connectors** (Android): the same page under **Settings → Connectors**, with the same services and
 > logos. Each token is sealed on the phone by its keystore and goes only to its own service over
 > https. With more than one git provider connected, **Pull requests from** picks the one Pull
-> requests will list (that screen comes next on Android).
+> requests lists.
+>
+> **Pull requests** (Android): in the chat list's menu, as on the iPhone: **Mine** and **Projects**,
+> filters, **Add a repository**, and the same one-tap prompts. A prompt opens New chat on the
+> computer whose folder holds the repository, with the words filled in; nothing is sent until
+> **Start**.
 >
 > **Pull requests** (iPhone): in the chat list's menu. **Mine** lists the open pull requests to
 > review, opened by you and assigned to you on the selected git provider; **Projects** lists the
