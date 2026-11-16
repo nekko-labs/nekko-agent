@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CatalogModel, EngineMemory, EngineSettings, LoadingModel, ResidentModel } from '@nekko-agent/shared';
+import type { CatalogModel, EngineMemory, EngineSettings, ImageRecommendedOption, LoadingModel, Recommendations, ResidentModel } from '@nekko-agent/shared';
 import { ModelLibrary } from './ModelLibrary.js';
 import { ResidentModels } from './ResidentModels.js';
 import { ModelDetail } from './ModelDetail.js';
-import { RecommendedModels } from './RecommendedModels.js';
+import { RecommendedModels, imageFitText } from './RecommendedModels.js';
 import { CheckIcon } from '../../icons.js';
-import { familyKind, groupModelFamilies, gpuGuidance, type FamilyKind, type LibraryModel } from './modelFamilies.js';
+import { familyKind, groupModelFamilies, gpuGuidance, setUpPictureModels, shelveCatalog, type FamilyKind, type LibraryModel, type ModelFamily } from './modelFamilies.js';
 import { VoiceSettings } from '../VoiceSettings.js';
 
 /**
@@ -21,6 +21,11 @@ import { VoiceSettings } from '../VoiceSettings.js';
  * "unload" belongs to what is in memory, "load" to what is on disk, and
  * "download" to what is not — but they share the query, the empty states, and
  * the size/fit vocabulary.
+ *
+ * Picture and video models are held to a shorter list than chat ones. A chat
+ * GGUF is one file that starts; a picture model also needs a text encoder and
+ * a VAE, so only the ones Nekko has set up are listed, and what else a search
+ * finds from known publishers waits behind "Show more from Hugging Face".
  */
 /** The kind filter above the list: what a model makes. */
 export const KIND_FILTERS: { id: 'all' | FamilyKind; label: string }[] = [
@@ -32,9 +37,19 @@ export const KIND_FILTERS: { id: 'all' | FamilyKind; label: string }[] = [
 
 /** One line under the filter when it needs saying: what the list can and cannot do for that kind. */
 export function kindNote(kind: 'all' | FamilyKind, query: string, shown: number): string | null {
-  if (kind === 'video') return 'Wan 2.2 TI2V 5B makes short clips in a Photo chat (experimental, needs a graphics card). Other video models are listed but not supported yet.';
+  if (kind === 'video') return 'Wan 2.2 TI2V 5B makes short clips in a Photo chat (experimental, needs a graphics card).';
   if (kind === 'image' && !query.trim() && !shown) return 'No picture models here yet. Download one of the picks above, or search Hugging Face.';
   return null;
+}
+
+/** The fit line of a set-up picture model: the recommendation's own answer, not the chat estimate from file size. */
+export function setUpFitText(o: ImageRecommendedOption): string {
+  return o.fit === 'tooBig' ? 'Too large for this computer' : imageFitText(o).text;
+}
+
+/** The families a search found that Nekko has not set up: nothing on disk, and every source from the "more" shelf. */
+export function isMoreFamily(f: ModelFamily, more: Set<string>): boolean {
+  return !f.local.length && f.catalog.length > 0 && f.catalog.every(m => more.has(m.id));
 }
 
 export function ModelsHome({
@@ -73,6 +88,14 @@ export function ModelsHome({
   const [repoId, setRepoId] = useState<string | null>(null);
   const [format, setFormat] = useState<'gguf' | 'mlx'>('gguf');
   const [kind, setKind] = useState<'all' | FamilyKind>('all');
+  const [recs, setRecs] = useState<Recommendations | null>(null);
+  const [showMore, setShowMore] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    window.nekko.machineRecommendations().then(r => { if (live) setRecs(r); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -88,15 +111,34 @@ export function ModelsHome({
     return () => { live = false; clearTimeout(timer); };
   }, [query, format]);
 
-  const families = useMemo(() => groupModelFamilies(models, catalog), [models, catalog]);
-  const visible = useMemo(() => {
+  const picks = useMemo(() => setUpPictureModels(recs), [recs]);
+  // The starter list stays chat only: the picks join it under Pictures or Video, or once there is a search.
+  const shelves = useMemo(() => shelveCatalog(catalog, picks, models, kind !== 'all' || !!query.trim()), [catalog, picks, models, kind, query]);
+  const families = useMemo(() => groupModelFamilies(models, [...shelves.listed, ...shelves.more]), [models, shelves]);
+  const matching = useMemo(() => {
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return families.filter(f => (kind === 'all' || familyKind(f) === kind) && words.every(word => [f.name, ...f.local.flatMap(m => [m.name, m.sourceRepo, m.quantization, m.folderProvider]), ...f.catalog.flatMap(m => [m.name, m.id, ...m.tags])].join(' ').toLowerCase().includes(word)));
   }, [families, query, kind]);
-  const note = kindNote(kind, query, visible.length);
+  const moreIds = useMemo(() => new Set(shelves.more.map(m => m.id)), [shelves]);
+  const extra = useMemo(() => matching.filter(f => isMoreFamily(f, moreIds)), [matching, moreIds]);
+  const main = useMemo(() => matching.filter(f => !extra.includes(f)), [matching, extra]);
+  const visible = showMore ? [...main, ...extra] : main;
+  const note = kindNote(kind, query, visible.length + extra.length);
   const selected = visible.find(f => f.key === selectedKey) ?? visible[0];
   const repositories = [...new Set([...(selected?.catalog.map(m => m.id) ?? []), ...(selected?.local.map(m => m.sourceRepo).filter((id): id is string => Boolean(id)) ?? [])])];
   const selectedRepo = repositories.includes(repoId ?? '') ? repoId! : repositories[0];
+
+  const row = (f: ModelFamily) => {
+    const smallest = f.local.slice().sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
+    const sizes = f.catalog.flatMap(m => m.quants.map(q => q.sizeBytes ?? 0)).filter(Boolean);
+    const pick = smallest ? undefined : picks.find(p => f.catalog.some(m => m.id === p.repo));
+    const fit = pick ? setUpFitText(pick) : gpuGuidance(smallest?.sizeBytes ?? (sizes.length ? Math.min(...sizes) : undefined), memory, smallest);
+    const title = pick ? 'From the recommendations for this machine, with its supporting files counted' : smallest ? 'Planner result for the smallest downloaded variant' : 'Estimate from file size, not a measured context limit';
+    return <button key={f.key} className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-2" style={{ background: selected?.key === f.key ? 'var(--accent-soft)' : undefined }} aria-pressed={selected?.key === f.key} onClick={() => { setSelectedKey(f.key); setRepoId(null); }}>
+      <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium">{f.name}</p><p className="mt-0.5 text-2xs text-ink-faint">{f.local.length ? `${f.local.length} downloaded · ` : ''}{f.catalog.length} source{f.catalog.length === 1 ? '' : 's'}</p><p className="mt-1 text-2xs text-ink-soft" title={title}>{fit}{!pick && !smallest && memory?.kind !== 'ram' && fit !== 'GPU fit unknown' ? ' (estimated)' : ''}</p></div>
+      {f.local.length > 0 && <span className="shrink-0 text-success" aria-label="Downloaded"><CheckIcon className="h-4 w-4" /></span>}
+    </button>;
+  };
 
   return (
     <>
@@ -112,16 +154,11 @@ export function ModelsHome({
         <p className="mt-2 text-2xs text-ink-faint">{searching ? 'Searching…' : `${visible.length} models`} · Checkmarks mean downloaded</p>
         {error && <p role="status" className="mt-2 text-xs text-ink-faint">{error}</p>}
         <div className="mt-3 max-h-[65vh] space-y-1 overflow-y-auto" aria-label="Models">
-          {visible.map(f => {
-            const smallest = f.local.slice().sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
-            const sizes = f.catalog.flatMap(m => m.quants.map(q => q.sizeBytes ?? 0)).filter(Boolean);
-            const fit = gpuGuidance(smallest?.sizeBytes ?? (sizes.length ? Math.min(...sizes) : undefined), memory, smallest);
-            return <button key={f.key} className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-2" style={{ background: selected?.key === f.key ? 'var(--accent-soft)' : undefined }} aria-pressed={selected?.key === f.key} onClick={() => { setSelectedKey(f.key); setRepoId(null); }}>
-              <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium">{f.name}</p><p className="mt-0.5 text-2xs text-ink-faint">{f.local.length ? `${f.local.length} downloaded · ` : ''}{f.catalog.length} source{f.catalog.length === 1 ? '' : 's'}</p><p className="mt-1 text-2xs text-ink-soft" title={smallest ? 'Planner result for the smallest downloaded variant' : 'Estimate from file size, not a measured context limit'}>{fit}{!smallest && memory?.kind !== 'ram' && fit !== 'GPU fit unknown' ? ' (estimated)' : ''}</p></div>
-              {f.local.length > 0 && <span className="shrink-0 text-success" aria-label="Downloaded"><CheckIcon className="h-4 w-4" /></span>}
-            </button>;
-          })}
-          {!searching && !visible.length && !note && <p className="py-4 text-xs text-ink-faint">No matching models. Try a shorter search.</p>}
+          {main.map(row)}
+          {extra.length > 0 && <button type="button" className="btn btn-ghost mt-2 text-xs" aria-expanded={showMore} data-more-models onClick={() => setShowMore(v => !v)}>{showMore ? 'Hide' : 'Show'} {extra.length} more from Hugging Face</button>}
+          {showMore && extra.length > 0 && <p className="px-3 py-1 text-2xs text-ink-faint" data-more-note>Not set up by Nekko. These may need extra files, or not start.</p>}
+          {showMore && extra.map(row)}
+          {!searching && !visible.length && !extra.length && !note && <p className="py-4 text-xs text-ink-faint">No matching models. Try a shorter search.</p>}
         </div>
       </div>
       <div className="min-w-0" aria-label="Model details">

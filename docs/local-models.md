@@ -9,7 +9,7 @@ before you wait through the load. This is what the Models page shows you and why
 
 Open **Photo** to make pictures from a prompt. If you do not have a picture model yet, choose one of the models picked for your computer and press **Download and set up**. Nekko handles the model and its supporting files; they are not separate models you need to choose yourself. The image engine is also installed when needed. Downloads are shared with **Models → Downloads**, where you can check progress or cancel.
 
-You can also find **Create pictures** and **Edit photos** recommendations in Models, or filter the model library to **Pictures**. Open a downloaded model to see its setup checklist: model, supporting files and image engine. **Finish photo setup** installs missing parts. “Ready” requires both supporting files and the engine; a custom model without a known file set remains an advanced, unverified setup. A model that only edits is labeled accordingly.
+You can also find **Create pictures** and **Edit photos** recommendations in Models, or filter the model library to **Pictures**. Pictures and Video list the models Nekko has set up, which download with their supporting files and start. A search can find others: they wait behind **Show more from Hugging Face**, limited to well-known publishers, and may need extra files or not start. Open a downloaded model to see its setup checklist: model, supporting files and image engine. **Finish photo setup** installs missing parts. “Ready” requires both supporting files and the engine; a custom model without a known file set remains an advanced, unverified setup. A model that only edits is labeled accordingly.
 
 In a Photo chat, pick a model and a **Shape**: Square, Landscape, Portrait, Wide or Tall. Existing custom sizes stay unchanged. **Advanced** contains Steps, Prompt guidance (CFG) and Seed, with a short explanation and **Restore model defaults**. You do not need to adjust these to begin.
 
@@ -25,7 +25,7 @@ Nekko can make short clips on your computer with **Wan 2.2 TI2V 5B**. In **Model
 
 Choose it as the model in a Photo chat and describe the clip. Attach a photo to use it as the first frame. A clip is about two seconds (33 frames at 16 frames a second) in your chat's shape, or the photo's, at about 832×480. It appears in the chat as an animated picture, with its length beside it. The progress line shows the sampling steps, and **Stop** cancels the clip on the engine.
 
-This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) can be listed under **Models → Video** but are not supported yet.
+This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) are not supported yet: a search under **Models → Video** keeps them behind **Show more from Hugging Face**.
 
 ## Your first local model
 
