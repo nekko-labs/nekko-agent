@@ -43,6 +43,7 @@ import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.files.FilesScreen
 import com.nekko.android.ui.files.LogsScreen
 import com.nekko.android.ui.screens.ProvidersScreen
+import com.nekko.android.ui.screens.TailscaleSetupSheet
 import com.nekko.android.ui.screens.AutomationsScreen
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.UsageScreen
@@ -183,6 +184,8 @@ fun NekkoNavHost(
 
     // A pairing just worked: celebrate over whatever screen is now underneath (PairSuccessOverlay).
     var justPaired by rememberSaveable { mutableStateOf<String?>(null) }
+    // Paired over Tailscale (#2856): after the celebration, the steps that are left.
+    var tailscaleSetup by rememberSaveable { mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         NavHost(navController = nav, startDestination = Routes.CHATS) {
@@ -292,6 +295,8 @@ fun NekkoNavHost(
                     onPaired = { id ->
                         FirstRun.paired(phonePrefs)
                         justPaired = id
+                        val relay = repo.state.value.computers.firstOrNull { it.id == id }?.relayUrl
+                        if (relay != null && com.nekko.protocol.RelayRoute.of(relay) == com.nekko.protocol.RelayRoute.TAILSCALE) tailscaleSetup = id
                         nav.onMain { backToChats() }
                     },
                 )
@@ -363,6 +368,7 @@ fun NekkoNavHost(
             val name = state.computers.firstOrNull { it.id == id }?.name?.takeIf { it != DEFAULT_COMPUTER_NAME }
             PairSuccessOverlay(name) { justPaired = null }
         }
+        if (justPaired == null) tailscaleSetup?.let { id -> TailscaleSetupSheet(repo, id) { tailscaleSetup = null } }
     }
 }
 

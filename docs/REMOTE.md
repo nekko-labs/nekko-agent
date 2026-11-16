@@ -873,6 +873,13 @@ on. Without Tailscale on this computer the option links to Tailscale and stays o
   Switch **Also on this Wi-Fi** off to keep the relay on the tailnet only; pair the phone again
   after changing it. Phones paired before this keep the one route until they scan a new code.
 
+**After pairing over Tailscale** (iPhone and Android), the phone shows **Set up Tailscale**: is
+Tailscale on on this phone (with **Open Tailscale**), does the computer answer, and how to keep it
+working away from home. That last step is VPN On Demand in Tailscale on the iPhone, and Tailscale's
+**Always-on VPN** in Android's VPN settings (**Open VPN settings**); Android doesn't tell apps which
+VPN is always on, so the phone can't tick that one. The first two steps tick themselves as they
+come true. Open the guide again from **Settings → Connection** (Android: **Tailscale setup guide**).
+
 On the iPhone, **Settings → Connection** shows the route in use (on Android, **Settings →
 Connection status**, with the other routes). **Check routes** (iPhone and Android) looks up,
 connects to and says hello on each route with timings, and **Share diagnostics** shares those

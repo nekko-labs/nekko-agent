@@ -562,4 +562,28 @@
     <string name="permissions_page">Permissions</string>
     <string name="permissions_section">Device access</string>
     <string name="permissions_row_detail">What this phone lets Nekko do</string>
+    <!-- Set up Tailscale after pairing over it (#2856). -->
+    <string name="tailscale_title">Set up Tailscale</string>
+    <string name="tailscale_guide">Tailscale setup guide</string>
+    <string name="tailscale_your_computer">your computer</string>
+    <string name="tailscale_intro">You paired over Tailscale, a private network between your own devices. Two quick checks and your phone can reach %1$s from anywhere.</string>
+    <string name="tailscale_on_title">Tailscale is on on this phone</string>
+    <string name="tailscale_on_detail">Connected to your tailnet.</string>
+    <string name="tailscale_off_title">Turn Tailscale on on this phone</string>
+    <string name="tailscale_off_detail">Open the Tailscale app, sign in with the same account as on your computer, and switch it on.</string>
+    <string name="tailscale_open">Open Tailscale</string>
+    <string name="tailscale_answers">%1$s answers</string>
+    <string name="tailscale_waiting">Waiting for %1$s</string>
+    <string name="tailscale_answers_detail">Your chats and tools are reachable from this phone.</string>
+    <string name="tailscale_denied_detail">The computer turned this phone away. Pair again from Settings → Remote access on the computer.</string>
+    <string name="tailscale_after_on_detail">This finishes on its own once Tailscale is on.</string>
+    <string name="tailscale_check_computer_detail">On the computer: keep Nekko Agent open, and make sure Tailscale is on and signed in to the same account.</string>
+    <string name="tailscale_always_title">Keep it working away from home</string>
+    <string name="tailscale_always_detail">In Android’s VPN settings, tap the gear next to Tailscale and turn on Always-on VPN. Then your phone reaches your computer on any Wi-Fi or mobile data, without opening Tailscale first. Android doesn’t tell apps which VPN is always on, so this step isn’t checked.</string>
+    <string name="tailscale_vpn_settings">Open VPN settings</string>
+    <string name="tailscale_cloud_soon">Nekko Cloud will connect your phone from anywhere with nothing to install. It’s coming soon; Tailscale is the way for now.</string>
+    <string name="tailscale_done">Done</string>
+    <string name="tailscale_later">Later</string>
+    <string name="tailscale_step_done">Done</string>
+    <string name="tailscale_step_not_done">Not done yet</string>
 </resources>
