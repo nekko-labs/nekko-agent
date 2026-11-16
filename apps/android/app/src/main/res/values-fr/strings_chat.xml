@@ -302,4 +302,32 @@
     <string name="chat_clip_attached">Joint à la discussion</string>
     <string name="chat_clip_failed">Impossible d’envoyer cette vidéo</string>
     <string name="chat_remove_clip">Retirer %1$s</string>
+    <!-- The agent's plan sheet over the composer (#2115). -->
+    <string name="plan_sheet">Plan de l’agent</string>
+    <string name="plan_open_label">Plan, %1$d sur %2$d faites. Replie le plan</string>
+    <string name="plan_title">Plan</string>
+    <string name="plan_done_of">%1$d sur %2$d faites</string>
+    <string name="plan_folded_label">Plan, étape %1$d sur %2$d : %3$s. Affiche tout le plan</string>
+    <string name="plan_position">%1$d sur %2$d</string>
+    <string name="plan_paused">En pause</string>
+    <string name="plan_working">En cours</string>
+    <string name="plan_done">Fait</string>
+    <string name="plan_skipped">Ignorée</string>
+    <string name="plan_pending">En attente</string>
+    <string name="plan_agent_reported">%1$s, signalé par l’agent</string>
+    <string name="plan_open_evidence">%1$s, ouvrir la preuve</string>
+    <string name="plan_pass">Passe %1$d</string>
+    <string name="plan_pass_label">Passe %1$d : une vérification ultérieure a renvoyé le travail ici</string>
+    <string name="plan_pr_merged">#%1$s · Fusionnée</string>
+    <string name="plan_pr_closed">#%1$s · Fermée</string>
+    <string name="plan_pr_open">Ouverte</string>
+    <string name="plan_pr_draft">Brouillon</string>
+    <string name="plan_ci_failing">CI en échec</string>
+    <string name="plan_ci_passing">CI réussie</string>
+    <string name="plan_ci_running">CI en cours</string>
+    <string name="plan_ci_none">Pas de CI</string>
+    <string name="plan_pr_label">Pull request %1$s</string>
+    <string name="plan_subagent">Sous-agent</string>
+    <string name="plan_subagents">Sous-agents</string>
+    <string name="plan_subagents_label">Sous-agents : %1$d en cours, %2$d terminés</string>
 </resources>

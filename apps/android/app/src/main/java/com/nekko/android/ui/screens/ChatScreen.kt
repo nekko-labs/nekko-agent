@@ -771,6 +771,9 @@ private fun ChatScreenContent(
                         WaitingList(waiting, sendingId, online, onEdit = vm::editWaiting, onDelete = vm::deleteWaiting, onSendNow = vm::sendWaitingNow)
                         refusal?.let { RefusalNote(it, onDismiss = vm::dismissRefusal) }
                     }
+                    // The agent's plan, right on the composer's top edge (#2115).
+                    val planUi by vm.plan.collectAsStateWithLifecycle()
+                    planUi?.let { com.nekko.android.ui.chat.PlanSheet(it, showPrs = simple.shown("pr-status", pr = true), onOpenChat = { id -> onOpenChat(id, null) }) }
                     Composer(
                         restore = restore,
                         onRestored = vm::restored,

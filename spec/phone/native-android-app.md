@@ -108,3 +108,26 @@ Talk to Nekko opens a foreground sheet behind the app lock; entry never starts t
 ### Image settings fallback and localized resources (2026-11-08)
 
 When an image session has no saved image parameters, sending refuses explicitly and asks the owner to choose/save settings. The settings editor uses the protocol default CFG4, not an artificial invalid CFG4.5. Saved fractional parameters are preserved exactly and still require explicit correction; no automatic rounding or unsigned fallback is introduced. Voice/image resource keys are translated into all six existing additional locales; key/placeholder and XML checks pass, while native localized rendering and linguistic review remain unverified.
+
+### The agent's plan over the composer (#2115, 2026-11-16)
+
+`[implemented; JVM tests (AgentPlanTest, the iPhone's PlanTests: the chat's plan, unsafe evidence, no plan outside Claude Code or without plan calls, Claude Code's own plan from TodoWrite and Task calls, task links, chips on the step active at the time, the step that starts open, paused); emulator-verified (PlanSheetDeviceTest), not on a physical phone]`
+
+The iPhone's plan sheet (PlanSheet.swift, the desktop's `PlanSheet.tsx`) on Android.
+
+- **The model:** `AgentPlan` and `PlanStep` in the protocol module, ported from the iPhone's Plan.swift. `Session.agentPlan` is parsed from `session:get`.
+- **Which plan:** the chat's own plan. On a Claude Agent chat without one, it is Claude Code's own plan rebuilt from its successful `TodoWrite` and `TaskCreate`/`TaskUpdate` calls. When there is none, there is no sheet: nothing is made up from tool calls.
+- **Placement:** right on the composer's top edge, rounded on top, the surface with a touch of accent.
+- **Folded** (the default):
+  - the step being worked: its mark, loop kind, title, pass and "3 of 4";
+  - a row of chips: Sub-agents (running and done), the step's PRs or else the newest one, and the step's task links or else the chat's.
+- **Opened by a tap:**
+  - every step, with its kind in a fixed column, its detail and its chips;
+  - finished steps squeeze to their title and open or fold when tapped, except the last one with results (a PR, or a check's evidence), which starts open.
+- **Chips:** they are placed by the app, not the model.
+  - **PR chips:** only the chat's own PRs (`pr:sessionList`), with number, state and CI.
+  - **Task links:** Linear, Jira, GitHub issues, Trello, Asana, ClickUp and Todoist.
+  - **Sub-agents:** they open their chat.
+  - **The step's bullet** carries the agent's check: a sun while worked or checking, a pause after a stopped reply, a tick, a red X, a warning, a ring, a struck ring. With http(s) evidence, the bullet opens it.
+- **Simple mode** hides the PR chips when PR status is hidden.
+

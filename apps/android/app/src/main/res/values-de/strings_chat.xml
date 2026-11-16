@@ -302,4 +302,32 @@
     <string name="chat_clip_attached">An den Chat angehängt</string>
     <string name="chat_clip_failed">Video konnte nicht gesendet werden</string>
     <string name="chat_remove_clip">%1$s entfernen</string>
+    <!-- The agent's plan sheet over the composer (#2115). -->
+    <string name="plan_sheet">Plan des Agenten</string>
+    <string name="plan_open_label">Plan, %1$d von %2$d erledigt. Klappt den Plan ein</string>
+    <string name="plan_title">Plan</string>
+    <string name="plan_done_of">%1$d von %2$d erledigt</string>
+    <string name="plan_folded_label">Plan, Schritt %1$d von %2$d: %3$s. Zeigt den ganzen Plan</string>
+    <string name="plan_position">%1$d von %2$d</string>
+    <string name="plan_paused">Pausiert</string>
+    <string name="plan_working">In Arbeit</string>
+    <string name="plan_done">Erledigt</string>
+    <string name="plan_skipped">Übersprungen</string>
+    <string name="plan_pending">Ausstehend</string>
+    <string name="plan_agent_reported">%1$s, vom Agenten gemeldet</string>
+    <string name="plan_open_evidence">%1$s, Nachweis öffnen</string>
+    <string name="plan_pass">Durchgang %1$d</string>
+    <string name="plan_pass_label">Durchgang %1$d: eine spätere Prüfung hat die Arbeit hierher zurückgeschickt</string>
+    <string name="plan_pr_merged">#%1$s · Zusammengeführt</string>
+    <string name="plan_pr_closed">#%1$s · Geschlossen</string>
+    <string name="plan_pr_open">Offen</string>
+    <string name="plan_pr_draft">Entwurf</string>
+    <string name="plan_ci_failing">CI schlägt fehl</string>
+    <string name="plan_ci_passing">CI erfolgreich</string>
+    <string name="plan_ci_running">CI läuft</string>
+    <string name="plan_ci_none">Keine CI</string>
+    <string name="plan_pr_label">Pull Request %1$s</string>
+    <string name="plan_subagent">Sub-Agent</string>
+    <string name="plan_subagents">Sub-Agenten</string>
+    <string name="plan_subagents_label">Sub-Agenten: %1$d laufen, %2$d fertig</string>
 </resources>
