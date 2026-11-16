@@ -330,4 +330,16 @@
     <string name="plan_subagent">Subagente</string>
     <string name="plan_subagents">Subagentes</string>
     <string name="plan_subagents_label">Subagentes: %1$d rodando, %2$d concluídos</string>
+    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
+    <string name="response_waiting">Pendente · envia quando conectar</string>
+    <string name="response_sending">Enviando…</string>
+    <string name="response_sent">Enviado</string>
+    <string name="response_stale">Não está mais pendente</string>
+    <string name="response_failed">Não foi possível enviar a resposta</string>
+    <string name="response_stale_detail">A solicitação original não está mais pendente.</string>
+    <string name="response_request_id">Identificador da solicitação: %1$s</string>
+    <string name="response_retry">Tentar de novo</string>
+    <string name="response_cancel">Cancelar</string>
+    <string name="response_allow">Permitir %1$s</string>
+    <string name="response_deny">Negar %1$s</string>
 </resources>

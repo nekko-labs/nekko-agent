@@ -624,9 +624,70 @@ class ChatViewModel(
         }
     }
     fun stop() = controller.stop()
-    suspend fun approve(ok: Boolean) = controller.approve(ok)
+    // ---- answers and approvals as pending response messages (decision 0081, #2497) ----
+
+    /** The computer this chat is on; its responses never go to another one. */
+    private val computerId: String? = repo.state.value.activeId
+
+    /** This chat's response messages: waiting, being sent, sent, no longer pending or failed. */
+    val responses: StateFlow<List<com.nekko.android.data.ResponseMessage>> =
+        combine(repo.responses.items, repo.state.map { it.activeId }.distinctUntilChanged()) { list, active ->
+            if (active == computerId) list.filter { it.sessionId == sessionId } else emptyList()
+        }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptyList())
+
+    /** The approval card, unless a response to it is already a message. */
+    fun shownApproval(a: com.nekko.protocol.Approval?) = a?.takeUnless { repo.responses.contains(sessionId, it) }
+
+    /** The question card, unless an answer to it is already a message. */
+    fun shownQuestion(q: com.nekko.protocol.AskRequest?) = q?.takeUnless { repo.responses.contains(sessionId, it) }
+
+    private fun mine() = check(repo.state.value.activeId == computerId) { "This chat belongs to another computer." }
+
+    /**
+     * Allow or Deny, once: kept as a response message bound to this exact approval, sent now if the
+     * computer is reachable and it still waits, else when it is back. [words] says it in the phone's language.
+     */
+    suspend fun approve(ok: Boolean, words: (Boolean, String) -> String = { yes, tool -> "${if (yes) "Allow" else "Deny"} $tool" }) {
+        val a = shownApproval(ui.value.approval) ?: return
+        mine()
+        repo.responses.approve(sessionId, a, ok, words)
+        send(a.call.id)
+    }
+
+    suspend fun answer(answers: List<AskAnswer>) {
+        val q = shownQuestion(ui.value.question) ?: return
+        mine()
+        repo.responses.answer(sessionId, q, answers)
+        send(q.callId)
+    }
+
+    /**
+     * Send what waits, in the view model's scope: the card that asked steps aside the moment its
+     * message exists, and its own scope going must not cut the send short (back to Pending).
+     */
+    private suspend fun send(callId: String) {
+        viewModelScope.launch {
+            repo.responses.flush()
+            if (responses.value.any { it.callId == callId && it.status == com.nekko.android.data.ResponseMessage.Status.SENT }) controller.responded(callId)
+        }.join()
+    }
+
+    /** Try again, with the same fresh check; reconnects first when the computer is away. */
+    fun retryResponse(id: String) {
+        if (repo.state.value.activeId != computerId) return
+        if (!repo.responses.retry(id)) return
+        if (repo.state.value.conn != RelayState.ONLINE) repo.reconnect()
+        viewModelScope.launch { repo.responses.flush() }
+    }
+
+    /** Remove an unsent response; its card comes back if the computer still waits on it. */
+    fun cancelResponse(id: String) {
+        if (repo.state.value.activeId != computerId) return
+        repo.responses.cancel(id)
+    }
+
+    // Always allow changes the chat's tool policy: never queued, online only (decision 0081).
     suspend fun alwaysAllowTool(stepUp: StepUpProof? = null) = controller.alwaysAllowTool(stepUp)
-    suspend fun answer(answers: List<AskAnswer>) = controller.answer(answers)
     suspend fun answerVoice(callId: String, text: String, authorized: () -> Boolean) = controller.answerVoice(callId, text, authorized)
 
     private fun env(s: ComputersState) = ChatEnv(

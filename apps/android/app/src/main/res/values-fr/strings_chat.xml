@@ -330,4 +330,16 @@
     <string name="plan_subagent">Sous-agent</string>
     <string name="plan_subagents">Sous-agents</string>
     <string name="plan_subagents_label">Sous-agents : %1$d en cours, %2$d terminés</string>
+    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
+    <string name="response_waiting">En attente · envoyé à la connexion</string>
+    <string name="response_sending">Envoi…</string>
+    <string name="response_sent">Envoyé</string>
+    <string name="response_stale">Plus en attente</string>
+    <string name="response_failed">Impossible d’envoyer la réponse</string>
+    <string name="response_stale_detail">La demande d’origine n’est plus en attente.</string>
+    <string name="response_request_id">Identifiant de la demande : %1$s</string>
+    <string name="response_retry">Réessayer</string>
+    <string name="response_cancel">Annuler</string>
+    <string name="response_allow">Autoriser %1$s</string>
+    <string name="response_deny">Refuser %1$s</string>
 </resources>

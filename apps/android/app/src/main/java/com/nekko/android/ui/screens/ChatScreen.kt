@@ -713,8 +713,17 @@ private fun ChatScreenContent(
                 }
             }
             val controls: @Composable () -> Unit = {
-                chat.approval?.let { a ->
-                    ApprovalCard(a, onDecide = vm::approve, onAlwaysAllow = {
+                // Answers and approvals kept until the computer takes them (#2497); their cards step aside meanwhile.
+                val responses by vm.responses.collectAsStateWithLifecycle()
+                // Only what hasn't gone yet: a sent one leaves (the chat shows what came of it), so it
+                // never crowds out the next card's buttons.
+                responses.filter { it.unsent }.forEach { m ->
+                    com.nekko.android.ui.chat.ResponseMessageRow(m, onRetry = { vm.retryResponse(m.id) }, onCancel = { vm.cancelResponse(m.id) })
+                }
+                val allowWords = stringResource(R.string.response_allow)
+                val denyWords = stringResource(R.string.response_deny)
+                vm.shownApproval(chat.approval)?.let { a ->
+                    ApprovalCard(a, onDecide = { ok -> vm.approve(ok) { yes, tool -> (if (yes) allowWords else denyWords).format(tool) } }, onAlwaysAllow = {
                         try {
                             vm.alwaysAllowTool()
                         } catch (e: RelayException) {
@@ -724,7 +733,7 @@ private fun ChatScreenContent(
                         }
                     }, startAlways = alwaysNow == a.call.id, onStartedAlways = { alwaysNow = null })
                 }
-                chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
+                vm.shownQuestion(chat.question)?.let { QuestionCard(it, onAnswer = vm::answer) }
                 prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
                 // A completed chat reads like the desktop's: no message box until it is restored.
                 if (completedAt != null && !chat.running) CompletedBar(

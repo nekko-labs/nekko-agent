@@ -330,4 +330,16 @@
     <string name="plan_subagent">Sub-Agent</string>
     <string name="plan_subagents">Sub-Agenten</string>
     <string name="plan_subagents_label">Sub-Agenten: %1$d laufen, %2$d fertig</string>
+    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
+    <string name="response_waiting">Wartet · wird gesendet, sobald verbunden</string>
+    <string name="response_sending">Wird gesendet…</string>
+    <string name="response_sent">Gesendet</string>
+    <string name="response_stale">Nicht mehr offen</string>
+    <string name="response_failed">Antwort konnte nicht gesendet werden</string>
+    <string name="response_stale_detail">Die ursprüngliche Anfrage ist nicht mehr offen.</string>
+    <string name="response_request_id">Anfragekennung: %1$s</string>
+    <string name="response_retry">Erneut versuchen</string>
+    <string name="response_cancel">Abbrechen</string>
+    <string name="response_allow">%1$s erlauben</string>
+    <string name="response_deny">%1$s ablehnen</string>
 </resources>
