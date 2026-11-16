@@ -283,4 +283,8 @@
     <string name="chats_subagent">Sub-agent</string>
     <string name="chats_subagent_named">Sub-agent %1$s</string>
     <string name="chats_subagent_on">Sub-agent %1$s, on %2$s</string>
+    <!-- New chat as a composer (#2459). -->
+    <string name="chats_photo_unreadable">Couldn’t read that image.</string>
+    <string name="chats_choose_model">Choose a model</string>
+    <string name="chats_starts_on">Starts on %1$s</string>
 </resources>

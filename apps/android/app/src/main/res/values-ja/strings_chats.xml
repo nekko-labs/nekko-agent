@@ -267,4 +267,8 @@
     <string name="chats_subagent">サブエージェント</string>
     <string name="chats_subagent_named">サブエージェント %1$s</string>
     <string name="chats_subagent_on">サブエージェント %1$s（%2$s）</string>
+    <!-- New chat as a composer (#2459). -->
+    <string name="chats_photo_unreadable">その画像を読み込めませんでした。</string>
+    <string name="chats_choose_model">モデルを選択</string>
+    <string name="chats_starts_on">%1$s で開始</string>
 </resources>
