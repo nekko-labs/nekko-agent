@@ -141,7 +141,15 @@ export function RecommendationList({
   const picked = recs.tasks.filter(t => t.pick);
   const pictures = (recs.imageTasks ?? []).filter(t => t.pick);
   return (
-    <details className="group card mb-5 p-4" open={open} data-recommendations>
+    <details
+      className="group mb-5 rounded-2xl border p-5"
+      style={{
+        borderColor: 'color-mix(in srgb, var(--accent) 30%, var(--line))',
+        background: 'color-mix(in srgb, var(--accent) 7%, transparent)',
+      }}
+      open={open}
+      data-recommendations
+    >
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1">
         <ChevronIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform group-open:rotate-90" />
         <span className="text-sm font-semibold">Best for this machine</span>
