@@ -25,7 +25,8 @@ describe('Greeting Nekko', () => {
     expect(markup.indexOf('</svg>')).toBeLessThan(markup.indexOf('data-part="peek-paws"'));
     expect(markup).toContain('data-nekko-look="true" transform="translate(0 1)"');
     expect(markup).not.toContain('d="M0 25H32');
-    expect(markup).not.toContain('M15 20H17V21H15Z');
+    // His mouth is drawn only where a dark theme sets --nekko-mouth (spec/brand/colour-palette.md).
+    expect(markup).toContain('data-part="peek-mouth" d="M15 20H17V21H15Z" fill="var(--nekko-mouth, transparent)"');
   });
 
   it('moves only the artwork 10px left and 1px up without changing its layout slot', () => {

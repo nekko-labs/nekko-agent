@@ -113,9 +113,9 @@ const page = (title: string, body: string) => `<!doctype html><html><head><meta 
  * grid, with room above for the mark.
  */
 export const ALERT_MASCOT = '<svg viewBox="0 -7 34 39" shape-rendering="crispEdges" aria-hidden="true">'
-  + '<path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#16161c" stroke="#ece9f5" stroke-width="2"/>'
-  + '<path d="M10 14H14V15H10Z M10 17H14V18H10Z M10 15H11V17H10Z M13 15H14V17H13Z M19 14H23V15H19Z M19 17H23V18H19Z M19 15H20V17H19Z M22 15H23V17H22Z M15 22H17V24H15Z" fill="#ece9f5"/>'
-  + '<path d="M15 20H17V21H15Z" fill="#c084b5"/>'
+  + '<path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#16161c" stroke="#f3e8ee" stroke-width="2"/>'
+  + '<path d="M10 14H14V15H10Z M10 17H14V18H10Z M10 15H11V17H10Z M13 15H14V17H13Z M19 14H23V15H19Z M19 17H23V18H19Z M19 15H20V17H19Z M22 15H23V17H22Z M15 22H17V24H15Z" fill="#ffffff"/>'
+  + '<path d="M15 20H17V21H15Z" fill="#854f6c"/>'
   + '<path d="M29 -7H32V-2H29Z M29 -1H32V2H29Z" fill="#e2b36b"/></svg>';
 
 /** What shutting the local models down costs: how many replies stop. */

@@ -6,14 +6,15 @@ struct PixelCat: View {
     var happy = false
     var shocked = false
     var blink = false
-    var fill = BrandColor.plum
-    var line = BrandColor.mark
+    var fill = BrandColor.nekkoFace
+    var line = BrandColor.nekkoLine
+    var eyes = BrandColor.nekkoEyes
 
     var body: some View {
         Canvas { context, size in
             context.scaleBy(x: size.width / 32, y: size.height / 32)
             func pixels(_ rects: [CGRect]) {
-                for rect in rects { context.fill(Path(rect), with: .color(line)) }
+                for rect in rects { context.fill(Path(rect), with: .color(eyes)) }
             }
             var face = Path()
             face.addLines([(4,5),(6,5),(6,7),(8,7),(8,9),(11,9),(11,10),(21,10),(21,9),(24,9),(24,7),(26,7),(26,5),(28,5),(28,19),(27,19),(27,22),(25,22),(25,24),(22,24),(22,26),(10,26),(10,24),(7,24),(7,22),(5,22),(5,19),(4,19)].map { CGPoint(x: $0.0, y: $0.1) })
@@ -33,7 +34,7 @@ struct PixelCat: View {
             } else {
                 pixels(blink ? [CGRect(x: 10, y: 17, width: 4, height: 1), CGRect(x: 19, y: 17, width: 4, height: 1)] : [CGRect(x: 11, y: 15, width: 2, height: 3), CGRect(x: 20, y: 15, width: 2, height: 3)])
             }
-            context.fill(Path(CGRect(x: 15, y: 20, width: 2, height: 1)), with: .color(BrandColor.plumLight))
+            context.fill(Path(CGRect(x: 15, y: 20, width: 2, height: 1)), with: .color(BrandColor.nekkoNose))
         }
         .accessibilityHidden(true)
     }
