@@ -340,6 +340,9 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .agent-panel-group + .agent-panel-group { margin-top: 20px; }
 .agent-panel-group + .agent-panel-group::before { content: ""; position: absolute; inset-inline: 8px; top: -10px; height: 1px; background: color-mix(in srgb, var(--line) 65%, transparent); pointer-events: none; }
 .agent-panel-group-heading { margin-bottom: 4px; }
+/* Reserve the scrollbar's width up front, so expanding a group that makes the
+   list scroll doesn't narrow the cards. */
+.agent-panel-list { scrollbar-gutter: stable; }
 /* Keep the active group visible until its own rows end. */
 .agent-panel-list .agent-panel-group-heading { position: sticky; top: 0; z-index: 1; background: var(--paper); }
 .agent-panel-list .agent-panel-group-heading:hover { background: var(--surface-2); }
