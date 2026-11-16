@@ -270,6 +270,46 @@ class ChatViewModel(
         Subagents(kids, activity.filterKeys { id -> kids.any { it.id == id } })
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, Subagents())
 
+    /** The agent's plan as the sheet over the composer draws it (#2115); null when there is none. */
+    data class PlanUi(
+        val plan: List<com.nekko.protocol.PlanStep>,
+        val current: com.nekko.protocol.PlanStep,
+        val links: Map<String, com.nekko.protocol.PlanStepLinks>,
+        val paused: Boolean,
+        val children: List<SessionSummary>,
+        val prs: List<PullRequest>,
+    )
+
+    private val chatPrs = MutableStateFlow<List<PullRequest>>(emptyList())
+
+    val plan: StateFlow<PlanUi?> = combine(
+        controller.state, children, chatPrs, repo.state.map { it.providers }.distinctUntilChanged(),
+    ) { st, kids, prs, providers ->
+        val session = st.session ?: return@combine null
+        val claudeCode = providers.firstOrNull { it.id == session.providerId }?.kind == com.nekko.protocol.AgentPlan.CLAUDE_CODE_KIND
+        val steps = com.nekko.protocol.AgentPlan.sheet(session, claudeCode).orEmpty()
+        val current = com.nekko.protocol.AgentPlan.current(steps) ?: return@combine null
+        PlanUi(
+            plan = steps,
+            current = current,
+            links = com.nekko.protocol.AgentPlan.links(session.messages, steps, prs.map { it.url }.toSet(), kids),
+            paused = com.nekko.protocol.AgentPlan.paused(session.messages, st.turn.running),
+            children = kids,
+            prs = prs,
+        )
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    init {
+        // A plan's PR chips show the chat's own PRs, read again whenever the chat changes.
+        viewModelScope.launch {
+            combine(controller.state.map { it.session?.updatedAt }, plan.map { it != null }) { at, has -> at.takeIf { has } }
+                .distinctUntilChanged().collect { at ->
+                    if (at == null) return@collect
+                    try { chatPrs.value = pullRequests() } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+                }
+        }
+    }
+
     private fun calls(tool: String) = ui.value.blocks.any { it is Block.Tool && it.name == tool }
 
     /**
