@@ -44,6 +44,8 @@ object Channels {
     const val CHAT_GENERATE_IMAGE = "chat:generateImage"
     const val SESSION_PHOTO = "session:photo"
     const val CHAT_SEND = "chat:send"
+    /** A clip from the phone in pieces (#2777): (chatId, uploadId, name, offset, total, base64 chunk). */
+    const val ATTACHMENT_UPLOAD = "attachment:upload"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
     /** Stop the reply and start the queued prompt at an index. */

@@ -539,7 +539,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > you come back to the app.
 >
 > **Photos and dictation** (Android): the **+** on the left of a chat's message box opens **Dictate**,
-> **Image from files** (the phone's photo picker; Nekko only sees the photos you pick) and **Take
+> **Photos and videos** (the phone's photo picker; Nekko only sees what you pick) and **Take
 > photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails
 > inside the message box that you can remove. Adding or removing a photo saves the draft at once, so
 > reopening the app brings back its text and photos. They are scaled to 1600 px and sent end-to-end
@@ -547,6 +547,12 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > The photos stay in the message's bubble on the phone too, as small previews the computer makes
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
+>
+> **Videos** (Android): pick up to 2 videos in the same picker. Each goes to the computer at once,
+> with its progress in the message box, and is attached to the chat as a file; **Send** waits until it
+> has arrived. A video larger than 50 MB is turned down on the phone before anything is sent. Videos
+> need the computer connected: they never wait on the phone like a message does. Once attached, a
+> video stays among the chat's attached files on the computer.
 >
 > **Dictation** (Android): tap **+ → Dictate** and speak as long as you like; tap ■ when you're done.
 > At each pause the words said so far are turned into text and typed into the message box while you

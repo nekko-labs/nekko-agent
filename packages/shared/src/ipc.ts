@@ -265,6 +265,8 @@ export const IpcChannels = {
   /** What Privacy Shield would hide from a cloud model in a chat and its draft. */
   privacyPreview: 'privacy:preview',
   attachmentImport: 'attachment:import',
+  /** A phone's clip, in pieces (#2777); the daemon answers it. */
+  attachmentUpload: 'attachment:upload',
   imageFetch: 'image:fetch',
 
   changesList: 'changes:list',
