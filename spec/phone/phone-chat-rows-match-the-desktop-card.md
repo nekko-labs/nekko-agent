@@ -23,7 +23,7 @@ The desktop's card is the reference ([agent panel view options](../agents/agent-
 
 ## Quiet rows and sub-agents on the iPhone (2026-11-10)
 
-`[Implemented 2026-11-10 on iOS, in source. SessionSummary.subagents and the retired Previews choice are covered by CardDetailsTests; the Swift build, the native fixture screenshots and a device pass await macOS CI. Android has no sub-agent rows yet: #2509]`
+`[Implemented 2026-11-10 on iOS, in source. SessionSummary.subagents and the retired Previews choice are covered by CardDetailsTests; the Swift build, the native fixture screenshots and a device pass await macOS CI. Android: implemented 2026-11-16, #2509, see below]`
 
 Philip asked (2026-11-10) that the iPhone's chat rows drop the chat preview and the divider lines and take the updated quiet style, with PR chips and sub-agents shown just like the desktop, and the model each sub-agent runs on especially.
 
@@ -36,6 +36,12 @@ Philip asked (2026-11-10) that the iPhone's chat rows drop the chat preview and 
 - **View → Card details → Sub-agents** turns the sub-agent rows off, as the desktop's view menu does; on by default and kept across relaunches.
 
 The desktop card's "N sub-agents" count line is not repeated on the phone: the rows below say it.
+
+### Android (2026-11-16, #2509)
+
+`[implemented; JVM tests (ChatListLayoutTest: sub-agents under their parent, oldest first, completed ones left out; CardDetailsTest: a saved Previews choice ignored, Sub-agents on by default; AllChatsTest: a sub-agent opens on its parent's computer) and on an API 37 emulator (ChatListViewTest.quietRowsWithSubagents: no preview, two sub-agents with their models, a completed one left out, a tap opens the sub-agent's chat; groupByDateAndHideSubagents: no Previews in Show, Card details → Sub-agents hides them; ChatStatusTest: no Working / Needs you chip, the glyph says it); not on a physical phone or against a live computer with real sub-agents]`
+
+The same rows as the iPhone's. No preview and no View → Show → *Previews* (a saved choice is ignored); no divider lines, rows kept apart by space. The status glyph and the title (medium weight, up to two lines); then one line of facts: place, an image chat's mark, the provider's mark and the model, context while it works, prompts waiting, and at its end the PR chip and the time. No Working / Needs you chip. Sub-agents come from the same `sessions:summaries` answer (`SessionSummary.subagents`, kept per computer on `ComputersState` and each fleet `Peer`, merged by `AllChats`, whose owners map sends a sub-agent to its parent's computer): one row each under an active chat, oldest first, with the tree line from the chat's glyph (a tee, a rounded corner for the last), the sub-agent's status glyph, its title and the model with its provider's mark; a tap opens its chat. **View → Card details → Sub-agents** hides them, saved on the phone. Chats on this phone have no sub-agents.
 
 ## PR state on Android
 

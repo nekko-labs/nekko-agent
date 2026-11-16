@@ -25,8 +25,6 @@ data class ChatListView(
     val sortBy: SortBy = SortBy.MANUAL,
     /** Manual order has no direction: it is whatever was dragged on the computer. */
     val ascending: Boolean = false,
-    /** The last reply (or first prompt) under each title. */
-    val showPreviews: Boolean = true,
     /** Completed chats, after their group's active ones (in a Completed group when not by project). */
     val showCompleted: Boolean = true,
     /** Project folders with no chats in them. */
@@ -35,6 +33,12 @@ data class ChatListView(
     val showContext: Boolean = true,
     val showPullRequests: Boolean = true,
     val showUpdated: Boolean = true,
+    /**
+     * The sub-agents a chat spawned, one row each under it with the model it runs on (#2509, the
+     * iPhone's #2513). The transcript preview under each title is gone with them: a saved
+     * `showPreviews` is ignored.
+     */
+    val showSubagents: Boolean = true,
     /** Where each chat runs, on its row, when the list holds more than one place (the iPhone's #1741). */
     val showComputer: Boolean = true,
     /** The computer's own icon (or the phone's) beside that name, else a dot. */
@@ -59,13 +63,13 @@ data class ChatListView(
         put("groupBy", groupBy.wire)
         put("sortBy", sortBy.wire)
         put("ascending", ascending)
-        put("showPreviews", showPreviews)
         put("showCompleted", showCompleted)
         put("showEmptyGroups", showEmptyGroups)
         put("showModel", showModel)
         put("showContext", showContext)
         put("showPullRequests", showPullRequests)
         put("showUpdated", showUpdated)
+        put("showSubagents", showSubagents)
         put("showComputer", showComputer)
         put("showComputerIcons", showComputerIcons)
     }.toString()
@@ -81,13 +85,13 @@ data class ChatListView(
                 groupBy = GroupBy.entries.firstOrNull { it.wire == o.str("groupBy") } ?: STANDARD.groupBy,
                 sortBy = SortBy.entries.firstOrNull { it.wire == o.str("sortBy") } ?: STANDARD.sortBy,
                 ascending = flag("ascending", STANDARD.ascending),
-                showPreviews = flag("showPreviews", STANDARD.showPreviews),
                 showCompleted = flag("showCompleted", STANDARD.showCompleted),
                 showEmptyGroups = flag("showEmptyGroups", STANDARD.showEmptyGroups),
                 showModel = flag("showModel", STANDARD.showModel),
                 showContext = flag("showContext", STANDARD.showContext),
                 showPullRequests = flag("showPullRequests", STANDARD.showPullRequests),
                 showUpdated = flag("showUpdated", STANDARD.showUpdated),
+                showSubagents = flag("showSubagents", STANDARD.showSubagents),
                 showComputer = flag("showComputer", STANDARD.showComputer),
                 showComputerIcons = flag("showComputerIcons", STANDARD.showComputerIcons),
             )
