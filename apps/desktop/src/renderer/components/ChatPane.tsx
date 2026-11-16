@@ -3008,7 +3008,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
                 {starAsk && !streaming && !question && !secretAsk && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
-                {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
+                {!imageMode && <PrWatchContinuation sessionId={sessionId} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!secretAsk || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
                 {errorNotice && !question && !streaming && (() => {
