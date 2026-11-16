@@ -540,4 +540,24 @@
     <string name="tailscale_later">Später</string>
     <string name="tailscale_step_done">Erledigt</string>
     <string name="tailscale_step_not_done">Noch nicht erledigt</string>
+    <!-- This phone's connectors (#2109). -->
+    <string name="connectors_title">Connectoren</string>
+    <string name="connectors_intro">Verbinde die Dienste, mit denen du arbeitest. Jedes Token bleibt versiegelt auf diesem Telefon und geht nur an seinen Dienst, nie an einen Computer, das Relay oder Nekko Cloud. Deine Computer behalten ihre eigenen Connectoren.</string>
+    <string name="connectors_git">Git-Anbieter</string>
+    <string name="connectors_tasks">Projektmanagement</string>
+    <string name="connectors_prs_from">Pull Requests von</string>
+    <string name="connectors_prs_from_detail">Der Bildschirm Pull Requests zeigt die dieses Anbieters.</string>
+    <string name="connectors_connected_as">Verbunden als %1$s</string>
+    <string name="connectors_connected">Verbunden</string>
+    <string name="connectors_git_detail">Pull Requests und Prüfungen</string>
+    <string name="connectors_tasks_detail">Deine offenen Aufgaben</string>
+    <string name="connectors_options">Optionen für %1$s</string>
+    <string name="connectors_new_token">Neues Token</string>
+    <string name="connectors_disconnect">Trennen</string>
+    <string name="connectors_disconnect_title">%1$s trennen?</string>
+    <string name="connectors_disconnect_text">Das Token wird von diesem Telefon gelöscht.</string>
+    <string name="connectors_connect">Verbinden</string>
+    <string name="connectors_connect_title">%1$s verbinden</string>
+    <string name="connectors_kept_here">Nur auf diesem Telefon, vom Keystore versiegelt.</string>
+    <string name="connectors_row_detail">Git-Anbieter und Projekttools</string>
 </resources>

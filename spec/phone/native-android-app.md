@@ -149,3 +149,19 @@ The iPhone's plan sheet (PlanSheet.swift, the desktop's `PlanSheet.tsx`) on Andr
 - **The mic:** **+ → Dictate**, as in a chat, when dictation is on (Settings → Dictation); the words are typed into the box. It needs the computer connected.
 - **Not yet:** videos in New chat. The **+** menu reads *Photos and videos*, as in a chat, but New chat's picker takes photos only: a clip goes to a chat that already exists. Offline New chat is unchanged (its first message waits in the outbox).
 
+### This phone's connectors (#2109, 2026-11-16)
+
+`[implemented; JVM tests (ConnectorsTest, the iPhone's ConnectorsTests case for case, plus header-injection and long-body checks); emulator-verified (ConnectorsDeviceTest), not against live services]`
+
+The iPhone's Connectors page (decision 0058) on Android, under **Settings → Connectors**.
+
+- **The services:** git providers (GitHub, GitLab, Bitbucket) and project tools (Linear, Jira, Floop, Asana, ClickUp, Trello, Todoist), in the iPhone's order, with their brand marks. The marks are converted from the iPhone's SVGs; GitHub and Linear are drawn in the ink.
+- **Connect:** it asks for the kind's fields and its token, then makes a real call that answers with who the token belongs to (`PhoneConnectors.whoAmI`).
+  - A refusal, or Linear's `errors` in a 200, keeps nothing and shows the service's words, cut short.
+  - Addresses must be https, with no credentials, query or fragment.
+  - The token must be printable ASCII, so it can't add a header.
+- **Storage:** the token is in its own slot of the Keystore-sealed store (`phone.connector.token.<kind>`); the list (`phone.connectors.v1`) holds no secret.
+- **Calls:** `DirectConnectorHTTP` follows no redirect, takes https only, and reads at most 2 MB.
+- **Managing:** **New token** and **Disconnect** (it deletes the token). **Pull requests from** picks the git provider when there are several.
+- **Not yet:** the Pull requests screen (Mine, Projects, pins, one-tap prompts), which comes in a second PR for #2109.
+
