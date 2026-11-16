@@ -151,9 +151,13 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Chats on this phone (Android, in progress for [#2414](https://github.com/nekko-labs/nekko-agent/issues/2414)).**
 > From Chats, choose **This phone**, even with no paired computer or provider. Add a provider there:
-> Claude API, OpenAI, OpenRouter, Claude in Amazon Bedrock (Mantle Messages), Claude in Microsoft
-> Foundry, Claude on Vertex AI, or an HTTPS OpenAI-compatible API. Supply your own API key or access
-> token (optional for compatible APIs), choose a model and start a streamed text conversation.
+> Claude API, OpenAI, OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock (Mantle
+> Messages), Claude in Microsoft Foundry, Claude on Vertex AI, or an HTTPS OpenAI-compatible API.
+> OpenRouter is one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude
+> API, OpenAI, Gemini and Ollama Cloud, tap **Open** to reach the key page, copy a key, come back and
+> tap **Paste**; Nekko checks it and connects. A wrong key is turned down before anything is saved.
+> For the others, supply your own API key or access token (optional for compatible APIs). Then
+> choose a model and start a streamed text conversation.
 > Test, replace the key, disable/re-enable or remove a provider; Stop cancels a reply and Retry
 > replaces its last attempt. Fixed-catalog Test requests can incur a small provider charge.
 > Keys and local transcripts are sealed with Android Keystore-backed encryption. Requests go

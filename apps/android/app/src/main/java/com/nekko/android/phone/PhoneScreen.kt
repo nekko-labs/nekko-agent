@@ -122,8 +122,33 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
             }
         }
     }
-    if (adding) ProviderForm(onDismiss = { adding = false }) { kind, label, url, key, workspace ->
-        action { phone.add(kind, label, url, key, workspace); adding = false; notice = "Provider saved. Test it before starting a chat." }
+    // OpenRouter's sign-in came back and its provider was kept (#2852): the form closes.
+    LaunchedEffect(s.signIn) {
+        if (s.signIn == PhoneChats.SignIn.DONE) { adding = false; providers = true; notice = "OpenRouter connected."; phone.clearSignIn() }
+    }
+    if (adding) {
+        var failed by remember { mutableStateOf<String?>(null) }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        ProviderForm(
+            busy = busy || s.signIn == PhoneChats.SignIn.ADDING,
+            failed = failed ?: s.signInError,
+            onDismiss = { adding = false; phone.clearSignIn() },
+            onSignIn = {
+                failed = null
+                open(context, phone.startOpenRouterSignIn())
+            },
+            onOpen = { url -> open(context, url) },
+        ) { kind, label, url, key, workspace ->
+            failed = null
+            scope.launch {
+                busy = true
+                // Checked before it is kept: a wrong key is turned down here, with the provider's reason.
+                try { phone.connect(kind, label, url, key, workspace); adding = false; providers = true; notice = "${PhoneProviders.kind(kind)?.label ?: label} connected." }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { failed = e.message ?: "Could not check the key. Try again." }
+                finally { busy = false }
+            }
+        }
     }
     keyFor?.let { providerId ->
         var key by remember { mutableStateOf("") }
@@ -145,8 +170,25 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
     }
 }
 
+/** A web page in the browser: a provider's key page, or OpenRouter's sign-in, which comes back to the app. */
+private fun open(context: android.content.Context, url: String) {
+    try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } catch (_: android.content.ActivityNotFoundException) {}
+}
+
+/**
+ * Add a provider to this phone (#2852, the iPhone's #2853). OpenRouter is one button: a browser
+ * sign-in hands the key back. Kinds with a key page are guided: open it, copy the key, come back
+ * and tap Paste, and the provider is checked and kept by itself. The others keep the full form.
+ */
 @Composable
-private fun ProviderForm(onDismiss: () -> Unit, onSave: (String, String, String, String, String) -> Unit) {
+private fun ProviderForm(
+    busy: Boolean,
+    failed: String?,
+    onDismiss: () -> Unit,
+    onSignIn: () -> Unit,
+    onOpen: (String) -> Unit,
+    onSave: (String, String, String, String, String) -> Unit,
+) {
     var kindId by remember { mutableStateOf("anthropic") }
     val kind = PhoneProviders.kind(kindId)!!
     var label by remember { mutableStateOf(kind.label) }
@@ -155,21 +197,50 @@ private fun ProviderForm(onDismiss: () -> Unit, onSave: (String, String, String,
     var workspace by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var choosing by remember { mutableStateOf(false) }
+    var opened by remember { mutableStateOf(false) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val guided = kind.keyPage != null
+    val save = {
+        try { PhoneProviders.make("check", kindId, label, url, key, workspace); error = null; onSave(kindId, label, url, key, workspace) }
+        catch (e: IllegalArgumentException) { error = e.message }
+    }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Add phone provider") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = { choosing = !choosing }, modifier = Modifier.testTag("phone.kind")) { Text(kind.label) }
-            if (choosing) PhoneProviders.kinds.forEach { k -> TextButton(onClick = { kindId = k.id; label = k.label; url = k.defaultUrl; key = ""; choosing = false }) { Text(k.label) } }
+            if (choosing) PhoneProviders.kinds.forEach { k -> TextButton(onClick = { kindId = k.id; label = k.label; url = k.defaultUrl; key = ""; opened = false; error = null; choosing = false }, modifier = Modifier.testTag("phone.kind.${k.id}")) { Text(k.label) } }
             Text(kind.hint)
-            OutlinedTextField(label, { label = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.testTag("phone.label"))
-            OutlinedTextField(url, { url = it }, label = { Text("HTTPS address") }, singleLine = true, modifier = Modifier.testTag("phone.url"))
-            OutlinedTextField(key, { key = it }, label = { Text(if (kindId == "vertex") "Access token" else "API key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.testTag("phone.key"))
+            if (kind.signIn) {
+                Button(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("phone.signIn")) { Text("Sign in with ${kind.label}") }
+                Text("Approve in the browser and the key comes back to this phone.", style = MaterialTheme.typography.bodySmall)
+                Text("Or use a key", style = MaterialTheme.typography.labelLarge)
+            }
+            // A kind with a key page needs no name or address: its own are used.
+            if (!guided) {
+                OutlinedTextField(label, { label = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.testTag("phone.label"))
+                OutlinedTextField(url, { url = it }, label = { Text("HTTPS address") }, singleLine = true, modifier = Modifier.testTag("phone.url"))
+            }
+            kind.keyPage?.let { page ->
+                val site = runCatching { java.net.URI(page).host }.getOrNull().orEmpty()
+                OutlinedButton(onClick = { opened = true; onOpen(page) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("phone.openKeyPage")) { Text("Open $site") }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(key, { key = it }, label = { Text(if (kindId == "vertex") "Access token" else "API key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.weight(1f).testTag("phone.key"))
+                if (guided && key.isEmpty()) {
+                    // One tap: the copied key is pasted, checked and kept.
+                    FilledTonalButton(onClick = {
+                        val pasted = clipboard.getText()?.text?.trim().orEmpty()
+                        if (pasted.isNotEmpty()) { key = pasted; save() } else error = "Nothing to paste. Copy the key first."
+                    }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp).testTag("phone.paste")) { Text("Paste") }
+                }
+            }
             if (kindId == "anthropic") OutlinedTextField(workspace, { workspace = it }, label = { Text("Workspace ID (optional)") }, singleLine = true)
-            error?.let { Text(it) }
+            Text(if (opened) "Copy the key, come back and tap Paste. Nekko checks it and connects." else "Kept on this phone only, sealed by its keystore.", style = MaterialTheme.typography.bodySmall)
+            if (busy) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Text("Checking the key…", style = MaterialTheme.typography.bodySmall)
+            }
+            (error ?: failed)?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("phone.addError")) }
         }
-    }, confirmButton = { TextButton(onClick = {
-        try { PhoneProviders.make("check", kindId, label, url, key, workspace); onSave(kindId, label, url, key, workspace); key = "" }
-        catch (e: IllegalArgumentException) { error = e.message }
-    }, modifier = Modifier.testTag("phone.save")) { Text("Save provider") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+    }, confirmButton = { TextButton(onClick = { save() }, enabled = !busy, modifier = Modifier.testTag("phone.save")) { Text("Add") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable

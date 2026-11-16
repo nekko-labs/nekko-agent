@@ -25,6 +25,9 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         val usage: com.nekko.protocol.PhoneUsageLedger = com.nekko.protocol.PhoneUsageLedger(),
         /** How this phone's models talk (Customize, #2426); from their next reply. */
         val tone: com.nekko.protocol.PhoneTone = com.nekko.protocol.PhoneTone.STANDARD,
+        /** OpenRouter's browser sign-in, while it runs (#2852). */
+        val signIn: SignIn? = null,
+        val signInError: String? = null,
     )
     private val mutable = MutableStateFlow(State())
     val state = mutable.asStateFlow()
@@ -65,9 +68,78 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     private suspend fun saveChats() = secrets.set(chatsSlot, json.encodeToString(ListSerializer(PhoneChat.serializer()), mutable.value.chats))
     private suspend fun saveUsage() = secrets.set(usageSlot, mutable.value.usage.json().toString())
 
-    suspend fun add(kind: String, label: String, url: String?, key: String?, workspace: String? = null): String = lock.withLock {
-        ready()
+    /**
+     * Keep a provider only once it works (#2852, the iPhone's #2853/#2855): its models load, and
+     * where that list answers anyone (OpenRouter, Ollama Cloud), a request a bad key is refused on.
+     * A wrong key is turned down here, with the provider's reason; nothing is saved.
+     */
+    suspend fun connect(kind: String, label: String, url: String?, key: String?, workspace: String? = null): String {
         val p = PhoneProviders.make(id(), kind, label, url, key, workspace)
+        val models = verifyKey(p, key)
+        return keep(p, key).also { id -> synchronized(gate) { mutable.update { it.copy(models = it.models + (id to models)) } } }
+    }
+
+    /** Keep a provider as given, unchecked (tests and restores). */
+    suspend fun add(kind: String, label: String, url: String?, key: String?, workspace: String? = null): String =
+        keep(PhoneProviders.make(id(), kind, label, url, key, workspace), key)
+
+    private suspend fun verifyKey(p: PhoneProvider, key: String?): List<PhoneModel> {
+        val models = PhoneProviders.modelsRequest(p, key)?.let { PhoneProviders.models(http.send(it), p.kind) } ?: PhoneProviders.kind(p.kind)!!.catalog
+        require(models.isNotEmpty()) { "The provider listed no models." }
+        val probe = PhoneProviders.keyCheckRequest(p, key) ?: return models
+        try {
+            http.send(probe)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val m = e.message.orEmpty()
+            // Only a refusal of the key counts; an unknown model (Ollama's probe) means the key passed.
+            if ("(401)" in m || "(403)" in m) throw IllegalArgumentException(m)
+            if (m.startsWith("Could not reach")) throw IllegalArgumentException("Could not reach the provider to check the key. Try again.")
+        }
+        return models
+    }
+
+    /** OpenRouter's sign-in answers with a code; swap it for the API key it stands for. */
+    suspend fun openRouterKey(code: String, verifier: String): String {
+        val body = try { http.send(PhoneProviders.openRouterKeyRequest(code, verifier)) } catch (e: CancellationException) { throw e } catch (_: Exception) { throw IllegalArgumentException(PhoneProviders.SIGN_IN_FAILED) }
+        return PhoneProviders.openRouterKey(body) ?: throw IllegalArgumentException(PhoneProviders.SIGN_IN_FAILED)
+    }
+
+    /** The sign-in under way: its verifier waits here until the browser comes back with a code. */
+    private var signInVerifier: String? = null
+
+    /** Start OpenRouter's sign-in: the page to open in the browser. */
+    fun startOpenRouterSignIn(): String {
+        val v = PhoneProviders.pkceVerifier()
+        synchronized(gate) { signInVerifier = v; mutable.update { it.copy(signIn = SignIn.WAITING, signInError = null) } }
+        return PhoneProviders.openRouterAuthorizeUrl(PhoneProviders.pkceChallenge(v))
+    }
+
+    /** The browser came back to `nekko-agent://openrouter-key`: swap the code, check the key, keep the provider. */
+    suspend fun finishOpenRouterSignIn(callback: String) {
+        val verifier = synchronized(gate) { signInVerifier.also { signInVerifier = null } } ?: return
+        val code = PhoneProviders.openRouterCode(callback)
+        synchronized(gate) { mutable.update { it.copy(signIn = SignIn.ADDING, signInError = null) } }
+        try {
+            if (code == null) throw IllegalArgumentException(PhoneProviders.SIGN_IN_FAILED)
+            val kind = PhoneProviders.kind("openrouter")!!
+            connect(kind.id, kind.label, null, openRouterKey(code, verifier))
+            synchronized(gate) { mutable.update { it.copy(signIn = SignIn.DONE) } }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            synchronized(gate) { mutable.update { it.copy(signIn = null, signInError = e.message ?: PhoneProviders.SIGN_IN_FAILED) } }
+        }
+    }
+
+    /** The person left the sign-in (Cancel, or back without approving). */
+    fun clearSignIn() = synchronized(gate) { signInVerifier = null; mutable.update { it.copy(signIn = null, signInError = null) } }
+
+    enum class SignIn { WAITING, ADDING, DONE }
+
+    private suspend fun keep(p: PhoneProvider, key: String?): String = lock.withLock {
+        ready()
         secrets.set(keySlot(p.id), key?.trim()?.ifEmpty { null })
         synchronized(gate) { mutable.update { it.copy(providers = it.providers + p) } }
         saveProviders(); p.id

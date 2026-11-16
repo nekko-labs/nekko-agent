@@ -14,7 +14,7 @@ class PhoneProvidersTest {
         return parser.line("")
     }
     @Test fun sevenKindsAndCorrectAuthentication() {
-        assertEquals(listOf("anthropic", "openai", "openrouter", "bedrock", "foundry", "vertex", "openai-compat"), PhoneProviders.kinds.map { it.id })
+        assertEquals(listOf("anthropic", "openai", "openrouter", "gemini", "ollama-cloud", "bedrock", "foundry", "vertex", "openai-compat"), PhoneProviders.kinds.map { it.id })
         for (kind in PhoneProviders.kinds) {
             val req = PhoneProviders.chatRequest(provider(kind.id), " secret ", "model", emptyList())
             if (kind.id in listOf("anthropic", "bedrock", "foundry")) { assertEquals("secret", req.headers["x-api-key"]); assertNull(req.headers["Authorization"]) }
@@ -132,5 +132,48 @@ class PhoneProvidersTest {
         p.line("data: [DONE]")
         // A final data line without its blank frame delimiter has not completed.
         assertTrue(p.line(": keepalive").isEmpty())
+    }
+
+    // #2852: one-tap setup, as on the iPhone (#2853, #2855).
+    @Test fun guidedKindsHaveAKeyPageAndOnlyOpenRouterSignsIn() {
+        assertEquals(listOf("anthropic", "openai", "openrouter", "gemini", "ollama-cloud"), PhoneProviders.kinds.filter { it.keyPage != null }.map { it.id })
+        assertEquals(listOf("openrouter"), PhoneProviders.kinds.filter { it.signIn }.map { it.id })
+        for (id in listOf("gemini", "ollama-cloud")) {
+            val req = PhoneProviders.chatRequest(PhoneProviders.make("p", id, "X", null, "k"), "k", "m", emptyList())
+            assertTrue(req.url.endsWith("/chat/completions"))
+            assertEquals("Bearer k", req.headers["Authorization"])
+            assertEquals(id == "gemini", req.body!!.containsKey("stream_options"))
+        }
+        assertEquals("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", PhoneProviders.chatRequest(PhoneProviders.make("p", "gemini", "G", null, "k"), "k", "m", emptyList()).url)
+        val listed = """{"data":[{"id":"models/gemini-2.5-flash"},{"id":"models/text-embedding-004"},{"id":"models/imagen-4"},{"id":"models/veo-3"}]}"""
+        assertEquals(listOf("models/gemini-2.5-flash"), PhoneProviders.models(listed, "gemini").map { it.id })
+    }
+
+    @Test fun aKeyCheckOnlyWhereTheModelListAnswersAnyone() {
+        val or = PhoneProviders.keyCheckRequest(PhoneProviders.make("p", "openrouter", "OR", null, "k"), "k")!!
+        assertEquals("GET", or.method); assertEquals("https://openrouter.ai/api/v1/key", or.url); assertEquals("Bearer k", or.headers["Authorization"])
+        val ol = PhoneProviders.keyCheckRequest(PhoneProviders.make("p", "ollama-cloud", "OC", null, "k"), "k")!!
+        assertEquals("https://ollama.com/v1/chat/completions", ol.url)
+        assertEquals("nekko-key-check", ol.body!!["model"].toString().trim('"'))
+        assertNull(PhoneProviders.keyCheckRequest(PhoneProviders.make("p", "openai", "O", null, "k"), "k"))
+    }
+
+    @Test fun openRouterSignInIsPkceAndTakesOnlyOurCallback() {
+        val v = PhoneProviders.pkceVerifier()
+        assertEquals(43, v.length)
+        // RFC 7636 appendix B.
+        assertEquals("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", PhoneProviders.pkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"))
+        val url = PhoneProviders.openRouterAuthorizeUrl("abc")
+        assertEquals("https://openrouter.ai/auth?callback_url=nekko-agent%3A%2F%2Fopenrouter-key&code_challenge=abc&code_challenge_method=S256", url)
+        assertEquals("c 1", PhoneProviders.openRouterCode("nekko-agent://openrouter-key?code=c%201"))
+        assertNull(PhoneProviders.openRouterCode("nekko-agent://chat/x?code=c"))
+        assertNull(PhoneProviders.openRouterCode("nekko-agent://openrouter-key?code="))
+        val req = PhoneProviders.openRouterKeyRequest("c", v)
+        assertEquals("https://openrouter.ai/api/v1/auth/keys", req.url)
+        assertEquals(v, req.body!!["code_verifier"].toString().trim('"'))
+        assertEquals("sk-or-1", PhoneProviders.openRouterKey("""{"key":"sk-or-1"}"""))
+        assertNull(PhoneProviders.openRouterKey("""{"key":""}"""))
+        assertNull(PhoneProviders.openRouterKey("""{"key":"a\nb"}"""))
+        assertNull(PhoneProviders.openRouterKey("not json"))
     }
 }
