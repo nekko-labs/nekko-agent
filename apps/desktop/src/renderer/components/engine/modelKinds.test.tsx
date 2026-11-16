@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { CatalogModel, ImageRecommendedOption, Recommendations } from '@nekko-agent/shared';
 import { catalogKind, familyKind, groupModelFamilies, setUpPictureModels, shelveCatalog, type LibraryModel } from './modelFamilies.js';
-import { KIND_FILTERS, isMoreFamily, kindNote, setUpFitText } from './ModelsHome.js';
+import { KIND_FILTERS, isMoreFamily, kindNote, setUpFitText, setUpModelOf } from './ModelsHome.js';
+import { pictureModelBlurb } from './pictureModelText.js';
 import { RecommendationList, imageFitText } from './RecommendedModels.js';
 import { needsOffload } from '../agent-console/imageOffload.js';
 import fixture from './recommendations.fixture.json';
@@ -146,6 +147,16 @@ describe('picture and video models are a short list', () => {
     const folded = Object.fromEntries(groupModelFamilies([], [...listed, ...more]).map(f => [f.name, isMoreFamily(f, moreIds)]));
     // Another publisher's copy of a set-up model joins that model's family instead of a row of its own.
     expect(folded).toEqual({ 'Z-Image-Turbo': false, 'FLUX.2-klein-4B': false, 'FLUX.2-klein-9B': true });
+  });
+
+  it('names a set-up family by the model and says what it is for, downloaded or not', () => {
+    const { listed } = shelveCatalog([hf('unsloth/FLUX.2-klein-9B-GGUF', 490506)], picks, [], true);
+    const families = groupModelFamilies([local('z_image_turbo-Q4_K.gguf', { modality: 'image', sourceRepo: 'leejet/Z-Image-Turbo-GGUF' })], listed);
+    expect(families.map(f => setUpModelOf(f, picks)?.name).sort()).toEqual(['FLUX.2 klein 4B', 'Z-Image Turbo']);
+    expect(setUpModelOf(groupModelFamilies([], [hf('unsloth/FLUX.2-klein-9B-GGUF', 490506)])[0], picks)).toBeUndefined();
+    expect(pictureModelBlurb(klein)).toBe('Small and quick, and it can also edit photos.');
+    expect(pictureModelBlurb({ modelId: 'new-one', capabilities: ['video'] })).toBe('Makes short video clips.');
+    expect(pictureModelBlurb({ modelId: 'new-one', capabilities: ['create'] })).toBe('Creates pictures from a description.');
   });
 
   it('says a set-up model\'s fit in the recommendation\'s words', () => {

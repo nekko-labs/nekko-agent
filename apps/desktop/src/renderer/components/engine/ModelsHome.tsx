@@ -7,6 +7,7 @@ import { RecommendedModels, imageFitText } from './RecommendedModels.js';
 import { CheckIcon } from '../../icons.js';
 import { familyKind, groupModelFamilies, gpuGuidance, setUpPictureModels, shelveCatalog, type FamilyKind, type LibraryModel, type ModelFamily } from './modelFamilies.js';
 import { VoiceSettings } from '../VoiceSettings.js';
+import { pictureModelBlurb } from './pictureModelText.js';
 
 /**
  * Models, one surface.
@@ -45,6 +46,11 @@ export function kindNote(kind: 'all' | FamilyKind, query: string, shown: number)
 /** The fit line of a set-up picture model: the recommendation's own answer, not the chat estimate from file size. */
 export function setUpFitText(o: ImageRecommendedOption): string {
   return o.fit === 'tooBig' ? 'Too large for this computer' : imageFitText(o).text;
+}
+
+/** The set-up model a family holds, if any: the list then says its name and what it is for, not a repository's. */
+export function setUpModelOf(f: ModelFamily, picks: ImageRecommendedOption[]): ImageRecommendedOption | undefined {
+  return picks.find(p => f.catalog.some(m => m.id === p.repo) || f.local.some(m => m.sourceRepo === p.repo));
 }
 
 /** The families a search found that Nekko has not set up: nothing on disk, and every source from the "more" shelf. */
@@ -131,11 +137,12 @@ export function ModelsHome({
   const row = (f: ModelFamily) => {
     const smallest = f.local.slice().sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
     const sizes = f.catalog.flatMap(m => m.quants.map(q => q.sizeBytes ?? 0)).filter(Boolean);
-    const pick = smallest ? undefined : picks.find(p => f.catalog.some(m => m.id === p.repo));
+    const setUp = setUpModelOf(f, picks);
+    const pick = smallest ? undefined : setUp;
     const fit = pick ? setUpFitText(pick) : gpuGuidance(smallest?.sizeBytes ?? (sizes.length ? Math.min(...sizes) : undefined), memory, smallest);
     const title = pick ? 'From the recommendations for this machine, with its supporting files counted' : smallest ? 'Planner result for the smallest downloaded variant' : 'Estimate from file size, not a measured context limit';
     return <button key={f.key} className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-2" style={{ background: selected?.key === f.key ? 'var(--accent-soft)' : undefined }} aria-pressed={selected?.key === f.key} onClick={() => { setSelectedKey(f.key); setRepoId(null); }}>
-      <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium">{f.name}</p><p className="mt-0.5 text-2xs text-ink-faint">{f.local.length ? `${f.local.length} downloaded · ` : ''}{f.catalog.length} source{f.catalog.length === 1 ? '' : 's'}</p><p className="mt-1 text-2xs text-ink-soft" title={title}>{fit}{!pick && !smallest && memory?.kind !== 'ram' && fit !== 'GPU fit unknown' ? ' (estimated)' : ''}</p></div>
+      <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium">{setUp?.name ?? f.name}</p><p className="mt-0.5 text-2xs text-ink-faint" data-model-line>{setUp ? pictureModelBlurb(setUp) : `${f.local.length ? `${f.local.length} downloaded · ` : ''}${f.catalog.length} source${f.catalog.length === 1 ? '' : 's'}`}</p><p className="mt-1 text-2xs text-ink-soft" title={title}>{fit}{!pick && !smallest && memory?.kind !== 'ram' && fit !== 'GPU fit unknown' ? ' (estimated)' : ''}</p></div>
       {f.local.length > 0 && <span className="shrink-0 text-success" aria-label="Downloaded"><CheckIcon className="h-4 w-4" /></span>}
     </button>;
   };
@@ -175,7 +182,7 @@ export function ModelsHome({
           <div className="mt-2"><VoiceSettings compact /></div>
         </details>
         {selected ? <>
-          <h3 className="break-words text-xl font-semibold">{selected.name}</h3>
+          <h3 className="break-words text-xl font-semibold">{setUpModelOf(selected, picks)?.name ?? selected.name}</h3>
           <p className="mt-1 text-xs text-ink-faint">Choose a variant to download, load or configure. B means billions of parameters.</p>
           <h4 className="mt-5 text-sm font-semibold">Variants on this machine</h4>
           <div className="mt-2"><ModelLibrary providerId={providerId} models={selected.local} resident={resident} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} running={running} /></div>
