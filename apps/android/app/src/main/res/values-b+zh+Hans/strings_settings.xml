@@ -516,4 +516,28 @@
     <string name="permissions_page">权限</string>
     <string name="permissions_section">设备访问</string>
     <string name="permissions_row_detail">这台手机允许 Nekko 做的事</string>
+    <!-- Set up Tailscale after pairing over it (#2856). -->
+    <string name="tailscale_title">设置 Tailscale</string>
+    <string name="tailscale_guide">Tailscale 设置指南</string>
+    <string name="tailscale_your_computer">你的电脑</string>
+    <string name="tailscale_intro">你通过 Tailscale（你自己设备之间的私有网络）完成了配对。再做两项检查，你的手机就能从任何地方连接 %1$s。</string>
+    <string name="tailscale_on_title">此手机上的 Tailscale 已开启</string>
+    <string name="tailscale_on_detail">已连接到你的 tailnet。</string>
+    <string name="tailscale_off_title">在此手机上开启 Tailscale</string>
+    <string name="tailscale_off_detail">打开 Tailscale 应用，使用与电脑相同的账号登录并开启。</string>
+    <string name="tailscale_open">打开 Tailscale</string>
+    <string name="tailscale_answers">%1$s 已响应</string>
+    <string name="tailscale_waiting">正在等待 %1$s</string>
+    <string name="tailscale_answers_detail">你的聊天和工具可以从此手机访问。</string>
+    <string name="tailscale_denied_detail">电脑拒绝了此手机。请在电脑的 设置 → 远程访问 中重新配对。</string>
+    <string name="tailscale_after_on_detail">Tailscale 开启后会自动完成。</string>
+    <string name="tailscale_check_computer_detail">在电脑上：保持 Nekko Agent 打开，并确认 Tailscale 已开启且登录同一账号。</string>
+    <string name="tailscale_always_title">离开家也能使用</string>
+    <string name="tailscale_always_detail">在 Android 的 VPN 设置中，点按 Tailscale 旁边的齿轮并开启“始终开启的 VPN”。这样无需先打开 Tailscale，手机在任何 Wi-Fi 或移动数据下都能连接电脑。Android 不会告诉应用哪个 VPN 始终开启，因此此步骤不会被检查。</string>
+    <string name="tailscale_vpn_settings">打开 VPN 设置</string>
+    <string name="tailscale_cloud_soon">Nekko Cloud 将无需安装任何东西即可从任何地方连接你的手机。即将推出；目前请使用 Tailscale。</string>
+    <string name="tailscale_done">完成</string>
+    <string name="tailscale_later">稍后</string>
+    <string name="tailscale_step_done">已完成</string>
+    <string name="tailscale_step_not_done">尚未完成</string>
 </resources>

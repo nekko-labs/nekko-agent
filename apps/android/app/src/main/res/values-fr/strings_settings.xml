@@ -516,4 +516,28 @@
     <string name="permissions_page">Autorisations</string>
     <string name="permissions_section">Accès à l’appareil</string>
     <string name="permissions_row_detail">Ce que ce téléphone permet à Nekko</string>
+    <!-- Set up Tailscale after pairing over it (#2856). -->
+    <string name="tailscale_title">Configurer Tailscale</string>
+    <string name="tailscale_guide">Guide de configuration de Tailscale</string>
+    <string name="tailscale_your_computer">votre ordinateur</string>
+    <string name="tailscale_intro">Vous avez associé via Tailscale, un réseau privé entre vos propres appareils. Deux vérifications rapides et votre téléphone joindra %1$s de partout.</string>
+    <string name="tailscale_on_title">Tailscale est activé sur ce téléphone</string>
+    <string name="tailscale_on_detail">Connecté à votre tailnet.</string>
+    <string name="tailscale_off_title">Activez Tailscale sur ce téléphone</string>
+    <string name="tailscale_off_detail">Ouvrez l’app Tailscale, connectez-vous avec le même compte que sur votre ordinateur et activez-la.</string>
+    <string name="tailscale_open">Ouvrir Tailscale</string>
+    <string name="tailscale_answers">%1$s répond</string>
+    <string name="tailscale_waiting">En attente de %1$s</string>
+    <string name="tailscale_answers_detail">Vos discussions et outils sont accessibles depuis ce téléphone.</string>
+    <string name="tailscale_denied_detail">L’ordinateur a refusé ce téléphone. Associez-le à nouveau depuis Réglages → Accès à distance sur l’ordinateur.</string>
+    <string name="tailscale_after_on_detail">Cela se règle tout seul une fois Tailscale activé.</string>
+    <string name="tailscale_check_computer_detail">Sur l’ordinateur : gardez Nekko Agent ouvert et vérifiez que Tailscale est activé et connecté au même compte.</string>
+    <string name="tailscale_always_title">Continuer à fonctionner hors de chez vous</string>
+    <string name="tailscale_always_detail">Dans les réglages VPN d’Android, touchez l’engrenage à côté de Tailscale et activez le VPN permanent. Votre téléphone joindra alors votre ordinateur sur n’importe quel Wi-Fi ou réseau mobile, sans ouvrir Tailscale d’abord. Android n’indique pas aux apps quel VPN est permanent, donc cette étape n’est pas vérifiée.</string>
+    <string name="tailscale_vpn_settings">Ouvrir les réglages VPN</string>
+    <string name="tailscale_cloud_soon">Nekko Cloud connectera votre téléphone de partout sans rien installer. Bientôt disponible ; pour l’instant, passez par Tailscale.</string>
+    <string name="tailscale_done">Terminé</string>
+    <string name="tailscale_later">Plus tard</string>
+    <string name="tailscale_step_done">Fait</string>
+    <string name="tailscale_step_not_done">Pas encore fait</string>
 </resources>
