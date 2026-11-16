@@ -1,5 +1,6 @@
 // Captures the Models page fixture hidden, off-screen and non-focusable: the
-// recommendations with their picture rows, then each kind filter.
+// recommendations with their picture rows, each kind filter, then a search
+// under Pictures and the rest of Hugging Face behind its button.
 const { app, BrowserWindow, session, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -30,6 +31,19 @@ app.whenReady().then(async () => {
         await settle("!!document.querySelector('[data-kind-note]')");
         report.checks[kind] = await run("document.querySelector('[data-kind-note]')?.textContent");
         await shot(`models-${kind}`);
+      }
+      const rows = "document.querySelectorAll('[aria-label=Models] > button[aria-pressed]').length";
+      await run("document.querySelector('[data-kind-filter=image]').click()");
+      await run("(()=>{const i=document.querySelector('input[aria-label=\"Search models\"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(i,'flux');i.dispatchEvent(new Event('input',{bubbles:true}));})()");
+      await sleep(900);
+      report.checks.searchRows = await run(rows);
+      await shot('models-image-search');
+      if (await run("!!document.querySelector('[data-more-models]')")) {
+        await run("document.querySelector('[data-more-models]').click()");
+        await sleep(200);
+        report.checks.moreRows = await run(rows);
+        report.checks.moreNote = await run("document.querySelector('[data-more-note]')?.textContent");
+        await shot('models-image-search-more');
       }
     }
   } catch (e) { report.errors.push(String(e)); process.exitCode = 1; }

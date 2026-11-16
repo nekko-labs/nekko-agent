@@ -1,6 +1,9 @@
 // The Models page (real ModelsHome) against a stub bridge: an RTX 4060 with no
 // models yet, the chat recommendations from the shared fixture plus the
-// picture picks, and a catalog of the usual chat starters. Never contacts a host.
+// picture picks, a catalog of the usual chat starters, and for any search the
+// kind of picture repos Hugging Face returns: the set-up one, two from known
+// publishers, a remix from an unknown one and a barely downloaded one. Never
+// contacts a host.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/geist';
@@ -23,9 +26,17 @@ const catalog = [
   { id: 'bartowski/google_gemma-3-12b-it-GGUF', name: 'Gemma 3 12B', owner: 'Google', parameterSize: '12B', tags: ['chat', 'vision'], quants: [{ label: 'Q4_K_M', sizeBytes: 7.3 * GB }], curated: true },
   { id: 'bartowski/Qwen2.5-Coder-7B-Instruct-GGUF', name: 'Qwen2.5 Coder 7B', owner: 'Qwen', parameterSize: '7B', tags: ['code', 'tools'], quants: [{ label: 'Q4_K_M', sizeBytes: 4.7 * GB }], curated: true },
 ];
+const hf = (id: string, baseModel: string, downloads: number, sizeGb: number) => ({ id, name: id.split('/')[1].replace(/-gguf$/i, ''), owner: id.split('/')[0], tags: ['chat'], quants: [{ label: 'Q4_K_M', file: 'model-Q4_K_M.gguf', sizeBytes: sizeGb * GB }], downloads, pipelineTag: 'text-to-image', baseModel });
+const found = [
+  hf('leejet/FLUX.2-klein-4B-GGUF', 'black-forest-labs/FLUX.2-klein-4B', 220320, 2.46),
+  hf('unsloth/FLUX.2-klein-9B-GGUF', 'black-forest-labs/FLUX.2-klein-9B', 490506, 5.6),
+  hf('city96/FLUX.1-dev-gguf', 'black-forest-labs/FLUX.1-dev', 254498, 6.8),
+  hf('acme/FLUX.1-dev-remix-GGUF', 'acme/FLUX.1-dev-remix', 64738, 6.8),
+  hf('someone/flux-test-GGUF', 'someone/flux-test', 512, 6.8),
+];
 const known: Record<string, (...a: unknown[]) => unknown> = {
   machineRecommendations: async () => recs,
-  engineCatalog: async () => catalog,
+  engineCatalog: async (query?: unknown) => (query ? found : catalog),
   engineDownloads: async () => [],
   engineModels: async () => [],
   voiceStatus: async () => ({ installed: false, installing: false, progress: 0, running: false, supported: true, engine: 'whisper', apple: { supported: false, installed: false, installing: false }, whisper: { installed: false, installing: false, progress: 0 } }),
