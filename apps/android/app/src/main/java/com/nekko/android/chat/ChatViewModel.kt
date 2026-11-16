@@ -409,9 +409,54 @@ class ChatViewModel(
         if (session.chatType == "image" && photos.state.value.photos.isNotEmpty()) {
             throw com.nekko.protocol.RelayException("Image generation accepts text only. Remove the attached photos first.")
         }
+        check(!clips.state.value.sending) { "Wait for the video to finish sending." }
         // Sending without choosing removes the star card; that ask is already used up (Not now).
         _starCard.value = StarCard.NONE
         controller.send(text, skill, images)
+        // The clips that arrived are attached to the chat: this message read them.
+        clips.sent()
+    }
+
+    /** Videos going with the message (#2777): each goes to the computer as soon as it is picked. */
+    val clips = ClipTray()
+    private val clipJobs = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
+
+    /** The + menu's picks: photos to the photo tray, videos to the computer. */
+    fun addMedia(resolver: ContentResolver, uris: List<Uri>) {
+        val (videos, photosPicked) = uris.partition { resolver.getType(it)?.startsWith("video/") == true }
+        addPhotos(resolver, photosPicked)
+        if (videos.isEmpty()) return
+        if (controller.state.value.session?.chatType == "image") {
+            clips.refuse("Image chats take photos only.")
+            return
+        }
+        val online = repo.state.value.conn == RelayState.ONLINE
+        videos.forEach { uri ->
+            val (name, size) = describe(resolver, uri)
+            val clip = clips.add(name, size, online) ?: return@forEach
+            clipJobs[clip.id] = viewModelScope.launch {
+                try {
+                    clips.upload(clip, sessionId, repo.caller) { resolver.openInputStream(uri) ?: error("Couldn’t read that video.") }
+                } finally {
+                    clipJobs.remove(clip.id)
+                }
+            }
+        }
+    }
+
+    /** Remove a clip still going or that failed; one still going stops. */
+    fun removeClip(id: String) {
+        clipJobs.remove(id)?.cancel()
+        clips.remove(id)
+    }
+
+    private fun describe(resolver: ContentResolver, uri: Uri): Pair<String, Long?> = try {
+        resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)?.use { c ->
+            if (!c.moveToFirst()) "" to null
+            else (c.getString(0) ?: "") to c.getLong(1).takeUnless { c.isNull(1) }
+        } ?: ("" to null)
+    } catch (_: Exception) {
+        "" to null
     }
 
     val voiceLanguage: String get() = phonePrefs?.get(Dictation.LANGUAGE).orEmpty()

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { IpcChannels } from './ipc.js';
 import {
+  PHONE_UPLOAD,
+  PHONE_AGENT_CHANNELS,
+  PHONE_MAX_FRAME_BYTES,
   PHONE_GUARDED_OPTION_KEYS,
   PHONE_ALWAYS_DENIED,
   PHONE_CHANNELS,
@@ -453,5 +456,35 @@ describe('a chat as a phone receives it (session:get)', () => {
     });
     expect(phoneSessionView(null)).toBeNull();
     expect(phoneSessionView({ id: 's1' })).toEqual({ id: 's1' });
+  });
+});
+
+describe('a clip from a phone (attachment:upload, #2777)', () => {
+  const ok = ['s1', 'upload-1234', 'clip.mp4', 0, 10, 'AAAA'];
+  const refused = (args: unknown[]) => {
+    try { screenPhoneCall('attachment:upload', args); return null; } catch (e) { return (e as PhoneAccessError).detail; }
+  };
+  it('is an agent channel: the Change switch applies and it is logged', () => {
+    expect(phoneChannelAllowed('attachment:upload')).toBe(true);
+    expect(PHONE_AGENT_CHANNELS).toContain('attachment:upload');
+    expect(phoneChannelAllowed('attachment:import')).toBe(false);
+  });
+  it('takes one ordered piece of at most 3 MiB toward a file of at most 50 MB', () => {
+    expect(refused(ok)).toBeNull();
+    expect(refused(ok.slice(0, 5))).toBe('upload arguments');
+    expect(refused(['', ...ok.slice(1)])).toBe('chat id');
+    expect(refused(['s1', 'short', ...ok.slice(2)])).toBe('upload id');
+    expect(refused(['s1', 'upload/../x', ...ok.slice(2)])).toBe('upload id');
+    for (const name of ['../a.mp4', 'a\\b.mp4', ' ', 'a\nb.mp4', 'x'.repeat(256)]) expect(refused(['s1', 'upload-1234', name, 0, 10, 'AAAA'])).toBe('file name');
+    expect(refused(['s1', 'upload-1234', 'a.mp4', 0, PHONE_UPLOAD.maxBytes + 1, 'AAAA'])).toBe('size');
+    expect(refused(['s1', 'upload-1234', 'a.mp4', 0, 0, 'AAAA'])).toBe('size');
+    expect(refused(['s1', 'upload-1234', 'a.mp4', 10, 10, 'AAAA'])).toBe('offset');
+    expect(refused(['s1', 'upload-1234', 'a.mp4', -1, 10, 'AAAA'])).toBe('offset');
+    expect(refused(['s1', 'upload-1234', 'a.mp4', 0, 10, 'not base64!'])).toBe('chunk');
+    expect(refused(['s1', 'upload-1234', 'a.mp4', 0, 10, 'A'.repeat((PHONE_UPLOAD.chunkBytes / 3) * 4 + 4)])).toBe('chunk');
+    expect(refused(['s1', 'upload-1234', 'a.mp4', 0, 10, 'A'.repeat((PHONE_UPLOAD.chunkBytes / 3) * 4)])).toBeNull();
+  });
+  it('fits a frame the relay carries', () => {
+    expect((PHONE_UPLOAD.chunkBytes / 3) * 4).toBeLessThan(PHONE_MAX_FRAME_BYTES);
   });
 });

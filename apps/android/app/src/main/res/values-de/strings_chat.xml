@@ -115,7 +115,7 @@
     <string name="chat_terminal">Terminal</string>
     <string name="chat_dictate">Diktieren</string>
     <string name="chat_photos_max">max. %1$d</string>
-    <string name="chat_image_from_files">Bild aus Dateien</string>
+    <string name="chat_image_from_files">Fotos und Videos</string>
     <string name="chat_take_photo">Foto aufnehmen</string>
     <string name="chat_remove_photo">Foto %1$d entfernen</string>
     <string name="chat_adding_photo">Foto wird hinzugefügt</string>
@@ -297,4 +297,9 @@
     <!-- Folded by default in the transcript (#2453). -->
     <string name="chat_progress_note">Fortschrittsnotiz</string>
     <string name="chat_conversation_summary">Zusammenfassung des Gesprächs</string>
+    <!-- Videos from the message box (#2777). -->
+    <string name="chat_clip_sending">Wird gesendet… %1$d %%</string>
+    <string name="chat_clip_attached">An den Chat angehängt</string>
+    <string name="chat_clip_failed">Video konnte nicht gesendet werden</string>
+    <string name="chat_remove_clip">%1$s entfernen</string>
 </resources>

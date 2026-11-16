@@ -115,7 +115,7 @@
     <string name="chat_terminal">ターミナル</string>
     <string name="chat_dictate">音声入力</string>
     <string name="chat_photos_max">最大 %1$d 枚</string>
-    <string name="chat_image_from_files">ファイルから画像</string>
+    <string name="chat_image_from_files">写真と動画</string>
     <string name="chat_take_photo">写真を撮る</string>
     <string name="chat_remove_photo">写真 %1$d を削除</string>
     <string name="chat_adding_photo">写真を追加中</string>
@@ -297,4 +297,9 @@
     <!-- Folded by default in the transcript (#2453). -->
     <string name="chat_progress_note">進捗メモ</string>
     <string name="chat_conversation_summary">会話の要約</string>
+    <!-- Videos from the message box (#2777). -->
+    <string name="chat_clip_sending">送信中… %1$d%%</string>
+    <string name="chat_clip_attached">チャットに添付済み</string>
+    <string name="chat_clip_failed">この動画を送信できませんでした</string>
+    <string name="chat_remove_clip">%1$s を削除</string>
 </resources>

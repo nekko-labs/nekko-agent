@@ -144,6 +144,7 @@ export const PHONE_CHANNELS = [
   'app:info',
   'app:quit',
   'artifact:read',
+  'attachment:upload',
   'audit:read',
   'changes:list',
   'chat:abort',
@@ -450,6 +451,7 @@ export const PHONE_SAFETY_EXIT_CHANNELS: readonly string[] = ['app:quit', 'devic
 
 export const PHONE_AGENT_CHANNELS: readonly string[] = [
   ...PHONE_SAFETY_EXIT_CHANNELS,
+  'attachment:upload',
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
@@ -811,6 +813,28 @@ export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as
 /** What a phone receives of each tool (`tools:list`): the name a chat's `disabledTools` holds, and what it does. */
 export const PHONE_TOOL_VIEW = ['description', 'name'] as const;
 
+/**
+ * `attachment:upload` (#2777, #2635): a clip from the phone, in order, as
+ * `(chatId, uploadId, name, offset, total, chunk)` with `chunk` base64 of at
+ * most `chunkBytes`. The computer stages the pieces and, at `total`, moves the
+ * file into the chat's attachments and attaches it. `maxBytes` is the
+ * computer's import cap (50 MB); the relay caps a frame at 10 MB.
+ */
+export const PHONE_UPLOAD = { chunkBytes: 3 * 1024 * 1024, maxBytes: 50_000_000, idChars: 64, nameChars: 255, sessionIdChars: 128 } as const;
+
+/** Why an `attachment:upload` call is refused, or null. Shared shape with the Rust gate. */
+export function phoneUploadProblem(args: unknown[]): string | null {
+  if (args.length !== 6) return 'upload arguments';
+  const [chat, id, name, offset, total, chunk] = args;
+  if (typeof chat !== 'string' || !chat || chat.length > PHONE_UPLOAD.sessionIdChars) return 'chat id';
+  if (typeof id !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(id)) return 'upload id';
+  if (typeof name !== 'string' || !name.trim() || name.length > PHONE_UPLOAD.nameChars || /[\\/\u0000-\u001f\u007f]/.test(name)) return 'file name';
+  if (!Number.isSafeInteger(total) || (total as number) < 1 || (total as number) > PHONE_UPLOAD.maxBytes) return 'size';
+  if (!Number.isSafeInteger(offset) || (offset as number) < 0 || (offset as number) >= (total as number)) return 'offset';
+  if (typeof chunk !== 'string' || !chunk || chunk.length > Math.ceil(PHONE_UPLOAD.chunkBytes / 3) * 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(chunk)) return 'chunk';
+  return null;
+}
+
 /** `chat:queue` payload fields a phone may set (a plain string is text). */
 export const PHONE_QUEUE_KEYS = ['clientMessageId', 'images', 'skill', 'text'] as const;
 /** The model a phone may name when it interrupts with a queued prompt. */
@@ -1164,6 +1188,11 @@ export function screenPhoneCall(
       }
       phoneClientMessageId(opts);
       return own(opts, 'skill') ? { skill: phoneSkill(opts.skill) } : {};
+    }
+    case 'attachment:upload': {
+      const problem = phoneUploadProblem(args);
+      if (problem) throw new PhoneAccessError('value-invalid', problem);
+      return {};
     }
     case 'chat:queue': {
       const item = args[1];
@@ -1597,6 +1626,7 @@ export function phoneAccessPolicy() {
       checkView: [...PHONE_CHECK_VIEW],
     },
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
+    upload: { ...PHONE_UPLOAD },
     stepUp: stepUpPolicy(),
   };
 }

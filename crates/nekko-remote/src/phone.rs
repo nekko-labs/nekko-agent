@@ -58,6 +58,8 @@ pub struct Policy {
     pub photo_chars: usize,
     /// `PHONE_MAX_FRAME_BYTES`: the largest sealed reply frame sent to a phone.
     pub max_frame_bytes: usize,
+    /// `PHONE_UPLOAD`: a clip's pieces (`attachment:upload`, #2777).
+    pub upload: Upload,
     /// `PHONE_CHANGES_VIEW`: the limits of a phone's Changes view.
     pub changes_view: crate::phone_changes::Limits,
     /// `PHONE_VIEWS` and the views beyond the chat (phone_views.rs).
@@ -170,6 +172,7 @@ pub fn policy() -> &'static Policy {
             photo_side: v["sessionView"]["photoSide"].as_u64().unwrap_or(0) as u32,
             photo_chars: v["sessionView"]["photoChars"].as_u64().unwrap_or(0) as usize,
             max_frame_bytes: v["maxFrameBytes"].as_u64().unwrap_or(9 * 1024 * 1024) as usize,
+            upload: Upload::from(&v["upload"]),
             changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
             views: crate::phone_views::Views::from_policy(&v),
             queue_edit_keys: strings(&v["queueEditKeys"]),
@@ -363,6 +366,72 @@ fn phone_skill(v: &Value) -> Result<SkillCall, Denied> {
 }
 
 /// A phone's call checked against the allowlist and the per-channel rules.
+/// `PHONE_UPLOAD`. Missing numbers take nothing: every piece is refused.
+#[derive(Debug, Clone, Default)]
+pub struct Upload {
+    pub chunk_bytes: u64,
+    pub max_bytes: u64,
+    pub name_chars: usize,
+    pub session_id_chars: usize,
+}
+
+impl Upload {
+    fn from(v: &Value) -> Self {
+        let n = |k: &str| v[k].as_u64().unwrap_or(0);
+        Upload {
+            chunk_bytes: n("chunkBytes"),
+            max_bytes: n("maxBytes"),
+            name_chars: n("nameChars") as usize,
+            session_id_chars: n("sessionIdChars") as usize,
+        }
+    }
+
+    /// Why an `attachment:upload` call is refused, or None (`phoneUploadProblem`).
+    pub fn problem(&self, args: &[Value]) -> Option<&'static str> {
+        if args.len() != 6 {
+            return Some("upload arguments");
+        }
+        let utf16 = |s: &str| s.encode_utf16().count();
+        if !args[0].as_str().is_some_and(|c| !c.is_empty() && utf16(c) <= self.session_id_chars) {
+            return Some("chat id");
+        }
+        if !args[1].as_str().is_some_and(|id| {
+            (8..=64).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        }) {
+            return Some("upload id");
+        }
+        let name_ok = |n: &str| {
+            !n.trim().is_empty()
+                && utf16(n) <= self.name_chars
+                && !n.chars().any(|c| c == '/' || c == '\\' || (c as u32) < 0x20 || c == '\u{7f}')
+        };
+        if !args[2].as_str().is_some_and(name_ok) {
+            return Some("file name");
+        }
+        // A whole number in JSON, as `Number.isSafeInteger` (1.0 is one too).
+        let whole = |v: &Value| {
+            v.as_u64().or_else(|| {
+                v.as_f64().filter(|f| f.fract() == 0.0 && *f >= 0.0 && *f <= 9_007_199_254_740_991.0).map(|f| f as u64)
+            })
+        };
+        let Some(total) = whole(&args[4]).filter(|t| (1..=self.max_bytes).contains(t)) else { return Some("size") };
+        if whole(&args[3]).is_none_or(|o| o >= total) {
+            return Some("offset");
+        }
+        let longest = self.chunk_bytes.div_ceil(3) * 4;
+        let base64 = |c: &str| {
+            let body = c.trim_end_matches('=');
+            c.len() - body.len() <= 2
+                && !body.is_empty()
+                && body.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/')
+        };
+        if !args[5].as_str().is_some_and(|c| !c.is_empty() && c.len() as u64 <= longest && base64(c)) {
+            return Some("chunk");
+        }
+        None
+    }
+}
+
 pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     if !channel_allowed(channel) {
         return Err(denied("channel-denied", channel));
@@ -542,6 +611,11 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
             client_message_id(arg(0))?;
             if let Some(skill) = arg(0).get("skill") {
                 out.skill = Some(phone_skill(skill)?);
+            }
+        }
+        "attachment:upload" => {
+            if let Some(problem) = policy().upload.problem(args) {
+                return Err(denied("value-invalid", problem));
             }
         }
         "chat:queue" => {
@@ -3274,6 +3348,31 @@ mod tests {
                     assert_eq!(r.ask(c, json!([]), None), refused("channel-denied", c));
                 }
             }
+        }
+
+        #[test]
+        fn screens_a_phones_clip_piece() {
+            // #2777: one ordered piece of at most 3 MiB toward a file of at most 50 MB.
+            let ok = json!(["s1", "upload-1234", "clip.mp4", 0, 10, "AAAA"]);
+            let args = |v: &Value| v.as_array().unwrap().clone();
+            assert!(screen("attachment:upload", &args(&ok)).is_ok());
+            let refused = |v: Value| screen("attachment:upload", &args(&v)).unwrap_err().detail;
+            assert_eq!(refused(json!(["s1", "upload-1234", "clip.mp4", 0, 10])), "upload arguments");
+            assert_eq!(refused(json!(["s1", "short", "clip.mp4", 0, 10, "AAAA"])), "upload id");
+            assert_eq!(refused(json!(["s1", "up/../1234", "clip.mp4", 0, 10, "AAAA"])), "upload id");
+            for name in ["../a.mp4", "a\\b.mp4", " ", "a\nb.mp4"] {
+                assert_eq!(refused(json!(["s1", "upload-1234", name, 0, 10, "AAAA"])), "file name");
+            }
+            assert_eq!(refused(json!(["s1", "upload-1234", "a.mp4", 0, 50_000_001u64, "AAAA"])), "size");
+            assert_eq!(refused(json!(["s1", "upload-1234", "a.mp4", 10, 10, "AAAA"])), "offset");
+            assert_eq!(refused(json!(["s1", "upload-1234", "a.mp4", 0, 10, "not base64!"])), "chunk");
+            let longest = 3 * 1024 * 1024 / 3 * 4;
+            assert!(
+                screen("attachment:upload", &args(&json!(["s1", "upload-1234", "a.mp4", 0, 10, "A".repeat(longest)])))
+                    .is_ok()
+            );
+            assert_eq!(refused(json!(["s1", "upload-1234", "a.mp4", 0, 10, "A".repeat(longest + 4)])), "chunk");
+            assert!(screen("attachment:import", &[json!("s1"), json!("a"), json!("data:,")]).is_err());
         }
 
         #[test]

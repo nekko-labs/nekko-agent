@@ -115,7 +115,7 @@
     <string name="chat_terminal">终端</string>
     <string name="chat_dictate">听写</string>
     <string name="chat_photos_max">最多 %1$d 张</string>
-    <string name="chat_image_from_files">从文件中选择图片</string>
+    <string name="chat_image_from_files">照片和视频</string>
     <string name="chat_take_photo">拍照</string>
     <string name="chat_remove_photo">移除照片 %1$d</string>
     <string name="chat_adding_photo">正在添加照片</string>
@@ -297,4 +297,9 @@
     <!-- Folded by default in the transcript (#2453). -->
     <string name="chat_progress_note">进度备注</string>
     <string name="chat_conversation_summary">对话摘要</string>
+    <!-- Videos from the message box (#2777). -->
+    <string name="chat_clip_sending">正在发送… %1$d%%</string>
+    <string name="chat_clip_attached">已附加到聊天</string>
+    <string name="chat_clip_failed">无法发送此视频</string>
+    <string name="chat_remove_clip">移除 %1$s</string>
 </resources>

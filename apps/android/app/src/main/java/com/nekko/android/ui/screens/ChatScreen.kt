@@ -1025,11 +1025,13 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
     val res = LocalResources.current
     val lock = LocalAppLock.current
     val state by vm.photos.state.collectAsStateWithLifecycle()
+    val clips by vm.clips.state.collectAsStateWithLifecycle()
     // Where the camera app was asked to write; survives the activity being recreated meanwhile.
     var shot by rememberSaveable { mutableStateOf<String?>(null) }
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoTray.MAX_PHOTOS)) { uris ->
+    // Photos and videos (#2777): photos stay on the phone until Send, videos go to the computer at once.
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoTray.MAX_PHOTOS + com.nekko.android.chat.ClipTray.MAX_CLIPS)) { uris ->
         lock?.returned()
-        vm.addPhotos(context.contentResolver, uris)
+        vm.addMedia(context.contentResolver, uris)
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         lock?.returned()
@@ -1047,7 +1049,7 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
         state = state,
         onPickFiles = {
             lock?.expectReturn()
-            pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
         },
         onTakePhoto = if (!hasCamera) null else {
             {
@@ -1069,7 +1071,9 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
         onRemove = vm.photos::remove,
         take = vm.photos::take,
         restore = vm.photos::restore,
-        clearError = vm.photos::clearError,
+        clearError = { vm.photos.clearError(); vm.clips.clearError() },
+        clips = clips,
+        onRemoveClip = vm::removeClip,
     )
 }
 
