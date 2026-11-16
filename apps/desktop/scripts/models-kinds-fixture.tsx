@@ -12,7 +12,7 @@ import fixture from '../src/renderer/components/engine/recommendations.fixture.j
 
 const GB = 1e9;
 const pic = (o: Record<string, unknown>) => ({ owner: 'Tongyi-MAI', license: 'Apache-2.0', capabilities: ['create'], placement: 'gpu', headroomBytes: 0.5 * GB, ...o });
-const zImage = pic({ modelId: 'z-image-turbo', name: 'Z-Image Turbo', repo: 'leejet/Z-Image-Turbo-GGUF', companionSet: 'z-image', quant: 'Q4_K', downloadLabel: 'Q4_K', files: ['z_image_turbo-Q4_K.gguf'], weightsBytes: 3.86 * GB, companionBytes: 2.83 * GB, downloadBytes: 6.70 * GB, memoryBytes: 6.0 * GB, offloadToCpu: true, fit: 'tight' });
+const zImage = pic({ modelId: 'z-image-turbo', name: 'Z-Image Turbo', repo: 'leejet/Z-Image-Turbo-GGUF', companionSet: 'z-image', quant: 'Q4_K', downloadLabel: 'Q4_K', files: ['z_image_turbo-Q4_K.gguf'], weightsBytes: 3.86 * GB, companionBytes: 2.83 * GB, downloadBytes: 6.70 * GB, memoryBytes: 6.0 * GB, offloadToCpu: true, fit: 'tight', time: { seconds: 31, basis: 'measuredHere', samples: 4 } });
 const klein = pic({ modelId: 'flux2-klein-4b', name: 'FLUX.2 klein 4B', owner: 'Black Forest Labs', repo: 'leejet/FLUX.2-klein-4B-GGUF', capabilities: ['create', 'edit'], companionSet: 'flux2-klein-4b', quant: 'Q4_0', downloadLabel: 'Q4_0', files: ['flux-2-klein-4b-Q4_0.gguf'], weightsBytes: 2.46 * GB, companionBytes: 2.83 * GB, downloadBytes: 5.29 * GB, memoryBytes: 4.6 * GB, offloadToCpu: true, fit: 'fits' });
 const recs = {
   ...(fixture as any).rtx4060,

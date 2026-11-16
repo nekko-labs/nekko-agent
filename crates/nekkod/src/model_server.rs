@@ -308,9 +308,11 @@ impl Server {
         if let Some(key) = nekko_js::truthy_str(settings.get("apiKey")) {
             req = req.header("authorization", format!("Bearer {key}"));
         }
+        let clock = std::time::Instant::now();
         let res = req.send().await.map_err(|_| "fetch failed".to_string())?;
         let status = res.status();
         let result: Value = res.json().await.map_err(|e| e.to_string())?;
+        let ms = clock.elapsed().as_secs_f64() * 1000.0;
         if !status.is_success() || result.get("data").and_then(Value::as_array).is_none_or(Vec::is_empty) {
             return Err(result
                 .get("error")
@@ -319,7 +321,19 @@ impl Server {
                 .map(nekko_js::display)
                 .unwrap_or_else(|| format!("Image generation failed (HTTP {}).", status.as_u16())));
         }
+        // An edit reads its pictures first and takes longer: only a picture from words is timed.
+        if request.get("refImages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            self.timed(&model, ms).await;
+        }
         Ok(result)
+    }
+
+    /// Keep how long the picture or clip took against the model's file, for
+    /// the recommendations' "here" figure. The model was loaded before the clock started.
+    async fn timed(&self, model: &Value, ms: f64) {
+        if let Some(path) = model.get("path").and_then(Value::as_str) {
+            self.machine.record_picture(path, ms).await;
+        }
     }
 
     /// What the library's model can do, from its companion set (`create`,
@@ -365,6 +379,7 @@ impl Server {
         let _busy = child.begin();
         let base = format!("http://127.0.0.1:{}", child.port);
         on_stage("generating");
+        let clock = std::time::Instant::now();
         let res = self
             .client
             .post(format!("{base}/sdcpp/v1/vid_gen"))
@@ -423,6 +438,7 @@ impl Server {
                     if result.get("b64_json").and_then(Value::as_str).is_none_or(str::is_empty) {
                         return Err("The video model finished without a clip.".into());
                     }
+                    self.timed(&model, clock.elapsed().as_secs_f64() * 1000.0).await;
                     return Ok(result);
                 }
                 "failed" | "cancelled" => {

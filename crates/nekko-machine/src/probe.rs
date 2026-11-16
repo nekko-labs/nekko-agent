@@ -245,6 +245,12 @@ impl Machine {
         self.speeds.record(path, &machine, predicted_n, predicted_ms, alone, nekko_js::now_ms())
     }
 
+    /// One picture or clip the picture model at `path` made in `ms`, already loaded.
+    pub async fn record_picture(&self, path: &str, ms: f64) -> bool {
+        let machine = crate::measured::machine_key(&self.profile(false).await);
+        self.speeds.record_picture(path, &machine, ms, nekko_js::now_ms())
+    }
+
     /// Where the daemon keeps its data, when it knows.
     pub fn data_dir(&self) -> Option<&Path> {
         self.data_dir.as_deref()

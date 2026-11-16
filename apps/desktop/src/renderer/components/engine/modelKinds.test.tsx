@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CatalogModel, ImageRecommendedOption, Recommendations } from '@nekko-agent/shared';
 import { catalogKind, familyKind, groupModelFamilies, setUpPictureModels, shelveCatalog, type LibraryModel } from './modelFamilies.js';
 import { KIND_FILTERS, isMoreFamily, kindNote, setUpFitText, setUpModelOf } from './ModelsHome.js';
-import { pictureModelBlurb } from './pictureModelText.js';
+import { durationText, pictureModelBlurb, pictureTimeText } from './pictureModelText.js';
 import { RecommendationList, imageFitText } from './RecommendedModels.js';
 import { needsOffload } from '../agent-console/imageOffload.js';
 import fixture from './recommendations.fixture.json';
@@ -162,5 +162,34 @@ describe('picture and video models are a short list', () => {
   it('says a set-up model\'s fit in the recommendation\'s words', () => {
     expect(setUpFitText(option({ fit: 'tooBig' }))).toBe('Too large for this computer');
     expect(setUpFitText(option({ fit: 'fits', offloadToCpu: false }))).toBe('Fits');
+  });
+});
+
+describe('how long a picture takes', () => {
+  it('says nothing unless something measured it', () => {
+    expect(pictureTimeText(option({}))).toBeNull();
+    expect(pictureTimeText(option({ time: { seconds: 0, basis: 'measuredHere' } }))).toBeNull();
+  });
+
+  it('tells this machine\'s own pictures from a run on the same kind of hardware', () => {
+    const here = pictureTimeText(option({ time: { seconds: 24.6, basis: 'measuredHere', samples: 5 } }))!;
+    expect(here.text).toBe('25 s a picture here');
+    expect(here.title).toContain('last 5 pictures');
+    const like = pictureTimeText(option({ time: { seconds: 18, basis: 'measured', width: 1024, height: 1024, steps: 20 } }))!;
+    expect(like.text).toBe('~18 s a picture');
+    expect(like.title).toContain('1024x1024 and 20 steps');
+    expect(pictureTimeText(option({ capabilities: ['video'], time: { seconds: 410, basis: 'measuredHere', samples: 3 } }))!.text).toBe('6.8 min a clip here');
+  });
+
+  it('counts in seconds, then minutes', () => {
+    expect([0.4, 89, 90, 150, 900].map(durationText)).toEqual(['1 s', '89 s', '1.5 min', '2.5 min', '15 min']);
+  });
+
+  it('shows it on the pick\'s row in Best for this machine', () => {
+    const timed: Recommendations = { ...withPictures, imageTasks: [{ ...withPictures.imageTasks![0], pick: option({ time: { seconds: 31, basis: 'measuredHere', samples: 4 } }) }] };
+    const html = renderToStaticMarkup(<RecommendationList recs={timed} models={[]} open onDownload={vi.fn()} onRecheck={vi.fn()} />);
+    expect(html).toContain('data-picture-time="measuredHere"');
+    expect(html).toContain('31 s a picture here');
+    expect(renderToStaticMarkup(<RecommendationList recs={withPictures} models={[]} open onDownload={vi.fn()} onRecheck={vi.fn()} />)).not.toContain('data-picture-time');
   });
 });

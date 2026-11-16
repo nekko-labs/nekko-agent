@@ -17,7 +17,7 @@ To edit, attach, paste or drop a photo and describe the change, or press **Edit*
 
 On the iPhone, an image chat edits the same way: **+ → Photos to edit** (or Paste image), then describe the change, or tap **Edit** under a made picture (not under a clip). Up to four photos, scaled to 1,536 px on the long side. The edit runs on the computer and needs it online; if the chat's model can't edit photos, the computer says so in the chat.
 
-Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. Memory-fit estimates are not measured speed or output-quality guarantees.
+Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. After you have made three pictures with a model, Models shows how long one takes on your computer ("25 s a picture here"): the median of your recent ones, at the sizes you used. Memory-fit estimates are not measured speed or output-quality guarantees.
 
 ### Short video clips (experimental)
 
