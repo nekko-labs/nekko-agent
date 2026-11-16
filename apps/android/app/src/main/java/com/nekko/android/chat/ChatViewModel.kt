@@ -651,16 +651,25 @@ class ChatViewModel(
         val a = shownApproval(ui.value.approval) ?: return
         mine()
         repo.responses.approve(sessionId, a, ok, words)
-        repo.responses.flush()
-        if (responses.value.any { it.callId == a.call.id && it.status == com.nekko.android.data.ResponseMessage.Status.SENT }) controller.responded(a.call.id)
+        send(a.call.id)
     }
 
     suspend fun answer(answers: List<AskAnswer>) {
         val q = shownQuestion(ui.value.question) ?: return
         mine()
         repo.responses.answer(sessionId, q, answers)
-        repo.responses.flush()
-        if (responses.value.any { it.callId == q.callId && it.status == com.nekko.android.data.ResponseMessage.Status.SENT }) controller.responded(q.callId)
+        send(q.callId)
+    }
+
+    /**
+     * Send what waits, in the view model's scope: the card that asked steps aside the moment its
+     * message exists, and its own scope going must not cut the send short (back to Pending).
+     */
+    private suspend fun send(callId: String) {
+        viewModelScope.launch {
+            repo.responses.flush()
+            if (responses.value.any { it.callId == callId && it.status == com.nekko.android.data.ResponseMessage.Status.SENT }) controller.responded(callId)
+        }.join()
     }
 
     /** Try again, with the same fresh check; reconnects first when the computer is away. */

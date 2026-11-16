@@ -94,6 +94,20 @@ class PendingResponsesDeviceTest {
         shot("3-back-online")
     }
 
+    /** Online, Allow goes at once and reads Sent: the card leaving must not cut the send short (LiveRelayTest's Deny). */
+    @Test fun allowTappedOnlineIsSentAtOnce() {
+        val repo = repo()
+        val vm = ChatViewModel("s1", repo, null, null)
+        compose.setContent { NekkoTheme(dark = false) { ChatScreen(vm, onBack = {}) } }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Allow")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasText("Allow")).performClick()
+        if (after) {
+            compose.waitUntil(10_000) { computer.approved.isNotEmpty() }
+            compose.waitUntil(5_000) { compose.onAllNodes(hasText("Sent")).fetchSemanticsNodes().isNotEmpty() }
+            assertEquals(listOf("call-1"), computer.approved)
+        }
+    }
+
     private fun repo(): ComputersRepository {
         val repo = ComputersRepository(
             store = MemoryStore(),
@@ -198,7 +212,11 @@ class PendingResponsesDeviceTest {
             override fun close() { status.value = RelayStatus(RelayState.IDLE) }
             override fun nudge() {}
             override fun reconnect() {}
-            override suspend fun call(channel: String, vararg args: JsonElement) = answer(channel, args.toList())
+            // As a relay does, the answer comes a moment later: the card has left by then.
+            override suspend fun call(channel: String, vararg args: JsonElement): JsonElement {
+                if (channel == Channels.CHAT_PENDING || channel == Channels.TOOL_APPROVE) kotlinx.coroutines.delay(300)
+                return answer(channel, args.toList())
+            }
             override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) = answer(channel, args.toList())
         }
     }
