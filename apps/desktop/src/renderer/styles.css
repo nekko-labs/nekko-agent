@@ -901,7 +901,9 @@
   --rail-open-delay: 50ms;
   --rail-close-delay: 60ms;
   width: var(--rail-w-rest);
-  padding-inline: 8px;
+  /* A 40px row at rest (52 - 8 - 4), so each 40px icon box fits its row and
+     the active tile and hover wash sit square on the icon. */
+  padding-inline: 8px 4px;
   justify-content: flex-start;
   isolation: isolate;
   pointer-events: none;
@@ -960,7 +962,8 @@
 .rail-indicator {
   position: absolute;
   top: var(--rail-head, 0px);
-  left: 6px;
+  /* Past the scroller's 8px reach, so the tile covers exactly the row. */
+  left: 8px;
   right: 0;
   height: var(--rail-row);
   border-radius: 12px;
