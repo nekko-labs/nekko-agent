@@ -6,7 +6,7 @@ status: in-progress
 
 # Nekko Cloud is invite-only while it goes live
 
-Tracking: [#2932](https://github.com/nekko-labs/nekko-agent/issues/2932), go-live checklist [#2733](https://github.com/nekko-labs/nekko-agent/issues/2733). Decision: [0105](../../docs/decisions/0105-nekko-cloud-is-invite-only-behind-an-account-gate.md).
+Tracking: [#2932](https://github.com/nekko-labs/nekko-agent/issues/2932), go-live checklist [#2733](https://github.com/nekko-labs/nekko-agent/issues/2733). Decision: [0106](../../docs/decisions/0106-nekko-cloud-is-invite-only-behind-an-account-gate.md).
 
 ## Goal
 

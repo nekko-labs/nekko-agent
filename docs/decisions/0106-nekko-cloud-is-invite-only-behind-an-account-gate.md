@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-17
 ---
 
-# 0105. Nekko Cloud goes live invite-only, behind an account gate in the API
+# 0106. Nekko Cloud goes live invite-only, behind an account gate in the API
 
 ## Context
 
