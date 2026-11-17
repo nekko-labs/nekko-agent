@@ -1,6 +1,6 @@
-# Direct text cloud chats on iPhone
+# Direct cloud chats on iPhone
 
-Use a cloud model without pairing or keeping a computer online. These are device-local text conversations, separate from computer chats and Nekko Cloud sync.
+Use a cloud model without pairing or keeping a computer online. These are device-local conversations (text and photos), separate from computer chats and Nekko Cloud sync.
 
 ## Set up
 
@@ -27,6 +27,7 @@ Provider credentials and model access can incur charges. Mantle/Foundry/Vertex u
 ## During a chat
 
 - **Stop** keeps the text received so far. **Try again** replaces the last assistant reply and sends the conversation again; it can incur another charge.
+- **+ → Photos** (or Paste image) adds up to four photos to a message, in New chat and in the open chat. A model its provider says can't read photos has no **+**; where the provider doesn't say, a model that can't read them fails with a safe status explanation. Photos are kept with the chat on this device and sent again with each turn, like the text.
 - Model selection affects the next reply. Rename, pin, complete, restore and delete work locally.
 - Completed replies need an explicit stream completion marker. A cut-off connection is an error, not a successful answer; received text is kept. Partial replies interrupted by app termination are marked on reopening.
 - To replace an expired token: Settings → Models on this iPhone → touch and hold the provider → **New key**. Key rotation, disable and remove stop its active replies and invalidate in-flight discovery/tests.
@@ -34,7 +35,7 @@ Provider credentials and model access can incur charges. Mantle/Foundry/Vertex u
 
 ## Privacy and boundaries
 
-Keys stay in this device's Keychain; chat/provider metadata is kept in protected local Application Support outside backups. The configured provider receives your conversation and key over HTTPS. Nothing in a direct chat passes through a computer, the relay or Nekko Cloud. No tools, file access, photo attachments, subscription harnesses, local model servers or chat sync are provided in this mode.
+Keys stay in this device's Keychain; chat/provider metadata is kept in protected local Application Support outside backups. The configured provider receives your conversation and key over HTTPS. Nothing in a direct chat passes through a computer, the relay or Nekko Cloud. Photos you attach go to the provider inside the request, never fetched from an address. No tools, file access, subscription harnesses, local model servers or chat sync are provided in this mode.
 
 The app refuses credentials in URLs, configured queries/fragments, unsafe model paths/headers and every HTTP redirect. Raw provider error bodies are not saved or displayed because an endpoint can echo a secret. Streams/model lists are bounded and overly large or malformed responses stop with an error rather than silently dropping text.
 

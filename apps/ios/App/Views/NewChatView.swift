@@ -232,8 +232,7 @@ struct NewChatView: View {
                 }
                 .accessibilityLabel("Add")
                 .accessibilityIdentifier("newChat.add")
-                // Chats on this iPhone send text only.
-                .disabled(onPhone || imageChat)
+                .disabled(imageChat || (onPhone && phoneModel.map { !phone.acceptsImages(providerId: $0.0, modelId: $0.1) } == true))
                 // The desktop composer's order (#2448): +, the folder, then Simple's asks-first icon; mic and Start at the right.
                 if !onPhone && !imageChat {
                     folderMenu
@@ -488,7 +487,7 @@ struct NewChatView: View {
                 && imageParams.modelId != nil && images.isEmpty && !loadingPhotos
                 && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        if onPhone { return !busy && phoneModel != nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if onPhone { return !busy && !loadingPhotos && phoneModel != nil && !(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty) }
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty
         return !busy && !autoFinding && !loadingPhotos && model != nil && !(offline && (empty || !supportingFolders.isEmpty))
     }
@@ -609,8 +608,6 @@ struct NewChatView: View {
         if id == PhoneProviders.computerId {
             pickedComputer = true
             onPhone = true
-            images = []
-            photos = []
             Task { await pickPhoneDefault() }
             return
         }
@@ -764,9 +761,11 @@ struct NewChatView: View {
         if onPhone {
             guard let picked = phoneModel else { return }
             let (p, m) = picked
-            let id = phone.create(providerId: p, modelId: m, first: text)
+            let id = phone.create(providerId: p, modelId: m, first: text, images: phone.acceptsImages(providerId: p, modelId: m) ? images : [])
             app.prefs.lastModel[PhoneProviders.computerId] = "\(p)::\(m)"
             text = ""
+            images = []
+            photos = []
             store.drafts.clear(DraftStore.newChat)
             opened(id)
             return
