@@ -1698,7 +1698,10 @@ impl Turns {
         let wanted = Wanted {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
-            model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+            // A chat saved on a family alias runs on that family's newest model.
+            model: str_at(opts, "modelId")
+                .filter(|m| !js::trim(m).is_empty())
+                .map(nekko_agent::providers::claude_code::concrete_model_id),
             // `normal` means no choice was made: Claude Code's own setting stands.
             effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
