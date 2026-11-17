@@ -1,0 +1,56 @@
+<!doctype html>
+<!-- Source for docs/brand/nekko-banner-1280x640.png (README hero, and the base of
+     apps/website/og.png). Colours from spec/brand/colour-palette.md (dark).
+     Background: the website's dot-matrix swell (apps/website/site.js), dark look,
+     frozen at one frame. Nekko: dark-mode mascot colours. Render with
+     `node scripts/make-readme-banner.cjs`. -->
+<html><head><meta charset="utf-8"><style>
+@font-face { font-family: 'Inter Tight'; font-weight: 100 900; src: url(../../apps/website/fonts/inter-tight-latin-wght-normal.woff2) format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-weight: 100 800; src: url(../../apps/website/fonts/jetbrains-mono-latin-wght-normal.woff2) format('woff2'); }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1280px; height: 640px; overflow: hidden; }
+body {
+  position: relative; color: #FFFFFF; font-family: 'Inter Tight', sans-serif;
+  background:
+    radial-gradient(55% 520px at 8% 0%, rgba(133, 79, 108, 0.26), transparent 70%),
+    radial-gradient(45% 520px at 80% 50%, rgba(133, 79, 108, 0.16), transparent 70%),
+    radial-gradient(60% 420px at 20% 100%, rgba(133, 79, 108, 0.18), transparent 70%),
+    #0B0C14;
+}
+canvas { position: absolute; inset: 0; }
+.copy { position: absolute; left: 96px; top: 0; }
+.eyebrow { position: absolute; top: 179px; font: 500 14px 'JetBrains Mono', monospace; letter-spacing: 0.34em; color: #A3A4B6; white-space: nowrap; }
+h1 { position: absolute; top: 216px; font-weight: 800; font-size: 118px; letter-spacing: -0.055em; line-height: 1.1; white-space: nowrap; }
+.l1, .l2 { position: absolute; font-weight: 500; font-size: 35px; letter-spacing: -0.02em; white-space: nowrap; }
+.l1 { top: 374px; } .l2 { top: 418px; color: #C99BB3; }
+.foot { position: absolute; top: 564px; font: 400 15px 'JetBrains Mono', monospace; color: #A3A4B6; white-space: nowrap; }
+.foot b { font-weight: 600; color: #C99BB3; }
+svg { position: absolute; left: 813px; top: 132px; }
+</style></head><body>
+<canvas id="wave" width="1280" height="640"></canvas>
+<div class="copy">
+  <div class="eyebrow">FREE &amp; OPEN SOURCE · MIT</div>
+  <h1>Nekko Agent</h1>
+  <div class="l1">AI help on your computer.</div>
+  <div class="l2">For coding and everyday work.</div>
+  <div class="foot"><b>nekkoagent.com</b> &nbsp;·&nbsp; Local or online AI</div>
+</div>
+<!-- Nekko: the website's pixel head geometry, dark-mode colours from the mascot rule -->
+<svg viewBox="0 0 32 32" width="384" height="384" shape-rendering="crispEdges">
+  <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#16161C" stroke="#F3E8EE" stroke-width="2" stroke-linejoin="miter"/>
+  <path d="M11 15H13V18H11Z M20 15H22V18H20Z" fill="#FFFFFF"/>
+  <path d="M15 20H17V21H15Z" fill="#854F6C"/>
+</svg>
+<script>
+// Same maths as the website's dark-look swell, one frozen frame.
+const ctx = document.getElementById('wave').getContext('2d');
+const W = 1280, H = 640, CELL = 9, t = 1.2;
+for (let y = 0; y < H; y += CELL) for (let x = 0; x < W; x += CELL) {
+  const w = Math.sin(x / 110 - t * 1.4 + Math.sin(y / 150 + t * 0.5) * 1.6);
+  const a = Math.max(0, w) ** 3 * 0.34;
+  if (a < 0.025) continue;
+  const s = a > 0.18 ? 3 : 2, k = x / W;
+  ctx.fillStyle = `rgba(${Math.round(192 - 59 * k)},${Math.round(132 - 53 * k)},${Math.round(181 - 73 * k)},${(a * 1.1).toFixed(3)})`;
+  ctx.fillRect(Math.round(x + (CELL - s) / 2), Math.round(y + (CELL - s) / 2), s, s);
+}
+</script></body></html>
