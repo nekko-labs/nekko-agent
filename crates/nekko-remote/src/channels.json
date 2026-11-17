@@ -42,6 +42,7 @@
  "connector:fetch",
  "connectors:list",
  "context:preview",
+ "context:promptProfiles",
  "context:setPrefs",
  "context:toggle",
  "data:wipe",

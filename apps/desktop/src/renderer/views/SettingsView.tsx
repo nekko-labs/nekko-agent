@@ -6,6 +6,7 @@ import { CHAT_MODE_LABEL, AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, aut
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
+import { PromptProfilesSettings } from '../components/PromptProfilesSettings.js';
 import { QuietTabs, StatusDot } from '../components/primitives/index.js';
 import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses.js';
@@ -332,6 +333,7 @@ export function SettingsView() {
                 <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
               </div>
               <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="System prompt size"><PromptProfilesSettings settings={settings} update={update} /></ErrorBoundary>
               <FunSection settings={settings} update={update} />
             </SettingsGroup>
             <SettingsGroup id="agents">

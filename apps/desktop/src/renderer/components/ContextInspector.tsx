@@ -351,6 +351,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
             <p className="mt-1 text-2xs text-ink-faint">
               {Math.round(pct)}% of the {windowTokens.toLocaleString()}-token window · {draftTokens > 0 ? 'includes what you’re typing.' : 'updates as you type.'}
             </p>
+            {bundle?.promptProfile && <p className="mt-(--q-tight) text-2xs text-ink-faint" data-prompt-profile={bundle.promptProfile.profile}>{bundle.promptProfile.reason}</p>}
           </div>
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">

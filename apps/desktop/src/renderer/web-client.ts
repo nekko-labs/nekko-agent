@@ -565,6 +565,7 @@ function makeWebClient(): NekkoApi {
     toggleContextItem: (sessionId, itemId, included, pinned) =>
       call(IpcChannels.contextToggle, sessionId, itemId, included, pinned),
     setContextPrefs: (sessionId, prefs) => call(IpcChannels.contextSetPrefs, sessionId, prefs),
+    promptProfileTexts: () => call(IpcChannels.contextPromptProfiles),
 
     buildSpec: (sessionId) => call(IpcChannels.specBuild, sessionId),
     buildSpecDoc: (sessionId, docId, workspaceId) => call(IpcChannels.specBuildDoc, sessionId, docId, workspaceId),
