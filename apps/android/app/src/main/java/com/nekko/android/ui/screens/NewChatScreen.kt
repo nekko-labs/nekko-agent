@@ -143,7 +143,8 @@ fun NewChatScreen(
     var pick by rememberSaveable(stateSaver = ModelPickSaver) { mutableStateOf<ModelPick?>(null) }
     var touched by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    var workspaceId by rememberSaveable { mutableStateOf<String?>(null) }
+    // A chat about a pull request (#2109) opens on the folder that holds its repository.
+    var workspaceId by rememberSaveable { mutableStateOf(if (shared != null) repo.drafts.draft(DraftStore.NEW_CHAT).workspaceId else null) }
     /** How hard the model works (T201a); null follows the computer's own effort setting. */
     var effort by rememberSaveable { mutableStateOf<String?>(null) }
     /** Run on was used here, so the row stays while the other computer connects and lists its models. */

@@ -69,7 +69,7 @@ class DirectConnectorHTTP : ConnectorHTTP {
  * What this phone is connected to (#2109, the iPhone's ConnectorsModel): the list and each
  * token in the Keystore-sealed store, apart from the computers' connectors.
  */
-class Connectors(private val secrets: SecureStore, private val http: ConnectorHTTP, private val now: () -> Long = System::currentTimeMillis) {
+class Connectors(private val secrets: SecureStore, val http: ConnectorHTTP, private val now: () -> Long = System::currentTimeMillis) {
     data class State(val loaded: Boolean = false, val connectors: List<PhoneConnector> = emptyList(), val selectedGit: String? = null) {
         fun connector(kind: String) = connectors.firstOrNull { it.kind == kind }
         val git: List<PhoneConnector> get() = connectors.filter { it.category == PhoneConnectors.Category.GIT }

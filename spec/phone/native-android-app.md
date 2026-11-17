@@ -163,5 +163,13 @@ The iPhone's Connectors page (decision 0058) on Android, under **Settings → Co
 - **Storage:** the token is in its own slot of the Keystore-sealed store (`phone.connector.token.<kind>`); the list (`phone.connectors.v1`) holds no secret.
 - **Calls:** `DirectConnectorHTTP` follows no redirect, takes https only, and reads at most 2 MB.
 - **Managing:** **New token** and **Disconnect** (it deletes the token). **Pull requests from** picks the git provider when there are several.
-- **Not yet:** the Pull requests screen (Mine, Projects, pins, one-tap prompts), which comes in a second PR for #2109.
+- **Pull requests** (the second PR for #2109, the iPhone's PullRequestsView and PullRequests.swift; `[JVM tests (PullRequestsTest, the iPhone's PullRequestsTests case for case); emulator-verified (PullRequestsDeviceTest), not against live services]`):
+  - **Where:** in the chat list's menu. It reads the selected git provider straight from the phone, with the phone's own token.
+  - **Mine:** to review, opened by me and assigned. On GitHub this is one GraphQL call with three searches; GitLab uses its three lists, Bitbucket the person's uuid. Each pull request appears once, with every role it came under, newest first. Role chips and a filter narrow it.
+  - **Projects:** the repositories the paired computers' folders hold, plus repositories pinned here (**Add a repository**; pins are kept per provider). Long repository lists are split across GitHub searches.
+  - **A pull request's sheet:**
+    - the one-tap prompts: Review it, Fix the failing checks (only when they fail), Address the review comments, Summarize it, Update from the base branch, Ask about it;
+    - where the chat will run (`PullRequestPlace`: the computer whose folder is named like the repository, the active one first);
+    - Open in browser and Share link.
+  - **A prompt** makes that computer the active one, sets New chat's folder, and opens New chat with the words to edit. Nothing is sent until Start.
 

@@ -117,6 +117,7 @@ object Routes {
     const val LOGS = "settings/logs"
     const val PROVIDERS = "settings/providers"
     const val CONNECTORS = "settings/connectors"
+    const val PULL_REQUESTS = "pull-requests"
     const val SIMPLE_MODE = "settings/simple"
     const val CUSTOMIZE = "settings/customize"
     const val PERMISSIONS = "settings/permissions"
@@ -333,6 +334,16 @@ fun NekkoNavHost(
             composable(Routes.AUTOMATIONS) {
                 AutomationsScreen(repo = repo, onBack = { nav.popBackStack() })
             }
+            composable(Routes.PULL_REQUESTS) {
+                val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                com.nekko.android.ui.screens.PullRequestsScreen(
+                    repo = repo, connectors = app.connectors, model = app.pullRequests,
+                    onBack = { nav.popBackStack() },
+                    onConnectors = { nav.navigate(Routes.CONNECTORS) },
+                    // The prompt is New chat's text to edit; nothing goes until Start.
+                    onStartChat = { text -> shareInbox.offer(text); nav.navigate(Routes.NEW) },
+                )
+            }
             composable(Routes.CONNECTORS) {
                 val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
                 com.nekko.android.ui.screens.ConnectorsScreen(app.connectors, onBack = { nav.popBackStack() })
@@ -440,6 +451,7 @@ private fun Panes(
                 onPair = { nav.navigate(Routes.pair()) },
                 onComputers = { nav.navigate(Routes.COMPUTERS) },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
+                onPullRequests = { nav.navigate(Routes.PULL_REQUESTS) },
                 onMonitors = { panes.update(running) { l -> if (l[slot.side.other] == PaneContent.Monitors) l else l.replace(slot.side.other, PaneContent.Monitors) } },
                 pane = slot,
                 phonePrefs = phonePrefs,
@@ -598,6 +610,7 @@ private fun PhoneComputerHome(
         onComputers = { nav.navigate(Routes.COMPUTERS) },
         onSettings = { nav.navigate(Routes.SETTINGS) },
         onMonitors = { nav.navigate(Routes.MONITORS) },
+        onPullRequests = { nav.navigate(Routes.PULL_REQUESTS) },
         onSkipFirstRun = firstRunSkip(phonePrefs),
         phonePrefs = phonePrefs,
         phone = phoneChats(),
