@@ -94,6 +94,8 @@ export interface TaskRecommendation {
 
 export interface Recommendations {
   feedVersion: string;
+  /** `update`: a signed list newer than the one this version shipped, fetched with an update check. */
+  feedSource?: 'bundled' | 'update';
   hardware: {
     /** The device the budget is measured against; `null` on a CPU-only machine. */
     device: string | null;
