@@ -190,8 +190,9 @@ struct PhoneChatView: View {
                     Text(ChatPlace.phoneName).lineLimit(1).layoutPriority(1)
                 }
                 .font(.caption).foregroundStyle(palette.inkSoft)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(String(localized: "\(modelName(chat)) on \(ChatPlace.phoneName)"))
+                // Plain text to accessibility, like ChatView's subtitle: a custom element this
+                // short fails the accessibility audit's hit-region check.
+                .accessibilityRepresentation { Text(String(localized: "\(modelName(chat)) on \(ChatPlace.phoneName)")) }
                 .accessibilityIdentifier("phoneChat.place")
             }
         }
