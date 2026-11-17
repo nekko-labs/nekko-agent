@@ -186,7 +186,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > every desktop preset (Nebula, Terminal, Nord, Solar, Lilac, Lavender, Ember, Spooky, Winter and the
 > experimental families). In October, **Spooky** also switches the app icon to a limited fall
 > version; iOS confirms the change, and the usual icon comes back with any other theme or after
-> Halloween. The iPhone app speaks the desktop's languages (English, Spanish, French, German,
+> Halloween. On Android the icon switches the next time you leave the app, and its launcher icon
+> also has a dark version (a solid plum tile with a pink cat) when the phone is in dark mode.
+> The iPhone app speaks the desktop's languages (English, Spanish, French, German,
 > Portuguese, Japanese and Chinese): it follows the iPhone's language, and **Settings → Appearance →
 > Language** opens iOS Settings to pick one for Nekko Agent alone.
 >

@@ -185,3 +185,16 @@ The iPhone's photo editing in image chats (PhotoEdit.swift, decisions 0067 and 0
 - **Refused on the phone** before anything is signed: more than four photos, a type other than PNG, JPEG or WebP, or more than 6 MiB together.
 - **Unchanged:** image chats still take no skill, and never go through the outbox.
 
+### The dark launcher icon and the Spooky icon (#2118, 2026-11-17)
+
+`[implemented; JVM test (SpookyIconTest: October on the Spooky theme only); emulator-verified (LauncherIconsDeviceTest: the three icons drawn as the launcher gets them, and SpookyIcon.sync enabling exactly one alias), not on a physical phone or a real home screen]`
+
+The iPhone's dark Home Screen icon (#2044) and Spooky alternate icon (SpookyIcon.swift) on Android.
+
+- **Dark:** in night mode the adaptive icon's tile is solid deep plum (`#190019`, `drawable-night/ic_launcher_background`) and the cat soft pink (`#C99BB3`, `values-night` `ic_launcher_mark`), as the iPhone's AppIcon-Dark. Launchers that read the night resources show it.
+- **Spooky:**
+  - **The icon:** the harvest night of falling leaves and pumpkins, rendered from the iPhone's AppIcon-Spooky `icon.svg` without its cat, with the scene in the adaptive icon's visible centre, and the usual cat (white) on top.
+  - **The switch:** the launcher entry is two activity aliases of MainActivity, `.LauncherDefault` and `.LauncherSpooky`; exactly one is enabled. `SpookyIcon.sync` enables the Spooky one from October 1 through Halloween when the theme on screen is Spooky (`autumn`), else the usual one, and changes nothing when it already matches.
+  - **When:** it runs in `onStop`, never while the app is in front, because on some phones disabling the alias the app opened from closes it.
+  - **Unlike the iPhone:** no system confirmation is shown, and some launchers move or re-add the icon when it changes.
+

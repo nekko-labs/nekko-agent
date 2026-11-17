@@ -38,6 +38,8 @@ import kotlinx.coroutines.launch
  * A FragmentActivity because the system authentication prompt (app lock) is a fragment.
  */
 class MainActivity : FragmentActivity() {
+    /** The theme on screen is Spooky; the launcher icon follows it in [onStop]. */
+    @Volatile private var spookyTheme = false
     /** The system prompt for the app lock and for confirming Changes (AN-32). */
     private lateinit var authenticator: Authenticator
 
@@ -60,6 +62,8 @@ class MainActivity : FragmentActivity() {
             val choice by app.themePrefs.choice.collectAsStateWithLifecycle()
             val computer by repo.appearance.collectAsStateWithLifecycle()
             val look = ThemeResolver.resolve(choice, computer, isSystemInDarkTheme())
+            // The Spooky theme's October icon (#2118): switched when the app goes to the background.
+            spookyTheme = look.preset?.id == SpookyIcon.PRESET
             // Status and navigation bar icons follow the app's theme, not only the phone's.
             LaunchedEffect(look.dark) {
                 val bars = if (look.dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
@@ -110,6 +114,8 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onStop() {
+        // Never while the app is in front: on some phones disabling the alias it opened from closes it.
+        runCatching { SpookyIcon.sync(this, spookyTheme) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             unregisterScreenCaptureCallback(screenCapture as Activity.ScreenCaptureCallback)
         }
