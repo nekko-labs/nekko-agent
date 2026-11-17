@@ -13,13 +13,16 @@ public struct PhoneMessage: Codable, Equatable, Sendable, Identifiable {
     public var error: String?
     /// Persisted marker so partial replies are recognized after process death.
     public var incomplete: Bool?
+    /// The user's photos, as image data URLs. Absent in chats saved before photos.
+    public var images: [String]?
 
-    public init(id: String, role: Role, text: String, at: Int64, error: String? = nil) {
+    public init(id: String, role: Role, text: String, at: Int64, error: String? = nil, images: [String]? = nil) {
         self.id = id
         self.role = role
         self.text = text
         self.at = at
         self.error = error
+        self.images = images?.isEmpty == true ? nil : images
     }
 }
 
@@ -302,20 +305,26 @@ public final class PhoneChats {
     // MARK: Chats
 
     /// Start a chat here and send its first message.
-    public func create(providerId: String, modelId: String, first: String) -> String {
+    public func create(providerId: String, modelId: String, first: String, images: [String] = []) -> String {
         let id = PhoneProviders.chatPrefix + newId()
         var chat = PhoneChat(id: id, title: PhoneChat.title(from: first), providerId: providerId, modelId: modelId, createdAt: now())
-        if chat.title.isEmpty { chat.title = String(localized: "New chat") }
+        if chat.title.isEmpty { chat.title = images.isEmpty ? String(localized: "New chat") : String(localized: "Photo") }
         chats.append(chat)
-        send(id, first)
+        send(id, first, images: images)
         return id
     }
 
-    /// Add the user's message and stream the reply.
-    public func send(_ chatId: String, _ text: String) {
+    /// Whether a model takes photos. Unknown counts as yes: a model that can't says so in its reply.
+    public func acceptsImages(providerId: String, modelId: String) -> Bool {
+        models[providerId]?.first { $0.id == modelId }?.acceptsImages ?? true
+    }
+
+    /// Add the user's message (text, photos or both) and stream the reply.
+    public func send(_ chatId: String, _ text: String, images: [String] = []) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !running.contains(chatId), let i = index(chatId) else { return }
-        chats[i].messages.append(PhoneMessage(id: newId(), role: .user, text: text, at: now()))
+        let images = Array(images.filter { PhoneProviders.imagePart($0) != nil }.prefix(PhoneProviders.maxImages))
+        guard !text.isEmpty || !images.isEmpty, !running.contains(chatId), let i = index(chatId) else { return }
+        chats[i].messages.append(PhoneMessage(id: newId(), role: .user, text: text, at: now(), images: images))
         chats[i].archivedAt = nil
         reply(chatId)
     }

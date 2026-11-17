@@ -5,9 +5,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 @Serializable data class PhoneProvider(val id: String, val kind: String, val label: String, val baseUrl: String, val workspaceId: String? = null, val enabled: Boolean = true)
-/** [created]: when the provider published it (OpenAI's `created`, seconds since 1970), if it says. */
-@Serializable data class PhoneModel(val id: String, val name: String, val created: Long? = null)
-@Serializable data class PhoneMessage(val id: String, val role: String, val text: String, val at: Long, val error: String? = null)
+/** [acceptsImages]: true or false where the provider's list says, null when it doesn't. [created]: when the provider published it (OpenAI's `created`, seconds since 1970), if it says. */
+@Serializable data class PhoneModel(val id: String, val name: String, val acceptsImages: Boolean? = null, val created: Long? = null)
+/** [images]: the user's photos as image data URLs; absent in chats saved before photos. */
+@Serializable data class PhoneMessage(val id: String, val role: String, val text: String, val at: Long, val error: String? = null, val images: List<String>? = null)
 @Serializable data class PhoneChat(val id: String, val title: String, val providerId: String, val modelId: String, val createdAt: Long, val updatedAt: Long, val messages: List<PhoneMessage> = emptyList())
 data class PhoneRequest(val url: String, val headers: Map<String, String>, val body: JsonObject? = null, val method: String = "POST")
 
@@ -76,12 +77,52 @@ object PhoneProviders {
             if (p.kind in USAGE_KINDS) putJsonObject("stream_options") { put("include_usage", true) }
             putJsonArray("messages") {
                 if (!a && system != null) add(buildJsonObject { put("role", "system"); put("content", system) })
-                messages.filter { it.text.isNotBlank() && it.role in setOf("user", "assistant") }.forEach { m -> add(buildJsonObject { put("role", m.role); put("content", m.text) }) }
+                messages.filter { it.role in setOf("user", "assistant") }.forEach { m ->
+                    val photos = if (m.role == "user") m.images.orEmpty().mapNotNull(::imagePart) else emptyList()
+                    if (m.text.isBlank() && photos.isEmpty()) return@forEach
+                    add(buildJsonObject {
+                        put("role", m.role)
+                        if (photos.isEmpty()) put("content", m.text) else put("content", content(m.text.takeIf { it.isNotBlank() }, photos, a))
+                    })
+                }
             }
         }
         val path = when { p.kind == "vertex" -> "/publishers/anthropic/models/$model:streamRawPredict"; a -> "/v1/messages"; else -> "/chat/completions" }
         return PhoneRequest(p.baseUrl.trimEnd('/') + path, headers(p, key) + ("Accept" to "text/event-stream"), body)
     }
+    /** A message takes this many photos at most, as in a computer chat. */
+    const val MAX_IMAGES = 4
+    /** The largest photo sent (a data URL); the composer's are about a tenth of this. */
+    const val MAX_IMAGE_CHARS = 8_000_000
+    data class ImagePart(val url: String, val mediaType: String, val data: String)
+    private val IMAGE_URL = Regex("^data:(image/(?:jpeg|png|gif|webp));base64,([A-Za-z0-9+/]+={0,2})$")
+
+    /** A photo as providers take it, from an image data URL; null for anything else (never a remote URL). */
+    fun imagePart(dataUrl: String): ImagePart? {
+        if (dataUrl.length > MAX_IMAGE_CHARS) return null
+        val m = IMAGE_URL.matchEntire(dataUrl) ?: return null
+        return ImagePart(dataUrl, m.groupValues[1], m.groupValues[2])
+    }
+
+    /** Anthropic's image blocks before the text, or the OpenAI route's `image_url` parts after it. */
+    private fun content(text: String?, photos: List<ImagePart>, anthropic: Boolean) = buildJsonArray {
+        if (anthropic) {
+            photos.forEach { ph -> add(buildJsonObject { put("type", "image"); putJsonObject("source") { put("type", "base64"); put("media_type", ph.mediaType); put("data", ph.data) } }) }
+            text?.let { t -> add(buildJsonObject { put("type", "text"); put("text", t) }) }
+        } else {
+            text?.let { t -> add(buildJsonObject { put("type", "text"); put("text", t) }) }
+            photos.forEach { ph -> add(buildJsonObject { put("type", "image_url"); putJsonObject("image_url") { put("url", ph.url) } }) }
+        }
+    }
+
+    /** Every Claude model takes photos, and OpenRouter names each model's inputs; null elsewhere. */
+    private fun acceptsImages(o: JsonObject, kind: String): Boolean? {
+        if (kind == "anthropic") return true
+        if (kind != "openrouter") return null
+        val inputs = ((o["architecture"] as? JsonObject)?.get("input_modalities") as? JsonArray) ?: return null
+        return inputs.any { (it as? JsonPrimitive)?.content == "image" }
+    }
+
     fun modelsRequest(p: PhoneProvider, key: String?): PhoneRequest? {
         validate(p, key)
         return if (kind(p.kind)?.catalog?.isNotEmpty() == true) null else PhoneRequest(p.baseUrl.trimEnd('/') + if (p.kind == "anthropic") "/v1/models?limit=1000" else "/models", headers(p, key), method = "GET")
@@ -95,7 +136,7 @@ object PhoneProviders {
             val o = e as? JsonObject ?: return@mapNotNull null
             val id = o.string("id") ?: return@mapNotNull null
             val created = (o["created"] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull
-            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind in setOf("openai", "gemini") && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id, created)
+            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind in setOf("openai", "gemini") && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id, acceptsImages(o, kind), created)
         }.distinctBy { it.id }
     }
 

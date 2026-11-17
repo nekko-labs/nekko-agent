@@ -64,9 +64,9 @@ class PhoneProviderErrorsTest {
 
     @Test fun defaultModelIsTheNewestPlainChatModel() {
         val list = listOf(
-            PhoneModel("o3-2025-04-16", "o3-2025-04-16", 1_744_000_000), PhoneModel("o3", "o3", 1_744_000_000),
-            PhoneModel("gpt-live-1", "gpt-live-1", 1_790_000_000), PhoneModel("gpt-6.1-terra", "gpt-6.1-terra", 1_788_000_000),
-            PhoneModel("gpt-6.1-sol", "gpt-6.1-sol", 1_788_500_000), PhoneModel("gpt-5.5-pro", "gpt-5.5-pro", 1_791_000_000),
+            PhoneModel("o3-2025-04-16", "o3-2025-04-16", created = 1_744_000_000), PhoneModel("o3", "o3", created = 1_744_000_000),
+            PhoneModel("gpt-live-1", "gpt-live-1", created = 1_790_000_000), PhoneModel("gpt-6.1-terra", "gpt-6.1-terra", created = 1_788_000_000),
+            PhoneModel("gpt-6.1-sol", "gpt-6.1-sol", created = 1_788_500_000), PhoneModel("gpt-5.5-pro", "gpt-5.5-pro", created = 1_791_000_000),
         )
         assertEquals("gpt-6.1-sol", PhoneProviders.defaultModel(list)?.id)
         assertEquals("claude-opus-5-5", PhoneProviders.defaultModel(listOf(PhoneModel("claude-x-20250514", "x"), PhoneModel("claude-opus-5-5", "Opus")))?.id)

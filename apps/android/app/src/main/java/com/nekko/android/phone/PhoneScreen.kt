@@ -16,6 +16,7 @@ import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.panes.TabletopSplit
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -28,7 +29,7 @@ import com.nekko.protocol.PhoneProviders
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** A separate native destination: no remote controllers, tools, attachments or sync. */
+/** A separate native destination: no remote controllers, tools or sync. Photos go to models that take them. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit) {
@@ -95,7 +96,7 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
                     val chat = s.chats.firstOrNull { it.id == chatId }
                     val list: @Composable (Modifier) -> Unit = { modifier ->
                         LazyColumn(modifier.padding(horizontal = 20.dp).testTag("phone.chatList"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            item { Text("Direct cloud chats. No computer, tools, photos or sync.", color = p.inkSoft) }
+                            item { Text("Direct cloud chats. No computer, tools or sync.", color = p.inkSoft) }
                             item { Button(onClick = { if (s.providers.none { it.enabled }) { providers = true } else picking = true }, modifier = Modifier.testTag("phone.new")) { Text("New chat") } }
                             if (s.chats.isEmpty()) item { Text("Add a provider to start a chat here.", color = p.inkSoft) }
                             items(s.chats, key = { it.id }) { c -> TextButton(onClick = { chatId = c.id }, modifier = Modifier.fillMaxWidth().testTag("phone.open.${c.id}")) {
@@ -249,6 +250,31 @@ private fun PhoneConversation(phone: PhoneChats, chat: PhoneChat, running: Boole
     val p = Nekko.palette
     val s by phone.state.collectAsStateWithLifecycle()
     val canSend = s.providers.any { it.id == chat.providerId && it.enabled }
+    // Photos stay on the phone until Send; only a model known not to take them loses the button.
+    val takesPhotos = phone.acceptsImages(chat.providerId, chat.modelId)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val lock = com.nekko.android.lock.LocalAppLock.current
+    val scope = rememberCoroutineScope()
+    val photos = remember(chat.id) { com.nekko.android.chat.PhotoTray<androidx.compose.ui.graphics.ImageBitmap>() }
+    val photoState by photos.state.collectAsStateWithLifecycle()
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(PhoneProviders.MAX_IMAGES),
+    ) { uris ->
+        lock?.returned()
+        val n = photos.begin(uris.size)
+        uris.take(n).forEach { uri ->
+            scope.launch {
+                try {
+                    val (url, preview) = com.nekko.android.chat.ImageAttachments.encode(context.contentResolver, uri)
+                    photos.added(url, preview)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    photos.failed("Couldn’t read that photo.")
+                }
+            }
+        }
+    }
     val window = rememberWindowPosture()
     val density = LocalDensity.current
     var topDp by remember { mutableFloatStateOf(0f) }
@@ -267,6 +293,7 @@ private fun PhoneConversation(phone: PhoneChats, chat: PhoneChat, running: Boole
             item { Text("${chat.modelId} · No tools or computer access", color = p.inkSoft, style = MaterialTheme.typography.bodySmall) }
             items(chat.messages, key = { it.id }) { m -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (m.role == "user") "You" else "Nekko", color = p.inkSoft, style = MaterialTheme.typography.labelMedium)
+                m.images?.takeIf { it.isNotEmpty() }?.let { sent -> SentPhotos(sent) }
                 if (m.text.isNotEmpty()) MarkdownText(text = m.text, color = p.ink)
                 if (m.error == PhoneChats.STREAMING && m.text.isEmpty()) Text("Thinking…", color = p.inkSoft)
                 if (m.error != null && m.error != PhoneChats.STREAMING) Text(m.error.orEmpty(), color = p.inkSoft)
@@ -275,12 +302,37 @@ private fun PhoneConversation(phone: PhoneChats, chat: PhoneChat, running: Boole
         }
         }, controls = {
         if (!canSend) Text("Enable this provider to send. Removed providers leave chats read-only.", Modifier.padding(20.dp), color = p.inkSoft)
+        if (photoState.photos.isNotEmpty() || photoState.busy) Box(Modifier.padding(horizontal = 20.dp)) {
+            com.nekko.android.ui.chat.PhotoStrip(photoState.photos, photoState.adding, photos::remove)
+        }
+        photoState.error?.let { Text(it, Modifier.padding(horizontal = 20.dp), color = p.inkSoft) }
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (takesPhotos) TextButton(onClick = {
+                photos.clearError()
+                lock?.expectReturn()
+                pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }, enabled = canSend && !running && photoState.room > 0, modifier = Modifier.testTag("phone.photos")) { Text("Photos") }
             OutlinedTextField(text, { text = it }, enabled = canSend && !running, label = { Text("Message") }, modifier = Modifier.weight(1f).testTag("phone.message"), maxLines = 5)
             if (running) TextButton(onClick = { phone.stop(chat.id) }, modifier = Modifier.testTag("phone.stop")) { Text("Stop") }
-            else Button(onClick = { phone.send(chat.id, text); text = "" }, enabled = canSend && text.isNotBlank(), modifier = Modifier.testTag("phone.send")) { Text("Send") }
+            else Button(onClick = {
+                val sent = if (takesPhotos) photos.take().map { it.dataUrl } else emptyList()
+                phone.send(chat.id, text, images = sent); text = ""
+            }, enabled = canSend && !photoState.busy && (text.isNotBlank() || photoState.photos.isNotEmpty()), modifier = Modifier.testTag("phone.send")) { Text("Send") }
         }
         if (!running && canSend && chat.messages.lastOrNull()?.role == "assistant") TextButton(onClick = { phone.send(chat.id, "", retry = true) }, modifier = Modifier.testTag("phone.retry")) { Text("Retry last reply") }
         })
+    }
+}
+
+/** The photos a message was sent with, as thumbnails above its text. */
+@Composable
+private fun SentPhotos(photos: List<String>) {
+    val previews = remember(photos) { photos.map { com.nekko.android.chat.ImageAttachments.preview(it) } }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("phone.sentPhotos")) {
+        previews.forEachIndexed { i, preview ->
+            val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+            if (preview != null) androidx.compose.foundation.Image(preview, "Photo ${i + 1} of ${photos.size}", Modifier.size(96.dp).clip(shape), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            else Box(Modifier.size(96.dp).clip(shape).background(Nekko.palette.surface2))
+        }
     }
 }
