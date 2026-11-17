@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { authenticate, issueToken, type Plan, SYNC_PLANS } from "./auth.js";
+import { accountAllowed, authenticate, issueToken, type Plan, SYNC_PLANS } from "./auth.js";
 import type { Stripe } from "./billing.js";
 import type { Db } from "./db.js";
 import { featuresFor, type Features } from "./features.js";
@@ -215,6 +215,10 @@ export function registerAccount(
     } catch (e) {
       if (e instanceof InvalidSession) return reply.code(401).send({ error: "invalid-session", message: e.message });
       throw e;
+    }
+    // Invite-only gate (#2932): checked on the proven email before any user, signup link or token is created.
+    if (!accountAllowed(req.server.accountGate, identity.email, identity.emailVerified)) {
+      return reply.code(403).send({ error: "account-not-available", message: "Nekko Cloud is invite-only for now. This account isn't on the list yet." });
     }
     try {
       const user = await userForIdentity(db, identity);
