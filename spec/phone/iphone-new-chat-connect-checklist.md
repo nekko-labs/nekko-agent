@@ -56,4 +56,3 @@ Design: [nekko-designs/iphone-new-chat-design.html](../../nekko-designs/iphone-n
 
 - OpenAI API keys on a computer report no limits yet (`limitsKeyFor` in `packages/shared/src/limits.ts` covers Claude, subscription logins, OpenRouter and Anthropic keys); tracked in #2923.
 - Screenshots from a simulator or device: the views were written on Windows and are compiled and tested by macOS CI.
-- Translations of the new strings.
