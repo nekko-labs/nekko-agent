@@ -228,6 +228,9 @@ export const GfIcon = ({ name, className, title }: P & { name: GfIconName }) => 
   );
 };
 
+/** Whether `name`, read from data rather than typed in source, is a bundled icon. */
+export const isGfIconName = (name: string): name is GfIconName => Object.hasOwn(PATHS, name);
+
 /** Named helpers, one per icon, so call sites keep reading cleanly. */
 export const SidebarCollapseIcon = (p: P) => <GfIcon {...p} name="sidebar-collapse" />;
 export const SidebarExpandIcon = (p: P) => <GfIcon {...p} name="sidebar-expand" />;

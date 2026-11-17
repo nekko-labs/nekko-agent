@@ -1,0 +1,9 @@
+{
+  "0.10": [
+    { "title": "Plan & billing in Settings", "detail": "See your plan and switch teams.", "pr": 2732, "icon": "settings" },
+    { "title": "Guided Google Gemini setup", "detail": "Connect Gemini step by step.", "pr": 2726, "icon": "brain-circuit" },
+    { "title": "Fusion routing strategies", "detail": "Route by model capability tier.", "pr": 2737, "icon": "router" },
+    { "title": "Search everything with Ctrl/Cmd+K", "detail": "Find commands, chats and settings.", "pr": 2389, "icon": "bolt" },
+    { "title": "Winter theme", "detail": "A snowy look with hidden extras.", "pr": 2412, "icon": "image" }
+  ]
+}

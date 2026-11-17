@@ -1258,6 +1258,11 @@
   font-weight: 600;
 }
 
+/* The pill holds two controls: the confirmation (dismisses) and "What's new". */
+.update-done > button { font: inherit; color: inherit; cursor: pointer; border-radius: 4px; }
+.update-done > button:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
+.update-done-link { text-decoration: underline; text-underline-offset: 2px; }
+
 .update-failed {
   border-color: color-mix(in srgb, var(--danger) 34%, transparent);
   background: color-mix(in srgb, var(--danger) 12%, var(--surface));
@@ -5116,6 +5121,8 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 @keyframes permission-enable { from { opacity: .5; transform: translateX(var(--permission-x)) scale(var(--permission-scale)) rotate(var(--permission-angle)); } to { opacity: 1; transform: none; } }
 @keyframes permission-check-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
 @keyframes permission-detail-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+/* The What's new sheet arrives like a popover: fades in, rises 4px, scales from 0.98. */
+.whats-new-sheet { animation: permission-menu-in var(--dur-med) var(--ease-out); }
 @keyframes permission-menu-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .permissions-menu, .permission-detail, .permission-mark, .permission-choice[aria-checked='true'] .permission-glyph, .permission-choice[aria-checked='true'] .permission-check { animation: none; }

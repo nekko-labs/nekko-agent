@@ -5,6 +5,7 @@ import { useStore, viewEnabled, type View } from '../store.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { Modal } from './primitives/index.js';
 import { openFeedback } from './FeedbackSheet.js';
+import { openWhatsNew } from '../whatsNew.js';
 import { SIMPLE_ITEMS, simpleShown, simpleVisibility } from '@nekko-agent/shared';
 import { useExpertMode, useLocalModelLoaded, useSimpleChoices } from '../simpleMode.js';
 import { Toggle } from './primitives/Toggle.js';
@@ -96,6 +97,7 @@ export function CommandPalette() {
       go('settings', 'Go to Settings', 'Every preference, in one page'),
       { id: 'toggle-context', label: 'Toggle context panel', description: 'Show or hide the panel beside the chat', run: () => toggleContextPanel() },
       { id: 'feedback', label: 'Send feedback', description: 'Report a bug or share an idea with the Nekko team', hint: 'Help', run: openFeedback },
+      { id: 'whats-new', label: "What's new", description: 'The changes in this version, and the full release notes', hint: 'Help', run: openWhatsNew },
       { id: 'mode', label: expert ? 'Switch to Simple' : 'Switch to Detailed', description: expert ? 'Everyday controls only' : 'Show every control', run: () => setExpert(!expert) },
       { id: 'simple-settings', label: 'Choose what Simple shows', description: 'Pick the controls Simple mode keeps', hint: 'Settings', run: () => openSettingsGroup('simple') },
       // Controls out of sight in this mode stay findable: Detailed-only ones

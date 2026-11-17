@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AppInfo, UpdateInfo } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
+import { openWhatsNew } from '../whatsNew.js';
 
 const LS_LAST_VERSION = 'op_last_version';
 const LS_SKIPPED_VERSION = 'nekko_skipped_update';
@@ -268,9 +269,11 @@ export function UpdateControl() {
 
   if (stage === 'installed') {
     return wrap(
-      <button className="update-pill update-done" onClick={updater.dismissResult} title="Dismiss">
-        ✓ Updated to v{version}
-      </button>,
+      <span className="update-pill update-done">
+        <button type="button" onClick={updater.dismissResult} title="Dismiss">✓ Updated to v{version}</button>
+        <span aria-hidden>·</span>
+        <button type="button" className="update-done-link" onClick={() => { openWhatsNew(); updater.dismissResult(); }} data-testid="update-whats-new">What's new</button>
+      </span>,
     );
   }
 

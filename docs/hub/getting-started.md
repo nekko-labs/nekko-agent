@@ -215,6 +215,12 @@ where Auto routing is not supported, such as a fixed-model workflow step.
 The iPhone and Android apps' model lists have **All**, **Cloud** and **Local** at
 the top too (they offer no Auto, so no Fusion).
 
+### See what's new in this version
+
+**What's new** lists the few changes in your version worth knowing about, each with the pull request that made it. **Show N more** opens the rest, and **See every change** opens the full release notes on GitHub. The list ships with the app, so it opens without a connection.
+
+Open it from **Settings → Updates → What's new**, from **About Nekko Agent**, by typing "what's new" in the command palette (Ctrl/Cmd+K), or from the **✓ Updated to v… · What's new** pill in the title bar right after an update.
+
 ### Search everything (Ctrl/Cmd+K)
 
 Press **Ctrl+K** (**⌘K** on macOS) to search the whole app from one box: commands, Settings pages, individual settings, chats, the messages inside them and the files your chats made. The best matches come first, and message matches always come after the rest. The chips under the box show how many results each type has; click one, or press **Tab** (Shift+Tab to go back), to show only Commands, Settings, Chats, Messages or Artifacts.
