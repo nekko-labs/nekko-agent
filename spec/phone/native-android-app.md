@@ -173,3 +173,15 @@ The iPhone's Connectors page (decision 0058) on Android, under **Settings → Co
     - Open in browser and Share link.
   - **A prompt** makes that computer the active one, sets New chat's folder, and opens New chat with the words to edit. Nothing is sent until Start.
 
+### Edit photos in image chats (#2230, 2026-11-17)
+
+`[implemented; JVM tests (PhotoEditTest, the iPhone's PhotoEditTests with the same numbers; ImageChatControllerTest: an edit sends the photos and the first one's shape, refused photos never go); emulator-verified (ImageChatEvidenceTest#editAMadePicture), not on a physical phone]`
+
+The iPhone's photo editing in image chats (PhotoEdit.swift, decisions 0067 and 0069) on Android.
+
+- **Attaching:** the **+** menu works in image chats too. Photos are scaled to 1536 px on their longest side.
+- **Edit** sits under each picture the chat made: a reply with `generated` that is not a clip. It puts the picture in the message box as a photo to edit: at full size from `session:photo`, else its thumbnail, scaled to 1536 px.
+- **Send:** with photos, `chat:generateImage` carries `images` (at most 4) and `size`. The size is the first photo's shape at the chat's pixel count, in multiples of 64 between 256 and 2048, as the desktop's `photoEdit.ts`.
+- **Refused on the phone** before anything is signed: more than four photos, a type other than PNG, JPEG or WebP, or more than 6 MiB together.
+- **Unchanged:** image chats still take no skill, and never go through the outbox.
+

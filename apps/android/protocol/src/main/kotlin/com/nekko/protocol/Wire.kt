@@ -244,6 +244,8 @@ data class ChatMessage(
     val interrupted: Boolean = false,
     /** The computer's persisted measurements for the turn this reply ended; null when it recorded none. */
     val turnStats: TurnStats? = null,
+    /** A picture an image chat made (`generated`), for Edit under it (#2230). */
+    val generated: GeneratedPicture? = null,
 ) {
     val imageCount: Int get() = images.size
 
@@ -265,6 +267,7 @@ data class ChatMessage(
                 toolResult = ToolResult.from(o["toolResult"]),
                 interrupted = o.bool("interrupted"),
                 turnStats = TurnStats.from(o["turnStats"]),
+                generated = if (o.str("role") == "assistant") GeneratedPicture.from(o["generated"]) else null,
             )
         }
     }

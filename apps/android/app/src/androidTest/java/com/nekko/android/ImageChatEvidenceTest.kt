@@ -98,6 +98,28 @@ class ImageChatEvidenceTest {
         } else assertTrue(compose.onAllNodesWithTag("image.reply.0").fetchSemanticsNodes().isEmpty())
     }
 
+    /** #2230: Edit under the made picture puts it in the message box; Send makes an edit from it. */
+    @Test fun editAMadePicture() {
+        showChat()
+        if (before) {
+            shot("image-edit")
+            assertTrue(compose.onAllNodesWithTag("chat.editPicture").fetchSemanticsNodes().isEmpty())
+            return
+        }
+        compose.onNodeWithTag("chat.editPicture").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("composer.photo.0").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodes(hasSetTextAction()).onFirst().performTextInput("Make the boat red")
+        shot("image-edit")
+        compose.onNodeWithContentDescription("Send").performClick()
+        compose.waitUntil(10_000) { host.signed.any { it.first == "chat:generateImage" } }
+        val request = host.signed.single { it.first == "chat:generateImage" }.second.single().jsonObject
+        assertEquals(setOf("sessionId", "prompt", "params", "images", "size"), request.keys)
+        assertEquals(1, request["images"]!!.jsonArray.size)
+        assertTrue(request["images"]!!.jsonArray.single().jsonPrimitive.content.startsWith("data:image/jpeg;base64,"))
+        // The 64×64 picture is square: the chat's own 1024×1024.
+        assertEquals("""{"width":1024,"height":1024}""", request["size"].toString())
+    }
+
     @Test fun imageSummaryBadge() {
         compose.setContent {
             NekkoTheme(dark = false) {
@@ -215,7 +237,7 @@ private class ImageEvidenceRemote : Remote {
             "engine:models" -> json("""[{"id":"flux","kind":"image","name":"Flux","format":"gguf","state":"ready"}]""")
             "sessions:summaries" -> json("""[{"id":"image-session","title":"Paper boat","updatedAt":$updatedAt,"chatType":"image"}]""")
             "session:create" -> json("""{"id":"image-session"}""")
-            "session:get" -> json("""{"id":"image-session","title":"Paper boat","chatType":"image","imageParams":{"modelId":"flux","cfgScale":4},"messages":[{"id":"reply","role":"assistant","content":"","reasoning":"Rendering","images":["$image"]}]}""")
+            "session:get" -> json("""{"id":"image-session","title":"Paper boat","chatType":"image","imageParams":{"modelId":"flux","cfgScale":4},"messages":[{"id":"reply","role":"assistant","content":"","reasoning":"Rendering","images":["$image"],"generated":{"modelId":"flux","width":1024,"height":1024}}]}""")
             "session:photo" -> JsonPrimitive(image)
             "workspace:list", "skills:list", "skills:all", "skills:runnable", "prompts:list" -> JsonArray(emptyList())
             "chat:pending" -> JsonObject(emptyMap())

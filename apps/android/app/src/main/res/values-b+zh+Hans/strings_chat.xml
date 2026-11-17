@@ -342,4 +342,6 @@
     <string name="response_cancel">取消</string>
     <string name="response_allow">允许 %1$s</string>
     <string name="response_deny">拒绝 %1$s</string>
+    <!-- Edit under a picture an image chat made (#2230). -->
+    <string name="chat_edit_picture">编辑</string>
 </resources>
