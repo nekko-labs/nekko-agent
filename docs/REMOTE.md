@@ -244,7 +244,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > model provider. Add one in **Settings → Models on this iPhone**: the Claude API, OpenAI,
 > OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock, Claude in Microsoft Foundry,
 > Claude on Vertex AI, or any OpenAI-compatible server over https, with your own key. Each provider
-> shows its own logo, the same marks the desktop uses. OpenRouter is
+> shows its own logo, the same marks the desktop uses. Tap a provider's button to add it; each
+> provider you have is a row that opens its page (on or off, Test, New key, Remove). Choosing the
+> Claude API first shows its options: an API key works, while the Claude subscription is dimmed,
+> because Anthropic doesn't allow it from a phone. OpenRouter is
 > one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude API, OpenAI,
 > Gemini and Ollama Cloud, tap **Open** to reach the key page, copy a key, come back and tap
 > **Paste**; Nekko checks it and connects. The key stays in this iPhone's Keychain
