@@ -390,6 +390,12 @@ struct NewChatView: View {
                 placeLine(.gauge)
                 placeLine(.squeezed)
             }
+            // The chosen provider's limits, whenever the computer reports them (#2923).
+            if onPhone, let provider = phoneModel?.0 {
+                PhoneLimitLine(providerId: provider) { pickingPhoneModel = true }.padding(.horizontal, 4)
+            } else if !onPhone, let provider = model?.0 {
+                ComputerLimitLine(providerId: provider) { showModels = true }.padding(.horizontal, 4)
+            }
             if autoShown, let line = autoLine {
                 Label(line, systemImage: autoFinding ? "ellipsis" : "sparkles")
                     .font(.caption).foregroundStyle(palette.inkSoft)
