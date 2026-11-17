@@ -37,4 +37,3 @@ Design: [nekko-designs/iphone-new-chat-design.html](../../nekko-designs/iphone-n
 
 - The limit line (#2923) and the model picker's size, context, folded snapshots and limits (#2925) land in the next layers of this stack.
 - Screenshots from a simulator or device: the views were written on Windows and are compiled and tested by macOS CI.
-- Translations of the new strings.
