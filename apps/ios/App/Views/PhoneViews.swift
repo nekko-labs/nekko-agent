@@ -340,7 +340,10 @@ struct PhoneModelPicker: View {
                             .accessibilityIdentifier("phoneModel.row")
                         }
                     } header: {
-                        SectionHeader(LocalizedStringKey(p.label))
+                        HStack(spacing: 8) {
+                            ProviderMarkImage(kind: p.kind, size: 16)
+                            SectionHeader(LocalizedStringKey(p.label))
+                        }
                     }
                 }
             }

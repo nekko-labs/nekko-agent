@@ -240,7 +240,8 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Chats on this iPhone** (iPhone): the phone can run chats itself, with no computer, on a cloud
 > model provider. Add one in **Settings → Models on this iPhone**: the Claude API, OpenAI,
 > OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock, Claude in Microsoft Foundry,
-> Claude on Vertex AI, or any OpenAI-compatible server over https, with your own key. OpenRouter is
+> Claude on Vertex AI, or any OpenAI-compatible server over https, with your own key. Each provider
+> shows its own logo, the same marks the desktop uses. OpenRouter is
 > one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude API, OpenAI,
 > Gemini and Ollama Cloud, tap **Open** to reach the key page, copy a key, come back and tap
 > **Paste**; Nekko checks it and connects. The key stays in this iPhone's Keychain

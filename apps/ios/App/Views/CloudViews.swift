@@ -219,9 +219,9 @@ struct CloudSignInView: View {
                     Button("Use a different email") { sent = false; code = "" }.font(.footnote).foregroundStyle(palette.inkSoft)
                 } else {
                     VStack(spacing: 10) {
-                        ProviderButton(title: "Continue with Apple", symbol: "apple.logo") { await oauth("apple") }
-                        ProviderButton(title: "Continue with GitHub", symbol: "chevron.left.forwardslash.chevron.right") { await oauth("github") }
-                        ProviderButton(title: "Continue with Google", symbol: "g.circle") { await oauth("google") }
+                        ProviderButton(title: "Continue with Apple", brand: .apple) { await oauth("apple") }
+                        ProviderButton(title: "Continue with GitHub", brand: .github) { await oauth("github") }
+                        ProviderButton(title: "Continue with Google", brand: .google) { await oauth("google") }
                     }
                     .disabled(busy)
                     HStack { Rectangle().fill(palette.line).frame(height: 1); Text("OR").font(.caption2).foregroundStyle(palette.inkFaint); Rectangle().fill(palette.line).frame(height: 1) }
@@ -282,19 +282,37 @@ struct CloudSignInView: View {
     private func msg(_ e: Error) -> String { (e as? CloudError)?.message ?? e.localizedDescription }
 }
 
+/// The three sign-in marks. Apple follows its Human Interface Guidelines for Sign in with Apple:
+/// the Apple logo (the system's `apple.logo`) with "Continue with Apple" on a solid black button
+/// (white in dark mode), at least 44 high, with no border. GitHub's mark is the Octicons
+/// `mark-github`; Google's is the four-colour "G" on a plain surface. See ASSETS.md.
+private enum SignInBrand { case apple, github, google }
+
 private struct ProviderButton: View {
-    let title: String
-    let symbol: String
+    let title: LocalizedStringKey
+    let brand: SignInBrand
     let action: () async -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
         Button { Task { await action() } } label: {
-            Label(title, systemImage: symbol).font(.body.weight(.medium)).frame(maxWidth: .infinity, minHeight: 44)
+            HStack(spacing: 8) {
+                mark.frame(width: 20, height: 20).accessibilityHidden(true)
+                Text(title).font(.body.weight(.medium))
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
         }
-        .foregroundStyle(palette.ink)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
+        .foregroundStyle(brand == .apple ? Color(UIColor.systemBackground) : palette.ink)
+        .background(brand == .apple ? Color(UIColor.label) : palette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay { if brand != .apple { RoundedRectangle(cornerRadius: 12).stroke(palette.line) } }
+    }
+
+    @ViewBuilder private var mark: some View {
+        switch brand {
+        case .apple: Image(systemName: "apple.logo").resizable().scaledToFit().padding(1)
+        case .github: Image("brand-github").renderingMode(.template).resizable().scaledToFit()
+        case .google: Image("brand-google").renderingMode(.original).resizable().scaledToFit()
+        }
     }
 }
 
