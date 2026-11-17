@@ -344,4 +344,9 @@
     <string name="response_deny">拒绝 %1$s</string>
     <!-- Edit under a picture an image chat made (#2230). -->
     <string name="chat_edit_picture">编辑</string>
+    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
+    <string name="car_you">你</string>
+    <string name="car_reply">回复</string>
+    <string name="car_mark_read">标记为已读</string>
+    <string name="car_not_sent">未发送：此聊天不在手机当前连接的电脑上。</string>
 </resources>

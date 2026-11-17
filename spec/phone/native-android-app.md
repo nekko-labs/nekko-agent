@@ -198,3 +198,25 @@ The iPhone's dark Home Screen icon (#2044) and Spooky alternate icon (SpookyIcon
   - **When:** it runs in `onStop`, never while the app is in front, because on some phones disabling the alias the app opened from closes it.
   - **Unlike the iPhone:** no system confirmation is shown, and some launchers move or re-add the icon when it changes.
 
+### In the car: Android Auto through messaging notifications (#2782, 2026-11-17)
+
+`[implemented; JVM tests (CarReplyTest; CarCommandsTest over the shared car-commands.json); emulator-verified (CarNotificationDeviceTest: the conversation, Reply with its RemoteInput and Mark as read, a reply refused off the active computer); not run on Android Auto's Desktop Head Unit or in a car]`
+
+The iPhone's CarPlay app (#2781, spec/phone/carplay.md), as far as Android Auto allows an app like this.
+
+- **Why notifications:** the Car App Library's categories are navigation, places, IoT, weather, media, messaging and calling, and Google checks the category at review. There is no category for a voice agent, so Nekko is in the car as a messaging app through its notifications (`automotive_app_desc.xml`: `notification`). Nothing is drawn on the car's screen by the app.
+- **In the car only:** `CarMode` uses the library's `CarConnection` and is on while the phone is projected. Then a **finished** reply's notification becomes a `MessagingStyle` conversation:
+  - its title is the chat's;
+  - its message is the reply in plain words (`CarReply.spoken`: no code, links or Markdown marks, at most about 200 characters, as CarPlay speaks), read from the chat itself with `session:get`;
+  - it replaces the chat's *Reply ready*.
+  Off the car, notifications stay content-free as before.
+- **Reply** (`SEMANTIC_ACTION_REPLY`, a `RemoteInput`, no UI):
+  - Android Auto takes the dictated words, reads them back and asks before sending.
+  - `CarReplyReceiver` sends them to that chat through the outbox, so they wait while the computer is offline.
+  - Only to a chat on the computer the phone is connected to, as CarPlay. Otherwise the conversation says it wasn't sent.
+  - The conversation then shows the reply as sent, so the car stops waiting.
+- **Mark as read** (invisible action) clears the notification.
+- **Not in the car on Android:** the Work list, Results, Allow / Deny, Stop and new chats. Android Auto takes only Reply and Mark as read from a messaging notification, and a templated app would need a category Google accepts. Speech is Android Auto's (Google's) recognizer, not the phone's own as on CarPlay.
+- **Shared grammar:** the iPhone's car command grammar and chat matching are pinned by `packages/shared/fixtures/car-commands.json` (the iPhone's CarCommandsTests and Android's CarCommandsTest). Android's port, `CarCommands`, isn't used yet: it is ready for a car app if a category allows one.
+- **Like CarPlay:** the app lock doesn't hide the car's conversation (the driver can't unlock there; see carplay.md, open question 3).
+
