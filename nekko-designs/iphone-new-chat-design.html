@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>iPhone New chat: model on device, connect checklist, limits, model picker</title>
+<style>
+/* Dark Nekko (x-plum-dark) from apps/ios/App/Platform/ThemePresets.swift + Theme.swift dark defaults. */
+:root{color-scheme:dark;
+--paper:#0b0c14;--surface:#14151f;--surface-2:#1d1f2c;--line:#26262f;
+--ink:#ffffff;--ink-soft:#a3a1b0;--ink-faint:#8e8e9b;
+--accent:#c084b5;--accent-soft:#c084b52e;--on-accent:#0c0c11;
+--success:#4cc38a;--warning:#e3a446;--warning-text:#f0bd6e;--danger:#ef6a5b;--danger-text:#f48a7d;--info:#6bb8d4;
+--user-bubble:#3a1438;--field:#1d1f2c;
+--wash-top:#c084b529;--wash-bottom:#c084b50d;
+--ease-out:cubic-bezier(.2,.8,.2,1)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface);color:var(--ink);font:14px/1.45 -apple-system,"SF Pro Text",system-ui,"Segoe UI",sans-serif}
+header{padding:40px 40px 0;max-width:1200px}
+h1{margin:0;font-size:24px;font-weight:600}
+header p{margin:8px 0 0;color:var(--ink-soft)}
+h2{font-size:16px;font-weight:600;margin:40px 40px 0}
+.canvas{display:flex;gap:40px;padding:20px 40px;align-items:flex-start}
+.frame{flex:0 0 auto;width:390px}
+.frame.narrow{width:320px}
+.caption{font-size:12px;color:var(--ink-soft);margin-bottom:8px;min-height:36px}
+.caption b{color:var(--ink);font-weight:600}
+.note{font-size:12px;color:var(--ink-faint);margin-top:8px}
+
+/* An iPhone screen in points. */
+.phone{position:relative;width:390px;height:780px;border-radius:44px;overflow:hidden;
+  background:linear-gradient(var(--wash-top),var(--wash-bottom)),var(--paper);box-shadow:0 0 0 1px var(--line),0 16px 48px #0008;
+  display:flex;flex-direction:column}
+.narrow .phone{width:320px;height:640px;border-radius:36px}
+.sb{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 32px;font-weight:600;font-size:16px;flex:none}
+.sb .r{display:flex;gap:6px;align-items:center;font-size:12px}
+.sb .bat{border:1.5px solid var(--ink);border-radius:4px;padding:0 4px;font-size:11px;line-height:14px}
+.nav{height:56px;display:flex;align-items:center;padding:0 16px;flex:none}
+.nav .t{flex:1;text-align:center;font-weight:600;font-size:17px;line-height:1.2}
+.nav .t small{display:block;font-size:12px;font-weight:400;color:var(--ink-soft)}
+.circ{width:44px;height:44px;border-radius:22px;background:var(--surface-2);display:grid;place-items:center;color:var(--ink);flex:none}
+.circ.ghost{background:none}
+.body{flex:1;padding:0 20px;display:flex;flex-direction:column;min-height:0}
+.hero{display:flex;align-items:center;gap:16px;margin:28px 0 8px}
+.hero h3{margin:0;font-size:22px;font-weight:600;line-height:1.25}
+.modes{align-self:flex-end;display:flex;background:var(--surface-2);border-radius:20px;padding:4px;gap:4px}
+.modes i{width:36px;height:28px;border-radius:14px;display:grid;place-items:center;color:var(--ink-soft)}
+.modes i.on{background:var(--paper);color:var(--accent)}
+.ph{font-size:17px;color:var(--ink-faint);margin:16px 8px 0}
+.bar{display:flex;align-items:center;height:44px;margin:4px 0 0;color:var(--ink-soft)}
+.bar .sp{flex:1}
+.bar .send{width:36px;height:36px;border-radius:18px;background:var(--surface-2);display:grid;place-items:center;color:var(--ink-faint);margin-left:8px}
+.ic{width:44px;height:44px;display:grid;place-items:center}
+svg{display:block}
+.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.i.s{width:16px;height:16px}
+
+/* Model on device: one line, each half its own 44pt target. */
+.where{display:flex;align-items:center;min-height:44px;font-size:13px;font-weight:500;white-space:nowrap;margin-top:8px}
+.where .seg{display:flex;align-items:center;gap:6px;min-height:44px;min-width:0;color:var(--ink)}
+.where .seg .n{overflow:hidden;text-overflow:ellipsis}
+.where .seg .p{color:var(--ink-soft);font-weight:400}
+.where .seg.model{flex:0 1 auto}
+.where .seg.dev{flex:0 1 auto}
+.where .link{color:var(--ink-faint);margin:0 8px;flex:none}
+.where .eff{margin-left:16px;flex:none}
+.where.fixed .seg{flex:none}
+.where .seg .i{color:var(--ink-soft);flex:none}
+.old .row{display:flex;align-items:center;gap:6px;min-height:44px;font-size:13px;font-weight:500;margin-left:8px}
+.old .row .i{color:var(--ink-soft)}
+.old .msg{font-size:12px;color:var(--ink-soft);margin:4px 8px 0}
+.strike{outline:1.5px dashed var(--danger);outline-offset:4px;border-radius:4px}
+
+/* Limit line: a 3pt meter and one faint line, under the model on device line. */
+.lim{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-faint);margin:0 0 0 2px}
+.meter{width:44px;height:3px;border-radius:2px;background:var(--surface-2);overflow:hidden;flex:none}
+.meter b{display:block;height:100%;background:var(--ink-faint);border-radius:2px}
+.lim.warn .meter b{background:var(--warning)} .lim.warn .w{color:var(--warning-text)}
+.lim.full .meter b{background:var(--danger)} .lim.full .w{color:var(--danger-text)}
+.lim a{color:var(--accent);text-decoration:none;font-weight:500}
+
+/* The connect checklist: a group on the page, no card. */
+.ck{margin-top:40px}
+.ck .hd{display:flex;align-items:center;gap:8px}
+.ck .hd h4{margin:0;font-size:15px;font-weight:600;flex:1}
+.ck .hd .ct{font-size:12px;color:var(--ink-faint)}
+.ck .hd .x{width:44px;height:44px;display:grid;place-items:center;color:var(--ink-soft);margin-right:-12px}
+.ck ul{list-style:none;margin:8px 0 0;padding:0}
+.ck li{display:flex;align-items:center;gap:12px;min-height:56px}
+.ck li .st{width:22px;height:22px;flex:none;display:grid;place-items:center;color:var(--ink-faint)}
+.ck li.done .st{color:var(--success)}
+.ck li .tx{flex:1;min-width:0}
+.ck li .tt{font-size:15px;font-weight:500;line-height:1.25}
+.ck li .dd{font-size:12px;color:var(--ink-faint);line-height:1.3}
+.ck li.done .tt{color:var(--ink-soft)}
+.ck li.wait .tt{color:var(--ink-faint)}
+.ck li .chev{color:var(--ink-faint)}
+.ck li.done .chev{visibility:hidden}
+
+/* Later visits: one closeable line, Petrol because it informs. */
+.hint{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft);margin-top:20px;min-height:44px}
+.hint .i{color:var(--info)}
+.hint .x .i{color:var(--ink-faint)}
+.hint .msg{flex:1}
+.hint a{color:var(--accent);font-weight:500;text-decoration:none}
+.hint .x{width:44px;height:44px;display:grid;place-items:center;color:var(--ink-faint);margin-right:-12px}
+
+/* Open chat. */
+.banner{display:flex;gap:8px;font-size:15px;color:var(--ink-soft);margin:8px 0 16px}
+.bub{align-self:flex-end;background:var(--user-bubble);border-radius:20px;padding:10px 16px;font-size:17px;max-width:80%;margin-top:8px}
+.reply{font-size:16px;line-height:1.45;margin-top:20px}
+.reply ul{margin:8px 0 0;padding-left:20px}
+.comp{margin-top:auto;padding:12px 16px 28px;border-top:1px solid var(--line);flex:none;background:var(--paper)}
+.comp .fld{background:var(--field);border-radius:22px;height:44px;display:flex;align-items:center;padding:0 16px;color:var(--ink-faint);font-size:17px}
+.comp .bar{margin-top:8px}
+
+/* Model picker sheet (iOS grouped list keeps its platform rows). */
+.sheet{position:absolute;inset:56px 0 0;background:var(--surface);border-radius:20px 20px 0 0;display:flex;flex-direction:column}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--line);margin:8px auto 0}
+.snav{display:flex;align-items:center;padding:8px 16px;height:56px}
+.snav .t{flex:1;text-align:center;font-weight:600;font-size:17px;margin-right:72px}
+.pill{background:var(--surface-2);border-radius:18px;padding:8px 16px;color:var(--accent);font-size:16px}
+.tabs{display:flex;margin:4px 16px 0;background:var(--surface-2);border-radius:10px;padding:2px}
+.tabs i{flex:1;text-align:center;font-style:normal;font-size:13px;padding:6px 0;border-radius:8px;color:var(--ink-soft)}
+.tabs i.on{background:var(--line);color:var(--ink)}
+.sec{margin:20px 16px 0}
+.sec .sh{display:flex;align-items:baseline;padding:0 16px 8px}
+.sec .sh b{flex:1;font-size:15px;font-weight:600}
+.sec .sh a{font-size:13px;color:var(--accent);text-decoration:none}
+.sec .slim{padding:0 16px 8px;display:flex;flex-direction:column;gap:4px}
+.list{background:var(--surface-2);border-radius:12px;overflow:hidden}
+.mr{display:flex;align-items:center;min-height:48px;padding:0 16px;gap:8px;position:relative}
+.mr+.mr::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--line)}
+.mr .nm{flex:1;min-width:0;font-size:16px;line-height:1.2}
+.mr .nm small{display:block;font-size:12px;color:var(--ink-faint)}
+.mr .meta{font-size:13px;color:var(--ink-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mr .ck2{color:var(--accent);width:20px}
+.mr .dot{width:6px;height:6px;border-radius:3px;background:var(--success);display:inline-block;margin-right:4px;vertical-align:middle}
+.mr.sub{padding-left:32px}
+.mr.sub .nm{font-size:14px;color:var(--ink-soft)}
+
+.rules{width:390px;font-size:13px;color:var(--ink-soft)}
+.rules h3{font-size:15px;color:var(--ink);margin:0 0 8px;font-weight:600}
+.rules ul{margin:0 0 20px;padding-left:18px}
+.rules li{margin:4px 0}
+.rules b{color:var(--ink);font-weight:500}
+</style>
+<body>
+<header>
+<h1>iPhone New chat: model on device, connect checklist, usage limits, model picker</h1>
+<p>Issues #2921, #2922, #2923, #2925 · Dark Nekko · 2026-11-17. Frames are iPhone points (390 wide; the narrow frame is 320).</p>
+</header>
+
+<h2>1 · Model and device on one line (#2922) and the "No tools" note removed (#2921)</h2>
+<div class="canvas">
+  <section class="frame"><div class="caption"><b>Today.</b> Two rows, then a note that repeats the device menu's "no tools" subtitle. Struck parts go.</div><div class="phone" data-screen="today"></div></section>
+  <section class="frame"><div class="caption"><b>Proposed, phone chat.</b> "Model ⟶ device" on one line; each half opens its own picker. The note is gone; the limit line sits under it (§3).</div><div class="phone" data-screen="proposed-phone"></div></section>
+  <section class="frame"><div class="caption"><b>Proposed, computer chat.</b> Effort stays on the line. When names run long it shrinks to its gauge before any name truncates.</div><div class="phone" data-screen="proposed-computer"></div></section>
+  <section class="frame narrow"><div class="caption"><b>Narrow (320).</b> Order of give: provider, effort word, then both names truncate in the middle (device keeps 12 characters).</div><div class="phone" data-screen="narrow"></div></section>
+</div>
+
+<h2>2 · Connect checklist on the first message, then a closeable note (#2921)</h2>
+<div class="canvas">
+  <section class="frame"><div class="caption"><b>First message, nothing connected.</b> Nekko leads a four-row checklist. Each row opens its setup; close (x) hides it for good.</div><div class="phone" data-screen="ck-empty"></div></section>
+  <section class="frame"><div class="caption"><b>Partly done.</b> Done rows tick and name what got connected. Rows re-check live as setups finish.</div><div class="phone" data-screen="ck-half"></div></section>
+  <section class="frame"><div class="caption"><b>Later visits, still nothing connected.</b> One line, closeable. Connect opens the same checklist as a sheet.</div><div class="phone" data-screen="hint"></div></section>
+  <section class="frame"><div class="caption"><b>All done, or closed.</b> Nothing extra: the composer, model on device and limits.</div><div class="phone" data-screen="clean"></div></section>
+</div>
+
+<h2>3 · Open chat without the banner, and usage limits wherever we know them (#2921, #2923)</h2>
+<div class="canvas">
+  <section class="frame"><div class="caption"><b>Today.</b> Every phone chat opens with the place and "no tools" banner.</div><div class="phone" data-screen="chat-today"></div></section>
+  <section class="frame"><div class="caption"><b>Proposed.</b> The banner goes; the title's subtitle says model ⟶ device once, and the limit line shows only when it's near.</div><div class="phone" data-screen="chat-new"></div></section>
+  <section class="frame"><div class="caption"><b>Limit line states.</b> Always shown on New chat when the provider reports limits; it colours only as it nears.</div><div class="phone" data-screen="limits"></div></section>
+</div>
+
+<h2>4 · Model picker with size or context, folded snapshots and limits (#2925)</h2>
+<div class="canvas">
+  <section class="frame"><div class="caption"><b>This iPhone, OpenAI.</b> Limits under the provider name, context on the right, nothing when unknown, dated snapshots folded.</div><div class="phone" data-screen="picker-phone"></div></section>
+  <section class="frame"><div class="caption"><b>A computer's Local tab.</b> Parameters and size on disk; Loaded is a dot and a word.</div><div class="phone" data-screen="picker-local"></div></section>
+  <section class="frame"><div class="caption"><b>A folded snapshot, opened.</b> Tapping the count reveals the dated ids beneath the main one.</div><div class="phone" data-screen="picker-open"></div></section>
+  <section class="rules"><div class="caption">&nbsp;</div>
+    <h3>When things show</h3>
+    <ul>
+      <li><b>Checklist:</b> the user has never sent a message, and at least one row isn't done. Shown on phone and computer chats.</li>
+      <li><b>Rows:</b> pair a computer, add a folder (waits for a computer), connect a git provider, connect a task tool. Done comes from <code>store.computers</code>, <code>store.workspaces</code>, <code>ConnectorsModel.git</code> / <code>.tasks</code>.</li>
+      <li><b>Closeable note:</b> after the first message, when no computer, folder or git provider is connected. Closing either is remembered on this phone.</li>
+      <li><b>Limit line:</b> whenever the chosen model's provider has a window we know (plans, Claude, OpenRouter, Anthropic and OpenAI keys from headers). Tightest window wins. Faint below 75%, warning from 75%, danger at 100% with a Switch model link.</li>
+      <li><b>Model meta:</b> local "params · size on disk"; cloud "context" only when the provider lists it. Never guessed.</li>
+      <li><b>Connector glyph:</b> decorative; VoiceOver reads "gpt-6.1-sol on This iPhone".</li>
+    </ul>
+    <h3>Motion</h3>
+    <ul>
+      <li>Checklist row tick: glyph crossfades ring to check, 200ms; the count updates with it.</li>
+      <li>Closing the checklist or note: fades, then the gap closes, 160ms; Undo in a toast.</li>
+      <li>Meter: width and colour ease, 260ms.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+const I = {
+  back:'<path d="M12.5 4.5L7 10l5.5 5.5"/>',
+  dots:'<circle cx="5" cy="10" r=".6"/><circle cx="10" cy="10" r=".6"/><circle cx="15" cy="10" r=".6"/>',
+  cpu:'<rect x="5" y="5" width="10" height="10" rx="1.5"/><rect x="8" y="8" width="4" height="4" rx=".5"/><path d="M8 2.5v2.5M12 2.5v2.5M8 15v2.5M12 15v2.5M2.5 8h2.5M2.5 12h2.5M15 8h2.5M15 12h2.5"/>',
+  phone:'<rect x="6" y="2.5" width="8" height="15" rx="2"/><path d="M9 15h2"/>',
+  desk:'<rect x="2.5" y="3.5" width="15" height="10" rx="1.5"/><path d="M7.5 17h5M10 13.5V17"/>',
+  chev:'<path d="M8 5l5 5-5 5"/>',
+  chevd:'<path d="M5 8l5 5 5-5"/>',
+  x:'<path d="M6 6l8 8M14 6l-8 8"/>',
+  check:'<path d="M5 10.5l3.2 3.2L15 7"/>',
+  ring:'<circle cx="10" cy="10" r="7"/>',
+  ringcheck:'<circle cx="10" cy="10" r="7"/><path d="M6.8 10.3l2.2 2.2 4.2-4.6"/>',
+  folder:'<path d="M2.5 6A1.5 1.5 0 0 1 4 4.5h3.3l1.7 2h7A1.5 1.5 0 0 1 17.5 8v6.5A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z"/>',
+  branch:'<circle cx="6" cy="4.5" r="1.8"/><circle cx="6" cy="15.5" r="1.8"/><circle cx="14" cy="6.5" r="1.8"/><path d="M6 6.3v7.4M14 8.3c0 3.5-8 2.2-8 5.4"/>',
+  tasks:'<path d="M3 5.5l1.5 1.5L7 4.5M3 13l1.5 1.5L7 12M10 6h7M10 13.5h7"/>',
+  plus:'<path d="M10 4v12M4 10h12"/>',
+  mic:'<rect x="7.5" y="2.5" width="5" height="9" rx="2.5"/><path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v2.5"/>',
+  up:'<path d="M10 16V4M5 9l5-5 5 5"/>',
+  bubble:'<path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5H8l-3.5 3v-3H4A1.5 1.5 0 0 1 2.5 13V6A1.5 1.5 0 0 1 4 4.5z"/>',
+  photo:'<rect x="3" y="3" width="14" height="14" rx="2"/><circle cx="7.5" cy="7.5" r="1.3"/><path d="M17 13l-4-4-7 8"/>',
+  info:'<circle cx="10" cy="10" r="7.5"/><path d="M10 9v5M10 6.3v.2"/>',
+  warn:'<path d="M10 3l7.5 13h-15z"/><path d="M10 8v3.5M10 13.8v.2"/>',
+  gauge:'<path d="M4 14a6.5 6.5 0 1 1 12 0"/><path d="M10 11.5L7.5 7.5"/>',
+  chip:'<rect x="4" y="4" width="12" height="12" rx="2"/><rect x="7.5" y="7.5" width="5" height="5" rx=".5"/><path d="M7.5 2v2M12.5 2v2M7.5 16v2M12.5 16v2M2 7.5h2M2 12.5h2M16 7.5h2M16 12.5h2"/>',
+};
+const ic = (n, cls='i') => `<svg class="${cls}" viewBox="0 0 20 20" aria-hidden="true">${I[n]}</svg>`;
+// The connector: a dot, a short line and an open head, in ink-faint. Decorative.
+const link = `<svg class="link" width="18" height="10" viewBox="0 0 18 10" aria-hidden="true"><circle cx="2" cy="5" r="1.6" fill="currentColor"/><path d="M5.5 5h9M12 2l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+// Nekko's pixel face, drawn from a grid: '#' is the shape, interior cells fill dark, eyes white.
+function cat(px=6){
+  const g=["#...........#","##.........##","#############","#############","#############","#############","#############","#############","#############","##.##...##.##","##.##...##.##"];
+  const eyes=new Set(["4,5","8,5","4,6","8,6"]);
+  const on=(x,y)=>g[y]&&g[y][x]==="#";
+  let r="";
+  for(let y=0;y<g.length;y++)for(let x=0;x<g[y].length;x++){if(!on(x,y))continue;
+    const inner=on(x-1,y)&&on(x+1,y)&&on(x,y-1)&&on(x,y+1);
+    const fill=eyes.has(x+","+y)?"var(--ink)":inner?"var(--paper)":"var(--ink)";
+    r+=`<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${fill}"/>`;}
+  return `<svg width="${13*px}" height="${11*px}" viewBox="0 0 13 11" shape-rendering="crispEdges" aria-hidden="true">${r}</svg>`;
+}
+const sb = (t="17:14") => `<div class="sb"><span>${t}</span><span class="r"><span>▂▄▆█</span><span class="bat">53</span></span></div>`;
+const nav = (title, right=true, sub="") => `<div class="nav"><span class="circ">${ic('back')}</span><span class="t">${title}${sub?`<small>${sub}</small>`:""}</span>${right?`<span class="circ">${ic('dots')}</span>`:`<span class="circ ghost"></span>`}</div>`;
+const hero = (q="What could use a fresh pair of eyes?", px=6) => `<div class="hero">${cat(px)}<h3>${q}</h3></div><div class="modes"><i class="on">${ic('bubble','i s')}</i><i>${ic('photo','i s')}</i></div>`;
+const composer = () => `<div class="ph">Ask anything</div><div class="bar"><span class="ic">${ic('plus')}</span><span class="sp"></span><span class="ic">${ic('mic')}</span><span class="send">${ic('up','i s')}</span></div>`;
+const where = ({model="gpt-6.1-sol", prov="OpenAI", dev="This iPhone", devIc="phone", eff="", fixed=false}={}) =>
+  `<div class="where${fixed?" fixed":""}" aria-label="${model} on ${dev}"><span class="seg model">${ic('chip','i s')}<span class="n">${model}</span>${prov?`<span class="p">· ${prov}</span>`:""}</span>${link}<span class="seg dev">${ic(devIc,'i s')}<span class="n">${dev}</span></span>${eff?`<span class="seg eff" aria-label="Effort: ${eff.replace('gauge:','')}">${ic('gauge','i s')}${eff.startsWith('gauge:')?'':`<span>${eff}</span>`}</span>`:""}</div>`;
+const lim = (pct, text, cls="") => `<div class="lim ${cls}"><span class="meter"><b style="width:${pct}%"></b></span><span class="w">${text}</span></div>`;
+
+function checklist(state){
+  const rows = [
+    {ic:'desk', t:'Pair a computer', d:'Let Nekko use tools and your files', done:'MacBook Pro'},
+    {ic:'folder', t:'Add a folder', d:'Choose where Nekko works', wait:'After you pair a computer', done:'nekko-agent'},
+    {ic:'branch', t:'Connect a git provider', d:'GitHub, GitLab or Bitbucket'},
+    {ic:'tasks', t:'Connect a task tool', d:'Linear, Jira, Floop and more'},
+  ];
+  const doneN = state==="half"?2:0;
+  const li = rows.map((r,i)=>{
+    const done=i<doneN, wait=!done&&r.wait&&doneN===0;
+    return `<li class="${done?'done':wait?'wait':''}"><span class="st">${ic(done?'ringcheck':'ring')}</span><span class="tx"><div class="tt">${r.t}</div><div class="dd">${done?r.done:wait?r.wait:r.d}</div></span><span class="chev">${ic('chev','i s')}</span></li>`;
+  }).join("");
+  return `<div class="ck"><div class="hd">${cat(2.6)}<h4>Nekko can do more with these</h4><span class="ct">${doneN} of 4</span><span class="x" aria-label="Close">${ic('x','i s')}</span></div><ul>${li}</ul></div>`;
+}
+
+const screens = {
+  today: () => sb()+nav("New chat",false)+`<div class="body">${hero()}${composer()}<div class="old"><div class="row">${ic('chip','i s')} gpt-6.1-sol · OpenAI</div><div class="row">${ic('phone','i s')} This iPhone</div><div class="msg strike">Runs on This iPhone with your own key. No tools: it can’t see your computers or files.</div></div></div>`,
+  "proposed-phone": () => sb()+nav("New chat",false)+`<div class="body">${hero()}${composer()}${where()}${lim(4,"Tokens: 4% of the per-minute limit")}</div>`,
+  "proposed-computer": () => sb()+nav("New chat",false)+`<div class="body">${hero("What should we work on?")}${composer()}${where({model:"claude-sonnet-5-5",prov:"",dev:"MacBook Pro",devIc:"desk",eff:"gauge:Medium"})}${lim(34,"34% of 5-hour limit · resets 19:40")}</div>`,
+  narrow: () => sb()+nav("New chat",false)+`<div class="body">${hero("What should we work on?",4.6)}${composer()}${where({model:"claude…5-5",prov:"",dev:"Philip’s M…Pro",devIc:"desk",eff:"gauge:Medium",fixed:true})}${where({prov:""})}</div>`,
+  "ck-empty": () => sb()+nav("New chat",false)+`<div class="body">${hero()}${composer()}${where()}${lim(0,"Tokens: 0% of the per-minute limit")}${checklist("empty")}</div>`,
+  "ck-half": () => sb()+nav("New chat",false)+`<div class="body">${hero()}${composer()}${where()}${lim(0,"Tokens: 0% of the per-minute limit")}${checklist("half")}</div>`,
+  hint: () => sb()+nav("New chat",false)+`<div class="body">${hero()}${composer()}${where()}${lim(9,"Tokens: 9% of the per-minute limit")}<div class="hint">${ic('info','i s')}<span class="msg">Nekko can’t use your files or tools yet.</span><a>Connect</a><span class="x" aria-label="Close">${ic('x','i s')}</span></div></div>`,
+  clean: () => sb()+nav("New chat",false)+`<div class="body">${hero()}${composer()}${where({model:"gpt-6.1-sol",prov:"",dev:"MacBook Pro",devIc:"desk",eff:"Medium"})}${lim(34,"34% of 5-hour limit · resets 19:40")}</div>`,
+  "chat-today": () => sb("17:15")+nav("Test!")+`<div class="body"><div class="banner">${ic('phone','i s')}<span>Runs on This iPhone with gpt-6.1-sol · OpenAI. It has no tools: it can’t see your computers or files.</span></div><div class="bub">Test!</div><div class="reply">Got it. Here’s what I can do from this phone:<ul><li>Answer questions and draft text</li><li>Explain code you paste in</li></ul></div></div><div class="comp"><div class="fld">Message</div><div class="bar"><span class="ic">${ic('chip')}</span><span class="sp"></span><span class="ic">${ic('mic')}</span><span class="send">${ic('up','i s')}</span></div></div>`,
+  "chat-new": () => sb("17:15")+nav("Test!",true,"gpt-6.1-sol ⟶ This iPhone")+`<div class="body"><div class="bub">Test!</div><div class="reply">Got it. Here’s what I can do from this phone:<ul><li>Answer questions and draft text</li><li>Explain code you paste in</li></ul></div></div><div class="comp">${lim(82,"82% of the per-minute token limit","warn")}<div class="fld" style="margin-top:8px">Message</div><div class="bar"><span class="ic">${ic('plus')}</span><span class="ic">${ic('chip')}</span><span class="sp"></span><span class="ic">${ic('mic')}</span><span class="send">${ic('up','i s')}</span></div></div>`,
+  limits: () => sb()+nav("New chat",false)+`<div class="body">${hero()}${composer()}${where({model:"claude-sonnet-5-5",prov:"Claude",dev:"This iPhone"})}
+    <div style="display:flex;flex-direction:column;gap:20px;margin-top:20px">
+      <div><div class="note" style="margin:0 0 4px">Low (under 75%)</div>${lim(34,"34% of 5-hour limit · resets 19:40")}</div>
+      <div><div class="note" style="margin:0 0 4px">Near (75% and up)</div>${lim(86,"86% of 5-hour limit · resets 19:40","warn")}</div>
+      <div><div class="note" style="margin:0 0 4px">Reached</div>${lim(100,"5-hour limit reached · resets 19:40 · <a>Switch model</a>","full")}</div>
+      <div><div class="note" style="margin:0 0 4px">API key, from response headers</div>${lim(12,"Tokens: 12% of the per-minute limit")}</div>
+      <div><div class="note" style="margin:0 0 4px">Unknown (no headers yet): no line</div></div>
+    </div></div>`,
+  "picker-phone": () => sb("17:13")+`<div class="sheet"><div class="grab"></div><div class="snav"><span class="pill">Cancel</span><span class="t">Model</span></div><div class="tabs"><i class="on">All</i><i>Cloud</i><i>Local</i></div>
+    <div class="sec"><div class="sh"><b>OpenAI</b><a>Reload</a></div><div class="slim">${lim(4,"Tokens: 4% of the per-minute limit")}${lim(1,"Requests: 1 of 500 this minute")}</div>
+    <div class="list">
+      <div class="mr"><span class="nm">gpt-6.1-sol</span><span class="meta">400K context</span><span class="ck2">${ic('check','i s')}</span></div>
+      <div class="mr"><span class="nm">gpt-6.1-terra</span><span class="meta">400K context</span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">gpt-6-sol</span><span class="meta">400K context</span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">gpt-6-luna</span><span class="meta">128K context</span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">gpt-live-1</span><span class="meta"></span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">gpt-5.5-pro<small>+1 dated version</small></span><span class="meta">1M context</span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">o3<small>+1 dated version</small></span><span class="meta">200K context</span><span class="ck2"></span></div>
+    </div></div></div>`,
+  "picker-local": () => sb("17:13")+`<div class="sheet"><div class="grab"></div><div class="snav"><span class="pill">Cancel</span><span class="t">Model</span></div><div class="tabs"><i>All</i><i>Cloud</i><i class="on">Local</i></div>
+    <div class="sec"><div class="sh"><b>MacBook Pro</b></div>
+    <div class="list">
+      <div class="mr"><span class="nm">Qwen3 8B<small><span class="dot"></span>Loaded</small></span><span class="meta">8B · 4.9 GB</span><span class="ck2">${ic('check','i s')}</span></div>
+      <div class="mr"><span class="nm">Gemma 4 27B</span><span class="meta">27B · 16.2 GB</span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">gpt-oss 20B</span><span class="meta">21B · 12.8 GB</span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">Llama 3.3 70B</span><span class="meta">70B · 42.5 GB</span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">my-finetune.gguf</span><span class="meta">3.1 GB</span><span class="ck2"></span></div>
+    </div></div>
+    <div class="sec"><div class="sh"><b>gomi</b></div>
+    <div class="list">
+      <div class="mr"><span class="nm">Qwen3 32B</span><span class="meta">32B · 19.8 GB</span><span class="ck2"></span></div>
+    </div></div></div>`,
+  "picker-open": () => sb("17:13")+`<div class="sheet"><div class="grab"></div><div class="snav"><span class="pill">Cancel</span><span class="t">Model</span></div><div class="tabs"><i class="on">All</i><i>Cloud</i><i>Local</i></div>
+    <div class="sec"><div class="sh"><b>OpenAI</b><a>Reload</a></div><div class="slim">${lim(4,"Tokens: 4% of the per-minute limit")}</div>
+    <div class="list">
+      <div class="mr"><span class="nm">gpt-5.5-pro<small>+1 dated version</small></span><span class="meta">1M context</span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">o3<small>Hide dated versions</small></span><span class="meta">200K context</span><span class="ck2"></span></div>
+      <div class="mr sub"><span class="nm">o3-2025-04-16</span><span class="meta">200K context</span><span class="ck2"></span></div>
+      <div class="mr"><span class="nm">gpt-4.1<small>+2 dated versions</small></span><span class="meta">1M context</span><span class="ck2"></span></div>
+    </div></div></div>`,
+};
+document.querySelectorAll('.phone').forEach(p => { p.innerHTML = screens[p.dataset.screen](); });
+</script>
+</body></html>
