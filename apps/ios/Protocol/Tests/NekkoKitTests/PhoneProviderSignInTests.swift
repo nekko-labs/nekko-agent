@@ -29,7 +29,7 @@ final class PhoneProviderSignInTests: XCTestCase {
         do { _ = try await s.openRouterKey(code: "c", verifier: "v"); XCTFail("an unsafe key must fail") } catch {}
     }
 
-    func testGeminiAndOllamaCloudAreFixedAddressOpenAIKinds() throws {
+    func testGeminiAndOllamaCloudAreFixedAddressOpenAIKinds() async throws {
         for id in ["gemini", "ollama-cloud"] {
             let k = try XCTUnwrap(PhoneProviders.kind(id))
             XCTAssertEqual(k.wire, .openai)

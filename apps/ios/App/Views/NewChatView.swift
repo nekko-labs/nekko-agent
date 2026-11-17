@@ -613,7 +613,7 @@ struct NewChatView: View {
         Task { await pickPhoneDefault() }
     }
 
-    /// This iPhone's last model, else its first provider's first.
+    /// This iPhone's last model, else its first provider's newest plain chat model.
     private func pickPhoneDefault() async {
         guard phoneModel == nil else { return }
         if let last = app.prefs.lastModel[PhoneProviders.computerId], let r = last.range(of: "::") {
@@ -623,7 +623,7 @@ struct NewChatView: View {
         guard let first = phone.providers.first(where: \.enabled) else { return }
         var list = phone.models[first.id] ?? []
         if list.isEmpty { list = await phone.loadModels(first.id) }
-        if phoneModel == nil, let m = list.first { phoneModel = (first.id, m.id) }
+        if phoneModel == nil, let m = PhoneProviders.defaultModel(list) { phoneModel = (first.id, m.id) }
     }
 
     private func phoneModelName(_ m: (String, String)) -> String {
