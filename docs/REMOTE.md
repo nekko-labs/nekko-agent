@@ -249,6 +249,14 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
 > and ChatGPT subscriptions and local model servers still need a computer.
 >
+> **Model on device** (iPhone): New chat shows the model and where it runs on one line, such as
+> *gpt-6.1-sol · OpenAI ⟶ This iPhone*. Tap the model to change it, or the device to choose
+> another computer or This iPhone. Until you send your first message, New chat also shows **Nekko
+> can do more with these**: pair a computer, add a folder, connect a git provider and connect a
+> task tool. Each row opens its setup and ticks when it's done. Later, while no computer, folder or
+> git provider is connected, one line offers **Connect**. Close either with **×** (and **Undo** if
+> you change your mind); it stays closed on this iPhone.
+>
 > **Connectors** (iPhone): **Settings → Connectors** (or **Connectors** in the chat list's menu)
 > connects this iPhone to a git provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) and to
 > project tools (Linear, Jira, Floop, Asana, ClickUp, Trello, Todoist). Each token stays in this
