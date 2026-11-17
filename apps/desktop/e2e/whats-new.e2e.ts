@@ -53,6 +53,9 @@ test("what's new", async ({ scenario, shot }) => {
     await expect(rows.first()).toContainText(top[0]!.title);
     await expect(rows.first()).toContainText(top[0]!.detail);
     await expect(rows.first()).toContainText(`#${top[0]!.pr}`);
+    // Every icon is Gentleface: one per row, and the close button's.
+    await expect(shown.locator('[data-gf-icon]')).toHaveCount(top.length);
+    await expect(sheet.getByRole('button', { name: 'Close' }).locator('[data-gf-icon="x"]')).toHaveCount(1);
     await shot('sheet-dark');
     await theme('light'); await shot('sheet-light'); await theme('dark');
     await rows.first().click();

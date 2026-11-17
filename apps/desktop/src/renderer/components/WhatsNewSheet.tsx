@@ -2,12 +2,11 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { NekkoAvatar } from './Mascot.js';
 import { useUpdater } from './UpdateBanner.js';
 import { Group, Modal, Row } from './primitives/index.js';
-import { CloseIcon } from '../icons.js';
-import { GfIcon, isGfIconName } from '../gentleface-icons.js';
+import { GfCloseIcon, GfIcon, isGfIconName } from '../gentleface-icons.js';
 import { highlightsFor, prUrl, releaseUrl, splitHighlights, type Highlight } from '../whatsNew.js';
 
 /** Every row has a glyph: the highlight's own, or this when it names none we bundle. */
-const FALLBACK_ICON = 'bolt';
+const FALLBACK_ICON = 'sparkles';
 
 function HighlightRow({ item, rowRef }: { item: Highlight; rowRef?: React.Ref<HTMLDivElement> }) {
   const icon = item.icon && isGfIconName(item.icon) ? item.icon : FALLBACK_ICON;
@@ -54,7 +53,7 @@ function Sheet({ version, onClose }: { version: string; onClose: () => void }) {
           <h2 id={titleId} className="text-base font-semibold">What's new</h2>
           <span className="text-xs tabular-nums text-ink-faint">v{version}</span>
           <button type="button" className="-mr-1 ml-auto rounded-sm p-1 text-ink-faint hover:text-ink" onClick={onClose} aria-label="Close">
-            <CloseIcon className="h-4 w-4" />
+            <GfCloseIcon className="h-4 w-4" />
           </button>
         </header>
 

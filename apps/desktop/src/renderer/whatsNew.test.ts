@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { RELEASE_NOTES_URL } from '@nekko-agent/shared';
 import bundled from './whatsNew.json';
 import { isGfIconName } from './gentleface-icons.js';
@@ -97,7 +98,19 @@ describe('the bundled file', () => {
 describe('isGfIconName', () => {
   it('knows a bundled icon from an unknown or inherited name', () => {
     expect(isGfIconName('bolt')).toBe(true);
-    expect(isGfIconName('sparkles')).toBe(false);
+    expect(isGfIconName('search')).toBe(true);
+    expect(isGfIconName('magnifier')).toBe(false);
     expect(isGfIconName('toString')).toBe(false);
+  });
+});
+
+describe("the spec's topic table", () => {
+  it('names only bundled icons', () => {
+    const spec = readFileSync(new URL('../../../../spec/desktop/whats-new-sheet.md', import.meta.url), 'utf8');
+    const icons = [...spec.matchAll(/^\s*\| [^|`]+ \| `([a-z-]+)` \|$/gm)].map(match => match[1]!);
+
+    expect(icons.length).toBeGreaterThan(10);
+    expect(icons).toContain('search');
+    for (const name of icons) expect(isGfIconName(name), name).toBe(true);
   });
 });
