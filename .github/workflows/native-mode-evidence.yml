@@ -122,6 +122,7 @@ jobs:
             apps/ios/App/Views/ChatStatusFixture.swift
             apps/ios/App/Views/ReplyVoicesFixture.swift
             apps/ios/Protocol/Tests/NekkoKitTests/StarAskTests.swift
+            scripts/ios-permission-return-fixture.mjs
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -141,6 +142,13 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+          # TCC legitimately kills both permission-return apps. Keep the DEBUG
+          # route/UI configuration across the argument-free relaunch, identically
+          # on both revisions. Never overlay permissions or authorization values.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/PermissionReturnTimingTests.swift" ]]; then
+            node .evidence-harness/scripts/ios-permission-return-fixture.mjs .
+            shasum -a 256 apps/ios/App/AppModel.swift apps/ios/App/NekkoApp.swift apps/ios/App/Platform/PermissionChecklist.swift >> apps/ios/evidence/revisions.txt
+          fi
           # Overlay only deterministic test data: the title comparison, and for the winter
           # comparison an identical debug transition history on both revisions that observes
           # the real refresh across XCTest's idle wait. No seasonal implementation is copied.
@@ -208,6 +216,8 @@ jobs:
             VIDEO_FILE=evidence/native-motion.mp4
           elif [[ "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/PhoneDirectCloudTests.swift" ]]; then
             VIDEO_FILE=evidence/native-comparison.mp4
+          elif [[ "$IOS_TEST_FILE" == "apps/ios/UITests/PermissionReturnTimingTests.swift" ]]; then
+            VIDEO_FILE=evidence/permission-return.mp4
           elif [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/KeyboardDismissEvidenceTests.swift" ]]; then
             VIDEO_FILE=evidence/quiet-transcript.mp4
           fi
