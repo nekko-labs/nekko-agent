@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { CHAT_MODE_LABEL, getExecutionMode, patchPrivacy, privacyMode, type ChatMode, type Session } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { saveSettings } from '../settingsIndex.js';
-import { CheckIcon, GlobeIcon, GlobeOffIcon, IncognitoIcon, InfoIcon, ShieldIcon } from '../icons.js';
+import { CheckIcon, CloseIcon, GlobeIcon, GlobeOffIcon, IncognitoIcon, InfoIcon, ShieldIcon } from '../icons.js';
+import { toolPickerLabel } from './toolPresentation.js';
 import { CHAT_MODE_ICON } from '../gentleface-icons.js';
 import { usePopover } from './ModeViews.js';
 import { allowModeChange } from './YoloWarning.js';
@@ -104,6 +105,62 @@ export function PermissionRows({ toggles, onToggle, busy = false }: { toggles: P
   );
 }
 
+export type ChatGrantKind = 'tool' | 'recipient';
+
+/** One thing this chat no longer asks about, as the menu lists it. */
+export type ChatGrant = { kind: ChatGrantKind; value: string; label: string; remove: string; title: string };
+
+/**
+ * What this chat stopped asking about: the MCP tools the user chose "Always
+ * allow this tool" for (decision 0054), then the recipients it has written to
+ * (decision 0063). Each can be taken back, and the next call asks again.
+ */
+export function chatGrants(session: Session): ChatGrant[] {
+  const tools = (session.allowedMcpTools ?? []).map((value): ChatGrant => {
+    const label = toolPickerLabel(value);
+    return { kind: 'tool', value, label, remove: `Ask again before ${label}`,
+      title: `${label} runs without asking in this chat. Remove it to be asked again.` };
+  });
+  const recipients = (session.knownRecipients ?? []).map((value): ChatGrant => ({
+    kind: 'recipient', value, label: value, remove: `Ask again before writing to ${value}`,
+    title: `This chat has written to ${value}, so writing to it again does not ask. Remove it to be asked again.` }));
+  return [...tools, ...recipients];
+}
+
+/** The session patch that takes one grant back. */
+export function revokeGrant(session: Session, grant: Pick<ChatGrant, 'kind' | 'value'>): Pick<Session, 'allowedMcpTools'> | Pick<Session, 'knownRecipients'> {
+  return grant.kind === 'tool'
+    ? { allowedMcpTools: (session.allowedMcpTools ?? []).filter((t) => t !== grant.value) }
+    : { knownRecipients: (session.knownRecipients ?? []).filter((r) => r !== grant.value) };
+}
+
+const GRANT_HEADING: Record<ChatGrantKind, string> = { tool: 'Always allowed tools', recipient: 'Known recipients' };
+
+/** The menu's "Allowed in this chat" list. Shown only when the chat has something on it. */
+export function GrantRows({ grants, onRemove, busy = false }: { grants: ChatGrant[]; onRemove: (grant: ChatGrant) => void; busy?: boolean }) {
+  if (!grants.length) return null;
+  const kinds = (['tool', 'recipient'] as const).filter((k) => grants.some((g) => g.kind === k));
+  return (
+    <div className="permission-grants" role="group" aria-label="Allowed in this chat" data-asks-grants>
+      {kinds.map((kind) => (
+        <div key={kind} role="none">
+          <div className="permission-grants-heading" role="none">{GRANT_HEADING[kind]}</div>
+          {grants.filter((g) => g.kind === kind).map((g) => (
+            <div key={kind + ':' + g.value} className="permission-grant" role="none" title={g.title} data-asks-grant={kind}>
+              <span className="min-w-0 flex-1 truncate">{g.label}</span>
+              <button type="button" role="menuitem" className="permission-info" aria-label={g.remove} title={g.remove}
+                disabled={busy} data-asks-revoke={g.value} onClick={() => onRemove(g)}>
+                <CloseIcon className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+      <p className="permission-grants-note">Removing one makes the next call ask again, in this chat only.</p>
+    </div>
+  );
+}
+
 /** A chat's approvals: one choice, in the row under the message box. */
 export function AsksFirstMenu({ session, onChange, iconOnly = false, isCloudModel = true }: { iconOnly?: boolean; session: Session; onChange: (s: Session | null) => void; isCloudModel?: boolean }) {
   const fallback = useStore((s) => s.settings?.defaultChatMode);
@@ -140,6 +197,13 @@ export function AsksFirstMenu({ session, onChange, iconOnly = false, isCloudMode
         : { offline: !session.offline };
     try { onChange(await window.nekko.setSessionOptions(session.id, patch as never)); } catch (e) { useStore.getState().pushToast('error', String(e)); } finally { setBusy(false); }
   };
+  const grants = chatGrants(session);
+  // Taking one back keeps the menu open too, and applies to the next call of a running turn.
+  const revoke = async (grant: ChatGrant) => {
+    if (busy) return;
+    setBusy(true);
+    try { onChange(await window.nekko.setSessionOptions(session.id, revokeGrant(session, grant))); } catch (e) { useStore.getState().pushToast('error', String(e)); } finally { setBusy(false); }
+  };
   return (
     <>
       <button ref={pop.anchor} type="button" className={`ctl-menu min-w-0 whitespace-nowrap ${iconOnly ? 'composer-permissions' : ''}`} aria-label={`Permissions: ${current.label}${marks.length ? `, ${marksText}` : ''}`} data-asks-first={mode} aria-haspopup="menu" aria-expanded={pop.open} title={(sandbox ? 'A sandbox always asks' : `${current.label}: ${current.hint}`) + (marks.length ? `\n${marksText}` : '')} onClick={() => pop.setOpen((o) => !o)}>
@@ -171,6 +235,7 @@ export function AsksFirstMenu({ session, onChange, iconOnly = false, isCloudMode
             </button>
           ))}
           <PermissionRows toggles={toggles} busy={busy} onToggle={(key) => void flip(key)} />
+          <GrantRows grants={grants} busy={busy} onRemove={(g) => void revoke(g)} />
         </div>,
         document.body,
       )}
