@@ -9,13 +9,32 @@ area: brand
 
 The reference for every colour in the Nekko and Indigo app themes, the app icon and the website. Use it for screenshots, videos, decks and anything else that shows the product. If a value here and the code disagree, the code is right and this file needs fixing.
 
+## Nekko, the mascot (read this first)
+
+Nekko is the centre of the brand. This section is a rule for all current and future design work (app, website, video, stills, social, decks). Do not reinterpret him from the colour names elsewhere in this file, and do not change him without the CEO's approval.
+
+- **Who he is:** a black cat, and a boy. Always "he", "him", "his". Never "she" or "her".
+- **Dark mode: one Nekko, everywhere.** Every Nekko on a dark ground, whether the full pixel head or the peeking Nekko with paws, in every dark theme, on every platform, and in all marketing, uses exactly:
+
+| Part | Colour |
+|---|---|
+| Face (and paw fill) | `#16161C` |
+| Outline (and paw outline) | `#F3E8EE` |
+| Eyes | `#FFFFFF` |
+| Mouth | `#854F6C` |
+
+- **The reference** is the peeking Nekko on the website's Dark look (over the beta card and the demo box).
+- **Light mode:** on the website's White look and on white or light marketing material, he is white: face `#FFFFFF`, outline and eyes `#190019`, mouth `#854F6C`. Inside the app's light themes, the peeking Nekko follows the theme's panel and text colours; the fixed pixel head keeps the dark-mode colours.
+- **Never:** a purple, plum, rose, lavender or grey face; a white face on a dark ground; a coloured outline; a different mouth colour; recolouring him to match a scene.
+- **Where the values live:** desktop pixel head `PixelHead` in `apps/desktop/src/renderer/components/Mascot.tsx`; desktop peeking Nekko `PeekNekkoArt` in `GreetingNekko.tsx`, coloured in dark themes by `--nekko-face`, `--nekko-line`, `--nekko-eyes` and `--nekko-mouth` at the end of `apps/desktop/src/renderer/styles.css`; iPhone `PixelCat` with `BrandColor.nekkoFace`, `nekkoLine`, `nekkoEyes`, `nekkoNose` (the mouth); Android `PixelCat` in `PairSuccess.kt`; website `--mascot-*` and `.nekko-peek` in `apps/website/styles.css`. `scripts/brand-colours.test.mjs` checks the desktop, iPhone and Android cats. If any of these disagree with this section, they are wrong.
+
 ## Core palette
 
 | Role | Hex | Use |
 |---|---|---|
-| **Plum** (main, Nekko) | `#190019` | Main buttons, the app icon tile, website download button, big fills. Too dark for text or thin lines on dark backgrounds. |
+| **Plum** (main, Nekko) | `#190019` | Reads as black on screen, not purple. Nekko's fill. Main buttons, the app icon tile, website download button, big fills. Too dark for text or thin lines on dark backgrounds. |
 | **Indigo** (main, Indigo theme) | `#2B124C` | Same role as plum, in the Indigo themes only. |
-| **Secondary** | `#854F6C` | Outlines, glows, installer marks, the cat on the website, wash gradients, chart/dot-wave ends. Not for small text on dark (2.9:1). |
+| **Secondary** | `#854F6C` | Outlines, glows, installer marks, sticker shadows, wash gradients, chart/dot-wave ends. Not for small text on dark (2.9:1). |
 | **Secondary, light** | `#C99BB3` | The secondary as **small text on dark** (7.6:1): links, labels, merged-PR text in Dark. |
 | **Text, dark mode** | `#FFFFFF` | All body text in Dark. |
 | **Text, light mode** | `#000000` | All body text in Light. |
@@ -102,7 +121,7 @@ What the app draws in the brand's own colours, whatever theme is chosen. Before 
 | iPhone launch screen (`LaunchBrandPlum.storyboard`), opening animation, return dissolve and app lock cover | plum `#190019` | white cat | none |
 | Android 12+ opening splash | plum `#190019` (`ic_launcher_background`) | none since #2120 (`splash_blank`): the app's opening builds the white cat in its first frame, as the iPhone's plain-plum launch screen | none |
 | Desktop / Local Web UI startup splash | plum `#190019` (already, #2272) | white | none |
-| Pixel mascot (iPhone `PixelCat`, the paw refresh, the Live Activity cat, the pairing celebration; Android `PixelCat`; desktop `PixelHead`) | plum `#190019` | white line and eyes | mouth `#C99BB3` |
+| Pixel mascot (iPhone `PixelCat`, the paw refresh, the Live Activity cat, the pairing celebration; Android `PixelCat`; desktop `PixelHead`) | Nekko black `#16161C` | line `#F3E8EE`, eyes `#FFFFFF` | mouth `#854F6C` |
 | Outline brand mark on a themed screen (iPhone first run and pairing) | none | the theme's `accent` | none |
 | iPhone Live Activity card (fixed dark plum `#190019`, washed with the accent from the top, 16% to 4%; was grey `#1C1C1E`) | plum `#190019` | none | Dark Nekko accent `#C084B5` (mic, filled buttons; 5.5:1 at the top of the wash, 6.8:1 on plain plum, 6.7:1 under its dark text), was the retired lavender `#8B7DFF`; secondary buttons `#3A1438` |
 
@@ -116,8 +135,8 @@ What the app draws in the brand's own colours, whatever theme is chosen. Before 
 `[updated 2026-11-05]` The last places that still drew the old lilac and violet now use the palette above.
 
 - **System, Light and Dark** (the base looks, and the default accent a fresh profile saves): Light `#5A2352` / `#8A4A7F`, Dark `#C084B5` / `#C99BB3`, on the desktop, the iPhone and Android. A saved `#6D5EFC` (the old default) migrates to `#5A2352` on load, and the old base accents (`#6D5EFC`, `#06B6D4`, `#8B7DFF`, `#22D3EE`) read as the new ones, so nobody who never picked a colour keeps the violet. A phone paired to a computer that still sends the old violet keeps plum.
-- **Desktop startup splash** (#2272): first launch, System, base Light/Dark and Nekko use main plum `#190019` with a white cat. Indigo uses `#2B124C`; deliberately selected alternative palettes retain their colours. Unversioned cached fills are ignored before paint, removing stale lilac intros. The **iPhone launch screen, opening animation and lock cover** remain `#101714` with the cream cat (`#F2F1E9`), unchanged by the desktop follow-up.
-- **iPhone brand mark** (first run, pairing): the cat in sage `#A7C8AC`. Android uses the white launcher/splash mark.
+- **Desktop startup splash** (#2272): first launch, System, base Light/Dark and Nekko use main plum `#190019` with a white cat. Indigo uses `#2B124C`; deliberately selected alternative palettes retain their colours. Unversioned cached fills are ignored before paint, removing stale lilac intros.
+- **iPhone brand mark** (first run, pairing): the outline cat in the theme's `accent` (see the fixed brand surfaces table). Android uses the white launcher/splash mark.
 - **Recovery kit export** (#2272): the key outline uses the Light Nekko accent `#5A2352`, not the retired violet.
 - **Tray companion and memory warning popups** (desktop): `#16161C` panel, `#C99BB3` outlines, `#190019` main button with a `#854F6C` outline.
 - **Nekko Cloud beta emails and the confirm/unsubscribe pages**: `#FBF6F8` page, `#5A2352` wordmark and links (`#C99BB3` in dark), `#190019` to `#3A1438` button, `#5A2352` to `#C084B5` headline.
@@ -126,23 +145,27 @@ Not changed: themes a user picks by name (Nebula, and the older Lilac, Lavender 
 
 ## Website
 
-The site theme remains plum; the favicon and logo use the plum icon assets above. The social card retains its existing first-party banner. The tables below describe site UI colors, not the superseded icon colors. The site theme is plum only. Dark and White are its two main looks; Colourful follows the same palette.
+The site theme remains plum; the favicon and logo use the plum icon assets above. The social card retains its existing first-party banner. The tables below describe site UI colors, not the superseded icon colors. The site theme is plum only. It has two looks, Dark and White (the Colourful look no longer exists in the site code).
 
 | Element | Value |
 |---|---|
 | Dark page | `#0C0C11`, with plum glows `rgba(25, 0, 25, 0.9)` top-left and `0.7` bottom-left |
 | Dark panels / lines | `#16161C` / `#26262F` |
 | Dark links and accent text | `#C99BB3` |
-| Dark outlines, cat, sticker shadows | `#854F6C` |
+| Dark outlines, sticker shadows | `#854F6C` |
+| Nekko, Dark look (hero mascot and the peeking Nekko) | face `#16161C`, line `#F3E8EE`, eyes `#FFFFFF`, mouth `#854F6C` |
+| Nekko, White look (hero mascot and the peeking Nekko) | face `#FFFFFF`, line and eyes `#190019`, mouth `#854F6C` |
 | Headline highlight ("you can trust."), Dark | gradient `#854F6C` to `#E6D0DC` |
 | White text | `#000000` |
 | Download button | gradient `#190019` to `#3A1438`, text `#FFFFFF` |
 | Pale tints (bands, hovers, White page) | `#E6D0DC`, `#F3E8EE`, `#FBF6F8` |
 | Logo (nav, footer) | gradient `#5A2352` to `#C084B5` |
 | Favicon | current plum/white app icon (see above) |
-| Browser bar colour | Dark `#0C0C11`, White `#FBF6F8`, Colourful `#854F6C` |
+| Browser bar colour | Dark `#0C0C11`, White `#FBF6F8` |
 | Speed chart | Nekko `#5A2352`, Ollama `#177A89` (kept teal so it stays distinct), LM Studio `#A0601E` |
 | Hero screenshot frames | Dark `#241F23`, Light `#C9A9C4` |
+
+The website's Dark page (`#0C0C11`) is not the app's Dusk (`#0B0C14`, below). Use the website value for site material and Dusk for app material; do not mix them in one frame.
 
 The previous lavender site is kept at tag `website-lavender-original`.
 
@@ -162,6 +185,7 @@ The previous lavender site is kept at tag `website-lavender-original`.
 - Text meets WCAG AA, 4.5:1, on whatever it sits on. `apps/desktop/src/renderer/contrast.test.ts` enforces this for every theme.
 - Never put `#190019`, `#2B124C` or `#854F6C` as small text or thin lines on a dark background; use the light shades above.
 - On a main-colour fill, text is `#FFFFFF`.
+- Nekko follows the mascot section at the top of this file, whatever any other row says, in all current and future designs.
 - Body text is pure `#FFFFFF` in Dark and pure `#000000` in Light.
 
 ## For screenshots and video
@@ -169,6 +193,7 @@ The previous lavender site is kept at tag `website-lavender-original`.
 - **App:** Settings, Appearance, Theme, Experimental: **Dark Nekko** (default for marketing) or **Light Nekko**. Use Indigo only when showing the theme choice itself.
 - **Window size:** match existing material (hero shots are 2560 by 1392; renderer captures 1440 by 900).
 - **Show the glow honestly:** only a window whose agent is thinking or replying carries it; capture it mid-reply, never on a finished chat.
+- **Nekko in video and stills:** use the dark-mode Nekko from the mascot section on any dark ground, and the white version only on a white or light ground. Never recolour him to match a scene.
 - **Check before publishing:** nothing should show the retired lavender, aqua or rose listed above, including the cat, logo and icon.
 - **Website embeds:** dark shots sit on a `#241F23` frame, light shots on `#C9A9C4`. The hero screenshots are recoloured originals; re-record the intro and demo videos in Dark Nekko.
 

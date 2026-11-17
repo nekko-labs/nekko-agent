@@ -29,7 +29,9 @@ Order: the user's per-model setting, the user's per-provider default, then the a
 
 Implemented: the profiles, the selection logic with automatic sizing off by default, `promptProfiles` (including `auto`) in settings, the preview field, tests for selection and for each profile's content.
 
-Planned, not built: showing the reason in the Context Inspector; a Settings screen with a tab per profile (built-in text read-only, "Your additions", and an advanced "Replace the built-in prompt" with Reset); a per-model override in the model's settings; trimming Large. Unverified: whether Small beats Medium on small local models (task success, valid tool calls, tokens in). The measurement run (a ~8B and a ~32B local model and a frontier model, each profile, results in `docs/perf-history.md`) is tracked in #2771; automatic sizing stays off until it shows Small winning.
+Also implemented (#2771): the reason line under the Context Inspector's window bar; Settings > System prompt size with the automatic checkbox, a tab per profile showing its built-in text read-only (`context:promptProfiles`), a default per provider and an override per model (chosen from the active provider's models).
+
+Planned, not built: per-profile "Your additions" and an advanced "Replace the built-in prompt" with Reset (open question 2, so not built); trimming Large. Unverified: whether Small beats Medium on small local models (task success, valid tool calls, tokens in). The measurement run (a ~8B and a ~32B local model and a frontier model, each profile, results in `docs/perf-history.md`) is tracked in #2771; automatic sizing stays off until it shows Small winning.
 
 ## Open questions for Philip (not decided)
 

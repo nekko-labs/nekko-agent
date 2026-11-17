@@ -538,6 +538,11 @@
   [data-quiet-row]:hover .quiet-row-action,
   [data-quiet-row]:focus-within .quiet-row-action,
   .quiet-row-action:focus-visible { opacity: 1; }
+  /* The narrow runner panel: hidden actions take no width, so names are not cut for buttons nobody sees.
+     Clipped rather than display:none, so Tab still reaches them and focus brings the row's actions back. */
+  [data-compact] [data-quiet-row]:not(:hover):not(:focus-within) .quiet-row-action {
+    position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%);
+  }
 }
 
 /* A code block's own actions (Run, Copy, and the inline terminal's): quiet
@@ -896,7 +901,9 @@
   --rail-open-delay: 50ms;
   --rail-close-delay: 60ms;
   width: var(--rail-w-rest);
-  padding-inline: 8px;
+  /* A 40px row at rest (52 - 8 - 4), so each 40px icon box fits its row and
+     the active tile and hover wash sit square on the icon. */
+  padding-inline: 8px 4px;
   justify-content: flex-start;
   isolation: isolate;
   pointer-events: none;
@@ -955,7 +962,8 @@
 .rail-indicator {
   position: absolute;
   top: var(--rail-head, 0px);
-  left: 6px;
+  /* Past the scroller's 8px reach, so the tile covers exactly the row. */
+  left: 8px;
   right: 0;
   height: var(--rail-row);
   border-radius: 12px;
@@ -4289,8 +4297,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .greeting-nekko-slot { position: relative; display: block; flex: 0 0 64px; width: 64px; height: 60px; pointer-events: none; }
 /* The paws straddle viewBox y=25 at the border, 18px below the greeting. */
 .greeting-nekko { position: absolute; z-index: 3; left: -18px; top: 14.5px; display: block; width: 80px; height: 75px; pointer-events: none; }
-.clean-start-greeting h2 { display: flex; align-items: center; width: 300px; min-height: 60px; font-size: var(--text-xl); font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
-@media (max-width: 600px) { .clean-start-greeting { gap: 12px; } .clean-start-greeting h2 { width: 230px; max-width: calc(100vw - 130px); } }
+.clean-start-greeting h2 { display: flex; align-items: center; min-width: 300px; width: max-content; max-width: 100%; min-height: 60px; white-space: nowrap; font-size: var(--text-xl); font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+@media (max-width: 600px) { .clean-start-greeting { gap: 12px; } .clean-start-greeting h2 { width: 230px; min-width: 0; max-width: calc(100vw - 130px); white-space: normal; } }
 .clean-start-greeting p { margin-top: 4px; font-size: var(--text-sm); color: var(--ink-faint); }
 /* Solid, readable controls above the decorative field. Never dim their text. */
 [data-clean-start] .clean-start-model { max-width: 100%; color: var(--ink); }
@@ -4500,7 +4508,6 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .automations-content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 0 64px; }
 .models-navigation { display: flex; flex-direction: column; gap: 8px; }
 .models-navigation .settings-nav-item { min-height: 40px; font-size: var(--text-sm); }
-.models-navigation .models-nav-main + .models-nav-main { margin-top: 20px; }
 .models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: 20px 0 64px; }
 .models-layout .models-section { max-width: none; }
 /* The biggest heading in its section: titles nested below step down a size. */
@@ -4567,18 +4574,19 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Cloud on top, Local below, on one page; the side menu jumps to each and to Local's own sections. */
 [data-models-section] { scroll-margin-top: 12px; }
 .models-section-local { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
-/* Local's destinations are separate, comfortably spaced targets, not a ruled tree. */
-.models-navigation .models-nav-sub { margin-left: 24px; width: calc(100% - 24px); color: var(--ink-soft); }
-.models-navigation .models-nav-sub + .models-nav-sub { margin-top: 12px; }
+/* Local's own entries hang off a tree line under its icon, their labels in line
+   with its label; the line lights beside the current one. Spaced like Settings. */
+.models-navigation .models-nav-sub { position: relative; margin-left: 15px; width: calc(100% - 15px); padding-left: 17px; border-radius: 0 var(--radius-lg) var(--radius-lg) 0; color: var(--ink-soft); }
+.models-navigation .models-nav-sub::before { content: ''; position: absolute; left: 0; top: -8px; bottom: 0; width: 1px; background: var(--line); }
 .models-navigation .models-nav-sub[aria-current] { color: var(--ink); }
+.models-navigation .models-nav-sub[aria-current]::before { top: 0; width: 2px; background: var(--accent); }
 @media (max-width: 1000px) {
   .models-layout { flex-direction: column; gap: 20px; padding-inline: 20px; }
   .models-rail { flex: none; max-height: 40%; padding: 12px 0 0; }
   .models-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
   .models-navigation .settings-nav-item { width: 100%; }
-  .models-navigation .models-nav-main + .models-nav-main { margin-top: 0; }
-  .models-navigation .models-nav-sub { margin: 0; width: 100%; }
-  .models-navigation .models-nav-sub + .models-nav-sub { margin-top: 0; }
+  .models-navigation .models-nav-sub { margin: 0; width: 100%; padding-left: 8px; border-radius: var(--radius-lg); }
+  .models-navigation .models-nav-sub::before { content: none; }
   .models-workspace { height: auto; min-height: 0; padding: 0 0 48px; }
   /* Automations keeps its side menu down to a phone width, one item a row. */
   .automations-rail .models-navigation { display: flex; }
@@ -4654,8 +4662,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .settings-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .settings-content { flex: 1; min-width: 0; overflow-y: auto; }
 .settings-page, .models-section { max-width: 64rem; margin-inline: auto; }
-/* The design system's content column: a setting's control stays within reach of its label. */
-.settings-page { max-width: 720px; padding: 20px 20px 64px; }
+/* The settings content column: wide enough for sections with a preview beside their rows. */
+.settings-page { max-width: 1080px; padding: 20px 20px 64px; }
 .settings-destination { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 /* Bars above the page's scroller reserve its scrollbar, so both centre on the same line. */
 .settings-bar { flex-shrink: 0; overflow: hidden; scrollbar-gutter: stable; }
@@ -5107,4 +5115,15 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 @media (prefers-reduced-motion: reduce) {
   .permissions-menu, .permission-detail, .permission-mark, .permission-choice[aria-checked='true'] .permission-glyph, .permission-choice[aria-checked='true'] .permission-check { animation: none; }
   .permission-choice:active:not(:disabled), .permission-info:active { transform: none; }
+}
+
+/* Nekko in every dark theme (spec/brand/colour-palette.md, "Nekko, the mascot"):
+   the peeking Nekko takes the reference colours instead of the theme's panel
+   and text colours. Light themes leave these unset, so he keeps following the
+   theme there. The fixed pixel head (Mascot.tsx) already uses these values. */
+[data-theme='dark'] {
+  --nekko-face: #16161c;
+  --nekko-line: #f3e8ee;
+  --nekko-eyes: #ffffff;
+  --nekko-mouth: #854f6c;
 }

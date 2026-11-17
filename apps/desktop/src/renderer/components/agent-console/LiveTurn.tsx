@@ -26,6 +26,7 @@ export const LiveTurn = memo(function LiveTurn({
   held,
   onImageClick,
   pendingCallId,
+  backgroundTasks,
   prs = EMPTY_PRS,
   priorPrUrls = EMPTY_URLS,
 }: {
@@ -34,6 +35,8 @@ export const LiveTurn = memo(function LiveTurn({
   onImageClick?: (src: string) => void;
   /** The call waiting for approval, which stays out of the purpose groups. */
   pendingCallId?: string;
+  /** Background tasks Claude Code still runs, which a quiet turn may be waiting on. */
+  backgroundTasks?: number;
   prs?: PrInfo[];
   priorPrUrls?: string[];
 }) {
@@ -66,7 +69,7 @@ export const LiveTurn = memo(function LiveTurn({
             : <MessageBubble message={{ id: `live_${i}`, role: 'assistant', content: block.text, createdAt: 0 }} voice={i < last ? midTurnVoice(block.text) : !live && run.tools.length ? 'reply' : undefined} onImageClick={onImageClick} chronological />}
         </Fragment>
       ))}
-      {live && <TurnActivityStatus run={live} pendingCallId={pendingCallId} />}
+      {live && <TurnActivityStatus run={live} pendingCallId={pendingCallId} backgroundTasks={backgroundTasks} />}
     </>
   );
 });

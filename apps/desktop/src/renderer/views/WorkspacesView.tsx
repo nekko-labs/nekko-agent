@@ -1,3 +1,4 @@
+import { SubagentList } from '../components/SubagentList.js';
 import { terminalPresentation } from '../components/terminalActivity.js';
 import { HoverTip } from '../components/HoverTip.js';
 import { CreateMenuRows } from '../components/CreateMenu.js';
@@ -6,7 +7,8 @@ import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, ComputerStatus, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, computerIdOf } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, computerIdOf, siteFolder, siteName } from '@nekko-agent/shared';
+import { useServedSites } from '../servedSites.js';
 import { ComputerGlyph, thisComputerName } from '../components/ComputerChip.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
@@ -24,7 +26,7 @@ import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../com
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
-import { sidebarWorkspaces, unopenedChats, subagentRows } from './unopenedChats.js';
+import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
@@ -35,7 +37,7 @@ import { isLiveState, onLiveStateTick } from '../liveStateTicker.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
-  AGENT_PANEL_SHOWS, DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelShows, readAgentPanelView, saveAgentPanelShows, saveAgentPanelView, statusGroupOf, wakeSourcesOf,
+  AGENT_PANEL_SHOWS, DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelShows, readAgentPanelView, saveAgentPanelShows, saveAgentPanelView, statusGroupOf, statusWithSubagents, wakeSourcesOf,
   type AgentPanelShows, type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
@@ -134,7 +136,8 @@ export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): A
     // would then clear a "working" it set (hub.rs files these as Kind::Meta).
     case 'session_meta':
     case 'compaction':
-    case 'claude_code_background': return undefined;
+    case 'claude_code_background':
+    case 'limit_reset': return undefined;
     case 'tool_approval_required':
     case 'question':
     case 'secret_request': return 'input';
@@ -176,6 +179,8 @@ type SidebarActions = {
   onCreate: (kind: 'chat' | 'image' | 'video' | 'terminal', projectId?: string, shell?: string) => Promise<void>;
   /** Open an agent with its Browser or Files drawer out (the Browsers and Files views). */
   onOpenCompanion?: (sessionId: string, kind: 'browser' | 'files') => void;
+  /** Open a Browser on a page, or Files on a folder, as a window of its own: no agent needed (#2824). */
+  onOpenWindow?: (kind: 'browser' | 'files', refId: string) => void;
   /** Hide the panel; the Agents toolbar offers it back. */
   onClosePanel?: () => void;
   /** The colour of the zone showing each agent on the board, by chat or terminal id. */
@@ -187,7 +192,7 @@ type SidebarActions = {
  * kind of window it lists: the agent cards (grouped), terminals, photo and
  * video chats, or the agents' browsers and files.
  */
-export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, onOpenCompanion, onClosePanel, zoneTints }: SidebarActions) {
+export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, onOpenCompanion, onOpenWindow, onClosePanel, zoneTints }: SidebarActions) {
   const [shows, setShowsState] = useState<AgentPanelShows>(readAgentPanelShows);
   const setShows = (next: AgentPanelShows) => { setShowsState(next); saveAgentPanelShows(next); };
   const drawer = useWallLogs(useShallow((d) => ({ sessionId: d.closing ? null : d.sessionId, kind: d.kind })));
@@ -473,6 +478,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     for (const kids of m.values()) kids.sort((a, b) => a.createdAt - b.createdAt);
     return m;
   }, [sessions]);
+  // A sub-agent has no card of its own: its question, or its work, lifts the parent's.
+  const chatStatus = (id: string): AgentStatus | undefined =>
+    statusWithSubagents(statuses.get(id), (childrenOf.get(id) ?? []).map((kid) => statuses.get(kid.id)));
 
   // Closing a workspace only closes its windows, not the saved conversation.
   // Keep those chats reachable without reopening every transcript at startup.
@@ -560,10 +568,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         ...completed,
       ];
     }
-    // A sub-agent has no card of its own, so its question lifts the parent's.
-    const kidIsWaiting = (e: Entry) => !!e.s && !!childrenOf.get(e.s.id)?.some((k) => statuses.get(k.id) === 'input');
     const groupOf = view.groupBy === 'status'
-      ? (e: Entry) => statusGroupOf(e.s, kidIsWaiting(e) ? 'input' : e.s ? statuses.get(e.s.id) : undefined)
+      ? (e: Entry) => statusGroupOf(e.s, e.s ? chatStatus(e.s.id) : undefined)
       : (e: Entry) => { const c = sortable(e); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
     const defs = view.groupBy === 'status' ? STATUS_GROUPS : DATE_GROUPS;
     return [
@@ -584,6 +590,13 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     ? order(buckets.flatMap((b) => bucketEntries(b.key)).filter((e) => !!e.s && !utilityKind(e))).flatMap((e) => (e.s ? [e.s] : []))
     : [];
   const folderName = (s: SessionSummary) => (settings?.workspaces ?? []).find((p) => p.id === s.workspaceId)?.name ?? remoteFolders.find((p) => p.id === s.workspaceId)?.name;
+  /** Browsers: the pages served here. Files: the folders connected on this computer (repositories among them). */
+  const servedSites = useServedSites(shows === 'browsers');
+  const localFolders = settings?.workspaces ?? [];
+  const openWindow = (kind: 'browser' | 'files', refId: string) => {
+    onOpenWindow?.(kind, refId);
+    setMobileNav(false);
+  };
   const openCompanion = (id: string, kind: 'browser' | 'files') => {
     if (onOpenCompanion) onOpenCompanion(id, kind);
     else onOpenChat(id);
@@ -792,8 +805,50 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         <SlideToggle label="Show windows" options={SHOWS_OPTIONS} value={shows} onChange={setShows} iconOnly className="agent-panel-shows" />
       </div>
       <div ref={listRef} className="agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3" data-agent-panel-list>
-        {groups.length === 0 && companionAgents.length === 0 && (
+        {!companionKind && groups.length === 0 && (
           <p className="px-3 py-2 text-xs text-ink-faint" data-agent-panel-empty>{SHOWS_EMPTY[shows]}</p>
+        )}
+        {companionKind === 'browser' && onOpenWindow && <div data-served-sites>
+          {(servedSites ?? []).map((site) => {
+            const folder = siteFolder(site, localFolders);
+            return (
+              <button key={site.url} type="button" data-served-site={site.port}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-surface-2"
+                title={`Open ${site.url}${site.process ? ` (${site.process})` : ''}`}
+                onClick={() => openWindow('browser', site.url)}>
+                <GfGlobeIcon className="h-4 w-4 shrink-0 text-ink-faint" />
+                <span className="min-w-0 flex-1 truncate text-sm" dir="auto">{siteName(site)}</span>
+                <span className="max-w-[40%] shrink-0 truncate text-2xs text-ink-faint" dir="auto">{folder?.name ?? `:${site.port}`}</span>
+              </button>
+            );
+          })}
+          {servedSites?.length === 0 && <p className="px-2 py-1.5 text-xs text-ink-faint" data-agent-panel-empty>No pages served on this computer</p>}
+          <button type="button" data-blank-browser
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-ink-faint transition-colors duration-150 hover:bg-surface-2 hover:text-ink"
+            title="Open a browser and type an address"
+            onClick={() => openWindow('browser', 'about:blank')}>
+            <PlusIcon className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-sm">New browser</span>
+          </button>
+        </div>}
+        {companionKind === 'files' && onOpenWindow && <div data-connected-folders>
+          {localFolders.map((f) => (
+            <button key={f.id} type="button" data-connected-folder={f.id}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-surface-2"
+              title={`Browse ${f.path}`}
+              onClick={() => openWindow('files', f.path)}>
+              <FolderOpenIcon className="h-4 w-4 shrink-0 text-ink-faint" />
+              <span className="min-w-0 flex-1 truncate text-sm" dir="auto">{f.name}</span>
+              {f.repo && <span className="max-w-[45%] shrink-0 truncate text-2xs text-ink-faint" dir="auto">{f.repo.fullName}</span>}
+            </button>
+          ))}
+          {localFolders.length === 0 && <p className="px-2 py-1.5 text-xs text-ink-faint" data-agent-panel-empty>No folders connected</p>}
+        </div>}
+        {companionKind && !onOpenWindow && companionAgents.length === 0 && (
+          <p className="px-3 py-2 text-xs text-ink-faint" data-agent-panel-empty>{SHOWS_EMPTY[shows]}</p>
+        )}
+        {companionKind && onOpenWindow && companionAgents.length > 0 && (
+          <p className="px-2 pb-1 pt-4 text-2xs font-semibold text-ink-faint" data-companion-heading>Beside an agent</p>
         )}
         {companionKind && companionAgents.map((s) => {
           const Icon = companionKind === 'browser' ? GfGlobeIcon : FolderOpenIcon;
@@ -821,7 +876,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           const completedGroup = b.key === COMPLETED_GROUP;
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
           const completedOpen = completedGroup || showCompleted.has(b.key);
-          const activity = view.groupBy === 'status' ? groupActivityOf(b.key, items.map((e) => (e.s ? statuses.get(e.s.id) : undefined))) : null;
+          const activity = view.groupBy === 'status' ? groupActivityOf(b.key, items.map((e) => (e.s ? chatStatus(e.s.id) : undefined))) : null;
           const tipHere = showTips && done.some((s) => s.id === completionTipSessionId);
           const visible = visibleItems(b);
           const completedRows = visibleDone(b);
@@ -929,7 +984,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           workspace={w}
                           session={s}
                           terminal={entry.t}
-                          status={s ? statuses.get(s.id) : undefined}
+                          status={s ? chatStatus(s.id) : undefined}
                           isActive={(s?.id ?? entry.t?.id) === selectedId}
                           now={now}
                           projects={settings?.workspaces ?? []}
@@ -962,16 +1017,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onRenameStart={s ? () => setRenamingId(s.id) : undefined}
                           onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
-                        {/* Sub-agents this chat spawned, one line each. */}
-                        {s && subagentRows(kids).map((kid, i, rows) => (
-                          <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
-                            session={kid}
-                            status={statuses.get(kid.id)}
-                            isActive={kid.id === selectedId}
-                            last={i === rows.length - 1}
-                            onOpen={() => onOpenChat(kid.id)}
-                          /></div>
-                        ))}
+                        {s && <SubagentList children={kids} statuses={statuses} selectedId={selectedId}
+                          expandByDefault={settings?.expandSubagents === true} activeRowRef={activeRowRef} onOpen={onOpenChat} />}
                       </div>
                     );
                   })}
@@ -1165,31 +1212,6 @@ function CompletedRow({
       >
         {completedDate(at, now)}
       </time>
-    </button>
-  );
-}
-
-/**
- * One sub-agent under its parent's card: a single line, no details of its own.
- * A tree elbow ties it to the card above (a tee for every row but the last),
- * and its status icon (rocket, check, question) sits where a bullet would.
- */
-function SubAgentRow({
-  session, status, isActive, last, onOpen,
-}: {
-  session: SessionSummary; status: AgentStatus | undefined; isActive: boolean; last: boolean; onOpen: () => void;
-}) {
-  return (
-    <button
-      onClick={onOpen}
-      data-subagent-row={session.id}
-      className={`subagent-row relative flex items-center gap-1.5 rounded-lg py-1 pl-7 pr-2 text-left text-xs transition-colors duration-150 ${
-        isActive ? 'bg-accent-soft text-ink' : 'text-ink-soft hover:bg-surface-2'
-      }`}
-    >
-      <span aria-hidden data-subagent-tree={last ? 'last' : 'tee'} className="subagent-tree" />
-      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, wakeSourcesOf(session))} />
-      <span className="min-w-0 flex-1 truncate" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
     </button>
   );
 }

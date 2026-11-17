@@ -159,6 +159,14 @@ public final class PhoneChats {
         return p
     }
 
+    /// OpenRouter's sign-in answers with a code; swap it for the API key it stands for.
+    public func openRouterKey(code: String, verifier: String) async throws -> String {
+        let (status, body) = try await http.send(PhoneProviders.openRouterKeyRequest(code: code, verifier: verifier))
+        guard (200..<300).contains(status) else { throw PhoneProviders.Problem.signIn }
+        guard let key = PhoneProviders.openRouterKey(from: body) else { throw PhoneProviders.Problem.signIn }
+        return key
+    }
+
     /// A new key for a provider (a Vertex AI token runs out in an hour).
     public func setKey(_ providerId: String, _ key: String) {
         guard provider(providerId) != nil, PhoneProviders.headerValue(key) else { return }
@@ -240,7 +248,15 @@ public final class PhoneChats {
         guard let p = provider(providerId), p.enabled, let kind = PhoneProviders.kind(p.kind) else { return String(localized: "Unknown provider.") }
         if kind.listsModels {
             let list = await loadModels(providerId)
-            return modelErrors[providerId] ?? (list.isEmpty ? String(localized: "The provider listed no models.") : nil)
+            if let why = modelErrors[providerId] ?? (list.isEmpty ? String(localized: "The provider listed no models.") : nil) { return why }
+            // OpenRouter and Ollama Cloud list models to anyone; ask something a bad key is refused on.
+            guard let check = try? PhoneProviders.keyCheckRequest(p, key: key(providerId)) else { return nil }
+            do {
+                let (status, body) = try await http.send(check)
+                return status == 401 || status == 403 ? PhoneProviders.failure(status: status, body: body) : nil
+            } catch {
+                return String(localized: "Could not reach the provider to check the key. Try again.")
+            }
         }
         models[providerId] = kind.catalog
         guard let model = kind.catalog.first?.id else { return nil }

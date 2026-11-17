@@ -5,7 +5,7 @@ import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
 import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { computerBlock, useComputerOf } from './ComputerChip.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
-import { ClaudeBackgroundTasks, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
+import { ChatBackgroundWork, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { shouldShowFirstPromptIntro } from '../firstPromptIntroGate.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
@@ -30,14 +30,14 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
-import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress, usageLimitResetAt } from '@nekko-agent/shared';
+import type { AutoProviderPick, BootedSimulator, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
-import { beginResumedRun, clearLiveRun, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
+import { anchorLiveRun, beginResumedRun, clearLiveRun, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
@@ -59,6 +59,7 @@ import type { PendingApproval } from './agent-console/index.js';
 import { SubagentModelControl } from './SubagentModelControl.js';
 import { replyIconState } from './agent-console/ReplyStatus.js';
 import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/LiveTurn.js';
+import { turnActivityLabel } from './agent-console/TurnActivityStatus.js';
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
 import { MediaAgentWelcome } from './MediaAgentIntro.js';
 import { ImageModeControls } from './agent-console/ImageModeControls.js';
@@ -80,6 +81,7 @@ import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSee
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
 import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure } from './agent-console/interruption.js';
+import { ContinueAtReset } from './agent-console/ContinueAtReset.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
@@ -119,6 +121,7 @@ import { starAskAfterReply } from '../starAsk.js';
 import { ShieldCheckIcon } from '../icons.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
+import { SimulatorStatus, useSimulatorAutoOpen } from './Simulators.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 // The first-chat intro brings Remotion with it, so it loads only when it shows.
@@ -548,8 +551,8 @@ const LiveUsageChip = memo(function LiveUsageChip({
  * how long it has been at it.
  */
 const LiveReplyStatus = memo(function LiveReplyStatus({
-  sessionId, startedAt, ...status
-}: Omit<React.ComponentProps<typeof ReplyStatus>, 'status' | 'elapsed'> & { sessionId: string; startedAt: number }) {
+  sessionId, startedAt, backgroundTasks = 0, ...status
+}: Omit<React.ComponentProps<typeof ReplyStatus>, 'status' | 'elapsed'> & { sessionId: string; startedAt: number; backgroundTasks?: number }) {
   const run = useLiveRun(sessionId, !usePaneVisible());
   const [elapsed, setElapsed] = useState(0);
   const [nextWakeAt, setNextWakeAt] = useState<number | null>(null);
@@ -574,7 +577,10 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
     return () => clearInterval(t);
   }, [status.streaming, startedAt]);
   const liveRate = status.streaming ? liveTokenRate(run) : null;
-  const label = status.streaming ? shortLiveStatus(run?.activity) || 'Working' : '';
+  // Agrees with the turn status line: "Starting" or "Writing reply" for half an hour reads as hung or busy
+  // when Claude Code is only waiting on its own background work.
+  const waiting = !!run && turnActivityLabel(run, undefined, backgroundTasks).startsWith('Waiting on');
+  const label = !status.streaming ? '' : waiting ? 'Waiting on background tasks' : shortLiveStatus(run?.activity) || 'Working';
   return <ReplyStatus {...status} tps={liveRate?.rate ?? status.tps} estimatedRate={!!liveRate} status={label} iconState={status.streaming ? replyIconState(run?.activity) : 'idle'} elapsed={status.streaming ? elapsed : 0} nextWakeAt={nextWakeAt} now={now} />;
 });
 
@@ -730,6 +736,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // On the wall the plan sheet carries the Agent Monitor's sub-agents and task links, so the rail stays closed there.
   const wideEnoughForRail = paneWidth >= PLAN_RAIL_MIN_PANE && !(commandCenter && surface === 'full');
   const planRailOpen = planRailWanted && wideEnoughForRail;
+  // A simulator this chat's agent started on opens the Simulator panel at the
+  // top of the Agent Monitor, once per device (Simulators.tsx). The line above
+  // the composer reopens it, or shows Simulator itself where there is no room.
+  useSimulatorAutoOpen(sessionId);
+  const showSimulator = (device: BootedSimulator) => {
+    if (wideEnoughForRail && surface !== 'composer') useStore.getState().setPlanRail(sessionId, true);
+    else if (device.canOpen) void window.nekko.simulatorsOpen?.(device.id).catch(() => {});
+  };
   const planSteps = useMemo(() => { const p = planProgress(session?.agentPlan); return { done: p.done + p.skipped, total: p.total }; }, [session?.agentPlan]);
   // A small window (a cell on the Agent board wall, a sliver of a split)
   // folds the two control rows into one summary chip, so the transcript keeps
@@ -1216,6 +1230,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           break;
         case 'approval_resolved':
           setApproval((current) => approvalAfterResult(current, e.callId));
+          break;
+        case 'limit_reset':
+          // nekkod is continuing the chat as asked, so the saved schedule is
+          // spent; the notice goes when the resumed reply starts streaming.
+          loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
           break;
         case 'tool_result':
           // Parallel work can finish while another tool is still waiting on us.
@@ -2593,8 +2612,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // While the live run draws the newest turn (streaming, or held until its
   // persisted copy has replaced it), stop at its prompt or the saved resume
   // boundary: only the new checkpointed tail would duplicate the live steps.
+  // A turn nobody sent (a Claude Code wake-up after a background sub-agent
+  // reported back) has no prompt of its own: nekkod names the message it
+  // follows, so the turn before it stays on screen instead of everything
+  // after the last prompt. The run keeps it once known, for its held copy.
   const liveTurn = streaming || !!held;
-  const transcriptThroughId = (getLiveRun(sessionId) ?? held)?.transcriptThroughId;
+  const runAnchor = streaming ? session?.activeRun?.afterMessageId : undefined;
+  useEffect(() => { if (runAnchor) anchorLiveRun(sessionId, runAnchor); }, [sessionId, runAnchor]);
+  const transcriptThroughId = (getLiveRun(sessionId) ?? held)?.transcriptThroughId ?? runAnchor;
   const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages, transcriptThroughId) : messages), [messages, liveTurn, transcriptThroughId]);
   const rows = useMemo(
     () => (settled ? toTranscriptRows(settled, extractPrUrls, collectSessionPrUrls, prs) : []),
@@ -2959,9 +2984,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {/* The reply being written: repaints once a frame on its own. */}
                 {imageMode
                   ? <ImageLiveTurn sessionId={sessionId} streaming={streaming} />
-                  : <LiveTurn sessionId={sessionId} held={held} prs={prs} priorPrUrls={priorPrUrls} onImageClick={setLightbox} pendingCallId={approval?.call.id} />}
+                  : <LiveTurn sessionId={sessionId} held={held} prs={prs} priorPrUrls={priorPrUrls} onImageClick={setLightbox} pendingCallId={approval?.call.id} backgroundTasks={claudeBackground} />}
                 <LiveReplyStatus
                   sessionId={sessionId}
+                  backgroundTasks={claudeBackground}
                   startedAt={turnStart.current}
                   streaming={streaming}
                   tps={tps}
@@ -2971,7 +2997,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   persisted={!streaming && !![...(session?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.turnStats}
                   blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : secretAsk ? `Waiting for ${secretAsk.name}` : null}
                 />
-                {!streaming && <ClaudeBackgroundTasks tasks={claudeBackground} />}
+                {!streaming && <ChatBackgroundWork tasks={claudeBackground} subAgents={subagentChildren} />}
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
                 {remoteBlock && <div role="status" data-computer-block className="mx-auto mb-1 w-full max-w-3xl rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>{remoteBlock}</div>}
                 {question && <div className="conversation-question" data-agent-question>
@@ -2982,7 +3008,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
                 {starAsk && !streaming && !question && !secretAsk && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
-                {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
+                {!imageMode && <PrWatchContinuation sessionId={sessionId} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!secretAsk || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
                 {errorNotice && !question && !streaming && (() => {
@@ -2993,6 +3019,17 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   const canResume = canContinueReply;
                   const interruption = describeInterruption(errorNotice, canResume);
                   const tone = interruption.paused ? 'var(--warning)' : 'var(--danger)';
+                  // A used-up usage limit with a known reset can carry on by itself then.
+                  const now = Date.now();
+                  const hasPrompt = !!session?.messages.some((m) => m.role === 'user');
+                  const resetAt = hasPrompt && !readOnly && !session?.incognito ? usageLimitResetAt(errorNotice, providerLimits, now) : null;
+                  const armedAt = session?.turnFailure?.continueAt ?? null;
+                  const scheduleContinue = (at: number | null) => {
+                    const turnFailure = { message: errorNotice, afterMessageId: lastMsgId, ...(at ? { continueAt: at } : {}) };
+                    window.nekko.setSessionOptions(sessionId, { turnFailure })
+                      .then((s) => { if (s) { putCachedSession(s); setSession(s); } })
+                      .catch((err) => useStore.getState().pushToast('error', `Could not ${at ? 'schedule' : 'cancel'} the continue: ${String(err)}`));
+                  };
                   return (
                   <div
                     className="fade-in flex flex-col gap-2 rounded-xl border px-3 py-2 text-xs"
@@ -3018,12 +3055,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 empty:hidden">
-                    {session?.messages.some((m) => m.role === 'user') && (
+                    {hasPrompt && (
                       <button className="btn btn-primary shrink-0 px-3 py-0.5 text-2xs"
                         title="Retry using the saved conversation and work" onClick={() => void resumeRun()}>
                         Retry
                       </button>
                     )}
+                    <ContinueAtReset resetAt={resetAt} armedAt={armedAt} now={now} onSchedule={scheduleContinue} />
                     {cuts.deleteLast && !readOnly && (
                       <button className="btn btn-outline shrink-0 px-3 py-0.5 text-2xs" data-notice-delete
                         title="Delete your last message and anything after it, then write it again (for example without the picture)"
@@ -3301,6 +3339,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                 </div>
               )}
+                 <SimulatorStatus sessionId={sessionId} onOpen={showSimulator} />
                  <ActiveWatchChips sessionId={sessionId} />
                  {subagentChildren.map(child => <ActiveWatchChips key={child.id} sessionId={child.id} owner={child.title || "Sub-agent"} />)}
                  {/* Attachments ride inside the composer, at the top, separated by

@@ -121,6 +121,12 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
             }
             if (state.conn != RelayState.DENIED) TextButton(onClick = { deps.repo.reconnect() }) { Text(stringResource(R.string.settings_try_again_now)) }
         }
+        // #2856: the Tailscale steps again, any time, when this computer is reached over Tailscale.
+        if (RelayRoute.of(inUse) == RelayRoute.TAILSCALE) {
+            var guide by remember { mutableStateOf(false) }
+            TextButton(onClick = { guide = true }, modifier = Modifier.testTag("connection.tailscaleSetup")) { Text(stringResource(R.string.tailscale_guide)) }
+            if (guide) com.nekko.android.ui.screens.TailscaleSetupSheet(deps.repo, c.id) { guide = false }
+        }
         // IO-21: each route checked in turn on a socket of its own, never the live one.
         val checks by deps.repo.checks.collectAsStateWithLifecycle()
         val checking by deps.repo.checking.collectAsStateWithLifecycle()

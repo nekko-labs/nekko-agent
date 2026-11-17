@@ -111,7 +111,6 @@
     <string name="chats_oldest_first">最早的在前</string>
     <string name="chats_newest_first">最新的在前</string>
     <string name="chats_show">显示</string>
-    <string name="chats_previews">预览</string>
     <string name="chats_completed_chats">已完成的聊天</string>
     <string name="chats_empty_groups">空分组</string>
     <string name="chats_reorder_groups_menu">调整分组顺序…</string>
@@ -263,4 +262,13 @@
     <string name="chats_reconnecting">%1$s 正在重新连接</string>
     <string name="chats_reconnecting_label">%1$s 正在重新连接…</string>
     <string name="chats_reconnect_draft">现在就写好消息，%1$s 重新连接后会自动发送</string>
+    <!-- Sub-agents under their chat (#2509). -->
+    <string name="chats_subagents">子代理</string>
+    <string name="chats_subagent">子代理</string>
+    <string name="chats_subagent_named">子代理 %1$s</string>
+    <string name="chats_subagent_on">子代理 %1$s，使用 %2$s</string>
+    <!-- New chat as a composer (#2459). -->
+    <string name="chats_photo_unreadable">无法读取该图片。</string>
+    <string name="chats_choose_model">选择模型</string>
+    <string name="chats_starts_on">在 %1$s 上开始</string>
 </resources>

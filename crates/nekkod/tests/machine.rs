@@ -132,6 +132,43 @@ async fn machine_channels_are_served_without_a_backend() {
         assert_eq!(fs, json!({ "quiet": false, "state": "free" }));
     }
 
+    // Booted simulators (#2814): a list, possibly empty, each device with its
+    // CPU, and an unknown one refused rather than acted on.
+    let (status, sims) = post(d.port, "simulators:state", json!([])).await;
+    assert_eq!(status, 200, "{sims}");
+    for dev in sims["devices"].as_array().expect("devices") {
+        assert!(dev["id"].is_string() && dev["cpuPct"].is_number() && dev["upSecs"].is_number(), "{dev}");
+        assert!(["ios", "android"].contains(&dev["kind"].as_str().unwrap_or_default()), "{dev}");
+    }
+    let (status, gone) = post(d.port, "simulators:shutdown", json!(["no-such-device"])).await;
+    assert_ne!(status, 200, "{gone}");
+
+    // Served pages (#2824): a list, each an address on this computer. The app
+    // that started the daemon (here, this test) is never one of them, even
+    // while it serves a page.
+    let page = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let page_port = page.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for stream in page.incoming().flatten() {
+            let mut stream = stream;
+            let mut buf = [0u8; 1024];
+            let _ = std::io::Read::read(&mut stream, &mut buf);
+            let _ = std::io::Write::write_all(
+                &mut stream,
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<title>Own page</title>",
+            );
+        }
+    });
+    let (status, served) = post(d.port, "servers:list", json!([])).await;
+    assert_eq!(status, 200, "{served}");
+    for site in served["servers"].as_array().expect("servers") {
+        let url = site["url"].as_str().unwrap_or_default();
+        assert!(url.starts_with("http://localhost:") || url.starts_with("http://[::1]:"), "{site}");
+        assert!(site["port"].is_u64(), "{site}");
+        assert_ne!(site["port"].as_u64(), Some(page_port as u64), "{site}");
+        assert_ne!(site["port"].as_u64(), Some(d.port as u64), "{site}");
+    }
+
     // Low memory: the level, and with detail, the daemon's own share and the
     // biggest app. Closing is refused for Nekko and the system.
     let (status, mem) = post(d.port, "memory:state", json!([{ "detail": true }])).await;

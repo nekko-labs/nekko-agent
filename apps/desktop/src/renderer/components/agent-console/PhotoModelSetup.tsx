@@ -16,6 +16,7 @@ import { formatBytes } from '../runtimes/verdict.js';
 import { groupDownloads, isActive, type DownloadGroup } from '../engine/downloadGroups.js';
 import { Progress, Step } from '../engine/FirstLocalModel.js';
 import { ensureRecommendedOffload } from './imageOffload.js';
+import { pictureModelBlurb, pictureTimeText } from '../engine/pictureModelText.js';
 
 /**
  * A Photo chat with no picture model: two or three models picked for this
@@ -31,14 +32,6 @@ import { ensureRecommendedOffload } from './imageOffload.js';
 
 const POLL_MS = 5000;
 const MAX_CARDS = 3;
-
-/** One line on what each recommended model is good at. */
-const BLURB: Record<string, string> = {
-  'qwen-image': 'Best quality, and good at lettering inside pictures.',
-  'z-image-turbo': 'Fast, with natural-looking pictures.',
-  'flux2-klein-4b': 'Small and quick, and it can also edit photos.',
-  'qwen-image-edit-2511': 'Precise edits that follow your instructions.',
-};
 
 const base = (p: string) => p.split(/[\\/]/).pop()?.toLowerCase() ?? '';
 
@@ -102,8 +95,14 @@ export function photoSetupPhase(input: {
   return { kind: 'choose' };
 }
 
-/** The fit in words. Memory is an estimate and no speed is measured, so nothing says "runs well". */
+/** The fit in words, then how long a picture takes when that was measured. Memory is an estimate, so nothing says "runs well". */
 export function photoFitLine(o: ImageRecommendedOption, recs: Recommendations): string {
+  const time = o.fit === 'tooBig' ? null : pictureTimeText(o);
+  const fit = photoFitWords(o, recs);
+  return time ? `${fit} About ${time.text.replace(/^~/, '')}${o.time?.basis === 'measured' ? ' on a computer like this' : ''}.` : fit;
+}
+
+function photoFitWords(o: ImageRecommendedOption, recs: Recommendations): string {
   const where = recs.hardware.device ? `your ${recs.hardware.device}` : 'this computer';
   if (o.fit === 'tooBig') return 'Too large for this computer.';
   if (o.offloadToCpu) return `Fits ${where} by keeping part of it in system memory, so pictures take longer.`;
@@ -357,7 +356,7 @@ export function PhotoSetupSteps({
                   <span className="text-sm font-semibold">{c.name}</span>
                   <span className="shrink-0 text-xs text-ink-faint">{formatBytes(c.downloadBytes)}</span>
                 </span>
-                <span className="text-xs text-ink-soft">{BLURB[c.modelId] ?? (c.capabilities.includes('edit') ? 'Creates and edits pictures.' : 'Creates pictures from a description.')}</span>
+                <span className="text-xs text-ink-soft">{pictureModelBlurb(c)}</span>
                 <span className="text-xs" style={{ color: off ? 'var(--danger)' : 'var(--ink-faint)' }}>{photoFitLine(c, recs)}</span>
               </button>
             );

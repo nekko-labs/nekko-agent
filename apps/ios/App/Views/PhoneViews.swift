@@ -1,3 +1,4 @@
+import AuthenticationServices
 import NekkoKit
 import NekkoProtocol
 import SwiftUI
@@ -468,21 +469,27 @@ struct PhoneModelsView: View {
     }
 }
 
-/// Add a provider to this iPhone: its kind, a name, the address where the kind
-/// needs one, and the key. Add checks it works before keeping it.
+/// Add a provider to this iPhone. OpenRouter is one button: a browser sign-in
+/// hands the key back. Kinds with a key page are guided: open it, copy the key,
+/// come back and tap Paste, and the provider is checked and kept by itself.
+/// Kinds that need an address keep the form. Add checks it works before keeping it.
 struct AddPhoneProviderSheet: View {
     @Environment(PhoneChats.self) private var phone
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @Environment(\.webAuthenticationSession) private var webAuth
     @State private var kindId = PhoneProviders.kinds[0].id
     @State private var label = PhoneProviders.kinds[0].label
     @State private var url = ""
     @State private var key = ""
     @State private var workspace = ""
+    @State private var opened = false
     @State private var busy = false
     @State private var failed: String?
 
     private var kind: PhoneProviders.Kind { PhoneProviders.kind(kindId) ?? PhoneProviders.kinds[0] }
+    private var keySite: String? { kind.keyPage.flatMap { URL(string: $0)?.host() } }
 
     var body: some View {
         NavigationStack {
@@ -492,10 +499,26 @@ struct AddPhoneProviderSheet: View {
                         ForEach(PhoneProviders.kinds) { k in Text(k.label).tag(k.id) }
                     }
                     .accessibilityIdentifier("addPhoneProvider.kind")
-                    TextField("Name", text: $label)
-                        .accessibilityIdentifier("addPhoneProvider.name")
+                    if kind.urlRequired {
+                        TextField("Name", text: $label)
+                            .accessibilityIdentifier("addPhoneProvider.name")
+                    }
                 } footer: {
                     Text(kind.hint).foregroundStyle(palette.inkSoft)
+                }
+                if kind.signIn {
+                    Section {
+                        Button { Task { await signIn() } } label: {
+                            Text("Sign in with \(kind.label)").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(busy)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                        .accessibilityIdentifier("addPhoneProvider.signIn")
+                    } footer: {
+                        Text("Approve in the browser and the key comes back to this iPhone.").foregroundStyle(palette.inkSoft)
+                    }
                 }
                 if kind.urlRequired {
                     Section {
@@ -505,15 +528,31 @@ struct AddPhoneProviderSheet: View {
                     } header: { SectionHeader("Address") }
                 }
                 Section {
-                    SecureField(kind.keyOptional ? String(localized: "\(kind.keyName) (optional)") : kind.keyName, text: $key)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .accessibilityIdentifier("addPhoneProvider.key")
+                    if let page = kind.keyPage.flatMap(URL.init(string:)), let keySite {
+                        Button("Open \(keySite)") { opened = true; openURL(page) }
+                            .accessibilityIdentifier("addPhoneProvider.openKeyPage")
+                    }
+                    HStack {
+                        SecureField(kind.keyOptional ? String(localized: "\(kind.keyName) (optional)") : kind.keyName, text: $key)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .onSubmit { Task { await add() } }
+                            .accessibilityIdentifier("addPhoneProvider.key")
+                        if key.isEmpty && kind.keyPage != nil {
+                            // The system Paste button reads the clipboard without the paste prompt.
+                            PasteButton(payloadType: String.self) { take($0.first) }
+                                .labelStyle(.titleOnly)
+                                .buttonBorderShape(.capsule)
+                                .disabled(busy)
+                                .accessibilityIdentifier("addPhoneProvider.paste")
+                        }
+                    }
                     if kind.id == "anthropic" {
                         TextField("Workspace ID (optional)", text: $workspace)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
                     }
-                } header: { SectionHeader("Key") } footer: {
-                    Text("Kept in this iPhone’s Keychain, on this device only.").foregroundStyle(palette.inkSoft)
+                } header: { SectionHeader(kind.signIn ? "Or use a key" : "Key") } footer: {
+                    Text(opened ? "Copy the key, come back and tap Paste. Nekko checks it and connects."
+                                : "Kept in this iPhone’s Keychain, on this device only.").foregroundStyle(palette.inkSoft)
                 }
                 if let failed {
                     Section { Label(failed, systemImage: "exclamationmark.triangle").foregroundStyle(palette.danger) }
@@ -527,6 +566,7 @@ struct AddPhoneProviderSheet: View {
                 // The name follows the kind until it is typed over.
                 if label == PhoneProviders.kind(old)?.label || label.isEmpty { label = PhoneProviders.kind(new)?.label ?? "" }
                 if PhoneProviders.kind(new)?.urlRequired == true { url = PhoneProviders.kind(new)?.defaultUrl ?? "" } else { url = "" }
+                opened = false
                 failed = nil
             }
             .toolbar {
@@ -541,6 +581,36 @@ struct AddPhoneProviderSheet: View {
             }
         }
         .interactiveDismissDisabled(busy)
+    }
+
+    /// A pasted key is checked and kept straight away.
+    private func take(_ text: String?) {
+        let pasted = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !pasted.isEmpty, !busy else { return }
+        key = pasted
+        Task { await add() }
+    }
+
+    /// OpenRouter's PKCE sign-in in the browser (the person's own session, so
+    /// usually one tap), then the code is swapped for a key and the key added.
+    private func signIn() async {
+        busy = true
+        failed = nil
+        do {
+            let verifier = SyncCrypto.base64url(E2E.randomBytes(32))
+            let callback = try await webAuth.authenticate(
+                using: PhoneProviders.openRouterAuthorizeURL(challenge: SyncCrypto.pkceChallenge(verifier)),
+                callbackURLScheme: "nekko-agent", preferredBrowserSession: .shared)
+            guard let code = PhoneProviders.openRouterCode(from: callback) else { throw PhoneProviders.Problem.signIn }
+            key = try await phone.openRouterKey(code: code, verifier: verifier)
+            busy = false
+            await add()
+        } catch let e as ASWebAuthenticationSessionError where e.code == .canceledLogin {
+            busy = false
+        } catch {
+            busy = false
+            failed = error.localizedDescription
+        }
     }
 
     /// Keep the provider only once it answers.

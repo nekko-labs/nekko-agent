@@ -133,6 +133,17 @@ export const IpcChannels = {
   /** Whether someone is using this computer (input, a chat they started), for background work and New chat's machine pick. */
   activityState: 'activity:state',
   systemStats: 'system:stats',
+  /** The web pages served on this computer (dev servers), for the Agents panel's Browsers view (#2824). Local only. */
+  serversList: 'servers:list',
+  /** Booted iOS simulators and Android emulators, their CPU and the chat that last used each (#2814). */
+  simulatorsState: 'simulators:state',
+  /** Shut a booted simulator down; iOS can be booted again (`simulators:boot`) as the Undo. */
+  simulatorsShutdown: 'simulators:shutdown',
+  simulatorsBoot: 'simulators:boot',
+  /** Bring Simulator.app forward on a device. */
+  simulatorsOpen: 'simulators:open',
+  /** A screenshot of a device's screen, read on demand for the chat's Simulator panel. */
+  simulatorsScreenshot: 'simulators:screenshot',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
   monitorSummary: 'monitor:summary',
 
@@ -189,6 +200,7 @@ export const IpcChannels = {
   contextPreview: 'context:preview',
   contextToggle: 'context:toggle',
   contextSetPrefs: 'context:setPrefs',
+  contextPromptProfiles: 'context:promptProfiles',
   sessionSetAttachments: 'session:setAttachments',
   specBuild: 'spec:build',
   specBuildDoc: 'spec:buildDoc',
@@ -254,6 +266,8 @@ export const IpcChannels = {
   /** What Privacy Shield would hide from a cloud model in a chat and its draft. */
   privacyPreview: 'privacy:preview',
   attachmentImport: 'attachment:import',
+  /** A phone's clip, in pieces (#2777); the daemon answers it. */
+  attachmentUpload: 'attachment:upload',
   imageFetch: 'image:fetch',
 
   changesList: 'changes:list',
@@ -549,6 +563,8 @@ export const IpcEvents = {
   tasksUpdated: 'tasks:updated',
   /** `BackgroundState` changed: a background turn started, ended, paused or resumed. */
   backgroundUpdated: 'background:updated',
+  /** Booted simulators changed, or a chat started on one (`SimulatorsUpdated`). */
+  simulatorsUpdated: 'simulators:updated',
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
   /** The image builder's `ImageView`, after any change. */
@@ -885,6 +901,14 @@ export interface NekkoApi {
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
   getSystemStats(): Promise<import('./monitor.js').SystemStats | null>;
+  /** The web pages served on this computer (`servers:list`). Absent where the host cannot look. */
+  serversList?(): Promise<import('./servers.js').ServedSites>;
+  /** Booted simulators and emulators (`simulators:state`). Absent where the host has none to show. */
+  simulatorsState?(): Promise<import('./simulators.js').SimulatorsState>;
+  simulatorsShutdown?(id: string): Promise<{ ok: boolean; canUndo: boolean }>;
+  simulatorsBoot?(id: string): Promise<{ ok: boolean }>;
+  simulatorsOpen?(id: string): Promise<{ ok: boolean }>;
+  simulatorsScreenshot?(id: string): Promise<import('./simulators.js').SimulatorShot>;
 
   listSessions(): Promise<Session[]>;
   /** Earliest deadline of this chat's active durable watches, or null. */
@@ -1001,6 +1025,8 @@ export interface NekkoApi {
   previewContext(sessionId: string, attachedPaths: string[]): Promise<ContextBundle>;
   toggleContextItem(sessionId: string, itemId: string, included: boolean, pinned: boolean): Promise<ContextBundle>;
   setContextPrefs(sessionId: string, prefs: import('./chat.js').ContextPrefs): Promise<void>;
+  /** The built-in system prompt text of each profile (decision 0095). */
+  promptProfileTexts(): Promise<Record<import('./context.js').PromptProfileName, string>>;
 
   /** Build/refresh the primary spec doc in the chat's workspace from the conversation. */
   buildSpec(sessionId: string): Promise<{ ok: boolean; path?: string; message?: string }>;
@@ -1500,6 +1526,8 @@ export interface NekkoApi {
   /** Fires when the automation-task list changes (created/updated/fired/deleted). */
   onTasksUpdated(cb: (tasks: AutomationTask[]) => void): () => void;
   onBackgroundUpdated(cb: (state: import('./background.js').BackgroundState) => void): () => void;
+  /** Booted simulators changed, or a chat started on one. */
+  onSimulatorsUpdated?(cb: (e: import('./simulators.js').SimulatorsUpdated) => void): () => void;
   /** Fires when any training/goal run changes (experiments, hints, status). */
   onTrainingUpdated(cb: (runs: TrainingRun[]) => void): () => void;
   /** Fires when a workflow is edited or any run advances a step. */

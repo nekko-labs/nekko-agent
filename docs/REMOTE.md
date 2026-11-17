@@ -14,11 +14,11 @@ After pairing your first computer, the permissions checklist explains what Nekko
 
 Denied access can be restored in system Settings. If Settings opens its home page, find Nekko Agent there (under **Apps** on newer iOS versions). Device restrictions or missing hardware may prevent a feature. Photo and file pickers need no blanket library or storage permission. Allowing microphone or speech access here does not start recording. You can revisit the checklist at any time.
 
-## Pending answers and approvals on iPhone
+## Pending answers and approvals on iPhone and Android
 
 If your computer is reconnecting, you can still submit an answer or a one-time **Allow** or **Deny** response inside its chat. It appears as a pending response message with its request identifier and stays on your phone when you leave the chat or restart the app.
 
-The phone tries again when connected, but only while the exact original question or tool call is still pending on that computer. **Retry** tries delivery again; **Cancel** removes an unsent response and lets you answer the original request again if it is still waiting. A response already sending cannot be recalled. After confirmation it reads **Sent**.
+The phone tries again when connected, but only while the exact original question or tool call is still pending on that computer. **Retry** tries delivery again; **Cancel** removes an unsent response and lets you answer the original request again if it is still waiting. A response already sending cannot be recalled. After confirmation it reads **Sent** (on Android the message then leaves the message box; the chat shows the result).
 
 If the request changed or was answered elsewhere, the message says **No longer pending** instead of applying your answer to a different action. If the connection dropped after the computer accepted it, the phone may not be able to confirm delivery; a missing request is not treated as proof that this phone sent it. **Always allow this tool** changes, voice actions, and responses from Monitors still need a live connection.
 
@@ -151,9 +151,13 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Chats on this phone (Android, in progress for [#2414](https://github.com/nekko-labs/nekko-agent/issues/2414)).**
 > From Chats, choose **This phone**, even with no paired computer or provider. Add a provider there:
-> Claude API, OpenAI, OpenRouter, Claude in Amazon Bedrock (Mantle Messages), Claude in Microsoft
-> Foundry, Claude on Vertex AI, or an HTTPS OpenAI-compatible API. Supply your own API key or access
-> token (optional for compatible APIs), choose a model and start a streamed text conversation.
+> Claude API, OpenAI, OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock (Mantle
+> Messages), Claude in Microsoft Foundry, Claude on Vertex AI, or an HTTPS OpenAI-compatible API.
+> OpenRouter is one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude
+> API, OpenAI, Gemini and Ollama Cloud, tap **Open** to reach the key page, copy a key, come back and
+> tap **Paste**; Nekko checks it and connects. A wrong key is turned down before anything is saved.
+> For the others, supply your own API key or access token (optional for compatible APIs). Then
+> choose a model and start a streamed text conversation.
 > Test, replace the key, disable/re-enable or remove a provider; Stop cancels a reply and Retry
 > replaces its last attempt. Fixed-catalog Test requests can incur a small provider charge.
 > Keys and local transcripts are sealed with Android Keystore-backed encryption. Requests go
@@ -233,8 +237,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Chats on this iPhone** (iPhone): the phone can run chats itself, with no computer, on a cloud
 > model provider. Add one in **Settings → Models on this iPhone**: the Claude API, OpenAI,
-> OpenRouter, Claude in Amazon Bedrock, Claude in Microsoft Foundry, Claude on Vertex AI, or any
-> OpenAI-compatible server over https, with your own key. The key stays in this iPhone's Keychain
+> OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock, Claude in Microsoft Foundry,
+> Claude on Vertex AI, or any OpenAI-compatible server over https, with your own key. OpenRouter is
+> one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude API, OpenAI,
+> Gemini and Ollama Cloud, tap **Open** to reach the key page, copy a key, come back and tap
+> **Paste**; Nekko checks it and connects. The key stays in this iPhone's Keychain
 > and goes only to that provider; it is never sent to your computer, the relay or Nekko Cloud.
 > Then pick **This iPhone** under **New chat → Run on**. These chats sit in the same list as your
 > computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
@@ -246,6 +253,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > iPhone's Keychain and goes only to its own service; your computers keep their own connectors.
 > Connect checks the token first and says who it signed in as. Each service is shown with its own
 > logo.
+>
+> **Connectors** (Android): the same page under **Settings → Connectors**, with the same services and
+> logos. Each token is sealed on the phone by its keystore and goes only to its own service over
+> https. With more than one git provider connected, **Pull requests from** picks the one Pull
+> requests will list (that screen comes next on Android).
 >
 > **Pull requests** (iPhone): in the chat list's menu. **Mine** lists the open pull requests to
 > review, opened by you and assigned to you on the selected git provider; **Projects** lists the
@@ -536,7 +548,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > you come back to the app.
 >
 > **Photos and dictation** (Android): the **+** on the left of a chat's message box opens **Dictate**,
-> **Image from files** (the phone's photo picker; Nekko only sees the photos you pick) and **Take
+> **Photos and videos** (the phone's photo picker; Nekko only sees what you pick) and **Take
 > photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails
 > inside the message box that you can remove. Adding or removing a photo saves the draft at once, so
 > reopening the app brings back its text and photos. They are scaled to 1600 px and sent end-to-end
@@ -544,6 +556,12 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > The photos stay in the message's bubble on the phone too, as small previews the computer makes
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
+>
+> **Videos** (Android): pick up to 2 videos in the same picker. Each goes to the computer at once,
+> with its progress in the message box, and is attached to the chat as a file; **Send** waits until it
+> has arrived. A video larger than 50 MB is turned down on the phone before anything is sent. Videos
+> need the computer connected: they never wait on the phone like a message does. Once attached, a
+> video stays among the chat's attached files on the computer.
 >
 > **Dictation** (Android): tap **+ → Dictate** and speak as long as you like; tap ■ when you're done.
 > At each pause the words said so far are turned into text and typed into the message box while you
@@ -863,6 +881,13 @@ on. Without Tailscale on this computer the option links to Tailscale and stays o
   only to Tailscale names); it moves between the other routes the same way.
   Switch **Also on this Wi-Fi** off to keep the relay on the tailnet only; pair the phone again
   after changing it. Phones paired before this keep the one route until they scan a new code.
+
+**After pairing over Tailscale** (iPhone and Android), the phone shows **Set up Tailscale**: is
+Tailscale on on this phone (with **Open Tailscale**), does the computer answer, and how to keep it
+working away from home. That last step is VPN On Demand in Tailscale on the iPhone, and Tailscale's
+**Always-on VPN** in Android's VPN settings (**Open VPN settings**); Android doesn't tell apps which
+VPN is always on, so the phone can't tick that one. The first two steps tick themselves as they
+come true. Open the guide again from **Settings → Connection** (Android: **Tailscale setup guide**).
 
 On the iPhone, **Settings → Connection** shows the route in use (on Android, **Settings →
 Connection status**, with the other routes). **Check routes** (iPhone and Android) looks up,

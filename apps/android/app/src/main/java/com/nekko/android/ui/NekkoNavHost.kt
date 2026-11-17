@@ -43,6 +43,7 @@ import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.files.FilesScreen
 import com.nekko.android.ui.files.LogsScreen
 import com.nekko.android.ui.screens.ProvidersScreen
+import com.nekko.android.ui.screens.TailscaleSetupSheet
 import com.nekko.android.ui.screens.AutomationsScreen
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.UsageScreen
@@ -115,6 +116,7 @@ object Routes {
     const val FILES = "settings/files"
     const val LOGS = "settings/logs"
     const val PROVIDERS = "settings/providers"
+    const val CONNECTORS = "settings/connectors"
     const val SIMPLE_MODE = "settings/simple"
     const val CUSTOMIZE = "settings/customize"
     const val PERMISSIONS = "settings/permissions"
@@ -168,6 +170,7 @@ fun NekkoNavHost(
             // Over whatever is open; Back from New chat returns there.
             DeepLink.Share, DeepLink.NewChat -> nav.navigate(Routes.NEW) { launchSingleTop = true }
             DeepLink.Talk -> nav.navigate(Routes.VOICE) { launchSingleTop = true }
+            is DeepLink.OpenRouterKey -> nav.navigate(Routes.phone()) { launchSingleTop = true }
             DeepLink.Dashboard -> nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
             null -> return@LaunchedEffect
         }
@@ -183,6 +186,8 @@ fun NekkoNavHost(
 
     // A pairing just worked: celebrate over whatever screen is now underneath (PairSuccessOverlay).
     var justPaired by rememberSaveable { mutableStateOf<String?>(null) }
+    // Paired over Tailscale (#2856): after the celebration, the steps that are left.
+    var tailscaleSetup by rememberSaveable { mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         NavHost(navController = nav, startDestination = Routes.CHATS) {
@@ -292,6 +297,8 @@ fun NekkoNavHost(
                     onPaired = { id ->
                         FirstRun.paired(phonePrefs)
                         justPaired = id
+                        val relay = repo.state.value.computers.firstOrNull { it.id == id }?.relayUrl
+                        if (relay != null && com.nekko.protocol.RelayRoute.of(relay) == com.nekko.protocol.RelayRoute.TAILSCALE) tailscaleSetup = id
                         nav.onMain { backToChats() }
                     },
                 )
@@ -325,6 +332,10 @@ fun NekkoNavHost(
             }
             composable(Routes.AUTOMATIONS) {
                 AutomationsScreen(repo = repo, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.CONNECTORS) {
+                val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                com.nekko.android.ui.screens.ConnectorsScreen(app.connectors, onBack = { nav.popBackStack() })
             }
             composable(Routes.PROVIDERS) {
                 ProvidersScreen(repo = repo, onBack = { nav.popBackStack() })
@@ -363,6 +374,7 @@ fun NekkoNavHost(
             val name = state.computers.firstOrNull { it.id == id }?.name?.takeIf { it != DEFAULT_COMPUTER_NAME }
             PairSuccessOverlay(name) { justPaired = null }
         }
+        if (justPaired == null) tailscaleSetup?.let { id -> TailscaleSetupSheet(repo, id) { tailscaleSetup = null } }
     }
 }
 

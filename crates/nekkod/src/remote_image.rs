@@ -52,7 +52,7 @@ const ACCEPT: &str = "image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.9
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; NekkoAgent/1.0; +https://nekkoagent.com)";
 
 /// The channels [`route`] serves.
-pub const CHANNELS: &[&str] = &["image:fetch", "attachment:import"];
+pub const CHANNELS: &[&str] = &["image:fetch", "attachment:import", "attachment:upload"];
 
 /// `image:fetch` and `attachment:import`; None for any other channel.
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Option<Result<Value, String>> {
@@ -68,6 +68,16 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Option<Result<Va
         "attachment:import" => {
             let data_dir = ctx.workspace.data_dir().to_string_lossy().into_owned();
             Some(attachment_import(data_dir, args).await)
+        }
+        "attachment:upload" => {
+            let data_dir = ctx.workspace.data_dir().to_string_lossy().into_owned();
+            let (store, args) = (ctx.sessions.clone(), args.to_vec());
+            Some(
+                tokio::task::spawn_blocking(move || upload_piece(&data_dir, &store, &args))
+                    .await
+                    .map_err(|e| e.to_string())
+                    .and_then(|r| r),
+            )
         }
         _ => None,
     }
@@ -445,6 +455,115 @@ fn import_attachment_capped(
     Ok(target)
 }
 
+// ---------------------------------------------------------------------------
+// attachment:upload
+// ---------------------------------------------------------------------------
+
+/// The largest piece of a phone's clip (`PHONE_UPLOAD.chunkBytes`).
+const UPLOAD_CHUNK: usize = 3 * 1024 * 1024;
+/// How many files one chat's attachments may hold (as a computer's imports).
+const UPLOAD_FILES: usize = 256;
+/// A piece not followed within this long is dropped with its upload.
+const UPLOAD_STALE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// One piece of a phone's clip (#2777): `(chatId, uploadId, name, offset,
+/// total, chunk)`. The phone gate checked the shape; this checks the order.
+/// Pieces are staged under `attachment-uploads/<chat>/<uploadId>.part`, each
+/// starting where the last one ended. At `total` the file moves into the
+/// chat's attachments, as `attachment:import` would name it, and is added to
+/// the chat's attached files, so the next message reads it. The answer carries
+/// no path: `{ received, done }`.
+fn upload_piece(data_dir: &str, store: &nekko_store::SessionStore, args: &[Value]) -> Result<Value, String> {
+    let s = |i: usize| args.get(i).and_then(Value::as_str).unwrap_or_default();
+    let n = |i: usize| {
+        args.get(i)
+            .and_then(|v| v.as_u64().or_else(|| v.as_f64().filter(|f| f.fract() == 0.0 && *f >= 0.0).map(|f| f as u64)))
+    };
+    let (chat, id, name) = (s(0), s(1), s(2));
+    let (Some(offset), Some(total)) = (n(3), n(4)) else {
+        return Err("The clip's size or position is missing.".into());
+    };
+    if chat.is_empty() || !(8..=64).contains(&id.len()) || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+        return Err("The upload is not one this computer can take.".into());
+    }
+    if total == 0 || total > MAX_IMPORT as u64 || offset >= total {
+        return Err("Attachment is larger than 50 MB.".into());
+    }
+    let chunk = base64::engine::general_purpose::STANDARD
+        .decode(s(5))
+        .map_err(|_| "The clip arrived damaged. Try again.".to_string())?;
+    if chunk.is_empty() || chunk.len() > UPLOAD_CHUNK || offset + chunk.len() as u64 > total {
+        return Err("The clip arrived damaged. Try again.".into());
+    }
+    let Some(session) = store.get(chat) else { return Err("This chat was deleted on your computer.".into()) };
+    let staging = path::join(&[data_dir, "attachment-uploads", &safe_session(chat)]);
+    let part = path::join(&[&staging, &format!("{id}.part")]);
+    if offset == 0 {
+        let attachments = path::join(&[data_dir, "attachments", &safe_session(chat)]);
+        let held = std::fs::read_dir(&attachments).map_or(0, Iterator::count);
+        if held >= UPLOAD_FILES {
+            return Err("This chat holds too many attachments.".into());
+        }
+        std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
+        drop_stale(&staging);
+        std::fs::write(&part, []).map_err(|e| e.to_string())?;
+    }
+    let had = std::fs::metadata(&part)
+        .map(|m| m.len())
+        .map_err(|_| "The upload was interrupted. Send the clip again.".to_string())?;
+    if had != offset {
+        return Err("The upload was interrupted. Send the clip again.".into());
+    }
+    {
+        use std::io::Write as _;
+        let mut f = std::fs::OpenOptions::new().append(true).open(&part).map_err(|e| e.to_string())?;
+        f.write_all(&chunk).map_err(|e| e.to_string())?;
+    }
+    let received = offset + chunk.len() as u64;
+    if received < total {
+        return Ok(json!({ "received": received, "done": false }));
+    }
+    let target = place(data_dir, chat, name)?;
+    std::fs::rename(&part, &target).map_err(|e| e.to_string())?;
+    let mut attached: Vec<Value> = session.get("attachedPaths").and_then(Value::as_array).cloned().unwrap_or_default();
+    attached.push(Value::String(target));
+    store.set_attachments(chat, &Value::Array(attached))?;
+    Ok(json!({ "received": received, "done": true }))
+}
+
+/// Where an attachment named `name` goes in a chat's folder: its safe name, or
+/// `name-2`, `name-3`, ... when taken (`importAttachment`).
+fn place(data_dir: &str, session_id: &str, name: &str) -> Result<String, String> {
+    let dir = path::join(&[data_dir, "attachments", &safe_session(session_id)]);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let base = safe_name(name);
+    let ext = path::extname(&base);
+    let stem = &base[..base.len() - ext.len()];
+    let mut target = path::join(&[&dir, &base]);
+    let mut n = 2;
+    while std::path::Path::new(&target).exists() {
+        target = path::join(&[&dir, &format!("{stem}-{n}{ext}")]);
+        n += 1;
+    }
+    Ok(target)
+}
+
+/// Uploads a phone started and never finished do not pile up.
+fn drop_stale(staging: &str) {
+    let Ok(entries) = std::fs::read_dir(staging) else { return };
+    for e in entries.flatten() {
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > UPLOAD_STALE);
+        if old {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -798,6 +917,79 @@ mod tests {
         let e = import_attachment_capped(&data_dir, "s", "b.bin", &url, 10).unwrap_err();
         assert_eq!(e, "Attachment is larger than 50 MB.");
         assert!(!std::path::Path::new(&path::join(&[&data_dir, "attachments", "s", "b.bin"])).exists());
+        let _ = std::fs::remove_dir_all(&data_dir);
+    }
+
+    // attachment:upload (#2777): a phone's clip in ordered pieces.
+    fn chat_store(data_dir: &str) -> (nekko_store::SessionStore, String) {
+        std::fs::create_dir_all(path::join(&[data_dir, "sessions"])).unwrap();
+        let store = nekko_store::SessionStore::new(std::path::Path::new(data_dir));
+        let id = store.create(None).unwrap()["id"].as_str().unwrap().to_string();
+        (store, id)
+    }
+
+    fn piece(chat: &str, id: &str, offset: u64, total: u64, bytes: &[u8]) -> Vec<Value> {
+        vec![json!(chat), json!(id), json!("clip.mp4"), json!(offset), json!(total), json!(b64(bytes))]
+    }
+
+    #[test]
+    fn a_clip_arrives_in_order_and_is_attached_to_its_chat() {
+        let data_dir = temp_dir("upload");
+        let (store, chat) = chat_store(&data_dir);
+        store.set_attachments(&chat, &json!(["/already/there.txt"])).unwrap();
+        let first = upload_piece(&data_dir, &store, &piece(&chat, "upload-0001", 0, 6, b"abc")).unwrap();
+        assert_eq!(first, json!({ "received": 3, "done": false }));
+        assert!(store.get(&chat).unwrap()["attachedPaths"].as_array().unwrap().len() == 1);
+        let last = upload_piece(&data_dir, &store, &piece(&chat, "upload-0001", 3, 6, b"def")).unwrap();
+        assert_eq!(last, json!({ "received": 6, "done": true }));
+        let attached = store.get(&chat).unwrap()["attachedPaths"].clone();
+        let file = attached[1].as_str().unwrap().to_string();
+        assert_eq!(attached[0], "/already/there.txt");
+        assert!(file.ends_with("clip.mp4"));
+        assert_eq!(std::fs::read(&file).unwrap(), b"abcdef");
+        // The staged piece is gone; a second clip of the same name does not overwrite the first.
+        assert_eq!(
+            std::fs::read_dir(path::join(&[&data_dir, "attachment-uploads", &safe_session(&chat)])).unwrap().count(),
+            0
+        );
+        upload_piece(&data_dir, &store, &piece(&chat, "upload-0002", 0, 1, b"z")).unwrap();
+        assert!(store.get(&chat).unwrap()["attachedPaths"][2].as_str().unwrap().ends_with("clip-2.mp4"));
+        let _ = std::fs::remove_dir_all(&data_dir);
+    }
+
+    #[test]
+    fn a_piece_out_of_order_too_large_or_for_no_chat_is_refused() {
+        let data_dir = temp_dir("upload-bad");
+        let (store, chat) = chat_store(&data_dir);
+        // No first piece: nothing to continue.
+        assert_eq!(
+            upload_piece(&data_dir, &store, &piece(&chat, "upload-0003", 3, 6, b"def")).unwrap_err(),
+            "The upload was interrupted. Send the clip again."
+        );
+        upload_piece(&data_dir, &store, &piece(&chat, "upload-0003", 0, 6, b"abc")).unwrap();
+        // A gap or a repeat is refused, and so is a piece past the size.
+        assert!(upload_piece(&data_dir, &store, &piece(&chat, "upload-0003", 4, 6, b"ef")).is_err());
+        assert!(upload_piece(&data_dir, &store, &piece(&chat, "upload-0003", 0, 2, b"abc")).is_err());
+        assert!(upload_piece(&data_dir, &store, &piece(&chat, "upload-0003", 3, 5, b"def")).is_err());
+        assert_eq!(
+            upload_piece(&data_dir, &store, &piece(&chat, "upload-0004", 0, MAX_IMPORT as u64 + 1, b"a")).unwrap_err(),
+            "Attachment is larger than 50 MB."
+        );
+        assert_eq!(
+            upload_piece(&data_dir, &store, &piece("missing", "upload-0005", 0, 1, b"a")).unwrap_err(),
+            "This chat was deleted on your computer."
+        );
+        assert!(upload_piece(&data_dir, &store, &piece(&chat, "../../etc", 0, 1, b"a")).is_err());
+        let mut damaged = piece(&chat, "upload-0006", 0, 3, b"abc");
+        damaged[5] = json!("not base64!");
+        assert!(upload_piece(&data_dir, &store, &damaged).is_err());
+        // A name with a path keeps only its last part, inside the chat's folder.
+        let mut sneaky = piece(&chat, "upload-0007", 0, 1, b"a");
+        sneaky[2] = json!("../../outside.mp4");
+        upload_piece(&data_dir, &store, &sneaky).unwrap();
+        let attached = store.get(&chat).unwrap()["attachedPaths"].clone();
+        let placed = attached.as_array().unwrap().last().unwrap().as_str().unwrap().to_string();
+        assert!(placed.starts_with(&path::join(&[&data_dir, "attachments"])) && placed.ends_with("outside.mp4"));
         let _ = std::fs::remove_dir_all(&data_dir);
     }
 }

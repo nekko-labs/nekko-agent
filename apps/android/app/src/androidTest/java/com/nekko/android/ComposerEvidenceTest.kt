@@ -36,6 +36,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import org.junit.After
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
@@ -110,11 +111,45 @@ class ComposerEvidenceTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("newChat.kind").fetchSemanticsNodes().isNotEmpty() }
         shot("new-chat")
         if (!before) {
+            // #2459: the chat's own message box, the model below it.
+            compose.onNodeWithTag("newChat.composer").assertExists()
+            compose.waitUntil(10_000) { compose.onAllNodes(androidx.compose.ui.test.hasText("Text model"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("newChat.kind.image").performClick()
             compose.waitForIdle()
             Thread.sleep(400)
             shot("new-chat-image")
         }
+    }
+
+    @Test fun newChatStartsWithItsFirstPrompt() {
+        if (before) return
+        val repo = repo()
+        var created: String? = null
+        // Dictation on (Settings → Dictation): the mic is in New chat's box too.
+        prefs.set(com.nekko.android.voice.Dictation.ENABLED, true)
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                CompositionLocalProvider(LocalAppLock provides appLock, LocalSimple provides rememberSimpleView(prefs), com.nekko.android.ui.security.LocalPhonePrefs provides prefs) {
+                    NewChatScreen(repo, onBack = {}, onPair = {}, onCreated = { created = it })
+                }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodes(androidx.compose.ui.test.hasText("Text model"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        // As in a chat, the mic is + → Dictate (the stop button shows while it listens).
+        compose.onNode(androidx.compose.ui.test.hasContentDescription("Add")).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(androidx.compose.ui.test.hasText("Dictate")).fetchSemanticsNodes().isNotEmpty() }
+        shot("new-chat-plus")
+        InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+        compose.waitUntil(5_000) { compose.onAllNodes(androidx.compose.ui.test.hasText("Dictate")).fetchSemanticsNodes().isEmpty() }
+        compose.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("Tidy the settings page")
+        compose.onNodeWithTag("newChat.folder").performClick()
+        compose.onNodeWithTag("newChat.folder.app").performClick()
+        shot("new-chat-typed")
+        compose.onNode(androidx.compose.ui.test.hasContentDescription("Send")).performClick()
+        compose.waitUntil(10_000) { created == "new-chat" }
+        // Made in the folder, then the prompt goes (through the outbox) to that chat.
+        compose.waitUntil(10_000) { remote.calls.any { it == Channels.CHAT_SEND || it == Channels.CHAT_QUEUE } }
+        assertTrue(remote.calls.indexOf(Channels.SESSION_CREATE) < remote.calls.indexOfFirst { it == Channels.CHAT_SEND || it == Channels.CHAT_QUEUE })
     }
 
     private fun shot(name: String) {
@@ -169,6 +204,7 @@ private class ComposerEvidenceRemote : Remote {
             "models:list" -> json("""[{"id":"text","name":"Text model"}]""")
             "sessions:summaries" -> json("""[{"id":"composer-session","title":"Settings page","workspaceId":"app"}]""")
             "session:get" -> json("""{"id":"composer-session","title":"Settings page","providerId":"engine","modelId":"text","workspaceId":"app","messages":[{"id":"r1","role":"assistant","content":"The settings page is tidy now."}]}""")
+            "session:create" -> json("""{"id":"new-chat","messages":[]}""")
             "workspace:list" -> json("""[{"id":"app","name":"nekko-agent","path":"/code/nekko-agent"}]""")
             "skills:list", "skills:all", "skills:runnable", "prompts:list", "engine:models" -> JsonArray(emptyList())
             "chat:pending" -> JsonObject(emptyMap())

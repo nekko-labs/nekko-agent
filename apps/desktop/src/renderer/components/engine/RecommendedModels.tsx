@@ -5,6 +5,7 @@ import type { ImageRecommendedOption, LocalModel, Recommendations, TaskRecommend
 import { CheckIcon, ChevronIcon } from '../../icons.js';
 import { formatBytes } from '../runtimes/verdict.js';
 import { fitText, hardwareText, isDownloaded, memoryText, nudgeTitle, speedText } from './recommendationText.js';
+import { pictureTimeText } from './pictureModelText.js';
 
 /**
  * "What should I run here", answered per task before anything is downloaded.
@@ -141,7 +142,15 @@ export function RecommendationList({
   const picked = recs.tasks.filter(t => t.pick);
   const pictures = (recs.imageTasks ?? []).filter(t => t.pick);
   return (
-    <details className="group card mb-5 p-4" open={open} data-recommendations>
+    <details
+      className="group mb-5 rounded-2xl border p-5"
+      style={{
+        borderColor: 'color-mix(in srgb, var(--accent) 30%, var(--line))',
+        background: 'color-mix(in srgb, var(--accent) 7%, transparent)',
+      }}
+      open={open}
+      data-recommendations
+    >
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1">
         <ChevronIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform group-open:rotate-90" />
         <span className="text-sm font-semibold">Best for this machine</span>
@@ -237,7 +246,7 @@ export function imageFitText(p: ImageRecommendedOption): { text: string; title: 
     : { text: 'Tight fit', title: `Leaves about ${formatBytes(p.headroomBytes)}, by an estimate: it should run, with little to spare.` };
 }
 
-/** One picture task's pick: no speed (none is measured), and its supporting files counted in the download. */
+/** One picture task's pick: its supporting files counted in the download, and a time only when one was measured. */
 function ImageRecommendationRow({
   label,
   p,
@@ -254,6 +263,7 @@ function ImageRecommendationRow({
   onDownload: (result?: { ok: boolean; message: string }) => void;
 }) {
   const fit = imageFitText(p);
+  const time = pictureTimeText(p);
   const ok = p.fit === 'fits' && !p.offloadToCpu;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-recommendation={p.modelId} data-image-recommendation>
@@ -276,6 +286,12 @@ function ImageRecommendationRow({
           </span>
           {' · '}
           {formatBytes(p.downloadBytes)} download, with its supporting files · {p.license}
+          {time && (
+            <>
+              {' · '}
+              <span className="text-ink-soft" title={time.title} data-picture-time={p.time?.basis}>{time.text}</span>
+            </>
+          )}
         </p>
       </div>
       <div className="shrink-0">

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_AGENT_PANEL_VIEW, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, isDefaultView,
-  parseAgentPanelView, statusGroupOf, withSort, type SortableCard,
+  parseAgentPanelView, statusGroupOf, statusWithSubagents, withSort, type SortableCard,
 } from './agentPanelView.js';
 
 const card = (title: string, updatedAt: number, createdAt: number, order?: number): SortableCard => ({ title, updatedAt, createdAt, order });
@@ -63,6 +63,18 @@ describe('agent panel view', () => {
     expect(statusGroupOf({ exchangeCount: 0 }, undefined)).toBe('status:draft');
     expect(statusGroupOf({ exchangeCount: 2, phase: 'building' }, 'working')).toBe('status:building');
     expect(statusGroupOf({ exchangeCount: 2, phase: 'verifying' }, 'error')).toBe('status:verifying');
+  });
+
+  it('keeps a chat working, under Building, while its sub-agents work after its turn (#2840)', () => {
+    const lifted = statusWithSubagents('done', ['working', 'done']);
+    expect(lifted).toBe('working');
+    expect(statusGroupOf({ exchangeCount: 2, phase: 'building' }, lifted)).toBe('status:building');
+    expect(statusWithSubagents(undefined, ['working'])).toBe('working');
+    // A sub-agent waiting on you still wins, and the chat's own state stands otherwise.
+    expect(statusWithSubagents('working', ['input'])).toBe('input');
+    expect(statusWithSubagents('error', ['working'])).toBe('error');
+    expect(statusWithSubagents('done', ['done'])).toBe('done');
+    expect(statusWithSubagents(undefined, [])).toBeUndefined();
   });
 
   it('files a working chat that is landing its work under Verifying', () => {

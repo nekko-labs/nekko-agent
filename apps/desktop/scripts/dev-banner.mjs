@@ -31,6 +31,7 @@ export function devBanner(info) {
     '',
     `  ${c.key('q')} or ${c.key('Enter')}  stop cleanly ${c.dim('(engine and model servers shut down first)')}`,
     `  ${c.key('Ctrl+C')}      same, and press again to force`,
+    `  ${c.key('r')}           restart with what is on disk ${c.dim('(after a git pull: installs, rebuilds, relaunches)')}`,
     '',
   );
   return lines.join('\n');

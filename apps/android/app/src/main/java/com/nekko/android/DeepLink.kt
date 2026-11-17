@@ -20,6 +20,9 @@ sealed interface DeepLink {
     /** `nekko-agent://new`: open New chat (the launcher's "New chat" shortcut). */
     data object NewChat : DeepLink
 
+    /** `nekko-agent://openrouter-key?code=…`: OpenRouter's sign-in coming back with a code (#2852). */
+    data class OpenRouterKey(val raw: String) : DeepLink
+
     companion object {
         /** Pure so it can be unit-tested; MainActivity feeds it the parts of an android.net.Uri. */
         fun from(raw: String, scheme: String?, host: String?, path: List<String>, alwaysAllow: String? = null): DeepLink? {
@@ -29,6 +32,7 @@ sealed interface DeepLink {
                 s == "nekko-agent" && raw.contains("relay=") -> Pair(raw)
                 s == "nekko-agent" && host == "chat" && path.isNotEmpty() -> Chat(path.first(), alwaysAllow?.takeIf { it.isNotEmpty() })
                 s == "nekko-agent" && host == "new" -> NewChat
+                s == "nekko-agent" && host == "openrouter-key" -> OpenRouterKey(raw)
                 else -> null
             }
         }

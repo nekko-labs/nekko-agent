@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { defineConfig } from 'electron-vite';
-import type { Plugin } from 'vite';
+import { defaultClientConditions, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // Our own workspace packages must be bundled into the main and preload output,
@@ -72,7 +72,12 @@ export default defineConfig({
     // in one bundle, which leaves the hook dispatcher null and blanks the window
     // with "Cannot read properties of null (reading 'useCallback')". Deduping
     // resolves every `react` import to this app's copy. See bundleExternals.test.ts.
-    resolve: { dedupe: ['react', 'react-dom'] },
+    // `source` loads @nekko-agent/shared from its TypeScript, as type-checking
+    // does (#1153), never the built dist. The dist is only rebuilt by `npm run
+    // dev`, so a pull or an edit that added a shared export left the running
+    // dev server importing a name the stale dist lacked: the page failed to
+    // link and stayed blank through every reload.
+    resolve: { dedupe: ['react', 'react-dom'], conditions: ['source', ...defaultClientConditions] },
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/renderer/index.html') },

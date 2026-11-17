@@ -28,6 +28,13 @@ app.whenReady().then(async () => {
       await capture(`automations-${width}`);
       await check(`no horizontal overflow at ${width}`, 'document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll("main section")].every(e=>e.scrollWidth<=e.clientWidth+1)');
     }
+    await run("integration.show('idle')"); await sleep(400);
+    await capture('automations-idle-390');
+    if (!baseline) {
+      await check('an idle runner names its last job and PR', "!!document.querySelector('[data-runner-last-job]') && document.querySelector('[data-runner-last-job]').textContent.includes('Desktop · Unit tests') && document.querySelector('[data-runner-last-job]').textContent.includes('PR #2823')");
+      await check('the dock leaves the switch round and borderless', "(s=>s.borderTopWidth==='0px'&&parseFloat(s.borderTopLeftRadius)>=10)(getComputedStyle(document.querySelector('.monitors-dock .quiet-switch')))");
+    }
+    await run('integration.show()'); await sleep(300);
     await run('integration.full()'); await sleep(400);
     // The runners are their own page in the Automations sub-navigation; a baseline without it shows them in the list.
     await click('CI runners', '[data-workflows-subnav] button'); await sleep(300);
@@ -44,11 +51,19 @@ app.whenReady().then(async () => {
     }
     await run('integration.show()'); await sleep(250);
     if (!baseline) {
-      await check('compact runner: idle VM, queued and in progress jobs', "['nekko-mac-02','Queued','In progress','View CI runners'].every(s=>document.body.textContent.includes(s)) && !!document.querySelector('[data-running-job=\"nekko-mac-01\"]')");
-      await check('compact runner leaves page detail out', "!!document.querySelector('[data-runner-card][data-compact]') && !document.querySelector('[data-runner-facts]') && !document.body.textContent.includes('Completed')");
-      await click('Live log', '[data-runner-vm="nekko-mac-02"] button');
-      await check('ready VM log uses its identity', "integration.calls.some(c=>c[0]==='log'&&c[2]==='nekko-mac-02') && document.body.innerText.includes('Listening for jobs')");
-      await click('Accept now');
+      await check('compact runner: idle VM as a count, queued and running jobs as rows', "['1 idle','View CI runners'].every(s=>document.body.textContent.includes(s)) && !document.querySelector('[data-runner-vm=\"nekko-mac-02\"]') && !!document.querySelector('[data-running-job=\"nekko-mac-01\"]') && !!document.querySelector('[data-queued-job]')");
+      await check('compact runner leaves page detail out', "!!document.querySelector('[data-runner-card][data-compact]') && !document.querySelector('[data-runner-facts]') && !document.querySelector('[data-recent-job]')");
+      await check('queued actions show without hover', "[...document.querySelectorAll('[data-compact] [data-queued-job] button')].every(b=>b.getBoundingClientRect().width>1)");
+      await click('Completed · 1 job', '[data-runner-completed] button');
+      await check('completed row opens to inspectable jobs', "!!document.querySelector('[data-compact] [data-recent-job]')");
+      await capture('automations-completed-390');
+      await run("document.querySelector('[data-compact] [data-recent-job] button').click()"); await sleep(200);
+      await check('a completed job opens its log in the panel', "document.querySelector('[data-compact] [data-log=job]')?.textContent==='Tests passed'");
+      await run("document.querySelector('[data-compact] [data-recent-job] button').click(); document.querySelector('[data-runner-completed] button').click()"); await sleep(150);
+      await check('hidden row actions take no width', "[...document.querySelectorAll('[data-compact] [data-running-job] .quiet-row-action')].every(b=>b.getBoundingClientRect().width<=1)");
+      await click('Live log', '[data-running-job="nekko-mac-01"] button');
+      await check('running VM log uses its identity', "integration.calls.some(c=>c[0]==='log'&&c[2]==='nekko-mac-01') && document.body.innerText.includes('Listening for jobs')");
+      await click('Start now');
       await check('accept targets queued job', "integration.calls.some(c=>c[0]==='r1'&&c[1]==='accept'&&c[3]===43)");
       await click('Cancel', '[data-running-job] button');
       await check('cancel needs confirmation', "document.body.innerText.includes('Cancel the whole workflow run on GitHub?') && !integration.calls.some(c=>c[1]==='cancel')");

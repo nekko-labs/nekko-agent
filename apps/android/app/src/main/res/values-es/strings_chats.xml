@@ -111,7 +111,6 @@
     <string name="chats_oldest_first">Más antiguos primero</string>
     <string name="chats_newest_first">Más recientes primero</string>
     <string name="chats_show">Mostrar</string>
-    <string name="chats_previews">Vistas previas</string>
     <string name="chats_completed_chats">Chats completados</string>
     <string name="chats_empty_groups">Grupos vacíos</string>
     <string name="chats_reorder_groups_menu">Reordenar grupos…</string>
@@ -263,4 +262,13 @@
     <string name="chats_reconnecting">%1$s se está reconectando</string>
     <string name="chats_reconnecting_label">%1$s se está reconectando…</string>
     <string name="chats_reconnect_draft">Escribe tu mensaje ahora y se enviará cuando %1$s se vuelva a conectar</string>
+    <!-- Sub-agents under their chat (#2509). -->
+    <string name="chats_subagents">Subagentes</string>
+    <string name="chats_subagent">Subagente</string>
+    <string name="chats_subagent_named">Subagente %1$s</string>
+    <string name="chats_subagent_on">Subagente %1$s, con %2$s</string>
+    <!-- New chat as a composer (#2459). -->
+    <string name="chats_photo_unreadable">No se pudo leer esa imagen.</string>
+    <string name="chats_choose_model">Elige un modelo</string>
+    <string name="chats_starts_on">Empieza en %1$s</string>
 </resources>

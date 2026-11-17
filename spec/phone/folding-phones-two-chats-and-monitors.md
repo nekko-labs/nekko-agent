@@ -51,6 +51,8 @@ A pane's header shows its chat's title, status dot and the usual chat menu, plus
 
 **Which pane has focus** `[updated 2026-11-08]`: the focused pane wears a very subtle accent glow along its top and bottom edges, running into the status bar and home-indicator areas so it reaches the very top and bottom of the app. It replaced an accent border around the whole pane, which read as heavy. `[implemented on iOS; before/after captured on the iPad simulator in portrait (stacked); landscape and Android not checked, Android has no focus indicator]`
 
+Touching a pane gives it the focus, and the control touched still does its own job: on iOS the focus moves just after the tap, so a button in the pane that was not focused (the list's **New chat**, for one) is never dropped by the redraw (2026-11-15, #1314; the iPad journey lost about half of such taps before).
+
 **Approvals and questions.** A pending approval in the unfocused pane pulses its status dot and shows the card at the pane's bottom; the Live Activity and notifications are unchanged. Allowing from a pane follows today's rule (unlocked phone).
 
 **Drag between panes.** A message, a file from Files, or an image can be dragged from one pane into the other's composer (SwiftUI `draggable` / `dropDestination`; Compose `dragAndDropSource` / `dragAndDropTarget`). Text only lands as text in the composer; nothing is sent by a drop.
@@ -73,7 +75,7 @@ Titles and labels are cut to 120 UTF-16 units (`PHONE_MONITOR_VIEW`). The step l
 "Vertical" means the open, tall posture and the tabletop posture:
 
 - Open, tall: panes stack, primary on top. The chat list is never the bottom pane (a list under a chat reads as the chat's attachments); *Chats + Chat* becomes *Chat over Monitors* with the list reachable from the top pane's back button.
-- Tabletop: the pane that has the keyboard focus takes the whole screen in flex layout; the other pane is an edge tab until the phone is opened flat or picked up.
+- Tabletop: the pane that has the keyboard focus takes the whole screen in flex layout; the other pane is an edge tab until the phone is opened flat or picked up. The edge tab sits in the middle of the top half, never on the hinge (2026-11-14, #1314).
 - Rotation while two chats are open keeps both chats; the primary (top or left) is the pane that was focused.
 
 ## Platforms

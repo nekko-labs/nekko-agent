@@ -39,7 +39,7 @@ import { Shown } from '../ModeViews.js';
 const POLL_MS = 6000;
 const PROVIDER_ID = 'nekko-engine';
 
-type Tab = 'models' | 'downloads' | 'folders' | 'decisions';
+type Tab = 'models' | 'downloads' | 'folders';
 
 export function EngineSection({
   onProvidersChanged,
@@ -298,8 +298,7 @@ export function EngineSection({
       <div data-models-section="library" className="min-w-0">
         <h2 className="text-base font-semibold">Models</h2>
         <p className="mt-0.5 text-xs text-ink-faint">Find, download and run models from one library.</p>
-        <div className="card mt-3 min-w-0 p-4 sm:p-5">
-        <div className="flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
+        <div className="mt-5 flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
           <TabButton active={tab === 'models'} onClick={() => setTab('models')}>
             Models{models.length > 0 ? ` (${models.length})` : ''}
           </TabButton>
@@ -309,12 +308,9 @@ export function EngineSection({
           <TabButton active={tab === 'folders'} onClick={() => setTab('folders')}>
             Folders{borrowed > 0 ? ` (${borrowed} borrowed)` : ''}
           </TabButton>
-          <TabButton active={tab === 'decisions'} onClick={() => setTab('decisions')}>
-            Decisions
-          </TabButton>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-5">
           <ErrorBoundary key={tab} label="Model library">
           {tab === 'models' && (
             <ModelsHome
@@ -333,10 +329,19 @@ export function EngineSection({
           )}
           {tab === 'downloads' && <DownloadsPanel jobs={jobs} onChanged={refresh} />}
           {tab === 'folders' && <ModelFolders onChanged={refresh} />}
-          {tab === 'decisions' && <DecisionModels />}
           </ErrorBoundary>
         </div>
-      </div>
+
+        {tab === 'models' && (
+          <section data-decisions-subgroup className="mt-10 border-t pt-5" style={{ borderColor: 'var(--line)' }}>
+            <h3 className="text-sm font-semibold">Decision models</h3>
+            <div className="mt-3">
+              <ErrorBoundary label="Decision models">
+                <DecisionModels />
+              </ErrorBoundary>
+            </div>
+          </section>
+        )}
       </div>
     </section>
   );

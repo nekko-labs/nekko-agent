@@ -10,7 +10,9 @@
 //! - chat worktrees whose PR merged are removed, a minute after launch and
 //!   hourly (`removeMergedChatWorktrees`);
 //! - a chat that runs out of context with nobody watching is compacted and
-//!   carried on (`startAutoContinue`, auto_continue.rs).
+//!   carried on (`startAutoContinue`, auto_continue.rs);
+//! - a chat the user asked to continue when its usage limit resets is armed
+//!   again (limit_resume.rs).
 
 use crate::routes::Ctx;
 use serde_json::{Map, Value, json};
@@ -47,6 +49,7 @@ pub fn start(ctx: &Ctx, auto_start_engine: bool) {
     }
     {
         crate::auto_continue::start(ctx);
+        crate::limit_resume::start(ctx);
         let ctx = ctx.clone();
         tokio::spawn(async move {
             tokio::time::sleep(SWEEP_FIRST).await;

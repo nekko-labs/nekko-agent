@@ -64,6 +64,12 @@
           "description": "Chat-owned browser actions, security boundaries and native driver migration status."
         },
         {
+          "slug": "simulators",
+          "title": "Simulators in use",
+          "source": "docs/simulators.md",
+          "description": "See which chat is using each booted iOS simulator or Android emulator, what it costs in CPU, watch its screen, and shut it down."
+        },
+        {
           "slug": "connections",
           "title": "Connections",
           "source": "docs/connections.md",

@@ -26,6 +26,15 @@ describe('whole-turn visibility', () => {
     expect(turnActivityLabel(retry)).toBe('Waiting to retry the model');
     expect(turnActivityLabel(retry, 't')).toBe('Waiting for your approval');
   });
+  it('names background work instead of a model wait while Claude Code holds a quiet turn open', () => {
+    const quiet = run({ blocks: [], tools: [] });
+    expect(turnActivityLabel(quiet)).toBe('Waiting for the model');
+    expect(turnActivityLabel(quiet, undefined, 1)).toBe('Waiting on 1 background task');
+    expect(turnActivityLabel(quiet, undefined, 2)).toBe('Waiting on 2 background tasks');
+    expect(turnActivityLabel(run(), undefined, 2)).toBe('Tools finished · Waiting for the model');
+    expect(turnActivityLabel(run({ blocks: [...run().blocks, { kind: 'text', text: 'Only the checks are still going.' }] }), undefined, 2)).toBe('Waiting on 2 background tasks');
+    expect(turnActivityLabel(run({ reasoningStartedAt: 2200, blocks: [], tools: [] }), undefined, 2)).toBe('Thinking');
+  });
   it('labels elapsed time as the whole turn, not the last 1.1 second tool', () => {
     vi.spyOn(Date, 'now').mockReturnValue(62000);
     try {

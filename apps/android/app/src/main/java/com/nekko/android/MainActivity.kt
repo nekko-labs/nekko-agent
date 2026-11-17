@@ -180,6 +180,8 @@ class MainActivity : FragmentActivity() {
             Intent.ACTION_VIEW -> intent.data?.let(DeepLink::from)?.let { link ->
                 // Any chat link sets or drops the pending Always allow (taken by that chat's card).
                 if (link is DeepLink.Chat) (application as NekkoApp).alwaysAllow.opened(link.id, link.alwaysAllow)
+                // OpenRouter's sign-in came back: the key is fetched and checked while Phone chats opens.
+                if (link is DeepLink.OpenRouterKey) (application as NekkoApp).let { app -> app.appScope.launch { app.phoneChats.finishOpenRouterSignIn(link.raw) } }
                 incomingLink.value = link
             }
             Intent.ACTION_SEND -> {

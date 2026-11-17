@@ -589,6 +589,17 @@ class ChatController(
         caller.call(Channels.TOOL_APPROVE, JsonPrimitive(sessionId), JsonPrimitive(a.call.id), JsonPrimitive(true))
     }
 
+    /** The computer took this phone's response to [callId] (a pending response message, #2497): the card goes. */
+    fun responded(callId: String) {
+        _state.update { s ->
+            val t = s.turn
+            s.copy(turn = t.copy(
+                approval = t.approval?.takeUnless { it.call.id == callId },
+                question = t.question?.takeUnless { it.callId == callId },
+            ))
+        }
+    }
+
     suspend fun answer(answers: List<AskAnswer>) {
         val q = _state.value.turn.question ?: return
         caller.call(Channels.CHAT_ANSWER, JsonPrimitive(sessionId), JsonPrimitive(q.callId), JsonArray(answers.map { it.toJson() }))

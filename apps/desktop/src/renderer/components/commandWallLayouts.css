@@ -322,10 +322,17 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 @starting-style {
   .wall-agents-presence[data-panel-open='true'] { width: 0; transform: translateX(-100%); }
 }
-/* Below md the list is an absolute drawer that this wrapper contains (its
-   transform), so it keeps its old sizing: sized to the Agents button and
-   clipped, it cut the drawer off and clicks fell through to the windows. */
-@media (max-width: 767px) { .wall-agents-presence { width: auto; overflow: visible; clip-path: none; } }
+/* Below md the list is an absolute drawer (inset-y-0, z-30). The wrapper's
+   transform made it the drawer's containing block (so the drawer was only as
+   tall as the Agents button row, clipping every row and letting clicks fall
+   through to the chat) and a stacking context. Below md the wrapper is a plain
+   static box with no transform, so the drawer sizes to the main column and
+   stacks above the windows. The slide only matters at md and up, where the
+   list is a docked column. */
+@media (max-width: 767px) {
+  .wall-agents-presence, .wall-agents-presence[data-panel-open='true'] { position: static; width: auto; overflow: visible; clip-path: none; transform: none; transition: none; }
+  @starting-style { .wall-agents-presence[data-panel-open='true'] { transform: none; } }
+}
 @media (prefers-reduced-motion: reduce) { .wall-agents-presence { transition: none; transform: none; } }
 
 /* Give sections breathing room without changing card density or drop padding.
@@ -333,6 +340,9 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .agent-panel-group + .agent-panel-group { margin-top: 20px; }
 .agent-panel-group + .agent-panel-group::before { content: ""; position: absolute; inset-inline: 8px; top: -10px; height: 1px; background: color-mix(in srgb, var(--line) 65%, transparent); pointer-events: none; }
 .agent-panel-group-heading { margin-bottom: 4px; }
+/* Reserve the scrollbar's width up front, so expanding a group that makes the
+   list scroll doesn't narrow the cards. */
+.agent-panel-list { scrollbar-gutter: stable; }
 /* Keep the active group visible until its own rows end. */
 .agent-panel-list .agent-panel-group-heading { position: sticky; top: 0; z-index: 1; background: var(--paper); }
 .agent-panel-list .agent-panel-group-heading:hover { background: var(--surface-2); }

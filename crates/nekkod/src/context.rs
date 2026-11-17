@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-pub const CHANNELS: &[&str] = &["context:preview", "context:toggle", "context:setPrefs"];
+pub const CHANNELS: &[&str] = &["context:preview", "context:toggle", "context:setPrefs", "context:promptProfiles"];
 
 fn strings(v: Option<&Value>) -> Vec<String> {
     v.and_then(Value::as_array)
@@ -191,6 +191,11 @@ pub fn preview(
 }
 
 pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, String> {
+    if channel == "context:promptProfiles" {
+        // The built-in text of each profile, for the read-only tabs in Settings.
+        let text = |p| nekko_context::intro(p);
+        return Ok(json!({ "small": text(nekko_context::PromptProfile::Small), "medium": text(nekko_context::PromptProfile::Medium), "large": text(nekko_context::PromptProfile::Large) }));
+    }
     let store = ctx.sessions.clone();
     let sid = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
     if channel == "context:setPrefs" {

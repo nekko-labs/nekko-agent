@@ -45,14 +45,14 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
 | Native proof | No new native test/evidence pass or physical-device proof claimed | No new native test/evidence pass or physical-device proof claimed | Run native builds/tests, inspect matched evidence and verify device auth/microphone/lifecycle before closing the verification gap. |
 | Chat environment: repositories and question actions (desktop since #2404) | Actioned `ask_user` options show as plain answers; no repository list | Same | [#2415](https://github.com/nekko-labs/nekko-agent/issues/2415) |
-| Quiet chat rows: no preview or dividers, sub-agent rows with their models ([spec](phone-chat-rows-match-the-desktop-card.md#quiet-rows-and-sub-agents-on-the-iphone-2026-11-10)) | Built 2026-11-10 in source; native screenshots pending | Rows still show the preview; no sub-agent rows | [#2509](https://github.com/nekko-labs/nekko-agent/issues/2509) |
 | Run a suggested command in the chat's terminal ([spec](../chat/run-suggested-commands-in-a-terminal.md), desktop since #2595) | No Run on shell blocks | Same | [#2607](https://github.com/nekko-labs/nekko-agent/issues/2607) (iPhone), [#2608](https://github.com/nekko-labs/nekko-agent/issues/2608) (Android) |
 | Nekko in the car: voice-first, active work, Results of voice commands ([spec](carplay.md)) | CarPlay app built 2026-11-14 ([#2781](https://github.com/nekko-labs/nekko-agent/issues/2781)): Linux-tested logic, not yet in CarPlay Simulator; waits on Apple's entitlement | Nothing yet; Android Auto counterpart to work out | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Built 2026-11-09 ([#2423](https://github.com/nekko-labs/nekko-agent/issues/2423)): inline card, link to the repository only, verified in Native iOS CI, not on a device | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | Both: the native store rating request once on the App Store and Google Play (planned). |
+| Open your own computer from an organization's list with no pairing ([spec](../platform/organizations.md), desktop since #2806) | Separate issue #2804 | Protocol layer only (`FleetLink`, unit-tested); no Cloud sign-in, keyring unlock or org list in the app | [#2835](https://github.com/nekko-labs/nekko-agent/issues/2835) |
 
-## Pending response messages (#2476, not shipped)
+## Pending response messages (#2476, #2497)
 
-The lower stack layer implements iOS pending in-chat answers and one-time Allow/Deny messages. Android parity is tracked in [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) and the upper stack layer. Neither branch implementation nor an uninspected capture is release verification.
+Both phones keep in-chat answers and one-time Allow/Deny as pending response messages: the iPhone since #2499 (2026-11-13), Android since [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) (2026-11-16, JVM-tested and emulator-verified, not on a physical phone).
 
 ## Direct cloud text chats (#2414, not shipped)
 
@@ -62,6 +62,7 @@ The lower stack layer implements iOS pending in-chat answers and one-time Allow/
 | --- | --- | --- | --- |
 | No-computer entry | This iPhone in place/filter and Run on; empty model picker links to setup | This phone from Chats and first run, even without provider/computer | iPhone remains separate PR #2462; Android latest 91c5e4c1e synthetic matrix 18 pass / 2 expected skips plus 36 focused passes |
 | Direct text providers | Claude API, OpenAI, OpenRouter, Mantle Messages, Foundry, Vertex, HTTPS compatible | Same seven kinds | No live paid authentication/entitlement checks; Foundry custom deployment names unsupported; Vertex tokens manually renewed |
+| One-tap provider setup ([#2851](https://github.com/nekko-labs/nekko-agent/issues/2851)) | OpenRouter browser sign-in returns a key; Claude API, OpenAI, Gemini and Ollama Cloud open their key page and take the key back with one Paste; Gemini and Ollama Cloud kinds | The same, with a wrong key turned down at setup ([#2852](https://github.com/nekko-labs/nekko-agent/issues/2852), 2026-11-16; the browser opens outside the app, no Custom Tab) | OpenRouter sign-in not yet tried against a live account |
 | Provider lifecycle and streaming | Setup, Test, rekey, disable/remove; Stop/Retry; stale callback fencing | Same behaviors | Android JVM regression tests plus native synthetic transport checks; not live provider proof |
 | Privacy and retention | Device-held Keychain keys and local transcripts | Keystore-sealed separate credential slots and local transcripts | Direct HTTPS, no relay/computer/Nekko Cloud; provider may retain text; Forget is local only; storage is not transactional |
 | Reply recovery | Persists partial text per delta with interrupted marker | Persists at attempt start/cleanup; process death can lose partial text | Durability differs; do not promise identical process-kill recovery |
@@ -71,21 +72,20 @@ Tools, attachments, local models, subscription harnesses and cross-device sync a
 
 ## Android is behind the iPhone today
 
-Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([report](../../reports/android-ios-parity-2026-11-07.md)), and again on 2026-11-09 against the changes since, by reading the code, not on a device.
+Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([report](../../reports/android-ios-parity-2026-11-07.md)), again on 2026-11-09, and on 2026-11-16 against every iOS change since 2026-11-13, by reading the code, not on a device.
 
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
 | Computer controls: Cloud fleet group | Waits with Nekko Cloud (#2122); service management, the Models filter and Connect to <computer> landed (2026-11-12/13) | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
-| Connectors page (with the brand logos the iPhone has had since 2026-11-09) | Missing | [#2109](https://github.com/nekko-labs/nekko-agent/issues/2109) |
+| Pull requests from the phone's own git provider (Mine, Projects, one-tap prompts; iOS #1783) | Connectors page done (#2109, 2026-11-16); the Pull requests list not yet | [#2109](https://github.com/nekko-labs/nekko-agent/issues/2109) |
 | Edit photos in image chats: attach photos to a prompt, Edit under a made picture | Not implemented on Android | [#2230](https://github.com/nekko-labs/nekko-agent/issues/2230) |
-| Plan sheet on the composer | Missing (the iPhone's `PlanSheet.swift`) | [#2115](https://github.com/nekko-labs/nekko-agent/issues/2115) |
 | Live card: chats as chips that open the chat | Focused chat and its actions only | [#2116](https://github.com/nekko-labs/nekko-agent/issues/2116) |
 | Dark launcher icon and Spooky seasonal icon | Neither; Android can swap launcher icons with an activity alias | [#2118](https://github.com/nekko-labs/nekko-agent/issues/2118) |
 | Push notifications | No push; the keep-alive service covers an open connection | [#2121](https://github.com/nekko-labs/nekko-agent/issues/2121) |
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
-| New chat as a composer (the desktop's bottom row: +, folder, asks-first, mic, Start) | A form; only its Chat / Image toggle matches the iPhone's (#2448) | [#2459](https://github.com/nekko-labs/nekko-agent/issues/2459) |
+| CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | No Android Auto app | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 
 Android features the iPhone lacks have not been audited yet.
 

@@ -44,3 +44,16 @@ export function savedTurnFailure(session: Pick<Session, 'messages' | 'turnFailur
 export function shouldShowPersistedInterruption(history: ChatMessage[], streaming: boolean, awaitingTranscript: boolean, awaitingQuestion = false): boolean {
   return !streaming && !awaitingTranscript && !awaitingQuestion && lastReplyInterrupted(history);
 }
+
+/**
+ * A usage limit's reset time for the Continue button: the time alone today,
+ * with the weekday within a week, with the date after that.
+ */
+export function formatResetTime(at: number, now: number, locale?: string): string {
+  const time = new Date(at).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
+  if (new Date(at).toDateString() === new Date(now).toDateString()) return time;
+  const day = at - now < 6 * 24 * 60 * 60_000
+    ? new Date(at).toLocaleDateString(locale, { weekday: 'short' })
+    : new Date(at).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+  return `${day} ${time}`;
+}

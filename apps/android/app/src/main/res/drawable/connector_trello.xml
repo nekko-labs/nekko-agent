@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The trello mark, from the iPhone's ConnectorMarks (#2109). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:fillColor="#0079BF"
+        android:pathData="M25.0,0.0h206.0a25.0,25.0 0 0 1 25.0,25.0v206.0a25.0,25.0 0 0 1 -25.0,25.0h-206.0a25.0,25.0 0 0 1 -25.0,-25.0v-206.0a25.0,25.0 0 0 1 25.0,-25.0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M156.64,33.28h54.08a12.0,12.0 0 0 1 12.0,12.0v88.0a12.0,12.0 0 0 1 -12.0,12.0h-54.08a12.0,12.0 0 0 1 -12.0,-12.0v-88.0a12.0,12.0 0 0 1 12.0,-12.0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M45.28,33.28h54.08a12.0,12.0 0 0 1 12.0,12.0v152.0a12.0,12.0 0 0 1 -12.0,12.0h-54.08a12.0,12.0 0 0 1 -12.0,-12.0v-152.0a12.0,12.0 0 0 1 12.0,-12.0z" />
+</vector>

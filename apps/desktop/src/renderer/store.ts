@@ -105,6 +105,8 @@ export interface Toast {
   id: string;
   kind: 'info' | 'error' | 'success';
   message: string;
+  /** How many times this same message arrived while it showed (absent means once). */
+  count?: number;
   /** Dismissed and playing its exit; removed once that ends. */
   leaving?: boolean;
 }
@@ -175,6 +177,8 @@ reserveIdSeq(wsSeq);
 const newWorkspaceId = () => `ws_${(++wsSeq).toString(36)}`;
 /** Makes toast ids unique even when several arrive in the same millisecond. */
 let toastSeq = 0;
+/** Pending auto-dismiss timers by toast id, so a repeated message can restart its own. */
+const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 interface UiState {
   completionTipSessionId: string | null;
@@ -672,11 +676,19 @@ export const useStore = create<UiState>((set, get) => ({
     set({ activeProjectId: id });
   },
   pushToast: (kind, message) => {
-    const id = `t_${Date.now().toString(36)}_${(toastSeq++).toString(36)}`;
-    set((s) => ({ toasts: [...s.toasts, { id, kind, message }] }));
+    // The same message again folds into the one already showing: it moves to
+    // the newest spot with a count instead of stacking a copy.
+    const same = get().toasts.find((t) => t.kind === kind && t.message === message && !t.leaving);
+    const id = same?.id ?? `t_${Date.now().toString(36)}_${(toastSeq++).toString(36)}`;
+    const toast: Toast = same ? { ...same, count: (same.count ?? 1) + 1 } : { id, kind, message };
+    set((s) => ({ toasts: [...s.toasts.filter((t) => t.id !== id), toast] }));
     // At most a few on screen: older ones leave as a new one arrives.
     for (const old of overflowToasts(get().toasts)) get().dismissToast(old);
-    if (autoDismisses(kind)) setTimeout(() => get().dismissToast(id), TOAST_MS);
+    if (autoDismisses(kind)) {
+      // A repeat restarts the timeout, so it stays 5 s from the latest arrival.
+      clearTimeout(toastTimers.get(id));
+      toastTimers.set(id, setTimeout(() => { toastTimers.delete(id); get().dismissToast(id); }, TOAST_MS));
+    }
   },
   dismissToast: (id) => {
     if (!get().toasts.some((t) => t.id === id && !t.leaving)) return;

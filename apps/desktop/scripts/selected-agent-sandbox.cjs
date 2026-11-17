@@ -1,6 +1,6 @@
 // Real App, synthetic bridge, hidden isolated profile. Run with layout-evidence-integration.cjs.
-// The 480px hit test currently exposes baseline issue #1909 on both main and head;
-// keep the assertion until that drawer-stacking bug is fixed.
+// The 480px hit test guards the narrow Agents drawer (#1909): its rows must stay
+// visible and hit-testable above the chat, so keep the assertion.
 const { app, BrowserWindow, session, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -57,8 +57,13 @@ app.whenReady().then(async () => {
     const target = await run(`(() => { const b = document.querySelector('.agent-chip-chat[data-agent-active]').getBoundingClientRect(); return { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...target });
     await sleep(250);
-    assert.deepEqual(await rows(), report.initial);
-    report.checks.push('Hover preserves selection background');
+    const hovered = await rows();
+    // Hover may add its glow to the selected row, but must not move the selection.
+    assert.deepEqual(hovered.map(r => [r.title, r.active]), report.initial.map(r => [r.title, r.active]));
+    assert.notEqual(hovered.find(r => r.active).background, 'rgba(0, 0, 0, 0)');
+    report.checks.push('Hover keeps the selection and its background');
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: 470, y: 5 });
+    await sleep(250);
     await run("document.querySelector('.agent-chip-chat[title=\"Diagnose failed build\"]').click()");
     await sleep(500);
     report.switched = await rows();

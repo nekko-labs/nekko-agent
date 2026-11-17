@@ -4,7 +4,7 @@ import { SeasonalHatArt } from './SeasonalHat.js';
 
 export type MascotMood = 'idle' | 'waving' | 'thinking';
 
-/** The app icon's wide cat head, drawn on a 32px grid: brand plum, white line and eyes, light-plum mouth (spec/brand/colour-palette.md). No shared SVG IDs. */
+/** The app icon's wide cat head, drawn on a 32px grid: Nekko's fixed colours: near-black face #16161c, pale line #f3e8ee, white eyes, plum nose #854f6c (spec/brand/colour-palette.md). No shared SVG IDs. */
 export function PixelHead({ eyes = true, mouth = true, pupilOffset }: { eyes?: boolean; mouth?: boolean; pupilOffset?: { x: number; y: number } }) {
   // The eye group gets a per-render translate so the pupils can watch something
   // outside the SVG (e.g. the chat composer's caret); the opacity keyframes on
@@ -12,13 +12,13 @@ export function PixelHead({ eyes = true, mouth = true, pupilOffset }: { eyes?: b
   const eyeTransform = pupilOffset ? `translate(${pupilOffset.x} ${pupilOffset.y})` : undefined;
   return (
     <g data-part="pixel-head" strokeLinejoin="miter">
-      <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#190019" stroke="#ffffff" strokeWidth="2" />
+      <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#16161c" stroke="#f3e8ee" strokeWidth="2" />
       {eyes && <g data-part="pixel-eyes" fill="#ffffff" transform={eyeTransform}>
         <path className="pixel-eyes-open" d="M11 15H13V18H11Z M20 15H22V18H20Z" />
         <path className="pixel-eyes-happy" d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" />
         <path className="pixel-eyes-closed" d="M10 17H14V18H10Z M19 17H23V18H19Z" />
       </g>}
-      {mouth && <path className="pixel-mouth" d="M15 20H17V21H15Z" fill="#c99bb3" />}
+      {mouth && <path className="pixel-mouth" d="M15 20H17V21H15Z" fill="#854f6c" />}
     </g>
   );
 }

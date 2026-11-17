@@ -163,9 +163,9 @@ const STARTERS = ['Explain this folder', PROMPT, 'Write a script that…'];
 type Pose = { x: number; top: number; lift?: number; shift?: number; look: { x: number; y: number }; squint?: number; laugh?: boolean; paws?: number; pawsHold?: number };
 
 /**
- * GreetingNekko's PeekNekkoArt over the composer edge; she rises from behind it
- * while her paws are down. She is never rotated (that breaks her pixel grid):
- * to lean toward something she shifts sideways by `shift` px and looks at it.
+ * GreetingNekko's PeekNekkoArt over the composer edge; he rises from behind it
+ * while his paws are down. He is never rotated (that breaks his pixel grid):
+ * to lean toward something he shifts sideways by `shift` px and looks at it.
  */
 function Nekko({ x, top, lift = 0, shift = 0, look, squint = 0, laugh = false, paws = 1, pawsHold = 0 }: Pose) {
   const y = nekkoY(top);
@@ -182,7 +182,7 @@ function Nekko({ x, top, lift = 0, shift = 0, look, squint = 0, laugh = false, p
   </>;
 }
 
-/** Nekko's eyes on a point in the demo, the way GreetingNekko bounds her glance. */
+/** Nekko's eyes on a point in the demo, the way GreetingNekko bounds his glance. */
 const gaze = (face: { x: number; y: number }, x: number, y: number) => greetingGaze((x - face.x) * 80 / NEKKO.w, (y - face.y) * 80 / NEKKO.w);
 
 /** CleanStartGreeting's heading: text-xl, 600, -0.01em, in its 300 x 60 box above the composer. */
@@ -369,7 +369,7 @@ function FilesDemo() {
 /* ---------- 3. Send, and Nekko gets to work ---------- */
 
 /**
- * One pixel-confetti burst, in the theme's accents, out to both sides of her
+ * One pixel-confetti burst, in the theme's accents, out to both sides of his
  * head and falling over about a second. It fades out above `floor` (the
  * composer's top edge), so none lands on the composer or its placeholder.
  */

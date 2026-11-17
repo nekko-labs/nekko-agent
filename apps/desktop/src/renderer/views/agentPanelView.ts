@@ -198,6 +198,20 @@ export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phas
   return phase === 'verifying' || phase === 'shipping' ? 'status:verifying' : 'status:building';
 }
 
+type ChatStatus = 'working' | 'input' | 'error' | 'done' | 'idle' | undefined;
+
+/**
+ * A chat's status with its sub-agents', which have no card of their own: one
+ * waiting on you makes the chat wait on you, and one working keeps an idle
+ * chat working. A Claude Agent chat ends its turn while the sub-agents it
+ * started in the background run on, and it is not done until they report back.
+ */
+export function statusWithSubagents(own: ChatStatus, kids: ReadonlyArray<ChatStatus>): ChatStatus {
+  if (kids.includes('input')) return 'input';
+  if (own && own !== 'done' && own !== 'idle') return own;
+  return kids.includes('working') ? 'working' : own;
+}
+
 export type GroupActivityKind = 'building' | 'verifying' | 'watching';
 
 /**
@@ -239,8 +253,10 @@ export function dateGroupOf(at: number, now: number): string {
 /**
  * Which kind of window the Agents panel lists, picked in the switcher at its
  * top. Agents is the agent cards; Terminals and Photos and videos are those
- * cards on their own; Browsers and Files list the agents and open each one's
- * Browser or Files drawer. Remembered per window, like the view.
+ * cards on their own. Browsers lists the pages served on this computer and
+ * Files the connected folders, each opening a window of its own with no agent
+ * needed (#2824), then the agents, whose Browser or Files drawer a row opens.
+ * Remembered per window, like the view.
  */
 export type AgentPanelShows = 'agents' | 'terminals' | 'media' | 'browsers' | 'files';
 
