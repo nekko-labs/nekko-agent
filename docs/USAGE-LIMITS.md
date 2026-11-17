@@ -52,6 +52,8 @@ Your actual provider bill may differ because of taxes, discounts, cached-token p
 
 The iPhone's **Usage and limits** reads every paired computer that is online (its usage summary, its providers and each enabled provider's limits) and adds the chats that run on the iPhone itself. Each computer's numbers come from that computer, so its prices are the estimates above. The iPhone's own chats use your API keys straight from the phone: it counts the tokens each provider reports at the end of a reply (Anthropic's `message_start` and `message_delta` usage, OpenAI's and OpenRouter's `stream_options.include_usage`) and keeps that count on the phone. It has no price table, so it shows tokens only. An OpenAI-compatible server is not asked for usage, because some turn down fields they don't know.
 
+Under the model in **New chat**, and above the message box in an open chat, one quiet line shows the chosen provider's tightest limit whenever it's known, such as *34% of 5-hour limit · resets 19:40*. It turns amber from 75% and red at the limit, with **Switch model**. A computer's providers report it through the computer, polled every 30 seconds while the line shows. A key on the iPhone itself reports its per-minute token and request budget in the headers of each answer (OpenAI's `x-ratelimit-*`, Anthropic's `anthropic-ratelimit-*`), so its line appears after the first reply and is kept in memory only. Nothing shows while no limit is known.
+
 ## Limits are provider-side
 
 Nekko Agent can only read and surface the limits that Anthropic, OpenAI and OpenRouter return. It cannot raise, reset, or bypass them. If a window is reported as rate limited, that state comes from the provider; Nekko Agent does not create or remove the limit.

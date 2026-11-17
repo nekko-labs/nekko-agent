@@ -502,6 +502,20 @@ public struct PhoneRateLimits: Equatable, Sendable {
         }
         return r == PhoneRateLimits(at: at) ? nil : r
     }
+
+    /// The token and request budgets as limit windows (#2923), each used against its limit.
+    /// A budget past its reset time is full again, so it reads as unused.
+    public func providerLimits(now: Int64) -> ProviderLimits {
+        func window(_ id: String, _ label: String, _ limit: Int64?, _ remaining: Int64?, _ resetAt: Int64?) -> ProviderLimits.Window? {
+            guard let limit, limit > 0, let remaining else { return nil }
+            if let resetAt, resetAt <= now { return ProviderLimits.Window(id: id, label: label, usedPercent: 0, resetAt: nil, status: "allowed") }
+            let used = Double(limit - min(remaining, limit)) / Double(limit) * 100
+            return ProviderLimits.Window(id: id, label: label, usedPercent: used, resetAt: resetAt, status: remaining == 0 ? "rate_limited" : "allowed")
+        }
+        let windows = [window("tokens", "per-minute token", tokensLimit, tokensRemaining, tokensResetAt),
+                       window("requests", "per-minute request", requestsLimit, requestsRemaining, requestsResetAt)]
+        return ProviderLimits(planType: nil, windows: windows.compactMap { $0 }, updatedAt: at)
+    }
 }
 
 /// A provider this iPhone calls itself. Holds no secret: the key is in the Keychain.

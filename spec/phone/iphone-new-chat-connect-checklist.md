@@ -33,8 +33,18 @@ Design: [nekko-designs/iphone-new-chat-design.html](../../nekko-designs/iphone-n
 - **First message.** "Sent before" means any chat on a paired computer or this phone with an exchange (an older computer's chat with no count counts as used, as the first-prompt intro does). Once seen, it is remembered, so deleting every chat doesn't bring the checklist back. Until the chat list is read, neither shows, so someone who already chatted never sees the checklist flash.
 - Both show on phone and computer chats, not on image chats. Saved on this device only (`firstMessageSent`, `connectChecklistClosed`); UI test runs start with them closed unless a test opts in.
 
+## The limit line (#2923)
+
+`[implemented 2026-11-17 on iPhone; the window rules and the phone-key mapping are unit-tested in NekkoProtocol and NekkoKit on Linux; not yet run on a simulator or device]`
+
+- One quiet line shows the chosen provider's tightest limit whenever it is known: under model ⟶ device in New chat, and above the message box in an open chat (computer and phone chats; not image chats or a saved copy read offline). A 3pt meter, then *34% of 5-hour limit · resets 19:40*.
+- It is faint below 75%, the warning colour from 75% (or when the provider warns), and danger at 100% or when the provider says the key is limited, with **Switch model** opening the model picker. The tightest window wins; a limited window beats a fuller one.
+- **Computer chats:** the computer's `limits:get` for that provider (plans, Claude, OpenRouter, Anthropic keys), asked again every 30 seconds while the line shows and only while the computer is online.
+- **Phone chats:** the per-minute token and request budget from the rate-limit headers of the provider's last answer (OpenAI `x-ratelimit-*`, Anthropic `anthropic-ratelimit-*`, #2920), kept in memory only. A budget past its reset reads as unused. Nothing shows before the first answer.
+- No line, never a guess, while nothing is known.
+
 ## Not yet
 
-- The limit line (#2923) and the model picker's size, context, folded snapshots and limits (#2925) land in the next layers of this stack.
+- The model picker's size, context, folded snapshots and limits (#2925) land in the next layer of this stack.
+- OpenAI API keys on a computer report no limits yet (`limitsKeyFor` in `packages/shared/src/limits.ts` covers Claude, subscription logins, OpenRouter and Anthropic keys); tracked in #2923.
 - Screenshots from a simulator or device: the views were written on Windows and are compiled and tested by macOS CI.
-- Translations of the new strings.

@@ -248,6 +248,8 @@ struct PhoneChatView: View {
         // Only models that can't take photos lose the button; unknown ones keep it.
         let takesPhotos = phone.acceptsImages(providerId: chat.providerId, modelId: chat.modelId)
         return VStack(spacing: 6) {
+            // Always there once the provider has reported limits, quiet until they near (#2923).
+            PhoneLimitLine(providerId: chat.providerId) { picking = true }.padding(.horizontal, 4)
             if loadingPhotos {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
