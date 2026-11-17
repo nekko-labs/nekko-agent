@@ -282,6 +282,7 @@
     <string name="settings_how_3">Your computer dials out to a relay; it never opens a port. Everything is end-to-end encrypted with a key only your devices hold.</string>
     <string name="settings_how_4">Remove this phone any time from the same screen on your computer. It loses access immediately.</string>
     <string name="settings_rename_computer">Rename computer</string>
+    <string name="settings_rename_computer_hint">Only this phone sees this name. Leave it empty to use the computer’s own name.</string>
     <string name="settings_forget_title">Forget %1$s?</string>
     <string name="settings_forget_text">This phone deletes the pairing key. To be safe, also remove the phone on your computer (Settings → Remote access).</string>
     <string name="settings_forget">Forget</string>

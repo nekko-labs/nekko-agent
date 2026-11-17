@@ -65,7 +65,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "app:info" => {
             let mut info = app_info(&ctx.app.facts);
             let settings = crate::settings::current(ctx).await;
-            info["computerName"] = json!(computer_name(&settings, info["hostname"].as_str().unwrap_or_default()));
+            let system_name = crate::host_name::friendly_host_name();
+            info["computerName"] = json!(computer_name(&settings, &system_name));
+            info["systemName"] = json!(system_name);
             info["machineIcon"] = settings.get("machineIcon").cloned().unwrap_or(Value::Null);
             info["sharesModels"] = json!(crate::model_tunnel::sharing(&settings));
             let on = crate::settings::current(ctx).await.get("quitFromPhone") == Some(&Value::Bool(true));
@@ -150,7 +152,7 @@ pub fn app_info(facts: &AppFacts) -> Value {
     let version =
         facts.version.clone().or_else(|| std::env::var("NEKKO_VERSION").ok()).unwrap_or_else(|| "0.0.0".into());
     let edition = facts.edition.clone().unwrap_or_else(|| "web".into());
-    let hostname = gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string();
+    let hostname = crate::host_name::raw_host_name();
     // Support, not readiness: an installed model and a working local runtime are still required.
     json!({ "version": version, "platform": crate::admission::platform(), "edition": edition, "hostname": hostname,
         "capabilities": { "imageGeneration": true } })

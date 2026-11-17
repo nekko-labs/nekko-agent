@@ -654,6 +654,13 @@ class ComputersRepositoryTest {
         runCurrent()
         assertEquals("Mac", repo.state.value.active?.name)
         assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"nameIsCustom\":true"))
+        // A blank rename keeps the name until the computer reports one, then follows it again.
+        repo.rename(id, "   ")
+        assertEquals("Mac", repo.state.value.active?.name)
+        repo.refresh()
+        runCurrent()
+        assertEquals("New name", repo.state.value.active?.name)
+        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"nameIsCustom\":false"))
     }
 
     @Test

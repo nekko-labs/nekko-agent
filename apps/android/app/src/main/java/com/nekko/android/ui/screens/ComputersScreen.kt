@@ -142,6 +142,7 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
                     onValueChange = { name = it.take(40) },
                     singleLine = true,
                     label = { Text(stringResource(R.string.settings_name)) },
+                    supportingText = { Text(stringResource(R.string.settings_rename_computer_hint)) },
                 )
             },
             confirmButton = {
@@ -150,7 +151,6 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
                         scope.launch { repo.rename(c.id, name) }
                         renaming = null
                     },
-                    enabled = name.isNotBlank(),
                 ) { Text(stringResource(R.string.settings_save)) }
             },
             dismissButton = { TextButton(onClick = { renaming = null }) { Text(stringResource(R.string.settings_cancel)) } },

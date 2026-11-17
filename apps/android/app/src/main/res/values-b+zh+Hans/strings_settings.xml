@@ -250,6 +250,7 @@
     <string name="settings_how_3">你的电脑主动连接到 Relay，从不开放端口。所有内容都使用只有你的设备持有的密钥进行端到端加密。</string>
     <string name="settings_how_4">可随时在电脑的同一界面移除此手机。它会立即失去访问权限。</string>
     <string name="settings_rename_computer">重命名电脑</string>
+    <string name="settings_rename_computer_hint">只有这部手机会看到这个名称。留空则使用电脑自己的名称。</string>
     <string name="settings_forget_title">要忘记 %1$s 吗？</string>
     <string name="settings_forget_text">此手机将删除配对密钥。为安全起见，也请在电脑上移除此手机（设置 → 远程访问）。</string>
     <string name="settings_forget">忘记</string>

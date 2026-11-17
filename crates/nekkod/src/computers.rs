@@ -634,7 +634,10 @@ impl Computers {
         client.stop();
 
         let id = random_hex(4)?;
-        let name = info.get("hostname").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or(&host);
+        let name = ["computerName", "hostname"]
+            .iter()
+            .find_map(|k| info.get(*k).and_then(Value::as_str).filter(|n| !n.trim().is_empty()))
+            .unwrap_or(&host);
         let name: String = name.chars().take(60).collect();
         let platform = info.get("platform").and_then(Value::as_str).map(str::to_string);
         let at = nekko_remote::system_clock()();
@@ -867,7 +870,7 @@ fn fleet_refusal(state: &State, name: &str) -> String {
 
 /// What the other computer calls this one.
 fn this_name() -> String {
-    gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string()
+    crate::host_name::friendly_host_name()
 }
 
 #[cfg(test)]

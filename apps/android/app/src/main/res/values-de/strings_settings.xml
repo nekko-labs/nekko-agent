@@ -250,6 +250,7 @@
     <string name="settings_how_3">Dein Computer wählt sich bei einem Relay ein; er öffnet nie einen Port. Alles ist Ende-zu-Ende-verschlüsselt, mit einem Schlüssel, den nur deine Geräte haben.</string>
     <string name="settings_how_4">Entferne dieses Telefon jederzeit über denselben Bildschirm auf deinem Computer. Es verliert sofort den Zugriff.</string>
     <string name="settings_rename_computer">Computer umbenennen</string>
+    <string name="settings_rename_computer_hint">Nur dieses Telefon sieht diesen Namen. Leer lassen, um den Namen des Computers zu verwenden.</string>
     <string name="settings_forget_title">%1$s entfernen?</string>
     <string name="settings_forget_text">Dieses Telefon löscht den Kopplungsschlüssel. Entferne zur Sicherheit auch das Telefon auf deinem Computer (Einstellungen → Fernzugriff).</string>
     <string name="settings_forget">Entfernen</string>

@@ -191,6 +191,8 @@ struct ComputerDetailView: View {
             TextField("Name", text: $name)
             Button("Cancel", role: .cancel) {}
             Button("Save") { store.rename(c.id, to: name) }
+        } message: {
+            Text("Only this iPhone sees this name. Leave it empty to use the computer’s own name.")
         }
     }
 

@@ -25,6 +25,8 @@ struct NewChatView: View {
     @State private var effort: Effort?
     /// The computer was picked here: keep offering the choice while its models load.
     @State private var pickedComputer = false
+    @State private var renamingComputer: Computer?
+    @State private var computerName = ""
     @State private var text = ""
     @State private var photos: [PhotosPickerItem] = []
     @State private var pickingPhotos = false
@@ -367,6 +369,11 @@ struct NewChatView: View {
                         } icon: { Image(systemName: "iphone") }
                         .tag(Optional(PhoneProviders.computerId))
                     }
+                    if !onPhone, let c = store.active {
+                        Divider()
+                        Button { computerName = c.name; renamingComputer = c } label: { Label("Rename (c.name)…", systemImage: "pencil") }
+                            .accessibilityIdentifier("newChat.computer.rename")
+                    }
                 } label: {
                     if onPhone {
                         chip(ChatPlace.phoneName, icon: "iphone")
@@ -378,6 +385,13 @@ struct NewChatView: View {
                 }
                 .accessibilityHint("Where the chat runs. Choosing another computer shows its models and folders; a local model runs on that computer’s own hardware.")
                 .accessibilityIdentifier("newChat.computer")
+                .alert("Rename computer", isPresented: Binding(get: { renamingComputer != nil }, set: { if !$0 { renamingComputer = nil } })) {
+                    TextField("Name", text: $computerName)
+                    Button("Cancel", role: .cancel) {}
+                    Button("Save") { if let c = renamingComputer { store.rename(c.id, to: computerName) } }
+                } message: {
+                    Text("Only this iPhone sees this name. Leave it empty to use the computer’s own name.")
+                }
             }
             if autoShown, let line = autoLine {
                 Label(line, systemImage: autoFinding ? "ellipsis" : "sparkles")

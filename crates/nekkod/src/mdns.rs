@@ -635,7 +635,7 @@ impl NetworkVisibility {
         let relay = (self.relay)();
         let relay_url = relay.as_ref().map(|(u, _)| u.clone()).filter(|u| !u.is_empty());
         Advertisement {
-            name: service_label(&raw),
+            name: service_label(&crate::host_name::friendly_host_name()),
             host: host_label(&raw),
             addresses: lan_addresses(&interfaces()),
             port: if relay_url.is_some() { relay.map_or(0, |(_, p)| p) } else { 0 },
