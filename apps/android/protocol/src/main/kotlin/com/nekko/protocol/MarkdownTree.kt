@@ -28,7 +28,11 @@ data class MarkdownList(
 )
 
 data class MarkdownListItem(
-    /** Wrapped and continuation lines joined with `\n` (`\n\n` after a blank line), so they hang under the item, not the marker. */
+    /**
+     * A hard-wrapped continuation line joins with a space, a hard break (two trailing
+     * spaces or `\`) with `\n`, a second paragraph with `\n\n`; all of it hangs under
+     * the item, not the marker.
+     */
     val text: String,
     val task: Task? = null,
     /** Lists nested under this item, in order (a bullet list under a numbered item, say). */
@@ -95,23 +99,29 @@ object MarkdownParser {
     /**
      * [text] split where no block carries across: at a blank line (outside a
      * fence) followed by an unindented line. An indented line after a blank one
-     * can still belong to the list above, so it stays in the same segment.
+     * can still belong to the list above, so it stays in the same segment, and so
+     * does an item after a blank line while a list is open (a loose list).
      */
     fun segments(text: String): List<String> {
         val out = mutableListOf<String>()
         var current = mutableListOf<String>()
         val blanks = mutableListOf<String>()
         var fence: MDFence? = null
+        // True from a list item until a line that certainly ends the list. Staying
+        // true too long only costs caching; ending too early would split a list.
+        var listOpen = false
         for (line in text.split("\n")) {
             val l = MDLine(line)
             if (fence == null && l.isBlank) {
                 blanks += line
                 continue
             }
+            val isItem = fence == null && listItem(l) != null && !isRule(l)
             if (blanks.isNotEmpty()) {
-                if (fence == null && l.indent == 0 && current.isNotEmpty()) {
+                if (fence == null && l.indent == 0 && current.isNotEmpty() && !(listOpen && isItem)) {
                     out += current.joinToString("\n")
                     current = mutableListOf()
+                    listOpen = false
                 } else {
                     current += blanks
                 }
@@ -123,6 +133,11 @@ object MarkdownParser {
                 if (f.closes(l)) fence = null
             } else {
                 fence = MDFence.of(l)
+                if (isItem) {
+                    listOpen = true
+                } else if (fence != null || heading(l) != null || isRule(l) || l.content.startsWith(">")) {
+                    listOpen = false
+                }
             }
         }
         if (current.isNotEmpty()) out += current.joinToString("\n")
@@ -252,15 +267,18 @@ object MarkdownParser {
 
     private data class Item(val indent: Int, val ordered: Boolean, val number: Int, var text: String)
 
-    /** A list item's marker and text: `- x`, `* x`, `+ x`, `1. x`, `1) x`. */
+    /** Bullet markers: Markdown's `-*+`, plus the typographic bullets and dashes models often write instead (`• one`, `– two`). */
+    private const val BULLET_MARKERS = "-*+•◦▪‣–·"
+
+    /** A list item's marker and text: `- x`, `* x`, `+ x`, `• x`, `1. x`, `1) x`. */
     private fun listItem(l: MDLine): Item? {
         val c = l.content
         val first = c.firstOrNull() ?: return null
-        if (first in "-*+") {
+        if (first in BULLET_MARKERS) {
             val rest = c.substring(1)
             if (rest.isEmpty()) return null
-            if (rest[0] != ' ' && rest[0] != '\t') return null
-            return Item(l.indent, false, 0, rest.trimStart(' ', '\t'))
+            if (rest[0] != ' ' && rest[0] != '\t' && rest[0] != ' ') return null
+            return Item(l.indent, false, 0, rest.trimStart(' ', '\t', ' '))
         }
         val digits = c.takeWhile { it in '0'..'9' }
         if (digits.length !in 1..9) return null
@@ -279,10 +297,13 @@ object MarkdownParser {
         while (c.i < lines.size) {
             val l = lines[c.i]
             if (l.isBlank) {
-                // A blank line ends the list unless an indented line follows (a nested item, a second paragraph).
+                // A blank line ends the list unless an indented line (a nested item, a
+                // second paragraph) or another item (a loose list) follows.
                 var k = c.i
                 while (k < lines.size && lines[k].isBlank) k++
-                if (k >= lines.size || lines[k].indent == 0 || MDFence.of(lines[k]) != null) break
+                if (k >= lines.size || MDFence.of(lines[k]) != null) break
+                val looseItem = listItem(lines[k]) != null && !isRule(lines[k])
+                if (lines[k].indent == 0 && !looseItem) break
                 afterBlank = true
                 c.i = k
                 continue
@@ -296,8 +317,19 @@ object MarkdownParser {
             } else {
                 // A wrapped or continued line hangs under the item that owns it: the
                 // nearest one above it that is less indented, or (lazily) the last one.
+                // A hard-wrapped line reflows (a phone is narrower than the 80 columns
+                // a model wraps at); two trailing spaces or a `\` keep the break.
                 val owner = flat.indexOfLast { it.indent < l.indent }.takeIf { it >= 0 } ?: flat.lastIndex
-                if (owner >= 0) flat[owner].text += (if (afterBlank) "\n\n" else "\n") + l.content
+                if (owner >= 0) {
+                    val prev = lines[c.i - 1].raw
+                    val o = flat[owner]
+                    o.text = when {
+                        afterBlank -> o.text + "\n\n"
+                        prev.endsWith("  ") -> o.text + "\n"
+                        prev.endsWith("\\") && o.text.endsWith("\\") -> o.text.dropLast(1) + "\n"
+                        else -> o.text + " "
+                    } + l.content
+                }
             }
             afterBlank = false
             c.i++

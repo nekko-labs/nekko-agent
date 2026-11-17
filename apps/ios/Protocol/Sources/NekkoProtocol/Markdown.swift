@@ -35,8 +35,9 @@ public struct MarkdownList: Equatable, Sendable {
 
 public struct MarkdownListItem: Equatable, Sendable {
     public enum Task: Equatable, Sendable { case open, done }
-    /// The item's text; wrapped and continuation lines are joined with `\n`
-    /// (`\n\n` after a blank line), so they hang under the item, not the marker.
+    /// The item's text. A hard-wrapped continuation line joins with a space, a hard
+    /// break (two trailing spaces or `\`) with `\n`, a second paragraph with `\n\n`;
+    /// all of it hangs under the item, not the marker.
     public var text: String
     public var task: Task?
     /// Lists nested under this item, in order (a bullet list under a numbered item, say).
@@ -120,22 +121,28 @@ public enum MarkdownParser {
     /// `text` split where no block carries across: at a blank line (outside a
     /// fence) followed by an unindented line. An indented line after a blank one
     /// can still belong to the list above (a nested item, an item's second
-    /// paragraph), so it stays in the same segment.
+    /// paragraph), and so does an item after a blank line while a list is open
+    /// (a loose list).
     public static func segments(_ text: String) -> [String] {
         var out: [String] = []
         var current: [Substring] = []
         var blanks: [Substring] = []
         var fence: MDFence?
+        // True from a list item until a line that certainly ends the list. Staying
+        // true too long only costs caching; ending too early would split a list.
+        var listOpen = false
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
             let l = MDLine(line)
             if fence == nil && l.isBlank {
                 blanks.append(line)
                 continue
             }
+            let isItem = fence == nil && listItem(l) != nil && !isRule(l)
             if !blanks.isEmpty {
-                if fence == nil && l.indent == 0 && !current.isEmpty {
+                if fence == nil && l.indent == 0 && !current.isEmpty && !(listOpen && isItem) {
                     out.append(current.joined(separator: "\n"))
                     current = []
+                    listOpen = false
                 } else {
                     current += blanks
                 }
@@ -146,6 +153,11 @@ public enum MarkdownParser {
                 if f.closes(l) { fence = nil }
             } else {
                 fence = MDFence(l)
+                if isItem {
+                    listOpen = true
+                } else if fence != nil || heading(l) != nil || isRule(l) || l.content.hasPrefix(">") {
+                    listOpen = false
+                }
             }
         }
         if !current.isEmpty { out.append(current.joined(separator: "\n")) }
@@ -254,15 +266,19 @@ public enum MarkdownParser {
         var text: String
     }
 
-    /// A list item's marker and text: `- x`, `* x`, `+ x`, `1. x`, `1) x`. An empty item (`- `) counts.
+    /// Bullet markers: Markdown's `-*+`, plus the typographic bullets and dashes
+    /// models often write instead (`• one`, `– two`).
+    static let bulletMarkers: Set<Character> = ["-", "*", "+", "•", "◦", "▪", "‣", "–", "·"]
+
+    /// A list item's marker and text: `- x`, `* x`, `+ x`, `• x`, `1. x`, `1) x`. An empty item (`- `) counts.
     static func listItem(_ l: MDLine) -> Item? {
         let c = l.content
         guard let first = c.first else { return nil }
-        if "-*+".contains(first) {
+        if bulletMarkers.contains(first) {
             let rest = c.dropFirst()
             if rest.isEmpty { return nil }
-            guard rest.first == " " || rest.first == "\t" else { return nil }
-            return Item(indent: l.indent, ordered: false, number: 0, text: String(rest.drop { $0 == " " || $0 == "\t" }))
+            guard let gap = rest.first, gap == " " || gap == "\t" || gap == "\u{00A0}" else { return nil }
+            return Item(indent: l.indent, ordered: false, number: 0, text: String(rest.drop { $0 == " " || $0 == "\t" || $0 == "\u{00A0}" }))
         }
         let digits = c.prefix(while: { ("0"..."9").contains($0) })
         guard (1...9).contains(digits.count) else { return nil }
@@ -281,10 +297,11 @@ public enum MarkdownParser {
         while i < lines.count {
             let l = lines[i]
             if l.isBlank {
-                // A blank line ends the list unless an indented line follows (a nested item, a second paragraph).
+                // A blank line ends the list unless an indented line (a nested item, a
+                // second paragraph) or another item (a loose list) follows.
                 var k = i
                 while k < lines.count, lines[k].isBlank { k += 1 }
-                guard k < lines.count, lines[k].indent > 0, MDFence(lines[k]) == nil else { break }
+                guard k < lines.count, MDFence(lines[k]) == nil, lines[k].indent > 0 || (listItem(lines[k]) != nil && !isRule(lines[k])) else { break }
                 afterBlank = true
                 i = k
                 continue
@@ -297,7 +314,19 @@ public enum MarkdownParser {
             } else if let owner = flat.lastIndex(where: { $0.indent < l.indent }) ?? flat.indices.last {
                 // A wrapped or continued line hangs under the item that owns it: the
                 // nearest one above it that is less indented, or (lazily) the last one.
-                flat[owner].text += (afterBlank ? "\n\n" : "\n") + l.content
+                // A hard-wrapped line reflows (a phone is narrower than the 80 columns
+                // a model wraps at); two trailing spaces or a `\` keep the break.
+                let prev = lines[i - 1].raw
+                if afterBlank {
+                    flat[owner].text += "\n\n"
+                } else if prev.hasSuffix("  ") {
+                    flat[owner].text += "\n"
+                } else if prev.hasSuffix("\\") && flat[owner].text.hasSuffix("\\") {
+                    flat[owner].text = String(flat[owner].text.dropLast()) + "\n"
+                } else {
+                    flat[owner].text += " "
+                }
+                flat[owner].text += l.content
             }
             afterBlank = false
             i += 1
