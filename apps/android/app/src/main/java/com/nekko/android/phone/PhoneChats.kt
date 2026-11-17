@@ -280,8 +280,14 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         tasks[chatId]?.cancel()
         updateLast(chatId, null) { if (it.error == STREAMING) it.copy(error = "Stopped.") else it }
     }
-    fun send(chatId: String, text: String, retry: Boolean = false) = synchronized(gate) {
-        if (!mutable.value.ready || tasks.containsKey(chatId) || (!retry && text.isBlank())) return@synchronized
+    /** Whether a model takes photos. Unknown counts as yes: a model that can't says so in its reply. */
+    fun acceptsImages(providerId: String, modelId: String): Boolean =
+        mutable.value.models[providerId]?.firstOrNull { it.id == modelId }?.acceptsImages ?: true
+
+    /** Send text, photos (image data URLs) or both; [retry] asks again for the last reply. */
+    fun send(chatId: String, text: String, retry: Boolean = false, images: List<String> = emptyList()) = synchronized(gate) {
+        val photos = images.filter { PhoneProviders.imagePart(it) != null }.take(PhoneProviders.MAX_IMAGES)
+        if (!mutable.value.ready || tasks.containsKey(chatId) || (!retry && text.isBlank() && photos.isEmpty())) return@synchronized
         val attempt = id()
         lateinit var task: Job
         task = scope.launch(start = CoroutineStart.LAZY) {
@@ -301,10 +307,10 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                         val messages = if (retry) {
                             if (old.messages.lastOrNull()?.role != "assistant" || old.messages.dropLast(1).lastOrNull()?.role != "user") return@prepare null
                             old.messages.dropLast(1)
-                        } else old.messages + PhoneMessage(id(), "user", text.trim(), now())
+                        } else old.messages + PhoneMessage(id(), "user", text.trim(), now(), images = photos.ifEmpty { null })
                         val req = PhoneProviders.chatRequest(p, key, old.modelId, messages, system = mutable.value.tone.systemPrompt)
                         ranOn = Triple(p.id, p.label, old.modelId)
-                        val next = old.copy(title = if (old.messages.isEmpty()) text.trim().lineSequence().first().take(60) else old.title, updatedAt = now(), messages = messages + PhoneMessage(attempt, "assistant", "", now(), STREAMING))
+                        val next = old.copy(title = if (old.messages.isEmpty()) text.trim().lineSequence().first().take(60).ifEmpty { if (photos.isEmpty()) old.title else "Photo" } else old.title, updatedAt = now(), messages = messages + PhoneMessage(attempt, "assistant", "", now(), STREAMING))
                         mutable.update { s -> s.copy(chats = s.chats.map { if (it.id == chatId) next else it }, running = s.running + chatId, errors = s.errors - chatId) }
                         started = true
                         req

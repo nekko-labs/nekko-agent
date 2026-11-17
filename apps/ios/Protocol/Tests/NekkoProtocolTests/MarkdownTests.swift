@@ -87,9 +87,44 @@ final class MarkdownTests: XCTestCase {
           second paragraph of lazy
         """
         XCTAssertEqual(MarkdownParser.parse(md), [.list(MarkdownList(ordered: false, items: [
-            item("a long item\nthat wraps\nmore for the parent", nil, [MarkdownList(ordered: false, items: [item("child")])]),
-            item("lazy\ncontinuation\n\nsecond paragraph of lazy"),
+            item("a long item that wraps more for the parent", nil, [MarkdownList(ordered: false, items: [item("child")])]),
+            item("lazy continuation\n\nsecond paragraph of lazy"),
         ]))])
+    }
+
+    /// Models hard-wrap near 80 columns; on a phone those breaks land mid-line.
+    func testAHardWrappedItemReflowsButAHardBreakStays() {
+        let md = "- Nekko reads the repository and writes a plan that\n  covers each step before\n  it changes a file\n- two spaces  \n  keep a break\n- a backslash\\\n  keeps one too"
+        XCTAssertEqual(MarkdownParser.parse(md), [.list(MarkdownList(ordered: false, items: [
+            item("Nekko reads the repository and writes a plan that covers each step before it changes a file"),
+            item("two spaces\nkeep a break"),
+            item("a backslash\nkeeps one too"),
+        ]))])
+        // A chat paragraph still keeps its single newlines, as people type them.
+        XCTAssertEqual(MarkdownParser.parse("line one\nline two"), [.paragraph("line one\nline two")])
+    }
+
+    func testTypographicBulletsAreListItems() {
+        XCTAssertEqual(MarkdownParser.parse("Options:\n• one\n◦ two\n▪ three\n‣ four\n– five\n· six\n•\u{00A0}seven"), [
+            .paragraph("Options:"),
+            .list(MarkdownList(ordered: false, items: ["one", "two", "three", "four", "five", "six", "seven"].map { item($0) })),
+        ])
+        // Glued to a word, they stay text.
+        XCTAssertEqual(MarkdownParser.parse("•not a list\n–nor this"), [.paragraph("•not a list\n–nor this")])
+    }
+
+    func testALooseListStaysOneList() {
+        let md = "- a\n\n- b\n\n\n- c\n  more of c"
+        let want: [MarkdownBlock] = [.list(MarkdownList(ordered: false, items: [item("a"), item("b"), item("c more of c")]))]
+        XCTAssertEqual(MarkdownParser.parse(md), want)
+        XCTAssertEqual(MarkdownParser.blocks(md), want)
+        XCTAssertEqual(MarkdownParser.parse("1. a\n\n2. b"), [.list(MarkdownList(ordered: true, items: [item("a"), item("b")]))])
+        // A paragraph between items still splits them.
+        XCTAssertEqual(MarkdownParser.parse("- a\n\nbetween\n\n- b"), [
+            .list(MarkdownList(ordered: false, items: [item("a")])),
+            .paragraph("between"),
+            .list(MarkdownList(ordered: false, items: [item("b")])),
+        ])
     }
 
     func testABlankLineThenAnUnindentedLineEndsTheList() {
@@ -188,6 +223,8 @@ final class MarkdownTests: XCTestCase {
     func testSegmentsSplitOnlyWhereNothingCarriesAcross() {
         let md = "# A\npara\n\n- x\n\n  - y\n\n```\none\n\ntwo\n```\n\nlast"
         XCTAssertEqual(MarkdownParser.segments(md), ["# A\npara", "- x\n\n  - y", "```\none\n\ntwo\n```", "last"])
+        // An item after a blank line joins an open list; after a paragraph or a heading it starts fresh.
+        XCTAssertEqual(MarkdownParser.segments("- a\n\n- b\n\n# H\n\n- c\n\npara\n\n- d"), ["- a\n\n- b", "# H", "- c", "para", "- d"])
     }
 
     /// The cached, segment-by-segment parse is the same as one pass, so streaming can't change the result.
@@ -210,6 +247,14 @@ final class MarkdownTests: XCTestCase {
 
         > quote
         > more
+
+        - loose
+          wrapped
+
+        - list
+
+        • dot
+        after
 
         ```mermaid
         graph TD

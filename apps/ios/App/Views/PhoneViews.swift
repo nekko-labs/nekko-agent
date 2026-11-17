@@ -1,6 +1,7 @@
 import AuthenticationServices
 import NekkoKit
 import NekkoProtocol
+import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -98,6 +99,12 @@ struct PhoneChatView: View {
     @State private var renameText = ""
     @State private var confirmDelete = false
     @State private var typing = false
+    @State private var pickingPhotos = false
+    @State private var photos: [PhotosPickerItem] = []
+    @State private var images: [String] = []
+    @State private var loadingPhotos = false
+    @State private var photoError: String?
+    @State private var viewing: PhotoSet?
 
     var body: some View {
         Group {
@@ -118,6 +125,19 @@ struct PhoneChatView: View {
             PhoneModelPicker(selected: phone.chat(chatId).map { ($0.providerId, $0.modelId) }) { p, m in
                 phone.setModel(chatId, providerId: p, modelId: m)
             }
+        }
+        .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: PhoneProviders.maxImages, matching: .images)
+        // Send waits for the photos, as in a computer chat.
+        .task(id: photos) {
+            guard !photos.isEmpty else { return }
+            loadingPhotos = true
+            let loaded = await ImageAttachments.load(photos)
+            if !Task.isCancelled { images = loaded }
+            loadingPhotos = false
+        }
+        .fullScreenCover(item: $viewing) { set in ImageViewer(photos: set.photos, index: set.index) }
+        .alert(photoError ?? "", isPresented: Binding(get: { photoError != nil }, set: { if !$0 { photoError = nil } })) {
+            Button("OK", role: .cancel) {}
         }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)
@@ -169,14 +189,22 @@ struct PhoneChatView: View {
     @ViewBuilder private func message(_ m: PhoneMessage, last: Bool) -> some View {
         switch m.role {
         case .user:
-            HStack {
-                Spacer(minLength: 48)
-                MarkdownText(text: m.text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("You: \(m.text)")
+            VStack(alignment: .trailing, spacing: 6) {
+                if let sent = m.images, !sent.isEmpty {
+                    SentPhotos(photos: sent) { viewing = PhotoSet(photos: sent, index: $0, messageId: m.id) }
+                }
+                if !m.text.isEmpty {
+                    HStack {
+                        Spacer(minLength: 48)
+                        MarkdownText(text: m.text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
+                            .padding(.horizontal, 14).padding(.vertical, 10)
+                            .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("You: \(m.text)")
+                    }
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         case .assistant:
             VStack(alignment: .leading, spacing: 8) {
                 if m.text.isEmpty && m.error == nil {
@@ -204,10 +232,41 @@ struct PhoneChatView: View {
 
     private func composer(_ chat: PhoneChat) -> some View {
         let running = phone.running.contains(chatId)
-        let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty
+        // Only models that can't take photos lose the button; unknown ones keep it.
+        let takesPhotos = phone.acceptsImages(providerId: chat.providerId, modelId: chat.modelId)
         return VStack(spacing: 6) {
-            MarkdownComposerField(text: $text, focused: $typing, placeholder: "Message", identifier: "phoneChat.prompt")
+            if loadingPhotos {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Adding photos…").font(.caption)
+                }
+                .foregroundStyle(palette.inkSoft)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if !images.isEmpty {
+                ComposerPhotos(photos: images) { index in
+                    images.remove(at: index)
+                    photos = []
+                }
+            }
+            MarkdownComposerField(text: $text, focused: $typing, placeholder: "Message", identifier: "phoneChat.prompt",
+                                  onPasteImages: takesPhotos ? pasteImages : {})
             HStack(alignment: .bottom, spacing: 8) {
+            if takesPhotos {
+                Menu {
+                    Button { pickingPhotos = true } label: { Label("Photos", systemImage: "photo.on.rectangle") }
+                    // Asked for by the user, so iOS shows its paste prompt only then.
+                    Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
+                        .disabled(!UIPasteboard.general.hasImages)
+                } label: {
+                    ComposerGlyph(name: "plus").foregroundStyle(palette.inkSoft)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .accessibilityLabel("Add")
+                .accessibilityIdentifier("phoneChat.add")
+                .transition(.opacity)
+            }
             Button { picking = true } label: {
                 Image(systemName: "cpu").font(.body).foregroundStyle(palette.inkSoft)
                     .frame(width: 44, height: 44).contentShape(Rectangle())
@@ -229,8 +288,10 @@ struct PhoneChatView: View {
                 .accessibilityIdentifier("phoneChat.stop")
             } else {
                 Button {
-                    phone.send(chatId, text)
+                    phone.send(chatId, text, images: takesPhotos ? images : [])
                     text = ""
+                    images = []
+                    photos = []
                 } label: {
                     Image(systemName: "arrow.up").font(.body.weight(.bold))
                         .frame(width: 36, height: 36)
@@ -239,7 +300,7 @@ struct PhoneChatView: View {
                         .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(empty)
+                .disabled(empty || loadingPhotos)
                 .accessibilityLabel("Send")
                 .accessibilityIdentifier("phoneChat.send")
             }
@@ -247,6 +308,15 @@ struct PhoneChatView: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(.bar)
+        .animation(.easeOut(duration: 0.2), value: images.count)
+    }
+
+    /// Images on the clipboard, scaled like picked photos (at most four in the message).
+    private func pasteImages() {
+        let room = max(0, PhoneProviders.maxImages - images.count)
+        let added = (UIPasteboard.general.images ?? []).prefix(room).compactMap { ImageAttachments.encode($0) }
+        if added.isEmpty { photoError = String(localized: "There’s no image on the clipboard."); return }
+        images += added
     }
 
     private var menu: some View {
@@ -275,6 +345,46 @@ struct PhoneChatView: View {
         let name = phone.models[chat.providerId]?.first { $0.id == chat.modelId }?.name ?? chat.modelId
         let provider = phone.provider(chat.providerId)?.label ?? chat.providerId
         return "\(name) · \(provider)"
+    }
+}
+
+/// The photos a message was sent with, above its text; a tap opens them full screen.
+struct SentPhotos: View {
+    let photos: [String]
+    var open: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(Array(photos.enumerated()), id: \.offset) { i, source in
+                SentPhoto(source: source, label: "Photo \(i + 1) of \(photos.count)") { open(i) }
+            }
+        }
+        .accessibilityIdentifier("phoneChat.sentPhotos")
+    }
+}
+
+private struct SentPhoto: View {
+    let source: String
+    let label: String
+    let open: () -> Void
+    @Environment(\.palette) private var palette
+    @State private var thumbnail: UIImage?
+
+    var body: some View {
+        Button(action: open) {
+            Group {
+                if let thumbnail {
+                    Image(uiImage: thumbnail).resizable().scaledToFill()
+                } else {
+                    palette.surface2
+                }
+            }
+            .frame(width: 96, height: 96).clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .task(id: source) { thumbnail = DataURLImage.thumbnail(source) }
     }
 }
 

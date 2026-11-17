@@ -705,7 +705,7 @@ private fun PlusMenu(
 
 /** Thumbnails of the photos going with the next message; ✕ takes one out. */
 @Composable
-private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, onRemove: (Long) -> Unit) {
+internal fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, onRemove: (Long) -> Unit) {
     val p = Nekko.palette
     // A tap opens the photo full screen before it is sent (the iPhone's #1879): it is all on the phone already.
     var opened by remember { mutableStateOf<Int?>(null) }

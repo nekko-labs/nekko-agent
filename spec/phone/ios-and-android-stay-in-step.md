@@ -40,6 +40,7 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 
 | Capability | iPhone | Android | Gap / follow-up |
 | --- | --- | --- | --- |
+| Live card level preview ([#2928](https://github.com/nekko-labs/nekko-agent/issues/2928), 2026-11-17) | Settings shows the Lock Screen card built at the chosen level, with the chat lines that level sends under it | Radio rows with text only, no preview | [#2933](https://github.com/nekko-labs/nekko-agent/issues/2933) |
 | Voice without foregrounding | iOS 18+: authenticated LiveActivityIntent + AudioRecordingIntent path implemented, hardware unverified | Notification opens foreground sheet behind app lock; explicit Listen required; no background microphone | No-app goal remains unmet on Android. Track under dashboard #2046; validate supported native paths before claiming parity. |
 | Older OS fallback | iOS 17: Open app for voice opens list without auto-listening | Foreground sheet as above | iOS 17 is an app handoff, not equivalent background voice or an app-wide voice sheet. |
 | Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
