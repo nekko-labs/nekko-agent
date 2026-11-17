@@ -340,6 +340,9 @@ function ProviderCardContent({ provider, onChanged, embedded = false, claudeStat
   // available for a local instance with the CLI installed. `null` = not yet
   // probed; the reason feeds the fallback badge's tooltip.
   const [lms, setLms] = useState<{ available: boolean; reason?: string } | null>(null);
+  // A closed LM Studio's card asks to open it (RuntimeCard); while it asks, the
+  // offline errors below would only repeat that.
+  const [askingToOpen, setAskingToOpen] = useState(false);
   // Sign-in providers keep their credential host-side in the token store; the
   // renderer only ever sees this sanitized status (connected/account/expiry,
   // never a token). OpenRouter joins them with auth 'apikey' + a tokenKey: the
@@ -624,6 +627,7 @@ function ProviderCardContent({ provider, onChanged, embedded = false, claudeStat
           <RuntimeCard
             provider={provider}
             kind={provider.kind}
+            onAskToOpen={setAskingToOpen}
             onChanged={() => {
               onChanged();
               load();
@@ -645,7 +649,7 @@ function ProviderCardContent({ provider, onChanged, embedded = false, claudeStat
         >
           Remove account
         </button>}
-        {conn.state === 'fail' && <span className="text-xs" style={{ color: 'var(--danger)' }}>{conn.message}</span>}
+        {conn.state === 'fail' && !askingToOpen && <span className="text-xs" style={{ color: 'var(--danger)' }}>{conn.message}</span>}
         {conn.state === 'fail' && !subscription && reconnectOAuth && (
           <button className="btn btn-outline py-1 text-xs" onClick={() => setReconnecting((v) => !v)}>
             Reconnect
@@ -766,7 +770,7 @@ function ProviderCardContent({ provider, onChanged, embedded = false, claudeStat
       )}
 
       {!embedded && <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">
-        {models.length === 0 && (problem ? (
+        {models.length === 0 && !askingToOpen && (problem ? (
           <div className="flex items-start justify-between gap-2 text-xs" role="alert">
             <p className="min-w-0 break-words" style={{ color: 'var(--danger)' }}>{problem}</p>
             <button className="btn btn-outline shrink-0 px-2 py-0.5 text-2xs" onClick={retry}>Retry</button>

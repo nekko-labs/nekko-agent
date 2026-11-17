@@ -209,6 +209,11 @@ carries the context length and GPU share. It publishes no layer geometry anywher
 its projections are partial (see below). Driving it needs the CLI on the same machine as
 the server, so a remote LM Studio can be read but not controlled.
 
+Nekko Agent never opens LM Studio just because you looked at it. When LM Studio is
+closed, its card on the Models page says so and offers **Open and test**, which starts
+its server and checks the connection. The only time Nekko Agent opens it by itself is
+when you send a message to one of its models while it is closed.
+
 **vLLM** is deliberately connect-existing only. It serves one model per process with
 everything fixed by the launch command, and it is Linux plus NVIDIA plus Python in
 practice. Nekko Agent detects it, shows its live `/metrics`, and can stop it, but never

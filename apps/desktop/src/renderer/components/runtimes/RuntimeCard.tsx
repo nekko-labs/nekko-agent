@@ -22,14 +22,26 @@ import { formatBytes } from './verdict.js';
 
 const POLL_MS = 6000;
 
+/**
+ * Starting LM Studio opens the app, so a closed one on this computer is asked
+ * about, never started by the page itself (#2961). A chat with one of its
+ * models opens it on demand (`open_for_turn` in the engine).
+ */
+export function asksToOpen(kind: RuntimeKind, status: Pick<RuntimeStatus, 'running' | 'installed'> | null): boolean {
+  return kind === 'lmstudio' && status?.installed === true && !status.running;
+}
+
 export function RuntimeCard({
   provider,
   kind,
   onChanged,
+  onAskToOpen,
 }: {
   provider: ProviderConfig;
   kind: RuntimeKind;
   onChanged: () => void;
+  /** Told whether the card is asking to open a closed LM Studio. */
+  onAskToOpen?: (asking: boolean) => void;
 }) {
   const pushToast = useStore((s) => s.pushToast);
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
@@ -63,8 +75,12 @@ export function RuntimeCard({
     if (res && !('kind' in res)) {
       pushToast('error', res.error);
       setShowLog(true);
+      refresh();
+      return;
     }
     refresh();
+    // The provider card re-tests the connection and re-lists its models.
+    onChanged();
   };
 
   const stop = async (force = false) => {
@@ -88,6 +104,8 @@ export function RuntimeCard({
   };
 
   const running = Boolean(status?.running);
+  const askToOpen = asksToOpen(kind, status);
+  useEffect(() => onAskToOpen?.(askToOpen), [askToOpen, onAskToOpen]);
   const residentVram = (status?.resident ?? []).reduce((n, r) => n + (r.vramBytes ?? 0), 0);
   const residentTotal = (status?.resident ?? []).reduce((n, r) => n + (r.sizeBytes ?? 0), 0);
   const spilled = residentTotal > 0 && residentVram > 0 && residentTotal - residentVram > 64 * 1024 * 1024;
@@ -105,7 +123,7 @@ export function RuntimeCard({
         )}
 
         <div className="ml-auto">
-          {caps.canStart && status?.installed === false && !running ? (
+          {askToOpen ? null : caps.canStart && status?.installed === false && !running ? (
             <span
               className="rounded-full border px-2 py-0.5 text-2xs text-ink-faint"
               style={{ borderColor: 'var(--line)' }}
@@ -143,6 +161,16 @@ export function RuntimeCard({
           )}
         </div>
       </div>
+
+      {askToOpen && (
+        <div className="fade-in mt-2 flex flex-wrap items-center gap-2" data-testid="lmstudio-open-ask">
+          <p className="text-xs text-ink-faint">LM Studio is closed. Open it and test the connection?</p>
+          <button className="btn py-1 text-xs" onClick={() => void start()} disabled={busy !== null}>
+            <PowerIcon className="mr-1 inline h-3.5 w-3.5" />
+            {busy === 'starting' ? 'Opening…' : 'Open and test'}
+          </button>
+        </div>
+      )}
 
       <div className="mt-2">
         <AddressField provider={provider} onSaved={() => { onChanged(); refresh(); }} />
