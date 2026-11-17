@@ -5,19 +5,19 @@ import XCTest
 /// Intentionally ignores cancellation until released, like a late delegate
 /// callback. Generation guards, not cooperative HTTP mocks, must reject it.
 private actor DelayedPhoneModels: PhoneHTTP {
-    private var pending: [CheckedContinuation<(status: Int, body: Data), Error>] = []
+    private var pending: [CheckedContinuation<(status: Int, headers: [String: String], body: Data), Error>] = []
     var count: Int { pending.count }
 
-    func send(_ request: PhoneRequest) async throws -> (status: Int, body: Data) {
+    func send(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], body: Data) {
         try await withCheckedThrowingContinuation { pending.append($0) }
     }
 
-    func lines(_ request: PhoneRequest) async throws -> (status: Int, lines: AsyncThrowingStream<String, Error>) {
-        (200, AsyncThrowingStream { $0.finish() })
+    func lines(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], lines: AsyncThrowingStream<String, Error>) {
+        (200, [:], AsyncThrowingStream { $0.finish() })
     }
 
     func release(_ index: Int, model: String) {
-        pending[index].resume(returning: (200, Data("{\"data\":[{\"id\":\"\(model)\"}]}".utf8)))
+        pending[index].resume(returning: (200, [:], Data("{\"data\":[{\"id\":\"\(model)\"}]}".utf8)))
     }
 }
 

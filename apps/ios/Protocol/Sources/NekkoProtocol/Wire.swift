@@ -861,12 +861,24 @@ public struct ModelInfo: Equatable, Sendable, Identifiable {
     public let providerId: String
     public let name: String
     public let loaded: Bool
+    /// Size on disk, when the provider says (local model servers).
+    public var sizeBytes: Int64? = nil
+    /// The context window in tokens, when the provider says.
+    public var contextLength: Int64? = nil
+    /// Family, quantization and the like, as text (`details` on the wire).
+    public var details: [String: String] = [:]
+
+    /// "8B", from the details a model server or the Nekko engine gives.
+    public var parameters: String? { details["parameterSize"] ?? details["params"] }
 
     public static func list(_ v: JSONValue?) -> [ModelInfo] {
         (v?.array ?? []).compactMap { m in
             guard let id = m.str("id") else { return nil }
             let name = m.str("name").flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } ?? id
-            return ModelInfo(id: id, providerId: m.str("providerId") ?? "", name: name, loaded: m.flag("loaded"))
+            let details = (m["details"]?.object ?? [:]).compactMapValues { $0.string }
+            return ModelInfo(id: id, providerId: m.str("providerId") ?? "", name: name, loaded: m.flag("loaded"),
+                             sizeBytes: m.long("sizeBytes").flatMap { $0 > 0 ? $0 : nil },
+                             contextLength: m.long("contextLength").flatMap { $0 > 0 ? $0 : nil }, details: details)
         }
     }
 }

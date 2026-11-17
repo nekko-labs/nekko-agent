@@ -127,6 +127,18 @@ export function effectiveEffort(setting: EffortLevel | undefined, modelId: strin
 }
 
 /**
+ * A chat saved on a Claude Code family alias (`opus`, `sonnet`, `haiku`) runs
+ * on the newest concrete model of that family. `models` is a provider's list,
+ * newest first; returns the id to show, or the input when it is not an alias or
+ * the family is not listed.
+ */
+export function resolveClaudeAlias(id: string, models: readonly { id: string }[]): string {
+  const alias = id.trim().toLowerCase();
+  if (alias !== 'opus' && alias !== 'sonnet' && alias !== 'haiku') return id;
+  return models.find((m) => parseClaudeModel(m.id)?.family === alias)?.id ?? id;
+}
+
+/**
  * A model's context window from its id alone (no network call), for anything
  * that has to draw a usage bar before a model list has loaded. Claude is exact;
  * other families are the common sizes, and anything unknown gets a cautious

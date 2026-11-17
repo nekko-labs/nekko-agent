@@ -7,6 +7,7 @@ import {
   modelDefaultEffort,
   modelEffortLevels,
   parseClaudeModel,
+  resolveClaudeAlias,
   usesNativeEffort,
 } from './model-capabilities.js';
 
@@ -109,5 +110,17 @@ describe('effort capability', () => {
     expect(effectiveEffort('medium', 'gpt-5')).toBe('medium');
     expect(effectiveEffort('medium', 'llama3')).toBe('normal');
     expect(effectiveEffort('xhigh', 'claude-opus-5')).toBe('xhigh');
+  });
+});
+
+describe('resolveClaudeAlias', () => {
+  const models = [{ id: 'claude-fable-5-1' }, { id: 'claude-opus-5-5' }, { id: 'claude-opus-5' }, { id: 'claude-sonnet-5-5' }];
+  it('maps a saved alias to the newest listed model of its family', () => {
+    expect(resolveClaudeAlias('opus', models)).toBe('claude-opus-5-5');
+    expect(resolveClaudeAlias('Sonnet', models)).toBe('claude-sonnet-5-5');
+  });
+  it('leaves concrete ids and unlisted families alone', () => {
+    expect(resolveClaudeAlias('claude-opus-5', models)).toBe('claude-opus-5');
+    expect(resolveClaudeAlias('haiku', models)).toBe('haiku');
   });
 });
