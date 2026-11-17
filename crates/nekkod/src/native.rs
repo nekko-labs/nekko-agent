@@ -240,6 +240,7 @@ impl Native {
                 .ok_or_else(|| format!("App version is not a valid semver version: \"{}\"", self.version))?;
             let (info, file, feed_url) = self.latest().await?;
             self.fetch_claude_policy(ctx, &feed_url).await;
+            self.fetch_model_feed(ctx, &feed_url).await;
             let available = semver::is_update_available(&current, &info.version)?;
             Ok::<_, String>((info, file, available))
         }
@@ -278,6 +279,23 @@ impl Native {
                 }
             }
             Err(e) => eprintln!("nekkod: claude policy from {url} is not JSON: {e}"),
+        }
+    }
+
+    /// The release's signed `model-feed.json`, beside its feed file, when it
+    /// has one: nekkod verifies it with the release key and recommends from it
+    /// (model_feed.rs). Best effort: a release without one, or one that does
+    /// not verify or is not newer, leaves the list as it is.
+    async fn fetch_model_feed(&self, ctx: &Ctx, feed_url: &url::Url) {
+        let Ok(url) = feed_url.join(crate::model_feed::FEED_FILE) else { return };
+        let Ok(text) = self.fetch_text(&url, "application/json").await else { return };
+        match serde_json::from_str::<Value>(&text) {
+            Ok(doc) => {
+                if let Err(e) = ctx.model_feed.apply_signed(&doc) {
+                    eprintln!("nekkod: model list from {url} not used: {e}");
+                }
+            }
+            Err(e) => eprintln!("nekkod: model list from {url} is not JSON: {e}"),
         }
     }
 

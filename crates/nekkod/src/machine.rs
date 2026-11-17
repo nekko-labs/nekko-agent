@@ -32,7 +32,7 @@ pub const CHANNELS: &[&str] = &[
 /// The picks for this machine now, and the machine they are for.
 async fn current(machine: &Machine, refresh: bool) -> (nekko_machine::Recommendations, String) {
     let profile = machine.profile(refresh).await;
-    let recs = nekko_machine::recommend(&profile, nekko_machine::bundled_feed(), &machine.speeds().snapshot());
+    let recs = nekko_machine::recommend(&profile, &machine.feed(), &machine.speeds().snapshot());
     (recs, machine_key(&profile))
 }
 
@@ -95,7 +95,7 @@ pub async fn route(
             let nudges = match machine.data_dir() {
                 Some(dir) => {
                     let files = library_files(library).await;
-                    nekko_machine::nudges::nudges_for(dir, &recs, nekko_machine::bundled_feed(), &key, &files)
+                    nekko_machine::nudges::nudges_for(dir, &recs, &machine.feed(), &key, &files)
                 }
                 None => Vec::new(),
             };
