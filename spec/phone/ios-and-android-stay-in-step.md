@@ -83,6 +83,7 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
 | CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | No Android Auto app | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
+| New chat: model ⟶ device on one line, the connect checklist and note, the limit line, picker size and context (iPhone #2921-#2925, 2026-11-17) | Still two rows and the "no tools" note | [#2950](https://github.com/nekko-labs/nekko-agent/issues/2950) |
 
 Android features the iPhone lacks have not been audited yet.
 

@@ -1,7 +1,7 @@
 //! The Claude Agent provider (`claude-code`): the user's own Claude Code
 //! runs these chats (nekkod drives it through `nekko-harness`), so this
 //! provider has no wire. It lists the concrete Claude models the user can
-//! pin on `--model` (plus the generic family aliases), and refuses a direct
+//! pin on `--model` (newest first, never the family aliases), and refuses a direct
 //! chat: Nekko never calls a model with credentials that belong to Claude
 //! Code.
 
@@ -9,19 +9,30 @@ use crate::providers::anthropic::CLAUDE_MODELS;
 use crate::stream::{ChunkStream, Stop, spawn};
 use crate::types::{ChatRequest, ModelEffort, ModelEffortOption, ModelInfo, ProviderConfig, ProviderError, TestResult};
 
-/// The generic family aliases Claude Code resolves to the user's current
-/// plan default (`--model opus` -> whatever Opus the plan ships, which was
-/// 4.7 for a while and will roll forward on its own). They sit first in the
-/// picker so a user who does not want to pin a version keeps the plan's
-/// current default. `MODELS` concatenates these with the frontier concrete
-/// ids from [`CLAUDE_MODELS`] (the Anthropic provider's own list) so a
-/// subscription chat offers Opus 5.5, Sonnet 5.5 and friends without any
-/// id strings living in two places.
-pub const MODEL_ALIASES: &[(&str, &str)] = &[
-    ("opus", "Claude Opus (latest in plan)"),
-    ("sonnet", "Claude Sonnet (latest in plan)"),
-    ("haiku", "Claude Haiku (latest in plan)"),
-];
+/// The generic family aliases Claude Code accepts on `--model`. They are not
+/// offered any more: Claude Code resolves them to the plan's default, which
+/// lags the newest release (an "Opus (latest in plan)" row ran an older Opus).
+/// Chats saved on one still resolve through [`resolve_alias`].
+const FAMILY_ALIASES: [&str; 3] = ["opus", "sonnet", "haiku"];
+
+/// The newest concrete model of a family alias (`opus`, `sonnet`, `haiku`),
+/// from the shared Anthropic catalog, which is listed newest first. `None`
+/// for anything that is not a bare alias.
+pub fn resolve_alias(id: &str) -> Option<&'static str> {
+    let id = id.trim().to_ascii_lowercase();
+    FAMILY_ALIASES.contains(&id.as_str()).then(|| {
+        CLAUDE_MODELS
+            .iter()
+            .map(|(m, _)| *m)
+            .find(|m| m.starts_with(&format!("claude-{id}-")))
+    })?
+}
+
+/// The id to pass on `--model`: a saved alias becomes the newest concrete
+/// model of its family, anything else passes through unchanged.
+pub fn concrete_model_id(id: &str) -> String {
+    resolve_alias(id).map(str::to_string).unwrap_or_else(|| id.to_string())
+}
 
 /// The levels `claude --effort` takes. Claude Code owns this ladder and steps a
 /// level down itself on a model that lacks it, so every model offers all of them.
@@ -53,12 +64,10 @@ impl ClaudeCodeProvider {
     }
 
     pub async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
-        // Aliases first (what Claude Code resolves to the plan's default),
-        // then the concrete frontier ids from the shared Anthropic catalog
+        // The concrete ids from the shared Anthropic catalog, newest first
         // (what Claude Code accepts verbatim on `--model`).
-        Ok(MODEL_ALIASES
+        Ok(CLAUDE_MODELS
             .iter()
-            .chain(CLAUDE_MODELS.iter())
             .map(|(id, name)| ModelInfo {
                 id: (*id).into(),
                 provider_id: self.config.id.clone(),
@@ -93,19 +102,27 @@ mod tests {
         )
     }
 
+    #[test]
+    fn saved_aliases_resolve_to_the_newest_concrete_model() {
+        assert_eq!(resolve_alias("opus"), Some("claude-opus-5-5"));
+        assert_eq!(resolve_alias(" Sonnet "), Some("claude-sonnet-5-5"));
+        assert_eq!(resolve_alias("haiku"), Some("claude-haiku-5-5"));
+        assert_eq!(resolve_alias("claude-opus-5"), None);
+        assert_eq!(concrete_model_id("opus"), "claude-opus-5-5");
+        assert_eq!(concrete_model_id("claude-fable-5-1"), "claude-fable-5-1");
+    }
+
     #[tokio::test]
-    async fn lists_aliases_then_frontier_ids_and_never_chats() {
+    async fn lists_concrete_models_only_and_never_chats() {
         let p = provider();
         let models = p.list_models().await.unwrap();
         assert!(models.iter().all(|m| m.effort == Some(effort_levels())));
         let ids: Vec<String> = models.into_iter().map(|m| m.id).collect();
-        // Aliases first so "whatever my plan ships" stays one click away.
-        assert_eq!(&ids[..3], &["opus", "sonnet", "haiku"]);
-        // Concrete frontier ids follow (Opus 5.5 at the top), passed through
-        // on `--model` so a chat gets exactly what the user picked.
-        assert!(ids.contains(&"claude-opus-5-5".into()));
-        assert!(ids.contains(&"claude-sonnet-5-5".into()));
-        assert!(ids.contains(&"claude-haiku-5-5".into()));
+        assert!(ids.iter().all(|i| i.starts_with("claude-")), "no family aliases: {ids:?}");
+        assert_eq!(ids[0], "claude-opus-5-5");
+        for want in ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"] {
+            assert!(ids.contains(&want.into()), "{want}");
+        }
         let req: ChatRequest = serde_json::from_value(json!({ "model": "opus", "messages": [] })).unwrap();
         let (chunks, err): (Vec<ProviderChunk>, _) = p.chat(req).collect().await;
         assert!(chunks.is_empty());

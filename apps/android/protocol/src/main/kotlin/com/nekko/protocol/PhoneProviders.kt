@@ -5,8 +5,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 @Serializable data class PhoneProvider(val id: String, val kind: String, val label: String, val baseUrl: String, val workspaceId: String? = null, val enabled: Boolean = true)
-/** [acceptsImages]: true or false where the provider's list says, null when it doesn't. */
-@Serializable data class PhoneModel(val id: String, val name: String, val acceptsImages: Boolean? = null)
+/** [acceptsImages]: true or false where the provider's list says, null when it doesn't. [created]: when the provider published it (OpenAI's `created`, seconds since 1970), if it says. */
+@Serializable data class PhoneModel(val id: String, val name: String, val acceptsImages: Boolean? = null, val created: Long? = null)
 /** [images]: the user's photos as image data URLs; absent in chats saved before photos. */
 @Serializable data class PhoneMessage(val id: String, val role: String, val text: String, val at: Long, val error: String? = null, val images: List<String>? = null)
 @Serializable data class PhoneChat(val id: String, val title: String, val providerId: String, val modelId: String, val createdAt: Long, val updatedAt: Long, val messages: List<PhoneMessage> = emptyList())
@@ -135,20 +135,42 @@ object PhoneProviders {
         return data.mapNotNull { e ->
             val o = e as? JsonObject ?: return@mapNotNull null
             val id = o.string("id") ?: return@mapNotNull null
-            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind in setOf("openai", "gemini") && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id, acceptsImages(o, kind))
+            val created = (o["created"] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull
+            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind in setOf("openai", "gemini") && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id, acceptsImages(o, kind), created)
         }.distinctBy { it.id }
     }
+
+    /**
+     * The model to start on when none was chosen: the newest that is not a dated snapshot, a pro
+     * tier or a live (voice) model. Lists without dates keep their order.
+     */
+    fun defaultModel(list: List<PhoneModel>): PhoneModel? {
+        val plain = list.filter { m -> m.id.lowercase().let { !isSnapshot(it) && "-pro" !in it && "live" !in it } }
+        val pool = plain.ifEmpty { list }
+        if (pool.none { it.created != null }) return pool.firstOrNull()
+        // Stable: among equal dates the list's own order wins.
+        return pool.withIndex().maxWithOrNull(compareBy<IndexedValue<PhoneModel>> { it.value.created ?: Long.MIN_VALUE }.thenByDescending { it.index })?.value
+    }
+
+    /** `o3-2025-04-16`, `claude-x-20250514`: a pinned copy of a model that also has a plain id. */
+    fun isSnapshot(id: String) = Regex("""-(\d{4}-\d{2}-\d{2}|\d{8})$""").containsMatchIn(id)
     /** Kinds whose stream reports token use when asked (`stream_options.include_usage`). */
     private val USAGE_KINDS = setOf("openai", "openrouter", "gemini")
 
     /**
      * For kinds whose model list answers without a valid key: a request a bad key is refused on
-     * (401/403). Ollama Cloud's asks for a model that doesn't exist, so it costs nothing.
+     * (401/403). Ollama Cloud's asks for a model that doesn't exist, so it costs nothing. OpenAI
+     * lists models for a key with no credit, so its check is a tiny chat with [model].
      */
-    fun keyCheckRequest(p: PhoneProvider, key: String?): PhoneRequest? {
+    fun keyCheckRequest(p: PhoneProvider, key: String?, model: String? = null): PhoneRequest? {
         validate(p, key)
         val h = headers(p, key) + ("Accept" to "application/json")
         return when (p.kind) {
+            // Reasoning models spend a few tokens before any text; 16 still costs next to nothing.
+            "openai" -> if (model.isNullOrEmpty() || model.length > 1024) null else PhoneRequest(p.baseUrl.trimEnd('/') + "/chat/completions", h, buildJsonObject {
+                put("model", model); put("max_completion_tokens", 16)
+                putJsonArray("messages") { add(buildJsonObject { put("role", "user"); put("content", "Say OK.") }) }
+            })
             "openrouter" -> PhoneRequest(p.baseUrl.trimEnd('/') + "/key", h, method = "GET")
             "ollama-cloud" -> PhoneRequest(p.baseUrl.trimEnd('/') + "/chat/completions", h, buildJsonObject {
                 put("model", "nekko-key-check"); put("max_tokens", 1)
@@ -196,12 +218,98 @@ object PhoneProviders {
         return key.takeIf { k -> k.isNotEmpty() && k.all { it.code in 32..126 } }
     }
 
-    // Never echo response bodies: an untrusted endpoint may echo credentials in an error.
-    fun failure(status: Int, body: String = "") = when (status) {
-        401, 403 -> "The provider turned the key down ($status). Replace the key and test again."
-        404 -> "The provider does not know that address or model (404)."
-        429 -> "The provider is rate limiting this key (429). Try again later."
-        else -> "The provider answered $status."
+    /** The most a failed answer's body is read for its error code. */
+    const val ERROR_BODY_CHARS = 4096
+
+    /**
+     * Our own explanation of a failed answer. Only the error's code and type are read and compared to
+     * known values: provider message text can echo part of the key, so it is never shown.
+     */
+    fun failure(status: Int, body: String = "", headers: Map<String, String> = emptyMap(), kind: String = ""): String {
+        val code = errorCodes(body)
+        val wait = retryAfter(headers)
+        return when {
+            "insufficient_quota" in code || status == 402 ->
+                if (kind == "openai") "This key has no credit. Add billing at platform.openai.com, then try again."
+                else "This key has no credit left. Add billing with the provider, then try again."
+            "invalid_api_key" in code || "authentication_error" in code -> "The provider turned the key down ($status). Check the key and paste it again."
+            "model_not_found" in code -> "This key can’t use that model. Pick another one."
+            "overloaded_error" in code || status == 529 -> "The provider is busy. Try again in a moment."
+            status == 429 || code.any { it in setOf("rate_limit_exceeded", "rate_limit_error", "resource_exhausted") } -> when {
+                wait == null -> "Rate limited. Try again in a moment."
+                wait > 90 -> "Rate limited. Try again in ${kotlin.math.ceil(wait / 60).toInt()} min."
+                else -> "Rate limited. Try again in ${maxOf(1, kotlin.math.ceil(wait).toInt())}s."
+            }
+            status == 401 || status == 403 -> "The provider turned the key down ($status). Replace the key and test again."
+            status == 404 -> "The provider does not know that address or model (404)."
+            else -> "The provider answered $status."
+        }
+    }
+
+    /** The lowercased `error.code`, `error.type`, `error.status` and top-level `type` of an error body. Nothing else is read. */
+    fun errorCodes(body: String): Set<String> {
+        if (body.isEmpty() || body.length > ERROR_BODY_CHARS) return emptySet()
+        val json = runCatching { Json.parseToJsonElement(body) }.getOrNull() ?: return emptySet()
+        val root = (json as? JsonArray)?.firstOrNull() as? JsonObject ?: json as? JsonObject ?: return emptySet()
+        val error = root["error"] as? JsonObject
+        return listOfNotNull(error?.string("code"), error?.string("type"), error?.string("status"), root.string("type"))
+            .filter { it.length <= 64 }.map { it.lowercase() }.toSet()
+    }
+
+    /** Seconds to wait from `retry-after`, else the sooner of OpenAI's `x-ratelimit-reset-*`. */
+    fun retryAfter(headers: Map<String, String>): Double? {
+        val h = headers.mapKeys { it.key.lowercase() }
+        h["retry-after"]?.trim()?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }?.let { return it }
+        return listOf("x-ratelimit-reset-requests", "x-ratelimit-reset-tokens").mapNotNull { h[it]?.let(::duration) }.minOrNull()
+    }
+
+    /** OpenAI's reset durations: `1s`, `6m0s`, `20ms`, `1h2m3.5s`. */
+    fun duration(text: String): Double? {
+        val t = text.trim()
+        if (t.isEmpty() || t.length > 32) return null
+        val part = Regex("""(\d+(?:\.\d+)?)(ms|h|m|s)""")
+        var at = 0
+        var total = 0.0
+        while (at < t.length) {
+            val m = part.find(t, at)?.takeIf { it.range.first == at } ?: return null
+            total += m.groupValues[1].toDouble() * when (m.groupValues[2]) { "ms" -> 0.001; "h" -> 3600.0; "m" -> 60.0; else -> 1.0 }
+            at = m.range.last + 1
+        }
+        return total.takeIf { it.isFinite() }
+    }
+}
+
+/**
+ * A key's request and token budget, as the provider last reported it in its answer's headers
+ * (OpenAI's `x-ratelimit-*`, Anthropic's `anthropic-ratelimit-*`). Times are milliseconds since 1970.
+ */
+data class PhoneRateLimits(
+    val requestsLimit: Long? = null, val requestsRemaining: Long? = null, val requestsResetAt: Long? = null,
+    val tokensLimit: Long? = null, val tokensRemaining: Long? = null, val tokensResetAt: Long? = null,
+    val at: Long,
+) {
+    companion object {
+        /** The limits in an answer's headers, or null when it carries none. */
+        fun from(headers: Map<String, String>, at: Long): PhoneRateLimits? {
+            val h = headers.mapKeys { it.key.lowercase() }
+            fun count(name: String) = h[name]?.trim()?.toLongOrNull()?.takeIf { it >= 0 }
+            fun reset(name: String): Long? {
+                val v = h[name]?.trim() ?: return null
+                PhoneProviders.duration(v)?.let { return at + Math.round(it * 1000) }
+                return runCatching { java.time.Instant.parse(v).toEpochMilli() }.getOrNull()
+            }
+            fun pick(vararg names: String, read: (String) -> Long?) = names.firstNotNullOfOrNull(read)
+            val r = PhoneRateLimits(
+                requestsLimit = pick("x-ratelimit-limit-requests", "anthropic-ratelimit-requests-limit", read = ::count),
+                requestsRemaining = pick("x-ratelimit-remaining-requests", "anthropic-ratelimit-requests-remaining", read = ::count),
+                requestsResetAt = pick("x-ratelimit-reset-requests", "anthropic-ratelimit-requests-reset", read = ::reset),
+                tokensLimit = pick("x-ratelimit-limit-tokens", "anthropic-ratelimit-tokens-limit", read = ::count),
+                tokensRemaining = pick("x-ratelimit-remaining-tokens", "anthropic-ratelimit-tokens-remaining", read = ::count),
+                tokensResetAt = pick("x-ratelimit-reset-tokens", "anthropic-ratelimit-tokens-reset", read = ::reset),
+                at = at,
+            )
+            return if (r == PhoneRateLimits(at = at)) null else r
+        }
     }
 }
 
