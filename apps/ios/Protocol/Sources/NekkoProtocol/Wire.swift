@@ -411,6 +411,9 @@ public struct Session: Equatable, Sendable {
     /// MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in
     /// this chat (decision 0054): the egress gate stops asking for them.
     public var allowedMcpTools: [String] = []
+    /// Recipients this chat has written to through an MCP tool (decision 0063):
+    /// writing to one of them again does not ask for its recipient.
+    public var knownRecipients: [String] = []
 
     /// A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts).
     public static func inSubagent(_ text: String) -> String { "Do this in a subagent, then report back:\n\n\(text)" }
@@ -444,7 +447,8 @@ public struct Session: Equatable, Sendable {
             runOptions: RunOption.values(of: v),
             parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), imageParams: ImageChatParams.from(v["imageParams"]), executionMode: v.str("executionMode"),
             disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [],
-            allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [])
+            allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [],
+            knownRecipients: v["knownRecipients"]?.array?.compactMap(\.string) ?? [])
     }
 }
 
