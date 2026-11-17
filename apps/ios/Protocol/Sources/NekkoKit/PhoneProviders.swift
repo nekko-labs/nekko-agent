@@ -211,8 +211,10 @@ public enum PhoneProviders {
               p.wire != .vertex || model.range(of: "^[a-zA-Z0-9_-][a-zA-Z0-9@._-]*$", options: .regularExpression) != nil else { throw Problem.model }
         let turns: [JSONValue] = messages.compactMap { m in
             let text = m.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return nil }
-            return .object(["role": .string(m.role.rawValue), "content": .string(m.text)])
+            let photos = m.role == .user ? (m.images ?? []).compactMap(imagePart) : []
+            guard !text.isEmpty || !photos.isEmpty else { return nil }
+            guard !photos.isEmpty else { return .object(["role": .string(m.role.rawValue), "content": .string(m.text)]) }
+            return .object(["role": .string(m.role.rawValue), "content": .array(content(text: text.isEmpty ? nil : m.text, photos: photos, wire: p.wire))])
         }
         switch p.wire {
         case .anthropic, .vertex:
@@ -235,6 +237,44 @@ public enum PhoneProviders {
             // accepted: an OpenAI-compatible server may turn down a field it doesn't know.
             if usageKinds.contains(p.kind) { body["stream_options"] = ["include_usage": true] }
             return PhoneRequest(url: "\(p.baseUrl)/chat/completions", headers: headers(p, key: key), body: .object(body))
+        }
+    }
+
+    /// A message takes this many photos at most, as in a computer chat.
+    public static let maxImages = 4
+    /// The largest photo sent (a data URL); the composer's are about a tenth of this.
+    static let maxImageBytes = 8_000_000
+
+    /// A photo as providers take it, from an image data URL; nil for anything else.
+    public static func imagePart(_ dataURL: String) -> ImagePart? {
+        guard dataURL.utf8.count <= maxImageBytes,
+              let match = dataURL.range(of: "^data:image/(jpeg|png|gif|webp);base64,", options: .regularExpression) else { return nil }
+        let data = String(dataURL[match.upperBound...])
+        guard !data.isEmpty, data.range(of: "^[A-Za-z0-9+/]+={0,2}$", options: .regularExpression) != nil else { return nil }
+        let mediaType = String(dataURL[dataURL.index(dataURL.startIndex, offsetBy: 5)..<dataURL.firstIndex(of: ";")!])
+        return ImagePart(url: dataURL, mediaType: mediaType, data: data)
+    }
+
+    public struct ImagePart: Equatable, Sendable {
+        public let url: String
+        public let mediaType: String
+        public let data: String
+    }
+
+    /// A user turn with photos: Anthropic's image blocks before the text, or the OpenAI
+    /// route's `image_url` parts after it (OpenRouter, Gemini, Ollama Cloud take the same).
+    static func content(text: String?, photos: [ImagePart], wire: Wire) -> [JSONValue] {
+        switch wire {
+        case .anthropic, .vertex:
+            var parts: [JSONValue] = photos.map { photo in
+                .object(["type": "image", "source": .object(["type": "base64", "media_type": .string(photo.mediaType), "data": .string(photo.data)])])
+            }
+            if let text { parts.append(.object(["type": "text", "text": .string(text)])) }
+            return parts
+        case .openai:
+            var parts: [JSONValue] = text.map { [.object(["type": "text", "text": .string($0)])] } ?? []
+            parts += photos.map { .object(["type": "image_url", "image_url": .object(["url": .string($0.url)])]) }
+            return parts
         }
     }
 
@@ -295,12 +335,20 @@ public enum PhoneProviders {
         guard data.count <= 2_000_000, let list = (try? JSONValue.parse(data))?["data"]?.array else { return [] }
         let all = list.compactMap { m -> PhoneModel? in
             guard let id = m.str("id"), !id.isEmpty, id.utf8.count <= 1024, !id.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
-            return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id)
+            return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id, acceptsImages: acceptsImages(m, kind: kind))
         }
         guard kind == "openai" || kind == "gemini" else { return all }
         // OpenAI and Gemini list every model they serve; keep the ones that chat.
         let skip = ["embedding", "whisper", "tts", "dall-e", "moderation", "image", "audio", "realtime", "transcribe", "search", "davinci", "babbage", "sora", "imagen", "veo", "aqa"]
         return all.filter { m in !skip.contains { m.id.contains($0) } }.sorted { $0.id > $1.id }
+    }
+
+    /// Whether a listed model takes photos, where the list says: every Claude model does, and
+    /// OpenRouter names each model's inputs. Nil (unknown) elsewhere.
+    static func acceptsImages(_ m: JSONValue, kind: String) -> Bool? {
+        if kind == "anthropic" { return true }
+        guard kind == "openrouter", let inputs = m["architecture"]?["input_modalities"]?.array else { return nil }
+        return inputs.contains { $0.string == "image" }
     }
 
     /// A safe status explanation; provider error bodies may echo credentials.
@@ -341,7 +389,9 @@ public struct PhoneProvider: Codable, Equatable, Sendable, Identifiable {
 public struct PhoneModel: Codable, Equatable, Sendable, Identifiable {
     public let id: String
     public let name: String
-    public init(id: String, name: String) { self.id = id; self.name = name }
+    /// Takes photos: true or false where the provider says, nil when it doesn't.
+    public var acceptsImages: Bool?
+    public init(id: String, name: String, acceptsImages: Bool? = nil) { self.id = id; self.name = name; self.acceptsImages = acceptsImages }
 }
 
 /// An HTTP request to a provider, built here and sent by the app (`PhoneHTTP`).

@@ -29,7 +29,8 @@ final class PhoneProviderSignInTests: XCTestCase {
         do { _ = try await s.openRouterKey(code: "c", verifier: "v"); XCTFail("an unsafe key must fail") } catch {}
     }
 
-    func testGeminiAndOllamaCloudAreFixedAddressOpenAIKinds() throws {
+    // Async like its neighbours: Linux test discovery can't type a list of one sync and two async tests.
+    func testGeminiAndOllamaCloudAreFixedAddressOpenAIKinds() async throws {
         for id in ["gemini", "ollama-cloud"] {
             let k = try XCTUnwrap(PhoneProviders.kind(id))
             XCTAssertEqual(k.wire, .openai)

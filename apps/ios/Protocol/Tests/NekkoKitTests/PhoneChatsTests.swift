@@ -179,7 +179,7 @@ final class PhoneChatsTests: XCTestCase {
 
     func testModelsListsAndFailures() async {
         let anth = Data(#"{"data":[{"id":"claude-opus-5-5","display_name":"Claude Opus 5.5"}]}"#.utf8)
-        XCTAssertEqual(PhoneProviders.models(from: anth, kind: "anthropic"), [PhoneModel(id: "claude-opus-5-5", name: "Claude Opus 5.5")])
+        XCTAssertEqual(PhoneProviders.models(from: anth, kind: "anthropic"), [PhoneModel(id: "claude-opus-5-5", name: "Claude Opus 5.5", acceptsImages: true)])
         let openai = Data(#"{"data":[{"id":"text-embedding-3-large"},{"id":"gpt-5"},{"id":"whisper-1"},{"id":"gpt-5-mini"}]}"#.utf8)
         XCTAssertEqual(PhoneProviders.models(from: openai, kind: "openai").map(\.id), ["gpt-5-mini", "gpt-5"])
         let failed = PhoneProviders.failure(status: 401, body: Data(#"{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#.utf8))
