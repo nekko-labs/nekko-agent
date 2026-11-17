@@ -80,6 +80,12 @@ pub struct Feed {
     pub image_measured: Vec<ImageMeasured>,
 }
 
+/// A list's version, `YYYY-MM-DD.N`, in the order lists were made: the date, then the day's count.
+pub fn feed_version_key(version: &str) -> (String, u32) {
+    let (date, n) = version.split_once('.').unwrap_or((version, "0"));
+    (date.to_string(), n.parse().unwrap_or(0))
+}
+
 /// A picture task: a diffusion model that can do `capability`, at 1024x1024.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

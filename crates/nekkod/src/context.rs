@@ -194,7 +194,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
     if channel == "context:promptProfiles" {
         // The built-in text of each profile, for the read-only tabs in Settings.
         let text = |p| nekko_context::intro(p);
-        return Ok(json!({ "small": text(nekko_context::PromptProfile::Small), "medium": text(nekko_context::PromptProfile::Medium), "large": text(nekko_context::PromptProfile::Large) }));
+        return Ok(
+            json!({ "small": text(nekko_context::PromptProfile::Small), "medium": text(nekko_context::PromptProfile::Medium), "large": text(nekko_context::PromptProfile::Large) }),
+        );
     }
     let store = ctx.sessions.clone();
     let sid = args.first().and_then(Value::as_str).unwrap_or_default().to_string();

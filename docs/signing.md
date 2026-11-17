@@ -48,8 +48,8 @@ the check does not depend on `publisherName` in `app-update.yml`:
 One Ed25519 key signs what a release says about itself: the update feed
 (`latest*.yml`, signed into `latest*.yml.sig`) and the
 [Claude policy override](../spec/product/claude-policy.md)
-(`claude-policy.json`). Its public half is the `RELEASE_SIGNING_KEY` constant
-in `crates/nekko-native/src/release_key.rs`, which both verifiers read. Its
+(`claude-policy.json`) and for a newer model list (`model-feed.json`, verified by `crates/nekkod/src/model_feed.rs`; no script signs or publishes one yet). Its public half is the `RELEASE_SIGNING_KEY` constant
+in `crates/nekko-native/src/release_key.rs`, which every verifier reads. Its
 private half is the `NEKKO_RELEASE_SIGNING_KEY` **repository** secret (not an
 organization secret: only this repo's release workflow signs with it), plus
 one offline copy. Decision:

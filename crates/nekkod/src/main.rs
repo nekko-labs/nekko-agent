@@ -59,6 +59,7 @@ mod machine;
 mod mcp;
 mod mdns;
 mod messaging;
+mod model_feed;
 mod model_server;
 mod model_tunnel;
 mod native;
@@ -419,6 +420,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             cfg.native.as_ref().is_some_and(|n| n.is_packaged),
             Some(settings.store.clone()),
         )),
+        model_feed: Arc::new(model_feed::ModelFeedStore::new(machine.clone(), Some(data_dir.clone()))),
         messaging: messaging.clone(),
         native: native.clone(),
         desktop: cfg.native.as_ref().map(|n| desktop::Desktop::new(n, &data_dir)),
