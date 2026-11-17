@@ -1,6 +1,6 @@
 # Pillar demos
 
-Five 8 s demos, one per Nekko Agent product pillar, for the nekkolabs.com
+Six 8 s demos, one per Nekko Agent product pillar, for the nekkolabs.com
 flagship and (later) nekkoagent.com:
 
 | Composition | Shows |
@@ -10,6 +10,7 @@ flagship and (later) nekkoagent.com:
 | `Pillar-privacy-{dark,light}` | Privacy Shield swapping an email and card number for placeholders, then the end-to-end encrypted phone relay |
 | `Pillar-fleet-{dark,light}` | Connected computers and cloud plans as one fleet, three chats running on three of them |
 | `Pillar-anywhere-{dark,light}` | One chat on desktop, iPad, phone and a folding phone; a command approved from the phone |
+| `Pillar-photo-{dark,light}` | A Photo chat making a picture from a prompt, then editing it into a snowy morning. Both pictures are real FLUX.2 klein 4B output from an RTX 3070 (2026-11-17), kept in `public/photo` |
 
 1280x720, 30 fps, loops (each fades in from and out to the background). Colours
 are the app's tokens (`apps/desktop/src/renderer/styles.css`, `:root` and
