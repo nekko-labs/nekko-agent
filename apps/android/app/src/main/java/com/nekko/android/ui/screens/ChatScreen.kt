@@ -653,7 +653,7 @@ private fun ChatScreenContent(
                             itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
                                 val run = (row as? TranscriptRow.Run)?.run
                                 // Watch chips and subagent rows read the chat's watches and child chats.
-                                CompositionLocalProvider(LocalAgentContext provides agentContext, com.nekko.android.ui.chat.LocalSessionPhoto provides vm::photo) {
+                                CompositionLocalProvider(LocalAgentContext provides agentContext, com.nekko.android.ui.chat.LocalSessionPhoto provides vm::photo, com.nekko.android.ui.chat.LocalEditPicture provides vm::editPicture) {
                                     when {
                                         // A finished reply's metrics and, when it completed, its check (#2112).
                                         row is TranscriptRow.Footer -> com.nekko.android.ui.chat.TurnDetailsRow(row.details)
@@ -804,7 +804,8 @@ private fun ChatScreenContent(
                         insert = insert,
                         onInserted = vm::inserted,
                         // Keep a restored tray removable, but never offer new image attachments.
-                        attach = if (chat.chatType == "image" && attach.state.photos.isEmpty()) null else attach,
+                        // Image chats take photos too: attached, they are what the picture is made from (#2230).
+                        attach = attach,
                         prompts = if (chat.chatType == "image") emptyList() else prompts,
                         queuedPrompts = chat.queuedPrompts,
                         onEditQueued = vm::editQueued,

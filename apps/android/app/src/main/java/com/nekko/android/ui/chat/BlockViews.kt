@@ -1,5 +1,6 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.automirrored.outlined.Notes
 
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -211,6 +212,15 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?, showReas
             }
         }
         if (b.thumbs.isNotEmpty()) ReplyPhotos(b.id, b.thumbs)
+        // A picture this chat made: Edit puts it in the message box, to say what to change (#2230).
+        val edit = LocalEditPicture.current
+        if (b.editable && edit != null) {
+            TextButton(onClick = { edit(b.id, b.thumbs.first()) }, modifier = Modifier.heightIn(min = 48.dp).testTag("chat.editPicture")) {
+                Icon(androidx.compose.material.icons.Icons.Outlined.Edit, contentDescription = null, tint = p.accent, modifier = Modifier.size(16.dp))
+                androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
+                Text(stringResource(R.string.chat_edit_picture), color = p.accent)
+            }
+        }
         if (b.text.isNotEmpty() && voice == Voice.WORKING) {
             // Progress commentary folds behind "Progress note" (#2453, the iPhone's #2452); replies,
             // things left for the reader and text still unsettled stay open.

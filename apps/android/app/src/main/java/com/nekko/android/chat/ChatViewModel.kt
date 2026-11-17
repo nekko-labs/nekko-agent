@@ -446,9 +446,6 @@ class ChatViewModel(
     suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) {
         // Until the session is read its kind is unknown; never put possible image intent in the text outbox.
         val session = controller.state.value.session ?: throw com.nekko.protocol.RelayException("Wait for this chat to load before sending.")
-        if (session.chatType == "image" && photos.state.value.photos.isNotEmpty()) {
-            throw com.nekko.protocol.RelayException("Image generation accepts text only. Remove the attached photos first.")
-        }
         check(!clips.state.value.sending) { "Wait for the video to finish sending." }
         // Sending without choosing removes the star card; that ask is already used up (Not now).
         _starCard.value = StarCard.NONE
@@ -604,6 +601,28 @@ class ChatViewModel(
     }
 
     /** Picked files or a camera shot → the tray, scaled and encoded off the main thread. */
+    /** An image chat: photos attached are pictures to edit, at most 1536 px on their longest side (#2230). */
+    private val isImageChat: Boolean get() = controller.state.value.session?.chatType == "image"
+
+    /**
+     * **Edit** under a picture this chat made (#2230): it joins the message box as a photo to edit,
+     * at full size when the computer sends it (`session:photo`), else as its thumbnail.
+     */
+    fun editPicture(messageId: String, thumb: String) {
+        if (photos.begin(1) == 0) return
+        viewModelScope.launch {
+            try {
+                val full = try { photo(messageId, 0) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                val (url, preview) = ImageAttachments.refit(full?.takeIf { it.isNotEmpty() } ?: thumb, com.nekko.protocol.PhotoEdit.MAX_EDGE)
+                photos.added(url, preview)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                photos.failed("Couldn’t read that picture.")
+            }
+        }
+    }
+
     fun addPhotos(resolver: ContentResolver, uris: List<Uri>, afterEach: (Uri) -> Unit = {}) {
         if (uris.isEmpty()) return
         val n = photos.begin(uris.size)
@@ -611,7 +630,7 @@ class ChatViewModel(
         uris.take(n).forEach { uri ->
             viewModelScope.launch {
                 try {
-                    val (url, preview) = ImageAttachments.encode(resolver, uri)
+                    val (url, preview) = ImageAttachments.encode(resolver, uri, maxSide = if (isImageChat) com.nekko.protocol.PhotoEdit.MAX_EDGE else ImageAttachments.MAX_SIDE)
                     photos.added(url, preview)
                 } catch (e: CancellationException) {
                     throw e

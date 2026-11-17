@@ -478,20 +478,24 @@ class ChatController(
 
     private suspend fun sendImage(text: String, skill: SkillSummary?, images: List<String>) {
         val session = _state.value.session ?: throw RelayException("Wait for this chat to load.")
-        require(skill == null && images.isEmpty()) { "Image generation accepts a text prompt only. Remove attachments and skills first." }
+        require(skill == null) { "Image generation takes a prompt and photos to edit, not a skill. Remove the skill first." }
+        // Photos make it an edit (#2230, decision 0069): at most four, PNG, JPEG or WebP, 6 MiB together.
+        require(images.size <= com.nekko.protocol.PhotoEdit.MAX_PHOTOS) { "Up to ${com.nekko.protocol.PhotoEdit.MAX_PHOTOS} photos to edit from." }
+        require(images.all(com.nekko.protocol.PhotoEdit::accepts)) { "Only PNG, JPEG or WebP photos can be edited." }
+        require(com.nekko.protocol.PhotoEdit.fitsTotal(images)) { "These photos are too large together. Remove one and try again." }
         require(text.isNotBlank()) { "Describe the image to generate." }
         check(env().conn == RelayState.ONLINE) { "Reconnect to generate an image. Image prompts are never queued as text." }
         check(env().imageGeneration) { "This computer does not advertise image generation. Update Nekko Agent on the computer." }
         check(imageSend == null && !_state.value.turn.running && !session.running) { "Wait for this image to finish or stop it first." }
         val params = session.imageParams ?: throw RelayException("Choose and save image settings before generating.")
-        val request = params.generation(sessionId, text)
+        val request = params.generation(sessionId, text, images)
         val generate = generateImage ?: throw RelayException("This phone cannot authorize image generation.")
         // Await authorization and the turn so a refusal/cancel keeps the composer's words.
         // There is no image idempotency token: never retry an ambiguous lost response automatically.
         val attempt = ImageSend()
         imageSend = attempt
         imageRevision++
-        _state.update { it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-image-${now()}", text, now())))) }
+        _state.update { it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-image-${now()}", text, now(), thumbs = images)))) }
         try {
             coroutineScope {
                 // Stop cancels this child, including pending Change signing, not the composer's scope.

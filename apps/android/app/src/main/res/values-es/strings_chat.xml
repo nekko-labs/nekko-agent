@@ -342,4 +342,6 @@
     <string name="response_cancel">Cancelar</string>
     <string name="response_allow">Permitir %1$s</string>
     <string name="response_deny">Denegar %1$s</string>
+    <!-- Edit under a picture an image chat made (#2230). -->
+    <string name="chat_edit_picture">Editar</string>
 </resources>

@@ -342,4 +342,6 @@
     <string name="response_cancel">キャンセル</string>
     <string name="response_allow">%1$s を許可</string>
     <string name="response_deny">%1$s を拒否</string>
+    <!-- Edit under a picture an image chat made (#2230). -->
+    <string name="chat_edit_picture">編集</string>
 </resources>
