@@ -100,4 +100,52 @@ final class CarCommandsTests: XCTestCase {
     func testAccentsAndCase() {
         XCTAssertEqual(matchCarChat("cafe", among: [CarChatName(id: "z", title: "Café menu")]), .one("z"))
     }
+
+    // MARK: The shared fixture (packages/shared/fixtures/car-commands.json), also run by Android Auto's grammar (#2782)
+
+    private func command(_ v: JSONValue) -> CarCommand {
+        let chat = v.str("chat")
+        switch v.str("kind") {
+        case "status": return .status
+        case "read": return .read(chat: chat)
+        case "tell": return .tell(chat: chat, message: v.str("message") ?? "")
+        case "allow": return .allow(chat: chat)
+        case "deny": return .deny(chat: chat)
+        case "stop": return .stop(chat: chat)
+        case "newChat": return .newChat(message: v.str("message") ?? "")
+        case "yes": return .yes
+        case "no": return .no
+        case "pick": return .pick(Int(v.long("n") ?? 0))
+        case "again": return .again
+        default: return .unknown(v.str("text") ?? "")
+        }
+    }
+
+    func testSharedFixture() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("packages/shared/fixtures/car-commands.json")
+        let doc = try JSONValue.parse(Data(contentsOf: file))
+        let parse = try XCTUnwrap(doc["parse"]?.array)
+        for c in parse {
+            let say = c.str("say") ?? ""
+            XCTAssertEqual(parseCarCommand(say, inChat: c.flag("inChat")), try command(XCTUnwrap(c["command"])), say)
+        }
+        func names(_ v: JSONValue?) -> [CarChatName] { (v?.array ?? []).map { CarChatName(id: $0.str("id") ?? "", title: $0.str("title") ?? "") } }
+        let defaults = names(doc["chats"])
+        let matches = try XCTUnwrap(doc["matches"]?.array)
+        for c in matches {
+            let query = c.str("query") ?? ""
+            let among = c["chats"] == nil ? defaults : names(c["chats"])
+            let ids = c["match"]?["ids"]?.array?.compactMap(\.string) ?? []
+            let want: CarChatMatch = switch c["match"]?.str("kind") {
+            case "one": .one(ids.first ?? "")
+            case "several": .several(ids)
+            default: .none
+            }
+            XCTAssertEqual(matchCarChat(query, among: among), want, query)
+        }
+        XCTAssertGreaterThanOrEqual(parse.count + matches.count, 50)
+    }
 }

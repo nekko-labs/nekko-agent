@@ -141,6 +141,71 @@ class Notices(private val context: Context) {
         }
     }
 
+    /**
+     * A finished reply while the phone is on Android Auto (#2782): a conversation the car reads
+     * aloud ([CarReply.spoken], at most about 200 characters), with **Reply** (dictated, read back
+     * and confirmed by Android Auto) and **Mark as read**, the two actions Android Auto takes.
+     * It replaces the chat's "Reply ready".
+     */
+    fun postCar(sessionId: String, chatTitle: String, computerId: String, reply: String) {
+        if (!allowed()) return
+        val chat = androidx.core.app.Person.Builder().setName(chatTitle.trim().ifEmpty { "Nekko" }).setKey("chat:$sessionId").build()
+        val style = NotificationCompat.MessagingStyle(me())
+            .setConversationTitle(chatTitle)
+            .addMessage(reply, System.currentTimeMillis(), chat)
+        carNotify(sessionId, computerId, style)
+    }
+
+    /** After Reply: the car shows it sent (or why not), so it stops waiting on the notification. */
+    fun carReplied(sessionId: String, text: String, sent: Boolean) {
+        val shown = manager.activeNotifications.firstOrNull { it.tag == EventNotice.tag(sessionId) && it.id == ID_REPLY } ?: return
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(shown.notification) ?: return
+        val computerId = shown.notification.extras.getString(EXTRA_CAR_COMPUTER) ?: return
+        style.addMessage(if (sent) text else context.getString(R.string.car_not_sent), System.currentTimeMillis(), if (sent) null else androidx.core.app.Person.Builder().setName("Nekko").build())
+        carNotify(sessionId, computerId, style, silent = true)
+    }
+
+    fun clearCar(sessionId: String) = manager.cancel(EventNotice.tag(sessionId), ID_REPLY)
+
+    private fun me() = androidx.core.app.Person.Builder().setName(context.getString(R.string.car_you)).build()
+
+    private fun carNotify(sessionId: String, computerId: String, style: NotificationCompat.MessagingStyle, silent: Boolean = false) {
+        fun intent(action: String) = Intent(context, CarReplyReceiver::class.java).setAction(action)
+            .putExtra(CarReplyReceiver.SESSION, sessionId).putExtra(CarReplyReceiver.COMPUTER, computerId)
+        // Reply's PendingIntent must be mutable: the system adds the dictated words to it.
+        val reply = PendingIntent.getBroadcast(context, "carReply:$sessionId".hashCode(), intent(CarReplyReceiver.ACTION_REPLY),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+        val read = PendingIntent.getBroadcast(context, "carRead:$sessionId".hashCode(), intent(CarReplyReceiver.ACTION_READ),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(context, CHANNEL_REPLIES)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setStyle(style)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setSilent(silent)
+            .setContentIntent(openChat(sessionId))
+            .addExtras(android.os.Bundle().apply { putString(EXTRA_CAR_COMPUTER, computerId) })
+            .addAction(
+                NotificationCompat.Action.Builder(0, context.getString(R.string.car_reply), reply)
+                    .addRemoteInput(androidx.core.app.RemoteInput.Builder(CarReplyReceiver.KEY).setLabel(context.getString(R.string.car_reply)).build())
+                    .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
+                    .setShowsUserInterface(false)
+                    .build(),
+            )
+            .addInvisibleAction(
+                NotificationCompat.Action.Builder(0, context.getString(R.string.car_mark_read), read)
+                    .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ)
+                    .setShowsUserInterface(false)
+                    .build(),
+            )
+            .build()
+        try {
+            manager.notify(EventNotice.tag(sessionId), ID_REPLY, notification)
+        } catch (_: SecurityException) {
+            // Permission revoked between the check and the post.
+        }
+    }
+
     /** Explicit resolution only. Opening a chat must not call this. */
     fun clear(sessionId: String) {
         needsYou.values.remove(sessionId)
@@ -415,6 +480,7 @@ class Notices(private val context: Context) {
         const val ID_EVENT = 1
         const val ID_KEEP_ALIVE = 2
         const val ID_REPLY = 3
+        private const val EXTRA_CAR_COMPUTER = "nekko.carComputer"
 
         /** Which channel a [PhoneEvent] goes to. */
         fun channelOf(e: PhoneEvent) = if (e == PhoneEvent.APPROVAL || e == PhoneEvent.NEEDS_INPUT) CHANNEL_NEEDS_YOU else CHANNEL_REPLIES
