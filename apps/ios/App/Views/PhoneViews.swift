@@ -120,7 +120,10 @@ struct PhoneChatView: View {
         .floatingKeyboardDismiss()
         .navigationTitle(phone.chat(chatId)?.title ?? String(localized: "Chat"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { menu } }
+        .toolbar {
+            ToolbarItem(placement: .principal) { titleAndPlace }
+            ToolbarItem(placement: .topBarTrailing) { menu }
+        }
         .sheet(isPresented: $picking) {
             PhoneModelPicker(selected: phone.chat(chatId).map { ($0.providerId, $0.modelId) }) { p, m in
                 phone.setModel(chatId, providerId: p, modelId: m)
@@ -158,7 +161,6 @@ struct PhoneChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    placeNote(chat)
                     ForEach(chat.messages) { m in message(m, last: m.id == chat.messages.last?.id) }
                     Color.clear.frame(height: 1).id("end")
                 }
@@ -174,16 +176,26 @@ struct PhoneChatView: View {
         }
     }
 
-    /// Where the chat runs and what that means, above its first message.
-    private func placeNote(_ chat: PhoneChat) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            PlaceMark(place: .phonePlace, size: 14).padding(.top, 2)
-            Text("Runs on \(ChatPlace.phoneName) with \(modelName(chat)). It has no tools: it can’t see your computers or files.")
-                .font(.footnote).foregroundStyle(palette.inkSoft)
-                .fixedSize(horizontal: false, vertical: true)
+    /// The title, and under it once where the chat runs: "model ⟶ This iPhone" (#2921, #2922).
+    private var titleAndPlace: some View {
+        let chat = phone.chat(chatId)
+        return VStack(spacing: 0) {
+            Text(chat?.title ?? String(localized: "Chat")).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            if let chat {
+                HStack(spacing: 2) {
+                    Text(verbatim: phone.models[chat.providerId]?.first { $0.id == chat.modelId }?.name ?? chat.modelId)
+                        .lineLimit(1).truncationMode(.middle)
+                    PlaceConnector()
+                    Text(ChatPlace.phoneName).lineLimit(1).layoutPriority(1)
+                }
+                .font(.caption).foregroundStyle(palette.inkSoft)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "\(modelName(chat)) on \(ChatPlace.phoneName)"))
+                .accessibilityIdentifier("phoneChat.place")
+            }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("phoneChat.place")
+        .frame(maxWidth: 260)
     }
 
     @ViewBuilder private func message(_ m: PhoneMessage, last: Bool) -> some View {
@@ -407,7 +419,7 @@ struct PhoneModelPicker: View {
                     VStack(alignment: .leading, spacing: 12) {
                         PhoneCloudIllustration().frame(height: 100).accessibilityHidden(true)
                         Text("Chat without a computer").font(.headline)
-                        Text("Connect your own cloud provider. Your key stays in this device’s Keychain. Text chats only, with no tools or computer access.")
+                        Text("Connect your own cloud provider. Your key stays in this device’s Keychain.")
                             .font(.subheadline).foregroundStyle(palette.inkSoft)
                         Button { adding = true } label: { Label("Add a provider", systemImage: "plus") }
                             .buttonStyle(.borderedProminent)

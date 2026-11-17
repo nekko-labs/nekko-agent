@@ -45,6 +45,10 @@ final class Prefs {
     var voiceIntroSeen: Bool { didSet { d.set(voiceIntroSeen, forKey: "voiceIntroSeen") } }
     /// "Send your first prompt" was closed, any way; it opens once over the first ever new chat until then.
     var firstPromptIntroSeen: Bool { didSet { d.set(firstPromptIntroSeen, forKey: "firstPromptIntroSeen") } }
+    /// A first message was seen sent, so New chat's connect checklist gives way to the note for good (#2921).
+    var firstMessageSent: Bool { didSet { d.set(firstMessageSent, forKey: "firstMessageSent") } }
+    /// New chat's connect checklist and note were closed (Undo reopens them).
+    var connectChecklistClosed: Bool { didSet { d.set(connectChecklistClosed, forKey: "connectChecklistClosed") } }
     /// The GitHub star ask under the 10th and 50th reply (spec/platform/github-star-ask.md):
     /// prompts counted, asks shown, stopped. On this device only, never synced or sent.
     var starAsk: StarAsk { didSet { d.set(starAsk.encoded, forKey: StarAsk.key) } }
@@ -121,6 +125,9 @@ final class Prefs {
         voiceIntroSeen = flag("voiceIntroSeen", false)
         // UI test runs start with it seen, so it never covers a test's new chat; a test opts in with `-firstPromptIntroSeen NO`.
         firstPromptIntroSeen = flag("firstPromptIntroSeen", ProcessInfo.processInfo.arguments.contains("-uiTestReset"))
+        firstMessageSent = flag("firstMessageSent", false)
+        // Closed in UI test runs like the intro, so it never moves a test's new chat; opt in with `-connectChecklistClosed NO`.
+        connectChecklistClosed = flag("connectChecklistClosed", ProcessInfo.processInfo.arguments.contains("-uiTestReset"))
         // UI test runs never see the star ask, whatever earlier runs counted, unless a test
         // opts in with `-starAskPrompts N` (that many prompts already counted, no ask shown yet).
         if Self.uiTestRun {

@@ -922,7 +922,7 @@ final class LiveRelayTests: XCTestCase {
         here.tap()
         let ask = app.input("Ask anything")
         XCTAssertTrue(ask.waitForExistence(timeout: 5), "New chat on this iPhone")
-        XCTAssertTrue(app.descendants(matching: .any)["newChat.phoneNote"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["newChat.computer"].firstMatch.label.contains("This iPhone"), "model ⟶ This iPhone on one line")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Claude Opus 5.5")).firstMatch.waitForExistence(timeout: 10),
                       "the iPhone's model is chosen")
         attach(app, "fleet-2-new-chat-on-phone")

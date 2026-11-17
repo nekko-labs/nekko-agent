@@ -58,7 +58,8 @@ final class PhoneDirectCloudTests: XCTestCase {
         newChat.tap()
         let prompt = app.textViews["newChat.prompt"]
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any)["newChat.phoneNote"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["newChat.phoneNote"].exists, "no \"no tools\" note under the composer")
+        XCTAssertTrue(app.buttons["newChat.computer"].label.contains("This iPhone"))
         prompt.tap()
         prompt.typeText("Hello without a computer")
         let start = app.buttons["newChat.start"]
@@ -70,9 +71,29 @@ final class PhoneDirectCloudTests: XCTestCase {
         app.terminate()
     }
 
-    private func launch(_ fixture: String, theme: String) -> XCUIApplication {
+    /// New chat’s connect checklist (#2921): over the first message with nothing connected, then closed and undone.
+    func testConnectChecklistOnTheFirstMessage() {
+        let app = launch("-uiTestPhoneProvider", theme: "dark", extra: ["-connectChecklistClosed", "NO", "-firstMessageSent", "NO"])
+        let newChat = app.navigationBars.buttons["New chat"]
+        XCTAssertTrue(newChat.waitForExistence(timeout: 10))
+        newChat.tap()
+        let checklist = app.descendants(matching: .any)["connectChecklist"]
+        XCTAssertTrue(checklist.waitForExistence(timeout: 5), "the checklist over the first message")
+        for row in ["computer", "folder", "git", "tasks"] {
+            XCTAssertTrue(app.buttons["connectChecklist.(row)"].exists, row)
+        }
+        attach(app, "connect-checklist-first-message")
+        app.buttons["connectChecklist.close"].tap()
+        let undo = app.buttons["connectChecklist.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 3), "Undo where the checklist was")
+        undo.tap()
+        XCTAssertTrue(checklist.waitForExistence(timeout: 3), "Undo brings it back")
+        app.terminate()
+    }
+
+    private func launch(_ fixture: String, theme: String, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES", "-theme", theme, "-AppleLanguages", "(en)", fixture]
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES", "-theme", theme, "-AppleLanguages", "(en)", fixture] + extra
         app.launch()
         return app
     }
