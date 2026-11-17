@@ -86,14 +86,17 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     private suspend fun verifyKey(p: PhoneProvider, key: String?): List<PhoneModel> {
         val models = PhoneProviders.modelsRequest(p, key)?.let { PhoneProviders.models(http.send(it), p.kind) } ?: PhoneProviders.kind(p.kind)!!.catalog
         require(models.isNotEmpty()) { "The provider listed no models." }
-        val probe = PhoneProviders.keyCheckRequest(p, key) ?: return models
+        // OpenAI lists models for a key with no credit: its probe is a tiny chat with the default model.
+        val probe = PhoneProviders.keyCheckRequest(p, key, PhoneProviders.defaultModel(models)?.id) ?: return models
         try {
             http.send(probe)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             val m = e.message.orEmpty()
-            // Only a refusal of the key counts; an unknown model (Ollama's probe) means the key passed.
+            // OpenAI's probe is a real chat, so any refusal fails it.
+            if (p.kind == "openai" && e is ProviderRefusal) throw IllegalArgumentException(m)
+            // Otherwise only a refusal of the key counts; an unknown model (Ollama's probe) means the key passed.
             if ("(401)" in m || "(403)" in m) throw IllegalArgumentException(m)
             if (m.startsWith("Could not reach")) throw IllegalArgumentException("Could not reach the provider to check the key. Try again.")
         }
@@ -337,9 +340,11 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                 }
             } catch (e: CancellationException) {
                 synchronized(gate) { if (started) updateLast(chatId, attempt) { it.copy(error = "Stopped.") } }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                // A refusal is already in our own words (no credit, rate limited and so on).
+                val why = if (e is ProviderRefusal) e.message.orEmpty() else "Reply failed. Check the provider and connection, then retry."
                 synchronized(gate) {
-                    if (started) updateLast(chatId, attempt) { it.copy(error = if (task.isActive) "Reply failed. Check the provider and connection, then retry." else "Stopped.") }
+                    if (started) updateLast(chatId, attempt) { it.copy(error = if (task.isActive) why else "Stopped.") }
                 }
             } finally {
                 withContext(NonCancellable) {
