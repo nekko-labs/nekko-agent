@@ -14,6 +14,8 @@ public struct LimitLine: Equatable, Sendable {
     /// Whole percent used, 0 to 100.
     public var percent: Int { Int(window.usedPercent.rounded()) }
 
+    public init(window: ProviderLimits.Window) { self.window = window }
+
     /// Nothing when the provider reported no windows: no line, never a guess.
     public static func tightest(_ limits: ProviderLimits?) -> LimitLine? {
         guard let windows = limits?.windows, !windows.isEmpty else { return nil }

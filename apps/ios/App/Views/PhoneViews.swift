@@ -413,6 +413,8 @@ struct PhoneModelPicker: View {
     @Environment(\.palette) private var palette
     @State private var scope = ModelScope.all
     @State private var adding = false
+    /// Models whose dated snapshots are showing (`provider::model`).
+    @State private var unfolded: Set<String> = []
 
     var body: some View {
         NavigationStack {
@@ -443,28 +445,36 @@ struct PhoneModelPicker: View {
                         if list.isEmpty && phone.modelErrors[p.id] == nil {
                             ProgressView().frame(maxWidth: .infinity)
                         }
-                        Button("Reload models") { Task { await phone.loadModels(p.id) } }
-                            .accessibilityIdentifier("phoneModel.reload")
-                        ForEach(list) { m in
-                            Button {
-                                pick(p.id, m.id)
-                                dismiss()
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(m.name).foregroundStyle(palette.ink)
-                                        if m.name != m.id { Text(m.id).font(.caption).foregroundStyle(palette.inkSoft) }
-                                    }
-                                    Spacer()
-                                    if selected?.0 == p.id && selected?.1 == m.id {
-                                        Image(systemName: "checkmark").foregroundStyle(palette.accent).accessibilityLabel("Selected")
-                                    }
+                        // Dated snapshots fold under the model they pin (#2925).
+                        let byId = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                        ForEach(ModelSnapshots.fold(list.map(\.id))) { fold in
+                            let key = "\(p.id)::\(fold.main)"
+                            let open = unfolded.contains(key) || (selected?.0 == p.id && fold.dated.contains(selected?.1 ?? ""))
+                            if let m = byId[fold.main] { row(p.id, m) }
+                            if !fold.dated.isEmpty {
+                                DatedVersionsToggle(count: fold.dated.count, open: open) {
+                                    if unfolded.contains(key) { unfolded.remove(key) } else { unfolded.insert(key) }
                                 }
                             }
-                            .accessibilityIdentifier("phoneModel.row")
+                            if open {
+                                ForEach(fold.dated, id: \.self) { id in
+                                    if let m = byId[id] { row(p.id, m).padding(.leading, 16) }
+                                }
+                            }
                         }
                     } header: {
-                        SectionHeader(LocalizedStringKey(p.label))
+                        // Reload sits by the name, and the key's limits under it once an answer reported them.
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                SectionHeader(LocalizedStringKey(p.label))
+                                Spacer(minLength: 8)
+                                Button("Reload") { Task { await phone.loadModels(p.id) } }
+                                    .font(.caption.weight(.semibold)).foregroundStyle(palette.accent).textCase(nil)
+                                    .accessibilityLabel("Reload models")
+                                    .accessibilityIdentifier("phoneModel.reload")
+                            }
+                            PhoneLimitLine(providerId: p.id).textCase(nil)
+                        }
                     }
                 }
             }
@@ -477,6 +487,29 @@ struct PhoneModelPicker: View {
             .task { await phone.loadAllModels() }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func row(_ providerId: String, _ m: PhoneModel) -> some View {
+        Button {
+            pick(providerId, m.id)
+            dismiss()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(m.name).foregroundStyle(palette.ink)
+                    if m.name != m.id { Text(m.id).font(.caption).foregroundStyle(palette.inkSoft) }
+                }
+                Spacer()
+                // Context only where the provider lists it, never guessed (#2925).
+                if let meta = ModelMeta.line(local: false, contextLength: m.contextLength) {
+                    Text(verbatim: meta).font(.caption.monospacedDigit()).foregroundStyle(palette.inkSoft).lineLimit(1)
+                }
+                if selected?.0 == providerId && selected?.1 == m.id {
+                    Image(systemName: "checkmark").foregroundStyle(palette.accent).accessibilityLabel("Selected")
+                }
+            }
+        }
+        .accessibilityIdentifier("phoneModel.row")
     }
 }
 
