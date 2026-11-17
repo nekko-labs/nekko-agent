@@ -682,6 +682,52 @@ public final class ChatModel {
         }
     }
 
+    /// An MCP tool's name for people: `mcp__slack__post_message` reads "Post
+    /// message (Slack)", as `toolPickerLabel` on the desktop.
+    public static func mcpToolLabel(_ name: String) -> String {
+        func humanize(_ s: String) -> String {
+            let words = s.replacingOccurrences(of: "([a-z0-9])([A-Z])", with: "$1 $2", options: .regularExpression)
+                .replacingOccurrences(of: "[_./:-]+", with: " ", options: .regularExpression)
+                .split(separator: " ").joined(separator: " ")
+            return words.isEmpty ? "Unnamed tool" : words.prefix(1).uppercased() + words.dropFirst()
+        }
+        let parts = name.components(separatedBy: "__")
+        guard name.hasPrefix("mcp__"), parts.count >= 3 else { return humanize(name) }
+        let server = parts[1].isEmpty ? "MCP" : parts[1]
+        return "\(humanize(parts.dropFirst(2).joined(separator: " "))) (\(humanize(server)))"
+    }
+
+    /// The recipients this chat writes to without asking (decision 0063), as the computer last said.
+    public var knownRecipients: [String] { session?.knownRecipients ?? [] }
+
+    /// What this chat no longer asks about, for its "Allowed without asking" list.
+    public var hasGrants: Bool { !allowedMcpTools.isEmpty || !knownRecipients.isEmpty }
+
+    /// Changing what a chat allows needs the computer: the gate signs it there.
+    public static let reconnectToChangeGrants = "Reconnect to change what this chat allows."
+
+    /// Take back "Always allow this tool": the tool's next call in this chat asks
+    /// again, the next call of a running turn included. Signed with Face ID or
+    /// the passcode, as saving it was (`PHONE_GUARDED_OPTION_KEYS`).
+    public func revokeAlwaysAllowed(_ tool: String) async throws {
+        guard store.conn == .online else { throw RelayError(Self.reconnectToChangeGrants) }
+        let left = allowedMcpTools.filter { $0 != tool }
+        _ = try await store.call(guarded: Channels.sessionSetOptions,
+                                 [.string(sessionId), .object(["allowedMcpTools": .array(left.map(JSONValue.string))])])
+        allowedHere.removeAll { $0 == tool }
+        await reload()
+    }
+
+    /// Forget a recipient: the next call that writes to it asks again. Signed,
+    /// since the computer's gate cannot tell taking one back from adding one.
+    public func forgetRecipient(_ recipient: String) async throws {
+        guard store.conn == .online else { throw RelayError(Self.reconnectToChangeGrants) }
+        let left = knownRecipients.filter { $0 != recipient }
+        _ = try await store.call(guarded: Channels.sessionSetOptions,
+                                 [.string(sessionId), .object(["knownRecipients": .array(left.map(JSONValue.string))])])
+        await reload()
+    }
+
     public func answer(_ answers: [AskAnswer]) async throws {
         guard store.activeId == computerId else { throw RelayError("This chat belongs to another computer.") }
         guard let q = responseQuestion else { return }
