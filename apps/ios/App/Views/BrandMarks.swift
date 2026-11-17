@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The companies' own marks, from the asset catalog (vector, the same artwork as the
 /// desktop's `providers/*.svg`; see ASSETS.md). Never a stand-in symbol.
-enum BrandMark {
+enum BrandMarks {
     /// The asset for a provider kind (the ids in `PhoneProviders.kinds`), or nil for a
     /// custom endpoint, which has no mark of its own. Matches the desktop's ProviderMark.tsx.
     static func asset(forProviderKind kind: String) -> String? {
@@ -28,7 +28,7 @@ struct ProviderMarkImage: View {
 
     var body: some View {
         Group {
-            if let asset = BrandMark.asset(forProviderKind: kind) {
+            if let asset = BrandMarks.asset(forProviderKind: kind) {
                 Image(asset).renderingMode(.template).resizable().scaledToFit()
             } else {
                 Image(systemName: "link").resizable().scaledToFit().padding(size * 0.12)
