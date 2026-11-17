@@ -968,6 +968,31 @@ struct ModelScopeTabs: View {
     }
 }
 
+/// Under a model with dated snapshots folded beneath it (#2925): "1 dated version" opens them.
+struct DatedVersionsToggle: View {
+    let count: Int
+    let open: Bool
+    var toggle: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                    .rotationEffect(.degrees(open ? 90 : 0))
+                Text(open ? String(localized: "Hide dated versions") : count == 1 ? String(localized: "1 dated version") : String(localized: "\(count) dated versions"))
+                    .font(.caption)
+            }
+            .foregroundStyle(palette.inkSoft)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.2), value: open)
+        .accessibilityIdentifier("modelPicker.dated")
+    }
+}
+
 extension ModelScope {
     var title: LocalizedStringKey {
         switch self {
@@ -992,6 +1017,8 @@ struct ModelPicker: View {
     @State private var limitsLoading = false
     /// Which Claude account the slider shows, once the user taps one.
     @State private var viewing: String?
+    /// Models whose dated snapshots are showing (`provider::model`).
+    @State private var unfolded: Set<String> = []
 
     var body: some View {
         NavigationStack {
@@ -1082,7 +1109,8 @@ struct ModelPicker: View {
             VStack(alignment: .leading, spacing: 8) {
                 // The header or the slider already says a plan login's plan ("Personal · Max"): say it once.
                 if let type = plan.planType, !g.provider.titleNamesPlan { Text(type.capitalized).font(.caption).foregroundStyle(palette.inkSoft) }
-                ForEach(plan.windows) { window in LimitBar(window: window) }
+                // One quiet line per window, as under New chat's model (#2925).
+                ForEach(plan.windows) { window in LimitLineView(line: LimitLine(window: window)) }
                 if plan.windows.isEmpty { Text("No limits reported.").font(.caption).foregroundStyle(palette.inkSoft) }
             }
             .accessibilityIdentifier("modelPicker.limits.\(g.provider.id)")
@@ -1093,11 +1121,36 @@ struct ModelPicker: View {
             // A search for the account's email or name lists all of that account's models.
             let account = g.provider.accountMatches(query)
             let shown = models.filter { query.isEmpty || account || $0.name.localizedCaseInsensitiveContains(query) || $0.id.localizedCaseInsensitiveContains(query) }
+            let local = g.provider.isLocal
             if shown.isEmpty { Text("No models").font(.footnote).foregroundStyle(palette.inkFaint) }
-            ForEach(shown) { m in row(g.provider.id, m.id, m.name, loaded: m.loaded) }
+            if query.isEmpty {
+                // Dated snapshots fold under the model they pin; a search lists every id.
+                let byId = Dictionary(shown.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                ForEach(ModelSnapshots.fold(shown.map(\.id))) { fold in
+                    let key = "\(g.provider.id)::\(fold.main)"
+                    let open = unfolded.contains(key) || (selected.0 == g.provider.id && fold.dated.contains(selected.1 ?? ""))
+                    if let m = byId[fold.main] { row(g.provider.id, m.id, m.name, loaded: m.loaded, meta: meta(m, local: local)) }
+                    if !fold.dated.isEmpty {
+                        DatedVersionsToggle(count: fold.dated.count, open: open) {
+                            if unfolded.contains(key) { unfolded.remove(key) } else { unfolded.insert(key) }
+                        }
+                    }
+                    if open {
+                        ForEach(fold.dated, id: \.self) { id in
+                            if let m = byId[id] { row(g.provider.id, m.id, m.name, loaded: m.loaded, meta: meta(m, local: local)).padding(.leading, 16) }
+                        }
+                    }
+                }
+            } else {
+                ForEach(shown) { m in row(g.provider.id, m.id, m.name, loaded: m.loaded, meta: meta(m, local: local)) }
+            }
         } else {
             ProgressView()
         }
+    }
+
+    private func meta(_ m: ModelInfo, local: Bool) -> String? {
+        ModelMeta.line(local: local, parameters: m.parameters, sizeBytes: m.sizeBytes, contextLength: m.contextLength)
     }
 
     /// The desktop's account slider: one tab per Claude login ("Personal · Max", "Acme Inc · Team"),
@@ -1136,7 +1189,7 @@ struct ModelPicker: View {
     }
 
     /// `provider` names the account beside a starred model, so the same model starred on two Claude accounts reads apart.
-    private func row(_ p: String, _ m: String, _ name: String, loaded: Bool = false, provider: String? = nil) -> some View {
+    private func row(_ p: String, _ m: String, _ name: String, loaded: Bool = false, provider: String? = nil, meta: String? = nil) -> some View {
         let detail = [name != m ? m : nil, provider].compactMap { $0 }.joined(separator: " · ")
         return Button {
             pick(p, m)
@@ -1148,6 +1201,8 @@ struct ModelPicker: View {
                     if !detail.isEmpty { Text(detail).font(.caption2).foregroundStyle(palette.inkFaint) }
                 }
                 Spacer()
+                // Size or context (#2925): only what the provider reported.
+                if let meta { Text(verbatim: meta).font(.caption.monospacedDigit()).foregroundStyle(palette.inkSoft).lineLimit(1) }
                 if loaded { Text("Loaded").font(.caption2).foregroundStyle(palette.success) }
                 if selected.0 == p && selected.1 == m { Image(systemName: "checkmark").foregroundStyle(palette.accent) }
             }

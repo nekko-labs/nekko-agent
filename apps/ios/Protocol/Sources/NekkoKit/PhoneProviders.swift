@@ -343,7 +343,9 @@ public enum PhoneProviders {
         guard data.count <= 2_000_000, let list = (try? JSONValue.parse(data))?["data"]?.array else { return [] }
         let all = list.compactMap { m -> PhoneModel? in
             guard let id = m.str("id"), !id.isEmpty, id.utf8.count <= 1024, !id.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
-            return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id, acceptsImages: acceptsImages(m, kind: kind), created: m.long("created"))
+            let context = ["context_length", "inputTokenLimit", "max_input_tokens", "context_window"].lazy.compactMap { m.long($0) }.first { $0 > 0 }
+            return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id, acceptsImages: acceptsImages(m, kind: kind),
+                              created: m.long("created"), contextLength: context)
         }
         guard kind == "openai" || kind == "gemini" else { return all }
         // OpenAI and Gemini list every model they serve; keep the ones that chat.
@@ -548,8 +550,11 @@ public struct PhoneModel: Codable, Equatable, Sendable, Identifiable {
     public var acceptsImages: Bool?
     /// When the provider published it (OpenAI's `created`, seconds since 1970), if it says.
     public var created: Int64?
-    public init(id: String, name: String, acceptsImages: Bool? = nil, created: Int64? = nil) {
-        self.id = id; self.name = name; self.acceptsImages = acceptsImages; self.created = created
+    /// The context window in tokens, where the list gives one (OpenRouter's `context_length`,
+    /// Gemini's `inputTokenLimit`, Anthropic's `max_input_tokens`).
+    public var contextLength: Int64?
+    public init(id: String, name: String, acceptsImages: Bool? = nil, created: Int64? = nil, contextLength: Int64? = nil) {
+        self.id = id; self.name = name; self.acceptsImages = acceptsImages; self.created = created; self.contextLength = contextLength
     }
 }
 

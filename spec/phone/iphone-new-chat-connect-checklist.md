@@ -43,9 +43,17 @@ Design: [nekko-designs/iphone-new-chat-design.html](../../nekko-designs/iphone-n
 - **Phone chats:** the per-minute token and request budget from the rate-limit headers of the provider's last answer (OpenAI `x-ratelimit-*`, Anthropic `anthropic-ratelimit-*`, #2920), kept in memory only. A budget past its reset reads as unused. Nothing shows before the first answer.
 - No line, never a guess, while nothing is known.
 
+## Model picker: size, context, folded snapshots and limits (#2925)
+
+`[implemented 2026-11-17 on iPhone; the meta and folding rules and the wire parsing are unit-tested in NekkoProtocol and NekkoKit on Linux; not yet run on a simulator or device]`
+
+- Each row says on its right what the provider reported, and nothing it didn't: a local model's parameters and size on disk (*8B · 4.9 GB*; parameters only where the server or the Nekko engine sends them, so Ollama rows show the size alone today), a cloud model's context window (*400K context*) where the model list gives one (OpenRouter, Gemini, Anthropic and a computer's providers that report `contextLength`). OpenAI's list gives none, so its rows show no context.
+- Dated snapshots fold under the model they pin: `o3-2025-04-16` under `o3`, `claude-sonnet-4-20250514` under `claude-sonnet-4`. Under the main row, *1 dated version* opens them; without the plain id in the list, the newest snapshot leads. A search lists every id, unfolded, and a chosen snapshot keeps its fold open so its tick shows.
+- **Limits under the provider's name.** A computer's picker shows each window as the same quiet line as New chat's (replacing the larger bars); This iPhone's picker shows the key's tightest per-minute budget under the provider's name once an answer has reported it. Reload moves into the provider's header.
+- The computer's wire `ModelInfo` now carries `sizeBytes`, `contextLength` and `details` (parameters, family, quantization); the iPhone's `PhoneModel` carries `contextLength`.
+
 ## Not yet
 
-- The model picker's size, context, folded snapshots and limits (#2925) land in the next layer of this stack.
 - OpenAI API keys on a computer report no limits yet (`limitsKeyFor` in `packages/shared/src/limits.ts` covers Claude, subscription logins, OpenRouter and Anthropic keys); tracked in #2923.
 - Screenshots from a simulator or device: the views were written on Windows and are compiled and tested by macOS CI.
 - Translations of the new strings.
