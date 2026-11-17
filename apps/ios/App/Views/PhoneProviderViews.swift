@@ -51,7 +51,7 @@ struct PhoneModelsView: View {
             if !phone.providers.isEmpty {
                 Section {
                     ForEach(phone.providers) { p in
-                        NavigationLink(value: Route.phoneProvider(p.id)) { ProviderRow(provider: p) }
+                        NavigationLink(value: Route.phoneProvider(p.id)) { PhoneProviderRow(provider: p) }
                             .accessibilityIdentifier("phoneModels.provider")
                     }
                 } header: { SectionHeader("Providers") }
@@ -101,7 +101,7 @@ struct PhoneModelsView: View {
 }
 
 /// An avatar row: the provider's mark, its name, and one status line.
-private struct ProviderRow: View {
+struct PhoneProviderRow: View {
     let provider: PhoneProvider
     @Environment(PhoneChats.self) private var phone
     @Environment(\.palette) private var palette

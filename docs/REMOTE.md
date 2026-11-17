@@ -240,6 +240,8 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > its name. **View → Group by → Computer** puts a heading over each computer's chats, and
 > **View → Show** turns the computer's name and icon off.
 >
+> **Settings on the iPhone** (iPhone): your Nekko Cloud account is the first row, like the Apple Account in iOS Settings; tap it to sign in or open sync. **Computers** come second, each computer a row you tap for its page, with a plus to add one. **Models on This iPhone** lists your providers the same way.
+>
 > **Chats on this iPhone** (iPhone): the phone can run chats itself, with no computer, on a cloud
 > model provider. Add one in **Settings → Models on this iPhone**: the Claude API, OpenAI,
 > OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock, Claude in Microsoft Foundry,
