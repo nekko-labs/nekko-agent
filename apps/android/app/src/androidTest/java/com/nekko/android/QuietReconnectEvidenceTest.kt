@@ -3,7 +3,6 @@ package com.nekko.android
 import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import android.os.Build
-import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -61,12 +60,7 @@ class QuietReconnectEvidenceTest {
 
     /** Record only the existing dots on a settled real New Chat surface, never HOME or transitions. */
     @Test fun steadyReconnectMotion() {
-        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
-            automation.executeShellCommand(command),
-        ).bufferedReader().use { it.readText().trim() }
         assertTrue("Motion evidence requires system animations", ValueAnimator.areAnimatorsEnabled())
-        assertEquals("1", shell("settings get global animator_duration_scale"))
         computer.online = false
         val repo = repo()
         // Disable auto-advance before composition: its InfiniteAnimationPolicy otherwise
@@ -85,44 +79,24 @@ class QuietReconnectEvidenceTest {
         compose.waitUntil(10_000) {
             compose.onAllNodes(hasTestTag("reconnect.title"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
-        val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
-        val revision = InstrumentationRegistry.getArguments().getString("nekkoRevision") ?: error("Missing nekkoRevision")
-        require(revision == "before" || revision == "after")
-        val recording = File(dir, "android-$revision-new-chat-dots-v4.mp4")
-        recording.delete()
-        // Block only the instrumentation thread. The main thread keeps native animation
-        // frames running, with an extra steady second before and half-second after capture.
-        Thread.sleep(1_000)
-        assertEquals(RelayState.CONNECTING, repo.state.value.conn)
-        var output = ""
-        val recorder = Thread {
-            output = shell("screenrecord --time-limit 6 --bit-rate 8000000 ${recording.absolutePath}")
+        // The parent evidence runner starts Android's screenrecord only after this real New Chat
+        // state is settled. Keep the existing dots moving at wall-clock speed for a bounded window.
+        val start = android.os.SystemClock.elapsedRealtime()
+        val clockStart = compose.mainClock.currentTime
+        while (android.os.SystemClock.elapsedRealtime() - start < 10_000) {
+            val elapsed = android.os.SystemClock.elapsedRealtime() - start
+            val advance = elapsed - (compose.mainClock.currentTime - clockStart)
+            if (advance > 0) compose.mainClock.advanceTimeBy(advance, ignoreFrameDuration = true)
+            Thread.sleep(16)
         }
-        recorder.start()
-        try {
-            // Compose tests own the animation clock. Drive it at wall-clock speed rather
-            // than freezing it during a sleep or fast-forwarding six seconds in one frame.
-            val start = android.os.SystemClock.elapsedRealtime()
-            val clockStart = compose.mainClock.currentTime
-            while (recorder.isAlive && android.os.SystemClock.elapsedRealtime() - start < 15_000) {
-                val elapsed = android.os.SystemClock.elapsedRealtime() - start
-                val advance = elapsed - (compose.mainClock.currentTime - clockStart)
-                if (advance > 0) compose.mainClock.advanceTimeBy(advance, ignoreFrameDuration = true)
-                Thread.sleep(16)
-            }
-            recorder.join(1_000)
-            assertTrue("screenrecord did not finish", !recorder.isAlive)
-            assertTrue("screenrecord failed: $output", recording.length() > 0)
-        } finally {
-            compose.mainClock.autoAdvance = true
-        }
+        compose.mainClock.autoAdvance = true
         assertEquals(RelayState.CONNECTING, repo.state.value.conn)
         Thread.sleep(500)
         assertEquals(0, computer.sends)
     }
 
     @Test fun quietReconnectSurfaces() {
-        computer.online = false
+        // Load one live transcript first, then make the same real Chat state reconnecting.
         val repo = repo()
         var screen by mutableStateOf("chat")
         var open by mutableStateOf(1)

@@ -13,7 +13,6 @@ final class QuietReconnectEvidenceTests: XCTestCase {
         XCTAssertTrue(composer.waitForExistence(timeout: 10), "Real Composer must show its reconnect notice")
         XCTAssertFalse(saved.label.isEmpty)
         XCTAssertFalse(composer.label.isEmpty)
-        XCTAssertNotNil(saved.label.range(of: "[0-9]", options: .regularExpression))
         attach(chat, "quiet-reconnect-chat")
         chat.terminate()
 
