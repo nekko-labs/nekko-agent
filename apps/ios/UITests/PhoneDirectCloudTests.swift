@@ -51,6 +51,23 @@ final class PhoneDirectCloudTests: XCTestCase {
         }
     }
 
+    /// The provider heading uses the provider's real mark, and Reload still refreshes its rows.
+    func testProviderHeadingEvidence() {
+        for theme in ["light", "dark"] {
+            let app = launch("-uiTestPhoneComposer", theme: theme, extra: ["-uiTestPhoneProvider"])
+            XCTAssertTrue(app.buttons["phoneChat.model"].waitForExistence(timeout: 10))
+            app.buttons["phoneChat.model"].tap()
+            XCTAssertTrue(app.staticTexts["Fixture Claude"].waitForExistence(timeout: 5), "the provider heading")
+            XCTAssertTrue(app.buttons["phoneModel.row"].firstMatch.waitForExistence(timeout: 5), "the fixture models")
+            attach(app, "\(theme)-provider-heading")
+            let reload = app.buttons["phoneModel.reload"]
+            XCTAssertTrue(reload.exists && reload.isHittable, "Reload stays beside the provider heading")
+            reload.tap()
+            XCTAssertTrue(app.buttons["phoneModel.row"].firstMatch.waitForExistence(timeout: 5), "models return after Reload")
+            app.terminate()
+        }
+    }
+
     func testDirectTextChatWithoutComputer() {
         let app = launch("-uiTestPhoneProvider", theme: "light")
         let newChat = app.navigationBars.buttons["New chat"]
