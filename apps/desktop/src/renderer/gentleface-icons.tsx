@@ -177,18 +177,21 @@ const PATHS: Record<GfIconName, Variant> = {
   },
 };
 
-// Locally authored motion for compound glyphs not animated by Gentleface 0.3.0.
+// Locally authored motion for glyphs Gentleface ships none for.
 // Keep the licensed upstream line artwork intact; animate it, not a substitute icon.
-const COMPOUND_MOTION: Partial<typeof GENTLEFACE_MOTION> = Object.fromEntries(
-  ['shield-question', 'brain-circuit'].map(name => [name, {
-    svg: '<svg viewBox="0 0 16 16"><g fill="currentColor" stroke="none">' +
-      (name === 'shield-question'
-        ? '<animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" values="0 7.5 8;-7 7.5 8;5 7.5 8;-2 7.5 8;0 7.5 8"/>'
-        : '<animateTransform attributeName="transform" type="translate" dur="1s" repeatCount="indefinite" values="0 0;0 -.65;0 .2;0 -.2;0 0"/>') +
-      PATHS[name as GfIconName].line + '</g></svg>',
-    frames: [0, 1] as [number, number],
-  }]),
-);
+const localMotion = (name: GfIconName, animation: string, frames: [number, number] = [0, 1]) => ({
+  svg: '<svg viewBox="0 0 16 16"><g fill="currentColor" stroke="none">' + animation + PATHS[name].line + '</g></svg>',
+  frames,
+});
+
+const COMPOUND_MOTION: Partial<typeof GENTLEFACE_MOTION> = {
+  'shield-question': localMotion('shield-question', '<animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" values="0 7.5 8;-7 7.5 8;5 7.5 8;-2 7.5 8;0 7.5 8"/>'),
+  'brain-circuit': localMotion('brain-circuit', '<animateTransform attributeName="transform" type="translate" dur="1s" repeatCount="indefinite" values="0 0;0 -.65;0 .2;0 -.2;0 0"/>'),
+
+  // Close: a quarter turn over 200ms (--dur-med) on the --ease-out curve. Turned 90 degrees the
+  // glyph looks as it does at rest, so it never travels back; it holds there until the clock resets.
+  'x': localMotion('x', '<animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.2;1" keySplines="0.22 1 0.36 1;0 0 1 1" values="0 7.5 7.5;90 7.5 7.5;90 7.5 7.5"/>', [0, 0.3]),
+};
 
 type P = { className?: string; title?: string };
 

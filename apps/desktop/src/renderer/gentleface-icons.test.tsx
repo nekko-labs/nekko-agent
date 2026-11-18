@@ -25,8 +25,8 @@ describe('Gentleface controls', () => {
     expect(renderToStaticMarkup(<GfIcon name="send" />)).toContain('aria-hidden="true"');
   });
 
-  it('animates both compound glyphs without replacing their licensed artwork', () => {
-    for (const name of ['shield-question', 'brain-circuit'] as const) {
+  it('animates the glyphs with local motion without replacing their licensed artwork', () => {
+    for (const name of ['shield-question', 'brain-circuit', 'x'] as const) {
       const html = renderToStaticMarkup(<GfIcon name={name} />);
       expect(html).toContain('gf-icon-motion');
       expect(html).toContain('<animateTransform');
@@ -36,7 +36,7 @@ describe('Gentleface controls', () => {
   });
 
   it('bundles the 0.6.0 glyphs as line and solid artwork in the inherited colour', () => {
-    for (const name of ['search', 'keyboard', 'palette', 'cloud', 'puzzle', 'sparkles', 'x'] as const) {
+    for (const name of ['search', 'keyboard', 'palette', 'cloud', 'puzzle', 'sparkles'] as const) {
       const html = renderToStaticMarkup(<GfIcon name={name} />);
       expect(html, name).toContain('gf-icon-line');
       expect(html, name).toContain('gf-icon-solid');
