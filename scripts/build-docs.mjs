@@ -24,6 +24,13 @@ import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
 import { writeContributors } from './build-contributors.mjs';
 
+// The text of a rendered heading: its tags dropped and marked's entities turned
+// back into characters, so the layout can escape it once like any other string.
+function plainText(html) {
+  const chars = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
+  return stripHtmlTags(html).replace(/&(amp|lt|gt|quot|#39);/g, (_, name) => chars[name]);
+}
+
 function stripHtmlTags(input) {
   let prev;
   let out = input;
@@ -131,7 +138,7 @@ function render(page, resolveHref) {
         const id = headingIds.shift();
         const inner = this.parser.parseInline(tokens);
         if (depth === 1) {
-          title = stripHtmlTags(inner);
+          title = plainText(inner);
           return '';
         }
         // Already escaped by marked: the layout inserts it as HTML.
@@ -356,6 +363,12 @@ export function parseWhatsNew(data) {
       if (!Array.isArray(h.authors) || !h.authors.length) fail(`${h.title}: no author`);
       for (const login of h.authors) if (!LOGIN.test(login ?? '')) fail(`${h.title}: not a GitHub login: ${login}`);
     }
+    // Everyone who merged a pull request in this line; the highlights' authors are among them.
+    if (!Array.isArray(entry.contributors) || !entry.contributors.length) fail('contributors are missing');
+    for (const login of entry.contributors) if (!LOGIN.test(login ?? '')) fail(`not a GitHub login: ${login}`);
+    const known = new Set(entry.contributors.map((login) => login.toLowerCase()));
+    if (known.size !== entry.contributors.length) fail('a contributor is listed twice');
+    for (const h of entry.highlights) for (const login of h.authors) if (!known.has(login.toLowerCase())) fail(`${h.title}: ${login} is not in contributors`);
     lines.push({ line, ...entry });
   }
   const parts = (l) => l.line.split('.').map(Number);
@@ -382,24 +395,48 @@ export function avatarsFrom(manifest) {
 
 const monthYear = (date) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-export function changelogPage(lines, avatars = new Map()) {
+// `rng` orders each release's "Everyone who shipped" row: a fresh shuffle on every
+// build, so no one is always first. Tests pass their own.
+export function changelogPage(lines, avatars = new Map(), rng = Math.random) {
+  const shuffled = (list) => {
+    const out = [...list];
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  };
   const title = "What's new · Nekko Agent";
   const description = 'The changes worth knowing in each Nekko Agent release, and the people who shipped them.';
   const canonical = `${ORIGIN}/changelog`;
   const og = `${ORIGIN}/og/changelog.jpg?v=${OG_VERSION}`;
-  const person = (login) => {
+  const face = (login) => {
     const avatar = avatars.get(login.toLowerCase());
     return (
-      `<a class="by" href="https://github.com/${login}" rel="noopener">` +
       `<span class="by-avatar" aria-hidden="true">${escapeHtml(login.slice(0, 2).toUpperCase())}` +
-      (avatar ? `<img class="by-img" src="${escapeHtml(avatar)}" alt="" width="20" height="20" loading="lazy" decoding="async" />` : '') +
-      `</span>${escapeHtml(login)}</a>`
+      (avatar ? `<img class="by-img" src="${escapeHtml(avatar)}" alt="" width="28" height="28" loading="lazy" decoding="async" />` : '') +
+      `</span>`
     );
   };
-  const jump =
-    lines.length > 1
-      ? `\n      <nav class="jump" aria-label="Releases">${lines.map((l) => `<a href="#${l.line}">${l.line}</a>`).join('')}</nav>`
-      : '';
+  const person = (login) => `<a class="by" href="https://github.com/${login}" rel="noopener">${escapeHtml(login)}</a>`;
+  // The rail: every release under its year, newest first. The first is marked as
+  // the current one; the script at the foot of the page moves the mark on scroll.
+  const month = (date) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+  const years = [...new Set(lines.map((l) => l.date.slice(0, 4)))];
+  const rail = `
+      <nav class="rail" aria-label="Releases"${lines.length === 1 ? ' data-solo' : ''}>
+${years
+  .map(
+    (year) => `        <p class="rail-year">${year}</p>
+        <ul>
+${lines
+  .filter((l) => l.date.startsWith(year))
+  .map((l) => `          <li><a class="rail-link" href="#${l.line}"${l === lines[0] ? ' aria-current="location"' : ''}>${month(l.date)} <span class="rail-v">${l.line}</span></a></li>`)
+  .join('\n')}
+        </ul>`,
+  )
+  .join('\n')}
+      </nav>`;
   const sections = lines
     .map(
       (l) => `
@@ -415,9 +452,15 @@ ${l.highlights
     (h) => `          <li>
             <h3>${escapeHtml(h.title)}</h3>
             <p>${escapeHtml(h.detail)}</p>
-            <p class="shipped">Shipped by ${h.authors.map(person).join(' ')} <span aria-hidden="true">·</span> <a href="${GITHUB}/pull/${h.pr}" rel="noopener">#${h.pr}</a></p>
+            <p class="shipped"><span class="by-faces">${h.authors.map(face).join('')}</span><span>Shipped by ${h.authors.map(person).join(', ')} <span aria-hidden="true">·</span> <a href="${GITHUB}/pull/${h.pr}" rel="noopener">#${h.pr}</a></span></p>
           </li>`,
   )
+  .join('\n')}
+        </ul>
+        <p class="everyone-who">Everyone who shipped ${l.line}</p>
+        <ul class="everyone">
+${shuffled(l.contributors)
+  .map((login) => `          <li><a class="by" href="https://github.com/${login}" rel="noopener">${face(login)}${escapeHtml(login)}</a></li>`)
   .join('\n')}
         </ul>
         <p class="release-all"><a href="${GITHUB}/releases/tag/${l.tag}" rel="noopener">See every change in ${l.line} on GitHub ↗</a></p>
@@ -453,27 +496,57 @@ ${l.highlights
     <link rel="stylesheet" href="/fonts.css?v=1" />
     <style>
       .legal { max-width: 720px; margin: 0 auto; padding: 120px 20px 80px; line-height: 1.65; }
-      .legal h1 { font-size: clamp(32px, 5vw, 48px); margin: 0 0 8px; }
-      .legal h2 { font-size: 28px; margin: 0; }
+      /* The home page's type: a heavy, tight title, the LED face for each release, retro mono for dates. */
+      .legal h1 { font-size: clamp(32px, 5vw, 48px); font-weight: 800; letter-spacing: -0.04em; line-height: 1.05; margin: 0 0 8px; }
+      .legal h2 { font-family: var(--led); font-size: 44px; font-weight: 600; letter-spacing: 0.01em; line-height: 1; margin: 0; }
       .legal h3 { font: 600 17px/1.4 var(--sans); letter-spacing: -0.01em; margin: 0 0 2px; color: var(--ink); }
       .legal p, .legal li { color: var(--muted); }
       .legal a { color: var(--accent); }
       .legal section { margin-top: 64px; scroll-margin-top: 96px; }
-      .jump { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 20px; font: 13px var(--mono); }
       .release-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 20px; }
-      .release-head time { font: 13px var(--mono); color: var(--muted); }
+      .release-head time { font: 12px var(--retro-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
       .release-intro { margin: 8px 0 0; }
       .highlights { list-style: none; padding: 0; margin: 32px 0 0; display: grid; gap: 28px; }
       .highlights p { margin: 0; }
-      .highlights .shipped { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; font-size: 14px; }
-      .by { display: inline-flex; align-items: center; gap: 6px; }
-      .by-avatar { position: relative; display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; background: var(--bg-2); color: var(--ink); font: 600 8px var(--mono); }
+      .highlights .shipped { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; }
+      .by-faces { display: inline-flex; flex: none; }
+      .by-avatar { position: relative; display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: var(--bg-2); color: var(--ink); font: 600 10px var(--mono); }
+      .by-avatar + .by-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--bg); }
       .by-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      @media (min-width: 900px) { .highlights { grid-template-columns: 1fr 1fr; gap: 32px 40px; } }
+      .everyone-who { margin: 40px 0 0; font: 12px var(--retro-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+      .everyone { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 12px 20px; font-size: 14px; }
+      .everyone .by { display: inline-flex; align-items: center; gap: 8px; }
       .release-all { margin: 32px 0 0; }
       .earlier { margin: 64px 0 0; }
+      /* The release rail. Wide screens: it sits left of the column and stays in view.
+         Narrower: a row of links under the lede, and none when there is one release. */
+      .rail { font: 12px var(--retro-mono); letter-spacing: 0.06em; }
+      .rail ul { list-style: none; padding: 0; margin: 0; }
+      .rail-year { margin: 0; color: var(--ink); }
+      .legal .rail-link { position: relative; display: inline-block; padding: 6px 0 6px 20px; color: var(--muted); text-decoration: none; }
+      .rail-link::before { content: ''; position: absolute; left: 0; top: 50%; width: 6px; height: 6px; border-radius: 3px; background: currentColor; opacity: 0.4; transform: translateY(-50%); transition: height 0.2s ease, opacity 0.2s ease; }
+      .legal .rail-link[aria-current] { color: var(--ink); }
+      .rail-link[aria-current]::before { height: 18px; opacity: 1; }
+      .rail-v { opacity: 0.7; }
+      @media (hover: hover) { .legal .rail-link:hover { color: var(--ink); } }
+      @media (prefers-reduced-motion: reduce) { .rail-link::before { transition: none; } }
+      @media (min-width: 1180px) {
+        .rail-wrap { position: absolute; top: 0; bottom: 0; right: 100%; width: 190px; padding: 136px 0 80px; }
+        .rail { position: sticky; top: 112px; }
+        .rail-year { margin: 20px 0 6px; }
+        .rail-year:first-child { margin-top: 0; }
+      }
+      @media (max-width: 1179px) {
+        .rail { display: flex; flex-wrap: wrap; align-items: center; gap: 0 20px; margin-top: 20px; }
+        .rail ul { display: flex; flex-wrap: wrap; gap: 0 20px; }
+        .rail[data-solo] { display: none; }
+      }
     </style>
   </head>
   <body>
+    <!-- the home page's dot wave (pixelwave.js): decorative, still under reduced motion, absent without JavaScript -->
+    <canvas id="pixelwave" aria-hidden="true"></canvas>
     <header class="nav">
       <a class="brand" href="/" aria-label="Nekko Agent home"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="30" height="23" /> NEKKO AGENT</a>
       <nav class="nav-links" aria-label="Main navigation">
@@ -485,7 +558,9 @@ ${l.highlights
 
     <main class="legal">
       <h1>What's new</h1>
-      <p>The changes worth knowing in each release.</p>${jump}
+      <p>The changes worth knowing in each release.</p>
+      <div class="rail-wrap">${rail}
+      </div>
 ${sections}
 
       <p class="earlier"><a href="${GITHUB}/releases" rel="noopener">Earlier releases on GitHub ↗</a></p>
@@ -504,6 +579,22 @@ ${sections}
       window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
+    <script src="/pixelwave.js?v=1" defer></script>
+    <script>
+      // The rail marks the release being read: the last section whose top has passed the nav.
+      (function () {
+        var links = [].slice.call(document.querySelectorAll('.rail-link'));
+        if (links.length < 2) return;
+        var sections = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); });
+        function mark() {
+          var at = 0;
+          sections.forEach(function (s, i) { if (s && s.getBoundingClientRect().top <= 140) at = i; });
+          links.forEach(function (a, i) { if (i === at) a.setAttribute('aria-current', 'location'); else a.removeAttribute('aria-current'); });
+        }
+        addEventListener('scroll', mark, { passive: true });
+        mark();
+      })();
+    </script>
   </body>
 </html>
 `;

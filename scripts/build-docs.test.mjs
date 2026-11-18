@@ -48,6 +48,15 @@ test('repo-relative links become hub links or GitHub links', () => {
   assert.match(files.get('llms.txt'), /<!-- docs:start -->[\s\S]*\/docs\/index\.md[\s\S]*<!-- docs:end -->/);
 });
 
+test('a page title with an apostrophe or an ampersand is escaped once, not twice', () => {
+  const files = build();
+  const page = files.get('docs/whats-new.html');
+  assert.match(page, /<h1>What&#39;s new<\/h1>/);
+  assert.match(page, /<title>What&#39;s new · Nekko Agent docs<\/title>/);
+  assert.match(page, /"headline":"What's new"/);
+  for (const [path, html] of files) if (path.endsWith('.html')) assert.doesNotMatch(html, /&amp;(?:#\d+|amp|lt|gt|quot);/, path);
+});
+
 test('every link to a docs page, and to a heading on one, resolves', () => {
   const files = build();
   const ids = new Map();
@@ -85,7 +94,7 @@ test('release info keeps only the tag and each asset name and URL', () => {
 
 test('no page loads fonts or release info from a third party', () => {
   const pages = [...build().entries()].filter(([path]) => path.endsWith('.html')).map(([, html]) => html);
-  for (const file of ['index.html', 'privacy.html', 'site.js']) pages.push(readFileSync(new URL(`../apps/website/${file}`, import.meta.url), 'utf8'));
+  for (const file of ['index.html', 'privacy.html', 'site.js', 'pixelwave.js']) pages.push(readFileSync(new URL(`../apps/website/${file}`, import.meta.url), 'utf8'));
   for (const html of pages) assert.doesNotMatch(html, /fonts\.googleapis\.com|fonts\.gstatic\.com|api\.github\.com/);
 });
 
@@ -150,13 +159,18 @@ test('task queries find canonical guides, including facts beyond the old 600-cha
 });
 
 // The changelog page (spec/brand/changelog-page.md) and its highlights file.
-const line = (over = {}) => ({
-  date: '2026-11-16',
-  tag: 'v0.10.1004',
-  intro: 'One sentence.',
-  highlights: [{ title: 'A thing', detail: 'What it does.', pr: 12, authors: ['octo-cat'] }],
-  ...over,
-});
+const line = (over = {}) => {
+  const l = {
+    date: '2026-11-16',
+    tag: 'v0.10.1004',
+    intro: 'One sentence.',
+    highlights: [{ title: 'A thing', detail: 'What it does.', pr: 12, authors: ['octo-cat'] }],
+    ...over,
+  };
+  // Unless a test says otherwise, the release's contributors are its highlights' authors.
+  l.contributors ??= [...new Set(l.highlights.flatMap((h) => h.authors ?? []))];
+  return l;
+};
 
 test('every highlight in the shipped file has a title, a pull request and an author', () => {
   const lines = loadWhatsNew();
@@ -185,6 +199,12 @@ test('the highlights file is refused when an entry is incomplete or unsafe', () 
     { '0.10': line({ highlights: [{ title: 't', detail: 'd', authors: ['a'] }] }) },
     { '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: [] }] }) },
     { '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['a/../b'] }] }) },
+    { '0.10': { ...line(), contributors: undefined } },
+    { '0.10': line({ contributors: [] }) },
+    { '0.10': line({ contributors: ['octo-cat', 'a b'] }) },
+    { '0.10': line({ contributors: ['octo-cat', 'Octo-Cat'] }) },
+    // A highlight's author is one of the release's contributors.
+    { '0.10': line({ contributors: ['someone-else'] }) },
   ];
   for (const data of bad) assert.throws(() => parseWhatsNew(data), JSON.stringify(data));
 });
@@ -214,11 +234,100 @@ test('the changelog page is built with every highlight, its author and its pull 
   assert.doesNotMatch(html, /<img[^>]+src="(?!\/)/, 'no third-party image');
 });
 
-test('jump links appear only when there are two or more release lines', () => {
+test('the shipped history runs from 0.7 to today, across three months or more', () => {
+  const lines = loadWhatsNew();
+  assert.equal(lines.at(-1).line, '0.7', 'history starts at 0.7, the first release under the Nekko name');
+  assert.ok(lines.length >= 4);
+  assert.ok(new Set(lines.map((l) => l.date.slice(0, 7))).size >= 3, 'three months or more');
+  // A line's date never runs ahead of a newer line's.
+  for (let i = 1; i < lines.length; i++) assert.ok(lines[i].date <= lines[i - 1].date, lines[i].line);
+  const html = build().get('changelog.html');
+  assert.doesNotMatch(html, /<nav class="rail"[^>]*data-solo/);
+  for (const l of lines) assert.ok(html.includes(`class="rail-link" href="#${l.line}"`), l.line);
+});
+
+test('the release rail lists every release under its year, newest first, and marks the first', () => {
   const one = changelogPage(parseWhatsNew({ '0.10': line() }));
-  assert.doesNotMatch(one, /class="jump"/);
-  const two = changelogPage(parseWhatsNew({ '0.10': line(), '0.11': line({ tag: 'v0.11.1000' }) }));
-  assert.match(two, /class="jump"[\s\S]*href="#0\.11"[\s\S]*href="#0\.10"/);
+  assert.match(one, /<nav class="rail" aria-label="Releases" data-solo>/);
+  assert.equal((one.match(/class="rail-link"/g) ?? []).length, 1);
+
+  const lines = parseWhatsNew({ '0.9': line({ date: '2025-12-02', tag: 'v0.9.1000' }), '0.10': line({ date: '2026-11-16' }), '0.11': line({ date: '2026-12-01', tag: 'v0.11.1000' }) });
+  const html = changelogPage(lines);
+  const rail = html.slice(html.indexOf('<nav class="rail"'), html.indexOf('</nav>', html.indexOf('<nav class="rail"')));
+  assert.doesNotMatch(rail, /data-solo/);
+  assert.deepEqual([...rail.matchAll(/class="rail-year">(\d+)</g)].map((m) => m[1]), ['2026', '2025']);
+  assert.deepEqual([...rail.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]), ['0.11', '0.10', '0.9']);
+  assert.match(rail, /href="#0\.11" aria-current="location">December <span class="rail-v">0\.11<\/span>/);
+  assert.equal((rail.match(/aria-current/g) ?? []).length, 1);
+  // Every rail link has a section to land on.
+  for (const [, id] of rail.matchAll(/href="#([^"]+)"/g)) assert.ok(html.includes(`<section id="${id}"`), id);
+});
+
+test('every release names everyone who shipped it, in an order no one is always first in', () => {
+  const people = ['ada', 'bob', 'cy', 'dee', 'eve'];
+  const lines = parseWhatsNew({ '0.10': line({ contributors: [...people, 'octo-cat'] }) });
+  const row = (html) => {
+    const from = html.indexOf('<ul class="everyone"');
+    return [...html.slice(from, html.indexOf('</ul>', from)).matchAll(/href="https:\/\/github\.com\/([^"]+)"/g)].map((m) => m[1]);
+  };
+
+  // The order comes from the dice passed in: the same roll gives the same row, another gives another.
+  const first = row(changelogPage(lines, new Map(), () => 0));
+  const last = row(changelogPage(lines, new Map(), () => 0.999));
+  assert.deepEqual(row(changelogPage(lines, new Map(), () => 0)), first);
+  assert.notDeepEqual(first, last);
+  assert.notEqual(first[0], last[0]);
+  for (const order of [first, last]) assert.deepEqual([...order].sort(), [...people, 'octo-cat'].sort());
+
+  const html = changelogPage(lines, new Map(), () => 0);
+  assert.ok(html.includes('Everyone who shipped 0.10'));
+  assert.equal((html.match(/class="everyone-who"/g) ?? []).length, 1);
+
+  // The shipped page: every release has its row, and no bot is in one.
+  const shipped = build().get('changelog.html');
+  for (const l of loadWhatsNew()) {
+    assert.ok(shipped.includes(`Everyone who shipped ${l.line}`), l.line);
+    for (const login of l.contributors) assert.doesNotMatch(login, /\[bot\]|-bot$/);
+    for (const h of l.highlights) for (const login of h.authors) assert.ok(l.contributors.includes(login), `${l.line}: ${login}`);
+  }
+});
+
+test('highlights sit in two columns when there is room', () => {
+  const html = build().get('changelog.html');
+  assert.match(html, /@media \(min-width: 900px\) \{[^}]*\.highlights \{[^}]*grid-template-columns: 1fr 1fr;/);
+});
+
+test('each credit leads with the avatars, then says who shipped it', () => {
+  const html = changelogPage(parseWhatsNew({ '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['one', 'two'] }] }) }));
+  const credit = html.slice(html.indexOf('<p class="shipped">'), html.indexOf('</p>', html.indexOf('<p class="shipped">')));
+  const faces = [...credit.matchAll(/class="by-avatar"/g)].map((m) => m.index);
+  assert.equal(faces.length, 2);
+  assert.ok(faces.every((at) => at < credit.indexOf('Shipped by')), 'avatars come first');
+  assert.ok(credit.indexOf('Shipped by') < credit.indexOf('href="https://github.com/one"'));
+  assert.match(html, /\.by-avatar \{[^}]*width: 28px; height: 28px;/);
+});
+
+test('the changelog carries the home page\'s dot wave, from one shared first-party script', () => {
+  const html = build().get('changelog.html');
+  assert.match(html, /<canvas id="pixelwave" aria-hidden="true"><\/canvas>/);
+  assert.match(html, /<script src="\/pixelwave\.js\?v=\d+" defer><\/script>/);
+
+  const site = (file) => readFileSync(new URL(`../apps/website/${file}`, import.meta.url), 'utf8');
+  const wave = site('pixelwave.js');
+  assert.match(wave, /getElementById\('pixelwave'\)/);
+  assert.match(wave, /prefers-reduced-motion: reduce/);
+  assert.doesNotMatch(wave, /https?:\/\//, 'no request leaves the site');
+  // One copy: the home page loads the same file and site.js no longer draws the wave.
+  assert.match(site('index.html'), /<script src="pixelwave\.js\?v=\d+"/);
+  assert.doesNotMatch(site('site.js'), /pixelwave/);
+});
+
+test('the changelog speaks in the home page\'s type: heavy title, LED release heading, retro mono dates', () => {
+  const html = build().get('changelog.html');
+  assert.match(html, /\.legal h1 \{[^}]*font-weight: 800;/);
+  assert.match(html, /\.legal h2 \{[^}]*font-family: var\(--led\);/);
+  assert.match(html, /\.release-head time \{[^}]*var\(--retro-mono\)/);
+  assert.match(html, /\.rail \{[^}]*var\(--retro-mono\)/);
 });
 
 test('avatars come only from the contributor cache, with initials when one is missing', () => {
@@ -237,7 +346,8 @@ test('avatars come only from the contributor cache, with initials when one is mi
 
   const lines = parseWhatsNew({ '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['octo-cat', 'none'] }] }) });
   const html = changelogPage(lines, avatars);
-  assert.equal((html.match(/<img class="by-img"/g) ?? []).length, 1);
+  // Once in the highlight's credit, once in the release's row of everyone.
+  assert.equal((html.match(/<img class="by-img"/g) ?? []).length, 2);
   assert.ok(html.includes('src="/contributors/Octo-Cat-0123456789abcdef.png"'));
   assert.ok(html.includes('>OC<') && html.includes('>NO<'), 'initials stay under the image and stand in when it is missing');
   assert.doesNotMatch(changelogPage(lines), /<img class="by-img"/);

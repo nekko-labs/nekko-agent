@@ -1,15 +1,56 @@
 {
-  "$comment": "The highlights of each release line (MAJOR.MINOR), read by the changelog page at nekkoagent.com/changelog (scripts/build-docs.mjs). date and tag are the line's newest release; authors are the GitHub logins of the pull request's author.",
+  "$comment": "The highlights of each release line (MAJOR.MINOR), read by the changelog page at nekkoagent.com/changelog (scripts/build-docs.mjs). date and tag are the line's newest release; authors are the GitHub logins of the pull request's author; contributors are the logins of everyone who merged a pull request in the line (from its GitHub release notes, bots left out).",
   "0.10": {
     "date": "2026-11-16",
     "tag": "v0.10.1004",
     "intro": "Billing and provider setup move into quieter screens, and Ctrl/Cmd+K searches everything.",
+    "contributors": ["ermish", "Ghezz9", "TravisJPN", "austinermish", "matthewkurtti", "BobbyRobBob"],
     "highlights": [
       { "title": "Plan & billing in Settings", "detail": "See your plan and switch teams.", "pr": 2732, "icon": "settings", "authors": ["ermish"] },
       { "title": "Guided Google Gemini setup", "detail": "Connect Gemini step by step.", "pr": 2726, "icon": "brain-circuit", "authors": ["ermish"] },
       { "title": "Fusion routing strategies", "detail": "Route by model capability tier.", "pr": 2737, "icon": "router", "authors": ["ermish"] },
       { "title": "Search everything with Ctrl/Cmd+K", "detail": "Find commands, chats and settings.", "pr": 2389, "icon": "search", "authors": ["ermish"] },
       { "title": "Winter theme", "detail": "A snowy look with hidden extras.", "pr": 2412, "icon": "palette", "authors": ["ermish"] }
+    ]
+  },
+  "0.9": {
+    "date": "2026-11-08",
+    "tag": "v0.9.5",
+    "intro": "New Nekko themes, an agent that asks before data leaves, and more of the desktop on Android.",
+    "contributors": ["ermish", "Ghezz9", "TravisJPN", "BobbyRobBob", "xayashi", "matthewkurtti", "Sinkleberg"],
+    "highlights": [
+      { "title": "Nekko and Indigo themes", "detail": "New looks with a plum app icon.", "pr": 1596, "authors": ["TravisJPN"] },
+      { "title": "Asks before data leaves", "detail": "A chat that read untrusted content asks first.", "pr": 1947, "authors": ["Ghezz9"] },
+      { "title": "Text size", "detail": "Set it in Settings › Accessibility.", "pr": 1973, "authors": ["BobbyRobBob"] },
+      { "title": "Lock Screen card on Android", "detail": "Allow, deny or stop from the Lock Screen.", "pr": 1407, "authors": ["Ghezz9"] },
+      { "title": "Rename a chat from its card", "detail": "Right in the agents list.", "pr": 1525, "authors": ["Ghezz9"] }
+    ]
+  },
+  "0.8": {
+    "date": "2026-10-31",
+    "tag": "v0.8.2",
+    "intro": "Nekko runs models on its own engine, puts every chat on one board, and arrives on Android.",
+    "contributors": ["ermish", "Ghezz9", "TravisJPN", "BobbyRobBob", "matthewkurtti", "xayashi"],
+    "highlights": [
+      { "title": "The Nekko engine", "detail": "Run models with no separate server.", "pr": 196, "authors": ["ermish"] },
+      { "title": "One board for every chat", "detail": "See what each agent is doing.", "pr": 199, "authors": ["ermish"] },
+      { "title": "Image generation in chat", "detail": "Switch a chat to make images.", "pr": 221, "authors": ["ermish"] },
+      { "title": "Android app", "detail": "Run your computer's agents from your phone.", "pr": 434, "authors": ["Ghezz9"] },
+      { "title": "Skills from GitHub", "detail": "Find and install Agent Skills in the Marketplace.", "pr": 522, "authors": ["Ghezz9"] },
+      { "title": "Find in chat", "detail": "Search a conversation for a keyword.", "pr": 633, "authors": ["BobbyRobBob"] }
+    ]
+  },
+  "0.7": {
+    "date": "2026-09-11",
+    "tag": "v0.7.1",
+    "intro": "Nekko gets its name, signs in with the subscription you already have, and walks you through setup.",
+    "contributors": ["ermish"],
+    "highlights": [
+      { "title": "Sign in with your Claude subscription", "detail": "Use the plan you already pay for.", "pr": 168, "authors": ["ermish"] },
+      { "title": "Sign in with your ChatGPT subscription", "detail": "No API key needed.", "pr": 169, "authors": ["ermish"] },
+      { "title": "First-run setup", "detail": "Pick a theme and connect providers.", "pr": 172, "authors": ["ermish"] },
+      { "title": "Workflow triggers", "detail": "Start workflows from connectors and webhooks.", "pr": 176, "authors": ["ermish"] },
+      { "title": "Run models locally", "detail": "Load models with a memory fit check.", "pr": 181, "authors": ["ermish"] }
     ]
   }
 }
