@@ -18,14 +18,25 @@ export function describeInterruption(message: string, canContinue: boolean) {
       : /^terminated\.?$/i.test(message.trim())
         ? 'The response stream ended unexpectedly. The provider did not report a specific cause.'
         : message;
+  const signInExpired = !paused && !interrupted && !overflow && isAuthError(message);
   return {
     // A stop the user asked for, and a run the app's own restart cut off, are
     // not failures and do not wear the failure colour.
     paused: paused || interrupted || overflow,
+    signInExpired,
     reason: detail,
-    title: paused ? 'Reply paused' : interrupted ? 'Reply interrupted' : overflow ? 'Out of context' : 'Reply failed',
+    title: paused ? 'Reply paused' : interrupted ? 'Reply interrupted' : overflow ? 'Out of context' : signInExpired ? 'Sign-in expired' : 'Reply failed',
     detail: `${detail} ${canContinue ? 'The work so far is saved; Retry picks up from here.' : 'No resumable progress was saved. Retry uses the saved conversation.'}`,
   };
+}
+
+/**
+ * Whether a failed reply was refused for its credentials (an expired or revoked
+ * sign-in, a bad key), which only signing in again fixes. Providers report it as
+ * "<provider> 401: {...}" with codes like token_expired or invalid_api_key.
+ */
+export function isAuthError(message: string): boolean {
+  return /\b401\b|unauthori[sz]ed|token_expired|invalid_api_key|authentication_error|sign(ing)? in again/i.test(message);
 }
 
 /** Only retire an inferred transcript warning; real errors remain until dismissed. */

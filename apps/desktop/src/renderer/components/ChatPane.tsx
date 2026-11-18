@@ -82,6 +82,8 @@ import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
 import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure } from './agent-console/interruption.js';
 import { ContinueAtReset } from './agent-console/ContinueAtReset.js';
+import { DockSignIn } from './MonitorsDock.js';
+import { SUBSCRIPTION_KINDS } from './providers/AddProvider.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
@@ -3055,8 +3057,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 empty:hidden">
+                    {/* Retry only fails again until the sign-in is fixed, so the
+                        fix sits here: the provider's own sign-in when it has one,
+                        otherwise its card in Models (a key or a Claude account). */}
+                    {interruption.signInExpired && activeProvider && !readOnly && (activeProvider.auth === 'subscription' && SUBSCRIPTION_KINDS[activeProvider.kind]
+                      ? <DockSignIn provider={activeProvider} onSignedIn={() => {}} />
+                      : <button className="btn btn-outline shrink-0 px-3 py-0.5 text-2xs" data-notice-fix-sign-in
+                          title={`Fix the ${activeProvider.label} sign-in or key in Models`}
+                          onClick={() => useStore.getState().setView('models')}>
+                          Fix in Models
+                        </button>)}
                     {hasPrompt && (
-                      <button className="btn btn-primary shrink-0 px-3 py-0.5 text-2xs"
+                      <button className={`btn ${interruption.signInExpired ? 'btn-outline' : 'btn-primary'} shrink-0 px-3 py-0.5 text-2xs`}
                         title="Retry using the saved conversation and work" onClick={() => void resumeRun()}>
                         Retry
                       </button>
