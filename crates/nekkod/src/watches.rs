@@ -191,6 +191,12 @@ pub fn view(w: &Value) -> Value {
     if let Some(e) = w.get("lastError").filter(|e| js::truthy(Some(e))) {
         put("lastError", Some(json!(js::slice16(&js::display(e), 300))));
     }
+    // A clip's stage (`waiting`, `loading`, `generating`, `step:3/20`), for the chip.
+    if str_of(w, "kind") == Some("clip")
+        && let Some(stage) = w.get("clipStage").filter(|s| s.is_string())
+    {
+        put("clipStage", Some(stage.clone()));
+    }
     // The PR as last polled, so the chip shows progress without a model turn.
     if let Some(snap) = str_of(w, "fingerprint").and_then(pr_snapshot) {
         for (k, as_k) in [("checks", "checks"), ("state", "prState")] {
@@ -338,7 +344,14 @@ pub struct Watches {
     /// re-parse it. Keyed by the file's modified time and length, so a write
     /// from outside (a test, a hand edit) is still read.
     loaded: std::sync::Mutex<Option<Loaded>>,
+    /// Clips being made for a `clip` watch (media_tools.rs), by watch id:
+    /// cancelling the watch (the chip, `agent_watch`, the chat's Stop) stops the clip.
+    clips: std::sync::Mutex<HashMap<String, nekko_loop::Cancel>>,
 }
+
+/// How long a `clip` watch may wait for its clip: the clip job's own four
+/// hours, plus a margin, before it wakes the chat to say so.
+const CLIP_WAIT_MS: f64 = (4.0 * 60.0 + 5.0) * 60_000.0;
 
 struct Loaded {
     stamp: (std::time::SystemTime, u64),
@@ -370,6 +383,7 @@ impl Watches {
             registrations: std::sync::Mutex::new(std::collections::HashMap::new()),
             settled: std::sync::Mutex::default(),
             loaded: std::sync::Mutex::default(),
+            clips: std::sync::Mutex::default(),
         })
     }
 
@@ -494,6 +508,8 @@ impl Watches {
             .unwrap_or_default()
             .iter()
             .filter(|w| str_of(w, "status") == Some("active"))
+            // A clip's deadline is only a safety net, not when the chat wakes: its chip says how it is doing.
+            .filter(|w| str_of(w, "kind") != Some("clip"))
             .map(|w| num(w, "deadlineAt"))
             .collect();
         if deadlines.is_empty() {
@@ -527,6 +543,7 @@ impl Watches {
         let mut changed = false;
         for w in &mut watches {
             if str_of(w, "sessionId") == Some(session_id) && str_of(w, "status") == Some("active") {
+                self.stop_clip(str_of(w, "id").unwrap_or_default());
                 w["status"] = json!("cancelled");
                 w["pending"] = Value::Null;
                 w["lastError"] = json!("Chat stopped or closed");
@@ -595,6 +612,7 @@ impl Watches {
             w["status"] = json!("cancelled");
             mark_ended(w, (self.now)());
             let id = str_of(w, "id").unwrap_or_default().to_string();
+            self.stop_clip(&id);
             if changed {
                 self.prune_in(&mut watches);
             }
@@ -722,6 +740,68 @@ impl Watches {
         ))
     }
 
+    /// Arm a `clip` watch for a clip that starts now (media_tools.rs): it
+    /// waits, without polling, until [`Watches::clip_finished`] gives it its
+    /// news, then wakes the chat with `prompt` as any watch does. `cancel` is
+    /// what stops the clip when the watch is cancelled.
+    pub async fn arm_clip(&self, session_id: &str, prompt: &str, cancel: nekko_loop::Cancel) -> Result<String, String> {
+        let _guard = self.write.lock().await;
+        if !self.host.exists(session_id) {
+            return Err("Chat no longer exists".into());
+        }
+        let mut watches = self.list(None)?;
+        let active = watches
+            .iter()
+            .filter(|w| str_of(w, "sessionId") == Some(session_id) && str_of(w, "status") == Some("active"))
+            .count();
+        if active >= 5 {
+            return Err("This chat already has five active watches; cancel one before starting a clip".into());
+        }
+        let now = (self.now)();
+        let id = nekko_js::uuid();
+        let deadline = now + CLIP_WAIT_MS;
+        watches.push(json!({
+            "id": id, "sessionId": session_id, "kind": "clip", "prompt": prompt,
+            "nextPollAt": deadline, "intervalMs": 60_000, "deadlineAt": deadline,
+            "status": "active", "failures": 0,
+        }));
+        self.save(&watches)?;
+        self.clips.lock().unwrap_or_else(|e| e.into_inner()).insert(id.clone(), cancel);
+        self.host.status_changed(session_id);
+        Ok(id)
+    }
+
+    /// The clip of a `clip` watch ended (made, failed or stopped): `news` is
+    /// what the chat is told when it wakes, at the next tick.
+    pub async fn clip_finished(&self, id: &str, news: &str) {
+        self.clips.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+        self.patch(id, json!({ "pending": news, "nextPollAt": (self.now)() })).await;
+    }
+
+    /// How far a clip got (the media job's stages), for its chip.
+    pub async fn clip_progress(&self, id: &str, session_id: &str, stage: &str) {
+        self.patch(id, json!({ "clipStage": stage })).await;
+        self.host.status_changed(session_id);
+    }
+
+    fn stop_clip(&self, id: &str) {
+        if let Some(c) = self.clips.lock().unwrap_or_else(|e| e.into_inner()).remove(id) {
+            c.cancel();
+        }
+    }
+
+    /// At startup no clip is being made: a `clip` watch still waiting lost
+    /// its clip when Nekko Agent stopped, and wakes its chat to say so.
+    async fn orphan_clips(&self) {
+        let Ok(watches) = self.list(None) else { return };
+        for w in watches.iter().filter(|w| {
+            str_of(w, "kind") == Some("clip") && str_of(w, "status") == Some("active") && !js::truthy(w.get("pending"))
+        }) {
+            let id = str_of(w, "id").unwrap_or_default().to_string();
+            self.clip_finished(&id, "The clip was interrupted: Nekko Agent stopped while it was being made. Nothing was saved; start it again if it is still wanted.").await;
+        }
+    }
+
     /// One pass over the armed watches (`tick`).
     pub async fn tick(&self, turns: Option<&Turns>) {
         if self.polling.swap(true, Ordering::AcqRel) {
@@ -813,6 +893,7 @@ impl Watches {
         let me = self.clone();
         tokio::spawn(async move {
             me.prune_now().await;
+            me.orphan_clips().await;
             let mut every = tokio::time::interval(TICK);
             loop {
                 every.tick().await;
@@ -928,6 +1009,58 @@ mod tests {
         fn snapshot(&self, v: Result<&str, &str>) {
             *self.fake.snapshot.lock().unwrap() = Some(v.map(str::to_string).map_err(str::to_string));
         }
+    }
+
+    #[tokio::test]
+    async fn a_clip_watch_waits_for_its_clip_then_wakes_the_chat_with_the_news() {
+        let r = rig("clip-ready");
+        let cancel = nekko_loop::Cancel::default();
+        let id = r.w.arm_clip("s", "Show the user the clip and continue the task.", cancel.clone()).await.unwrap();
+        // Nothing to poll while the clip is made: no wake-up, however long.
+        r.advance(60 * 60_000);
+        r.w.tick(None).await;
+        assert!(r.resumes().is_empty());
+        assert_eq!(r.all()[0]["kind"], "clip");
+        assert_eq!(r.w.next_wake_at("s"), Value::Null, "a clip is not a timed wake-up");
+        r.w.clip_progress(&id, "s", "step:3/20").await;
+        assert_eq!(view(&r.all()[0])["clipStage"], "step:3/20", "the chip reads the stage");
+        r.w.clip_finished(&id, "The clip is ready: /data/clip-1.webp.").await;
+        r.w.tick(None).await;
+        let resumes = r.resumes();
+        assert_eq!(resumes.len(), 1);
+        assert!(resumes[0].contains("The clip is ready: /data/clip-1.webp."), "{}", resumes[0]);
+        assert!(resumes[0].contains("Show the user the clip and continue the task."), "{}", resumes[0]);
+        assert_eq!(r.all()[0]["status"], "done");
+        assert!(!cancel.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn stopping_the_chat_or_cancelling_the_watch_stops_the_clip() {
+        let r = rig("clip-stop");
+        let stopped = nekko_loop::Cancel::default();
+        r.w.arm_clip("s", "go on", stopped.clone()).await.unwrap();
+        r.w.cancel_session("s").await.unwrap();
+        assert!(stopped.is_cancelled(), "the chat's Stop stops the clip");
+        let cancelled = nekko_loop::Cancel::default();
+        let id = r.w.arm_clip("s", "go on", cancelled.clone()).await.unwrap();
+        r.w.tool("s", &json!({ "action": "cancel", "id": id })).await.unwrap();
+        assert!(cancelled.is_cancelled(), "cancelling the watch stops the clip");
+        // A clip that ends after its watch was cancelled tells nobody.
+        r.w.clip_finished(&id, "The clip is ready.").await;
+        r.w.tick(None).await;
+        assert!(r.resumes().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_clip_lost_to_a_restart_wakes_its_chat_to_say_so() {
+        let r = rig("clip-orphan");
+        r.w.arm_clip("s", "go on", nekko_loop::Cancel::default()).await.unwrap();
+        let reopened = reopen(&r.dir, &r.fake, &r.now);
+        reopened.orphan_clips().await;
+        reopened.tick(None).await;
+        let resumes = r.resumes();
+        assert_eq!(resumes.len(), 1);
+        assert!(resumes[0].contains("The clip was interrupted"), "{}", resumes[0]);
     }
 
     fn pr() -> Value {

@@ -4280,7 +4280,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4328,7 +4329,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4364,7 +4366,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4398,7 +4401,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4426,7 +4430,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4468,7 +4473,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4498,7 +4504,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4526,7 +4533,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4558,7 +4566,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4595,7 +4604,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4625,7 +4635,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4657,7 +4668,8 @@
     "remember",
     "generate_image",
     "edit_image",
-    "media_models"
+    "media_models",
+    "generate_video"
    ]
   },
   {

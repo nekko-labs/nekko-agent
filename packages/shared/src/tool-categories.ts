@@ -54,6 +54,7 @@ export const TOOL_CATEGORY_OF: Readonly<Record<string, ToolCategory>> = {
   generate_image: 'media',
   edit_image: 'media',
   media_models: 'media',
+  generate_video: 'media',
 };
 
 /** Agent tools that can reach a cloud provider, so an offline chat goes without them. */

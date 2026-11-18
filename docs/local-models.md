@@ -25,6 +25,8 @@ Nekko can make short clips on your computer with **Wan 2.2 TI2V 5B**. In **Model
 
 Choose it as the model in a Photo chat and describe the clip. Attach a photo to use it as the first frame. A clip is about two seconds (33 frames at 16 frames a second) in your chat's shape, or the photo's, at about 832×480. It appears in the chat as an animated picture, with its length beside it. The progress line shows the sampling steps, and **Stop** cancels the clip on the engine.
 
+The agent in a chat on this computer can start a clip too (not in incognito or offline chats). It answers at once and the chat is free while the clip is made; when it is ready, the chat wakes with where the clip was saved, and the agent carries on. Stopping the chat, or cancelling the clip's watch, stops the clip.
+
 This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) are not supported yet: a search under **Models → Video** keeps them behind **Show more from Hugging Face**.
 
 ### Pictures from any chat

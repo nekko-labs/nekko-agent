@@ -185,6 +185,22 @@ async fn write_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     Ok(ToolResult::ok(call, format!("Wrote {p} ({} bytes)", js::len16(&content))))
 }
 
+/// Approve a new file a host tool will write later (a clip still being
+/// made): `write_file`'s path rules and approval now, while the turn can ask,
+/// never over an existing file. The path to write, or why not.
+pub async fn approve_new_file(call: &ToolCall, ctx: &ToolContext, path: Option<&Value>) -> Result<String, String> {
+    let p = resolve_path(path, ctx)?;
+    assert_writable(&p, ctx)?;
+    if nodefs::exists(&p) {
+        return Err(format!("{p} already exists; choose a new path."));
+    }
+    if !write_approved(call, ctx, &p, "Save").await {
+        return Err("Save not approved by user.".into());
+    }
+    record_original(ctx, &p).await?;
+    Ok(p)
+}
+
 /// Save bytes a host tool made (a picture) as a new file in the chat's
 /// folders: `write_file`'s path rules and approval, never over an existing
 /// file. The saved path, or why not.
