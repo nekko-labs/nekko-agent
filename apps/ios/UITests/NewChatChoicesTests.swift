@@ -88,6 +88,8 @@ final class NewChatChoicesTests: XCTestCase {
         }
         attach(app, "automatic-new-chat")
         computer.tap()
+        let macbook = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "MacBook")).firstMatch
+        XCTAssertTrue(macbook.waitForExistence(timeout: 3))
         attach(app, "automatic-run-on-menu")
         let rename = app.buttons["newChat.computer.rename"]
         if rename.waitForExistence(timeout: 1) {
@@ -96,8 +98,9 @@ final class NewChatChoicesTests: XCTestCase {
             attach(app, "automatic-rename-alert")
             app.buttons["Cancel"].tap()
             computer.tap()
+            XCTAssertTrue(macbook.waitForExistence(timeout: 3))
         }
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "MacBook")).firstMatch.tap()
+        macbook.tap()
         XCTAssertFalse(computer.label.contains("Auto"))
         XCTAssertFalse(app.staticTexts["newChat.auto"].exists)
         attach(app, "automatic-manual-macbook")
