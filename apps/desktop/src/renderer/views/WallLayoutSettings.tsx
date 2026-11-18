@@ -16,6 +16,8 @@ export function WallLayoutSettings({ settings, update }: { settings: AppSettings
   const { layout } = loadWallState(storage, settings.commandWall);
   const change = (patch: Partial<WallLayout>) => update(wallLayoutPatch(settings, patch, storage));
   return <div className="mt-(--q-inline)">
+    <SettingRow title="Always expand subagents" htmlFor="expand-subagents" detail="Show all subagents in the Agents panel. Off shows two until expanded."
+      control={<input id="expand-subagents" className="quiet-switch" type="checkbox" checked={settings.expandSubagents === true} onChange={(e) => update({ expandSubagents: e.target.checked })} />} />
     <SettingRow title="Wall layout" htmlFor="wall-layout-setting" detail="Ctrl/Cmd+Shift+1 or 2 selects Focused or Dynamic."
       control={<select id="wall-layout-setting" className="quiet-field max-w-[180px] py-1.5" value={layout.mode} onChange={(e) => change({ mode: e.target.value as WallLayout['mode'] })}>
         <option value="focus">Focused</option>

@@ -1,0 +1,11 @@
+{
+  "name": "instagram-reel",
+  "private": true,
+  "scripts": { "render": "remotion render src/index.tsx Reel-dark out/reel.mp4 --codec=h264 --crf=20" },
+  "dependencies": {
+    "@remotion/cli": "4.0.541",
+    "remotion": "4.0.541",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  }
+}

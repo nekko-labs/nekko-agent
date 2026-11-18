@@ -87,8 +87,17 @@ mac:
   # so the build still launches locally. Release CI sets them from the
   # nekko-labs org secrets; see docs/signing.md.
   hardenedRuntime: true
+  # The main executable carries Touch ID's restricted entitlements, which
+  # macOS honours only with the provisioning profile below; everything else
+  # (helpers, nekkod, Resources/bin) gets the inherit file, which has none.
   entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # Developer ID profile authorizing those entitlements, embedded as
+  # Contents/embedded.provisionprofile. Never committed: release CI writes it
+  # from MACOS_PROVISIONING_PROFILE. Read only when electron-builder signs, and
+  # a signed build without it fails (scripts/sign-mac.cjs). docs/signing.md,
+  # "Provisioning profile".
+  provisioningProfile: build/nekko-agent.provisionprofile
   # Signs like electron-builder does, but gives resources/bin/nekko-vm its own
   # entitlements (com.apple.security.virtualization). Never put that one in the
   # files above: everything the app starts, nekkod included, inherits them.

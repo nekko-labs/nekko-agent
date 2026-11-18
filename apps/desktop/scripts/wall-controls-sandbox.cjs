@@ -165,11 +165,11 @@ app.whenReady().then(async () => {
       return;
     }
     if (process.env.NEKKO_POLISH_EVIDENCE) {
-      // Two chats on a Dynamic wall, the first one working; the Agents panel in
-      // each orientation and collapsed; hover states on the grips and pills.
+      // Two chats on a Dynamic wall, the first one working; the Agents panel open
+      // and collapsed; hover states on the grips and pills.
       const tag = current ? 'after' : 'before';
       await win.loadFile(path.join(out, 'index.html'), { search: 'multi' }); await sleep(900);
-      const setPanel = (show, orientation) => run(`(() => { const st = integration.state(); const s = st.settings; const cw = { ...s.commandWall, layout: { ...s.commandWall.layout, mode: 'grid' }, agentPanel: { show: ${show}, orientation: '${orientation}' } }; window.__setWall?.(cw); })()`);
+      const setPanel = (show) => run(`(() => { const st = integration.state(); const s = st.settings; const cw = { ...s.commandWall, layout: { ...s.commandWall.layout, mode: 'grid' }, agentPanel: { show: ${show} } }; window.__setWall?.(cw); })()`);
       const work = () => run("window.__work?.()");
       const facts = () => run(`(() => {
         const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; };
@@ -190,8 +190,8 @@ app.whenReady().then(async () => {
       for (const theme of ['dark', 'light']) for (const width of [1400, 760]) {
         win.setContentSize(width, 900);
         await run(`document.documentElement.dataset.theme='${theme}'`);
-        for (const [show, orientation, label] of [[true, 'vertical', 'column'], [true, 'horizontal', 'row'], [false, 'vertical', 'collapsed']]) {
-          await setPanel(show, orientation); await sleep(500); await work(); await sleep(700);
+        for (const [show, label] of [[true, 'column'], [false, 'collapsed']]) {
+          await setPanel(show); await sleep(500); await work(); await sleep(700);
           report.checks.push({ name: `${tag} ${theme} ${width} ${label}`, facts: await facts() });
           await capture(`polish-${tag}-${theme}-${width}-${label}`);
         }
@@ -289,10 +289,7 @@ app.whenReady().then(async () => {
         await click('Focused');
         await run("document.querySelector('.command-wall-window:not(.command-wall-deck-window) [contenteditable]')?.focus()");
         await capture(`controls-${theme}-${width}-focus`);
-        await run("document.querySelector('[aria-label=\"Show agents in a row\"]')?.click()");
-        await capture(`controls-${theme}-${width}-row`);
         if (process.env.NEKKO_VIEW_AFTER) {
-          await check('horizontal orientation control remains visible', "(()=>{const e=document.querySelector('[aria-label=\"Show agents in a column\"]');return !!e && e.getBoundingClientRect().width>0})()");
           await check('focus chat has no glow', "getComputedStyle(document.querySelector('.command-wall-window[data-wall-selected] > .panel')).boxShadow==='none'");
           await check('focus composer has no glow', "getComputedStyle(document.querySelector('.command-wall-window:not(.command-wall-deck-window) .composer')).boxShadow==='none'");
           await check('magic is hidden outside Dynamic', "getComputedStyle(document.querySelector('.wall-auto-arrange')).visibility==='hidden' && document.querySelector('[aria-label=\"Auto-arrange\"]').disabled");

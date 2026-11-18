@@ -14,6 +14,7 @@ the runbooks it links. Read a runbook before the work it names.
 | Why a technical or product choice was made | [docs/decisions/](docs/decisions/README.md) |
 | Landing a change: worktrees, PRs, auto-merge, stacks | [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md) |
 | Version numbers (`x.xx.xxxx`), cutting a release (a `vMAJOR.MINOR.1000` tag; never bump a version in a PR unasked) | [docs/runbooks/releasing.md](docs/runbooks/releasing.md) |
+| Booting an iOS simulator or Android emulator (shut down what you boot) | [docs/runbooks/simulators.md](docs/runbooks/simulators.md) |
 | Cutting an iOS release / TestFlight upload (manual GitHub action, not EAS or desktop tags) | [docs/runbooks/ios-release.md](docs/runbooks/ios-release.md) |
 | A red check, on your PR or on `main` | [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md) |
 | Any UI work: layout, spacing, colour, type, icons, status, motion, copy | [docs/design-system.md](docs/design-system.md) |
@@ -90,7 +91,9 @@ The docs at nekkoagent.com/docs render from Markdown in this repo (`docs/hub/nav
 
 ## Reports and portable design artifacts
 
-For substantial research, comparisons, architecture, and explanations, provide a concise chat summary plus a linked Markdown report when it improves readability or reuse. Include sources, assumptions, recommendations, and next steps. Use Mermaid for useful diagrams, image links for actual photos/screenshots, and self-contained HTML/CSS/SVG for rich design prototypes. Keep editable source in the project, normally reports/ or nekko-designs/; follow existing conventions. Do not generate artifacts for trivial replies. Never confuse captured evidence with inspected evidence.
+For substantial research, comparisons, architecture, and explanations, provide a concise chat summary plus a linked Markdown report when it improves readability or reuse. Include sources, assumptions, recommendations, and next steps. Use Mermaid for useful diagrams and image links for actual photos/screenshots. Reports go in `reports/`. Do not generate artifacts for trivial replies. Never confuse captured evidence with inspected evidence.
+
+A design is not a report. A report is a document to read; a design is something to look at and build from (the screens, states, options or motion of an interface or a visual). A design is one self-contained HTML file in `nekko-designs/`, never in `reports/`, laid out as a canvas with each screen, state or option as a labelled frame side by side and little prose, named for what it shows (`checkout-design.html`). Look in `nekko-designs/` before designing or building an interface. To change a design someone has already seen, save a new version beside it (`checkout-design-v2.html`, then `-v3`) instead of overwriting it; the highest number is current. A design that belongs to a change is committed with it.
 
 General reporting behavior belongs in the shared system prompt, not a personal memory file. Repository-specific workflow belongs here. Preview changes must retain explicit user consent for local reads, isolate generated HTML from the app, and prevent silent external resource fetching.
 

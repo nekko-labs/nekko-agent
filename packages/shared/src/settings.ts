@@ -110,8 +110,8 @@ export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
 export interface CommandWallSetting {
   /** Agent tab placement, independent of window layout. */
   tabs?: 'top' | 'left' | 'hidden';
-  /** The Agents tab's panel of agent cards: shown or closed, a column or a row. */
-  agentPanel?: { show: boolean; orientation: 'vertical' | 'horizontal' };
+  /** The Agents tab's panel of agent cards: shown or closed. */
+  agentPanel?: { show: boolean };
   layout?: WallLayout;
   dock?: MonitorsDock;
   hero?: string | null;
@@ -205,6 +205,16 @@ export interface AppNotice {
 }
 
 export interface AppSettings {
+  /** Start each Agents-panel subagent list expanded; otherwise show two. */
+  expandSubagents?: boolean;
+  /** Fusion's ranking policy; permission remains per-chat. */
+  fusion?: import('./fusion.js').FusionSettings;
+  /**
+   * The local picture model a chat's agent uses (`generate_image`,
+   * `edit_image`) when neither the call nor the chat names one. Absent:
+   * Automatic, the chat's Photo model, else the first ready one.
+   */
+  agentPictureModel?: string;
   /**
    * Default off. The user has Anthropic's own permission to use the
    * approval-gated features (scheduled runs, Nekko tools, the context note,
@@ -219,6 +229,12 @@ export interface AppSettings {
   voice?: import('./voice.js').VoiceSettings;
   /** User-authored additions to the built-in system instructions. */
   systemInstructions?: string;
+  /** System prompt sizing (decision 0095). Keys: `<providerId>::<modelId>` and `<providerId>`; a missing key or `auto` is automatic. */
+  promptProfiles?: {
+    auto?: boolean;
+    models?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
+    providers?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
+  };
   /** Server-side instructions applied to every user turn. Empty disables them. */
   turnWrapper?: string;
   /** User-provided background/preferences, sent to the selected chat provider. */
@@ -406,6 +422,14 @@ export interface AppSettings {
   automationRunPolicy?: import('./tasks.js').AutomationRunPolicy | null;
   /** Minutes without input before the user counts as away (default 5). */
   automationIdleMinutes?: number;
+  /**
+   * Shut down a booted simulator an agent used once no agent has touched it
+   * for this many minutes and it is nearly idle (#2814). Unset or 0 is never.
+   * A simulator no agent used (one you booted) is never shut down.
+   */
+  simulatorAutoShutdownMinutes?: number | null;
+  /** Open the chat's Simulator panel when its agent starts using a simulator (default on). */
+  simulatorPanelAutoOpen?: boolean;
   /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
    * the event as JSON on stdin (see crates/nekko-tools/src/hooks.rs).

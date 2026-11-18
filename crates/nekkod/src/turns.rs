@@ -468,6 +468,8 @@ pub struct Turns {
     /// The router (`routes::route`), for a tool that asks another service
     /// (`delegation_targets` lists a provider's models).
     dispatch: OnceLock<crate::automation::Dispatcher>,
+    /// The model server, for the picture tools (media_tools.rs).
+    media: Option<Arc<crate::model_server::Server>>,
 }
 
 /// Admits the next queued prompt of a chain the daemon admitted itself
@@ -523,6 +525,7 @@ impl Turns {
             preparer: OnceLock::new(),
             background: OnceLock::new(),
             dispatch: OnceLock::new(),
+            media: None,
         }
     }
 
@@ -547,6 +550,12 @@ impl Turns {
     }
 
     /// The desktop bridge (`config.browserBridge`).
+    /// The model server, so a chat's agent can make pictures with its local models.
+    pub fn with_media(mut self, server: Arc<crate::model_server::Server>) -> Self {
+        self.media = Some(server);
+        self
+    }
+
     pub fn with_bridge(mut self, bridge: Option<(String, String)>) -> Self {
         self.bridge = bridge.map(|(url, token)| Arc::new(nekko_web::browser::HttpBridge::new(url, token)));
         self
@@ -880,6 +889,50 @@ impl Turns {
                 Ok(Err(e)) => fail(&e),
                 Err(e) => fail(&e.to_string()),
             });
+        }
+        if name == crate::media_tools::VIDEO_TOOL {
+            if !(self.claude_allows(&provider, "nekko_tools").await
+                && self.claude_allows(&provider, "unattended_runs").await)
+            {
+                return Some(fail(
+                    "Nekko's clip tool is not available for this Claude sign-in: on a Claude plan it waits for Anthropic's approval (Settings > Agents > Claude plan features).",
+                ));
+            }
+            let Some(server) = &self.media else { return Some(fail("Clips are not available here.")) };
+            let kept = self.data_dir.join("agent-pictures").join(&entry.session_id);
+            let frame = match crate::media_tools::bridge_frame(&input, &entry.roots, &kept) {
+                Ok(f) => f,
+                Err(e) => return Some(fail(&e)),
+            };
+            let clip = crate::media_tools::Clip {
+                session_id: &entry.session_id,
+                input: &input,
+                first_frame: frame,
+                project_path: None,
+                kept,
+            };
+            return Some(match crate::media_tools::start_clip(server.clone(), self.watches.clone(), clip).await {
+                Ok(text) => json!({ "ok": true, "text": text }),
+                Err(e) => fail(&e),
+            });
+        }
+        if crate::harness::BRIDGE_MEDIA.contains(&name) {
+            if !self.claude_allows(&provider, "nekko_tools").await {
+                return Some(fail(
+                    "Nekko's picture tools are not available for this Claude sign-in: on a Claude plan they wait for Anthropic's approval (Settings > Agents > Claude plan features).",
+                ));
+            }
+            let Some(server) = &self.media else { return Some(fail("Picture tools are not available here.")) };
+            let full = {
+                let (store, id) = (self.store.clone(), entry.session_id.clone());
+                tokio::task::spawn_blocking(move || store.get(&id)).await.ok().flatten().unwrap_or(session)
+            };
+            let default = settings.get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            let saved = self.data_dir.join("agent-pictures").join(&entry.session_id);
+            return Some(
+                crate::media_tools::run_bridge(server, name, &input, &full, default.as_deref(), &entry.roots, &saved)
+                    .await,
+            );
         }
         if name != crate::harness::BRIDGE_WATCH {
             return Some(fail("Unknown Nekko tool."));
@@ -1228,7 +1281,25 @@ impl Turns {
             _ => json!([]),
         };
         // The turn's composition: tools, context from disk, the system prompt.
+        // Picture tools only where they can work: a local (not sandbox, not
+        // Claude Code) chat on a computer with a picture model ready.
+        let media = !sandbox
+            && !claude_code
+            && !js::truthy(opts.get("noTools"))
+            && match &self.media {
+                Some(server) => !server.ready_media_models().await.is_empty(),
+                None => false,
+            };
+        let video = !sandbox
+            && !claude_code
+            && !js::truthy(opts.get("noTools"))
+            && match &self.media {
+                Some(server) => !server.ready_video_models().await.is_empty(),
+                None => false,
+            };
         let tool_input = json!({
+            "media": media,
+            "video": video,
             "session": loaded,
             "offline": crate::connections::offline(&loaded),
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
@@ -1299,6 +1370,7 @@ impl Turns {
             "contextBlock": block,
             "platform": facts.get("platform").cloned().unwrap_or(json!(std::env::consts::OS)),
             "workMode": loaded.get("workMode").cloned().unwrap_or(Value::Null),
+            "promptProfile": facts.pointer("/promptProfile/profile").cloned().unwrap_or(Value::Null),
         }));
 
         if shared.cancel.is_cancelled() {
@@ -1345,11 +1417,24 @@ impl Turns {
         };
 
         // On disk while the turn runs, so a restart knows it was cut off.
+        // `afterMessageId` is the last message before the turn's own (its
+        // prompt, or for a wake-up the end of the turn before it), where a
+        // window stops the saved transcript while it draws the live reply.
         if let Some(obj) = lock(&session).as_object_mut() {
-            obj.insert("activeRun".into(), json!({ "startedAt": nekko_js::now_ms() }));
+            let mut run = json!({ "startedAt": nekko_js::now_ms() });
+            if let Some(id) =
+                obj.get("messages").and_then(Value::as_array).and_then(|m| m.last()).and_then(|m| m.get("id"))
+            {
+                run["afterMessageId"] = id.clone();
+            }
+            obj.insert("activeRun".into(), run);
             obj.remove("turnFailure");
         }
         persist(&store, &session, incognito).await;
+        // A wake-up saved no prompt, so nothing has told the windows a turn began.
+        if wake && !incognito {
+            say(json!({ "type": "session_meta", "sessionId": session_id }));
+        }
 
         let turn_from = lock(&session).get("messages").and_then(Value::as_array).map_or(0, Vec::len);
         let started_at = nekko_js::now_ms();
@@ -1684,7 +1769,10 @@ impl Turns {
         let wanted = Wanted {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
-            model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+            // A chat saved on a family alias runs on that family's newest model.
+            model: str_at(opts, "modelId")
+                .filter(|m| !js::trim(m).is_empty())
+                .map(nekko_agent::providers::claude_code::concrete_model_id),
             // `normal` means no choice was made: Claude Code's own setting stands.
             effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
@@ -1725,6 +1813,25 @@ impl Turns {
         let title_session = lock(session).clone();
         if !incognito && self.claude_title_allowed(provider, &title_session).await {
             tools.push(crate::harness::BRIDGE_TITLE.to_string());
+        }
+        // The picture tools, where a picture model is ready on this computer.
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && let Some(server) = &self.media
+            && !server.ready_media_models().await.is_empty()
+        {
+            tools.extend(crate::harness::BRIDGE_MEDIA.iter().map(|t| t.to_string()));
+        }
+        // A clip wakes the chat later: it also needs the wake-up allowed, as the watch does.
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && self.claude_allows(provider, "unattended_runs").await
+            && let Some(server) = &self.media
+            && !server.ready_video_models().await.is_empty()
+        {
+            tools.push(crate::media_tools::VIDEO_TOOL.to_string());
         }
         // A child launched with other Nekko tools is relaunched (a provider
         // switch, or the policy changed), so its bridge lists the right ones.
@@ -1821,6 +1928,10 @@ impl Turns {
                 claude_attachments(&s, &id)
             }
         };
+        // Claude Code runs on its own prompt, so what a design is and where it
+        // goes rides on each message, only where the Claude policy lets Nekko
+        // add to what Claude Code receives (`context_note`).
+        let design_note = !wake && self.claude_allows(provider, "context_note").await;
         let input = TurnInput {
             content: if wake {
                 None
@@ -1829,6 +1940,7 @@ impl Turns {
                     claude_turn_content(
                         u,
                         tools.iter().any(|t| t == crate::harness::BRIDGE_TITLE),
+                        design_note,
                         attachments.as_deref(),
                     )
                 })
@@ -2082,10 +2194,21 @@ fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec
     (Some(parts.join("\n\n---\n\n")), seen)
 }
 
-/// A context note on the existing user message, not a system flag, extra
-/// message or persisted user edit. Both policy capabilities gate `name_chat`.
+/// The design rules as a note for a Claude Code message: the two rules of
+/// `nekko_context::DESIGN_RULES`, and the project's own instructions win.
+fn claude_design_note() -> String {
+    format!(
+        "Nekko design note: {} {} Where the project's own instructions differ, follow them.",
+        nekko_context::DESIGN_RULES[0],
+        nekko_context::DESIGN_RULES[1]
+    )
+}
+
+/// Context notes on the existing user message, not a system flag, extra
+/// message or persisted user edit. Both policy capabilities gate `name_chat`;
+/// `context_note` gates `design_note`, which rides on every message.
 /// Attached files the Claude Code session has not been given yet go first.
-fn claude_turn_content(user: &Value, name_chat: bool, attachments: Option<&str>) -> Value {
+fn claude_turn_content(user: &Value, name_chat: bool, design_note: bool, attachments: Option<&str>) -> Value {
     let mut content = nekko_harness::user_content(user);
     // Leave CLI commands such as /compact intact.
     if str_at(user, "content").is_some_and(|s| s.trim_start().starts_with('/')) {
@@ -2103,20 +2226,27 @@ fn claude_turn_content(user: &Value, name_chat: bool, attachments: Option<&str>)
             _ => {}
         }
     }
-    if !name_chat {
-        return content;
+    let mut notes: Vec<String> = Vec::new();
+    if design_note {
+        notes.push(claude_design_note());
     }
-    const NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a short 2-4 word label for what the chat is for, leading with an issue or PR number if the request names one (like \"Issue #2391\"); never copy the opening words of the request. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
-    match &mut content {
-        Value::String(text) => {
-            text.push_str("\n\n");
-            text.push_str(NOTE);
+    if name_chat {
+        notes.push(NAMING_NOTE.to_string());
+    }
+    for note in notes {
+        match &mut content {
+            Value::String(text) => {
+                text.push_str("\n\n");
+                text.push_str(&note);
+            }
+            Value::Array(blocks) => blocks.push(json!({ "type": "text", "text": note })),
+            _ => {}
         }
-        Value::Array(blocks) => blocks.push(json!({ "type": "text", "text": NOTE })),
-        _ => {}
     }
     content
 }
+
+const NAMING_NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a short 2-4 word label for what the chat is for, leading with an issue or PR number if the request names one (like \"Issue #2391\"); never copy the opening words of the request. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
 
 /// A Claude Agent chat's `agentPlan` after Claude Code changed its own plan
 /// (nekko_harness::PlanCall), through the same rules as `update_plan`;
@@ -2475,6 +2605,10 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 continue;
             }
         };
+        if let Some(Out::Event(e) | Out::Loop(e, _)) = &out {
+            // Which chat is using which simulator (simulators.rs).
+            crate::simulators::observe(&f.session_id, e);
+        }
         let (event, snapshot) = match out {
             None | Some(Out::End) => break,
             Some(Out::Event(e)) => {
@@ -2991,6 +3125,50 @@ impl TurnTools {
             let watches = self.turns.watches.clone();
             return Ok(self.agent_watch(&watches, call).await);
         }
+        if name == crate::media_tools::VIDEO_TOOL {
+            let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
+                return Ok(error(id, "Clips are not available in this chat."));
+            };
+            let session = lock(&self.session).clone();
+            let frame = match crate::media_tools::native_frame(&input, &session, ctx) {
+                Ok(f) => f,
+                Err(e) => return Ok(error(id, e)),
+            };
+            // A project copy is approved now, while this turn can still ask.
+            let project = match input.get("path").and_then(Value::as_str).filter(|p| !p.trim().is_empty()) {
+                Some(p) if !p.to_lowercase().ends_with(".webp") => {
+                    return Ok(error(id, "The path must end in .webp (the clip is an animated WebP)."));
+                }
+                Some(p) => {
+                    let tc = ToolCall { id: id.to_string(), name: name.to_string(), input: input.clone() };
+                    match nekko_tools::approve_new_file(&tc, ctx, Some(&json!(p))).await {
+                        Ok(p) => Some(p),
+                        Err(e) => return Ok(error(id, e)),
+                    }
+                }
+                None => None,
+            };
+            let clip = crate::media_tools::Clip {
+                session_id: &self.shared.session_id,
+                input: &input,
+                first_frame: frame,
+                project_path: project,
+                kept: self.turns.data_dir.join("agent-pictures").join(&self.shared.session_id),
+            };
+            return Ok(match crate::media_tools::start_clip(server.clone(), self.turns.watches.clone(), clip).await {
+                Ok(text) => result(id, text),
+                Err(e) => error(id, e),
+            });
+        }
+        if crate::media_tools::TOOLS.contains(&name) {
+            let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
+                return Ok(error(id, "Picture tools are not available in this chat."));
+            };
+            let session = lock(&self.session).clone();
+            let default =
+                self.turns.settings.get().get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            return Ok(crate::media_tools::run(server, crate::media_tools::Call { call, session, ctx, default }).await);
+        }
         if let Some(ctx) = &self.native
             && (name == "browser" || name == "capture")
         {
@@ -3455,9 +3633,22 @@ impl TurnTools {
                 return error(id, "Call not approved by user.");
             }
             // The approval showed these recipients: they are known in this chat now.
+            // The list is read again, not taken from before the wait: the user may
+            // have taken a recipient back while this call waited, and must not see
+            // it come back.
             if !fresh.is_empty() {
-                let mut all = known;
-                all.extend(fresh);
+                let now = self.disk().await;
+                let mut all: Vec<String> = now
+                    .as_ref()
+                    .and_then(|s| s.get("knownRecipients"))
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                    .unwrap_or_default();
+                for f in fresh {
+                    if !all.contains(&f) {
+                        all.push(f);
+                    }
+                }
                 let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
                 let _ =
                     tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "knownRecipients": all }))).await;
@@ -3708,10 +3899,40 @@ mod tests {
     }
 
     #[test]
+    fn claude_design_note_rides_on_every_message_the_policy_allows() {
+        let user = json!({ "content": "Mock up the checkout" });
+        // Off (a Claude plan, an unread sign-in): the message is passed through untouched.
+        assert_eq!(claude_turn_content(&user, false, false, None), user["content"]);
+        let noted = claude_turn_content(&user, false, true, None);
+        let text = noted.as_str().unwrap();
+        assert!(text.starts_with("Mock up the checkout\n\nNekko design note: "), "{text}");
+        for rule in nekko_context::DESIGN_RULES {
+            assert!(text.contains(rule), "{rule}");
+        }
+        assert!(text.contains("nekko-designs/") && text.contains("never in reports/"));
+        assert!(text.contains("checkout-design-v2.html"));
+        assert!(text.ends_with("Where the project's own instructions differ, follow them."));
+        assert_eq!(user["content"], "Mock up the checkout", "the saved message is not edited");
+        // With the naming note, the design note comes first and each is added once.
+        let both = claude_turn_content(&user, true, true, None);
+        let text = both.as_str().unwrap();
+        assert_eq!(text.matches("Nekko design note: ").count(), 1);
+        assert!(text.find("Nekko design note: ").unwrap() < text.find("Nekko chat naming note").unwrap());
+        // An image message keeps its blocks and gains one text block.
+        let image = json!({ "content": "Like this", "images": ["data:image/png;base64,AAAA"] });
+        let original = nekko_harness::user_content(&image);
+        let noted = claude_turn_content(&image, false, true, None);
+        assert_eq!(noted.as_array().unwrap().len(), original.as_array().unwrap().len() + 1);
+        assert!(noted.as_array().unwrap().last().unwrap()["text"].as_str().unwrap().starts_with("Nekko design note: "));
+        // A CLI command is never touched.
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true, true, None), json!("/compact"));
+    }
+
+    #[test]
     fn claude_naming_note_uses_only_the_existing_user_content() {
         let user = json!({ "content": "Fix the login form" });
-        assert_eq!(claude_turn_content(&user, false, None), user["content"]);
-        let named = claude_turn_content(&user, true, None);
+        assert_eq!(claude_turn_content(&user, false, false, None), user["content"]);
+        let named = claude_turn_content(&user, true, false, None);
         let text = named.as_str().unwrap();
         assert!(text.starts_with("Fix the login form\n\n"));
         assert!(text.contains("mcp__nekko_bridge__set_chat_title"));
@@ -3721,11 +3942,11 @@ mod tests {
         assert_eq!(user["content"], "Fix the login form");
         let image = json!({ "content": "Fix this", "images": ["data:image/png;base64,AAAA"] });
         let original = nekko_harness::user_content(&image);
-        let named = claude_turn_content(&image, true, None);
+        let named = claude_turn_content(&image, true, false, None);
         assert_eq!(named[0], original[0]);
         assert_eq!(named[1], original[1]);
         assert!(named[2]["text"].as_str().unwrap().contains("Nekko chat naming note"));
-        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true, None), json!("/compact"));
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true, false, None), json!("/compact"));
     }
 
     #[test]
@@ -3744,24 +3965,27 @@ mod tests {
         let block = block.expect("a new attachment is sent");
         assert!(block.contains("the quarterly numbers"));
         assert_eq!(seen, vec![notes.clone()]);
-        let text = claude_turn_content(&json!({ "content": "Summarize it" }), false, Some(&block));
+        let text = claude_turn_content(&json!({ "content": "Summarize it" }), false, false, Some(&block));
         let text = text.as_str().unwrap();
         assert!(text.starts_with("Files the user attached to this chat:"));
         assert!(text.ends_with("Summarize it"));
 
         // A file-only message still says something.
-        let alone = claude_turn_content(&json!({ "content": "" }), false, Some(&block));
+        let alone = claude_turn_content(&json!({ "content": "" }), false, false, Some(&block));
         assert!(alone.as_str().unwrap().contains("the quarterly numbers"));
 
         // With a photo, the files sit before the user's text, after the image.
         let image = json!({ "content": "And this", "images": ["data:image/png;base64,AAAA"] });
-        let with_image = claude_turn_content(&image, false, Some(&block));
+        let with_image = claude_turn_content(&image, false, false, Some(&block));
         assert_eq!(with_image[0]["type"], "image");
         assert!(with_image[1]["text"].as_str().unwrap().contains("the quarterly numbers"));
         assert_eq!(with_image[2]["text"], "And this");
 
         // A CLI command is left alone.
-        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), false, Some(&block)), json!("/compact"));
+        assert_eq!(
+            claude_turn_content(&json!({ "content": "/compact" }), false, false, Some(&block)),
+            json!("/compact")
+        );
 
         // The same Claude Code session is not sent it again; only the new file goes.
         session["claudeCodeAttached"] = json!({ "session": "cc1", "paths": seen });

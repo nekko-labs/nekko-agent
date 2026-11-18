@@ -91,6 +91,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.graphics.ImageBitmap
@@ -158,6 +159,8 @@ fun Composer(
     footer: (@Composable () -> Unit)? = null,
     onVoiceConversation: (() -> Unit)? = null,
     voiceControls: (@Composable (com.nekko.android.voice.VoiceComposer) -> Unit)? = null,
+    /** The line over the box that sets it apart from a transcript; New chat has none (#2459). */
+    topLine: Boolean = true,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -174,9 +177,10 @@ fun Composer(
     val menu = if (armedNone) SkillMenu.query(text)?.let { SkillMenu.match(skills, it) }.orEmpty() else emptyList()
     val promptMenu = if (armedNone) SkillMenu.query(text)?.let { SkillMenu.matchPrompts(prompts, it) }.orEmpty() else emptyList()
     val photos = attach?.state?.photos.orEmpty()
-    val addingPhotos = attach?.state?.busy == true
-    val hasContent = text.isNotBlank() || skill != null || prompt != null || photos.isNotEmpty()
-    // Send waits for photos still being read, so none are left behind.
+    val clips = attach?.clips?.clips.orEmpty()
+    // Send waits for photos still being read and videos still going, so none are left behind.
+    val addingPhotos = attach?.state?.busy == true || attach?.clips?.sending == true
+    val hasContent = text.isNotBlank() || skill != null || prompt != null || photos.isNotEmpty() || clips.any { it.status == com.nekko.android.chat.ClipTray.Status.ARRIVED }
     val canSend = hasContent && blocked == null && !sending && !addingPhotos
     val showStop = running && !hasContent && !addingPhotos
     var plusOpen by remember { mutableStateOf(false) }
@@ -244,7 +248,7 @@ fun Composer(
     }
 
     Column(modifier.fillMaxWidth().background(p.paper)) {
-        HorizontalDivider(color = p.line)
+        if (topLine) HorizontalDivider(color = p.line)
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (queued.isNotEmpty()) {
                 QueueList(queued, queuedPrompts, onEditQueued, if (running) onInterrupt else null) { error = it }
@@ -281,7 +285,7 @@ fun Composer(
             }
             skill?.let { SkillChip("/${it.name}", Icons.Filled.Extension, stringResource(R.string.chat_remove_skill, it.name)) { skillName = null } }
             prompt?.let { SkillChip("/${it.name}", Icons.Filled.Bookmark, stringResource(R.string.chat_remove_saved_prompt, it.name)) { promptId = null } }
-            val note = blocked ?: error ?: mic?.error ?: attach?.state?.error
+            val note = blocked ?: error ?: mic?.error ?: attach?.state?.error ?: attach?.clips?.error
             if (note != null) {
                 Text(
                     note,
@@ -292,19 +296,20 @@ fun Composer(
             } else if (sendsLater != null) {
                 Text(sendsLater, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(horizontal = 4.dp).testTag("composer.sendsLater"))
             }
-            // One box the width of the screen: the message on top, + and Send inside it below.
+            // The message on top, + and Send below it, with no card around them (#2417, the iPhone's #2416):
+            // the bar's top line already sets it apart from the transcript.
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(p.surface)
-                    .border(1.dp, p.line, RoundedCornerShape(16.dp))
                     .padding(6.dp)
                     .testTag("composer.card"),
             ) {
                 // Photos going with the message sit in the box with its text, as on the iPhone (#2043).
-                if (attach != null && (photos.isNotEmpty() || addingPhotos)) {
+                if (attach != null && (photos.isNotEmpty() || attach.state.busy)) {
                     Box(Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp)) { PhotoStrip(photos, attach.state.adding, attach.onRemove) }
+                }
+                if (attach != null && clips.isNotEmpty()) {
+                    Box(Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp)) { ClipStrip(clips, attach.onRemoveClip) }
                 }
                 PastedChip(draft, text, setText)
                 val fieldValue = draft.valueFor(text)
@@ -606,6 +611,9 @@ class AttachUi(
     val take: () -> List<PhotoTray.Photo<ImageBitmap>>,
     val restore: (List<PhotoTray.Photo<ImageBitmap>>) -> Unit,
     val clearError: () -> Unit,
+    /** Videos going to the computer before the message (#2777). */
+    val clips: com.nekko.android.chat.ClipTray.State = com.nekko.android.chat.ClipTray.State(),
+    val onRemoveClip: (String) -> Unit = {},
 )
 
 @Composable
@@ -697,7 +705,7 @@ private fun PlusMenu(
 
 /** Thumbnails of the photos going with the next message; ✕ takes one out. */
 @Composable
-private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, onRemove: (Long) -> Unit) {
+internal fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, onRemove: (Long) -> Unit) {
     val p = Nekko.palette
     // A tap opens the photo full screen before it is sent (the iPhone's #1879): it is all on the phone already.
     var opened by remember { mutableStateOf<Int?>(null) }
@@ -741,6 +749,47 @@ private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, 
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+/**
+ * Videos with the message (#2777): each goes to the computer as soon as it is picked, its
+ * progress shown, then *Attached*. One still going or that failed can be removed; one attached
+ * is already in the chat on the computer.
+ */
+@Composable
+private fun ClipStrip(clips: List<com.nekko.android.chat.ClipTray.Clip>, onRemove: (String) -> Unit) {
+    val p = Nekko.palette
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        clips.forEachIndexed { i, clip ->
+            val status = when (clip.status) {
+                com.nekko.android.chat.ClipTray.Status.SENDING -> stringResource(R.string.chat_clip_sending, (clip.progress * 100).toInt())
+                com.nekko.android.chat.ClipTray.Status.ARRIVED -> stringResource(R.string.chat_clip_attached)
+                com.nekko.android.chat.ClipTray.Status.FAILED -> clip.error ?: stringResource(R.string.chat_clip_failed)
+            }
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(p.surface2).padding(start = 10.dp).heightIn(min = 48.dp).testTag("composer.clip.$i"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(Icons.Filled.Videocam, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(20.dp))
+                Column(Modifier.weight(1f).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(clip.name, style = MaterialTheme.typography.bodySmall, color = p.ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.MiddleEllipsis)
+                    Text(status, style = MaterialTheme.typography.labelSmall, color = if (clip.status == com.nekko.android.chat.ClipTray.Status.FAILED) p.danger else p.inkSoft, modifier = Modifier.testTag("composer.clip.status"))
+                    if (clip.status == com.nekko.android.chat.ClipTray.Status.SENDING) {
+                        LinearProgressIndicator(progress = { clip.progress }, color = p.accent, trackColor = p.line, modifier = Modifier.fillMaxWidth().height(3.dp))
+                    }
+                }
+                if (clip.status != com.nekko.android.chat.ClipTray.Status.ARRIVED) {
+                    val removeLabel = stringResource(R.string.chat_remove_clip, clip.name)
+                    IconButton(onClick = { onRemove(clip.id) }, modifier = Modifier.semantics { contentDescription = removeLabel }) {
+                        Icon(Icons.Filled.Close, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(18.dp))
+                    }
+                } else {
+                    Box(Modifier.size(12.dp))
+                }
             }
         }
     }

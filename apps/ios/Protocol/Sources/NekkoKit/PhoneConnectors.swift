@@ -273,7 +273,7 @@ public final class ConnectorsModel {
     public func connect(kind: String, token: String, settings: [String: String]) async throws -> PhoneConnector {
         var c = try PhoneConnectors.make(kind: kind, token: token, settings: settings, at: now())
         let secret = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        let (status, body) = try await http.send(PhoneConnectors.whoAmI(c, token: secret))
+        let (status, _, body) = try await http.send(PhoneConnectors.whoAmI(c, token: secret))
         guard (200..<300).contains(status) else {
             throw ConnectError(message: PhoneConnectors.failure(label: c.label, status: status, body: body))
         }

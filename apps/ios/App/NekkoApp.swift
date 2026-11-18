@@ -34,6 +34,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// Only so the Home Screen quick action reaches the app (QuickActionScene).
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        // The car's screen (Info.plist's CarPlay scene): its own delegate, never the quick action's.
+        if connectingSceneSession.role == .carTemplateApplication {
+            return UISceneConfiguration(name: CarPlaySceneDelegate.configurationName, sessionRole: connectingSceneSession.role)
+        }
         let config = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
         config.delegateClass = QuickActionScene.self
         // A cold launch from the quick action: the item arrives with the connection.
@@ -92,10 +96,10 @@ struct NekkoApp: App {
 enum NativeFixtureRoute {
     static var isolated: Bool {
         #if DEBUG
-        let flags = ["-uiTestQuietReconnectEvidence", "-uiTestPermissionsSettings", "-uiTestNotificationStep", "-uiTestComputerSettingsEvidence", "-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
-                     "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
+        let flags = ["-uiTestPermissionsSettings", "-uiTestNotificationStep", "-uiTestComputerSettingsEvidence", "-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
+                     "-uiTestPreviews", "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
                      "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications",
-                     "-uiTestSecurityEvidence", "-uiTestRunSettings", "-uiTestStarAsk"]
+                     "-uiTestSecurityEvidence", "-uiTestRunSettings", "-uiTestStarAsk", "-uiTestQuietReconnectEvidence"]
         return flags.contains { ProcessInfo.processInfo.arguments.contains($0) }
         #else
         return false
@@ -120,7 +124,6 @@ private struct NativeAppContent: View {
     /// The app, or (Debug builds) a fixture the UI tests photograph.
     @ViewBuilder private var root: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-uiTestQuietReconnectEvidence") { QuietReconnectEvidenceFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPermissionsSettings") { NavigationStack { SettingsView() } } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestComputerSettingsEvidence") { ComputerSettingsEvidenceFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") { VoiceConversationFixture() } else
@@ -134,6 +137,8 @@ private struct NativeAppContent: View {
             ChatRefreshFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
             NewChatFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestPreviews") {
+            PreviewEvidenceFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestMarkdownLab") {
             MarkdownLab()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") {
@@ -150,6 +155,8 @@ private struct NativeAppContent: View {
             StarAskFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestFirstPromptIntro") {
             FirstPromptIntroFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestQuietReconnectEvidence") {
+            QuietReconnectEvidenceFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestConnectionStrip") {
             ConnectionStripFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") {

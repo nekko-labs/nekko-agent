@@ -32,13 +32,42 @@ describe('the macOS platform authenticator', () => {
     expect(onError).toHaveBeenCalled();
   });
 
+  const read = (path: string) => readFileSync(join(import.meta.dirname, '../..', path), 'utf8');
+  const builder = read('electron-builder.yml');
+  const ymlValue = (key: string) => builder.match(new RegExp(`^\\s*${key}:\\s*(\\S+)\\s*$`, 'm'))?.[1];
+  const keysOf = (plist: string) => [...plist.matchAll(/<key>(.*?)<\/key>/g)].map((m) => m[1]);
+  const isRestricted = (k: string) => k === 'keychain-access-groups' || k === 'com.apple.application-identifier' || k.startsWith('com.apple.developer.');
+  const valueOf = (plist: string, key: string) => plist.slice(plist.indexOf(`<key>${key}</key>`)).match(/<string>(.*?)<\/string>/)?.[1];
+
   it('is in the signed entitlements, spelled out: macOS grants the group only when the signature carries it', () => {
-    const plist = readFileSync(join(import.meta.dirname, '../../build/entitlements.mac.plist'), 'utf8');
+    const plist = read('build/entitlements.mac.plist');
     expect(plist).toContain('<key>keychain-access-groups</key>');
-    expect(plist).toContain(`<string>${WEBAUTHN_KEYCHAIN_ACCESS_GROUP}</string>`);
     // codesign expands no build variable, so a placeholder in a value here would ship a group macOS never grants.
-    const group = plist.slice(plist.indexOf('<key>keychain-access-groups</key>')).match(/<string>(.*?)<\/string>/)?.[1];
+    const group = valueOf(plist, 'keychain-access-groups');
     expect(group).toBe(WEBAUTHN_KEYCHAIN_ACCESS_GROUP);
     expect(group).not.toContain('$(');
+  });
+
+  it('keeps restricted entitlements on the main executable only, and only with a provisioning profile (#2688, #2703)', () => {
+    // macOS refuses to launch a Developer ID binary carrying any of these without a profile that authorizes it, and only the main executable has one.
+    const main = ymlValue('entitlements');
+    const inherit = ymlValue('entitlementsInherit');
+    expect(main).toBe('build/entitlements.mac.plist');
+    expect(inherit).toBe('build/entitlements.mac.inherit.plist');
+
+    const mainPlist = read(main!);
+    const inheritPlist = read(inherit!);
+    expect(keysOf(inheritPlist).filter(isRestricted)).toEqual([]);
+    // The helpers need everything else the main executable has (they run V8).
+    expect(keysOf(inheritPlist).sort()).toEqual(keysOf(mainPlist).filter((k) => !isRestricted(k)).sort());
+
+    const restricted = keysOf(mainPlist).filter(isRestricted);
+    if (!ymlValue('provisioningProfile')) {
+      expect(restricted).toEqual([]);
+      return;
+    }
+    expect(restricted.sort()).toEqual(['com.apple.application-identifier', 'com.apple.developer.team-identifier', 'keychain-access-groups']);
+    expect(valueOf(mainPlist, 'com.apple.application-identifier')).toBe(`${APPLE_TEAM_ID}.${ymlValue('appId')}`);
+    expect(valueOf(mainPlist, 'com.apple.developer.team-identifier')).toBe(APPLE_TEAM_ID);
   });
 });

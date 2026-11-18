@@ -129,7 +129,7 @@ fn kind_of(event_type: &str) -> Kind {
     match event_type {
         "done" | "error" => Kind::End,
         "usage" => Kind::Usage,
-        "session_meta" | "compaction" | "claude_code_background" => Kind::Meta,
+        "session_meta" | "compaction" | "claude_code_background" | "limit_reset" => Kind::Meta,
         "tool_approval_required" | "question" | "secret_request" => Kind::Wait,
         "question_resolved" | "approval_resolved" | "secret_resolved" | "steered" => Kind::Resume,
         _ => Kind::Stream,

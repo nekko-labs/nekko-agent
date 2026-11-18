@@ -316,6 +316,21 @@ fn folder_path(folders: &[Value], id: &str) -> Option<String> {
 }
 
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
+    let board = route_inner(ctx, channel, args).await?;
+    // Every design call answers with the board; the project's index of it
+    // (`nekko-designs/README.md`) follows, for agents that read files only.
+    if channel.starts_with("design:") && board.get("pages").is_some() {
+        let id = args.first().map(nekko_js::display).unwrap_or_default();
+        if let Some(folder) = folder_path(&folders(ctx).await, &id) {
+            let shown = board.clone();
+            // The index is a courtesy: a folder that cannot be written never fails the call.
+            let _ = blocking(move || design::write_index(&folder, &shown)).await;
+        }
+    }
+    Ok(board)
+}
+
+async fn route_inner(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     let ws = &ctx.workspace;
     let args = args.to_vec();
     match channel {

@@ -9,7 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.nekko.android.data.FirstRun
 import com.nekko.android.ui.screens.FirstRunIntro
-import com.nekko.android.ui.screens.FirstRunNotifications
 import kotlinx.coroutines.flow.first
 import android.net.Uri
 import android.os.Handler
@@ -44,6 +43,7 @@ import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.files.FilesScreen
 import com.nekko.android.ui.files.LogsScreen
 import com.nekko.android.ui.screens.ProvidersScreen
+import com.nekko.android.ui.screens.TailscaleSetupSheet
 import com.nekko.android.ui.screens.AutomationsScreen
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.UsageScreen
@@ -58,6 +58,8 @@ import com.nekko.android.ui.settings.SettingsDeps
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -114,8 +116,11 @@ object Routes {
     const val FILES = "settings/files"
     const val LOGS = "settings/logs"
     const val PROVIDERS = "settings/providers"
+    const val CONNECTORS = "settings/connectors"
+    const val PULL_REQUESTS = "pull-requests"
     const val SIMPLE_MODE = "settings/simple"
     const val CUSTOMIZE = "settings/customize"
+    const val PERMISSIONS = "settings/permissions"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     /** This phone's chats, opened on [chat] when one is given (a row of the chat list, #2108). */
@@ -166,6 +171,7 @@ fun NekkoNavHost(
             // Over whatever is open; Back from New chat returns there.
             DeepLink.Share, DeepLink.NewChat -> nav.navigate(Routes.NEW) { launchSingleTop = true }
             DeepLink.Talk -> nav.navigate(Routes.VOICE) { launchSingleTop = true }
+            is DeepLink.OpenRouterKey -> nav.navigate(Routes.phone()) { launchSingleTop = true }
             DeepLink.Dashboard -> nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
             null -> return@LaunchedEffect
         }
@@ -181,6 +187,8 @@ fun NekkoNavHost(
 
     // A pairing just worked: celebrate over whatever screen is now underneath (PairSuccessOverlay).
     var justPaired by rememberSaveable { mutableStateOf<String?>(null) }
+    // Paired over Tailscale (#2856): after the celebration, the steps that are left.
+    var tailscaleSetup by rememberSaveable { mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         NavHost(navController = nav, startDestination = Routes.CHATS) {
@@ -290,6 +298,8 @@ fun NekkoNavHost(
                     onPaired = { id ->
                         FirstRun.paired(phonePrefs)
                         justPaired = id
+                        val relay = repo.state.value.computers.firstOrNull { it.id == id }?.relayUrl
+                        if (relay != null && com.nekko.protocol.RelayRoute.of(relay) == com.nekko.protocol.RelayRoute.TAILSCALE) tailscaleSetup = id
                         nav.onMain { backToChats() }
                     },
                 )
@@ -312,6 +322,9 @@ fun NekkoNavHost(
                 }
                 com.nekko.android.ui.screens.CustomizeScreen(deps, phoneChats(), onBack = { nav.popBackStack() })
             }
+            composable(Routes.PERMISSIONS) {
+                com.nekko.android.permissions.PermissionsScreen(phonePrefs, onBack = { nav.popBackStack() })
+            }
             composable(Routes.SIMPLE_MODE) {
                 SimpleModeScreen(prefs = phonePrefs, onBack = { nav.popBackStack() })
             }
@@ -320,6 +333,20 @@ fun NekkoNavHost(
             }
             composable(Routes.AUTOMATIONS) {
                 AutomationsScreen(repo = repo, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.PULL_REQUESTS) {
+                val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                com.nekko.android.ui.screens.PullRequestsScreen(
+                    repo = repo, connectors = app.connectors, model = app.pullRequests,
+                    onBack = { nav.popBackStack() },
+                    onConnectors = { nav.navigate(Routes.CONNECTORS) },
+                    // The prompt is New chat's text to edit; nothing goes until Start.
+                    onStartChat = { text -> shareInbox.offer(text); nav.navigate(Routes.NEW) },
+                )
+            }
+            composable(Routes.CONNECTORS) {
+                val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                com.nekko.android.ui.screens.ConnectorsScreen(app.connectors, onBack = { nav.popBackStack() })
             }
             composable(Routes.PROVIDERS) {
                 ProvidersScreen(repo = repo, onBack = { nav.popBackStack() })
@@ -358,6 +385,7 @@ fun NekkoNavHost(
             val name = state.computers.firstOrNull { it.id == id }?.name?.takeIf { it != DEFAULT_COMPUTER_NAME }
             PairSuccessOverlay(name) { justPaired = null }
         }
+        if (justPaired == null) tailscaleSetup?.let { id -> TailscaleSetupSheet(repo, id) { tailscaleSetup = null } }
     }
 }
 
@@ -423,6 +451,7 @@ private fun Panes(
                 onPair = { nav.navigate(Routes.pair()) },
                 onComputers = { nav.navigate(Routes.COMPUTERS) },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
+                onPullRequests = { nav.navigate(Routes.PULL_REQUESTS) },
                 onMonitors = { panes.update(running) { l -> if (l[slot.side.other] == PaneContent.Monitors) l else l.replace(slot.side.other, PaneContent.Monitors) } },
                 pane = slot,
                 phonePrefs = phonePrefs,
@@ -508,24 +537,26 @@ private fun firstRunStep(repo: ComputersRepository, prefs: PhonePrefs): Boolean 
     val done by prefs.flow(FirstRun.DONE).collectAsStateWithLifecycle()
     val notifyStep by prefs.flow(FirstRun.NOTIFY_STEP).collectAsStateWithLifecycle()
     var introSeen by rememberSaveable { mutableStateOf(false) }
-    var asking by remember { mutableStateOf(false) }
-    // Whatever Android answers, the step is done; a refusal shows in Settings → Connection.
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { FirstRun.finish(prefs, allowNotifications = true) }
+    val context = LocalContext.current
     if (!c.ready) return false
     if (notifyStep && c.computers.isNotEmpty()) {
-        FirstRunNotifications(
-            computer = c.active?.name ?: stringResource(R.string.chats_your_computer_cap),
-            asking = asking,
-            onAllow = {
-                if (Build.VERSION.SDK_INT >= 33) {
-                    asking = true
-                    permission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else {
-                    FirstRun.finish(prefs, allowNotifications = true)
-                }
-            },
-            onNotNow = { FirstRun.finish(prefs, allowNotifications = false) },
-        )
+        // Step 3: the permissions checklist (#2251, the iPhone's #2249). Nothing is required;
+        // Continue ends the first run, and alerts left off turn Notify me off, as Not now did.
+        androidx.compose.foundation.layout.Box(
+            Modifier.fillMaxSize().background(com.nekko.android.ui.theme.Nekko.palette.paper)
+                .safeDrawingPadding(),
+        ) {
+            com.nekko.android.permissions.PermissionChecklist(
+                prefs,
+                step = { com.nekko.android.ui.screens.StepLabel(3) },
+                onDone = {
+                    val alerts = com.nekko.android.permissions.PermissionStates.read(
+                        context, com.nekko.android.permissions.PermissionItem.ALERTS, emptySet(), { false }, verified = false,
+                    )
+                    FirstRun.finish(prefs, allowNotifications = alerts == com.nekko.android.permissions.PermissionState.ALLOWED)
+                },
+            )
+        }
         return true
     }
     if (!done && !introSeen && c.computers.isEmpty()) {
@@ -579,6 +610,7 @@ private fun PhoneComputerHome(
         onComputers = { nav.navigate(Routes.COMPUTERS) },
         onSettings = { nav.navigate(Routes.SETTINGS) },
         onMonitors = { nav.navigate(Routes.MONITORS) },
+        onPullRequests = { nav.navigate(Routes.PULL_REQUESTS) },
         onSkipFirstRun = firstRunSkip(phonePrefs),
         phonePrefs = phonePrefs,
         phone = phoneChats(),

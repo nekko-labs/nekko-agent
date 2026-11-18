@@ -1,18 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AboutYouSection } from './AboutYouSettings.js';
 import { allowModeChange } from '../components/YoloWarning.js';
-import { CHAT_MODE_ICON } from '../gentleface-icons.js';
+import { CHAT_MODE_ICON, SettingsIcon } from '../gentleface-icons.js';
 import { CHAT_MODE_LABEL, AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
+import { PromptProfilesSettings } from '../components/PromptProfilesSettings.js';
 import { QuietTabs, StatusDot } from '../components/primitives/index.js';
 import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ComputerIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -25,6 +26,7 @@ import { GitHubStarSupport } from '../components/GitHubStarSupport.js';
 import { EXPERIMENTAL_FLAGS, saveSettings } from '../settingsIndex.js';
 import { zoomOf } from '../textScale.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
+import { PictureModelSettings } from '../components/PictureModelSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
 import { hasAppChrome } from '../chrome.js';
@@ -70,7 +72,7 @@ export const SETTINGS_GROUPS = [
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
   { id: 'connections', label: 'Connections', icon: GlobeIcon },
   { id: 'tools', label: 'Tools', icon: WrenchIcon },
-  { id: 'system', label: 'System', icon: GearIcon },
+  { id: 'system', label: 'System', icon: SettingsIcon },
 ] as const;
 type SettingsGroupId = (typeof SETTINGS_GROUPS)[number]['id'];
 
@@ -332,6 +334,7 @@ export function SettingsView() {
                 <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
               </div>
               <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="System prompt size"><PromptProfilesSettings settings={settings} update={update} /></ErrorBoundary>
               <FunSection settings={settings} update={update} />
             </SettingsGroup>
             <SettingsGroup id="agents">
@@ -379,6 +382,7 @@ export function SettingsView() {
                   );
                 })}
               </SettingsSection>
+              <SettingsSection id="agent-pictures" title="Pictures" help="Agents in chats on this computer can make and edit pictures with its picture models. Nothing leaves the computer."><div className="mt-(--q-inline)"><ErrorBoundary label="Pictures"><PictureModelSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
               <SettingsSection id="delegation-routes" title="Delegation routes"><div className="mt-(--q-inline)"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
               <ErrorBoundary label="Hooks"><HooksSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>
@@ -1222,22 +1226,13 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
   );
 }
 
+/**
+ * Settings' call shape (`on`, aria props) for the app's one switch. It wears
+ * `.quiet-switch`, the same look as `primitives/Toggle`, so Settings and
+ * Automations draw the same slider.
+ */
 export function Toggle({ on, onChange, ...aria }: { on: boolean; onChange: (v: boolean) => void } & Pick<React.AriaAttributes, 'aria-label' | 'aria-describedby'>) {
-  return (
-    <button
-      role="switch"
-      {...aria}
-      aria-checked={on}
-      onClick={() => onChange(!on)}
-      className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors"
-      style={{ background: on ? 'var(--accent)' : 'var(--line)' }}
-    >
-      <span
-        className="inline-block h-5 w-5 rounded-full bg-white shadow-(--shadow-sm) transition-transform"
-        style={{ transform: on ? 'translateX(22px)' : 'translateX(2px)' }}
-      />
-    </button>
-  );
+  return <button type="button" role="switch" {...aria} aria-checked={on} className="quiet-switch" onClick={() => onChange(!on)} />;
 }
 
 /**

@@ -6,22 +6,7 @@
     <string name="chats_back">返回</string>
     <string name="chats_cancel">取消</string>
     <string name="chats_new_chat">新聊天</string>
-    <string name="chats_denied_revoked">这部手机已在你的电脑上被移除。请在电脑上：设置 → 远程访问 → 配对设备，然后在这里扫描新的 QR 码。如果仍被拒绝，请先在电脑上使用“退出所有手机”。</string>
-    <string name="chats_denied_bad_code">该配对码已过期或已被使用。请扫描新的 QR 码。</string>
-    <string name="chats_denied_unknown_device">你的电脑还不认识这部手机。请扫描配对 QR 码。</string>
-    <string name="chats_denied_kicked">你的电脑断开了这部手机。请重新配对。</string>
-    <string name="chats_denied_bad_key">你电脑上的配对密钥已更改。请扫描新的 QR 码。</string>
-    <string name="chats_denied_update_required">你的电脑只接受使用最新版 Nekko Agent 的手机。请更新此 App 后再连接。</string>
-    <string name="chats_denied_invalid">配对失败。请在电脑上扫描新的 QR 码。</string>
-    <string name="chats_banner_stopped">你已停止 %1$s 上的远程访问。请在那里重新开启（设置 → 远程访问），然后点按此处重新连接。</string>
-    <string name="chats_banner_online">%1$s 在线</string>
-    <string name="chats_banner_offline">%1$s 已离线。请在它上面打开 Nekko Agent。</string>
-    <string name="chats_banner_connecting">正在重新连接 %1$s...</string>
-    <string name="chats_banner_host_not_found">找不到 %1$s，这是此手机配对时使用的地址。请在 %2$s 上的 设置 → 远程访问 中更改手机的连接方式，然后重新配对。</string>
-    <string name="chats_reconnect">重新连接</string>
     <string name="chats_pair_again">重新配对</string>
-    <string name="chats_manage_computers">管理电脑</string>
-    <string name="chats_encrypted_via">经由 %1$s 端到端加密</string>
     <string name="chats_safety_options">%1$s 的安全选项</string>
     <string name="chats_nearby_title">在此网络中</string>
     <string name="chats_nearby_own_relay">运行自己的 Relay：%1$s</string>
@@ -80,8 +65,8 @@
     <string name="chats_delete">删除</string>
     <string name="chats_delete_title">删除此聊天？</string>
     <string name="chats_delete_body">“%1$s”将从 %2$s 上永久删除。此操作无法撤销。</string>
-    <string name="chats_outbox_note_one">1 条提示词将在重新连接后发送。</string>
-    <string name="chats_outbox_note_other">%1$d 条提示词将在重新连接后发送。</string>
+    <string name="chats_outbox_note_one">1 条提示词在这部手机上等待。%1$s 恢复连接后发送。</string>
+    <string name="chats_outbox_note_other">%1$d 条提示词在这部手机上等待。%2$s 恢复连接后发送。</string>
     <string name="chats_waiting_to_send">等待发送</string>
     <string name="chats_on_computer">在 %1$s 上</string>
     <string name="chats_search_placeholder">搜索聊天</string>
@@ -126,7 +111,6 @@
     <string name="chats_oldest_first">最早的在前</string>
     <string name="chats_newest_first">最新的在前</string>
     <string name="chats_show">显示</string>
-    <string name="chats_previews">预览</string>
     <string name="chats_completed_chats">已完成的聊天</string>
     <string name="chats_empty_groups">空分组</string>
     <string name="chats_reorder_groups_menu">调整分组顺序…</string>
@@ -200,6 +184,10 @@
     <string name="chats_no_providers">你电脑上的 Nekko Agent 没有开启任何模型提供方。请在其模型设置中添加或启用一个。</string>
     <string name="chats_search_models">搜索模型</string>
     <string name="chats_starred">已加星标</string>
+    <string name="chats_account_signed_out">已退出登录</string>
+    <string name="chats_account_personal_plan">个人方案</string>
+    <string name="chats_account_organization">组织</string>
+    <string name="chats_account_switcher">Claude 账户</string>
     <string name="chats_model_source">模型来源</string>
     <string name="chats_scope_all">全部</string>
     <string name="chats_scope_cloud">云</string>
@@ -213,8 +201,6 @@
     <string name="chats_no_models_match">没有与“%1$s”匹配的模型。</string>
     <string name="chats_loaded">已加载</string>
     <string name="chats_selected">已选择</string>
-    <string name="chats_offline_connecting">%1$s 正在连接… 现在开始，聊天会在它恢复后开始；在此之前会在这部手机上等待。</string>
-    <string name="chats_offline_offline">%1$s 已离线。现在开始，聊天会在它恢复后开始；在此之前会在这部手机上等待。</string>
     <string name="chats_not_started">未开始：%1$s</string>
     <string name="chats_offline_no_model">要在 %1$s 离线时开始聊天，请在 设置 → 新聊天 中为它选择默认模型。</string>
     <string name="chats_model_named">模型 · %1$s</string>
@@ -276,4 +262,17 @@
     <string name="chats_phone_forget_title">忘记此聊天？</string>
     <string name="chats_phone_forget_body">其消息将从此手机删除。服务商的记录仍会保留。</string>
     <string name="chats_phone_forget">忘记</string>
+    <!-- New chat while the computer is away (#2475), the iPhone's two lines. -->
+    <string name="chats_reconnecting">%1$s 正在重新连接</string>
+    <string name="chats_reconnecting_label">%1$s 正在重新连接…</string>
+    <string name="chats_reconnect_draft">你发送的提示会在这部手机上等待。</string>
+    <!-- Sub-agents under their chat (#2509). -->
+    <string name="chats_subagents">子代理</string>
+    <string name="chats_subagent">子代理</string>
+    <string name="chats_subagent_named">子代理 %1$s</string>
+    <string name="chats_subagent_on">子代理 %1$s，使用 %2$s</string>
+    <!-- New chat as a composer (#2459). -->
+    <string name="chats_photo_unreadable">无法读取该图片。</string>
+    <string name="chats_choose_model">选择模型</string>
+    <string name="chats_starts_on">在 %1$s 上开始</string>
 </resources>

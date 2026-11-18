@@ -133,10 +133,15 @@ the script cannot see. The nightly run always checks both.
 
 Implemented in source, locally regression-tested; hosted Xcode execution and
 per-shard duration remain unverified. The required `protocol-and-build` matrix
-has three isolated jobs, each keeping the existing 85-minute timeout:
+has four isolated jobs, each keeping the existing 85-minute timeout:
 
-- **fixtures:** every unit/fixture UI suite except `LiveRelayTests`, selected by
-  the same broad exclusion so future non-live suites are included automatically.
+- **fixtures:** every unit/fixture UI suite except `LiveRelayTests` and the
+  `HEAVY` classes, selected by broad exclusion so future non-live suites are
+  included automatically.
+- **fixtures-heavy:** the `HEAVY` classes listed in `ios-native.yml`, the slowest
+  fixture suites by measured time (#1165: serial on a hosted 3-vCPU Mac, all
+  fixtures together took 71 of 85 minutes). Move a class into `HEAVY` when the
+  `fixtures` leg grows toward its timeout again.
 - **pairing:** the pair/stream/approval journey for every scoped appearance, with
   both fresh-stack attempts preserved.
 - **journeys:** the remaining seven live journeys, serial against fresh stacks.
@@ -145,7 +150,7 @@ All legs retain the protocol/relay checks, build and bundle audits. Repeating se
 costs more runner time but avoids transferring simulator builds between hosts.
 `fail-fast: false` lets the other legs finish and retain their diagnostics if
 one fails. Screenshot export remains unconditional, with distinct artifacts:
-`native-ios-evidence-fixtures`, `native-ios-evidence-pairing` and
+`native-ios-evidence-fixtures`, `native-ios-evidence-fixtures-heavy`, `native-ios-evidence-pairing` and
 `native-ios-evidence-journeys`. Failed live stacks still print their logs.
 
 Only the dependent `report-batch` job reports `Native iOS (batch)` after the

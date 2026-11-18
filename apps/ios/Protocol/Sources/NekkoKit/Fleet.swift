@@ -15,6 +15,8 @@ public struct Peer: Equatable, Sendable {
     public var detail: String?
     public var denied: DenyReason?
     public var summaries: [SessionSummary] = []
+    /// Its chats' sub-agents, by the parent's id.
+    public var subagents: [String: [SessionSummary]] = [:]
     public var activity: [String: Activity] = [:]
     public var workspaces: [WorkspaceFolder] = []
     /// The computer answered on this link (not only a saved list).
@@ -61,14 +63,23 @@ extension ComputersStore {
 
     /// The computer a chat is on, from the lists the phone holds.
     public func computerId(ofChat sessionId: String) -> String? {
-        if summaries.contains(where: { $0.id == sessionId }) { return activeId }
-        return peers.first { $0.value.summaries.contains { $0.id == sessionId } }?.key
+        func holds(_ chats: [SessionSummary], _ kids: [String: [SessionSummary]]) -> Bool {
+            chats.contains { $0.id == sessionId } || kids.values.contains { $0.contains { $0.id == sessionId } }
+        }
+        if holds(summaries, subagents) { return activeId }
+        return peers.first { holds($0.value.summaries, $0.value.subagents) }?.key
     }
 
     /// The chats on one computer, or on every paired computer (nil): the active one's first.
     public func chats(on computerId: String?) -> [SessionSummary] {
         if let computerId { return computerId == activeId ? summaries : peers[computerId]?.summaries ?? [] }
         return summaries + fleetOrder.flatMap { peers[$0]?.summaries ?? [] }
+    }
+
+    /// The sub-agents a chat spawned, on whichever computer holds it, oldest first.
+    public func subagents(of chatId: String) -> [SessionSummary] {
+        if let kids = subagents[chatId] { return kids }
+        return peers.values.lazy.compactMap { $0.subagents[chatId] }.first ?? []
     }
 
     /// Which chats run or need you, on one computer or every one (nil).
@@ -112,6 +123,7 @@ extension ComputersStore {
         openLink(id)
         if let kept, var peer = peers[id], peer.savedAt == nil || kept.loaded {
             peer.summaries = kept.summaries
+            peer.subagents = kept.subagents
             peer.workspaces = kept.workspaces
             peer.activity = kept.activity
             peers[id] = peer
@@ -278,6 +290,7 @@ extension ComputersStore {
         guard links[id]?.client === c, peers[id] != nil else { return }
         if let l = r.0 {
             peers[id]?.summaries = SessionSummary.visible(l)
+            peers[id]?.subagents = SessionSummary.subagents(l)
             peers[id]?.loaded = true
             peers[id]?.savedAt = nil
         }
@@ -307,6 +320,7 @@ extension ComputersStore {
                 guard self.links[id] === link, !Task.isCancelled else { return }
                 if let list {
                     self.peers[id]?.summaries = SessionSummary.visible(list)
+                    self.peers[id]?.subagents = SessionSummary.subagents(list)
                     self.peers[id]?.loaded = true
                     self.peers[id]?.savedAt = nil
                     self.savePeerList(id)

@@ -18,6 +18,7 @@ import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import { HoverTip } from './HoverTip.js';
 import './monitorsDock.css';
+import { SimulatorRows } from './Simulators.js';
 import type { OAuthStatus } from '@nekko-agent/shared';
 import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
@@ -802,6 +803,8 @@ function Hardware({ providers }: { providers: ProviderConfig[] }) {
   const monitors = useMonitors();
   const { system, gpu } = useResourceSample();
   const rows = hardwareRows(monitors, system, gpu);
+  // Simulators run on this computer only: a connected computer's are not read.
+  const watched = useWatchedComputer();
   return <div className="monitors-dock__metrics monitors-dock__hardware">
     {rows.map((row) => <div className="monitors-dock__meter" key={row.label}>
       <div className="monitors-dock__meter-head"><strong>{row.label}</strong>{formatTemperature(row.temp) && <span className="monitors-dock__temp" data-temp-tone={temperatureTone(row.temp!)} style={{ color: TEMP_COLOR[temperatureTone(row.temp!)] }} aria-label={`${row.label} temperature ${formatTemperature(row.temp)}`} title="Sensor temperature"><ThermometerGlyph />{formatTemperature(row.temp)}</span>}</div>
@@ -809,6 +812,7 @@ function Hardware({ providers }: { providers: ProviderConfig[] }) {
         {row.value != null && <span style={{ width: `${Math.max(0, Math.min(100, row.value))}%`, background: row.color }} />}
       </div><span className="monitors-dock__reading">{row.text}</span>
     </div>)}
+    {!watched && <SimulatorRows />}
   </div>;
 }
 

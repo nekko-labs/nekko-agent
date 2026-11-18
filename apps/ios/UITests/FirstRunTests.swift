@@ -127,6 +127,36 @@ final class FirstRunTests: XCTestCase {
         }
     }
 
+    /// After a Tailscale pairing: the setup guide with its live checks (no tailnet
+    /// on the simulator, so both read as still to do), and the first-run guide's
+    /// Nekko Cloud row as coming soon, in each appearance.
+    func testTailscaleSetupGuideInLightAndDark() {
+        for theme in uiTestThemes {
+            let app = XCUIApplication()
+            app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-theme", theme, "-uiTestReset", "YES", "-uiTestTailscaleSetup"]
+            app.launch()
+            let later = app.buttons["tailscaleSetup.done"]
+            XCTAssertTrue(later.waitForExistence(timeout: 10), "the setup guide after pairing")
+            XCTAssertTrue(app.staticTexts["Turn Tailscale on on this iPhone"].exists)
+            XCTAssertTrue(app.buttons["tailscaleSetup.open"].exists)
+            attach(app, "\(theme)-tailscale-setup")
+            auditAccessibility(app, "\(theme)-tailscale-setup")
+            later.tap()
+            XCTAssertTrue(waitGone(later, 5))
+            app.terminate()
+
+            app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-theme", theme, "-uiTestReset", "YES"]
+            app.launch()
+            let pair = app.buttons["Pair with your computer"]
+            XCTAssertTrue(pair.waitForExistence(timeout: 10))
+            let soon = app.staticTexts["Coming soon"]
+            for _ in 0..<4 where !soon.isHittable { app.swipeUp() }
+            XCTAssertTrue(soon.exists, "Nekko Cloud is labelled coming soon")
+            attach(app, "\(theme)-welcome-cloud-coming-soon")
+            app.terminate()
+        }
+    }
+
     /// Skip ends the first run on step 1: straight to pairing, with no step label.
     func testSkipGoesStraightToPairing() {
         let app = XCUIApplication()

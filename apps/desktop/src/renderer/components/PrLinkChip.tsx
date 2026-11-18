@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { parsePrUrl, type IssueInfo, type PrInfo } from '@nekko-agent/shared';
-import { PR_STATUS_LABEL as STATUS_LABEL, PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
+import { HoverTip } from './HoverTip.js';
+import { PR_STATUS_LABEL as STATUS_LABEL, PrStatusIcon, PrTip, prStatus, prTone } from './SessionPrChip.js';
+import { LinkTip } from './LinkTip.js';
 import { LIVE_STATE_FRESH_MS, isLiveState, onLiveStateTick } from '../liveStateTicker.js';
 import { GfIcon } from '../gentleface-icons.js';
 
@@ -112,27 +114,32 @@ export function isPrUrl(href: string): boolean {
 /**
  * A GitHub PR link drawn as a compact chip: the PR's live state glyph, tinted
  * as on GitHub, and its label. Opens in the external browser like any link.
+ * Hovering it shows the PR's state, title, size and checks.
  */
 export function PrLinkChip({ href, label, onContextMenu }: { href: string; label?: React.ReactNode; onContextMenu?: (e: React.MouseEvent) => void }) {
   const pr = usePrInfo(href);
   const status = prStatus(pr);
   const parsed = parsePrUrl(href);
   const fallback = parsed ? `${parsed.repo}#${parsed.number}` : href;
-  const title = pr ? `${pr.owner}/${pr.repo}#${pr.number} · ${STATUS_LABEL[status]} · ${pr.title}` : `${fallback} · ${href}`;
+  const reference = parsed ? `${parsed.owner}/${parsed.repo} #${parsed.number}` : href;
+  const plain = pr ? `${pr.owner}/${pr.repo}#${pr.number} · ${STATUS_LABEL[status]} · ${pr.title}` : `${fallback} · ${href}`;
+  const tip = pr ? <PrTip pr={pr} /> : <LinkTip glyph={<PrStatusIcon status={status} />} tone="var(--ink-faint)" state={STATUS_LABEL[status]} reference={reference} />;
   return (
+    <HoverTip label={plain} content={tip} side="top">
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
       data-pr-status={status}
-      title={title}
       className="pr-link-chip mx-0.5 inline-flex max-w-full cursor-pointer items-center gap-1 rounded-full border border-line px-2 py-px align-[-0.15em] text-sm font-medium leading-5 no-underline hover:bg-surface-2 focus-visible:outline focus-visible:outline-accent"
       onContextMenu={onContextMenu}
     >
       <span style={{ color: pr ? prTone(pr) : 'var(--ink-faint)' }} className="inline-flex"><PrStatusIcon status={status} /></span>
-      <span className="min-w-0 truncate text-ink">{label ?? fallback}</span>
+      {/* The label takes the state's hue too, as on the agent card's chip; ink until the state is read. */}
+      <span style={{ color: pr ? prTone(pr) : 'var(--ink)' }} className="min-w-0 truncate">{label ?? fallback}</span>
       <span className="sr-only"> ({STATUS_LABEL[status]})</span>
     </a>
+    </HoverTip>
   );
 }
 
@@ -140,18 +147,23 @@ export function PrLinkChip({ href, label, onContextMenu }: { href: string; label
 export function IssueLinkChip({ href, label }: { href: string; label: React.ReactNode }) {
   const issue = useIssueInfo(href);
   const look = issue && issueLook(issue);
+  const plain = issue ? `${issue.owner}/${issue.repo}#${issue.number} · ${look!.label} · ${issue.title}` : href;
+  const tip = issue && look
+    ? <LinkTip glyph={<GfIcon name={look.icon} className="h-3.5 w-3.5" />} tone={look.tone} state={look.label} reference={`${issue.owner}/${issue.repo} #${issue.number}`} title={issue.title} />
+    : <LinkTip glyph={<GfIcon name="record" className="h-3.5 w-3.5" />} tone="var(--ink-faint)" state="Issue" reference={href} />;
   return (
+    <HoverTip label={plain} content={tip} side="top">
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
       data-issue-state={look ? look.icon : 'unknown'}
-      title={issue ? `${issue.owner}/${issue.repo}#${issue.number} · ${look!.label} · ${issue.title}` : href}
       className="pr-link-chip mx-0.5 inline-flex max-w-full cursor-pointer items-center gap-1 rounded-full border border-line px-2 py-px align-[-0.15em] text-sm font-medium leading-5 no-underline hover:bg-surface-2 focus-visible:outline focus-visible:outline-accent"
     >
       <span style={{ color: look ? look.tone : 'var(--ink-faint)' }} className="inline-flex"><GfIcon name={look ? look.icon : 'record'} className="h-3.5 w-3.5" /></span>
-      <span className="min-w-0 truncate text-ink">{label}</span>
+      <span style={{ color: look ? look.tone : 'var(--ink)' }} className="min-w-0 truncate">{label}</span>
       {look && <span className="sr-only"> ({look.label})</span>}
     </a>
+    </HoverTip>
   );
 }

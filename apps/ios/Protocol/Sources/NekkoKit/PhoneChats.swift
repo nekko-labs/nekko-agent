@@ -11,13 +11,18 @@ public struct PhoneMessage: Codable, Equatable, Sendable, Identifiable {
     public let at: Int64
     /// Why the reply stopped short, when it did.
     public var error: String?
+    /// Persisted marker so partial replies are recognized after process death.
+    public var incomplete: Bool?
+    /// The user's photos, as image data URLs. Absent in chats saved before photos.
+    public var images: [String]?
 
-    public init(id: String, role: Role, text: String, at: Int64, error: String? = nil) {
+    public init(id: String, role: Role, text: String, at: Int64, error: String? = nil, images: [String]? = nil) {
         self.id = id
         self.role = role
         self.text = text
         self.at = at
         self.error = error
+        self.images = images?.isEmpty == true ? nil : images
     }
 }
 
@@ -75,6 +80,8 @@ public final class PhoneChats {
     public private(set) var chats: [PhoneChat] = []
     public private(set) var models: [String: [PhoneModel]] = [:]
     public private(set) var modelErrors: [String: String] = [:]
+    /// Each provider's request and token budget as its last answer reported it, by provider id.
+    public private(set) var rateLimits: [String: PhoneRateLimits] = [:]
     /// Chats whose reply is streaming in now.
     public private(set) var running: Set<String> = []
     /// The tokens this iPhone's chats used, by provider, model and day. Kept on the phone only.
@@ -86,6 +93,12 @@ public final class PhoneChats {
     private let http: PhoneHTTP
     private let now: () -> Int64
     private let newId: () -> String
+    @ObservationIgnored private var attempts: [String: String] = [:]
+    @ObservationIgnored private var providerEpoch: [String: UUID] = [:]
+    @ObservationIgnored private var modelLoads: [String: UUID] = [:]
+    @ObservationIgnored private var counts: [String: PhoneTokenCount] = [:]
+    @ObservationIgnored private var modelTasks: [String: Task<(status: Int, headers: [String: String], body: Data), Error>] = [:]
+    @ObservationIgnored private var tests: [UUID: (String, Task<String?, Never>)] = [:]
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
 
     static let file = "phone-chats"
@@ -107,9 +120,10 @@ public final class PhoneChats {
         tone = Self.decode(PhoneTone.self, files?.load(PhoneProviders.computerId, Self.toneFile)) ?? .standard
         // A reply cut off when the app was closed is not still coming.
         for i in chats.indices {
-            if let j = chats[i].messages.indices.last, chats[i].messages[j].role == .assistant, chats[i].messages[j].text.isEmpty,
+            if let j = chats[i].messages.indices.last, chats[i].messages[j].role == .assistant, (chats[i].messages[j].incomplete == true || chats[i].messages[j].text.isEmpty),
                chats[i].messages[j].error == nil {
                 chats[i].messages[j].error = String(localized: "Stopped when the app closed.")
+                chats[i].messages[j].incomplete = false
             }
         }
     }
@@ -150,8 +164,18 @@ public final class PhoneChats {
         return p
     }
 
+    /// OpenRouter's sign-in answers with a code; swap it for the API key it stands for.
+    public func openRouterKey(code: String, verifier: String) async throws -> String {
+        let (status, _, body) = try await http.send(PhoneProviders.openRouterKeyRequest(code: code, verifier: verifier))
+        guard (200..<300).contains(status) else { throw PhoneProviders.Problem.signIn }
+        guard let key = PhoneProviders.openRouterKey(from: body) else { throw PhoneProviders.Problem.signIn }
+        return key
+    }
+
     /// A new key for a provider (a Vertex AI token runs out in an hour).
     public func setKey(_ providerId: String, _ key: String) {
+        guard provider(providerId) != nil, PhoneProviders.headerValue(key) else { return }
+        invalidate(providerId)
         let secret = key.trimmingCharacters(in: .whitespacesAndNewlines)
         secrets.set(PhoneProviders.keyName(providerId), secret.isEmpty ? nil : secret)
         modelErrors[providerId] = nil
@@ -161,40 +185,56 @@ public final class PhoneChats {
 
     public func setEnabled(_ providerId: String, _ on: Bool) {
         guard let i = providers.firstIndex(where: { $0.id == providerId }) else { return }
+        if !on { invalidate(providerId) }
         providers[i].enabled = on
         saveProviders()
     }
 
     /// Remove a provider and its key. Its chats stay, to read; they can't send until it is back.
     public func remove(_ providerId: String) {
+        invalidate(providerId)
         secrets.set(PhoneProviders.keyName(providerId), nil)
         providers.removeAll { $0.id == providerId }
         models[providerId] = nil
         modelErrors[providerId] = nil
+        rateLimits[providerId] = nil
         saveProviders()
     }
 
     /// A provider's models: its list, or the kind's catalog. A failure is kept in `modelErrors`.
     @discardableResult
     public func loadModels(_ providerId: String) async -> [PhoneModel] {
-        guard let p = provider(providerId), let kind = PhoneProviders.kind(p.kind) else { return [] }
-        guard let req = PhoneProviders.modelsRequest(p, key: key(providerId)) else {
-            models[providerId] = kind.catalog
-            return kind.catalog
-        }
+        guard let p = provider(providerId), p.enabled, let kind = PhoneProviders.kind(p.kind) else { return [] }
+        let epoch = providerEpoch[providerId]
+        let load = UUID()
+        modelLoads[providerId] = load
         do {
-            let (status, body) = try await http.send(req)
+            guard let req = try PhoneProviders.modelsRequest(p, key: key(providerId)) else {
+                models[providerId] = kind.catalog
+                modelErrors[providerId] = nil
+                return kind.catalog
+            }
+            modelTasks[providerId]?.cancel()
+            let http = self.http
+            let task = Task { try Task.checkCancellation(); return try await http.send(req) }
+            modelTasks[providerId] = task
+            defer { if modelLoads[providerId] == load { modelTasks[providerId] = nil } }
+            let (status, headers, body) = try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
+            try Task.checkCancellation()
+            guard providerEpoch[providerId] == epoch, modelLoads[providerId] == load, provider(providerId) == p else { return [] }
+            noteLimits(providerId, headers)
             guard (200..<300).contains(status) else {
-                modelErrors[providerId] = PhoneProviders.failure(status: status, body: body)
-                return models[providerId] ?? []
+                modelErrors[providerId] = PhoneProviders.failure(status: status, body: body.prefix(PhoneProviders.errorBodyBytes), headers: headers, kind: p.kind)
+                return []
             }
             let list = PhoneProviders.models(from: body, kind: p.kind)
             models[providerId] = list
             modelErrors[providerId] = list.isEmpty ? String(localized: "The provider listed no models.") : nil
             return list
         } catch {
-            modelErrors[providerId] = error.localizedDescription
-            return models[providerId] ?? []
+            guard !Task.isCancelled, providerEpoch[providerId] == epoch, modelLoads[providerId] == load, provider(providerId) == p else { return [] }
+            modelErrors[providerId] = "Could not load models. Check the address and key, then retry."
+            return []
         }
     }
 
@@ -204,52 +244,87 @@ public final class PhoneChats {
 
     /// Check a provider works: its models list, or for a kind with none, a one-word reply.
     public func test(_ providerId: String) async -> String? {
-        guard let p = provider(providerId), let kind = PhoneProviders.kind(p.kind) else { return String(localized: "Unknown provider.") }
+        let id = UUID()
+        let task = Task { await self.testProvider(providerId) }
+        tests[id] = (providerId, task)
+        defer { tests[id] = nil }
+        return await withTaskCancellationHandler(operation: { await task.value }, onCancel: { task.cancel() })
+    }
+
+    private func testProvider(_ providerId: String) async -> String? {
+        guard let p = provider(providerId), p.enabled, let kind = PhoneProviders.kind(p.kind) else { return String(localized: "Unknown provider.") }
         if kind.listsModels {
             let list = await loadModels(providerId)
-            return list.isEmpty ? (modelErrors[providerId] ?? String(localized: "The provider listed no models.")) : nil
+            if let why = modelErrors[providerId] ?? (list.isEmpty ? String(localized: "The provider listed no models.") : nil) { return why }
+            // OpenRouter and Ollama Cloud list models to anyone, and OpenAI lists them for a key
+            // with no credit: ask something such a key is refused on.
+            let model = PhoneProviders.defaultModel(list)?.id
+            guard let check = try? PhoneProviders.keyCheckRequest(p, key: key(providerId), model: model) else { return nil }
+            do {
+                let (status, headers, body) = try await http.send(check)
+                noteLimits(providerId, headers)
+                // Ollama's check names a model that doesn't exist: only a refused key fails it.
+                let refused = p.kind == "openai" ? !(200..<300).contains(status) : status == 401 || status == 403
+                return refused ? PhoneProviders.failure(status: status, body: body.prefix(PhoneProviders.errorBodyBytes), headers: headers, kind: p.kind) : nil
+            } catch {
+                return String(localized: "Could not reach the provider to check the key. Try again.")
+            }
         }
         models[providerId] = kind.catalog
         guard let model = kind.catalog.first?.id else { return nil }
-        let req = PhoneProviders.chatRequest(p, key: key(providerId), model: model,
-                                             messages: [PhoneMessage(id: "t", role: .user, text: "Say OK.", at: now())],
-                                             system: nil, maxTokens: 8)
+        let epoch = providerEpoch[providerId]
         do {
-            let (status, lines) = try await http.lines(req)
-            guard (200..<300).contains(status) else { return PhoneProviders.failure(status: status, body: try await Self.collect(lines)) }
-            let parser = PhoneStreamParser()
+            let req = try PhoneProviders.chatRequest(p, key: key(providerId), model: model,
+                messages: [PhoneMessage(id: "t", role: .user, text: "Say OK.", at: now())], system: nil, maxTokens: 8)
+            try Task.checkCancellation()
+            let (status, headers, lines) = try await http.lines(req)
+            try Task.checkCancellation()
+            guard providerEpoch[providerId] == epoch, provider(providerId) == p else { return "Provider changed. Test again." }
+            noteLimits(providerId, headers)
+            guard (200..<300).contains(status) else {
+                return PhoneProviders.failure(status: status, body: await Self.errorBody(lines), headers: headers, kind: p.kind)
+            }
+            var parser = PhoneStreamParser()
             for try await line in lines {
-                for e in parser.read(line) {
+                try Task.checkCancellation()
+                guard providerEpoch[providerId] == epoch, provider(providerId) == p else { return "Provider changed. Test again." }
+                for e in parser.line(line) {
                     switch e {
-                    case .text, .done: return nil
-                    case .usage: continue
+                    case .done: return nil
+                    case .text, .usage: continue
                     case .failed(let why): return why
                     }
                 }
             }
-            return nil
+            return "The provider's stream ended before completion."
         } catch {
-            return error.localizedDescription
+            return Task.isCancelled ? "Stopped." : "Could not test the provider. Check the address and key, then retry."
         }
     }
 
     // MARK: Chats
 
     /// Start a chat here and send its first message.
-    public func create(providerId: String, modelId: String, first: String) -> String {
+    public func create(providerId: String, modelId: String, first: String, images: [String] = []) -> String {
         let id = PhoneProviders.chatPrefix + newId()
         var chat = PhoneChat(id: id, title: PhoneChat.title(from: first), providerId: providerId, modelId: modelId, createdAt: now())
-        if chat.title.isEmpty { chat.title = String(localized: "New chat") }
+        if chat.title.isEmpty { chat.title = images.isEmpty ? String(localized: "New chat") : String(localized: "Photo") }
         chats.append(chat)
-        send(id, first)
+        send(id, first, images: images)
         return id
     }
 
-    /// Add the user's message and stream the reply.
-    public func send(_ chatId: String, _ text: String) {
+    /// Whether a model takes photos. Unknown counts as yes: a model that can't says so in its reply.
+    public func acceptsImages(providerId: String, modelId: String) -> Bool {
+        models[providerId]?.first { $0.id == modelId }?.acceptsImages ?? true
+    }
+
+    /// Add the user's message (text, photos or both) and stream the reply.
+    public func send(_ chatId: String, _ text: String, images: [String] = []) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !running.contains(chatId), let i = index(chatId) else { return }
-        chats[i].messages.append(PhoneMessage(id: newId(), role: .user, text: text, at: now()))
+        let images = Array(images.filter { PhoneProviders.imagePart($0) != nil }.prefix(PhoneProviders.maxImages))
+        guard !text.isEmpty || !images.isEmpty, !running.contains(chatId), let i = index(chatId) else { return }
+        chats[i].messages.append(PhoneMessage(id: newId(), role: .user, text: text, at: now(), images: images))
         chats[i].archivedAt = nil
         reply(chatId)
     }
@@ -264,6 +339,7 @@ public final class PhoneChats {
 
     public func stop(_ chatId: String) {
         tasks[chatId]?.cancel()
+        if let answer = attempts[chatId] { finish(chatId, answer, error: String(localized: "Stopped.")) }
     }
 
     /// Run the chat on another of this iPhone's providers or models from its next message on.
@@ -308,12 +384,18 @@ public final class PhoneChats {
 
     /// Forget everything on this iPhone: every provider, its key, and every chat.
     public func forgetAll() {
-        for id in tasks.keys { stop(id) }
+        for id in Array(tasks.keys) { stop(id) }
+        for task in modelTasks.values { task.cancel() }
+        modelTasks = [:]
+        for (_, task) in tests.values { task.cancel() }
+        for p in providers { providerEpoch[p.id] = UUID() }
+        modelLoads = [:]
         for p in providers { secrets.set(PhoneProviders.keyName(p.id), nil) }
         providers = []
         chats = []
         models = [:]
         modelErrors = [:]
+        rateLimits = [:]
         usage = PhoneUsageLedger()
         tone = .standard
         files?.remove(PhoneProviders.computerId)
@@ -330,48 +412,58 @@ public final class PhoneChats {
         let history = chat.messages
         let answerId = newId()
         chats[i].messages.append(PhoneMessage(id: answerId, role: .assistant, text: "", at: now()))
+        chats[i].messages[chats[i].messages.count - 1].incomplete = true
+        attempts[chatId] = answerId
         chats[i].updatedAt = now()
         save()
         guard let p = provider(chat.providerId), p.enabled else {
             finish(chatId, answerId, error: String(localized: "This chat’s provider isn’t on this iPhone any more. Pick another model."))
             return
         }
-        let request = PhoneProviders.chatRequest(p, key: key(p.id), model: chat.modelId, messages: history, system: tone.systemPrompt)
+        let request: PhoneRequest
+        do { request = try PhoneProviders.chatRequest(p, key: key(p.id), model: chat.modelId, messages: history, system: tone.systemPrompt) }
+        catch { finish(chatId, answerId, error: "Check the provider address, key and model, then retry."); return }
         running.insert(chatId)
         let http = self.http
-        let model = chat.modelId
         tasks[chatId] = Task { [weak self] in
             var failure: String?
             var count = PhoneTokenCount()
+            var completed = false
             do {
-                let (status, lines) = try await http.lines(request)
+                try Task.checkCancellation()
+                let (status, headers, lines) = try await http.lines(request)
+                try Task.checkCancellation()
+                self?.noteLimits(p.id, headers)
                 if !(200..<300).contains(status) {
-                    failure = PhoneProviders.failure(status: status, body: try await Self.collect(lines))
+                    failure = PhoneProviders.failure(status: status, body: await Self.errorBody(lines), headers: headers, kind: p.kind)
                 } else {
-                    let parser = PhoneStreamParser()
+                    var parser = PhoneStreamParser()
                     read: for try await line in lines {
                         try Task.checkCancellation()
-                        for e in parser.read(line) {
+                        guard self?.attempts[chatId] == answerId else { return }
+                        for e in parser.line(line) {
                             switch e {
                             case .text(let t): self?.append(chatId, answerId, t)
-                            case .usage: count.add(e)
-                            case .done: break read
+                            case .usage:
+                                count.add(e)
+                                self?.counts[chatId] = count
+                            case .done: completed = true; break read
                             case .failed(let why):
                                 failure = why
                                 break read
                             }
                         }
                     }
+                    if !completed && failure == nil { failure = "The provider’s stream ended before completion. Try again." }
                     // A cancelled stream ends rather than throwing.
                     if Task.isCancelled && failure == nil { failure = String(localized: "Stopped.") }
                 }
             } catch is CancellationError {
                 failure = String(localized: "Stopped.")
             } catch {
-                failure = Task.isCancelled ? String(localized: "Stopped.") : error.localizedDescription
+                failure = Task.isCancelled ? String(localized: "Stopped.") : "Could not reach the provider. Check the connection and retry."
             }
-            // A stopped or failed reply still used what the provider counted.
-            if count.reported { self?.record(p, model: model, count) }
+            guard self?.attempts[chatId] == answerId else { return }
             self?.finish(chatId, answerId, error: failure)
         }
     }
@@ -384,18 +476,43 @@ public final class PhoneChats {
 
     private func append(_ chatId: String, _ answerId: String, _ text: String) {
         guard let i = index(chatId), let j = chats[i].messages.lastIndex(where: { $0.id == answerId }) else { return }
+        guard attempts[chatId] == answerId else { return }
         chats[i].messages[j].text += text
+        save()
     }
 
     private func finish(_ chatId: String, _ answerId: String, error: String?) {
+        guard attempts[chatId] == answerId else { return }
+        if let count = counts.removeValue(forKey: chatId), count.reported,
+           let chat = chat(chatId), let p = provider(chat.providerId) { record(p, model: chat.modelId, count) }
+        attempts[chatId] = nil
         running.remove(chatId)
         tasks[chatId] = nil
         guard let i = index(chatId) else { return }
         if let j = chats[i].messages.lastIndex(where: { $0.id == answerId }) {
-            chats[i].messages[j].error = error
+            chats[i].messages[j].error = error ?? (chats[i].messages[j].text.isEmpty ? "The provider returned no text. Try another model." : nil)
+            chats[i].messages[j].incomplete = false
         }
         chats[i].updatedAt = now()
         save()
+    }
+
+    private func noteLimits(_ providerId: String, _ headers: [String: String]) {
+        guard provider(providerId) != nil, let limits = PhoneRateLimits.from(headers: headers, at: now()) else { return }
+        rateLimits[providerId] = limits
+    }
+
+    /// The start of a failed answer's body, for its error code; a longer one is not read.
+    nonisolated static func errorBody(_ lines: AsyncThrowingStream<String, Error>) async -> Data {
+        var out = Data()
+        do {
+            for try await line in lines {
+                out.append(contentsOf: line.utf8)
+                out.append(10)
+                if out.count > PhoneProviders.errorBodyBytes { return Data() }
+            }
+        } catch {}
+        return out
     }
 
     private func index(_ chatId: String) -> Int? { chats.firstIndex { $0.id == chatId } }
@@ -411,10 +528,14 @@ public final class PhoneChats {
         files.save(PhoneProviders.computerId, Self.providersFile, v)
     }
 
-    static func collect(_ lines: AsyncThrowingStream<String, Error>) async throws -> Data {
-        var out = ""
-        for try await line in lines { out += line + "\n" }
-        return Data(out.utf8)
+    private func invalidate(_ providerId: String) {
+        providerEpoch[providerId] = UUID()
+        modelTasks.removeValue(forKey: providerId)?.cancel()
+        for (id, (provider, task)) in Array(tests) where provider == providerId { task.cancel(); tests[id] = nil }
+        modelLoads[providerId] = nil
+        models[providerId] = nil
+        modelErrors[providerId] = nil
+        for chat in chats where chat.providerId == providerId { stop(chat.id) }
     }
 
     static func encode<T: Encodable>(_ value: T) -> JSONValue? {

@@ -270,6 +270,46 @@ class ChatViewModel(
         Subagents(kids, activity.filterKeys { id -> kids.any { it.id == id } })
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, Subagents())
 
+    /** The agent's plan as the sheet over the composer draws it (#2115); null when there is none. */
+    data class PlanUi(
+        val plan: List<com.nekko.protocol.PlanStep>,
+        val current: com.nekko.protocol.PlanStep,
+        val links: Map<String, com.nekko.protocol.PlanStepLinks>,
+        val paused: Boolean,
+        val children: List<SessionSummary>,
+        val prs: List<PullRequest>,
+    )
+
+    private val chatPrs = MutableStateFlow<List<PullRequest>>(emptyList())
+
+    val plan: StateFlow<PlanUi?> = combine(
+        controller.state, children, chatPrs, repo.state.map { it.providers }.distinctUntilChanged(),
+    ) { st, kids, prs, providers ->
+        val session = st.session ?: return@combine null
+        val claudeCode = providers.firstOrNull { it.id == session.providerId }?.kind == com.nekko.protocol.AgentPlan.CLAUDE_CODE_KIND
+        val steps = com.nekko.protocol.AgentPlan.sheet(session, claudeCode).orEmpty()
+        val current = com.nekko.protocol.AgentPlan.current(steps) ?: return@combine null
+        PlanUi(
+            plan = steps,
+            current = current,
+            links = com.nekko.protocol.AgentPlan.links(session.messages, steps, prs.map { it.url }.toSet(), kids),
+            paused = com.nekko.protocol.AgentPlan.paused(session.messages, st.turn.running),
+            children = kids,
+            prs = prs,
+        )
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    init {
+        // A plan's PR chips show the chat's own PRs, read again whenever the chat changes.
+        viewModelScope.launch {
+            combine(controller.state.map { it.session?.updatedAt }, plan.map { it != null }) { at, has -> at.takeIf { has } }
+                .distinctUntilChanged().collect { at ->
+                    if (at == null) return@collect
+                    try { chatPrs.value = pullRequests() } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+                }
+        }
+    }
+
     private fun calls(tool: String) = ui.value.blocks.any { it is Block.Tool && it.name == tool }
 
     /**
@@ -345,6 +385,20 @@ class ChatViewModel(
         setRunOption("disabledTools", kotlinx.serialization.json.JsonArray(off.map { kotlinx.serialization.json.JsonPrimitive(it) }))
     }
 
+    /**
+     * Take back "Always allow this tool" (decision 0054): the tool's next call in this chat asks
+     * again. Signed with the screen lock, as saving it was (`PHONE_GUARDED_OPTION_KEYS`).
+     */
+    suspend fun revokeAlwaysAllowed(tool: String, allowed: List<String>) =
+        setRunOption("allowedMcpTools", kotlinx.serialization.json.JsonArray(allowed.filter { it != tool }.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+
+    /**
+     * Forget a recipient (decision 0063): the next call that writes to it asks again. Signed: the
+     * computer's gate cannot tell taking one back from adding one.
+     */
+    suspend fun forgetRecipient(recipient: String, known: List<String>) =
+        setRunOption("knownRecipients", kotlinx.serialization.json.JsonArray(known.filter { it != recipient }.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+
     suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
         repo.setChatMode(sessionId, mode, stepUp)
         controller.reload()
@@ -406,12 +460,54 @@ class ChatViewModel(
     suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) {
         // Until the session is read its kind is unknown; never put possible image intent in the text outbox.
         val session = controller.state.value.session ?: throw com.nekko.protocol.RelayException("Wait for this chat to load before sending.")
-        if (session.chatType == "image" && photos.state.value.photos.isNotEmpty()) {
-            throw com.nekko.protocol.RelayException("Image generation accepts text only. Remove the attached photos first.")
-        }
+        check(!clips.state.value.sending) { "Wait for the video to finish sending." }
         // Sending without choosing removes the star card; that ask is already used up (Not now).
         _starCard.value = StarCard.NONE
         controller.send(text, skill, images)
+        // The clips that arrived are attached to the chat: this message read them.
+        clips.sent()
+    }
+
+    /** Videos going with the message (#2777): each goes to the computer as soon as it is picked. */
+    val clips = ClipTray()
+    private val clipJobs = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
+
+    /** The + menu's picks: photos to the photo tray, videos to the computer. */
+    fun addMedia(resolver: ContentResolver, uris: List<Uri>) {
+        val (videos, photosPicked) = uris.partition { resolver.getType(it)?.startsWith("video/") == true }
+        addPhotos(resolver, photosPicked)
+        if (videos.isEmpty()) return
+        if (controller.state.value.session?.chatType == "image") {
+            clips.refuse("Image chats take photos only.")
+            return
+        }
+        val online = repo.state.value.conn == RelayState.ONLINE
+        videos.forEach { uri ->
+            val (name, size) = describe(resolver, uri)
+            val clip = clips.add(name, size, online) ?: return@forEach
+            clipJobs[clip.id] = viewModelScope.launch {
+                try {
+                    clips.upload(clip, sessionId, repo.caller) { resolver.openInputStream(uri) ?: error("Couldn’t read that video.") }
+                } finally {
+                    clipJobs.remove(clip.id)
+                }
+            }
+        }
+    }
+
+    /** Remove a clip still going or that failed; one still going stops. */
+    fun removeClip(id: String) {
+        clipJobs.remove(id)?.cancel()
+        clips.remove(id)
+    }
+
+    private fun describe(resolver: ContentResolver, uri: Uri): Pair<String, Long?> = try {
+        resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)?.use { c ->
+            if (!c.moveToFirst()) "" to null
+            else (c.getString(0) ?: "") to c.getLong(1).takeUnless { c.isNull(1) }
+        } ?: ("" to null)
+    } catch (_: Exception) {
+        "" to null
     }
 
     val voiceLanguage: String get() = phonePrefs?.get(Dictation.LANGUAGE).orEmpty()
@@ -519,6 +615,28 @@ class ChatViewModel(
     }
 
     /** Picked files or a camera shot → the tray, scaled and encoded off the main thread. */
+    /** An image chat: photos attached are pictures to edit, at most 1536 px on their longest side (#2230). */
+    private val isImageChat: Boolean get() = controller.state.value.session?.chatType == "image"
+
+    /**
+     * **Edit** under a picture this chat made (#2230): it joins the message box as a photo to edit,
+     * at full size when the computer sends it (`session:photo`), else as its thumbnail.
+     */
+    fun editPicture(messageId: String, thumb: String) {
+        if (photos.begin(1) == 0) return
+        viewModelScope.launch {
+            try {
+                val full = try { photo(messageId, 0) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                val (url, preview) = ImageAttachments.refit(full?.takeIf { it.isNotEmpty() } ?: thumb, com.nekko.protocol.PhotoEdit.MAX_EDGE)
+                photos.added(url, preview)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                photos.failed("Couldn’t read that picture.")
+            }
+        }
+    }
+
     fun addPhotos(resolver: ContentResolver, uris: List<Uri>, afterEach: (Uri) -> Unit = {}) {
         if (uris.isEmpty()) return
         val n = photos.begin(uris.size)
@@ -526,7 +644,7 @@ class ChatViewModel(
         uris.take(n).forEach { uri ->
             viewModelScope.launch {
                 try {
-                    val (url, preview) = ImageAttachments.encode(resolver, uri)
+                    val (url, preview) = ImageAttachments.encode(resolver, uri, maxSide = if (isImageChat) com.nekko.protocol.PhotoEdit.MAX_EDGE else ImageAttachments.MAX_SIDE)
                     photos.added(url, preview)
                 } catch (e: CancellationException) {
                     throw e
@@ -539,9 +657,70 @@ class ChatViewModel(
         }
     }
     fun stop() = controller.stop()
-    suspend fun approve(ok: Boolean) = controller.approve(ok)
+    // ---- answers and approvals as pending response messages (decision 0081, #2497) ----
+
+    /** The computer this chat is on; its responses never go to another one. */
+    private val computerId: String? = repo.state.value.activeId
+
+    /** This chat's response messages: waiting, being sent, sent, no longer pending or failed. */
+    val responses: StateFlow<List<com.nekko.android.data.ResponseMessage>> =
+        combine(repo.responses.items, repo.state.map { it.activeId }.distinctUntilChanged()) { list, active ->
+            if (active == computerId) list.filter { it.sessionId == sessionId } else emptyList()
+        }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptyList())
+
+    /** The approval card, unless a response to it is already a message. */
+    fun shownApproval(a: com.nekko.protocol.Approval?) = a?.takeUnless { repo.responses.contains(sessionId, it) }
+
+    /** The question card, unless an answer to it is already a message. */
+    fun shownQuestion(q: com.nekko.protocol.AskRequest?) = q?.takeUnless { repo.responses.contains(sessionId, it) }
+
+    private fun mine() = check(repo.state.value.activeId == computerId) { "This chat belongs to another computer." }
+
+    /**
+     * Allow or Deny, once: kept as a response message bound to this exact approval, sent now if the
+     * computer is reachable and it still waits, else when it is back. [words] says it in the phone's language.
+     */
+    suspend fun approve(ok: Boolean, words: (Boolean, String) -> String = { yes, tool -> "${if (yes) "Allow" else "Deny"} $tool" }) {
+        val a = shownApproval(ui.value.approval) ?: return
+        mine()
+        repo.responses.approve(sessionId, a, ok, words)
+        send(a.call.id)
+    }
+
+    suspend fun answer(answers: List<AskAnswer>) {
+        val q = shownQuestion(ui.value.question) ?: return
+        mine()
+        repo.responses.answer(sessionId, q, answers)
+        send(q.callId)
+    }
+
+    /**
+     * Send what waits, in the view model's scope: the card that asked steps aside the moment its
+     * message exists, and its own scope going must not cut the send short (back to Pending).
+     */
+    private suspend fun send(callId: String) {
+        viewModelScope.launch {
+            repo.responses.flush()
+            if (responses.value.any { it.callId == callId && it.status == com.nekko.android.data.ResponseMessage.Status.SENT }) controller.responded(callId)
+        }.join()
+    }
+
+    /** Try again, with the same fresh check; reconnects first when the computer is away. */
+    fun retryResponse(id: String) {
+        if (repo.state.value.activeId != computerId) return
+        if (!repo.responses.retry(id)) return
+        if (repo.state.value.conn != RelayState.ONLINE) repo.reconnect()
+        viewModelScope.launch { repo.responses.flush() }
+    }
+
+    /** Remove an unsent response; its card comes back if the computer still waits on it. */
+    fun cancelResponse(id: String) {
+        if (repo.state.value.activeId != computerId) return
+        repo.responses.cancel(id)
+    }
+
+    // Always allow changes the chat's tool policy: never queued, online only (decision 0081).
     suspend fun alwaysAllowTool(stepUp: StepUpProof? = null) = controller.alwaysAllowTool(stepUp)
-    suspend fun answer(answers: List<AskAnswer>) = controller.answer(answers)
     suspend fun answerVoice(callId: String, text: String, authorized: () -> Boolean) = controller.answerVoice(callId, text, authorized)
 
     private fun env(s: ComputersState) = ChatEnv(

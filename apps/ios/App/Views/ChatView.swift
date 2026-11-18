@@ -169,6 +169,11 @@ struct ChatView: View {
                         }
                         }
                     }
+                    ForEach(chat.responseMessages) { message in
+                        ResponseMessageRow(message: message,
+                            retry: { chat.retryResponse(message.id) }, cancel: { chat.cancelResponse(message.id) })
+                            .id("response-\(message.id)")
+                    }
                     // Prompts written here that the computer doesn't have yet.
                     ForEach(chat.waiting) { item in
                         WaitingRow(item: item, sending: store.outbox.sendingId == item.id, online: store.conn == .online,
@@ -435,13 +440,13 @@ struct ChatView: View {
     /// The approval and question cards, the queue, the PR chip and the composer.
     private func bottomBar(_ chat: ChatModel) -> some View {
         VStack(spacing: 8) {
-            if let a = chat.turn.approval {
+            if let a = chat.responseApproval {
                 ApprovalCard(approval: a, answer: { ok in try await chat.approve(ok) },
                              alwaysAllow: ChatModel.offersAlwaysAllow(a.call) ? { try await chat.alwaysAllowTool() } : nil,
                              startAlways: alwaysNow == a.call.id, startedAlways: { alwaysNow = nil })
                     .id(a.call.id)
             }
-            if let q = chat.turn.question {
+            if let q = chat.responseQuestion {
                 // A new question starts with nothing picked.
                 QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
             }
@@ -453,6 +458,10 @@ struct ChatView: View {
                     .font(.footnote).foregroundStyle(palette.inkSoft)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                     .accessibilityIdentifier("chat.savedCopy")
+            }
+            // Always there while the provider reports limits, quiet until they near (#2923).
+            if !chat.isImageChat && chat.savedAt == nil {
+                ComputerLimitLine(providerId: chat.providerId) { showModels = true }.padding(.horizontal, 4)
             }
             Composer(chat: chat, openTerminals: { showTerminals = true }, openFiles: { showFiles = true })
         }
@@ -828,8 +837,14 @@ struct BlockView: View {
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
                 }
-                .accessibilityElement(children: .combine)
+                // A text-only prompt is one leaf element that says everything it shows. A merged
+                // element can come out of the lazy transcript missing from the accessibility tree
+                // while its bubble is on screen (#2547: the first prompt, then the second, in the
+                // recordings of run 43282129948), which VoiceOver and XCTest then can't reach.
+                // A prompt with photos keeps its buttons as children.
+                .accessibilityElement(children: photos.contains(where: { !$0.isEmpty }) ? .combine : .ignore)
                 .accessibilityLabel(images > 0 ? "You: \(text), with \(images == 1 ? "1 image" : "\(images) images")" : "You: \(text)")
+                .accessibilityAddTraits(.isStaticText)
             }
         case .assistant(_, let text, let reasoning, let streaming, let interrupted):
             VStack(alignment: .leading, spacing: 6) {

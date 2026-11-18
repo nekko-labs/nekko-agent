@@ -29,16 +29,18 @@ export async function saveEmail(email: string, name?: string): Promise<string | 
   }
 }
 
-/** The newest pixel Nekko (the peeking cat's face, no mouth), whole and drawn in the theme's own ink. */
+/** The newest pixel Nekko (the peeking cat's face), whole. In dark themes he takes his fixed colours
+ * (--nekko-*, spec/brand/colour-palette.md) and his mouth; in light themes he follows the theme's ink. */
 export function SetupNekko({ size = 72, happy = false, className = '' }: { size?: number; happy?: boolean; className?: string }) {
   return (
     <svg className={`setup-nekko ${className}`} viewBox="0 0 32 28" width={size} height={size * 0.875} shapeRendering="crispEdges" aria-hidden="true" focusable="false">
-      <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="var(--surface)" stroke="var(--ink)" strokeWidth="2" />
-      <g fill="var(--ink)">
+      <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="var(--nekko-face, var(--surface))" stroke="var(--nekko-line, var(--ink))" strokeWidth="2" />
+      <g fill="var(--nekko-eyes, var(--ink))">
         {happy
           ? <path d="M10 17V15H11V14H13V15H14V17H13V16H11V17Z M19 17V15H20V14H22V15H23V17H22V16H20V17Z" />
           : <path className="setup-nekko-eyes" d="M11 15H13V18H11Z M20 15H22V18H20Z" />}
       </g>
+      <path d="M15 20H17V21H15Z" fill="var(--nekko-mouth, transparent)" />
     </svg>
   );
 }

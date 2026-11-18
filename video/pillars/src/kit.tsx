@@ -50,16 +50,22 @@ export function In({ at, children, style, dur = 12 }: { at: number; children: Re
   return <div style={{ ...style, opacity: v * ((style?.opacity as number) ?? 1), filter: `blur(${(1 - v) * 8}px)`, transform: `translateY(${(1 - v) * 14}px)` }}>{children}</div>;
 }
 
+/** Nekko's colours (spec/brand/colour-palette.md): his fixed dark-mode colours, and white on light grounds. */
+export const NEKKO = {
+  dark: { face: '#16161c', line: '#f3e8ee', eyes: '#ffffff', mouth: '#854f6c' },
+  light: { face: '#ffffff', line: '#190019', eyes: '#190019', mouth: '#854f6c' },
+};
+
 /** The app's PixelHead (apps/desktop/src/renderer/components/Mascot.tsx). */
 export function Cat({ size, eyes = 'open' }: { size: number; eyes?: 'open' | 'happy' }) {
-  const t = useT();
+  const n = useT() === THEMES.light ? NEKKO.light : NEKKO.dark;
   return (
     <svg viewBox="0 0 32 32" width={size} height={size} shapeRendering="crispEdges">
-      <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill={t.paper} stroke={t.ink} strokeWidth="2" strokeLinejoin="miter" />
-      <path fill={t.ink} d={eyes === 'open'
+      <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill={n.face} stroke={n.line} strokeWidth="2" strokeLinejoin="miter" />
+      <path fill={n.eyes} d={eyes === 'open'
         ? 'M11 15H13V18H11Z M20 15H22V18H20Z'
         : 'M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z'} />
-      <path d="M15 20H17V21H15Z" fill={t.accent} />
+      <path d="M15 20H17V21H15Z" fill={n.mouth} />
     </svg>
   );
 }

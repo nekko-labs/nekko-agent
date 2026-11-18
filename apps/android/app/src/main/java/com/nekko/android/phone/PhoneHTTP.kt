@@ -16,6 +16,9 @@ import okhttp3.Response
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+/** A provider's non-2xx answer, already explained in our own words by [PhoneProviders.failure]. */
+class ProviderRefusal(message: String) : IOException(message)
+
 interface PhoneHTTP {
     /** A null line callback reads a small JSON body; otherwise reads bounded SSE lines. */
     suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)? = null): String
@@ -42,7 +45,16 @@ class DirectPhoneHTTP : PhoneHTTP {
             override fun onResponse(call: Call, response: Response) {
                 try {
                     response.use { r ->
-                        if (!r.isSuccessful) throw IOException(PhoneProviders.failure(r.code))
+                        if (!r.isSuccessful) {
+                            // Only as far as the error code; the rest is not read.
+                            val body = r.body?.source()?.let { s ->
+                                s.request(PhoneProviders.ERROR_BODY_CHARS + 1L)
+                                s.buffer.readUtf8(minOf(s.buffer.size, PhoneProviders.ERROR_BODY_CHARS + 1L))
+                            }.orEmpty()
+                            val headers = r.headers.associate { (k, v) -> k.lowercase() to v }
+                            val kind = if (url.host == "api.openai.com") "openai" else ""
+                            throw ProviderRefusal(PhoneProviders.failure(r.code, body, headers, kind))
+                        }
                         val source = r.body?.source() ?: throw IOException("The provider returned no body.")
                         if (line == null) {
                             source.request(2_000_001)
@@ -68,7 +80,7 @@ class DirectPhoneHTTP : PhoneHTTP {
                         }
                     }
                 } catch (e: Exception) {
-                    if (cont.isActive) cont.resumeWithException(IOException(if (e is IOException && e.message?.startsWith("The provider") == true) e.message else "The provider connection ended unexpectedly."))
+                    if (cont.isActive) cont.resumeWithException(if (e is ProviderRefusal) e else IOException(if (e is IOException && e.message?.startsWith("The provider") == true) e.message else "The provider connection ended unexpectedly."))
                 }
             }
         })

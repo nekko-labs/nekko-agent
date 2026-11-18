@@ -44,6 +44,8 @@ object Channels {
     const val CHAT_GENERATE_IMAGE = "chat:generateImage"
     const val SESSION_PHOTO = "session:photo"
     const val CHAT_SEND = "chat:send"
+    /** A clip from the phone in pieces (#2777): (chatId, uploadId, name, offset, total, base64 chunk). */
+    const val ATTACHMENT_UPLOAD = "attachment:upload"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
     /** Stop the reply and start the queued prompt at an index. */
@@ -242,6 +244,8 @@ data class ChatMessage(
     val interrupted: Boolean = false,
     /** The computer's persisted measurements for the turn this reply ended; null when it recorded none. */
     val turnStats: TurnStats? = null,
+    /** A picture an image chat made (`generated`), for Edit under it (#2230). */
+    val generated: GeneratedPicture? = null,
 ) {
     val imageCount: Int get() = images.size
 
@@ -263,6 +267,7 @@ data class ChatMessage(
                 toolResult = ToolResult.from(o["toolResult"]),
                 interrupted = o.bool("interrupted"),
                 turnStats = TurnStats.from(o["turnStats"]),
+                generated = if (o.str("role") == "assistant") GeneratedPicture.from(o["generated"]) else null,
             )
         }
     }
@@ -300,6 +305,10 @@ data class Session(
     val disabledTools: List<String> = emptyList(),
     /** MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in this chat (decision 0054). */
     val allowedMcpTools: List<String> = emptyList(),
+    /** Recipients this chat has written to through an MCP tool (decision 0063): writing to one again does not ask. */
+    val knownRecipients: List<String> = emptyList(),
+    /** The agent's plan (`update_plan`), for the plan sheet over the composer (#2115). */
+    val agentPlan: List<PlanStep> = emptyList(),
 ) {
     /** Whether this chat can hand a follow-up to a sub-agent (`canOfferSubagent` in shared/orchestration.ts). */
     fun canOfferSubagent(strategy: String?): Boolean =
@@ -340,6 +349,8 @@ data class Session(
                 executionMode = o.str("executionMode"),
                 disabledTools = o["disabledTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 allowedMcpTools = o["allowedMcpTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
+                knownRecipients = o["knownRecipients"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
+                agentPlan = PlanStep.list(o["agentPlan"]),
             )
         }
     }
@@ -378,6 +389,8 @@ data class SessionSummary(
     val running: Boolean = false,
     /** What the chat's latest telling tool call says it is doing (`phase`: building, verifying, shipping…). */
     val phase: String? = null,
+    /** When it was made (ms), when the computer says; orders a chat's sub-agents oldest first. */
+    val createdAt: Long? = null,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -410,6 +423,7 @@ data class SessionSummary(
                 exchangeCount = o.long("exchangeCount")?.takeIf { it >= 0 },
                 running = o["activeRun"].let { it != null && it !is JsonNull },
                 phase = o.str("phase"),
+                createdAt = o.long("createdAt"),
                 contextUsed = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
                 contextWindow = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )
@@ -422,6 +436,16 @@ data class SessionSummary(
         /** Every top-level chat, completed ones included, newest first. */
         fun visible(list: JsonElement?): List<SessionSummary> =
             list.arr()?.mapNotNull { from(it) }?.filter { it.isVisible }?.sortedByDescending { it.updatedAt } ?: emptyList()
+
+        /**
+         * The sub-agents each chat spawned and hasn't completed, oldest first, by their parent's id:
+         * the rows under a chat in the list (#2509, the iPhone's `subagents`, the desktop sidebar's
+         * `childrenOf`). From the same `sessions:summaries` answer [visible] reads.
+         */
+        fun subagents(list: JsonElement?): Map<String, List<SessionSummary>> =
+            list.arr()?.mapNotNull { from(it) }?.filter { !it.archived && it.parentSessionId != null }
+                ?.groupBy { it.parentSessionId!! }
+                ?.mapValues { (_, kids) -> kids.sortedBy { it.createdAt ?: it.updatedAt } } ?: emptyMap()
     }
 }
 
@@ -469,13 +493,57 @@ data class ChatGroup(
     }
 }
 
-/** A provider as the phone keeps it: never the API key, base URL or token reference. */
-data class PublicProvider(val id: String, val kind: String, val label: String, val enabled: Boolean) {
+/**
+ * A provider as the phone keeps it: never the API key, base URL or token reference.
+ * [account] is the Claude login behind a Claude subscription provider, when the
+ * computer reports one (shared/models.ts ProviderAccount); see [ProviderAccounts]
+ * for how it reads.
+ */
+data class PublicProvider(
+    val id: String,
+    val kind: String,
+    val label: String,
+    val enabled: Boolean,
+    val account: ProviderAccount? = null,
+) {
     companion object {
         fun list(e: JsonElement?): List<PublicProvider> = e.arr()?.mapNotNull { p ->
             val o = p.obj() ?: return@mapNotNull null
-            PublicProvider(o.str("id") ?: return@mapNotNull null, o.str("kind") ?: "", o.str("label") ?: o.str("id")!!, o.bool("enabled"))
+            PublicProvider(
+                o.str("id") ?: return@mapNotNull null,
+                o.str("kind") ?: "",
+                o.str("label") ?: o.str("id")!!,
+                o.bool("enabled"),
+                ProviderAccount.from(o["account"]),
+            )
         } ?: emptyList()
+    }
+}
+
+/**
+ * Which Claude login a Claude subscription provider is signed in as. One email can
+ * have a personal plan (Pro, Max) and an organization seat (Team, Enterprise), each
+ * its own provider on the computer.
+ */
+data class ProviderAccount(
+    val signedIn: Boolean,
+    /** Missing for an API-key login. */
+    val email: String? = null,
+    /** `personal` or `organization`; anything else is kept as sent. */
+    val scope: String? = null,
+    /** "Personal", or the organization's name. */
+    val name: String? = null,
+    /** `pro`, `max`, `team`, `enterprise`, as Claude Code printed it; may be missing. */
+    val plan: String? = null,
+) {
+    val organization: Boolean get() = scope == "organization"
+
+    companion object {
+        fun from(e: JsonElement?): ProviderAccount? {
+            val o = e.obj() ?: return null
+            fun text(k: String) = o.str(k)?.trim()?.takeIf { it.isNotEmpty() }
+            return ProviderAccount(o.bool("signedIn"), text("email"), text("scope"), text("name"), text("plan"))
+        }
     }
 }
 

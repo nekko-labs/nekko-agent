@@ -38,9 +38,13 @@ import {
 
 export type WallFilter = 'all' | 'chat' | 'terminal';
 
-/** Only chats and shells belong in the wall tree; dashboard monitors live in the Monitors dock. */
-export type WallKind = 'chat' | 'terminal';
-export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal'];
+/**
+ * What the wall tree holds: chats and shells, and a Browser or Files window
+ * opened from the Agents panel without an agent (#2824). Dashboard monitors
+ * live in the Monitors dock.
+ */
+export type WallKind = 'chat' | 'terminal' | 'browser' | 'files';
+export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal', 'browser', 'files'];
 
 export type { WallLayout, WallLayoutMode, MonitorsDock, MonitorsSide, MonitorKey } from '@nekko-agent/shared';
 export { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK };
@@ -102,7 +106,7 @@ export interface CommandWallState {
   watermark: number;
   composer: ComposerDock;
   tabs?: 'top' | 'left' | 'hidden';
-  /** The panel of agent cards beside (or above) the wall. */
+  /** The panel of agent cards beside the wall. */
   agentPanel?: AgentPanelPrefs;
   /** Snap to grid: windows stay evenly spaced, and dividers snap back to even spacing. */
   snap?: boolean;
@@ -116,13 +120,13 @@ export interface CommandWallState {
 
 export interface AgentPanelPrefs {
   show: boolean;
-  orientation: 'vertical' | 'horizontal';
 }
-export const DEFAULT_AGENT_PANEL: AgentPanelPrefs = { show: true, orientation: 'vertical' };
+export const DEFAULT_AGENT_PANEL: AgentPanelPrefs = { show: true };
 
 export function readAgentPanel(raw: unknown): AgentPanelPrefs {
   const p = raw && typeof raw === 'object' ? (raw as Partial<AgentPanelPrefs>) : {};
-  return { show: p.show !== false, orientation: p.orientation === 'horizontal' ? 'horizontal' : 'vertical' };
+  // A saved `orientation` from the retired row layout is dropped: the panel is always a column.
+  return { show: p.show !== false };
 }
 
 /** Below this width the wall stacks its windows one above the other: a phone, or a very narrow window. */

@@ -115,7 +115,7 @@
     <string name="chat_terminal">终端</string>
     <string name="chat_dictate">听写</string>
     <string name="chat_photos_max">最多 %1$d 张</string>
-    <string name="chat_image_from_files">从文件中选择图片</string>
+    <string name="chat_image_from_files">照片和视频</string>
     <string name="chat_take_photo">拍照</string>
     <string name="chat_remove_photo">移除照片 %1$d</string>
     <string name="chat_adding_photo">正在添加照片</string>
@@ -294,4 +294,59 @@
     <string name="photo_actions">照片操作</string>
     <!-- Save to Photos on Android 9, when storage access was refused. -->
     <string name="chat_save_needs_storage">请允许访问存储空间，以便保存到照片。</string>
+    <!-- Folded by default in the transcript (#2453). -->
+    <string name="chat_progress_note">进度备注</string>
+    <string name="chat_conversation_summary">对话摘要</string>
+    <!-- Videos from the message box (#2777). -->
+    <string name="chat_clip_sending">正在发送… %1$d%%</string>
+    <string name="chat_clip_attached">已附加到聊天</string>
+    <string name="chat_clip_failed">无法发送此视频</string>
+    <string name="chat_remove_clip">移除 %1$s</string>
+    <!-- The agent's plan sheet over the composer (#2115). -->
+    <string name="plan_sheet">智能体计划</string>
+    <string name="plan_open_label">计划，已完成 %1$d/%2$d。折叠计划</string>
+    <string name="plan_title">计划</string>
+    <string name="plan_done_of">已完成 %1$d/%2$d</string>
+    <string name="plan_folded_label">计划，第 %1$d/%2$d 步：%3$s。显示完整计划</string>
+    <string name="plan_position">%1$d/%2$d</string>
+    <string name="plan_paused">已暂停</string>
+    <string name="plan_working">进行中</string>
+    <string name="plan_done">已完成</string>
+    <string name="plan_skipped">已跳过</string>
+    <string name="plan_pending">待处理</string>
+    <string name="plan_agent_reported">%1$s，由智能体报告</string>
+    <string name="plan_open_evidence">%1$s，打开证据</string>
+    <string name="plan_pass">第 %1$d 轮</string>
+    <string name="plan_pass_label">第 %1$d 轮：后续检查将工作退回到这里</string>
+    <string name="plan_pr_merged">#%1$s · 已合并</string>
+    <string name="plan_pr_closed">#%1$s · 已关闭</string>
+    <string name="plan_pr_open">打开</string>
+    <string name="plan_pr_draft">草稿</string>
+    <string name="plan_ci_failing">CI 失败</string>
+    <string name="plan_ci_passing">CI 通过</string>
+    <string name="plan_ci_running">CI 运行中</string>
+    <string name="plan_ci_none">无 CI</string>
+    <string name="plan_pr_label">拉取请求 %1$s</string>
+    <string name="plan_subagent">子智能体</string>
+    <string name="plan_subagents">子智能体</string>
+    <string name="plan_subagents_label">子智能体：%1$d 个运行中，%2$d 个已完成</string>
+    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
+    <string name="response_waiting">待发送 · 连接后发送</string>
+    <string name="response_sending">正在发送…</string>
+    <string name="response_sent">已发送</string>
+    <string name="response_stale">已不再等待</string>
+    <string name="response_failed">无法发送回复</string>
+    <string name="response_stale_detail">原始请求已不再等待。</string>
+    <string name="response_request_id">请求标识：%1$s</string>
+    <string name="response_retry">重试</string>
+    <string name="response_cancel">取消</string>
+    <string name="response_allow">允许 %1$s</string>
+    <string name="response_deny">拒绝 %1$s</string>
+    <!-- Edit under a picture an image chat made (#2230). -->
+    <string name="chat_edit_picture">编辑</string>
+    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
+    <string name="car_you">你</string>
+    <string name="car_reply">回复</string>
+    <string name="car_mark_read">标记为已读</string>
+    <string name="car_not_sent">未发送：此聊天不在手机当前连接的电脑上。</string>
 </resources>

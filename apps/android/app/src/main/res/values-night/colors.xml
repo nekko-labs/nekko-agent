@@ -5,4 +5,6 @@
     <color name="widget_ink">#FFECEAF3</color>
     <color name="widget_ink_soft">#FFA3A1B0</color>
     <color name="widget_online">#FF4CC38A</color>
+    <!-- The dark launcher icon's cat (#2118, the iPhone's AppIcon-Dark): soft pink on deep plum. -->
+    <color name="ic_launcher_mark">#FFC99BB3</color>
 </resources>

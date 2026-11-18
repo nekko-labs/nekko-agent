@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-pub const CHANNELS: &[&str] = &["context:preview", "context:toggle", "context:setPrefs"];
+pub const CHANNELS: &[&str] = &["context:preview", "context:toggle", "context:setPrefs", "context:promptProfiles"];
 
 fn strings(v: Option<&Value>) -> Vec<String> {
     v.and_then(Value::as_array)
@@ -120,6 +120,18 @@ pub fn preview(
     .filter(|s| !s.is_empty())
     .collect::<Vec<_>>()
     .join("\n\n");
+    let window = session.and_then(|s| s.get("modelId")).and_then(Value::as_str);
+    let window = claude_code_window(session, window).unwrap_or_else(|| guess_context_window(window));
+    let provider_id = session.and_then(|s| s.get("providerId")).and_then(Value::as_str).unwrap_or_default();
+    let kind = settings
+        .get("providers")
+        .and_then(Value::as_array)
+        .and_then(|ps| ps.iter().find(|p| p.get("id").and_then(Value::as_str) == Some(provider_id)))
+        .and_then(|p| p.get("kind"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let model_name = session.and_then(|s| s.get("modelId")).and_then(Value::as_str).unwrap_or_default();
+    let profile = crate::prompt_profile::resolve(settings, provider_id, kind, model_name, Some(window as f64));
     let system_text = nekko_context::build_system_prompt(&nekko_context::PromptContext {
         workspaces: &folders,
         system_instructions: Some(&system_instructions),
@@ -127,6 +139,7 @@ pub fn preview(
         about_user: settings.get("aboutUser").and_then(Value::as_str),
         context_block: "",
         platform,
+        profile: profile.profile,
         ..Default::default()
     });
     let mut attached = strings(session.and_then(|s| s.get("attachedPaths")));
@@ -172,11 +185,19 @@ pub fn preview(
     let mut out = bundle.to_json();
     if let Some(m) = out.as_object_mut() {
         m.shift_remove("contents");
+        m.insert("promptProfile".into(), profile.to_json());
     }
     out
 }
 
 pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, String> {
+    if channel == "context:promptProfiles" {
+        // The built-in text of each profile, for the read-only tabs in Settings.
+        let text = |p| nekko_context::intro(p);
+        return Ok(
+            json!({ "small": text(nekko_context::PromptProfile::Small), "medium": text(nekko_context::PromptProfile::Medium), "large": text(nekko_context::PromptProfile::Large) }),
+        );
+    }
     let store = ctx.sessions.clone();
     let sid = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
     if channel == "context:setPrefs" {
@@ -262,7 +283,11 @@ mod tests {
             let session = c["session"].as_str().and_then(|id| sessions.iter().find(|s| s["id"] == id));
             let attached: Vec<String> =
                 fill(&c["attached"]).as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
-            let got = normalize(&preview(&data, session, &settings, &attached, &[], "linux"), &root);
+            let mut shown = preview(&data, session, &settings, &attached, &[], "linux");
+            // Added after the TS host: which prompt profile the turn would use.
+            assert!(shown["promptProfile"]["profile"].is_string(), "case {i}");
+            shown.as_object_mut().unwrap().shift_remove("promptProfile");
+            let got = normalize(&shown, &root);
             assert_eq!(nekko_js::stringify(&got), nekko_js::stringify(&expected[i]), "case {i}");
         }
         let _ = std::fs::remove_dir_all(&root_dir);

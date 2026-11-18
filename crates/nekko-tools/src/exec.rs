@@ -8,7 +8,7 @@ use crate::allowlist::{Dialect, runs_git};
 use crate::bash::{Failure, RunRequest};
 use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
 use crate::gitguard::{harden_git_command, hardened_git_env, touches_git_config};
-use crate::guardrails::{Action, NOT_READ_ONLY, Severity, classify_command, default_guardrails};
+use crate::guardrails::{Action, NOT_READ_ONLY, Severity, classify_command_scoped, default_guardrails};
 use crate::js;
 use crate::nodefs;
 use crate::sandbox::{asks_everything, assert_readable, assert_writable, first_workspace, process_cwd, resolve_path};
@@ -185,6 +185,45 @@ async fn write_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     Ok(ToolResult::ok(call, format!("Wrote {p} ({} bytes)", js::len16(&content))))
 }
 
+/// Approve a new file a host tool will write later (a clip still being
+/// made): `write_file`'s path rules and approval now, while the turn can ask,
+/// never over an existing file. The path to write, or why not.
+pub async fn approve_new_file(call: &ToolCall, ctx: &ToolContext, path: Option<&Value>) -> Result<String, String> {
+    let p = resolve_path(path, ctx)?;
+    assert_writable(&p, ctx)?;
+    if nodefs::exists(&p) {
+        return Err(format!("{p} already exists; choose a new path."));
+    }
+    if !write_approved(call, ctx, &p, "Save").await {
+        return Err("Save not approved by user.".into());
+    }
+    record_original(ctx, &p).await?;
+    Ok(p)
+}
+
+/// Save bytes a host tool made (a picture) as a new file in the chat's
+/// folders: `write_file`'s path rules and approval, never over an existing
+/// file. The saved path, or why not.
+pub async fn save_new_file(
+    call: &ToolCall,
+    ctx: &ToolContext,
+    path: Option<&Value>,
+    bytes: &[u8],
+) -> Result<String, String> {
+    let p = resolve_path(path, ctx)?;
+    assert_writable(&p, ctx)?;
+    if nodefs::exists(&p) {
+        return Err(format!("{p} already exists; choose a new path."));
+    }
+    if !write_approved(call, ctx, &p, "Save").await {
+        return Err("Save not approved by user.".into());
+    }
+    record_original(ctx, &p).await?;
+    nodefs::mkdir_p(&dirname(&p))?;
+    std::fs::write(&p, bytes).map_err(|e| format!("Could not save {p}: {e}"))?;
+    Ok(p)
+}
+
 async fn edit_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     let p = resolve_path(arg(call, "path"), ctx)?;
     assert_writable(&p, ctx)?;
@@ -300,7 +339,13 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
             &default_rules
         }
     };
-    let decision = classify_command(&command, rules);
+    let cwd = if js::truthy(arg(call, "cwd")) {
+        resolve_path(arg(call, "cwd"), ctx)
+    } else {
+        Ok(ctx.default_cwd.clone().or_else(|| first_workspace(ctx).map(str::to_string)).unwrap_or_else(process_cwd))
+    };
+    let scope = crate::delete_guard::scope_for(ctx, cwd.clone().ok());
+    let decision = classify_command_scoped(&command, rules, Dialect::host(), &scope);
     // "Not a read-only command" says nothing the prompt's own wording does not.
     let labels = decision
         .matches
@@ -329,11 +374,7 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
             return Ok(ToolResult::err(call, "Command not approved by user."));
         }
     }
-    let cwd = if js::truthy(arg(call, "cwd")) {
-        resolve_path(arg(call, "cwd"), ctx)?
-    } else {
-        ctx.default_cwd.clone().or_else(|| first_workspace(ctx).map(str::to_string)).unwrap_or_else(process_cwd)
-    };
+    let cwd = cwd?;
 
     let workspace_id = ctx.workspaces.iter().find(|w| w.path == cwd).map(|w| w.id.clone());
     let log_text = |text: &str| {

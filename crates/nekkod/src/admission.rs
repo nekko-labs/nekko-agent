@@ -673,6 +673,10 @@ async fn admit(
     facts.insert("thinking".into(), json!(thinking));
     // The loaded window, for the loop to keep a long run inside (nekko-loop fit.rs).
     facts.insert("contextWindow".into(), json!(crate::providers::context_window_for(ctx, &provider, model_id).await));
+    // The system prompt profile for this model (decision 0095).
+    let window = facts.get("contextWindow").and_then(Value::as_f64);
+    let choice = crate::prompt_profile::resolve(&settings, s(&provider, "id"), kind, model_id, window);
+    facts.insert("promptProfile".into(), choice.to_json());
     // False for a model the provider lists without image input: pictures go as a note.
     facts.insert("imageInput".into(), json!(crate::providers::image_input_for(ctx, &provider, model_id).await));
     if let Some(p) = &resolved {
@@ -699,6 +703,7 @@ async fn admit(
         &settings,
         &[
             "systemInstructions",
+            "promptProfiles",
             "turnWrapper",
             "aboutUser",
             "orchestration",

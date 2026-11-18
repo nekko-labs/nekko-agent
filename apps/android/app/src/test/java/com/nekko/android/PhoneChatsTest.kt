@@ -3,6 +3,7 @@ package com.nekko.android
 import com.nekko.android.data.SecureStore
 import com.nekko.android.phone.PhoneChats
 import com.nekko.android.phone.PhoneHTTP
+import com.nekko.protocol.PhoneProviders
 import com.nekko.protocol.PhoneRequest
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
@@ -338,5 +339,66 @@ class PhoneChatsTest {
         val again = PhoneChats(memory, http, backgroundScope); again.load()
         assertEquals(com.nekko.protocol.PhoneTone.CONCISE, again.state.value.tone)
         assertEquals("an unknown saved tone reads as Default", com.nekko.protocol.PhoneTone.STANDARD, com.nekko.protocol.PhoneTone.parse("Pirate"))
+    }
+
+    // #2852: a provider is kept only once its key works; OpenRouter's sign-in adds one by itself.
+    private class Routed(val answer: (PhoneRequest) -> String) : PhoneHTTP {
+        val requests = mutableListOf<PhoneRequest>()
+        override suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)?): String { requests += request; return answer(request) }
+    }
+
+    @Test fun connectKeepsAWorkingKeyAndTurnsDownAWrongOne() = runTest {
+        var refuse = true
+        val http = Routed { r -> if (r.url.endsWith("/key") && refuse) throw java.io.IOException(PhoneProviders.failure(401)) else modelJSON }
+        val memory = Memory(); val phone = PhoneChats(memory, http, backgroundScope)
+        phone.load()
+        val wrong = runCatching { phone.connect("openrouter", "OpenRouter", null, "bad") }.exceptionOrNull()
+        assertEquals(PhoneProviders.failure(401), wrong?.message)
+        assertTrue(phone.state.value.providers.isEmpty())
+        assertFalse(memory.values.values.contains("bad"))
+        refuse = false
+        val id = phone.connect("openrouter", "OpenRouter", null, "good")
+        assertEquals(listOf("chat-model"), phone.state.value.models[id]!!.map { it.id })
+        assertTrue(memory.values.values.contains("good"))
+    }
+
+    @Test fun ollamasUnknownModelMeansTheKeyPassed() = runTest {
+        val http = Routed { r -> if (r.url.endsWith("/chat/completions")) throw java.io.IOException(PhoneProviders.failure(404)) else modelJSON }
+        val phone = PhoneChats(Memory(), http, backgroundScope)
+        phone.load()
+        phone.connect("ollama-cloud", "Ollama Cloud", null, "key")
+        assertEquals(1, phone.state.value.providers.size)
+    }
+
+    @Test fun openRouterSignInSwapsTheCodeAndKeepsTheProvider() = runTest {
+        val http = Routed { r -> if (r.url.endsWith("/auth/keys")) """{"key":"sk-or-signed"}""" else modelJSON }
+        val memory = Memory(); val phone = PhoneChats(memory, http, backgroundScope)
+        phone.load()
+        // A callback with no sign-in under way is ignored.
+        phone.finishOpenRouterSignIn("nekko-agent://openrouter-key?code=stray")
+        assertTrue(http.requests.isEmpty())
+        val page = phone.startOpenRouterSignIn()
+        assertTrue(page.startsWith("https://openrouter.ai/auth?"))
+        assertEquals(PhoneChats.SignIn.WAITING, phone.state.value.signIn)
+        phone.finishOpenRouterSignIn("nekko-agent://openrouter-key?code=abc")
+        assertEquals(PhoneChats.SignIn.DONE, phone.state.value.signIn)
+        val swap = http.requests.first()
+        assertEquals("abc", swap.body!!["code"].toString().trim('"'))
+        // The verifier sent is the one the challenge was made from.
+        val challenge = page.substringAfter("code_challenge=").substringBefore('&')
+        assertEquals(challenge, PhoneProviders.pkceChallenge(swap.body!!["code_verifier"].toString().trim('"')))
+        assertEquals("OpenRouter", phone.state.value.providers.single().label)
+        assertTrue(memory.values.values.contains("sk-or-signed"))
+    }
+
+    @Test fun aFailedSignInSaysSoAndKeepsNothing() = runTest {
+        val http = Routed { r -> if (r.url.endsWith("/auth/keys")) "{}" else modelJSON }
+        val phone = PhoneChats(Memory(), http, backgroundScope)
+        phone.load()
+        phone.startOpenRouterSignIn()
+        phone.finishOpenRouterSignIn("nekko-agent://openrouter-key?code=abc")
+        assertEquals(PhoneProviders.SIGN_IN_FAILED, phone.state.value.signInError)
+        assertNull(phone.state.value.signIn)
+        assertTrue(phone.state.value.providers.isEmpty())
     }
 }

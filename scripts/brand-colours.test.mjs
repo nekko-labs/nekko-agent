@@ -50,7 +50,7 @@ test('the iPhone draws its brand surfaces from BrandColor, which is plum', () =>
   const brand = read('apps/ios/App/Shared/BrandColor.swift');
   assert.match(brand, /static let plum = Color\(red: 0x19 \/ 255, green: 0x00 \/ 255, blue: 0x19 \/ 255\)/);
   assert.match(read('apps/ios/App/Views/Splash.swift'), /static let ground = BrandColor\.plum/);
-  assert.match(read('apps/ios/App/Shared/PixelCat.swift'), /var fill = BrandColor\.plum/);
+  assert.match(read('apps/ios/App/Shared/PixelCat.swift'), /var fill = BrandColor\.nekkoFace/);
   assert.match(read('apps/ios/App/Shared/LiveCardView.swift'), /static let accent = BrandColor\.accentOnDark/);
 });
 
@@ -67,13 +67,13 @@ test('Android 12+ opens on the plain brand plum, and the opening draws the white
   assert.match(splash, /val INK = Color\.White/);
 });
 
-test('the Android pixel cat is plum with a white line', () => {
+test('the Android pixel cat is Nekko black with a pale line', () => {
   assert.match(read('apps/android/app/src/main/java/com/nekko/android/ui/components/PairSuccess.kt'),
-    /fill: Color = Color\(0xFF190019\),\s*line: Color = Color\.White,/);
+    /fill: Color = Color\(0xFF16161C\),\s*line: Color = Color\(0xFFF3E8EE\),/);
 });
 
-test('the desktop pixel mascot is plum with a white line', () => {
-  assert.match(read('apps/desktop/src/renderer/components/Mascot.tsx'), /fill="#190019" stroke="#ffffff"/);
+test('the desktop pixel mascot is Nekko black with a pale line', () => {
+  assert.match(read('apps/desktop/src/renderer/components/Mascot.tsx'), /fill="#16161c" stroke="#f3e8ee"/);
 });
 
 test('no app source uses the retired green brand', () => {

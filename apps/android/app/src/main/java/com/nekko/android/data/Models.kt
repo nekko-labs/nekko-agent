@@ -38,6 +38,11 @@ data class Computer(
     /** Its `machineIcon`, learned from app:info once connected. Null shows nothing. */
     val icon: String? = null,
     val nameIsCustom: Boolean? = null,
+    /**
+     * Turned off on this phone ("Connect to <name>", #2059, the iPhone's connection intent): the
+     * pairing, saved chats, drafts and queued prompts stay, but the phone doesn't dial it. Null is on.
+     */
+    val connectionDisabled: Boolean? = null,
 )
 
 /** Secret half of a pairing, kept in [SecureStore] only. */
@@ -70,6 +75,8 @@ data class ComputersState(
     val route: String? = null,
     val denied: DenyReason? = null,
     val summaries: List<SessionSummary> = emptyList(),
+    /** The sub-agents each of the active computer's chats spawned and hasn't completed, oldest first, by parent id (#2509). */
+    val subagents: Map<String, List<SessionSummary>> = emptyMap(),
     val summariesLoading: Boolean = false,
     /** The active computer's own list has been read since it became active (not the phone's saved copy). */
     val summariesLoaded: Boolean = false,
@@ -96,6 +103,8 @@ data class ComputersState(
     val imageGeneration: Boolean = false,
     /** When this phone stopped remote access on the active computer (SK-8); null otherwise. */
     val remoteStoppedAt: Long? = null,
+    /** When this phone quit Nekko Agent on the active computer (SK-8); null otherwise. */
+    val remoteQuitAt: Long? = null,
     /** The active computer's phone protocol from its welcome (IO-32); null until it has welcomed this phone. */
     val hostProtocol: Int? = null,
     /**
@@ -123,6 +132,8 @@ data class Peer(
     val detail: String? = null,
     val denied: DenyReason? = null,
     val summaries: List<SessionSummary> = emptyList(),
+    /** Its chats' running sub-agents, by parent id (#2509). */
+    val subagents: Map<String, List<SessionSummary>> = emptyMap(),
     val activity: Map<String, Activity> = emptyMap(),
     val workspaces: List<WorkspaceFolder> = emptyList(),
     /** The computer answered on this link (not only a saved list). */
@@ -148,6 +159,7 @@ internal object StoredJson {
                 if (c.alts.isNotEmpty()) put("alts", buildJsonArray { c.alts.forEach { add(JsonPrimitive(it)) } })
                 c.icon?.let { put("icon", it) }
                 c.nameIsCustom?.let { put("nameIsCustom", it) }
+                if (c.connectionDisabled == true) put("connectionDisabled", true)
             })
         }
     }.toString()
@@ -165,6 +177,7 @@ internal object StoredJson {
                 alts = (o["alts"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
                 icon = o.str("icon"),
                 nameIsCustom = (o["nameIsCustom"] as? JsonPrimitive)?.booleanOrNull,
+                connectionDisabled = (o["connectionDisabled"] as? JsonPrimitive)?.booleanOrNull?.takeIf { it },
             )
         }
     }

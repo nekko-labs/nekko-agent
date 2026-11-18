@@ -183,6 +183,9 @@ pub struct Machine {
     /// The GPU probe's core temperature, read for activity at most every
     /// `TEMPS_TTL`: `nvidia-smi` is a process spawn.
     gpu_temp: tokio::sync::Mutex<Option<(Instant, Option<f64>)>>,
+    /// A model list newer than the bundled one, once the daemon has verified
+    /// its signature (`nekkod`'s `model_feed.rs`). `None` is the bundled list.
+    feed: std::sync::RwLock<Option<std::sync::Arc<crate::recommend::Feed>>>,
 }
 
 /// A polling meter reads the GPU at most this often.
@@ -207,7 +210,24 @@ impl Machine {
             speeds,
             activity: std::sync::Arc::default(),
             gpu_temp: tokio::sync::Mutex::new(None),
+            feed: std::sync::RwLock::new(None),
         }
+    }
+
+    /// The model list the recommendations are made from: a verified newer one, else the bundled one.
+    pub fn feed(&self) -> std::sync::Arc<crate::recommend::Feed> {
+        static BUNDLED: std::sync::OnceLock<std::sync::Arc<crate::recommend::Feed>> = std::sync::OnceLock::new();
+        self.feed
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .unwrap_or_else(|| BUNDLED.get_or_init(|| std::sync::Arc::new(crate::bundled_feed().clone())).clone())
+    }
+
+    /// Use `feed` in place of the bundled list, or go back to it with `None`.
+    /// The caller has verified where it came from: nothing is checked here.
+    pub fn set_feed(&self, feed: Option<crate::recommend::Feed>) {
+        *self.feed.write().unwrap_or_else(|e| e.into_inner()) = feed.map(std::sync::Arc::new);
     }
 
     /// Input, power and heat now (`activity:state`), each from its cache.
@@ -243,6 +263,12 @@ impl Machine {
     pub async fn record_decode(&self, path: &str, predicted_n: f64, predicted_ms: f64, alone: bool) -> bool {
         let machine = crate::measured::machine_key(&self.profile(false).await);
         self.speeds.record(path, &machine, predicted_n, predicted_ms, alone, nekko_js::now_ms())
+    }
+
+    /// One picture or clip the picture model at `path` made in `ms`, already loaded.
+    pub async fn record_picture(&self, path: &str, ms: f64) -> bool {
+        let machine = crate::measured::machine_key(&self.profile(false).await);
+        self.speeds.record_picture(path, &machine, ms, nekko_js::now_ms())
     }
 
     /// Where the daemon keeps its data, when it knows.

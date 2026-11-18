@@ -9,7 +9,7 @@ before you wait through the load. This is what the Models page shows you and why
 
 Open **Photo** to make pictures from a prompt. If you do not have a picture model yet, choose one of the models picked for your computer and press **Download and set up**. Nekko handles the model and its supporting files; they are not separate models you need to choose yourself. The image engine is also installed when needed. Downloads are shared with **Models → Downloads**, where you can check progress or cancel.
 
-You can also find **Create pictures** and **Edit photos** recommendations in Models, or filter the model library to **Pictures**. Open a downloaded model to see its setup checklist: model, supporting files and image engine. **Finish photo setup** installs missing parts. “Ready” requires both supporting files and the engine; a custom model without a known file set remains an advanced, unverified setup. A model that only edits is labeled accordingly.
+You can also find **Create pictures** and **Edit photos** recommendations in Models, or filter the model library to **Pictures**. Pictures and Video list the models Nekko has set up, which download with their supporting files and start. A search can find others: they wait behind **Show more from Hugging Face**, limited to well-known publishers, and may need extra files or not start. Open a downloaded model to see its setup checklist: model, supporting files and image engine. **Finish photo setup** installs missing parts. “Ready” requires both supporting files and the engine; a custom model without a known file set remains an advanced, unverified setup. A model that only edits is labeled accordingly.
 
 In a Photo chat, pick a model and a **Shape**: Square, Landscape, Portrait, Wide or Tall. Existing custom sizes stay unchanged. **Advanced** contains Steps, Prompt guidance (CFG) and Seed, with a short explanation and **Restore model defaults**. You do not need to adjust these to begin.
 
@@ -17,7 +17,7 @@ To edit, attach, paste or drop a photo and describe the change, or press **Edit*
 
 On the iPhone, an image chat edits the same way: **+ → Photos to edit** (or Paste image), then describe the change, or tap **Edit** under a made picture (not under a clip). Up to four photos, scaled to 1,536 px on the long side. The edit runs on the computer and needs it online; if the chat's model can't edit photos, the computer says so in the chat.
 
-Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. Memory-fit estimates are not measured speed or output-quality guarantees.
+Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. After you have made three pictures with a model, Models shows how long one takes on your computer ("25 s a picture here"): the median of your recent ones, at the sizes you used. Memory-fit estimates are not measured speed or output-quality guarantees.
 
 ### Short video clips (experimental)
 
@@ -25,7 +25,17 @@ Nekko can make short clips on your computer with **Wan 2.2 TI2V 5B**. In **Model
 
 Choose it as the model in a Photo chat and describe the clip. Attach a photo to use it as the first frame. A clip is about two seconds (33 frames at 16 frames a second) in your chat's shape, or the photo's, at about 832×480. It appears in the chat as an animated picture, with its length beside it. The progress line shows the sampling steps, and **Stop** cancels the clip on the engine.
 
-This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) can be listed under **Models → Video** but are not supported yet.
+The agent in a chat on this computer can start a clip too (not in incognito or offline chats). It answers at once and the chat is free while the clip is made; when it is ready, the chat wakes with where the clip was saved, and the agent carries on. Stopping the chat, or cancelling the clip's watch, stops the clip.
+
+This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) are not supported yet: a search under **Models → Video** keeps them behind **Show more from Hugging Face**.
+
+### Pictures from any chat
+
+When your computer has a picture model ready, the agent in any chat on this computer can make and change pictures with it: ask for an illustration, an icon or a mock-up while you work. The picture appears in the chat and the agent can look at it to check the result. Ask it to save the picture in the project (for example `assets/hero.png`) and it saves a new file, asking first in the same way as for any other file it writes. Nothing leaves your computer and making a picture asks nothing.
+
+The agent uses the chat's picture model if you chose one, then the one in **Settings → Agents → Pictures** (Automatic by default), otherwise the first ready one that can do the job. Only one picture or clip is made at a time on your computer, so a second one waits. When a picture model has to push the chat's own model out of memory, it is unloaded again once the picture is done, and the chat's model loads again for the next reply. Sandbox chats do not have these tools.
+
+In a **Claude Agent** chat (Claude Code), the agent gets the same tools when Claude Code runs on an Anthropic API key or a cloud account: it sees the picture, and Nekko keeps the file in its own data folder and tells the agent where, so Claude Code can copy it into the project with its own tools. On a **Claude plan** these tools stay off for now: Anthropic has not yet approved Nekko's tools inside Claude Code on a plan. Until it does, make pictures in a Photo chat or in a chat on another model (a local model, ChatGPT, Gemini or OpenRouter). If you have Anthropic's own written approval, **Settings → Agents → Claude plan features** turns them on for your install.
 
 ## Your first local model
 
@@ -376,3 +386,7 @@ pieces of work. Today Nekko Agent manages the runtimes you already have.
 ## Models navigation
 
 Open **Models** in the app rail. **Local model server** contains the built-in engine and connected local servers, with discovery and shortcuts for Ollama, LM Studio and vLLM. **Cloud providers** contains subscriptions and API accounts. To add one, use the filled provider icons to the right of your current providers, or **More providers** for the full chooser. Existing provider controls are unchanged.
+
+## Automatic routing and local subagents
+
+Local models participate in cross-provider routing only when the chat explicitly enables Fusion. A saved prefer-local subagent preference does not grant permission. Classify models as Small/Medium/Large/Frontier and set a separate subagent capability target in Settings → Agents. See [Fusion routing and model tiers](fusion-routing.md) for strategies, provider boundaries and setup steps.

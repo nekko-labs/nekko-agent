@@ -279,7 +279,7 @@ struct ComputerDetailView: View {
                 .frame(width: 16).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(info.name).font(.body).foregroundStyle(palette.ink).lineLimit(1)
-                Text([provider?.label, loaded ? String(localized: "loaded") : nil].compactMap { $0 }.joined(separator: " · "))
+                Text([provider?.shortName, loaded ? String(localized: "loaded") : nil].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(palette.inkFaint)
             }
             Spacer()
@@ -292,8 +292,8 @@ struct ComputerDetailView: View {
         // The switch is a change on the computer (Face ID, like every change); the row waits for its answer.
         Toggle(isOn: Binding(get: { p.enabled }, set: { on in flip(p, on, m) })) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(p.label).font(.body).foregroundStyle(p.enabled ? palette.ink : palette.inkSoft)
-                Text(kindName(p.kind)).font(.caption).foregroundStyle(palette.inkFaint)
+                Text(p.accountTitle).font(.body).foregroundStyle(p.enabled ? palette.ink : palette.inkSoft)
+                Text(p.accountCaption ?? kindName(p.kind)).font(.caption).foregroundStyle(palette.inkFaint)
             }
         }
         .disabled(!m.isActive || switching.contains(p.id))

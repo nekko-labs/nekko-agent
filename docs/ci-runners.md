@@ -8,15 +8,18 @@ while you are away and the Mac is plugged in.
 
 The **Automations** panel on the Agent board shows your connected CI runners even
 when no chat automations are scheduled, in a short form: each runner's name, state,
-switch and settings, then only what is happening now. A VM that is starting or ready
-for a job shows its name, and **Live log** (on hover) opens its output. Jobs appear
-under **Queued** and **In progress**, with Accept now/Decline, Cancel/Re-run and the
-live log. Cancel and restart still ask for confirmation because they affect the
-workflow run on GitHub. Hover the runner's name for its scope, label, mode and keep-awake
-setting.
+switch, then only what is happening now, as one flat list: a running job (with its step
+and progress bar), a queued job, a VM starting or being deleted. A VM ready for a job is a
+count beside the state ("Running · 1 idle"), not a row. A queued job always shows **Start now**
+and **Skip**, since it is a decision waiting on you. A running job's actions (Cancel/Re-run,
+**Live log**) and the settings gear appear when you hover or Tab to the row, and take no width
+until then, so names are not cut short. **Completed · N jobs** opens the jobs that ended; each
+one opens to its steps, job log and VM log. A runner error ends with **Open settings**. Cancel and restart still ask for
+confirmation because they affect the workflow run on GitHub. Hover the runner's name for its
+scope, label, mode and keep-awake setting.
 
-Completed jobs, idle slots and the Mac's facts (VM size, power, network, today's jobs)
-stay on the CI runners page.
+Idle slots, VM names, the Queued/In progress group labels and the Mac's facts (VM size, power,
+network, today's jobs) stay on the CI runners page.
 
 Choose **View CI runners** to open the full CI section in Automations, where you
 can also connect GitHub and set up this Mac. With no connected runners the panel
@@ -174,7 +177,10 @@ macOS or Xcode still needs **Rebuild image**.
 An image set up by an older Nekko may lack `node`, `gh` or `jq`, and a job that runs one
 before its own setup fails in seconds with `command not found`. The runner card then says, for
 example, "node and gh are missing from this Mac's runner image. Jobs that need them will fail."
-Choose **Install them**: Nekko copies the image, starts the copy once to install them with
+It may also lack `zstd` and `gtar`. Jobs still pass without them, but `actions/cache` falls back
+to gzip and its caches save slower, so the card says "zstd and gtar are missing from this Mac's
+runner image, so caches save slower." An image set up after these two were added still has them
+but no record of them, so it shows the notice once. Either way, choose **Install them**: Nekko copies the image, starts the copy once to install them with
 Homebrew, checks its disk for them and test-boots it: minutes, not a rebuild's half hour. The image in use keeps
 taking jobs until then, and the sheet shows the stages and any failure like setup does.
 
@@ -344,9 +350,11 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **Linux slots**: 0 to 4 Linux VMs, with no Apple limit (see [Linux jobs](#linux-jobs)).
 - **Suggested size**: what size VM your jobs need, from what they used. A VM holds all its
   memory from boot whether a job needs it or not, so a smaller fit leaves more for you, and a job
-  that swapped or kept every vCPU busy gets more. After 3 jobs at the current size, the row says
+  that swapped or kept every vCPU busy gets more. After 2 jobs at the current size, the row says
   either **Fits your last N jobs** or suggests a size with the reason, and **Apply** saves it at
-  once for the next VM. It never goes over what this Mac can give each slot, and never cuts
+  once for the next VM. A suggested change also shows as one line on the runner card ("Your last
+  2 jobs suggest 6 vCPUs, 14 GB per VM (now 6 vCPUs, 10 GB).") with **Apply**, and **Not now**,
+  which hides that suggestion until the daemon suggests a different size. It never goes over what this Mac can give each slot, and never cuts
   below GitHub's standard hosted Mac (3 vCPUs, 7 GB). Each job's VM samples its own CPU and memory
   every 5 seconds; the samples stay on this Mac and only their summary is kept, on the job's line
   in `runners/audit.jsonl`.
@@ -432,20 +440,20 @@ A newer version of the runner may add a reason this app does not know yet; it sh
 ## Jobs
 
 Below its slots, the runner card lists its jobs in three groups (the Automations panel
-shows the first two). A running job is listed here and not again on its slot. A group with nothing in
+shows the first two as one list without group labels, and the third behind one **Completed** row). A running job is listed here and not again on its slot. A group with nothing in
 it is left out.
 
 **Queued** lists jobs waiting on GitHub for a runner with this runner's label, with how long each
 has waited. Each one offers:
 
-- **Accept now** starts a VM for that job right away, as if the runner were in **Runner first**,
+- **Start now** starts a VM for that job right away, as if the runner were in **Runner first**,
   even when your mode would hold it (for example Do not disturb while you type). The job then runs
   to the end under Runner first's rules. The hard limits still apply (low memory, heat, low disk,
   Low Power Mode and Apple's limit of 2 macOS VMs), and so do your own conditions under **Only
   when** (on power, trusted networks, hotspots, VPN). When one of those blocks it, the button is
   off and says why. GitHub hands the new VM whichever matching job is first in line, which is usually
   the oldest. For a Linux job (when you have Linux slots), it starts a Linux VM instead.
-- **Decline** keeps this Mac from starting a VM for that job, so another runner or a hosted Mac
+- **Skip** keeps this Mac from starting a VM for that job, so another runner or a hosted Mac
   can take it. A VM this Mac already has waiting may still pick it up, because GitHub decides
   which ready runner gets which job.
 - **Undo** takes back either.

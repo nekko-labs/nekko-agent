@@ -7,23 +7,8 @@
     <string name="chats_cancel">Cancel</string>
     <string name="chats_new_chat">New chat</string>
 
-    <!-- Connection banner -->
-    <string name="chats_denied_revoked">This phone was removed on your computer. There: Settings → Remote access → Pair a device, then scan the new QR here. If it still refuses, use Sign out all phones there first.</string>
-    <string name="chats_denied_bad_code">That pairing code expired or was already used. Scan a fresh QR.</string>
-    <string name="chats_denied_unknown_device">Your computer doesn’t know this phone yet. Scan a pairing QR.</string>
-    <string name="chats_denied_kicked">Your computer disconnected this phone. Pair it again.</string>
-    <string name="chats_denied_bad_key">The pairing key changed on your computer. Scan a fresh QR.</string>
-    <string name="chats_denied_update_required">Your computer only accepts phones on the newest Nekko Agent. Update this app to connect to it.</string>
-    <string name="chats_denied_invalid">Pairing failed. Scan a fresh QR on your computer.</string>
-    <string name="chats_banner_stopped">You stopped remote access on %1$s. Turn it on there (Settings → Remote access), then tap here to reconnect.</string>
-    <string name="chats_banner_online">%1$s is online</string>
-    <string name="chats_banner_offline">%1$s is offline. Open Nekko Agent on it.</string>
-    <string name="chats_banner_connecting">Reconnecting to %1$s...</string>
-    <string name="chats_banner_host_not_found">Can’t find %1$s, the address this phone was paired with. On %2$s, change how phones connect in Settings → Remote access, then pair again.</string>
-    <string name="chats_reconnect">Reconnect</string>
+    <!-- Connection row -->
     <string name="chats_pair_again">Pair again</string>
-    <string name="chats_manage_computers">Manage computers</string>
-    <string name="chats_encrypted_via">End-to-end encrypted via %1$s</string>
     <string name="chats_safety_options">Safety options for %1$s</string>
 
     <!-- Computers on this network -->
@@ -90,8 +75,8 @@
     <string name="chats_delete">Delete</string>
     <string name="chats_delete_title">Delete this chat?</string>
     <string name="chats_delete_body">“%1$s” will be deleted from %2$s for good. This can’t be undone.</string>
-    <string name="chats_outbox_note_one">1 prompt will send when reconnected.</string>
-    <string name="chats_outbox_note_other">%1$d prompts will send when reconnected.</string>
+    <string name="chats_outbox_note_one">1 prompt waits on this phone. It goes when %1$s is back.</string>
+    <string name="chats_outbox_note_other">%1$d prompts wait on this phone. They go when %2$s is back.</string>
     <string name="chats_waiting_to_send">Waiting to send</string>
     <string name="chats_on_computer">On %1$s</string>
     <string name="chats_search_placeholder">Search chats</string>
@@ -136,7 +121,6 @@
     <string name="chats_oldest_first">Oldest first</string>
     <string name="chats_newest_first">Newest first</string>
     <string name="chats_show">Show</string>
-    <string name="chats_previews">Previews</string>
     <string name="chats_completed_chats">Completed chats</string>
     <string name="chats_empty_groups">Empty groups</string>
     <string name="chats_reorder_groups_menu">Reorder groups…</string>
@@ -214,6 +198,11 @@
     <string name="chats_no_providers">No model providers are switched on in Nekko Agent on your computer. Add or enable one in its Models settings.</string>
     <string name="chats_search_models">Search models</string>
     <string name="chats_starred">Starred</string>
+    <string name="chats_account_signed_out">Signed out</string>
+    <string name="chats_account_personal_plan">Personal plan</string>
+    <string name="chats_account_organization">Organization</string>
+    <string name="chats_account_family_claude" translatable="false">Claude</string>
+    <string name="chats_account_switcher">Claude account</string>
     <string name="chats_model_source">Model source</string>
     <string name="chats_scope_all">All</string>
     <string name="chats_scope_cloud">Cloud</string>
@@ -227,8 +216,6 @@
     <string name="chats_no_models_match">No models match “%1$s”.</string>
     <string name="chats_loaded">loaded</string>
     <string name="chats_selected">Selected</string>
-    <string name="chats_offline_connecting">%1$s is connecting…. Start now and the chat begins when it’s back; it waits on this phone until then.</string>
-    <string name="chats_offline_offline">%1$s is offline. Start now and the chat begins when it’s back; it waits on this phone until then.</string>
     <string name="chats_not_started">Not started: %1$s</string>
     <string name="chats_offline_no_model">To start a chat while %1$s is offline, choose a default model for it in Settings → New chats.</string>
     <string name="chats_model_named">Model · %1$s</string>
@@ -292,4 +279,17 @@
     <string name="chats_phone_forget_title">Forget this chat?</string>
     <string name="chats_phone_forget_body">Its messages are removed from this phone. Your provider’s own records stay.</string>
     <string name="chats_phone_forget">Forget</string>
+    <!-- New chat while the computer is away (#2475), the iPhone's two lines. -->
+    <string name="chats_reconnecting">%1$s is reconnecting</string>
+    <string name="chats_reconnecting_label">%1$s is reconnecting…</string>
+    <string name="chats_reconnect_draft">Prompts you send wait on this phone.</string>
+    <!-- Sub-agents under their chat (#2509). -->
+    <string name="chats_subagents">Sub-agents</string>
+    <string name="chats_subagent">Sub-agent</string>
+    <string name="chats_subagent_named">Sub-agent %1$s</string>
+    <string name="chats_subagent_on">Sub-agent %1$s, on %2$s</string>
+    <!-- New chat as a composer (#2459). -->
+    <string name="chats_photo_unreadable">Couldn’t read that image.</string>
+    <string name="chats_choose_model">Choose a model</string>
+    <string name="chats_starts_on">Starts on %1$s</string>
 </resources>

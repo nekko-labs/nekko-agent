@@ -115,7 +115,7 @@
     <string name="chat_terminal">Terminal</string>
     <string name="chat_dictate">Ditar</string>
     <string name="chat_photos_max">máx. %1$d</string>
-    <string name="chat_image_from_files">Imagem dos arquivos</string>
+    <string name="chat_image_from_files">Fotos e vídeos</string>
     <string name="chat_take_photo">Tirar foto</string>
     <string name="chat_remove_photo">Remover foto %1$d</string>
     <string name="chat_adding_photo">Adicionando foto</string>
@@ -294,4 +294,59 @@
     <string name="photo_actions">Ações da foto</string>
     <!-- Save to Photos on Android 9, when storage access was refused. -->
     <string name="chat_save_needs_storage">Permita o acesso ao armazenamento para salvar em Fotos.</string>
+    <!-- Folded by default in the transcript (#2453). -->
+    <string name="chat_progress_note">Nota de progresso</string>
+    <string name="chat_conversation_summary">Resumo da conversa</string>
+    <!-- Videos from the message box (#2777). -->
+    <string name="chat_clip_sending">Enviando… %1$d%%</string>
+    <string name="chat_clip_attached">Anexado ao chat</string>
+    <string name="chat_clip_failed">Não foi possível enviar este vídeo</string>
+    <string name="chat_remove_clip">Remover %1$s</string>
+    <!-- The agent's plan sheet over the composer (#2115). -->
+    <string name="plan_sheet">Plano do agente</string>
+    <string name="plan_open_label">Plano, %1$d de %2$d concluídas. Recolhe o plano</string>
+    <string name="plan_title">Plano</string>
+    <string name="plan_done_of">%1$d de %2$d concluídas</string>
+    <string name="plan_folded_label">Plano, etapa %1$d de %2$d: %3$s. Mostra o plano todo</string>
+    <string name="plan_position">%1$d de %2$d</string>
+    <string name="plan_paused">Pausado</string>
+    <string name="plan_working">Em andamento</string>
+    <string name="plan_done">Concluído</string>
+    <string name="plan_skipped">Ignorado</string>
+    <string name="plan_pending">Pendente</string>
+    <string name="plan_agent_reported">%1$s, informado pelo agente</string>
+    <string name="plan_open_evidence">%1$s, abrir evidência</string>
+    <string name="plan_pass">Passada %1$d</string>
+    <string name="plan_pass_label">Passada %1$d: uma verificação posterior devolveu o trabalho aqui</string>
+    <string name="plan_pr_merged">#%1$s · Mesclado</string>
+    <string name="plan_pr_closed">#%1$s · Fechado</string>
+    <string name="plan_pr_open">Aberto</string>
+    <string name="plan_pr_draft">Rascunho</string>
+    <string name="plan_ci_failing">CI falhando</string>
+    <string name="plan_ci_passing">CI passando</string>
+    <string name="plan_ci_running">CI rodando</string>
+    <string name="plan_ci_none">Sem CI</string>
+    <string name="plan_pr_label">Pull request %1$s</string>
+    <string name="plan_subagent">Subagente</string>
+    <string name="plan_subagents">Subagentes</string>
+    <string name="plan_subagents_label">Subagentes: %1$d rodando, %2$d concluídos</string>
+    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
+    <string name="response_waiting">Pendente · envia quando conectar</string>
+    <string name="response_sending">Enviando…</string>
+    <string name="response_sent">Enviado</string>
+    <string name="response_stale">Não está mais pendente</string>
+    <string name="response_failed">Não foi possível enviar a resposta</string>
+    <string name="response_stale_detail">A solicitação original não está mais pendente.</string>
+    <string name="response_request_id">Identificador da solicitação: %1$s</string>
+    <string name="response_retry">Tentar de novo</string>
+    <string name="response_cancel">Cancelar</string>
+    <string name="response_allow">Permitir %1$s</string>
+    <string name="response_deny">Negar %1$s</string>
+    <!-- Edit under a picture an image chat made (#2230). -->
+    <string name="chat_edit_picture">Editar</string>
+    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
+    <string name="car_you">Você</string>
+    <string name="car_reply">Responder</string>
+    <string name="car_mark_read">Marcar como lida</string>
+    <string name="car_not_sent">Não enviado: este chat não está no computador ao qual o telefone está conectado.</string>
 </resources>

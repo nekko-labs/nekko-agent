@@ -107,6 +107,10 @@ data class ChatUi(
     val runOptions: Map<String, JsonElement> = emptyMap(),
     /** The tools this chat may not call. */
     val disabledTools: List<String> = emptyList(),
+    /** MCP tools this chat runs without asking ("Always allow this tool", decision 0054). */
+    val allowedMcpTools: List<String> = emptyList(),
+    /** Recipients this chat writes to without asking (decision 0063). */
+    val knownRecipients: List<String> = emptyList(),
     /** The chat's own tool policy; null follows the computer's default. */
     val mode: PcSettings.ChatMode? = null,
     /** The transcript is the phone's saved copy, saved then: read-only until the computer answers (OF-5). */
@@ -478,20 +482,24 @@ class ChatController(
 
     private suspend fun sendImage(text: String, skill: SkillSummary?, images: List<String>) {
         val session = _state.value.session ?: throw RelayException("Wait for this chat to load.")
-        require(skill == null && images.isEmpty()) { "Image generation accepts a text prompt only. Remove attachments and skills first." }
+        require(skill == null) { "Image generation takes a prompt and photos to edit, not a skill. Remove the skill first." }
+        // Photos make it an edit (#2230, decision 0069): at most four, PNG, JPEG or WebP, 6 MiB together.
+        require(images.size <= com.nekko.protocol.PhotoEdit.MAX_PHOTOS) { "Up to ${com.nekko.protocol.PhotoEdit.MAX_PHOTOS} photos to edit from." }
+        require(images.all(com.nekko.protocol.PhotoEdit::accepts)) { "Only PNG, JPEG or WebP photos can be edited." }
+        require(com.nekko.protocol.PhotoEdit.fitsTotal(images)) { "These photos are too large together. Remove one and try again." }
         require(text.isNotBlank()) { "Describe the image to generate." }
         check(env().conn == RelayState.ONLINE) { "Reconnect to generate an image. Image prompts are never queued as text." }
         check(env().imageGeneration) { "This computer does not advertise image generation. Update Nekko Agent on the computer." }
         check(imageSend == null && !_state.value.turn.running && !session.running) { "Wait for this image to finish or stop it first." }
         val params = session.imageParams ?: throw RelayException("Choose and save image settings before generating.")
-        val request = params.generation(sessionId, text)
+        val request = params.generation(sessionId, text, images)
         val generate = generateImage ?: throw RelayException("This phone cannot authorize image generation.")
         // Await authorization and the turn so a refusal/cancel keeps the composer's words.
         // There is no image idempotency token: never retry an ambiguous lost response automatically.
         val attempt = ImageSend()
         imageSend = attempt
         imageRevision++
-        _state.update { it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-image-${now()}", text, now())))) }
+        _state.update { it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-image-${now()}", text, now(), thumbs = images)))) }
         try {
             coroutineScope {
                 // Stop cancels this child, including pending Change signing, not the composer's scope.
@@ -589,6 +597,17 @@ class ChatController(
         caller.call(Channels.TOOL_APPROVE, JsonPrimitive(sessionId), JsonPrimitive(a.call.id), JsonPrimitive(true))
     }
 
+    /** The computer took this phone's response to [callId] (a pending response message, #2497): the card goes. */
+    fun responded(callId: String) {
+        _state.update { s ->
+            val t = s.turn
+            s.copy(turn = t.copy(
+                approval = t.approval?.takeUnless { it.call.id == callId },
+                question = t.question?.takeUnless { it.callId == callId },
+            ))
+        }
+    }
+
     suspend fun answer(answers: List<AskAnswer>) {
         val q = _state.value.turn.question ?: return
         caller.call(Channels.CHAT_ANSWER, JsonPrimitive(sessionId), JsonPrimitive(q.callId), JsonArray(answers.map { it.toJson() }))
@@ -682,6 +701,17 @@ class ChatController(
         /** Only MCP tools offer **Always allow this tool**: their server alone says what they do (`offersToolScope` on the desktop). */
         fun offersToolScope(toolName: String): Boolean = toolName.startsWith("mcp__")
 
+        /** An MCP tool's name for people: `mcp__slack__post_message` reads "Post message (Slack)", as `toolPickerLabel` on the desktop. */
+        fun mcpToolLabel(name: String): String {
+            fun humanize(s: String): String {
+                val words = s.replace(Regex("([a-z0-9])([A-Z])"), "$1 $2").replace(Regex("[_./:-]+"), " ").trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+                return if (words.isEmpty()) "Unnamed tool" else words.substring(0, 1).uppercase() + words.substring(1)
+            }
+            val parts = name.split("__")
+            if (!name.startsWith("mcp__") || parts.size < 3) return humanize(name)
+            return "${humanize(parts.drop(2).joinToString(" "))} (${humanize(parts[1].ifEmpty { "MCP" })})"
+        }
+
         /** The session's own model, else the computer's default (never the `__auto__` sentinel). */
         fun resolveModel(session: Session?, defaults: RemoteDefaults): Pair<String?, String?> {
             val providerId = session?.providerId ?: defaults.defaultProviderId
@@ -721,7 +751,7 @@ class ChatController(
                 else -> null
             }
             val sendsLater = if (!image && away && env.canQueue) {
-                "${env.computerName} is ${if (env.conn == RelayState.OFFLINE) "offline" else "reconnecting"}.\nYour draft will be saved here and sent when reconnected"
+                "${env.computerName} is ${if (env.conn == RelayState.OFFLINE) "offline" else "reconnecting"}.\nPrompts you send wait on this phone."
             } else {
                 null
             }
@@ -761,6 +791,8 @@ class ChatController(
                 effort = Effort.parse(state.session?.effort),
                 runOptions = state.session?.runOptions ?: emptyMap(),
                 disabledTools = state.session?.disabledTools ?: emptyList(),
+                allowedMcpTools = state.session?.allowedMcpTools ?: emptyList(),
+                knownRecipients = state.session?.knownRecipients ?: emptyList(),
                 mode = state.session?.mode,
                 context = state.context,
                 contextTokens = liveTokens(state.context, turn),

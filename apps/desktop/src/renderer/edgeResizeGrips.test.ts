@@ -6,7 +6,7 @@ const dock = stylesheet('components/monitorsDock.css');
 
 describe('side panel resize grips', () => {
   it('has no permanent agent-list boundary', () => {
-    expect(cssRule(board, ".wall-agents-presence[data-orientation='vertical'][data-panel-open='true']")['box-shadow']).toBeUndefined();
+    expect(cssRule(board, ".wall-agents-presence[data-panel-open='true']")['box-shadow']).toBeUndefined();
   });
 
   it('keeps outboard grips hit-testable while clipping closed panels to zero', () => {

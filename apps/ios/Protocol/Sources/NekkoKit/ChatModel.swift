@@ -138,6 +138,7 @@ public final class ChatModel {
     /// This chat's subagent chats (the list hides them), for the delegation rows' status and model.
     public private(set) var children: [SessionSummary] = []
 
+    private let computerId: String?
     private let store: ComputersStore
     private let now: () -> Int64
     private var subscription: UUID?
@@ -155,6 +156,7 @@ public final class ChatModel {
     public init(sessionId: String, store: ComputersStore, now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }) {
         self.sessionId = sessionId
         self.store = store
+        self.computerId = store.activeId
         self.now = now
     }
 
@@ -605,20 +607,38 @@ public final class ChatModel {
         Task { _ = try? await r.call(Channels.chatAbort, [.string(id)]) }
     }
 
-    /// Approvals and answers are never queued: they are time-sensitive and safety-relevant.
-    public static let reconnectToAnswer = "Reconnect to answer. Approvals and answers are never sent later."
+    /// Guarded policy changes still require a live connection and fresh authentication.
+    public static let reconnectToAnswer = "Reconnect to answer here. Open the chat to keep a pending response."
+
+    public var responseMessages: [ResponseMessage] {
+        store.activeId == computerId ? store.responses.messages(for: sessionId) : []
+    }
+    public var responseApproval: Approval? {
+        guard let a = turn.approval, !store.responses.contains(sessionId, approval: a) else { return nil }
+        return a
+    }
+    public var responseQuestion: AskRequest? {
+        guard let q = turn.question, !store.responses.contains(sessionId, question: q) else { return nil }
+        return q
+    }
+    public func retryResponse(_ id: String) {
+        guard store.activeId == computerId else { return }
+        store.responses.retry(id)
+        if store.conn != .online { store.reconnect() }
+    }
+    public func cancelResponse(_ id: String) {
+        guard store.activeId == computerId else { return }
+        store.responses.cancel(id)
+    }
 
     public func approve(_ ok: Bool) async throws {
-        guard let a = turn.approval else { return }
-        guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
-        turn.approval = nil
-        cardChanges += 1
-        do {
-            _ = try await store.remote().call(Channels.toolApprove, [.string(sessionId), .string(a.call.id), .bool(ok)])
-        } catch {
-            // The computer is still waiting: keep the card so the user can try again.
-            if turn.approval == nil { turn.approval = a }
-            throw store.readable(error)
+        guard store.activeId == computerId else { throw RelayError("This chat belongs to another computer.") }
+        guard let a = responseApproval else { return }
+        store.responses.approve(sessionId, approval: a, ok: ok)
+        await store.responses.flush()
+        if responseMessages.contains(where: { $0.callId == a.call.id && $0.status == "sent" }) {
+            if turn.approval?.call.id == a.call.id { turn.approval = nil }
+            cardChanges += 1
         }
     }
 
@@ -662,16 +682,60 @@ public final class ChatModel {
         }
     }
 
+    /// An MCP tool's name for people: `mcp__slack__post_message` reads "Post
+    /// message (Slack)", as `toolPickerLabel` on the desktop.
+    public static func mcpToolLabel(_ name: String) -> String {
+        func humanize(_ s: String) -> String {
+            let words = s.replacingOccurrences(of: "([a-z0-9])([A-Z])", with: "$1 $2", options: .regularExpression)
+                .replacingOccurrences(of: "[_./:-]+", with: " ", options: .regularExpression)
+                .split(separator: " ").joined(separator: " ")
+            return words.isEmpty ? "Unnamed tool" : words.prefix(1).uppercased() + words.dropFirst()
+        }
+        let parts = name.components(separatedBy: "__")
+        guard name.hasPrefix("mcp__"), parts.count >= 3 else { return humanize(name) }
+        let server = parts[1].isEmpty ? "MCP" : parts[1]
+        return "\(humanize(parts.dropFirst(2).joined(separator: " "))) (\(humanize(server)))"
+    }
+
+    /// The recipients this chat writes to without asking (decision 0063), as the computer last said.
+    public var knownRecipients: [String] { session?.knownRecipients ?? [] }
+
+    /// What this chat no longer asks about, for its "Allowed without asking" list.
+    public var hasGrants: Bool { !allowedMcpTools.isEmpty || !knownRecipients.isEmpty }
+
+    /// Changing what a chat allows needs the computer: the gate signs it there.
+    public static let reconnectToChangeGrants = "Reconnect to change what this chat allows."
+
+    /// Take back "Always allow this tool": the tool's next call in this chat asks
+    /// again, the next call of a running turn included. Signed with Face ID or
+    /// the passcode, as saving it was (`PHONE_GUARDED_OPTION_KEYS`).
+    public func revokeAlwaysAllowed(_ tool: String) async throws {
+        guard store.conn == .online else { throw RelayError(Self.reconnectToChangeGrants) }
+        let left = allowedMcpTools.filter { $0 != tool }
+        _ = try await store.call(guarded: Channels.sessionSetOptions,
+                                 [.string(sessionId), .object(["allowedMcpTools": .array(left.map(JSONValue.string))])])
+        allowedHere.removeAll { $0 == tool }
+        await reload()
+    }
+
+    /// Forget a recipient: the next call that writes to it asks again. Signed,
+    /// since the computer's gate cannot tell taking one back from adding one.
+    public func forgetRecipient(_ recipient: String) async throws {
+        guard store.conn == .online else { throw RelayError(Self.reconnectToChangeGrants) }
+        let left = knownRecipients.filter { $0 != recipient }
+        _ = try await store.call(guarded: Channels.sessionSetOptions,
+                                 [.string(sessionId), .object(["knownRecipients": .array(left.map(JSONValue.string))])])
+        await reload()
+    }
+
     public func answer(_ answers: [AskAnswer]) async throws {
-        guard let q = turn.question else { return }
-        guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
-        do {
-            _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
+        guard store.activeId == computerId else { throw RelayError("This chat belongs to another computer.") }
+        guard let q = responseQuestion else { return }
+        store.responses.answer(sessionId, question: q, answers: answers)
+        await store.responses.flush()
+        if responseMessages.contains(where: { $0.callId == q.callId && $0.status == "sent" }) {
             if turn.question?.callId == q.callId { turn.question = nil }
             cardChanges += 1
-        } catch {
-            // Keep the mounted card, including all previous page choices, for retry.
-            throw store.readable(error)
         }
     }
 
@@ -899,7 +963,7 @@ public final class ChatModel {
         let name = store.active?.name ?? "your computer"
         let state = store.conn == .offline ? "offline" : "reconnecting"
         if isImageChat { return "\(name) is \(state). Reconnect to generate; your draft is kept here and is never sent as text." }
-        return "\(name) is \(state).\nYour draft will be saved here and sent when reconnected"
+        return "\(name) is \(state).\nPrompts you send wait on this iPhone."
     }
 
     /// This chat's prompts waiting in the outbox, oldest first.

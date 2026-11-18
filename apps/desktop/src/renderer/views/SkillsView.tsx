@@ -36,6 +36,7 @@ import { useStore } from '../store.js';
 import { StarIcon, SendIcon, CloseIcon, BinocularsIcon, WrenchIcon, BranchIcon, BoltIcon, DownloadIcon, GridIcon } from '../icons.js';
 import { hasAppChrome } from '../chrome.js';
 import { formatCount } from '../components/runtimes/verdict.js';
+import { PageGuideButton, PageIntro, SKILLS_GUIDE, usePageIntro } from '../components/PageIntro.js';
 
 /** Per-node-kind visual identity for the workflow canvas. */
 const KIND: Record<SkillNodeKind, { color: string; glyph: string; label: string }> = {
@@ -81,8 +82,10 @@ type Tab = 'library' | 'market';
 
 export function SkillsView() {
   const [tab, setTab] = useState<Tab>('library');
+  const intro = usePageIntro('skills');
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {intro.show && <PageIntro guide={SKILLS_GUIDE} onClose={intro.close} />}
       <div className="settings-bar border-b border-line">
         <div className="mx-auto flex max-w-5xl items-center gap-1 px-4 py-2">
           {(['library', 'market'] as Tab[]).map((k) => (
@@ -95,6 +98,8 @@ export function SkillsView() {
               {k === 'library' ? 'Library' : 'Marketplace'}
             </button>
           ))}
+          <span className="ml-auto" />
+          <PageGuideButton name="Skills" onClick={intro.open} />
         </div>
       </div>
       {tab === 'library' ? <LibraryTab /> : <MarketplaceTab />}

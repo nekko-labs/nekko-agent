@@ -23,8 +23,9 @@ struct ReconnectingNotice: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(name) is reconnecting...")
             .accessibilityIdentifier("reconnect.title")
-            Text("Draft your message now and it will send when \(name) reconnects")
+            Text("Prompts you send wait on this iPhone.")
                 .font(.footnote)
+                .accessibilityIdentifier("reconnect.draft")
                 .fixedSize(horizontal: false, vertical: true)
         }
         // Keep child labels and identifiers distinct from the parent notice identifier.

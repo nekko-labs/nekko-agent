@@ -1,6 +1,6 @@
 # Nekko Agent
 
-> Nekko Agent is open-source, local-first AI help for coding and everyday work, plus a local model server. Run models on your computer or use supported online providers; work with project files, tools and scheduled tasks under explicit permissions. Free, MIT licensed, by Nekko Labs.
+> Nekko Agent is open-source, local-first AI help for coding and everyday work, plus a local model server. Run models on your computer or use supported online providers; work with project files, tools and scheduled tasks under explicit permissions. Free, MIT licensed, by Nekko Labs. The name Nekko comes from neko, Japanese for cat.
 
 ## Start with the user's task
 
@@ -61,12 +61,14 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Simple and Detailed](https://nekkoagent.com/docs/simple-and-expert.md): Switch between the everyday app and every control, and choose what Simple shows.
 - [Fonts and text](https://nekkoagent.com/docs/fonts-and-text.md): Text size, the interface and code fonts, and adding your own fonts.
 - [Browser automation](https://nekkoagent.com/docs/browser-automation.md): Chat-owned browser actions, security boundaries and native driver migration status.
+- [Simulators in use](https://nekkoagent.com/docs/simulators.md): See which chat is using each booted iOS simulator or Android emulator, what it costs in CPU, watch its screen, and shut it down.
 - [Connections](https://nekkoagent.com/docs/connections.md): Switch off every network connection at once or one by one, and see how often each one is used.
 - [Usage and crash reports](https://nekkoagent.com/docs/usage-reports.md): Opt in to anonymous usage and crash reports, what they contain, and how to see each send.
 - [Voice](https://nekkoagent.com/docs/voice.md): Tap the mic once and talk: dictation that stays on, "Nekko" commands, and speech that never leaves your computer.
 - [Privacy Shield](https://nekkoagent.com/docs/privacy-shield.md): Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model.
 - [Code mode](https://nekkoagent.com/docs/code-mode.md): Let the model write code that calls your tools in a sandbox, so long tool lists and big results cost far fewer tokens.
 - [Running models locally](https://nekkoagent.com/docs/local-models.md): Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM).
+- [Fusion routing and model tiers](https://nekkoagent.com/docs/fusion-routing.md): Keep Auto on one provider, opt into Fusion strategies, classify model capabilities and target Small or Medium local subagents.
 - [Subscription sign-in](https://nekkoagent.com/docs/subscriptions.md): Use your ChatGPT subscription instead of a metered API key, and how Claude works in Nekko Agent.
 - [Accounts and switching](https://nekkoagent.com/docs/accounts.md): Several accounts for any provider in one window, switching a chat between them, and what Anthropic allows with several Claude accounts.
 - [Usage limits and prices](https://nekkoagent.com/docs/usage-limits.md): Where the usage numbers and price estimates come from, and what they mean.
@@ -74,6 +76,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Nekko Cloud machines](https://nekkoagent.com/docs/cloud-machines.md): A sandboxed computer in the cloud your phone pairs with, seeing only what you put in its scope.
 - [Protect this computer with a security key](https://nekkoagent.com/docs/protect-this-computer-with-a-security-key.md): Ask for a security key, a passkey or a one-time code before the actions that could take your computer over, and the safety exits on the phone.
 - [Two chats on a folding phone](https://nekkoagent.com/docs/two-chats-on-a-folding-phone.md): Two panes on a foldable or an iPad: two chats at once, Monitors beside a chat, and the layouts for each posture.
+- [Nekko Agent in CarPlay](https://nekkoagent.com/docs/carplay.md): Hear what your agents are doing and tell them what to do by voice from your car's screen.
 - [Encrypted sync](https://nekkoagent.com/docs/sync-encryption.md): How Pro and Team sync your chats without Nekko Cloud being able to read them.
 - [CLI and MCP](https://nekkoagent.com/docs/cli.md): Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor.
 - [Automations](https://nekkoagent.com/docs/automations.md): Ready-made automations, run results and notifications, and pausing them all.

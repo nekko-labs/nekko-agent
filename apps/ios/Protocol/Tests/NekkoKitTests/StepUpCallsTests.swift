@@ -266,7 +266,9 @@ final class StepUpCallsTests: XCTestCase {
         XCTAssertEqual(StepUp.actionName(channel: Channels.settingsUpdate, args: [["defaultChatMode": "yolo"]], computer: "Studio"),
                        "Make No restrictions the default for new chats on Studio")
         XCTAssertEqual(StepUp.actionName(channel: Channels.sessionSetOptions, args: ["s1", ["allowedMcpTools": ["mcp__slack__post"]]],
-                                         computer: "Studio"), "Always allow a tool in this chat on Studio")
+                                         computer: "Studio"), "Change which tools this chat runs without asking on Studio")
+        XCTAssertEqual(StepUp.actionName(channel: Channels.sessionSetOptions, args: ["s1", ["knownRecipients": []]],
+                                         computer: "Studio"), "Change who this chat writes to without asking on Studio")
         XCTAssertEqual(StepUp.actionName(channel: "security:phoneRegister", args: [], computer: "Studio"),
                        "Add a security key or passkey on Studio")
     }

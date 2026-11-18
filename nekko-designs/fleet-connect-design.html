@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Open a chat on your own computer from the organization list</title>
+<style>
+  :root { --paper:#f8f8fb; --ink:#1d1b22; --soft:#5d5966; --faint:#8d8996; --wash:#eeedf3; --accent:#190019; --ok:#3aa76d; --off:#8d8996; --danger:#b4372f; }
+  body { margin:0; padding:32px; background:#e9e8ee; font:14px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif; color:var(--ink); }
+  h1 { font-size:16px; margin:0 0 4px; } .lede { color:var(--soft); margin:0 0 24px; font-size:13px; }
+  .canvas { display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start; }
+  .frame { background:var(--paper); width:560px; border-radius:12px; padding:20px 20px 12px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .frame.narrow { width:340px; }
+  .label { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--faint); margin-bottom:12px; }
+  .group { font-size:12px; color:var(--soft); margin:4px 0 8px; }
+  .row { display:flex; justify-content:space-between; gap:16px; padding:8px; margin:0 -8px; border-radius:8px; }
+  .row.hover { background:var(--wash); }
+  .lead { display:flex; gap:8px; min-width:0; } .glyph { width:16px; color:var(--soft); }
+  .name { font-weight:500; } .tag { color:var(--faint); font-size:12px; margin-left:8px; font-weight:400; }
+  .detail { color:var(--faint); font-size:12px; margin-top:2px; } .note { color:var(--faint); font-size:12px; margin-top:2px; } .note.err { color:var(--danger); }
+  .trail { display:flex; gap:12px; align-items:flex-start; white-space:nowrap; font-size:12px; color:var(--soft); }
+  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--ok); margin-right:6px; vertical-align:1px; } .dot.off { background:var(--off); }
+  .act { padding:2px 8px; border-radius:6px; color:var(--ink); } .act.rest { visibility:hidden; } .act.busy { color:var(--faint); }
+  .why { font-size:12px; color:var(--soft); margin-top:12px; border-top:1px solid #e2e1e8; padding-top:8px; }
+</style>
+</head>
+<body>
+<h1>Open a chat on your own computer from the organization list</h1>
+<p class="lede">Settings &gt; Phone pairing &gt; Organization &gt; Computers, as the laptop sees it. Decision 0102. No pairing link: your account's keys open it.</p>
+<div class="canvas">
+
+  <section class="frame" aria-label="At rest">
+    <div class="label">1. At rest</div>
+    <div class="group">Computers</div>
+    <div class="row"><div class="lead"><span class="glyph">▭</span><div><div class="name">Philip MacBook Pro<span class="tag">This computer</span></div><div class="detail">Llama 3.1 8B</div></div></div><div class="trail"><span><span class="dot"></span>Online</span></div></div>
+    <div class="row"><div class="lead"><span class="glyph">▣</span><div><div class="name">gomi</div><div class="detail">Qwen 3 Coder 30B, Gemma 3 27B, Llama 3.3 70B</div></div></div><div class="trail"><span><span class="dot"></span>Online</span><span class="act rest">Open chat</span></div></div>
+    <div class="row"><div class="lead"><span class="glyph">▣</span><div><div class="name">Sam-PC</div><div class="detail">No local models</div><div class="note">Shared by sam@nekkolabs.com. Only they can open chats on it.</div></div></div><div class="trail"><span><span class="dot"></span>Online</span></div></div>
+    <div class="row"><div class="lead"><span class="glyph">▤</span><div><div class="name">Studio Linux box</div><div class="detail">Phi 4 14B</div><div class="note">Turn on Remote access on Studio Linux box to open chats on it from here.</div></div></div><div class="trail"><span><span class="dot"></span>Online</span></div></div>
+    <div class="row"><div class="lead"><span class="glyph">▭</span><div><div class="name">Old laptop</div><div class="detail">No local models</div></div></div><div class="trail"><span><span class="dot off"></span>Last seen 3 h ago</span></div></div>
+    <p class="why">Row action faint until hover or focus, always shown on touch. Offline rows and this computer say nothing more.</p>
+  </section>
+
+  <section class="frame" aria-label="Hover">
+    <div class="label">2. Hover a ready row</div>
+    <div class="group">Computers</div>
+    <div class="row hover"><div class="lead"><span class="glyph">▣</span><div><div class="name">gomi</div><div class="detail">Qwen 3 Coder 30B, Gemma 3 27B, Llama 3.3 70B</div></div></div><div class="trail"><span><span class="dot"></span>Online</span><span class="act">Open chat</span></div></div>
+    <p class="why">Only your own computer, online, verified, with Remote access on.</p>
+  </section>
+
+  <section class="frame" aria-label="Connecting">
+    <div class="label">3. Connecting</div>
+    <div class="row hover"><div class="lead"><span class="glyph">▣</span><div><div class="name">gomi</div><div class="detail">Qwen 3 Coder 30B, Gemma 3 27B, Llama 3.3 70B</div></div></div><div class="trail"><span><span class="dot"></span>Online</span><span class="act busy">Connecting…</span></div></div>
+    <p class="why">Then a new chat on gomi opens in the command center, and gomi joins Settings &gt; Computers.</p>
+  </section>
+
+  <section class="frame" aria-label="Refused">
+    <div class="label">4. Refused</div>
+    <div class="row"><div class="lead"><span class="glyph">▣</span><div><div class="name">gomi</div><div class="detail">Qwen 3 Coder 30B, Gemma 3 27B, Llama 3.3 70B</div><div class="note err">gomi stopped sharing with this organization.</div></div></div><div class="trail"><span><span class="dot"></span>Online</span><span class="act rest">Open chat</span></div></div>
+    <p class="why">The refusal sits on its own row. No chat is made.</p>
+  </section>
+
+  <section class="frame" aria-label="Settings Computers">
+    <div class="label">5. Settings &gt; Computers afterwards</div>
+    <div class="row hover"><div class="lead"><span class="dot"></span><div><div class="name">gomi</div><div class="detail">Online over Tailscale. Opened from your organization</div></div></div><div class="trail"><span class="act" style="color:var(--danger)">Disconnect</span></div></div>
+    <p class="why">Never saved: gone after a restart, a sign-out or a lock.</p>
+  </section>
+
+  <section class="frame narrow" aria-label="Phone width">
+    <div class="label">6. Narrow window</div>
+    <div class="row hover"><div class="lead"><span class="glyph">▣</span><div><div class="name">gomi</div><div class="detail">Qwen 3 Coder 30B, Gemma 3 27B, Llama 3.3 70B</div></div></div><div class="trail"><span><span class="dot"></span>Online</span><span class="act">Open chat</span></div></div>
+  </section>
+
+</div>
+</body>
+</html>

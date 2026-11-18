@@ -742,6 +742,11 @@ final class LiveRelayTests: XCTestCase {
         // The finished first step has no results for the user (a task link says what the work is for),
         // so it starts squeezed to its title; a tap opens its note and task link.
         XCTAssertFalse(app.staticTexts["Found the message box"].exists, "a finished step without results is squeezed")
+        // A reported check is a mark on the step's bullet (the desktop's), never a chip beside it.
+        XCTAssertTrue(app.descendants(matching: .any)["Verified on macOS, agent-reported"].firstMatch.exists, "a passed check marks its bullet")
+        XCTAssertTrue(app.descendants(matching: .any)["Check failed, agent-reported"].firstMatch.exists, "a failed check marks its bullet")
+        XCTAssertFalse(app.staticTexts["Verified on macOS"].exists, "no verification chip")
+        XCTAssertFalse(app.staticTexts["Check failed"].exists, "no verification chip")
         settle()
         attach(app, "plan-2-open")
         // Its title, not the row's centre: open, the centre is the task link's chip.
@@ -917,7 +922,7 @@ final class LiveRelayTests: XCTestCase {
         here.tap()
         let ask = app.input("Ask anything")
         XCTAssertTrue(ask.waitForExistence(timeout: 5), "New chat on this iPhone")
-        XCTAssertTrue(app.descendants(matching: .any)["newChat.phoneNote"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["newChat.computer"].firstMatch.label.contains("This iPhone"), "model ⟶ This iPhone on one line")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Claude Opus 5.5")).firstMatch.waitForExistence(timeout: 10),
                       "the iPhone's model is chosen")
         attach(app, "fleet-2-new-chat-on-phone")

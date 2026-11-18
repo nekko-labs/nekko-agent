@@ -43,6 +43,7 @@ mod downloads;
 mod engine;
 mod federation;
 mod feedback;
+mod fleet;
 mod gcp;
 mod harness;
 mod hub;
@@ -51,12 +52,15 @@ mod image_turns;
 mod installs;
 mod keys;
 mod library;
+mod limit_resume;
 mod local_relay;
 mod logs;
 mod machine;
 mod mcp;
 mod mdns;
+mod media_tools;
 mod messaging;
+mod model_feed;
 mod model_server;
 mod model_tunnel;
 mod native;
@@ -66,6 +70,7 @@ mod pr_autowatch;
 mod pr_checkouts;
 mod privacy;
 mod procgroup;
+mod prompt_profile;
 mod providers;
 mod remote;
 mod remote_image;
@@ -82,10 +87,12 @@ mod runner;
 mod runtimes;
 mod sandbox;
 mod security;
+mod servers;
 mod service_management;
 mod settings;
 mod side;
 mod sideband;
+mod simulators;
 mod skill_sources;
 mod small_services;
 mod spawn;
@@ -203,6 +210,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     }
     let settings = settings::Settings::new(data_dir.clone(), hub.clone());
     let accounts = Arc::new(accounts::Accounts::new(data_dir.clone(), hub.clone(), settings.store.clone()));
+    simulators::init(&data_dir, hub.clone(), settings.store.clone(), sessions.clone());
     // Older builds signed in to Claude plans; delete what they left (claude_plan.rs).
     match claude_plan::migrate(&data_dir, &settings.store, nekko_oauth::now_ms()) {
         Ok(done) if !done.is_empty() => eprintln!(
@@ -291,6 +299,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 Box::pin(async move { library::shareable_models(&library).await })
             })
         },
+        // How this account's other desktops reach this one, while remote access is on.
+        connect: {
+            let remote = remote.clone();
+            Some(Arc::new(move || fleet::connect_info(&remote)))
+        },
     });
     {
         // Abandoned downloads can be GBs each (#1035).
@@ -363,7 +376,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 sandboxes.clone(),
                 automation.training.clone(),
             )
-            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
+            .with_media(server.clone()),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),
@@ -408,6 +422,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             cfg.native.as_ref().is_some_and(|n| n.is_packaged),
             Some(settings.store.clone()),
         )),
+        model_feed: Arc::new(model_feed::ModelFeedStore::new(machine.clone(), Some(data_dir.clone()))),
         messaging: messaging.clone(),
         native: native.clone(),
         desktop: cfg.native.as_ref().map(|n| desktop::Desktop::new(n, &data_dir)),
@@ -479,6 +494,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     }
     remote.start();
     computers.start(ctx.clone());
+    fleet::start(remote.clone(), computers.clone(), cloud.clone(), &hub);
     {
         // A chat's turn, approvals and answers go through the router, as the UI's do.
         let ctx = ctx.clone();

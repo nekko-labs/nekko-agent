@@ -24,6 +24,8 @@ data class AllChats(
     val places: List<ChatPlace>,
     /** The places shown now: all of them, or the one the list is filtered to. */
     val shown: List<ChatPlace>,
+    /** Each chat's running sub-agents, oldest first, by parent id (#2509); their computer is in [owners] too. */
+    val subagents: Map<String, List<SessionSummary>> = emptyMap(),
 ) {
     fun placeOf(chat: SessionSummary): String? = owners[chat.id]
 
@@ -54,12 +56,16 @@ data class AllChats(
             val owners = HashMap<String, String>()
             val activity = HashMap<String, Activity>()
             val folders = LinkedHashMap<String, WorkspaceFolder>()
+            val subagents = HashMap<String, List<SessionSummary>>()
             // The active computer first, as the list was; then the others in pairing order.
             val order = listOfNotNull(s.activeId) + s.computers.map { it.id }.filter { it != s.activeId }
             for (id in order) {
                 if (id !in wanted) continue
                 val (list, act, dirs) = if (id == s.activeId) Triple(s.summaries, s.activity, s.workspaces)
                     else s.peers[id]?.let { Triple(it.summaries, it.activity, it.workspaces) } ?: continue
+                val kids = if (id == s.activeId) s.subagents else s.peers[id]?.subagents.orEmpty()
+                // A sub-agent opens on its parent's computer: its owner is that computer too.
+                kids.forEach { (parent, children) -> if (subagents.putIfAbsent(parent, children) == null) children.forEach { owners.putIfAbsent(it.id, id) } }
                 for (c in list) if (owners.putIfAbsent(c.id, id) == null) chats += c
                 act.forEach { (k, v) -> activity.putIfAbsent(k, v) }
                 dirs.forEach { folders.putIfAbsent(it.id, it) }
@@ -71,7 +77,7 @@ data class AllChats(
                     if (c.id in phoneRunning) activity[c.id] = Activity.RUNNING
                 }
             }
-            return AllChats(chats, activity, folders.values.toList(), owners, places, shown)
+            return AllChats(chats, activity, folders.values.toList(), owners, places, shown, subagents)
         }
 
         /** A phone chat as a row of the list. */

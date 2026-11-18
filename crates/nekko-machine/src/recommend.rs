@@ -75,6 +75,15 @@ pub struct Feed {
     pub image_tasks: Vec<ImageTask>,
     #[serde(default)]
     pub image_models: Vec<ImageModel>,
+    /// Seconds a picture or clip, measured on real hardware with the feed's own file.
+    #[serde(default)]
+    pub image_measured: Vec<ImageMeasured>,
+}
+
+/// A list's version, `YYYY-MM-DD.N`, in the order lists were made: the date, then the day's count.
+pub fn feed_version_key(version: &str) -> (String, u32) {
+    let (date, n) = version.split_once('.').unwrap_or((version, "0"));
+    (date.to_string(), n.parse().unwrap_or(0))
 }
 
 /// A picture task: a diffusion model that can do `capability`, at 1024x1024.
@@ -247,6 +256,20 @@ pub struct Measured {
     pub tokens_per_second: f64,
 }
 
+/// How long one picture (or clip) took on real hardware with the feed's own
+/// file, and what was asked for: time grows with the size and the steps.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageMeasured {
+    pub hardware: String,
+    pub model: String,
+    pub quant: String,
+    pub seconds: f64,
+    pub width: u32,
+    pub height: u32,
+    pub steps: u32,
+}
+
 /* ---------------------------------------------------------------- answer */
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -288,6 +311,27 @@ pub struct ImageChoice {
     /// preset): set it when installing, or the load runs out of VRAM.
     pub offload_to_cpu: bool,
     pub fit: Fit,
+    /// How long a picture (or clip) takes, when something measured it. Never estimated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<ImageTime>,
+}
+
+/// Seconds for one picture or clip. `measuredHere` is the median of this
+/// machine's own, at the sizes and steps they were made at; `measured` is one
+/// run on this class of hardware, at the size and steps given.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageTime {
+    pub seconds: f64,
+    pub basis: SpeedBasis,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub samples: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub steps: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -680,11 +724,13 @@ fn fit_for(memory: f64, budget: f64) -> Fit {
 /// the weights in RAM and brings each stage's into VRAM when it runs, so the
 /// GPU needs the largest file plus the working buffers, and RAM needs them all.
 fn image_choice(
+    feed: &Feed,
     task: &ImageTask,
     model: &ImageModel,
     quant: &ImageQuant,
     target: &Target,
     ram_budget: f64,
+    local: &Local,
 ) -> ImageChoice {
     let companions: f64 = model.companions.iter().map(|c| c.size_bytes).sum();
     let files = quant.size_bytes + companions;
@@ -715,19 +761,52 @@ fn image_choice(
         placement: target.placement,
         offload_to_cpu: offload,
         fit: fit_for(memory, target.budget),
+        time: image_time(feed, target, model, quant, local),
     }
+}
+
+/// This machine's own pictures with the file first, then a run on its class of hardware.
+fn image_time(
+    feed: &Feed,
+    target: &Target,
+    model: &ImageModel,
+    quant: &ImageQuant,
+    local: &Local,
+) -> Option<ImageTime> {
+    if let Some(here) = quant.files.first().and_then(|f| local.speeds.picture_seconds(f, &local.machine)) {
+        return Some(ImageTime {
+            seconds: here.seconds,
+            basis: SpeedBasis::MeasuredHere,
+            samples: Some(here.samples),
+            width: None,
+            height: None,
+            steps: None,
+        });
+    }
+    let class = target.class_id.as_ref()?;
+    let m =
+        feed.image_measured.iter().find(|m| &m.hardware == class && m.model == model.id && m.quant == quant.label)?;
+    Some(ImageTime {
+        seconds: m.seconds,
+        basis: SpeedBasis::Measured,
+        samples: None,
+        width: Some(m.width),
+        height: Some(m.height),
+        steps: Some(m.steps),
+    })
 }
 
 /// Each candidate at the quant to offer, quants being best first: one that
 /// fits with every file resident (comfortably, then tightly) before one that
 /// needs offloading, else the smallest.
-fn image_options(feed: &Feed, task: &ImageTask, target: &Target, ram_budget: f64) -> Vec<ImageChoice> {
+fn image_options(feed: &Feed, task: &ImageTask, target: &Target, ram_budget: f64, local: &Local) -> Vec<ImageChoice> {
     task.candidates
         .iter()
         .filter_map(|id| feed.image_models.iter().find(|m| &m.id == id))
         .filter(|m| m.capabilities.contains(&task.capability))
         .filter_map(|m| {
-            let all: Vec<ImageChoice> = m.quants.iter().map(|q| image_choice(task, m, q, target, ram_budget)).collect();
+            let all: Vec<ImageChoice> =
+                m.quants.iter().map(|q| image_choice(feed, task, m, q, target, ram_budget, local)).collect();
             let at = |fit: Fit, offload: bool| all.iter().find(|o| o.fit == fit && o.offload_to_cpu == offload);
             at(Fit::Fits, false)
                 .or_else(|| at(Fit::Tight, false))
@@ -786,11 +865,11 @@ pub fn recommend(profile: &HardwareProfile, feed: &Feed, local: &LocalSpeeds) ->
         .image_tasks
         .iter()
         .map(|task| {
-            let mut options = image_options(feed, task, main, cpu.budget);
+            let mut options = image_options(feed, task, main, cpu.budget, &local);
             let mut pick = image_pick(&options).filter(|p| !(task.gpu_only && p.placement == Placement::Cpu));
             // A discrete GPU too small for every candidate, even offloading: what runs from system RAM instead.
             if pick.is_none() && main.placement == Placement::Gpu && !task.gpu_only {
-                options = image_options(feed, task, &cpu, cpu.budget);
+                options = image_options(feed, task, &cpu, cpu.budget, &local);
                 pick = image_pick(&options);
             }
             ImageTaskPick {

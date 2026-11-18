@@ -101,6 +101,11 @@ const api: NekkoApi = {
   cloudCancelOAuth: () => inv(IpcChannels.cloudCancelOAuth),
   cloudSignOut: () => inv(IpcChannels.cloudSignOut),
   cloudDeleteAccount: () => inv(IpcChannels.cloudDeleteAccount),
+  cloudBillingPlans: () => inv(IpcChannels.cloudBillingPlans),
+  cloudBillingCheckout: (plan) => inv(IpcChannels.cloudBillingCheckout, plan),
+  cloudBillingPortal: () => inv(IpcChannels.cloudBillingPortal),
+  cloudTeamFeatures: () => inv(IpcChannels.cloudTeamFeatures),
+  cloudSetTeamFeature: (key, state) => inv(IpcChannels.cloudSetTeamFeature, key, state),
   connectionsStatus: () => inv(IpcChannels.connectionsStatus),
   connectionsEvents: (id, limit) => inv(IpcChannels.connectionsEvents, id, limit),
   connectionsClear: () => inv(IpcChannels.connectionsClear),
@@ -185,6 +190,12 @@ const api: NekkoApi = {
   machineDismissNudge: (task) => inv(IpcChannels.machineDismissNudge, task ?? null),
   getGpuStats: heldWhileHidden(() => inv(IpcChannels.gpuStats), pageHidden),
   getSystemStats: () => inv(IpcChannels.systemStats),
+  serversList: () => inv(IpcChannels.serversList),
+  simulatorsState: () => inv(IpcChannels.simulatorsState),
+  simulatorsShutdown: (id) => inv(IpcChannels.simulatorsShutdown, id),
+  simulatorsBoot: (id) => inv(IpcChannels.simulatorsBoot, id),
+  simulatorsOpen: (id) => inv(IpcChannels.simulatorsOpen, id),
+  simulatorsScreenshot: (id) => inv(IpcChannels.simulatorsScreenshot, id),
 
   listSessions: () => inv(IpcChannels.sessionsList),
   nextAgentWatchAt: (sessionId) => inv(IpcChannels.sessionNextWatch, sessionId),
@@ -233,6 +244,7 @@ const api: NekkoApi = {
   toggleContextItem: (sessionId, itemId, included, pinned) =>
     inv(IpcChannels.contextToggle, sessionId, itemId, included, pinned),
   setContextPrefs: (sessionId, prefs) => inv(IpcChannels.contextSetPrefs, sessionId, prefs),
+  promptProfileTexts: () => inv(IpcChannels.contextPromptProfiles),
 
   buildSpec: (sessionId) => inv(IpcChannels.specBuild, sessionId),
   buildSpecDoc: (sessionId, docId, workspaceId) => inv(IpcChannels.specBuildDoc, sessionId, docId, workspaceId),
@@ -458,6 +470,7 @@ const api: NekkoApi = {
   computerRead: (id, channel, args = []) => inv(IpcChannels.computersCall, id, channel, args),
   computerModelServer: (id, channel, args = []) => inv(IpcChannels.computersCall, id, channel, args),
   createSessionOn: (computerId, workspaceId) => inv(IpcChannels.computersCreateSession, computerId, workspaceId),
+  connectFleetComputer: (orgId, deviceId) => inv(IpcChannels.computersConnectFleet, orgId, deviceId),
   computerCatalog: (id) => inv(IpcChannels.computersCatalog, id),
   listRemoteDevices: () => inv(IpcChannels.remoteDevices),
   revokeRemoteDevice: (deviceId) => inv(IpcChannels.remoteRevoke, deviceId),
@@ -558,6 +571,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, tasks: import('@nekko-agent/shared').AutomationTask[]) => cb(tasks);
     bus.on(IpcEvents.tasksUpdated, listener);
     return () => bus.removeListener(IpcEvents.tasksUpdated, listener);
+  },
+  onSimulatorsUpdated: (cb) => {
+    const listener = (_: unknown, e: import('@nekko-agent/shared').SimulatorsUpdated) => cb(e ?? {});
+    bus.on(IpcEvents.simulatorsUpdated, listener);
+    return () => bus.removeListener(IpcEvents.simulatorsUpdated, listener);
   },
   onBackgroundUpdated: (cb) => {
     const listener = (_: unknown, state: import('@nekko-agent/shared').BackgroundState) => cb(state);

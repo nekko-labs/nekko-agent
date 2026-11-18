@@ -11,38 +11,34 @@ vi.mock('../liveRuns.js', async (original) => ({ ...(await original<object>()), 
 vi.mock('react-dom', async (original) => ({ ...(await original<typeof import('react-dom')>()), createPortal: (node: unknown) => node }));
 
 const css = stylesheet('styles.css');
-const header = (html: string) => html.slice(html.indexOf('data-agent-panel-header'), html.indexOf('data-agent-panel-list'));
+const header = (html: string) => html.slice(html.indexOf('data-agent-panel-header'), html.indexOf('data-agent-panel-shows'));
 const tag = (html: string, label: string) => html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0] ?? '';
 
 beforeEach(() => localStorage.removeItem(AGENT_PANEL_VIEW_KEY));
 
 describe('Agents panel header', () => {
-  it('hides with a left-panel icon rather than an X, and swaps sides with the curved-arrow icon', () => {
-    for (const orientation of ['vertical', 'horizontal'] as const) {
-      const head = header(renderSidebar({ orientation }));
-      expect(head, orientation).toContain('aria-label="Hide the agent panel"');
-      expect(head).toMatch(/aria-label="Show agents in a (row|column)"/);
-      expect(head).not.toContain('Close the agent panel');
-      // The X glyph (CloseIcon) appears nowhere in the header.
-      expect(head).not.toContain('M18 6 6 18M6 6l12 12');
-    }
+  it('hides with a left-panel icon rather than an X, and offers no column or row switch', () => {
+    const head = header(renderSidebar());
+    expect(head).toContain('aria-label="Hide the agent panel"');
+    expect(head).not.toMatch(/Show agents in a (row|column)/);
+    expect(head).not.toContain('Close the agent panel');
+    // The X glyph (CloseIcon) appears nowhere in the header.
+    expect(head).not.toContain('M18 6 6 18M6 6l12 12');
   });
 
   it('keeps the panel controls where the panel was when it is collapsed, and nowhere in the title bar', async () => {
     const { loadCommandCenter } = await import('../tests/renderCommandCenter.js');
     const page = await loadCommandCenter();
-    const collapsed = page.render({ commandWall: { agentPanel: { show: false, orientation: 'vertical' } } as never });
+    const collapsed = page.render({ commandWall: { agentPanel: { show: false } } as never });
     const toolbar = collapsed.slice(0, collapsed.indexOf('class="wall-workspace"'));
     expect(toolbar).not.toContain('agent panel');
-    expect(collapsed).toMatch(/<div class="agent-panel-collapsed" data-orientation="vertical"><div class="agent-panel-controls"[^>]*>[^]*aria-label="Show the agent panel"/);
+    expect(collapsed).toMatch(/<div class="agent-panel-collapsed"><div class="agent-panel-controls"[^>]*>[^]*aria-label="Show the agent panel"/);
   });
 
-  it('draws no outer ring around the Agents tab panel in either orientation', () => {
-    for (const orientation of ['vertical', 'horizontal'] as const) {
-      const panel = renderSidebar({ orientation }).match(/<div class="panel [^"]*" [^>]*data-agent-panel="true"/)?.[0] ?? '';
-      expect(panel, orientation).not.toBe('');
-      expect(panel).not.toMatch(/\bpanel-ring\b/);
-    }
+  it('draws no outer ring around the Agents tab panel', () => {
+    const panel = renderSidebar().match(/<div class="panel [^"]*" [^>]*data-agent-panel="true"/)?.[0] ?? '';
+    expect(panel).not.toBe('');
+    expect(panel).not.toMatch(/\bpanel-ring\b/);
   });
 
   it('renders the + in the accent, a size up', () => {
@@ -123,27 +119,19 @@ describe('Agent group hierarchy', () => {
     expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': 'var(--text-sm)', color: 'var(--accent)' });
     expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('20px');
     expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('4px');
+    // The list keeps one width whether or not it scrolls.
+    expect(cssRule(layout, '.agent-panel-list')['scrollbar-gutter']).toBe('stable');
     expect(cssRule(layout, '.agent-panel-list .agent-panel-group-heading')).toMatchObject({ position: 'sticky', top: '0', 'z-index': '1', background: 'var(--paper)' });
     expect(cssRule(layout, '.agent-panel-list .agent-panel-group-heading:hover').background).toBe('var(--surface-2)');
-    expect(cssRule(layout, '.agent-panel-row .agent-panel-group-heading').position).toBeUndefined();
     expect(cssRule(layout, '.agent-panel-group + .agent-panel-group::before')).toMatchObject({ content: '""', top: '-10px', height: '1px', 'pointer-events': 'none', background: 'color-mix(in srgb,var(--line)65%,transparent)' });
-    expect(cssRule(layout, '.agent-panel-row')['column-gap']).toBe('24px');
-    expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group::before')).toMatchObject({ 'inset-inline-start': '-12px', width: '1px', height: 'auto' });
     // Reordering still opens its original drop gap, independent of the divider.
     expect(cssRule(layout, '.agent-panel-group[data-group-gap]')['padding-top']).toBe('36px');
-    expect(cssRule(layout, '.agent-panel-row > .agent-panel-group[data-group-gap]')['padding-left']).toBe('48px');
-    expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group')['margin-top']).toBe('0');
   });
 });
 
 
-describe('Compact horizontal panel', () => {
-  it('fits five controls into three rows without padding below the cards', () => {
-    const layout = stylesheet('components/commandWallLayouts.css');
-    expect(cssRule(layout, "[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] > div")).toMatchObject({ display: 'grid', 'grid-template-columns': 'repeat(2,28px)' });
-    expect(cssRule(layout, "[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] .agent-panel-controls").display).toBe('contents');
-    expect(cssRule(layout, '.agent-panel-row')['padding-block']).toBe('0');
-    expect(cssRule(layout, '.agent-panel-row .collapse-wrap > div')['padding-bottom']).toBe('0');
+describe('Monitors dock scrolling', () => {
+  it('keeps the monitors list steady while it scrolls', () => {
     const dock = stylesheet('components/monitorsDock.css');
     expect(cssRule(dock, '.monitors-dock__monitors')).toMatchObject({ 'overflow-anchor': 'none', 'scrollbar-gutter': 'stable' });
     expect(cssRule(dock, '.monitors-dock__landing > span').height).toBe('var(--landing-height)');

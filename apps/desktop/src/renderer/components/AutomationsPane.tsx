@@ -1,10 +1,10 @@
 import React from 'react';
 import type { AutomationTask } from '@nekko-agent/shared';
 import { runPolicyNote, taskCadence } from '@nekko-agent/shared';
-import { PanelList } from './primitives/index.js';
+import { StatusDot } from './primitives/index.js';
 import { TrashIcon } from '../icons.js';
 import { PaneMetadata } from './PaneFrame.js';
-import { AutomationsEmptyArt, EmptyArea } from './EmptyIllustrations.js';
+import { StatusIcon } from './WorkspaceCard.js';
 import { useStore } from '../store.js';
 import { CiRunnersView } from '../views/CiRunnersView.js';
 import { setAutomationsPaused } from '../automationsPause.js';
@@ -41,30 +41,49 @@ function inTime(ms: number): string {
 
 /* ---------- Automations ---------- */
 
-const TASK_KIND_META: Record<AutomationTask['kind'], { icon: string; label: string }> = {
-  scheduled: { icon: '⏰', label: 'Scheduled' },
-  recurring: { icon: '🔁', label: 'Recurring' },
-  background: { icon: '♾️', label: 'Background' },
-};
+const KIND_LABEL: Record<AutomationTask['kind'], string> = { scheduled: 'Once', recurring: 'Recurring', background: 'Background' };
 
-/** Status resolution for an automation row: running now > waiting for idle > next up > paused > done/error. */
-function taskState(t: AutomationTask, running: Set<string>, now: number): { label: string; color: string; live: boolean } {
-  if (t.lastSessionId && running.has(t.lastSessionId)) return { label: 'running now', color: 'var(--success)', live: true };
+type TaskState = { word: string; mark: React.ReactNode; tone: 'soft' | 'faint' | 'danger' };
+
+/**
+ * An automation row's state: running now > waiting for idle > next up >
+ * paused > done/error. A running one is an agent at work, so it gets our
+ * rocket; everything else is a dot and a word (docs/design-system.md).
+ */
+function taskState(t: AutomationTask, running: Set<string>, now: number): TaskState {
+  if (t.lastSessionId && running.has(t.lastSessionId)) return { word: 'running now', mark: <StatusIcon status="working" />, tone: 'soft' };
   if (t.status === 'active') {
     // Due, but held by its run policy until the computer is free (run_policy.rs).
-    if (t.waitingSince) return { label: 'waiting for you to be away', color: 'var(--info)', live: false };
-    if (t.nextRunAt) return { label: inTime(t.nextRunAt - now), color: 'var(--warning)', live: false };
-    return { label: 'active', color: 'var(--success)', live: false };
+    if (t.waitingSince) return { word: 'waiting for you to be away', mark: <StatusDot tone="info" />, tone: 'soft' };
+    return { word: t.nextRunAt ? inTime(t.nextRunAt - now) : 'active', mark: <StatusDot tone="success" />, tone: 'faint' };
   }
-  if (t.status === 'paused') return { label: 'paused', color: 'var(--neutral)', live: false };
-  if (t.status === 'error') return { label: 'error', color: 'var(--danger)', live: false };
-  return { label: 'done', color: 'var(--info)', live: false };
+  if (t.status === 'paused') return { word: 'paused', mark: <StatusDot tone="neutral" />, tone: 'faint' };
+  if (t.status === 'error') return { word: 'error', mark: <StatusDot tone="danger" />, tone: 'danger' };
+  return { word: 'done', mark: <StatusIcon status="done" />, tone: 'faint' };
+}
+
+const TONE_CLASS: Record<TaskState['tone'], string> = { soft: 'text-ink-soft', faint: 'text-ink-faint', danger: 'text-danger-text' };
+
+/**
+ * "All automations are paused" as one quiet line: a warning dot, the words,
+ * and Resume. What it means waits in the tooltip. Shared by the Automations
+ * panel and the Automations page.
+ */
+export function AutomationsPausedLine({ onResume, className = '' }: { onResume: () => void; className?: string }) {
+  return (
+    <div className={`flex min-w-0 items-center gap-2 text-xs ${className}`} role="status" data-automations-paused
+      title="Schedules, events and polls start nothing until you resume. Run now still works.">
+      <StatusDot tone="warning" />
+      <span className="min-w-0 flex-1 truncate text-warning-text">All automations are paused</span>
+      <button type="button" className="btn btn-ghost" onClick={onResume}>Resume</button>
+    </div>
+  );
 }
 
 /**
  * The automations window on the Agent board wall: what fired, what's
- * planned next, what's parked. The window's strip names it, so the body
- * starts straight at the count and the rows.
+ * planned next, what's parked. The window's strip names it and carries the
+ * count, so the body starts straight at the rows.
  */
 export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: AutomationTask[]; running: Set<string>; now: number; onOpen: (id: string) => void }) {
   const rank = (t: AutomationTask) => {
@@ -80,36 +99,35 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-y-auto p-3">
-      <PaneMetadata>
-        <span className="chip shrink-0 text-2xs">{tasks.length === 0 ? 'nothing scheduled' : `${active} active of ${tasks.length}`}</span>
-      </PaneMetadata>
-      {paused && (
-        <div
-          className="mb-2 flex items-center gap-2 rounded-lg border px-3 py-1 text-xs"
-          style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}
-          role="status"
-        >
-          <span className="min-w-0 flex-1">All automations are paused: nothing fires on its own. Run now still works.</span>
-          <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => void setAutomationsPaused(false).catch(() => {})}>Resume</button>
-        </div>
+      {tasks.length > 0 && (
+        <PaneMetadata>
+          <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{active} active of {tasks.length}</span>
+        </PaneMetadata>
       )}
+      {paused && <AutomationsPausedLine className="mb-2 px-3" onResume={() => void setAutomationsPaused(false).catch(() => {})} />}
       <CiRunnersView panel />
+      <h2 className="py-1 text-sm font-semibold">Scheduled tasks</h2>
       {sorted.length === 0 ? (
-        <EmptyArea className="my-auto" art={<AutomationsEmptyArt />} title="Nothing scheduled">
-          Open a chat and use its <span className="font-medium text-ink-soft">⚡ Automate</span> menu to run a prompt at a time, repeat it on a schedule, or keep an agent working in the background. They line up here.
-        </EmptyArea>
+        <p className="py-2 text-xs text-ink-faint" data-automations-empty>
+          All clear. Nothing scheduled.
+        </p>
       ) : (
-        <PanelList>
+        <div className="flex flex-col" role="list">
           {sorted.map((t) => {
-            const meta = TASK_KIND_META[t.kind];
             const st = taskState(t, running, now);
+            const cadence = taskCadence(t);
             const ran = runPolicyNote(t.lastRunLowPriority, t.lastRunWaitedMs);
+            const history = t.runCount > 0
+              ? `${t.runCount} run${t.runCount === 1 ? '' : 's'}${t.lastRunAt ? ` · last ${relTime(now - t.lastRunAt)}` : ''}${ran ? ` · ${ran}` : ''}`
+              : null;
+            const detail = [cadence, history, t.lastResult].filter(Boolean).join(' · ');
             return (
-              <div key={t.id} className="group px-4 py-2" data-task-row={t.id}>
-                {/* Wraps on a narrow pane: a long cadence or the actions drop to a second line instead of squeezing the title to nothing. */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm" style={{ background: 'var(--surface-2)' }} title={meta.label}>{meta.icon}</span>
+              <div key={t.id} role="listitem" className="quiet-row flex-col items-stretch gap-1!" data-quiet-row data-task-row={t.id}>
+                {/* Wraps on a narrow pane: the state drops to a second line instead of squeezing the title to nothing. */}
+                <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-x-2">
+                  <span className="grid w-3 shrink-0 place-items-center">{st.mark}</span>
                   <button
+                    type="button"
                     className="min-w-0 max-w-full truncate text-left text-sm font-medium enabled:hover:text-accent"
                     dir="auto"
                     onClick={() => t.lastSessionId && onOpen(t.lastSessionId)}
@@ -118,36 +136,33 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
                   >
                     {t.title}
                   </button>
-                  <span className="min-w-0 max-w-[50%] truncate text-2xs text-ink-faint" title={taskCadence(t)}>{taskCadence(t)}</span>
                   <span
-                    className="ml-auto flex shrink-0 items-center gap-2 tabular-nums text-xs font-medium"
-                    style={{ color: st.color }}
+                    className={`ml-auto shrink-0 text-xs tabular-nums ${TONE_CLASS[st.tone]}`}
                     data-task-state
                     title={t.waitingSince ? `Due ${relTime(now - t.waitingSince)}. It runs once nobody is using this computer, or after 2 hours. Run now starts it at once.` : undefined}
                   >
-                    {st.live && <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: st.color }} />}
-                    {st.label}
+                    {st.word}
                   </span>
-                  <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 touch:opacity-100">
+                  {/* With a pointer these take the state word's place on hover or focus (styles.css), so the word sits flush right at rest. */}
+                  <span className="ml-auto flex shrink-0 items-center gap-1" data-task-actions>
                     {t.status !== 'done' && (
-                      <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => window.nekko.runTaskNow(t.id)}>Run now</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => window.nekko.runTaskNow(t.id)}>Run now</button>
                     )}
                     {t.status === 'active' ? (
-                      <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => window.nekko.updateTask(t.id, { status: 'paused' })}>Pause</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => window.nekko.updateTask(t.id, { status: 'paused' })}>Pause</button>
                     ) : t.status === 'paused' ? (
-                      <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => window.nekko.updateTask(t.id, { status: 'active' })}>Resume</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => window.nekko.updateTask(t.id, { status: 'active' })}>Resume</button>
                     ) : null}
-                    <button className="rounded-sm p-1 text-ink-faint hover:text-danger-text" title="Delete automation" onClick={() => window.nekko.deleteTask(t.id)}><TrashIcon className="h-3.5 w-3.5" /></button>
+                    <button type="button" className="rounded-sm p-1 text-ink-faint hover:text-danger-text" title="Delete automation" aria-label={`Delete ${t.title}`} onClick={() => window.nekko.deleteTask(t.id)}>
+                      <TrashIcon className="h-3.5 w-3.5" />
+                    </button>
                   </span>
                 </div>
-                <div className="mt-0.5 flex items-baseline gap-2 pl-9 text-xs text-ink-faint">
-                  {t.runCount > 0 && <span className="shrink-0 tabular-nums">{t.runCount} run{t.runCount === 1 ? '' : 's'}{t.lastRunAt ? ` · last ${relTime(now - t.lastRunAt)}` : ''}{ran ? ` · ${ran}` : ''}</span>}
-                  {t.lastResult && <span className="min-w-0 truncate text-ink-soft" title={t.lastResult}>{t.lastResult}</span>}
-                </div>
+                <p className="truncate pl-5 text-xs text-ink-faint" title={`${KIND_LABEL[t.kind]} · ${detail}`}>{detail}</p>
               </div>
             );
           })}
-        </PanelList>
+        </div>
       )}
     </section>
   );

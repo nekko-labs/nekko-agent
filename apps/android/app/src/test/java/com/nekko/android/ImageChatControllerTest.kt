@@ -35,6 +35,40 @@ class ImageChatControllerTest {
         assertFalse(chat.state.value.turn.running)
     }
 
+    /** A PNG header of [w]×[h]: enough for PhotoEdit.size, no pixels. */
+    private fun png(w: Int, h: Int): String {
+        val b = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52) +
+            java.nio.ByteBuffer.allocate(8).putInt(w).putInt(h).array() + ByteArray(9)
+        return "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(b)
+    }
+
+    @Test fun `photos make it an edit with the first photo's shape, and the turn shows them`() = runTest {
+        val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) session() else JsonNull }
+        val requests = mutableListOf<JsonElement>()
+        val end = CompletableDeferred<JsonElement>()
+        val chat = ChatController("s", caller, backgroundScope, { online }, generateImage = { requests += it; end.await() })
+        chat.reload()
+        val photo = png(1920, 1080)
+        val job = backgroundScope.launch { chat.send("Make the sky purple", null, listOf(photo)) }
+        runCurrent()
+        val sent = requests.single().jsonObject
+        assertEquals(listOf(photo), sent["images"]!!.jsonArray.map { it.jsonPrimitive.content })
+        // 1024×1024 worth of pixels in the photo's 16:9 shape, in multiples of 64.
+        assertEquals("""{"width":1344,"height":768}""", sent["size"].toString())
+        assertEquals(listOf(photo), (chat.state.value.turn.blocks.single() as Block.User).thumbs)
+        end.complete(JsonNull); runCurrent(); job.join()
+    }
+
+    @Test fun `photos the gate would refuse are turned down on the phone`() = runTest {
+        val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) session() else JsonNull }
+        var generated = 0
+        val chat = ChatController("s", caller, backgroundScope, { online }, generateImage = { generated++; JsonNull })
+        chat.reload()
+        assertEquals("Only PNG, JPEG or WebP photos can be edited.", runCatching { chat.send("x", null, listOf("data:image/gif;base64,R0lG")) }.exceptionOrNull()?.message)
+        assertEquals("Up to 4 photos to edit from.", runCatching { chat.send("x", null, List(5) { png(10, 10) }) }.exceptionOrNull()?.message)
+        assertEquals(0, generated)
+    }
+
     @Test fun `missing saved image settings refuse explicitly without inventing fractional defaults`() = runTest {
         val missing = buildJsonObject { put("id", "s"); put("chatType", "image") }
         val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) missing else JsonNull }
@@ -61,14 +95,15 @@ class ImageChatControllerTest {
         assertNull(ChatController.project(chat.state.value, env).sendsLater)
     }
 
-    @Test fun `unsupported capability attachments fractional params and missing authorization fail before any generation`() = runTest {
+    @Test fun `unsupported capability, refused photos, fractional params and missing authorization fail before any generation`() = runTest {
         var s = session()
         var env = online
         val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) s else JsonNull }
         var generated = 0
         val chat = ChatController("s", caller, backgroundScope, { env }, generateImage = { generated++; JsonNull })
         chat.reload()
-        assertTrue(runCatching { chat.send("cat", images = listOf("data:image/png;base64,AA==")) }.isFailure)
+        // A photo is an edit now (#2230); one the gate would refuse is turned down here.
+        assertTrue(runCatching { chat.send("cat", images = listOf("data:image/gif;base64,R0lG")) }.isFailure)
         assertTrue(runCatching { chat.send("cat", skill = SkillSummary("skill", "", "", "builtin")) }.isFailure)
         assertTrue(runCatching { chat.send(" ") }.isFailure)
         env = online.copy(imageGeneration = false)

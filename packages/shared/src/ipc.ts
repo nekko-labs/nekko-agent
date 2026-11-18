@@ -133,6 +133,17 @@ export const IpcChannels = {
   /** Whether someone is using this computer (input, a chat they started), for background work and New chat's machine pick. */
   activityState: 'activity:state',
   systemStats: 'system:stats',
+  /** The web pages served on this computer (dev servers), for the Agents panel's Browsers view (#2824). Local only. */
+  serversList: 'servers:list',
+  /** Booted iOS simulators and Android emulators, their CPU and the chat that last used each (#2814). */
+  simulatorsState: 'simulators:state',
+  /** Shut a booted simulator down; iOS can be booted again (`simulators:boot`) as the Undo. */
+  simulatorsShutdown: 'simulators:shutdown',
+  simulatorsBoot: 'simulators:boot',
+  /** Bring Simulator.app forward on a device. */
+  simulatorsOpen: 'simulators:open',
+  /** A screenshot of a device's screen, read on demand for the chat's Simulator panel. */
+  simulatorsScreenshot: 'simulators:screenshot',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
   monitorSummary: 'monitor:summary',
 
@@ -189,6 +200,7 @@ export const IpcChannels = {
   contextPreview: 'context:preview',
   contextToggle: 'context:toggle',
   contextSetPrefs: 'context:setPrefs',
+  contextPromptProfiles: 'context:promptProfiles',
   sessionSetAttachments: 'session:setAttachments',
   specBuild: 'spec:build',
   specBuildDoc: 'spec:buildDoc',
@@ -254,6 +266,8 @@ export const IpcChannels = {
   /** What Privacy Shield would hide from a cloud model in a chat and its draft. */
   privacyPreview: 'privacy:preview',
   attachmentImport: 'attachment:import',
+  /** A phone's clip, in pieces (#2777); the daemon answers it. */
+  attachmentUpload: 'attachment:upload',
   imageFetch: 'image:fetch',
 
   changesList: 'changes:list',
@@ -417,6 +431,7 @@ export const IpcChannels = {
   computersSetIcon: 'computers:setIcon',
   computersCreateSession: 'computers:createSession',
   computersStats: 'computers:stats',
+  computersConnectFleet: 'computers:connectFleet',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -484,6 +499,11 @@ export const IpcChannels = {
   cloudCancelOAuth: 'cloud:cancelOAuth',
   cloudSignOut: 'cloud:signOut',
   cloudDeleteAccount: 'cloud:deleteAccount',
+  cloudBillingPlans: 'cloud:billingPlans',
+  cloudBillingCheckout: 'cloud:billingCheckout',
+  cloudBillingPortal: 'cloud:billingPortal',
+  cloudTeamFeatures: 'cloud:teamFeatures',
+  cloudSetTeamFeature: 'cloud:setTeamFeature',
   syncTurnOn: 'sync:turnOn',
   syncConfirmRecoveryKey: 'sync:confirmRecoveryKey',
   syncRestore: 'sync:restore',
@@ -543,6 +563,8 @@ export const IpcEvents = {
   tasksUpdated: 'tasks:updated',
   /** `BackgroundState` changed: a background turn started, ended, paused or resumed. */
   backgroundUpdated: 'background:updated',
+  /** Booted simulators changed, or a chat started on one (`SimulatorsUpdated`). */
+  simulatorsUpdated: 'simulators:updated',
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
   /** The image builder's `ImageView`, after any change. */
@@ -620,6 +642,15 @@ export interface NekkoApi {
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
   /** Erase the Nekko Cloud account (`DELETE /v1/account`), then forget it on this device. */
   cloudDeleteAccount(): Promise<import('./cloud.js').CloudStatus>;
+  /** Plans on sale (#2724); refused unless billing is on for this account. */
+  cloudBillingPlans(): Promise<{ plans: import('./cloud.js').BillingPlan[] }>;
+  /** A Stripe Checkout page for `plan`, to open in the browser. */
+  cloudBillingCheckout(plan: 'pro'): Promise<{ url: string }>;
+  /** Stripe's Customer Portal for this account, to open in the browser. */
+  cloudBillingPortal(): Promise<{ url: string }>;
+  /** Nekko team accounts only (decision 0092): each unreleased feature's switch. */
+  cloudTeamFeatures(): Promise<import('./cloud.js').TeamFeatures>;
+  cloudSetTeamFeature(key: import('./cloud.js').TeamFeatureKey, state: import('./cloud.js').TeamFeatureState): Promise<import('./cloud.js').TeamFeatures>;
   /** Settings > Connections: the switch and each connection's counts. */
   connectionsStatus(): Promise<import('./connections.js').ConnectionsStatus>;
   /** A connection's recent events, newest first. */
@@ -870,6 +901,14 @@ export interface NekkoApi {
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
   getSystemStats(): Promise<import('./monitor.js').SystemStats | null>;
+  /** The web pages served on this computer (`servers:list`). Absent where the host cannot look. */
+  serversList?(): Promise<import('./servers.js').ServedSites>;
+  /** Booted simulators and emulators (`simulators:state`). Absent where the host has none to show. */
+  simulatorsState?(): Promise<import('./simulators.js').SimulatorsState>;
+  simulatorsShutdown?(id: string): Promise<{ ok: boolean; canUndo: boolean }>;
+  simulatorsBoot?(id: string): Promise<{ ok: boolean }>;
+  simulatorsOpen?(id: string): Promise<{ ok: boolean }>;
+  simulatorsScreenshot?(id: string): Promise<import('./simulators.js').SimulatorShot>;
 
   listSessions(): Promise<Session[]>;
   /** Earliest deadline of this chat's active durable watches, or null. */
@@ -986,6 +1025,8 @@ export interface NekkoApi {
   previewContext(sessionId: string, attachedPaths: string[]): Promise<ContextBundle>;
   toggleContextItem(sessionId: string, itemId: string, included: boolean, pinned: boolean): Promise<ContextBundle>;
   setContextPrefs(sessionId: string, prefs: import('./chat.js').ContextPrefs): Promise<void>;
+  /** The built-in system prompt text of each profile (decision 0095). */
+  promptProfileTexts(): Promise<Record<import('./context.js').PromptProfileName, string>>;
 
   /** Build/refresh the primary spec doc in the chat's workspace from the conversation. */
   buildSpec(sessionId: string): Promise<{ ok: boolean; path?: string; message?: string }>;
@@ -1001,7 +1042,7 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
@@ -1342,6 +1383,12 @@ export interface NekkoApi {
   computerModelServer(id: string, channel: 'model:load' | 'model:unload' | 'engine:unloadAll' | 'engine:settings', args?: unknown[]): Promise<unknown>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
+  /**
+   * Connect to one of your own computers from an organization's list, with no
+   * pairing (decision 0102). Answers its row in the Computers list; rejects
+   * with what to do next.
+   */
+  connectFleetComputer(orgId: string, deviceId: string): Promise<import('./computers.js').ComputerStatus>;
   /** Set the icon in that machine's own settings; empty removes it. */
   setComputerIcon(id: string, icon: string): Promise<import('./computers.js').ComputerStatus[]>;
   /** Its providers and folders; null when it has never answered. */
@@ -1479,6 +1526,8 @@ export interface NekkoApi {
   /** Fires when the automation-task list changes (created/updated/fired/deleted). */
   onTasksUpdated(cb: (tasks: AutomationTask[]) => void): () => void;
   onBackgroundUpdated(cb: (state: import('./background.js').BackgroundState) => void): () => void;
+  /** Booted simulators changed, or a chat started on one. */
+  onSimulatorsUpdated?(cb: (e: import('./simulators.js').SimulatorsUpdated) => void): () => void;
   /** Fires when any training/goal run changes (experiments, hints, status). */
   onTrainingUpdated(cb: (runs: TrainingRun[]) => void): () => void;
   /** Fires when a workflow is edited or any run advances a step. */

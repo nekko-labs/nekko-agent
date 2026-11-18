@@ -471,7 +471,7 @@ fn residency_rig(name: &str, models: Value, settings: Value, free_mb: Option<f64
     }
     let gpu = free_mb.map_or(Value::Null, |f| json!({ "before": f, "after": f }));
     let fake = Arc::new(Fake {
-        case: json!({ "bins": { "llama": true }, "gpu": gpu }),
+        case: json!({ "bins": { "llama": true, "diffusion": true }, "gpu": gpu }),
         root: root.clone(),
         clock: Mutex::new(1_700_000_000_000.0),
         landed: Mutex::new(false),
@@ -573,6 +573,49 @@ async fn a_model_that_needs_the_memory_unloads_idle_ones_first() {
     let log = server.status()["log"].to_string();
     assert!(log.contains("Unloading small1 to free memory for big."), "{log}");
     assert!(log.contains("big may not fit in free memory"), "{log}");
+}
+
+/// A Z-Image Turbo file of `gb`: its companion set adds the FLUX.1 VAE and a
+/// Qwen3 4B encoder (about 2.8 GB) and sd.cpp's 2 GiB working allowance.
+fn picture(id: &str, gb: f64) -> Value {
+    json!({ "id": id, "name": "Z-Image Turbo", "path": "<root>/models/image/z_image_turbo-Q4_K.gguf", "sizeBytes": gb * 1e9,
+        "addedAt": 1_600_000_000_123u64, "modality": "image" })
+}
+
+/// Z-Image's companion files, downloaded, so its load can start.
+fn with_picture_companions(fake: &Fake) {
+    let dir = join(&[&fake.root, "models", ".companions", "image"]);
+    std::fs::create_dir_all(&dir).unwrap();
+    for f in ["vae-z-image.safetensors", "llm-qwen3-4b-instruct-2507-q4_k_m.gguf"] {
+        std::fs::write(join(&[&dir, f]), b"x").unwrap();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_picture_model_counts_its_companions_and_makes_room_like_a_chat_model() {
+    // 6,000 MB free with the chat model loaded: the 3 GB picture file and the
+    // working allowance alone (5.1 GB) would fit, but with its companions
+    // (about 8 GB in all) it does not.
+    let models = json!([sized("chat", 2.0), picture("zimage", 3.0)]);
+    let (fake, server) = residency_rig("picture-memory", models, json!({ "maxLoaded": 4 }), Some(6_000.0));
+    with_picture_companions(&fake);
+    assert_eq!(server.load("chat", json!({})).await["ok"], true);
+    advance(&fake, 1000.0);
+    assert_eq!(server.load("zimage", json!({})).await["ok"], true);
+    assert_eq!(kills(&fake), vec!["chat".to_string()], "the idle chat model makes room");
+    let log = server.status()["log"].to_string();
+    assert!(log.contains("Unloading chat to free memory for zimage."), "{log}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_picture_model_that_fits_leaves_the_chat_model_loaded() {
+    let models = json!([sized("chat", 2.0), picture("zimage", 3.0)]);
+    let (fake, server) = residency_rig("picture-fits", models, json!({ "maxLoaded": 4 }), Some(40_000.0));
+    with_picture_companions(&fake);
+    assert_eq!(server.load("chat", json!({})).await["ok"], true);
+    let r = server.load("zimage", json!({})).await;
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(kills(&fake).is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]

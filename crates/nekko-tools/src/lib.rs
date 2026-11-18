@@ -20,6 +20,7 @@ mod allowlist;
 mod bash;
 mod changes;
 mod context;
+pub mod delete_guard;
 mod edit_batch;
 mod exec;
 pub mod gitguard;
@@ -42,10 +43,11 @@ pub use context::{
     Approver, BoxFuture, Cancel, ChatMode, CommandLog, SandboxMode, ToolCall, ToolContext, ToolResult, Workspace,
     agent_terminal_id, approver_fn,
 };
-pub use exec::execute;
+pub use delete_guard::{DeleteScope, UNSAFE_DELETE, delete_roots};
+pub use exec::{approve_new_file, execute, save_new_file};
 pub use guardrails::{
     Action, GuardrailDecision, GuardrailMatch, GuardrailRule, NOT_READ_ONLY, SHELL_SYNTAX, Severity, classify_command,
-    classify_command_in, default_guardrails,
+    classify_command_in, classify_command_scoped, default_guardrails,
 };
 pub use nodefs::code_name as node_error_code;
 pub use process::{Processes, describe_process};

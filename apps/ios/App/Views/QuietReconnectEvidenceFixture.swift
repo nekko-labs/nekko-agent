@@ -4,40 +4,44 @@ import NekkoKit
 import NekkoProtocol
 import SwiftUI
 
-/// Real connection strip, saved transcript and composer against a memory-only computer (#2473).
-/// Run only in the disposable evidence simulator. Lifecycle work is disabled;
-/// the fixture computer, transcript cache and outbox never use real credentials or transport.
+/// Real Chat and New Chat surfaces against one memory-only reconnecting computer (#2473).
+/// Run only in the disposable evidence simulator. The fixture uses no credentials, sockets,
+/// push registration or production stores.
 struct QuietReconnectEvidenceFixture: View {
     private static let chatId = "quiet-reconnect-evidence"
-    private static let savedAt: Int64 = 1793800000000
+    private static let savedAt: Int64 = 1_793_800_000_000
     @State private var store = ComputersStore(
         store: QuietReconnectSecrets(), makeConnection: { _ in QuietReconnectConnection() },
         deviceName: { "Test iPhone" }, deriveKey: { _, _ in Data(repeating: 0, count: 32) },
-        now: { 1793800000000 }, offlineFiles: nil)
+        now: { Self.savedAt }, offlineFiles: nil)
     @State private var cache = QuietReconnectCache()
+    @State private var path: [Route] = []
     @State private var ready = false
+
+    private var showsNewChat: Bool {
+        ProcessInfo.processInfo.arguments.contains("-quietReconnectNewChat")
+    }
 
     var body: some View {
         NavigationStack {
             if ready {
-                ChatView(sessionId: Self.chatId)
-                    .safeAreaInset(edge: .top) {
-                        ConnectionStrip()
-                            .padding(.horizontal, 16)
-                            .accessibilityIdentifier("quietReconnect.banner")
-                    }
+                if showsNewChat {
+                    NewChatView(path: $path)
+                } else {
+                    ChatView(sessionId: Self.chatId)
+                }
             }
         }
         .environment(store)
         .task {
             guard !ready else { return }
             store.load()
-            // A fixed synthetic pairing, handled entirely by the no-op connection below.
             _ = try? await store.pair(PairingLink(
                 relayUrl: "ws://localhost:1440", room: "a1b2c3d4e5f60718",
                 key: "00112233445566778899aabbccddeeff",
-                hostKey: "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE=", pair: "ABCD2345"))
-            if let id = store.activeId { store.rename(id, to: "Gomi") }
+                hostKey: "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE=",
+                pair: "ABCD2345"))
+            if let id = store.activeId { store.rename(id, to: "Studio Mac") }
             store.transcriptCache = cache
             let session: JSONValue = [
                 "id": .string(Self.chatId), "title": "Release plan", "modelId": "fixture-model",
@@ -48,12 +52,7 @@ struct QuietReconnectEvidenceFixture: View {
                 ],
             ]
             if let saved = Session.from(session) { store.transcripts.save(saved) }
-            let args = ProcessInfo.processInfo.arguments
-            let index = args.firstIndex(of: "-quietReconnectCount")
-            let requested = index.flatMap { $0 + 1 < args.count ? Int(args[$0 + 1]) : nil } ?? 0
-            for i in 0..<min(3, max(0, requested)) {
-                store.outbox.add(chatId: Self.chatId, text: "Review item \(i + 1)", id: "quiet-prompt-\(i)")
-            }
+            store.drafts.set(DraftStore.newChat, Draft(text: "Review the release notes"))
             ready = true
         }
     }
@@ -78,14 +77,19 @@ private final class QuietReconnectCache: TranscriptCache {
     func removeAll() { values = [:] }
 }
 
-/// Remains connecting, with no timers, sockets, push registration or remote calls.
+/// Remains reconnecting, with no timers, sockets, push registration or remote calls.
 private final class QuietReconnectConnection: RemoteConnection, @unchecked Sendable {
+    private let lock = NSLock()
+    private var onStatus: (@Sendable (RelayStatus) -> Void)?
+
     func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?,
-                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {}
-    func connect() {}
+                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {
+        lock.withLock { self.onStatus = onStatus }
+    }
+    func connect() { lock.withLock { onStatus }?(RelayStatus(.connecting)) }
     func close() {}
     func nudge() {}
-    func reconnect() {}
+    func reconnect() { connect() }
     func registerPush(token: String) async throws {}
     func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {}
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {

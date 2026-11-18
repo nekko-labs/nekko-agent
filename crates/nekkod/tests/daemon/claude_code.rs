@@ -112,7 +112,10 @@ pub fn fake_claude() {
             );
             continue;
         }
-        let text = msg["message"]["content"].as_str().unwrap_or_default().to_string();
+        // What nekkod wrote, and the user's own words in it: where the Claude
+        // policy allows a context note, Nekko's notes follow the message.
+        let raw = msg["message"]["content"].as_str().unwrap_or_default().to_string();
+        let text = raw.split("\n\nNekko design note: ").next().unwrap_or_default().to_string();
         let lifecycle =
             |state: &str| json!({ "type": "command_lifecycle", "command_uuid": msg["uuid"], "state": state });
         if replay && msg["uuid"].is_string() {
@@ -123,7 +126,7 @@ pub fn fake_claude() {
         if text.starts_with("title probe") {
             let probe = json!({
                 "offered": offered.iter().any(|t| t == "set_chat_title"),
-                "note": text.contains("Nekko chat naming note:"),
+                "note": raw.contains("Nekko chat naming note:"),
                 "systemFlag": args.iter().any(|a| a == "--system-prompt" || a == "--append-system-prompt"),
             });
             if text.starts_with("title probe hold") {
@@ -150,6 +153,26 @@ pub fn fake_claude() {
             });
             let reply = json!({ "probe": probe, "answer": answer }).to_string();
             out(assistant("m_title", json!([{ "type": "text", "text": reply }])));
+            out(result(&reply, "completed"));
+        } else if text == "picture probe" {
+            // The picture tools: whether the bridge lists them, and what a call
+            // gets (made even when unoffered: the daemon must refuse it itself).
+            let offered =
+                ["generate_image", "edit_image", "media_models"].iter().all(|t| offered.iter().any(|o| o == t));
+            let answer: Value = rt.block_on(async {
+                reqwest::Client::new()
+                    .post(format!("{url}/harness/tool"))
+                    .bearer_auth(&token)
+                    .json(&json!({ "name": "generate_image", "input": { "prompt": "a red kite", "size": "256x256" } }))
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap()
+            });
+            let reply = json!({ "offered": offered, "answer": answer }).to_string();
+            out(assistant("m_pic", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
         } else if text == "background" || text == "background-slow" {
             // Start a background command, end the turn, then wake when it
@@ -272,6 +295,11 @@ pub fn fake_claude() {
                 "no watch tool".to_string()
             };
             out(assistant("m_w", json!([{ "type": "text", "text": reply }])));
+            out(result(&reply, "completed"));
+        } else if text == "design probe" {
+            // Report exactly what arrived, so a test can tell a note from a passthrough.
+            let reply = json!({ "raw": raw, "systemFlag": args.iter().any(|a| a == "--system-prompt" || a == "--append-system-prompt") }).to_string();
+            out(assistant("m_design", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
         } else if text == "usage" {
             // Plan usage Claude Code reports on its own while it works.
@@ -530,6 +558,9 @@ fn rig_with(name: &str, mode: &str, cli: bool, daemon: Value, extra: &[(&str, Op
     env.extend_from_slice(extra);
     let d = start_with_env(&data, daemon, &env);
     let events = record_events(d.port);
+    // As in turn_rig_env: boot also writes providers, so let it finish before
+    // a fixture replaces them with its Claude account's policy settings.
+    boot_settled(&data);
     Rig { t: TurnRig { data, workspace, d, events }, bin }
 }
 
@@ -788,8 +819,8 @@ async fn claude_title_bridge_rechecks_rename_privacy_and_policy_at_dispatch() {
                 .and_then(|text| serde_json::from_str(&text).ok())
         })
         .await;
-        assert_eq!(probe["offered"], true);
-        assert_eq!(probe["note"], true);
+        assert_eq!(probe["offered"], true, "{change}: {probe}");
+        assert_eq!(probe["note"], true, "{change}: {probe}");
         if change == "policy" {
             write_settings(&rig, json!({ "providers": [title_provider(false)] })).await;
         } else {
@@ -809,6 +840,52 @@ async fn claude_title_bridge_rechecks_rename_privacy_and_policy_at_dispatch() {
         assert_eq!(answer["answer"]["ok"], false, "{change}: {answer}");
         assert_eq!(saved["title"], if change == "rename" { "My chosen title" } else { "cc" });
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_design_note_rides_on_each_message_only_where_the_policy_allows() {
+    let rig = rig("design-note", "guardrails", true);
+    let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
+    // `cc` has a sign-in nekkod has not read (`unknown`, treated as a plan); `cc_key` runs on an API key.
+    let plan = provider("cc", json!({}));
+    let key = provider("cc_key", json!({ "authSource": "nekko-anthropic-key" }));
+    write_settings(&rig, json!({ "providers": [plan.clone(), key.clone()] })).await;
+    let received = |turn: &'static str, provider: Value| {
+        let rig = &rig;
+        async move {
+            let (status, body) =
+                post(rig.d.port, "chat:turn", json!([spec_on(rig, turn, "design probe", provider)]), Some(TOKEN)).await;
+            assert_eq!(status, 200, "{body}");
+            let (_, end) = turn_record(rig, turn, "s_cc").await;
+            assert_eq!(end["aborted"], false, "{end}");
+            serde_json::from_str::<Value>(assistant_texts(&saved(rig)).last().unwrap()).unwrap()
+        }
+    };
+
+    // On a plan nothing is added: Claude Code receives the user's message, byte for byte.
+    let on_plan = received("dn1", plan).await;
+    assert_eq!(on_plan["raw"], "design probe", "{on_plan}");
+
+    // On an API key every message carries the note, never as a system flag, and the saved chat keeps the user's words.
+    for turn in ["dn2", "dn3"] {
+        let on_key = received(turn, key.clone()).await;
+        let raw = on_key["raw"].as_str().unwrap();
+        assert!(raw.starts_with("design probe\n\nNekko design note: "), "{raw}");
+        assert!(
+            raw.contains("nekko-designs/") && raw.contains("never in reports/") && raw.contains("-v2.html"),
+            "{raw}"
+        );
+        assert_eq!(raw.matches("Nekko design note: ").count(), 1);
+        assert_eq!(on_key["systemFlag"], false);
+    }
+    let users: Vec<String> = saved(&rig)["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["role"] == "user")
+        .map(|m| m["content"].as_str().unwrap_or_default().to_string())
+        .collect();
+    assert_eq!(users, ["design probe", "design probe", "design probe"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1216,6 +1293,12 @@ async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
     assert_eq!(approval["call"]["executedBy"], "claude-code");
     let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
     assert_eq!(running, json!(["s_cc"]));
+    // With no prompt of its own, the wake-up names the end of the turn before
+    // it, where a window stops the saved transcript while it streams (#2840).
+    let s = saved(&rig);
+    let first_end =
+        s["messages"].as_array().unwrap().iter().find(|m| m.get("turnStats").is_some()).expect("the first turn's end");
+    assert_eq!(s["activeRun"]["afterMessageId"], first_end["id"], "{s}");
     let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cc", "toolu_wake", true]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{body}");
     until("the wake-up turn to end", Duration::from_secs(30), || async {
@@ -1420,4 +1503,64 @@ async fn claude_code_compacting_reaches_the_chat_as_it_runs() {
     assert_eq!(states, [json!("running"), json!("done")]);
     let k = kinds(&events);
     assert!(k.ends_with(&["usage".into(), "done".into()]), "{k:?}");
+}
+
+/// The picture tools reach a Claude Code chat only where the Claude policy's
+/// `nekko_tools` row is enabled for its sign-in (an API key here) and a
+/// picture model is ready; elsewhere (an unread sign-in, which counts as a
+/// plan) they are neither listed nor run, even when called.
+#[tokio::test(flavor = "multi_thread")]
+async fn picture_tools_reach_claude_code_only_where_the_policy_allows_them() {
+    let rig = rig("pictures", "guardrails", true);
+    let model = rig.data.join("models/image/acme_sd/tiny-sd.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, crate::engine::tiny_gguf("sd1", "Tiny SD")).unwrap();
+    let sd_dir = rig.data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    let engine = json!({ "buildId": "fake", "binPath": crate::engine::fake_sd(), "version": "fake" });
+    std::fs::write(sd_dir.join("engine.json"), engine.to_string()).unwrap();
+    let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
+    let key = provider("cc_key", json!({ "authSource": "nekko-anthropic-key" }));
+    let unread = provider("cc", json!({}));
+    for (i, (p, allowed)) in [(unread, false), (key, true)].into_iter().enumerate() {
+        write_settings(
+            &rig,
+            json!({
+                "providers": [p.clone()],
+                "engineBinPath": crate::engine::fake_llama(),
+                "engine": { "port": free_port(), "modelFolders": [] },
+            }),
+        )
+        .await;
+        let turn = format!("pic-{i}");
+        let (status, body) =
+            post(rig.d.port, "chat:turn", json!([spec_on(&rig, &turn, "picture probe", p)]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (events, end) = turn_record(&rig, &turn, "s_cc").await;
+        assert_eq!(end["aborted"], false, "{end}");
+        let saved = saved(&rig);
+        let reply = assistant_texts(&saved).last().cloned().unwrap_or_else(|| panic!("case {i}: no reply; {events:?}"));
+        let probe: Value = serde_json::from_str(&reply).unwrap();
+        assert_eq!(probe["offered"], allowed, "case {i}: {probe}");
+        assert_eq!(probe["answer"]["ok"], allowed, "case {i}: {probe}");
+        if allowed {
+            let text = probe["answer"]["text"].as_str().unwrap();
+            assert!(text.starts_with("Made the picture with Tiny SD (256x256) on this computer."), "{text}");
+            assert!(text.contains("Kept at "), "{text}");
+            let images = probe["answer"]["images"].as_array().unwrap();
+            assert_eq!(images.len(), 1, "{probe}");
+            let kept: Vec<_> = std::fs::read_dir(rig.data.join("agent-pictures/s_cc")).unwrap().collect();
+            assert_eq!(kept.len(), 1, "the picture is kept in Nekko's data, not the project");
+            assert!(
+                std::fs::read_dir(&rig.workspace).unwrap().all(|e| !e
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .ends_with(".png"))
+            );
+        } else {
+            assert!(probe["answer"]["error"].as_str().unwrap().contains("does not offer generate_image"), "{probe}");
+        }
+    }
+    post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
 }

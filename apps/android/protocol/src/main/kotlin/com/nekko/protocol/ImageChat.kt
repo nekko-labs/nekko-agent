@@ -31,8 +31,20 @@ data class ImageChatParams(
     }
 
     fun sessionOptions(): JsonObject = buildJsonObject { put("chatType", "image"); put("imageParams", json()) }
-    fun generation(sessionId: String, prompt: String): JsonObject = buildJsonObject {
+    /**
+     * The `chat:generateImage` argument, signed as a whole. With photos it is an edit (decision
+     * 0069): `images` (at most [PhotoEdit.MAX_PHOTOS]) and `size`, the first photo's shape at this
+     * chat's pixel count. Without photos it makes a picture from the words alone.
+     */
+    fun generation(sessionId: String, prompt: String, images: List<String> = emptyList()): JsonObject = buildJsonObject {
         put("sessionId", sessionId); put("prompt", prompt); put("params", json())
+        val photos = images.take(PhotoEdit.MAX_PHOTOS)
+        if (photos.isNotEmpty()) {
+            val chosen = PixelSize(width.toInt(), height.toInt())
+            val size = PhotoEdit.size(photos.first())?.let { PhotoEdit.editSize(it, chosen) } ?: chosen
+            put("images", kotlinx.serialization.json.JsonArray(photos.map(::JsonPrimitive)))
+            put("size", buildJsonObject { put("width", size.width); put("height", size.height) })
+        }
     }
 
     companion object {

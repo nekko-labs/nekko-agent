@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeInterruption, shouldShowPersistedInterruption, reconcileInterruptionNotice, savedTurnFailure, PERSISTED_INTERRUPTION } from './interruption.js';
+import { describeInterruption, formatResetTime, shouldShowPersistedInterruption, reconcileInterruptionNotice, savedTurnFailure, PERSISTED_INTERRUPTION } from './interruption.js';
 
 describe('describeInterruption', () => {
   it('treats an intentional stop as a pause, not an error', () => {
@@ -16,6 +16,16 @@ describe('describeInterruption', () => {
     expect(result).toMatchObject({ paused: true, title: 'Out of context' });
     expect(result.reason).toContain('compacts it and carries on');
     expect(describeInterruption('429 rate limit: too many tokens per min', true).title).toBe('Reply failed');
+  });
+
+  it('names a refused sign-in as expired, still a failure, so the notice can offer Sign in again', () => {
+    const expired = describeInterruption('chatgpt 401: { "error": { "message": "Provided authentication token is expired. Please try signing in again.", "code": "token_expired" } }', true);
+    expect(expired).toMatchObject({ paused: false, signInExpired: true, title: 'Sign-in expired' });
+    expect(describeInterruption('openai 401: Incorrect API key provided (invalid_api_key)', true).signInExpired).toBe(true);
+    expect(describeInterruption('Rate limit exceeded', true).signInExpired).toBe(false);
+    expect(describeInterruption('Stopped', true).signInExpired).toBe(false);
+    // 4010 tokens is not a 401.
+    expect(describeInterruption('openai 400: 4010 tokens over', true).signInExpired).toBe(false);
   });
 
   it('explains terminated without inventing a cause or calling it a pause', () => {
@@ -95,5 +105,15 @@ describe('savedTurnFailure', () => {
     expect(savedTurnFailure({ messages: [], turnFailure: failure })).toBeNull();
     expect(savedTurnFailure({ messages: [tool], turnFailure: null })).toBeNull();
     expect(savedTurnFailure({ messages: [tool] })).toBeNull();
+  });
+});
+
+describe('formatResetTime', () => {
+  const now = new Date(2026, 10, 15, 10, 0).getTime();
+
+  it('shows the time alone today, the weekday this week and the date after', () => {
+    expect(formatResetTime(new Date(2026, 10, 15, 15, 0).getTime(), now, 'en-US')).toBe('3:00 PM');
+    expect(formatResetTime(new Date(2026, 10, 16, 9, 30).getTime(), now, 'en-US')).toBe('Mon 9:30 AM');
+    expect(formatResetTime(new Date(2026, 10, 25, 10, 0).getTime(), now, 'en-US')).toBe('Nov 25 10:00 AM');
   });
 });

@@ -12,7 +12,7 @@ import SwiftUI
 /// finished steps squeeze to their title and open or fold when tapped, except
 /// the last one with results for the user (a PR, a check's evidence), which
 /// starts open. Chips are placed by the app, not the model:
-/// sub-agents, verification, PRs and task links.
+/// sub-agents, PRs and task links. A step's check shows on its bullet, not in a chip.
 struct PlanSheet: View {
     let chat: ChatModel
     @Environment(ComputersStore.self) private var store
@@ -34,7 +34,7 @@ struct PlanSheet: View {
     /// The plan the sheet shows for this chat (`sheetPlan`): empty when there is none, and then no sheet.
     @MainActor static func plan(_ chat: ChatModel, _ store: ComputersStore) -> [PlanStep] {
         let claudeCode = store.providers.first { $0.id == chat.session?.providerId }?.kind == AgentPlan.claudeCodeKind
-        return AgentPlan.sheet(chat.session, claudeCode: claudeCode, working: chat.running) ?? []
+        return AgentPlan.sheet(chat.session, claudeCode: claudeCode) ?? []
     }
 
     var body: some View {
@@ -77,7 +77,7 @@ struct PlanSheet: View {
         return VStack(alignment: .leading, spacing: 4) {
             Button { toggle(true) } label: {
                 HStack(spacing: 8) {
-                    PlanStepMark(status: current.status, paused: paused)
+                    PlanStepMark(step: current, paused: paused)
                     if let kind = current.kind { KindLabel(kind: kind, current: current.status == .active) }
                     Text(current.title).font(.footnote).lineLimit(1)
                         .foregroundStyle(current.status == .done ? palette.inkSoft : palette.ink)
@@ -93,11 +93,10 @@ struct PlanSheet: View {
             .accessibilityHint("Shows the whole plan")
             .accessibilityIdentifier("chat.planFolded")
             let kids = chat.children
-            if !kids.isEmpty || current.verification != nil || !shownPrs.isEmpty || !projects.isEmpty {
+            if !kids.isEmpty || !shownPrs.isEmpty || !projects.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         if !kids.isEmpty { SubagentSummary(children: kids) }
-                        if let v = current.verification { verificationChip(v) }
                         ForEach(shownPrs, id: \.self) { prChip($0) }
                         ForEach(projects, id: \.url) { projectChip($0) }
                     }
@@ -137,11 +136,11 @@ struct PlanSheet: View {
     private func row(_ step: PlanStep, links own: PlanStepLinks?, paused: Bool, opened: String?) -> some View {
         let kids = (own?.subagents ?? []).compactMap { id in chat.children.first { $0.id == id } }
         let prs = prefs.shows("pr-status", pr: true) ? own?.prs ?? [] : []
-        let chips = !prs.isEmpty || own?.projects.isEmpty == false || !kids.isEmpty || step.verification != nil
+        let chips = !prs.isEmpty || own?.projects.isEmpty == false || !kids.isEmpty
         let more = step.detail != nil || chips
         let shown = !step.squeezed || (tapped[step.id] ?? (step.id == opened))
         return HStack(alignment: .firstTextBaseline, spacing: 8) {
-            PlanStepMark(status: step.status, paused: paused)
+            PlanStepMark(step: step, paused: paused)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     // The loop kind sits in a fixed column, as on the desktop.
@@ -164,7 +163,6 @@ struct PlanSheet: View {
                             FlowChips {
                                 ForEach(own?.projects ?? [], id: \.url) { projectChip($0) }
                                 ForEach(kids) { subagentChip($0) }
-                                if let v = step.verification { verificationChip(v) }
                                 ForEach(prs, id: \.self) { prChip($0) }
                             }
                         }
@@ -230,19 +228,6 @@ struct PlanSheet: View {
         return ("#\(number) · \(pr.isDraft ? "Draft" : "Open") · \(ci)", tone)
     }
 
-    private func verificationChip(_ v: PlanStep.Verification) -> some View {
-        let tone: Color = switch v.status {
-        case .passed: palette.success
-        case .failed: palette.danger
-        case .blocked: palette.warning
-        case .active: palette.accent
-        case .pending, .unknown: palette.inkFaint
-        }
-        let evidence = v.safeEvidence
-        return chip(evidence.map { url in { openURL(url) } }) { dot(tone); Text(v.label) }
-            .accessibilityLabel("\(v.label), agent-reported")
-    }
-
     private func projectChip(_ link: ProjectLink) -> some View {
         chip({ if let u = URL(string: link.url) { openURL(u) } }) {
             Image(systemName: "tag").font(.caption2).accessibilityHidden(true)
@@ -262,25 +247,61 @@ struct PlanSheet: View {
     }
 }
 
-/// The step's status mark: a check when done, a sun-burst while worked (two
-/// bars when paused), a ring ahead, a struck ring when skipped. Not animated.
+/// The step's bullet (desktop `StepMark`). The agent's reported check outranks
+/// the step's own status: a sun-burst while a check runs (even on a done step),
+/// a check when it passed, a red X when it failed, a warning when it is
+/// blocked. Without a settled check the step's status draws: a check when done,
+/// a sun-burst while worked (two bars when paused), a ring ahead, a struck ring
+/// when skipped. With evidence attached the bullet opens it. Not animated.
 private struct PlanStepMark: View {
-    let status: PlanStep.Status
+    let step: PlanStep
     let paused: Bool
     @Environment(\.palette) private var palette
+    @Environment(\.openURL) private var openURL
+
+    /// The reported check, unless it is still pending or unknown.
+    private var check: PlanStep.Verification.Status? {
+        guard let s = step.verification?.status, s != .pending, s != .unknown else { return nil }
+        return s
+    }
+
+    private var running: Bool { check == .active || (check == nil && step.status == .active) }
+
+    private var label: String {
+        if running && paused { return "Paused" }
+        if let v = step.verification { return v.label }
+        switch step.status {
+        case .active: return "Working"
+        case .done: return "Done"
+        case .skipped: return "Skipped"
+        case .pending: return "Pending"
+        }
+    }
 
     var body: some View {
-        Group {
-            switch status {
-            case .done: Image(systemName: "checkmark").foregroundStyle(palette.success)
-            case .active: Image(systemName: paused ? "pause" : "sun.max").foregroundStyle(palette.accent)
-            case .skipped: Image(systemName: "circle.slash").foregroundStyle(palette.inkFaint)
-            case .pending: Image(systemName: "circle").foregroundStyle(palette.inkFaint)
+        let glyph = Group {
+            if running {
+                Image(systemName: paused ? "pause" : "sun.max").foregroundStyle(palette.accent)
+            } else if check == .passed || (check == nil && step.status == .done) {
+                Image(systemName: "checkmark").foregroundStyle(palette.success)
+            } else if check == .failed {
+                Image(systemName: "xmark").foregroundStyle(palette.danger)
+            } else if check == .blocked {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(palette.warning)
+            } else {
+                Image(systemName: step.status == .skipped ? "circle.slash" : "circle").foregroundStyle(palette.inkFaint)
             }
         }
         .font(.system(size: 11, weight: .semibold))
         .frame(width: 12, height: 12)
-        .accessibilityLabel(status == .active ? (paused ? "Paused" : "Working") : status == .done ? "Done" : status == .skipped ? "Skipped" : "Pending")
+        if let url = step.verification?.safeEvidence {
+            Button { openURL(url) } label: { glyph.frame(minWidth: 30, minHeight: 30).contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .frame(width: 12, height: 12)
+                .accessibilityLabel("\(label), agent-reported, open evidence")
+        } else {
+            glyph.accessibilityLabel(step.verification == nil ? label : "\(label), agent-reported")
+        }
     }
 }
 

@@ -26,6 +26,7 @@
 //! Merging is per chat, newest `updatedAt` wins; a chat a turn is running in
 //! is never overwritten (its local copy is newer by the time it saves).
 
+mod fleet_link;
 mod http;
 mod org_records;
 mod orgs;
@@ -49,6 +50,7 @@ use std::time::Duration;
 use vault::Vault;
 use zeroize::Zeroize;
 
+pub use fleet_link::{ConnectInfo, FleetAdmitted, FleetTarget, HelloBinding};
 pub use http::client;
 pub use org_records::LocalModel;
 pub use orgs::{HEARTBEAT, HostInfo, ModelFuture};
@@ -62,6 +64,11 @@ pub const CHANNELS: &[&str] = &[
     "cloud:cancelOAuth",
     "cloud:signOut",
     "cloud:deleteAccount",
+    "cloud:billingPlans",
+    "cloud:billingCheckout",
+    "cloud:billingPortal",
+    "cloud:teamFeatures",
+    "cloud:setTeamFeature",
     "sync:turnOn",
     "sync:confirmRecoveryKey",
     "sync:restore",
@@ -126,6 +133,11 @@ struct Live {
     orgs: Option<Vec<Value>>,
     /// How sharing with each org is going.
     shares: BTreeMap<String, orgs::ShareLive>,
+    /// Computers of this account that can be reached, from the last fleet
+    /// lists (`org/device`), with how to reach them (decision 0102).
+    fleet_targets: BTreeMap<String, fleet_link::FleetTarget>,
+    /// A fleet HELLO named a device or epoch this computer hadn't heard of: reading the account again.
+    fleet_catching_up: bool,
 }
 
 pub struct Cloud {
@@ -219,6 +231,33 @@ impl Cloud {
             }
             "cloud:signOut" => self.sign_out().await,
             "cloud:deleteAccount" => self.delete_account().await,
+            // Plans and billing (#2724): the app opens the answered `url` in the browser.
+            "cloud:billingPlans" => self.api.get(&self.token()?, "/v1/billing/plans").await.map_err(e),
+            "cloud:billingCheckout" => {
+                let body = json!({ "plan": arg(args, 0) });
+                self.api
+                    .send(&self.token()?, reqwest::Method::POST, "/v1/billing/checkout", Some(body))
+                    .await
+                    .map_err(e)
+            }
+            "cloud:billingPortal" => {
+                self.api.send(&self.token()?, reqwest::Method::POST, "/v1/billing/portal", None).await.map_err(e)
+            }
+            // Team accounts only (decision 0092); the API answers 404 to everyone else.
+            "cloud:teamFeatures" => self.api.get(&self.token()?, "/v1/staff/features").await.map_err(e),
+            "cloud:setTeamFeature" => {
+                let key = arg(args, 0);
+                if key.is_empty() || !key.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') {
+                    return Err("Unknown feature.".into());
+                }
+                let path = format!("/v1/staff/features/{key}");
+                let body = json!({ "state": arg(args, 1) });
+                let out = self.api.send(&self.token()?, reqwest::Method::PUT, &path, Some(body)).await.map_err(e)?;
+                // What this account sees follows the switch at once.
+                self.refresh().await?;
+                self.changed();
+                Ok(out)
+            }
             "sync:turnOn" => self.turn_on().await,
             "sync:confirmRecoveryKey" => self.confirm_recovery_key(&arg(args, 0)),
             "sync:restore" => self.restore(&arg(args, 0)).await,
@@ -401,7 +440,10 @@ impl Cloud {
         let join_code = if phase == "awaiting-approval" { self.vault.get("join-code") } else { None };
         json!({
             "signedIn": signed_in,
-            "account": s.account.as_ref().map(|a| json!({ "email": a.email, "plan": a.plan, "canSync": a.can_sync })),
+            "account": s.account.as_ref().map(|a| json!({
+                "email": a.email, "plan": a.plan, "canSync": a.can_sync,
+                "staff": a.staff, "features": { "billing": a.billing },
+            })),
             "oauthPending": live.oauth.is_some(),
             "keysStoredIn": self.vault.kind(),
             "orgs": orgs::orgs_summary(&s, &live),
@@ -430,13 +472,7 @@ impl Cloud {
     async fn refresh(&self) -> Result<(), String> {
         let token = self.token()?;
         let me = self.api.get(&token, "/v1/auth/me").await.map_err(e)?;
-        let a = &me["account"];
-        let account = Account {
-            id: a["id"].as_str().unwrap_or("").into(),
-            email: a["email"].as_str().unwrap_or("").into(),
-            plan: a["plan"].as_str().unwrap_or("free").into(),
-            can_sync: a["canSync"].as_bool().unwrap_or(false),
-        };
+        let account = Account::from_api(&me["account"]);
         self.edit(|s| s.account = Some(account))?;
         let remote = self.api.get(&token, "/v1/sync/state").await.map_err(e)?;
         lock(&self.live).remote = Some(remote);
@@ -562,13 +598,7 @@ impl Cloud {
         let label = lock(&self.state).device_label.clone();
         let res = self.api.session(access_token, &label).await.map_err(e)?;
         let token = res["token"].as_str().ok_or("Nekko Cloud sent no token.")?.to_string();
-        let a = &res["account"];
-        let account = Account {
-            id: a["id"].as_str().unwrap_or("").into(),
-            email: a["email"].as_str().unwrap_or("").into(),
-            plan: a["plan"].as_str().unwrap_or("free").into(),
-            can_sync: a["canSync"].as_bool().unwrap_or(false),
-        };
+        let account = Account::from_api(&res["account"]);
         let other_account = lock(&self.state).account.as_ref().is_some_and(|old| old.id != account.id);
         if other_account {
             // This computer leaves the old account's org lists, then another account's keys never mix with this one's.
@@ -607,6 +637,8 @@ impl Cloud {
             let mut live = lock(&self.live);
             live.remote = None;
             live.orgs = None;
+            // How to reach this account's computers goes with the sign-in.
+            live.fleet_targets.clear();
         }
         Ok(self.changed())
     }
@@ -620,6 +652,9 @@ impl Cloud {
             Ok(_) => {}
             Err(err) if err.status == 401 => {
                 return Err("You're signed out of Nekko Cloud. Sign in again, then delete the account.".into());
+            }
+            Err(err) if err.status == 502 && err.code == "billing-teardown-failed" => {
+                return Err("Nekko Cloud couldn't cancel your subscription, so your account was not deleted. Try again in a few minutes.".into());
             }
             Err(err) if err.status == 502 => {
                 return Err("Nekko Cloud couldn't shut down your cloud computer, so your account was not deleted. Try again in a few minutes.".into());

@@ -5,7 +5,7 @@ area: phone
 
 # iPhone: chats on this iPhone, where each chat runs, and group by computer (2026-11-04)
 
-`[implemented 2026-11-04, iPhone only: the providers, requests, streaming and chat store are tested in NekkoKit (Linux Swift container), the list's Group by → Computer in NekkoProtocol; the screens build on macOS CI and are driven by the live UI test testChatsOnTheComputerAndOnThisIPhoneInOneList with a fixture provider. Not yet tried against a real provider from a device. Android has none of it yet]` Decision: [0048](../../docs/decisions/0050-the-iphone-runs-chats-on-its-own-cloud-providers.md). Builds on [every computer at once](iphone-every-computer-at-once.md).
+`[implemented 2026-11-04, iPhone only: the providers, requests, streaming and chat store are tested in NekkoKit (Linux Swift container), the list's Group by → Computer in NekkoProtocol; the screens build on macOS CI and are driven by the live UI test testChatsOnTheComputerAndOnThisIPhoneInOneList with a fixture provider. Not yet tried against a real provider from a device. Android direct text cloud parity is tracked in #2414]` Decision: [0048](../../docs/decisions/0050-the-iphone-runs-chats-on-its-own-cloud-providers.md). Builds on [every computer at once](iphone-every-computer-at-once.md).
 
 ## User intent
 
@@ -18,12 +18,16 @@ Philip asked (2026-11-04):
 
 ## What the user sees
 
-- **One list, every place.** The chat list holds every paired computer's chats and this iPhone's own chats. *Show chats from* in the computer pill lists *All computers*, each computer, and **This iPhone** (*Its own models*) once the phone runs chats.
+- **One list, every place.** The chat list holds every paired computer's chats and this iPhone's own chats. *Show chats from* in the computer pill lists *All computers*, each computer, and **This iPhone** (*Its own models*) even before provider setup (#1882).
 - **Where a chat runs**, on its row when the list shows more than one place: the computer's icon in its colour (the desktop's computer colours, the same order), or a dot when the computer has no icon, then its name; this iPhone's chats show a phone mark and *This iPhone*. The colour is on the mark only, so the name keeps the list's contrast. **View → Show → Computer** and **Computer icons** turn the name and the icon off, as on the desktop.
 - **Group by → Computer** (in the view menu once there is more than one place): a heading per computer, then *This iPhone*, each with its mark, its chats in the chosen order and its own completed chats after them. With headings naming the place, the rows don't repeat it. A computer with no chats in view shows when *Empty groups* is on.
-- **Models on this iPhone** (Settings → Computers, and *Or use a model provider on this iPhone* on the welcome screen before any computer is paired): the phone's providers, each with its models or what went wrong, a switch to turn it off, touch and hold for **Test**, **New key** and **Remove**. **Add a provider** takes the kind, a name, the address where the kind needs one, and the key; it is kept only after the provider answers. The kinds: Claude API (optional workspace ID), OpenAI, OpenRouter, Claude in Amazon Bedrock, Claude in Microsoft Foundry, Claude on Vertex AI (a pasted access token, about an hour), OpenAI-compatible (any https server). The desktop's other kinds are listed under *On a computer only*: the Claude subscription (Claude Code), the ChatGPT subscription and local model servers.
-- **New chat → Run on** lists **This iPhone** (*Its own models, no tools*) beside the computers. On this iPhone the model chip picks among the phone's providers' models; folder, tools, effort, photos and Nekko Cloud step aside, the box asks *Ask anything*, and a line says the chat runs on this iPhone with your own key and has no tools. New chat starts on this iPhone when the list is filtered to it or no computer is paired.
-- **A chat on this iPhone** opens to its conversation: a line on where it runs and with which model, your messages, the reply streaming in with Markdown, **Stop** while it streams, and **Try again** under a reply that failed (the provider's own words: a refused key, a rate limit, an unknown model). Its menu changes the model, renames, pins, completes or restores, and deletes. In the list it swipes and touches and holds like any chat.
+- **Models on this iPhone** (Settings → Computers, and *Or use a model provider on this iPhone* on the welcome screen before any computer is paired): the phone's providers, each with its models or what went wrong, a switch to turn it off, touch and hold for **Test**, **New key** and **Remove**. **Add a provider** is as short as each provider allows, and a provider is kept only after it answers. **OpenRouter** is one button: *Sign in with OpenRouter* opens the browser (the person's own session, PKCE), and the key OpenRouter hands back is checked and kept with nothing to copy (#2851). **Claude API, OpenAI, Google Gemini and Ollama Cloud** are guided: *Open* the provider's key page, copy the key there, come back and tap **Paste** (the system button, so no paste prompt); it is checked and kept by itself. Anthropic, OpenAI, Google and Ollama offer no sign-in a third-party app may use to mint an API key, so a pasted key is the shortest honest path. Kinds that need an address take a name, the address and the key. The kinds: Claude API (optional workspace ID), OpenAI, OpenRouter, Google Gemini (AI Studio key, OpenAI-compatible endpoint), Ollama Cloud (ollama.com key), Claude in Amazon Bedrock, Claude in Microsoft Foundry, Claude on Vertex AI (a pasted access token, about an hour), OpenAI-compatible (any https server). The desktop's other kinds are listed under *On a computer only*: the Claude subscription (Claude Code), the ChatGPT subscription and local model servers.
+- **New chat → Run on** lists **This iPhone** (*Its own models*) beside the computers. On this iPhone the model chip picks among the phone's providers' models; folder, tools, effort and Nekko Cloud step aside (photos stay: see below) and the box asks *Ask anything*. The model and This iPhone share one line, and the "no tools" line and the open chat's banner are gone (2026-11-17, [iphone-new-chat-connect-checklist.md](iphone-new-chat-connect-checklist.md)): the connect checklist and note say what Nekko could do with a computer, a folder or a git provider instead. New chat starts on this iPhone when the list is filtered to it or no computer is paired.
+- **A chat on this iPhone** opens to its conversation: a line on where it runs and with which model, your messages, the reply streaming in with Markdown, **Stop** while it streams, and **Try again** under a reply that failed (a safe status explanation: a refused key, a rate limit, an unknown model; raw provider errors are not persisted). Its menu changes the model, renames, pins, completes or restores, and deletes. In the list it swipes and touches and holds like any chat.
+- **Why a reply or Test failed** `[implemented 2026-11-17 (#2920), iPhone and Android: NekkoKit and Kotlin protocol tests per error code; not yet tried against a live key with no credit]`: a failed answer's first 4 KB and its headers are read only for the error's code and type, compared to known values, and explained in our own words; the provider's message text is never shown or kept (it can echo part of the key). *No credit* (`insufficient_quota`, or 402): "This key has no credit. Add billing at platform.openai.com, then try again." for OpenAI, a provider-neutral line otherwise; OpenAI answers 429 for this too, so it is no longer called rate limiting. *Rate limited* (`rate_limit_exceeded`, `rate_limit_error`, Gemini's `RESOURCE_EXHAUSTED`, or any other 429): "Rate limited. Try again in 12s." from `retry-after`, else the sooner of OpenAI's `x-ratelimit-reset-*`, else "in a moment". *Wrong model* (`model_not_found`), *refused key* (`invalid_api_key`, `authentication_error`, keeping the status) and *busy* (`overloaded_error`, 529) each have their own line.
+- **An OpenAI key is tested with a real request.** OpenAI lists its models for a key with no credit, so Test (and Android's check before a provider is kept) also sends the default model "Say OK." capped at 16 tokens; any refusal fails it.
+- **The default model** for a new chat on this iPhone, when none was chosen before, is the provider's newest model by its published date that is not a dated snapshot (`o3-2025-04-16`), a pro tier or a live (voice) model; lists without dates keep their order. Before, OpenAI's reverse-sorted list put `o3-2025-04-16` first.
+- **Each key's rate limits** (OpenAI's `x-ratelimit-*`, Anthropic's `anthropic-ratelimit-*`: requests and tokens, their limits, what remains and when each resets) are kept in memory from every answer, per provider, for the usage limits work (#2923); nothing shows them yet.
 - With no computer paired and a provider on this iPhone, the app opens on the chat list instead of the welcome screen.
 
 ## How it works
@@ -43,7 +47,9 @@ Philip asked (2026-11-04):
 
 - With a computer paired and a provider on this iPhone, a chat on each shows in one list; the iPhone's row reads *This iPhone* with its mark, the computer's its name.
 - Group by → Computer shows a heading per place with the right chats; with one place the option is not offered.
-- A Claude API key that is refused is not kept, and Add says the provider's reason.
+- A Claude API key that is refused is not kept, and Add shows a safe status explanation.
+- A wrong OpenRouter or Ollama Cloud key is refused at Add even though their model lists answer without a key (OpenRouter's `/key`, Ollama Cloud a chat for a model that does not exist) (#2854).
+- Tapping *Sign in with OpenRouter* and approving in the browser adds OpenRouter with its models and no typing; cancelling the browser leaves the sheet as it was. `[implemented 2026-11-16, request/exchange tested in NekkoKit; not yet tried against a live OpenRouter account]`
 - A reply streams in on the iPhone, Stop keeps what arrived, and Try again after a failed reply sends the conversation again without the failed reply.
 - Unit tests: `PhoneChatsTests` (NekkoKit), `ChatListLayoutTests` (NekkoProtocol). UI: `LiveRelayTests.testChatsOnTheComputerAndOnThisIPhoneInOneList`.
 
@@ -51,4 +57,46 @@ Philip asked (2026-11-04):
 
 - A real provider called from a device (the UI test uses a fixture provider inside the simulator).
 - Translations of the new text: the new strings show in English in every language until the catalog is translated.
-- Photos in a chat on this iPhone, tools, and syncing these chats are not built.
+- Tools and syncing these chats are not built.
+
+## Direct text cloud hardening (#2414, source implemented; native verification pending)
+
+- This iPhone remains in place/filter and Run on lists before provider setup. The empty phone model picker offers an original phone-to-cloud illustration, says the key stays in this device's Keychain, and opens Add a provider directly. Existing welcome/pairing onboarding is preserved.
+- Matches Android commit ad7039c52 for direct provider kinds and auth: Anthropic/Mantle/Foundry Messages use x-api-key; only Anthropic gets the workspace header. Mantle does not offer legacy Sonnet 4.6. Vertex sends a bearer token, path model and body anthropic_version. OpenAI uses max_completion_tokens; other wires use max_tokens. Both OpenAI and OpenRouter request streaming usage.
+- Stored provider metadata is revalidated before attaching a key. HTTPS only; no URL credentials, configured query/fragment, traversal, unsafe headers or Vertex model-path injection. All redirects are refused, including same-origin tenant/path changes. Ephemeral per-operation sessions disable cookie/cache/credential stores and are invalidated on cancellation.
+- SSE requires text/event-stream, real blank-line frame boundaries and explicit message_stop or [DONE]. EOF, malformed JSON, error events and size limits fail the turn; finish_reason alone is not completion. Limits: 1 MB line/frame, 8 MB stream, 2 MB accumulated text/model-list response and 32 queued lines (overflow fails rather than dropping text silently). Unknown protocol extension events are ignored.
+- Stop immediately saves partial text, clears running state and fences the attempt. Late callbacks cannot update a retry, removed chat or forgotten store. Disable/remove/key rotation invalidate active turns, provider tests and model loads. Model-load generation IDs discard stale results. Each text delta is persisted with an incomplete marker; reopening a partial interrupted reply shows an interruption error. Legacy empty-reply recovery remains supported.
+- No tools, sync, subscriptions, local servers or computer connections are added to direct chats (photos came later, #2926). Stored keys remain device-only. Foundry custom deployment names are not configurable; use a deployment matching the offered catalog ID.
+
+### Verification contract
+
+Focused package suites: PhoneChatsTests, PhoneCloudBoundaryTests, PhoneCloudLifecycleTests, PhoneCloudDiscoveryTests, UsageByPlaceTests. Native tests: PhoneHTTPBoundaryTests (request and redirect policy), PhoneDirectCloudTests (matched empty-picker/new-chat screenshots and no-computer fixture reply). Baseline app ref: a45e083f2 (full SHA recorded in CI). Native CI/evidence is pending; Windows has no Swift on PATH and Docker's Linux daemon is unavailable. Neither source tests nor captured media establish visual inspection or live provider authentication. See apps/ios/docs/direct-cloud-chat.md and the draft PR for current run IDs and limitations.
+
+### Official request references
+
+- https://platform.claude.com/docs/en/build-with-claude/claude-in-amazon-bedrock (Mantle Messages token goes in x-api-key, not Authorization).
+- https://platform.claude.com/docs/en/build-with-claude/claude-in-microsoft-foundry
+- https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/claude/use-claude
+- https://platform.openai.com/docs/api-reference/chat/create
+- https://openrouter.ai/docs/api-reference/streaming
+
+Desktop cross-check: crates/nekko-agent/src/providers/anthropic.rs and openai_compat.rs. Official references describe API contracts, not successful calls with an entitled account.
+
+### Current-main integration checkpoint (PR #2462)
+
+Implemented source retains main’s image-chat options and desktop-order composer action row while always offering This iPhone for text chats before provider setup. Folder/tools are not duplicated in the Run on row and stay hidden for phone-local chats. The focused comparison workflow now records the native simulator journey in addition to screenshots; this is capture support, not pixel/video inspection. Final merged-source Native iOS and matched current-main evidence are pending. No live paid-provider, physical-device or iPad/conceptual-foldable verification is claimed. The batch composer cannot push workflow changes with its current GitHub App permissions; use the existing standalone native/evidence workflows without widening App permissions.
+
+## Photos in chats on this iPhone (#2926)
+
+`[implemented 2026-11-17 on iPhone and Android: request shapes, persistence and model capability tested in NekkoKit (Linux Swift container) and the Android protocol module; the screens are not yet run on a device or simulator]`
+
+**User intent:** Philip (2026-11-17): "I can't seem to add photos to the chats on this phone." Chats that ran on the phone were text only: the New chat **+** was disabled for them and the open chat had no photo button.
+
+- **New chat** on this iPhone keeps **+** (Photos, Paste image), up to four photos, scaled as in a computer chat (JPEG, 1,600 px on the long side). A chat can start with photos and no text; it is titled *Photo*.
+- **An open chat on this iPhone** has the same **+** beside the model button, the photo tray above the box, and Send waits for photos to load. Sent photos show above the message as thumbnails; a tap opens them full screen.
+- **Which models:** a model the provider says can't take photos (OpenRouter lists each model's inputs) has no **+** in the open chat, and the New chat **+** is disabled for it. Claude models take photos. Where the provider doesn't say (OpenAI, Gemini, Ollama Cloud, OpenAI-compatible), the button stays and a model that can't read them says so in the failed reply's safe status explanation.
+- **What is sent:** Claude (API, Bedrock, Foundry, Vertex AI) gets `image` blocks (base64) before the text; the Chat Completions route (OpenAI, OpenRouter, Gemini, Ollama Cloud, OpenAI-compatible) gets `image_url` parts with the data URL after the text. Only `data:image/jpeg|png|gif|webp;base64` URLs under 8 MB are sent, so the phone never fetches a remote address for a message. Earlier photos stay in the conversation and are sent again with each turn, as the text is.
+- **Kept:** the photos are saved with the chat on this device (`PhoneMessage.images`), like its text, and removed by Delete or Forget everything. Chats saved before photos load unchanged.
+- **Android** matches: a **Photos** button and tray in a phone chat, thumbnails in the transcript, the same request shapes (`PhoneProviders.kt`).
+
+Tests: `PhoneChatPhotosTests` (NekkoKit), `PhoneChatPhotosTest` (Android protocol). Not verified: a live provider reading a photo from a device, and the iPhone and Android screens on a simulator or phone.

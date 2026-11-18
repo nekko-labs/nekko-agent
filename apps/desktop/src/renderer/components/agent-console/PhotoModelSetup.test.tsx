@@ -70,6 +70,10 @@ describe('the fit in words', () => {
     expect(photoFitLine({ ...zImage, offloadToCpu: true }, recs)).toContain('pictures take longer');
     expect(photoFitLine({ ...zImage, placement: 'cpu' }, recs)).toContain('processor');
     expect(photoFitLine(qwen, recs)).toBe('Too large for this computer.');
+    // A time is added only when one was measured, and never to a model that does not fit.
+    expect(photoFitLine({ ...zImage, time: { seconds: 24.6, basis: 'measuredHere', samples: 3 } }, recs)).toBe('Fits your NVIDIA GeForce RTX 4060. About 25 s a picture here.');
+    expect(photoFitLine({ ...zImage, time: { seconds: 18, basis: 'measured' } }, recs)).toBe('Fits your NVIDIA GeForce RTX 4060. About 18 s a picture on a computer like this.');
+    expect(photoFitLine({ ...qwen, time: { seconds: 18, basis: 'measured' } }, recs)).toBe('Too large for this computer.');
     for (const o of [zImage, klein, qwen]) expect(photoFitLine(o, recs)).not.toMatch(/runs well|fast/i);
   });
 

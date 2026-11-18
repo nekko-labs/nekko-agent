@@ -81,12 +81,22 @@ describe('RunnerCard', () => {
     const html = render(view({ slots: [
       { state: 'running', vm: 'busy-mac', job: { repo: 'nekko-labs/nekko-agent', runId: 1, jobId: 2, workflow: 'ios-native', job: 'PR #904' }, since: now - 360, drainEndsAt: null },
       { state: 'ready', vm: 'ready-mac', job: null, since: now, drainEndsAt: null },
-    ], reasons: ['onBattery', 'network'], state: 'waiting' }), image({ state: 'ready' }), undefined, true);
+      { state: 'starting', vm: 'new-mac', job: null, since: now, drainEndsAt: null },
+    ], reasons: ['onBattery', 'network'], state: 'waiting', config: { ...view().config, settings: { ...view().config.settings, macosSlots: 3 } } }), image({ state: 'ready' }), undefined, true);
     expect(html).toContain('data-compact="true"');
-    expect(html).toContain('data-runner-vm="ready-mac"');
-    expect(html).toContain('In progress · 1');
+    // An idle VM is a count beside the state, not a row; a VM that is starting is a row, without its name.
+    expect(html).toContain('Waiting · 1 idle');
+    expect(html).not.toContain('data-runner-vm="ready-mac"');
+    expect(html).toContain('data-runner-vm="new-mac"');
+    expect(html).toContain('Starting a VM');
+    expect(html).toContain('data-running-job="busy-mac"');
+    for (const label of ['In progress', 'Queued', 'Slots', 'Working on', '<code']) expect(html).not.toContain(label);
+    // Completed jobs wait behind one closed row.
+    expect(html).toContain('Completed · 2 jobs');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('data-recent-job');
     expect(html).toContain('This Mac is on battery, below what this mode allows.');
-    for (const gone of ['Completed', 'data-runner-facts', 'Connect to a workflow', 'This network is not one you trust']) expect(html).not.toContain(gone);
+    for (const gone of ['data-runner-facts', 'Connect to a workflow', 'This network is not one you trust']) expect(html).not.toContain(gone);
     // An idle slot without a VM says nothing the panel needs.
     expect(render(view({ slots: [] }), null, undefined, true)).not.toContain('data-runner-slots');
   });
@@ -120,22 +130,40 @@ describe('RunnerCard', () => {
     expect(html).not.toContain('role="progressbar"');
   });
 
-  it('a queued job can be accepted or declined, and either undone', () => {
+  it('a queued job can be started now or skipped, and either undone', () => {
     const q = { repo: 'o/r', runId: 9, jobId: 90, workflow: 'ci', job: 'lint', createdAt: null };
     const fresh = render(view({ queue: [{ ...q, declined: false, accepted: false }] }));
-    expect(fresh).toContain('>Accept now<');
-    expect(fresh).toContain('>Decline<');
+    expect(fresh).toContain('>Start now<');
+    expect(fresh).toContain('>Skip<');
+    // A decision waiting on you: never hidden until hover.
+    expect(fresh).not.toMatch(/quiet-row-action[^"]*"[^>]*>(Start now|Skip)</);
     const declined = render(view({ queue: [{ ...q, declined: true, accepted: false }] }));
-    expect(declined).toContain('Declined: this Mac starts no VM for it');
+    expect(declined).toContain('Skipped: this Mac starts no VM for it');
     expect(declined).toContain('>Undo<');
-    expect(render(view({ queue: [{ ...q, declined: false, accepted: true }] }))).toContain('Accepted: a VM starts for it now');
-    // A hard limit Runner first keeps: Accept now is off, with the reason.
+    expect(render(view({ queue: [{ ...q, declined: false, accepted: true }] }))).toContain('Starting: a VM starts for it now');
+    // A hard limit Runner first keeps: Start now is off, with the reason.
     const hot = render(view({ acceptWhy: ['thermalCritical'], queue: [{ ...q, declined: false, accepted: false }] }));
     expect(hot).toMatch(/disabled=""[^>]*title="[^"]*hot[^"]*"|title="[^"]*hot[^"]*"[^>]*disabled=""/i);
   });
 
+  it('an idle runner names its last job: the action and the PR, on the page and in the panel', () => {
+    const idle = view({ state: 'waiting', slots: [], recent: [
+      { ts: now - 600, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'CI', job: 'gate', result: 'finished', seconds: 60, reason: [], url: 'https://github.com/nekko-labs/nekko-agent/actions/runs/7/job/8', pr: { number: 2823, url: 'https://github.com/nekko-labs/nekko-agent/pull/2823' } },
+    ] });
+    for (const compact of [false, true]) {
+      const html = render(idle, null, undefined, compact);
+      expect(html).toContain('data-runner-last-job');
+      expect(html).toMatch(/href="https:\/\/github.com\/nekko-labs\/nekko-agent\/actions\/runs\/7\/job\/8"[^>]*>CI · gate<\/a>/);
+      expect(html).toMatch(/href="https:\/\/github.com\/nekko-labs\/nekko-agent\/pull\/2823"[^>]*>PR #(<!-- -->)?2823<\/a>/);
+    }
+    // Busy: the job rows already carry it, so it is not said twice.
+    expect(render(view())).not.toContain('data-runner-last-job');
+  });
+
   it('error_card_shows_the_daemons_sentence', () => {
-    expect(render(view({ state: 'error', error: 'No VM image yet.', slots: [] }))).toMatch(/role="alert"[^>]*>[^<]*No VM image yet\./);
+    const html = render(view({ state: 'error', error: 'No VM image yet.', slots: [] }));
+    expect(html).toMatch(/role="alert"[^>]*>[^<]*No VM image yet\./);
+    expect(html).toContain('>Open settings</button>');
   });
 
   it('an off runner still shows the daemon error', () => {
@@ -170,6 +198,19 @@ describe('RunnerCard', () => {
     expect(html).not.toContain('0 cores');
     expect(html).toContain('VM size not known yet');
     expect(html).not.toContain('VM support unavailable');
+  });
+
+  it('after 2 jobs, a different suggested size shows on the card with Apply and Not now (#2700)', () => {
+    const settings = { ...DEFAULT_RUNNER_SETTINGS, enabled: true, macosSlots: 1, memoryPerVmMb: 10240 };
+    const at = (suggestedSize: RunnerView['suggestedSize']) => render(view({ config: { ...view().config, settings }, host: { ...view().host, cpusPerVm: 6 }, suggestedSize }));
+    const html = at({ jobs: 2, cpus: 6, memoryMb: 14336, reasons: ['The jobs swapped.'] });
+    expect(html).toContain('Your last 2 jobs suggest 6 vCPUs, 14 GB per VM (now 6 vCPUs, 10 GB).');
+    expect(html).toContain('data-size-notice="6x14336"');
+    expect(html).toContain('>Apply<');
+    expect(html).toContain('>Not now<');
+    // Too few jobs, or a size that already fits: nothing on the card.
+    expect(at({ jobs: 1, cpus: 6, memoryMb: 14336, reasons: [] })).not.toContain('data-size-notice');
+    expect(at({ jobs: 3, cpus: 6, memoryMb: 10240, reasons: [] })).not.toContain('data-size-notice');
   });
 
   it('no_em_dash_in_markup', () => {

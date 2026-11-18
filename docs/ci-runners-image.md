@@ -76,7 +76,7 @@ never harms the image you have.
 | Check | macOS 27, VM support, 110 GB free, security updates, Xcode found. No Xcode offers macOS only | Names the fix |
 | Download | Apple's restore image, 25.6 GB for macOS 27.2 | Resumes from the partial file |
 | Install | A 140 GB sparse disk, then a first boot that creates the `nekko-build` admin, with no window. Saved as a checkpoint, and the restore image is deleted | Restarts this stage |
-| Xcode | Over SSH: Xcode as a `tar` stream, first launch, the iOS simulator, Homebrew with `zstd` and `gnu-tar`, then `node`, `gh` and `jq`. macOS only skips Xcode and the simulator | Back to the checkpoint |
+| Xcode | Over SSH: Xcode as a `tar` stream, first launch, the iOS simulator, Homebrew, then the [job tools](#job-tools): `node`, `gh`, `jq`, `zstd` and `gtar`. macOS only skips Xcode and the simulator | Back to the checkpoint |
 | Lockdown | `provision.sh` as a one-off LaunchDaemon, because it turns SSH off partway. The guest stops, and Nekko reads the proof file from its disk, read-only, and which job tools a job's PATH finds there | Back to the checkpoint: it runs once per image |
 | Test | A clone must boot, reject a `not-a-config` seed and power off within 10 minutes, and its boot log must show the runner ran: a guest also powers off on a seed it could not read | Keeps the build and shows the log |
 | Finish | Swaps the image in, writes `image.json` (the proof plus `tools`), applies the chosen mode, turns the runner on, deletes the build folder | Safe to run again |
@@ -86,18 +86,24 @@ from Install on for power, and, before a stage that boots a VM (Install, Xcode, 
 Test), for a free macOS VM slot. An idle runner VM gives its slot up at once; a running job is
 waited for. Linux VMs, Docker Desktop's included, take no slot. It uses 8 GB and leaves 2 cores free. Quitting
 Nekko pauses it, and the next launch offers to resume. A hung command fails its stage: each has a
-limit (license 3 min, first launch 20, simulator 60, Homebrew 20, `zstd` and `gnu-tar` 10, `node`,
-`gh` and `jq` 15, lockdown 15, test boot 10).
+limit (license 3 min, first launch 20, simulator 60, Homebrew 20, the job tools 20, lockdown 15, test boot 10).
 
 ### Job tools
 
 `JOB_TOOLS` in `crates/nekkod/src/runner/image.rs` is the one list of commands a job runs before
 any setup step of its own could install them: `node` (`ios-native.yml` picks its appearances
-before `actions/setup-node`), and `gh` and `jq` (its batch report). Every build installs them,
+before `actions/setup-node`), `gh` and `jq` (its batch report), and `zstd` and `gtar` (Homebrew's
+`gnu-tar`), which `actions/cache` needs to compress with zstd as on hosted Macs. Without those two
+a job still passes, but its caches fall back to `/usr/bin/tar` and gzip: on the M1 Max pilot the
+Rust cache took 28 s to compress against 5 s hosted, and came out 13% bigger
+([CI runner performance](ci-runner-performance.md#why-the-cache-save-is-slower)). Every build installs them,
 and nekkod records the ones it finds in `/opt/homebrew/bin`, `/usr/local/bin` or `/usr/bin` on
 the guest's disk as `tools` in `image.json`. An `image.json` without `tools` is from before
 this check, so every tool macOS does not ship counts as missing (macOS 15 and later ship `jq`).
-The runner card names what is missing, and **Install them** runs a build of kind `tools`:
+The runner card names what is missing (for `zstd` and `gtar`, that caches save slower, not that
+jobs fail), and **Install them** runs a build of kind `tools`. An image built before 2026-11-03 14:07
+UTC lacks `zstd` and `gtar`; one built after has them but its `tools` record predates the check, so
+it is flagged once too, and **Install them** finds them already there and records them:
 
 | Stage | What happens | If it stops |
 | --- | --- | --- |
@@ -155,9 +161,7 @@ release pages: the `osx-arm64` SHA in the
 
 Xcode, iOS simulator runtimes, Homebrew and the tools your jobs use. They come from the base
 image: the Cirrus `-xcode` images carry them, and Nekko's own build adds them before the
-lockdown, with the [job tools](#job-tools) and with `zstd` and `gnu-tar` so `actions/cache` compresses with zstd as on hosted Macs
-(without them it falls back to `/usr/bin/tar` and gzip, and its caches are bigger and slower to
-save). Add anything else before running `provision.sh`, while the admin account still works.
+lockdown, with the [job tools](#job-tools). Add anything else before running `provision.sh`, while the admin account still works.
 
 ## GitLab
 

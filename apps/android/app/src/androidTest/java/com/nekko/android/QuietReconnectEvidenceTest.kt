@@ -5,25 +5,16 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -31,8 +22,9 @@ import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.Remote
 import com.nekko.android.data.SecureStore
+import com.nekko.android.data.ModelPick
 import com.nekko.android.ui.screens.ChatScreen
-import com.nekko.android.ui.screens.ChatsScreen
+import com.nekko.android.ui.screens.NewChatScreen
 import com.nekko.android.ui.theme.NekkoTheme
 import com.nekko.protocol.Channels
 import com.nekko.protocol.RelayConfig
@@ -67,7 +59,7 @@ class QuietReconnectEvidenceTest {
     private val computer = FakeComputer()
     private val device = InstrumentationRegistry.getArguments().getString("nekkoDevice") ?: Build.MODEL.replace(' ', '_')
 
-    /** Record only a settled real reconnect banner, never HOME or fixture transitions. */
+    /** Record only the existing dots on a settled real New Chat surface, never HOME or transitions. */
     @Test fun steadyReconnectMotion() {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
@@ -75,32 +67,28 @@ class QuietReconnectEvidenceTest {
         ).bufferedReader().use { it.readText().trim() }
         assertTrue("Motion evidence requires system animations", ValueAnimator.areAnimatorsEnabled())
         assertEquals("1", shell("settings get global animator_duration_scale"))
+        computer.online = false
         val repo = repo()
-        var motionFrame by mutableStateOf(0)
         // Disable auto-advance before composition: its InfiniteAnimationPolicy otherwise
         // cancels infinite transitions before a later manual-clock hold can drive them.
         compose.mainClock.autoAdvance = false
         compose.setContent {
             NekkoTheme(dark = false) {
-                Box(Modifier.fillMaxSize()) {
-                    ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {})
-                    // A static base emits just one screenrecord frame without this test-only
-                    // counter. It keeps both native recordings continuous, below the banner.
-                    Text("Motion sample $motionFrame", modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp), fontSize = 9.sp)
-                }
+                NewChatScreen(repo, onBack = {}, phonePick = ModelPick("anthropic", "claude-opus-4-7"),
+                    onPair = {}, onCreated = {}, onQueued = {})
             }
         }
-        compose.runOnIdle { computer.online = false; computer.goConnecting() }
+        compose.runOnIdle { computer.goConnecting() }
         compose.mainClock.advanceTimeBy(200)
         compose.waitUntil(10_000) { repo.state.value.conn == RelayState.CONNECTING }
         settle()
         compose.waitUntil(10_000) {
-            compose.onAllNodes(hasText("Studio Mac", substring = true)).fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodes(hasTestTag("reconnect.title"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
         val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
         val revision = InstrumentationRegistry.getArguments().getString("nekkoRevision") ?: error("Missing nekkoRevision")
         require(revision == "before" || revision == "after")
-        val recording = File(dir, "android-$revision-pulse-v3.mp4")
+        val recording = File(dir, "android-$revision-new-chat-dots-v4.mp4")
         recording.delete()
         // Block only the instrumentation thread. The main thread keeps native animation
         // frames running, with an extra steady second before and half-second after capture.
@@ -117,7 +105,6 @@ class QuietReconnectEvidenceTest {
             val start = android.os.SystemClock.elapsedRealtime()
             val clockStart = compose.mainClock.currentTime
             while (recorder.isAlive && android.os.SystemClock.elapsedRealtime() - start < 15_000) {
-                compose.runOnUiThread { motionFrame++ }
                 val elapsed = android.os.SystemClock.elapsedRealtime() - start
                 val advance = elapsed - (compose.mainClock.currentTime - clockStart)
                 if (advance > 0) compose.mainClock.advanceTimeBy(advance, ignoreFrameDuration = true)
@@ -135,6 +122,7 @@ class QuietReconnectEvidenceTest {
     }
 
     @Test fun quietReconnectSurfaces() {
+        computer.online = false
         val repo = repo()
         var screen by mutableStateOf("chat")
         var open by mutableStateOf(1)
@@ -143,28 +131,22 @@ class QuietReconnectEvidenceTest {
                 if (screen == "chat") key(open) {
                     ChatScreen(remember { ChatViewModel("s1", repo, null, null) }, onBack = {})
                 } else {
-                    ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {})
+                    NewChatScreen(repo, onBack = {}, phonePick = ModelPick("anthropic", "claude-opus-4-7"),
+                        onPair = {}, onCreated = {}, onQueued = {})
                 }
             }
         }
         compose.waitUntil(10_000) { "s1" in repo.transcripts.chatIds }
-        compose.runOnIdle { computer.online = false; computer.goConnecting(); open++ }
+        compose.runOnIdle { computer.goConnecting(); open++ }
         compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("chat.savedCopy")).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodes(hasSetTextAction()).onFirst().performTextInput("Keep my release notes draft")
         settle()
-        shot("quiet-reconnect-composer")
-        compose.runOnIdle { screen = "list" }
+        shot("quiet-reconnect-chat")
+        compose.runOnIdle { screen = "new" }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("newChat.offlineNote")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodes(hasSetTextAction()).onFirst().performTextInput("Review the release notes")
         settle()
-        shot("quiet-reconnect-empty")
-        compose.runOnIdle { repo.outbox.add("s1", "Run the focused tests") }
-        settle()
-        shot("quiet-reconnect-one")
-        compose.runOnIdle { repo.outbox.add("s1", "Check the release notes") }
-        settle()
-        shot("quiet-reconnect-many")
-        compose.runOnIdle { computer.goOffline(); screen = "chat"; open++ }
-        settle()
-        shot("quiet-offline-composer")
+        shot("quiet-reconnect-new-chat")
         assertEquals(0, computer.sends)
     }
 

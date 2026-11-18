@@ -22,6 +22,9 @@ import com.nekko.android.ui.theme.Nekko
 /** The existing authorized session:photo read. No path, external URL or file API fallback. */
 val LocalSessionPhoto = staticCompositionLocalOf<(suspend (messageId: String, index: Int) -> String?)?> { null }
 
+/** **Edit** under a picture an image chat made (#2230): attaches it to the next prompt. Null hides it. */
+val LocalEditPicture = staticCompositionLocalOf<((messageId: String, thumb: String) -> Unit)?> { null }
+
 @Composable
 fun ReplyPhotos(messageId: String, thumbs: List<String>) {
     val read = LocalSessionPhoto.current

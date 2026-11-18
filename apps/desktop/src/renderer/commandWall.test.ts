@@ -339,7 +339,7 @@ describe('persistence', () => {
     const storage = memory();
     storage.setItem(WALL_STATE_KEY, '{nope');
     expect(loadWallState(storage)).toEqual(DEFAULT_WALL_STATE);
-    storage.setItem(WALL_STATE_KEY, JSON.stringify({ root: { id: 'split_1', dir: 'row', children: [{ id: 'pane_2', kind: 'browser', refId: 'x' }, { id: 'pane_3', kind: 'chat', refId: 'a' }], sizes: [0.5, 0.5] } }));
+    storage.setItem(WALL_STATE_KEY, JSON.stringify({ root: { id: 'split_1', dir: 'row', children: [{ id: 'pane_2', kind: 'pr', refId: 'x' }, { id: 'pane_3', kind: 'chat', refId: 'a' }], sizes: [0.5, 0.5] } }));
     const loaded = loadWallState(storage);
     expect(allPanes(loaded.root).map((p) => p.refId)).toEqual(['a']);
   });
@@ -389,7 +389,7 @@ describe('wall preferences and panel migration', () => {
   const a = { id: 'pane_a', kind: 'chat', refId: 'a' };
   const b = { id: 'pane_b', kind: 'terminal', refId: 'b' };
   it('exports the dock descriptors and fresh defaults without tree panels', () => {
-    expect(WALL_KINDS).toEqual(['chat', 'terminal']);
+    expect(WALL_KINDS).toEqual(['chat', 'terminal', 'browser', 'files']);
     expect(MONITORS.map(p => p.key)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
     expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true, simpleShow: false,
       monitorOrder: MONITORS.map(p => p.key),
@@ -494,16 +494,19 @@ describe('wall preferences and panel migration', () => {
 });
 
 describe('agent panel preferences', () => {
-  it('persists close and orientation, defaulting to a shown column', () => {
-    for (const agentPanel of [{ show: false, orientation: 'vertical' }, { show: true, orientation: 'horizontal' }] as const) {
+  it('persists close, defaulting to a shown panel', () => {
+    for (const agentPanel of [{ show: false }, { show: true }] as const) {
       const state = { ...DEFAULT_WALL_STATE, agentPanel };
       expect(loadWallState(undefined, toWallSetting(state)).agentPanel).toEqual(agentPanel);
       let raw = '';
       saveWallState({ setItem: (_, value) => { raw = value; } }, state);
       expect(loadWallState({ getItem: () => raw }).agentPanel).toEqual(agentPanel);
     }
-    expect(loadWallState({ getItem: () => JSON.stringify({ agentPanel: { show: 'no', orientation: 'diagonal' } }) }).agentPanel).toEqual(DEFAULT_AGENT_PANEL);
-    expect(readAgentPanel(undefined)).toEqual({ show: true, orientation: 'vertical' });
+    expect(loadWallState({ getItem: () => JSON.stringify({ agentPanel: { show: 'no' } }) }).agentPanel).toEqual(DEFAULT_AGENT_PANEL);
+    expect(readAgentPanel(undefined)).toEqual({ show: true });
+  });
+  it('drops the retired row orientation from a saved wall', () => {
+    expect(loadWallState({ getItem: () => JSON.stringify({ agentPanel: { show: true, orientation: 'horizontal' } }) }).agentPanel).toEqual({ show: true });
   });
 });
 

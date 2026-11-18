@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync, spawn, execFileSync } from 'node:child_process';
 import { devBanner } from './dev-banner.mjs';
+import { devSigningIdentity } from './dev-signing.cjs';
 const require = createRequire(import.meta.url);
 if (process.env.ELECTRON_RUN_AS_NODE) throw new Error('Unset ELECTRON_RUN_AS_NODE before launching Nekko Agent');
 const env = { ...process.env, NEKKO_DEV_OWNER: randomUUID() };
@@ -36,7 +37,14 @@ export function prepareMacBundle() {
   const cache = resolve('.dev-runtime', require('electron/package.json').version);
   const bundle = join(cache, 'Nekko Agent.app');
   const ready = join(cache, 'ready-v2');
-  const stamp = runtimeStamp(resolve('build/icon.png'), 'signed');
+  // macOS pins Screen Recording and its other privacy grants to the app's
+  // designated requirement. Ad-hoc, that is the binary's hash, so every rebuild
+  // (an Electron upgrade, a new icon) voids the grant while System Settings
+  // still shows it on. Signed with the development identity (dev-signing.cjs),
+  // it names the bundle id and certificate, and the grant survives rebuilds.
+  // The identity is in the stamp, so a newly created one re-signs once.
+  const identity = devSigningIdentity();
+  const stamp = runtimeStamp(resolve('build/icon.png'), identity ? `signed-${identity}` : 'signed');
   if (!runtimeIsCurrent(ready, stamp)) {
     rmSync(cache, { recursive: true, force: true });
     mkdirSync(cache, { recursive: true });
@@ -53,8 +61,14 @@ export function prepareMacBundle() {
       const result = spawnSync('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, plist]);
       if (result.status !== 0 && spawnSync('/usr/libexec/PlistBuddy', ['-c', `Add :${key} string ${value}`, plist]).status !== 0) throw new Error('Could not set development bundle identity: ' + key);
     }
-    const signed = spawnSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', bundle], { stdio: 'inherit' });
-    if (signed.status !== 0) throw new Error('Could not sign development bundle');
+    const sign = (id) => spawnSync('/usr/bin/codesign', ['--force', '--deep', '--timestamp=none', '--sign', id, bundle], { stdio: 'inherit' }).status === 0;
+    const signedAs = identity && sign(identity);
+    if (!signedAs) {
+      console.warn(identity
+        ? `[nekko] codesign with "${identity}" failed: the dev runtime is ad-hoc signed, so macOS forgets its Screen Recording grant whenever it is rebuilt.`
+        : '[nekko] The dev runtime is ad-hoc signed, so macOS forgets its Screen Recording grant whenever it is rebuilt. Run apps/desktop/scripts/dev-signing-identity.sh once to keep it (docs/signing.md, "Development builds").');
+      if (!sign('-')) throw new Error('Could not sign development bundle');
+    }
     writeFileSync(ready, stamp);
   }
   // LaunchServices makes the app, not the terminal, the responsible process.
@@ -138,7 +152,19 @@ const cleanup = () => {
   try { rmSync(readyFile, { force: true }); } catch {}
   if (keys) try { process.stdin.setRawMode(false); } catch {}
 };
-child.on('exit', code => { cleanup(); process.exit(stopping ? 0 : code ?? 1); });
+let restarting = false;
+child.on('exit', code => {
+  cleanup();
+  if (restarting) {
+    // The whole of `npm run dev` again, so a pull's new dependencies, engine
+    // and main process are all picked up, in this same terminal.
+    // shortcut: each restart nests one more idle launcher process; re-exec in place if that ever matters.
+    process.stdin.pause();
+    console.log('[nekko] Restarting with what is on disk...');
+    process.exit(spawnSync('npm', ['run', 'dev'], { cwd: resolve('../..'), stdio: 'inherit', shell: process.platform === 'win32' }).status ?? 1);
+  }
+  process.exit(stopping ? 0 : code ?? 1);
+});
 
 /** End electron-vite, Electron, the engine and anything they started. */
 const killTree = () => {
@@ -179,9 +205,10 @@ if (keys) {
   process.stdin.resume();
   process.stdin.on('data', (data) => {
     const key = data.toString();
-    if (key === '\r' || key === '\n' || key.toLowerCase() === 'q' || key === '\x03') stop();
+    if (key.toLowerCase() === 'r' && !stopping) { restarting = true; stop(); }
+    else if (key === '\r' || key === '\n' || key.toLowerCase() === 'q' || key === '\x03') { restarting = false; stop(); }
   });
-  console.log('[nekko] Press Enter or q to stop Nekko Agent cleanly (twice to force).');
+  console.log('[nekko] Press Enter or q to stop Nekko Agent cleanly (twice to force), r to restart after a pull.');
 }
 
 // Once the app reports in, say what is running and how to stop it, after

@@ -294,7 +294,7 @@ private fun ChatScreenContent(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // Offline or refused: the chat stays as it was; the banner says why.
+                // Offline or refused: the chat stays as it was; the connection row says why.
             } finally {
                 pullUp.refreshing = false
             }
@@ -479,7 +479,8 @@ private fun ChatScreenContent(
         )
     }
     if (showModelEffort) {
-        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onLoadTools = vm::tools, onSetTool = { name, on -> vm.setTool(name, on, chat.disabledTools) }, onDismiss = { showModelEffort = false })
+        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onLoadTools = vm::tools, onSetTool = { name, on -> vm.setTool(name, on, chat.disabledTools) }, onDismiss = { showModelEffort = false },
+            onRevokeTool = { t -> vm.revokeAlwaysAllowed(t, chat.allowedMcpTools) }, onForgetRecipient = { r -> vm.forgetRecipient(r, chat.knownRecipients) })
     }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
     terminals?.let { t ->
@@ -653,7 +654,7 @@ private fun ChatScreenContent(
                             itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
                                 val run = (row as? TranscriptRow.Run)?.run
                                 // Watch chips and subagent rows read the chat's watches and child chats.
-                                CompositionLocalProvider(LocalAgentContext provides agentContext, com.nekko.android.ui.chat.LocalSessionPhoto provides vm::photo) {
+                                CompositionLocalProvider(LocalAgentContext provides agentContext, com.nekko.android.ui.chat.LocalSessionPhoto provides vm::photo, com.nekko.android.ui.chat.LocalEditPicture provides vm::editPicture) {
                                     when {
                                         // A finished reply's metrics and, when it completed, its check (#2112).
                                         row is TranscriptRow.Footer -> com.nekko.android.ui.chat.TurnDetailsRow(row.details)
@@ -713,8 +714,17 @@ private fun ChatScreenContent(
                 }
             }
             val controls: @Composable () -> Unit = {
-                chat.approval?.let { a ->
-                    ApprovalCard(a, onDecide = vm::approve, onAlwaysAllow = {
+                // Answers and approvals kept until the computer takes them (#2497); their cards step aside meanwhile.
+                val responses by vm.responses.collectAsStateWithLifecycle()
+                // Only what hasn't gone yet: a sent one leaves (the chat shows what came of it), so it
+                // never crowds out the next card's buttons.
+                responses.filter { it.unsent }.forEach { m ->
+                    com.nekko.android.ui.chat.ResponseMessageRow(m, onRetry = { vm.retryResponse(m.id) }, onCancel = { vm.cancelResponse(m.id) })
+                }
+                val allowWords = stringResource(R.string.response_allow)
+                val denyWords = stringResource(R.string.response_deny)
+                vm.shownApproval(chat.approval)?.let { a ->
+                    ApprovalCard(a, onDecide = { ok -> vm.approve(ok) { yes, tool -> (if (yes) allowWords else denyWords).format(tool) } }, onAlwaysAllow = {
                         try {
                             vm.alwaysAllowTool()
                         } catch (e: RelayException) {
@@ -724,7 +734,7 @@ private fun ChatScreenContent(
                         }
                     }, startAlways = alwaysNow == a.call.id, onStartedAlways = { alwaysNow = null })
                 }
-                chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
+                vm.shownQuestion(chat.question)?.let { QuestionCard(it, onAnswer = vm::answer) }
                 prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
                 // A completed chat reads like the desktop's: no message box until it is restored.
                 if (completedAt != null && !chat.running) CompletedBar(
@@ -771,6 +781,9 @@ private fun ChatScreenContent(
                         WaitingList(waiting, sendingId, online, onEdit = vm::editWaiting, onDelete = vm::deleteWaiting, onSendNow = vm::sendWaitingNow)
                         refusal?.let { RefusalNote(it, onDismiss = vm::dismissRefusal) }
                     }
+                    // The agent's plan, right on the composer's top edge (#2115).
+                    val planUi by vm.plan.collectAsStateWithLifecycle()
+                    planUi?.let { com.nekko.android.ui.chat.PlanSheet(it, showPrs = simple.shown("pr-status", pr = true), onOpenChat = { id -> onOpenChat(id, null) }) }
                     Composer(
                         restore = restore,
                         onRestored = vm::restored,
@@ -792,7 +805,8 @@ private fun ChatScreenContent(
                         insert = insert,
                         onInserted = vm::inserted,
                         // Keep a restored tray removable, but never offer new image attachments.
-                        attach = if (chat.chatType == "image" && attach.state.photos.isEmpty()) null else attach,
+                        // Image chats take photos too: attached, they are what the picture is made from (#2230).
+                        attach = attach,
                         prompts = if (chat.chatType == "image") emptyList() else prompts,
                         queuedPrompts = chat.queuedPrompts,
                         onEditQueued = vm::editQueued,
@@ -922,7 +936,7 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
  * tapped (Android shows its own prompt), then starts or stops dictation.
  */
 @Composable
-private fun rememberMic(
+internal fun rememberMic(
     d: DictationController?,
     updates: kotlinx.coroutines.flow.Flow<*>? = null,
     /** Routes the words through the chat's voice commands ("Nekko, send"); else they are typed. */
@@ -1025,11 +1039,13 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
     val res = LocalResources.current
     val lock = LocalAppLock.current
     val state by vm.photos.state.collectAsStateWithLifecycle()
+    val clips by vm.clips.state.collectAsStateWithLifecycle()
     // Where the camera app was asked to write; survives the activity being recreated meanwhile.
     var shot by rememberSaveable { mutableStateOf<String?>(null) }
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoTray.MAX_PHOTOS)) { uris ->
+    // Photos and videos (#2777): photos stay on the phone until Send, videos go to the computer at once.
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoTray.MAX_PHOTOS + com.nekko.android.chat.ClipTray.MAX_CLIPS)) { uris ->
         lock?.returned()
-        vm.addPhotos(context.contentResolver, uris)
+        vm.addMedia(context.contentResolver, uris)
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         lock?.returned()
@@ -1047,7 +1063,7 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
         state = state,
         onPickFiles = {
             lock?.expectReturn()
-            pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
         },
         onTakePhoto = if (!hasCamera) null else {
             {
@@ -1069,7 +1085,9 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
         onRemove = vm.photos::remove,
         take = vm.photos::take,
         restore = vm.photos::restore,
-        clearError = vm.photos::clearError,
+        clearError = { vm.photos.clearError(); vm.clips.clearError() },
+        clips = clips,
+        onRemoveClip = vm::removeClip,
     )
 }
 

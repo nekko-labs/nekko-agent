@@ -62,6 +62,7 @@
   "app:info",
   "app:quit",
   "artifact:read",
+  "attachment:upload",
   "audit:read",
   "changes:list",
   "chat:abort",
@@ -294,6 +295,7 @@
   "app:quit",
   "device:signOut",
   "remote:stop",
+  "attachment:upload",
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
@@ -490,6 +492,7 @@
   "guidance",
   "imageParams",
   "incognito",
+  "knownRecipients",
   "memory",
   "mode",
   "modelId",
@@ -514,6 +517,7 @@
   "gitIsolation",
   "guidance",
   "incognito",
+  "knownRecipients",
   "memory",
   "offline",
   "privacy"
@@ -1088,6 +1092,13 @@
   ]
  },
  "maxFrameBytes": 9437184,
+ "upload": {
+  "chunkBytes": 3145728,
+  "maxBytes": 50000000,
+  "idChars": 64,
+  "nameChars": 255,
+  "sessionIdChars": 128
+ },
  "stepUp": {
   "challenge": {
    "channel": "security:challenge",

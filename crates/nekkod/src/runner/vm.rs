@@ -261,10 +261,9 @@ impl HelperVm {
                 if rc < 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
             });
         }
-        let mut child = tokio::process::Command::from(cmd)
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| format!("cannot run nekko-vm: {e}"))?;
+        let mut cmd = tokio::process::Command::from(cmd);
+        cmd.kill_on_drop(true);
+        let mut child = spawn_retrying_busy(&mut cmd).await.map_err(|e| format!("cannot run nekko-vm: {e}"))?;
         // Counted from here: the VM may be up before its `started` line.
         let live = Live::up(&self.live);
         drop(vm_end);
@@ -315,6 +314,27 @@ fn run_args(bundle: &Path, cpus: u8, memory_mb: u32) -> Vec<OsString> {
     args
 }
 
+/// Spawn `cmd`, retrying a few times when exec fails with ETXTBSY.
+///
+/// On Linux, exec of a file fails with ETXTBSY while any process holds it open for writing. A
+/// helper that was written moments ago (an install, or a test fixture) can be held that way by a
+/// child that another thread forked between our `open` and `close`: the child keeps the writable
+/// descriptor until its own exec closes it. The window is microseconds, so a short bounded retry
+/// on this one error is exact; every other error, and the last ETXTBSY, is returned as is.
+pub(super) async fn spawn_retrying_busy(cmd: &mut tokio::process::Command) -> io::Result<Child> {
+    const TRIES: u32 = 20;
+    let mut tries = 1;
+    loop {
+        match cmd.spawn() {
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && tries < TRIES => {
+                tries += 1;
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            r => return r,
+        }
+    }
+}
+
 /// Runs `cmd` to completion within `limit`. On a timeout the child is killed
 /// and reaped before the error returns, so nothing is left running.
 pub(super) async fn output_within(
@@ -323,13 +343,8 @@ pub(super) async fn output_within(
     what: &str,
 ) -> Result<std::process::Output, String> {
     use tokio::io::AsyncReadExt;
-    let mut child = cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| format!("cannot run {what}: {e}"))?;
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
+    let mut child = spawn_retrying_busy(&mut cmd).await.map_err(|e| format!("cannot run {what}: {e}"))?;
     let (mut out, mut err) = (child.stdout.take(), child.stderr.take());
     let run = async {
         let (mut o, mut e) = (vec![], vec![]);

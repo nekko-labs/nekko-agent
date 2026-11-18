@@ -249,7 +249,7 @@ class RelayClientTest {
         }
     }
 
-    private fun fixtureClient(t: WsTransport, challengeWaitMs: Long = 2_000, signer: HelloSigner? = null): RelayClient {
+    private fun fixtureClient(t: WsTransport, challengeWaitMs: Long = 2_000, signer: HelloSigner? = null, fleet: ((FleetBinding) -> JsonObject?)? = null): RelayClient {
         val d = fxObj("device")
         return RelayClient(
             RelayConfig(
@@ -260,6 +260,7 @@ class RelayClientTest {
                 handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
                 challengeWaitMs = challengeWaitMs,
                 helloSigner = signer,
+                fleetHello = fleet,
             ),
             t, scope,
         )
@@ -335,6 +336,36 @@ class RelayClientTest {
         assertTrue(ChangeProof.verify(key, text, sig))
         assertEquals(JsonObject(fxObj("hello") - "sig"), JsonObject(hello - "sig"))
         c.close()
+    }
+
+    @Test fun `a fleet HELLO carries a proof bound to this handshake, and says nothing when locked`() = runBlocking {
+        val ring = AccountKeyring(ByteArray(64) { it.toByte() })
+        val acct = "a1111111-2b3d-4e5f-8a6b-9c0d1e2f3a4b"; val dev = "7e1f0a9c-2b3d-4e5f-8a6b-9c0d1e2f3a4b"
+        val signer = fxDeviceSigner()
+        val t = Recorder(E2E.fromHex(fx("key")))
+        val c = fixtureClient(t, signer = signer, fleet = { b -> FleetLink.hello(ring, acct, 3, dev, "org-1", b) })
+        c.connect()
+        until("the socket") { t.sockets.isNotEmpty() }
+        t.last.goldenChallenge()
+        until("the HELLO") { t.last.of("hello").isNotEmpty() }
+        val fleet = t.last.of("hello").single()["fleet"]!!.jsonObject
+        assertEquals(dev, fleet["deviceId"]!!.jsonPrimitive.content)
+        val plain = WireJson.parseToJsonElement(String(FleetLink.openHelloProof(ring, acct, 3, dev, fleet["proof"]!!.jsonPrimitive.content))).jsonObject
+        assertEquals(fx("room"), plain["room"]!!.jsonPrimitive.content)
+        assertEquals(fxFrame("challenge"), plain["challenge"]!!.jsonPrimitive.content)
+        assertEquals(fxFrame("eph"), plain["hostEph"]!!.jsonPrimitive.content)
+        assertEquals(t.last.host.clientEph!!, plain["clientEph"]!!.jsonPrimitive.content)
+        assertEquals(java.util.Base64.getEncoder().encodeToString(signer.publicKey()), plain["helloKey"]!!.jsonPrimitive.content)
+        c.close()
+
+        val locked = Recorder(E2E.fromHex(fx("key")))
+        val d = fixtureClient(locked, signer = signer, fleet = { null })
+        d.connect()
+        until("the socket") { locked.sockets.isNotEmpty() }
+        locked.last.goldenChallenge()
+        delay(200)
+        assertTrue(locked.last.of("hello").isEmpty())
+        d.close()
     }
 
     @Test fun `answers the shared challenge with the shared HELLO, then sends the shared requests`() = runBlocking {

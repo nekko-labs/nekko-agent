@@ -262,8 +262,8 @@ function PhoneApp({ stage }: { stage: Stage }) {
       {/* push banner */}
       {banner > 0.01 && (
         <div style={{ position: 'absolute', left: 8, right: 8, top: 40, transform: `translateY(${(1 - banner) * -60}px)`, opacity: banner, background: t.surface2, border: `1px solid ${t.line}`, borderRadius: 16, padding: '9px 11px', boxShadow: '0 8px 24px rgba(0,0,0,0.25)', display: 'flex', gap: 9, alignItems: 'center' }}>
-          <div style={{ width: 28, height: 28, borderRadius: 7, background: '#5a2352', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg viewBox="0 0 32 32" width="22" height="22" shapeRendering="crispEdges"><path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#5a2352" stroke="#fff" strokeWidth="2" /><path fill="#fff" d="M11 15H13V18H11Z M20 15H22V18H20Z" /></svg>
+          <div style={{ width: 28, height: 28, borderRadius: 7, background: '#190019', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg viewBox="0 0 32 32" width="22" height="22" shapeRendering="crispEdges"><path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#16161c" stroke="#f3e8ee" strokeWidth="2" /><path fill="#fff" d="M11 15H13V18H11Z M20 15H22V18H20Z" /><path fill="#854f6c" d="M15 20H17V21H15Z" /></svg>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', fontSize: 10.5, fontWeight: 600 }}>Nekko Agent<span style={{ marginLeft: 'auto', fontWeight: 400, color: t.faint }}>now</span></div>

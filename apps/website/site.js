@@ -294,6 +294,100 @@
     };
   }
 
+  // ---- Windows install help: once a Windows installer download starts, show what Windows
+  //      will ask next, right under the button that was clicked. The installer is not
+  //      signed yet, so Edge and SmartScreen warn on first download and first run.
+  //      Turn this off once signed builds have built up reputation and the warnings stop.
+  const INSTALL_HELP = true;
+  const HELP_VIDEOS = {
+    run: {
+      wide: 'media/install-help-first-run.mp4',
+      tall: 'media/install-help-first-run-tall.mp4',
+      poster: 'media/install-help-first-run-poster.webp',
+      label: 'Windows protected your PC: click More info, then Run anyway.',
+      swap: 'Saw a warning in your browser instead?',
+    },
+    download: {
+      wide: 'media/install-help-download.mp4',
+      tall: 'media/install-help-download-tall.mp4',
+      poster: 'media/install-help-download-poster.webp',
+      label: "Edge says the file isn't commonly downloaded: click the three dots, Keep, Show more, then Keep anyway.",
+      swap: 'Back to opening the installer',
+    },
+  };
+  let helpPanel = null;
+
+  function isWindowsInstaller(href) {
+    return os === 'win' && /\.exe($|[?#])/i.test(href || '');
+  }
+
+  function showInstallHelp(root) {
+    if (!INSTALL_HELP) return;
+    const host = root.closest('.cta-row, .dl-cta') || root;
+    helpPanel?.remove();
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const tall = window.matchMedia('(max-width: 600px)').matches;
+
+    const panel = document.createElement('section');
+    panel.className = 'install-help';
+    panel.setAttribute('aria-label', 'Installing Nekko Agent on Windows');
+    panel.innerHTML = `
+      <div class="ih-head">
+        <div>
+          <h3 class="ih-title">Your download has started</h3>
+          <p class="ih-sub">Windows may ask you to confirm before it runs. Here's what to click.</p>
+        </div>
+        <button class="ih-close" type="button" aria-label="Close">×</button>
+      </div>
+      <video class="ih-video" muted playsinline preload="auto"></video>
+      <div class="ih-foot">
+        <button class="ih-link ih-replay" type="button" hidden>Play again</button>
+        <button class="ih-link ih-swap" type="button"></button>
+      </div>`;
+    const video = panel.querySelector('video');
+    const replay = panel.querySelector('.ih-replay');
+    const swap = panel.querySelector('.ih-swap');
+    let plays = 0;
+
+    function load(key) {
+      const v = HELP_VIDEOS[key];
+      panel.dataset.video = key;
+      plays = 0;
+      video.src = tall ? v.tall : v.wide;
+      video.poster = v.poster;
+      video.setAttribute('aria-label', `Video: ${v.label}`);
+      swap.textContent = v.swap;
+      replay.hidden = true;
+      video.controls = still;
+      if (!still) video.play().catch(() => { video.controls = true; });
+    }
+    // Two plays, then it rests on the last frame with a way to watch again.
+    video.addEventListener('ended', () => {
+      plays += 1;
+      if (plays < 2 && !still) video.play().catch(() => {});
+      else replay.hidden = false;
+    });
+    replay.addEventListener('click', () => { plays = 1; replay.hidden = true; video.currentTime = 0; video.play().catch(() => {}); });
+    swap.addEventListener('click', () => load(panel.dataset.video === 'run' ? 'download' : 'run'));
+    panel.querySelector('.ih-close').addEventListener('click', () => {
+      panel.classList.add('ih-out');
+      setTimeout(() => panel.remove(), 150);
+      if (helpPanel === panel) helpPanel = null;
+    });
+
+    host.after(panel);
+    helpPanel = panel;
+    load('run');
+    panel.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
+  }
+
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest?.('[data-dl-main], .dl-item');
+    if (!link || !isWindowsInstaller(link.href)) return;
+    const root = link.closest('[data-dl-pick]');
+    if (root) showInstallHelp(root);
+  });
+
   const picks = [...document.querySelectorAll('[data-dl-pick]')].map(setupPick);
   function closeOtherMenus(except) {
     picks.forEach((p) => p.root !== except && p.isOpen() && p.close());
@@ -562,7 +656,7 @@
   document.addEventListener('click', (e) => { if (!nav.contains(e.target)) set(false); });
 })();
 
-// ---- beta sign-up, hosted by Nekko: she peeks over the card and reacts.
+// ---- beta sign-up, hosted by Nekko: he peeks over the card and reacts.
 //      idle: blinks now and then · watching: eyes follow the typing ·
 //      eager: happy eyes over the button · confused: a bad email ·
 //      celebrate: hop and sparkles once signed up ----
@@ -659,7 +753,7 @@
       website: form.elements.website?.value || '',
       // Product updates are their own unticked choice; the API records which policy text was agreed to.
       marketing: Boolean(form.elements.marketing?.checked),
-      policyVersion: '2026-11-08',
+      policyVersion: '2026-11-13',
     };
     button.disabled = true;
     let res;
@@ -1125,11 +1219,11 @@
 })();
 
 // ---- why Nekko: Nekko peeks over the pillar demos. One Nekko for the whole
-//      tour: her drawing is cloned from the beta card's peek so the two stay
-//      identical. She blinks now and then; when the active pillar changes she
+//      tour: his drawing is cloned from the beta card's peek so the two stay
+//      identical. He blinks now and then; when the active pillar changes he
 //      blinks once and glances toward the list (left, or down when the demo is
-//      stacked above it). Under reduced motion she stays still. Only her eyes
-//      change: the frame and the videos around her are never touched. ----
+//      stacked above it). Under reduced motion he stays still. Only his eyes
+//      change: the frame and the videos around him are never touched. ----
 (() => {
   const host = document.querySelector('[data-pillar-peek]');
   const art = document.querySelector('[data-beta] .nekko-peek-svg');

@@ -8,20 +8,23 @@ final class FakePhoneHTTP: PhoneHTTP, @unchecked Sendable {
     let lock = NSLock()
     var requests: [PhoneRequest] = []
     var answers: [(Int, [String])] = []
+    /// Headers for the answer at the same position in `answers`; none when missing.
+    var headers: [[String: String]] = []
+    private var served = 0
     /// Stream this line, then wait to be cancelled.
     var hang = false
 
-    func send(_ request: PhoneRequest) async throws -> (status: Int, body: Data) {
-        let (status, lines) = next(request)
-        return (status, Data(lines.joined(separator: "\n").utf8))
+    func send(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], body: Data) {
+        let (status, h, lines) = next(request)
+        return (status, h, Data(lines.joined(separator: "\n").utf8))
     }
 
-    func lines(_ request: PhoneRequest) async throws -> (status: Int, lines: AsyncThrowingStream<String, Error>) {
-        let (status, lines) = next(request)
+    func lines(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], lines: AsyncThrowingStream<String, Error>) {
+        let (status, h, lines) = next(request)
         let hang = self.hang
         let stream = AsyncThrowingStream<String, Error> { c in
             let t = Task {
-                for l in lines { c.yield(l) }
+                for l in lines { c.yield(l); c.yield("") }
                 if hang {
                     while !Task.isCancelled { try? await Task.sleep(nanoseconds: 5_000_000) }
                     c.finish(throwing: CancellationError())
@@ -31,13 +34,17 @@ final class FakePhoneHTTP: PhoneHTTP, @unchecked Sendable {
             }
             c.onTermination = { _ in t.cancel() }
         }
-        return (status, stream)
+        return (status, h, stream)
     }
 
-    private func next(_ r: PhoneRequest) -> (Int, [String]) {
+    private func next(_ r: PhoneRequest) -> (Int, [String: String], [String]) {
         lock.lock(); defer { lock.unlock() }
         requests.append(r)
-        return answers.isEmpty ? (500, []) : answers.removeFirst()
+        let h = served < headers.count ? headers[served] : [:]
+        served += 1
+        guard !answers.isEmpty else { return (500, h, []) }
+        let (status, lines) = answers.removeFirst()
+        return (status, h, lines)
     }
 }
 
@@ -71,10 +78,10 @@ final class PhoneChatsTests: XCTestCase {
         XCTAssertEqual(make().tone, .standard)
     }
 
-    func testToneUsesTheExistingProviderSystemFields() {
+    func testToneUsesTheExistingProviderSystemFields() throws {
         for tone in PhoneTone.allCases {
             let p = PhoneProvider(id: "openai", kind: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1")
-            let request = PhoneProviders.chatRequest(p, key: "test-key", model: "test-model", messages: [], system: tone.systemPrompt)
+            let request = try PhoneProviders.chatRequest(p, key: "test-key", model: "test-model", messages: [], system: tone.systemPrompt)
             XCTAssertEqual(request.body?["messages"]?.array?.first?.str("role"), "system")
             XCTAssertEqual(request.body?["messages"]?.array?.first?.str("content"), tone.systemPrompt)
         }
@@ -116,7 +123,7 @@ final class PhoneChatsTests: XCTestCase {
     }
 
     func testEveryDesktopCloudKindButTheComputerOnesIsOffered() async {
-        XCTAssertEqual(PhoneProviders.kinds.map(\.id), ["anthropic", "openai", "openrouter", "bedrock", "foundry", "vertex", "openai-compat"])
+        XCTAssertEqual(PhoneProviders.kinds.map(\.id), ["anthropic", "openai", "openrouter", "gemini", "ollama-cloud", "bedrock", "foundry", "vertex", "openai-compat"])
         XCTAssertTrue(PhoneProviders.kind("bedrock")!.catalog.allSatisfy { $0.id.hasPrefix("anthropic.") })
         XCTAssertFalse(PhoneProviders.kind("anthropic")!.listsModels == false)
     }
@@ -127,7 +134,7 @@ final class PhoneChatsTests: XCTestCase {
         let msgs = [PhoneMessage(id: "1", role: .user, text: "Hi", at: 1), PhoneMessage(id: "2", role: .assistant, text: "", at: 2, error: "x"),
                     PhoneMessage(id: "3", role: .user, text: "Again", at: 3)]
         let claude = PhoneProvider(id: "c", kind: "anthropic", label: "C", baseUrl: "https://api.anthropic.com", workspaceId: "ws1")
-        let r = PhoneProviders.chatRequest(claude, key: "k", model: "claude-opus-5-5", messages: msgs)
+        let r = try PhoneProviders.chatRequest(claude, key: "k", model: "claude-opus-5-5", messages: msgs)
         XCTAssertEqual(r.url, "https://api.anthropic.com/v1/messages")
         XCTAssertEqual(r.headers["x-api-key"], "k")
         XCTAssertEqual(r.headers["anthropic-version"], "2023-06-01")
@@ -138,30 +145,30 @@ final class PhoneChatsTests: XCTestCase {
         XCTAssertNotNil(r.body?.str("system"))
 
         let bedrock = PhoneProvider(id: "b", kind: "bedrock", label: "B", baseUrl: "https://bedrock-mantle.eu-west-1.api.aws/anthropic")
-        XCTAssertEqual(PhoneProviders.chatRequest(bedrock, key: "k", model: "anthropic.claude-opus-5-5", messages: msgs).url,
+        XCTAssertEqual(try PhoneProviders.chatRequest(bedrock, key: "k", model: "anthropic.claude-opus-5-5", messages: msgs).url,
                        "https://bedrock-mantle.eu-west-1.api.aws/anthropic/v1/messages")
 
         let vertex = PhoneProvider(id: "v", kind: "vertex", label: "V", baseUrl: "https://aiplatform.googleapis.com/v1/projects/p/locations/global")
-        let rv = PhoneProviders.chatRequest(vertex, key: "tok", model: "claude-sonnet-5-5", messages: msgs)
+        let rv = try PhoneProviders.chatRequest(vertex, key: "tok", model: "claude-sonnet-5-5", messages: msgs)
         XCTAssertEqual(rv.url, "https://aiplatform.googleapis.com/v1/projects/p/locations/global/publishers/anthropic/models/claude-sonnet-5-5:streamRawPredict")
         XCTAssertEqual(rv.headers["Authorization"], "Bearer tok")
         XCTAssertNil(rv.headers["x-api-key"])
         XCTAssertNil(rv.body?["model"])
         XCTAssertEqual(rv.body?.str("anthropic_version"), "vertex-2023-10-16")
-        XCTAssertNil(PhoneProviders.modelsRequest(vertex, key: "tok"), "Vertex has no models list: the catalog stands")
+        XCTAssertNil(try PhoneProviders.modelsRequest(vertex, key: "tok"), "Vertex has no models list: the catalog stands")
     }
 
-    func testOpenAiKindsSendChatCompletions() async {
+    func testOpenAiKindsSendChatCompletions() async throws {
         let msgs = [PhoneMessage(id: "1", role: .user, text: "Hi", at: 1)]
         let router = PhoneProvider(id: "o", kind: "openrouter", label: "O", baseUrl: "https://openrouter.ai/api/v1")
-        let r = PhoneProviders.chatRequest(router, key: "k", model: "openai/gpt-5", messages: msgs)
+        let r = try PhoneProviders.chatRequest(router, key: "k", model: "openai/gpt-5", messages: msgs)
         XCTAssertEqual(r.url, "https://openrouter.ai/api/v1/chat/completions")
         XCTAssertEqual(r.headers["Authorization"], "Bearer k")
         XCTAssertEqual(r.headers["X-Title"], "Nekko Agent")
         XCTAssertEqual(r.body?["messages"]?.array?.map { $0.str("role") ?? "" }, ["system", "user"])
         let open = PhoneProvider(id: "x", kind: "openai-compat", label: "X", baseUrl: "https://x.example/v1")
-        XCTAssertNil(PhoneProviders.chatRequest(open, key: nil, model: "m", messages: msgs).headers["Authorization"], "no key, no header")
-        XCTAssertEqual(PhoneProviders.modelsRequest(open, key: nil)?.url, "https://x.example/v1/models")
+        XCTAssertNil(try PhoneProviders.chatRequest(open, key: nil, model: "m", messages: msgs).headers["Authorization"], "no key, no header")
+        XCTAssertEqual(try PhoneProviders.modelsRequest(open, key: nil)?.url, "https://x.example/v1/models")
     }
 
     func testReadsBothStreams() async {
@@ -170,7 +177,7 @@ final class PhoneChatsTests: XCTestCase {
         XCTAssertEqual(p.read(#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hel"}}"#), [.text("Hel")])
         XCTAssertEqual(p.read(#"data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hm"}}"#), [])
         XCTAssertEqual(p.read(#"data: {"type":"message_stop"}"#), [.done])
-        XCTAssertEqual(p.read(#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#), [.failed("Overloaded")])
+        XCTAssertEqual(p.read(#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#), [.failed("The provider stopped with an error. Test the provider and retry.")])
         XCTAssertEqual(p.read(#"data: {"choices":[{"index":0,"delta":{"content":"lo"}}]}"#), [.text("lo")])
         XCTAssertEqual(p.read(#"data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#), [])
         XCTAssertEqual(p.read("data: [DONE]"), [.done])
@@ -179,12 +186,12 @@ final class PhoneChatsTests: XCTestCase {
 
     func testModelsListsAndFailures() async {
         let anth = Data(#"{"data":[{"id":"claude-opus-5-5","display_name":"Claude Opus 5.5"}]}"#.utf8)
-        XCTAssertEqual(PhoneProviders.models(from: anth, kind: "anthropic"), [PhoneModel(id: "claude-opus-5-5", name: "Claude Opus 5.5")])
+        XCTAssertEqual(PhoneProviders.models(from: anth, kind: "anthropic"), [PhoneModel(id: "claude-opus-5-5", name: "Claude Opus 5.5", acceptsImages: true)])
         let openai = Data(#"{"data":[{"id":"text-embedding-3-large"},{"id":"gpt-5"},{"id":"whisper-1"},{"id":"gpt-5-mini"}]}"#.utf8)
         XCTAssertEqual(PhoneProviders.models(from: openai, kind: "openai").map(\.id), ["gpt-5-mini", "gpt-5"])
         let failed = PhoneProviders.failure(status: 401, body: Data(#"{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#.utf8))
         XCTAssertTrue(failed.contains("401"))
-        XCTAssertTrue(failed.contains("invalid x-api-key"))
+        XCTAssertFalse(failed.contains("invalid x-api-key"))
     }
 
     // MARK: Chats
@@ -220,7 +227,7 @@ final class PhoneChatsTests: XCTestCase {
         http.answers = [(401, [#"{"error":{"message":"Incorrect API key provided"}}"#])]
         let id = s.create(providerId: "openai", modelId: "gpt-5", first: "Hi")
         await s.settled(id)
-        XCTAssertTrue(s.chat(id)?.messages.last?.error?.contains("Incorrect API key") == true)
+        XCTAssertTrue(s.chat(id)?.messages.last?.error?.contains("401") == true)
         http.answers = [(200, [#"data: {"choices":[{"delta":{"content":"Hey"}}]}"#, "data: [DONE]"])]
         s.retry(id)
         await s.settled(id)

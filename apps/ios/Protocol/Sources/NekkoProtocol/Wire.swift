@@ -411,6 +411,9 @@ public struct Session: Equatable, Sendable {
     /// MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in
     /// this chat (decision 0054): the egress gate stops asking for them.
     public var allowedMcpTools: [String] = []
+    /// Recipients this chat has written to through an MCP tool (decision 0063):
+    /// writing to one of them again does not ask for its recipient.
+    public var knownRecipients: [String] = []
 
     /// A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts).
     public static func inSubagent(_ text: String) -> String { "Do this in a subagent, then report back:\n\n\(text)" }
@@ -444,7 +447,8 @@ public struct Session: Equatable, Sendable {
             runOptions: RunOption.values(of: v),
             parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), imageParams: ImageChatParams.from(v["imageParams"]), executionMode: v.str("executionMode"),
             disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [],
-            allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [])
+            allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [],
+            knownRecipients: v["knownRecipients"]?.array?.compactMap(\.string) ?? [])
     }
 }
 
@@ -512,6 +516,16 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public static func visible(_ list: JSONValue?) -> [SessionSummary] {
         (list?.array ?? []).compactMap(from).filter(\.isVisible).sorted { $0.updatedAt > $1.updatedAt }
     }
+
+    /// The sub-agents each chat spawned and has not completed, oldest first: the
+    /// rows under a chat in the list, as the desktop sidebar's `childrenOf`.
+    public static func subagents(_ list: JSONValue?) -> [String: [SessionSummary]] {
+        var byParent: [String: [SessionSummary]] = [:]
+        for s in (list?.array ?? []).compactMap(from) where !s.archived {
+            if let parent = s.parentSessionId { byParent[parent, default: []].append(s) }
+        }
+        return byParent.mapValues { kids in kids.sorted { ($0.createdAt ?? $0.updatedAt) < ($1.createdAt ?? $1.updatedAt) } }
+    }
 }
 
 /// One group of the chat list as the desktop's agent sidebar draws it:
@@ -578,17 +592,65 @@ public struct ComputerUse: Equatable, Sendable {
     }
 }
 
+/// Which Claude login a Claude subscription provider (`claude-code`) is signed in as
+/// (`ProviderAccount` in packages/shared/src/models.ts, #2488). One email can hold a
+/// personal plan (Pro, Max) and an organization seat (Team, Enterprise); each is its own provider.
+public struct ProviderAccount: Equatable, Sendable {
+    public enum Scope: String, Sendable {
+        /// The person's own plan; its name is always "Personal".
+        case personal
+        /// A Team or Enterprise seat; its name is the organization's.
+        case organization
+    }
+
+    public var signedIn: Bool
+    /// Missing for an API-key login or a signed-out one.
+    public var email: String?
+    public var scope: Scope?
+    /// "Personal", or the organization's name.
+    public var name: String?
+    /// `pro`, `max`, `team`, `enterprise`, or whatever a newer Claude Code prints; may be missing.
+    public var plan: String?
+
+    public init(signedIn: Bool, email: String? = nil, scope: Scope? = nil, name: String? = nil, plan: String? = nil) {
+        self.signedIn = signedIn
+        self.email = email
+        self.scope = scope
+        self.name = name
+        self.plan = plan
+    }
+
+    /// nil when the computer sent none (not read yet, an older build, or not a Claude subscription).
+    public static func from(_ v: JSONValue?) -> ProviderAccount? {
+        guard let v, v.object != nil else { return nil }
+        let blank = { (s: String?) in s.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } }
+        return ProviderAccount(signedIn: v.flag("signedIn"), email: blank(v.str("email")),
+                               scope: v.str("scope").flatMap(Scope.init(rawValue:)), name: blank(v.str("name")), plan: blank(v.str("plan")))
+    }
+}
+
 /// A provider as the phone keeps it: never the API key, base URL or token reference.
 public struct PublicProvider: Equatable, Sendable, Identifiable {
     public let id: String
     public let kind: String
     public let label: String
     public let enabled: Bool
+    /// Which Claude login it is, for a Claude subscription provider; nil otherwise.
+    public let account: ProviderAccount?
+
+    public init(id: String, kind: String, label: String, enabled: Bool, account: ProviderAccount? = nil) {
+        self.id = id
+        self.kind = kind
+        self.label = label
+        self.enabled = enabled
+        self.account = account
+    }
 
     public static func list(_ v: JSONValue?) -> [PublicProvider] {
         (v?.array ?? []).compactMap { p in
             guard let id = p.str("id") else { return nil }
-            return PublicProvider(id: id, kind: p.str("kind") ?? "", label: p.str("label") ?? id, enabled: p.flag("enabled"))
+            return PublicProvider(id: id, kind: p.str("kind") ?? "", label: p.str("label") ?? id, enabled: p.flag("enabled"),
+                                  account: ProviderAccount.from(p["account"]))
         }
     }
 
@@ -803,12 +865,24 @@ public struct ModelInfo: Equatable, Sendable, Identifiable {
     public let providerId: String
     public let name: String
     public let loaded: Bool
+    /// Size on disk, when the provider says (local model servers).
+    public var sizeBytes: Int64? = nil
+    /// The context window in tokens, when the provider says.
+    public var contextLength: Int64? = nil
+    /// Family, quantization and the like, as text (`details` on the wire).
+    public var details: [String: String] = [:]
+
+    /// "8B", from the details a model server or the Nekko engine gives.
+    public var parameters: String? { details["parameterSize"] ?? details["params"] }
 
     public static func list(_ v: JSONValue?) -> [ModelInfo] {
         (v?.array ?? []).compactMap { m in
             guard let id = m.str("id") else { return nil }
             let name = m.str("name").flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } ?? id
-            return ModelInfo(id: id, providerId: m.str("providerId") ?? "", name: name, loaded: m.flag("loaded"))
+            let details = (m["details"]?.object ?? [:]).compactMapValues { $0.string }
+            return ModelInfo(id: id, providerId: m.str("providerId") ?? "", name: name, loaded: m.flag("loaded"),
+                             sizeBytes: m.long("sizeBytes").flatMap { $0 > 0 ? $0 : nil },
+                             contextLength: m.long("contextLength").flatMap { $0 > 0 ? $0 : nil }, details: details)
         }
     }
 }

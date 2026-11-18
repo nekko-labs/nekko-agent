@@ -8,6 +8,11 @@
 //! themselves and generated enough tokens to say something count. A file's
 //! samples belong to the machine they were taken on (GPU and engine backend):
 //! a new card or a CPU build starts the file's record over.
+//!
+//! Pictures and clips are kept beside them, in seconds each: a sample is one
+//! picture (or clip) the daemon asked a picture model for, timed from the
+//! request to the result with the model already loaded, at whatever size and
+//! steps it was asked at.
 
 use crate::profile::HardwareProfile;
 use serde::{Deserialize, Serialize};
@@ -29,7 +34,7 @@ pub const MIN_TOKENS: f64 = 32.0;
 pub struct Record {
     /// Which machine the samples are from ([`machine_key`]).
     pub machine: String,
-    /// Tokens per second, oldest first.
+    /// Tokens per second (seconds each, for a picture file), oldest first.
     pub samples: Vec<f64>,
     pub updated_at: u64,
 }
@@ -40,6 +45,16 @@ pub struct LocalSpeeds {
     pub format: u32,
     /// By weights file name (the first shard of a split model), lower-cased.
     pub files: BTreeMap<String, Record>,
+    /// Seconds a picture or clip, by the picture model's weights file name.
+    #[serde(default)]
+    pub pictures: BTreeMap<String, Record>,
+}
+
+/// A local figure for one picture file: the median seconds and how many pictures it is from.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalSeconds {
+    pub seconds: f64,
+    pub samples: usize,
 }
 
 /// A local figure for one file: the median and how many replies it is from.
@@ -78,13 +93,28 @@ impl LocalSpeeds {
         })
     }
 
+    /// The median seconds a picture for `file` on `machine`, once there are enough of them.
+    pub fn picture_seconds(&self, file: &str, machine: &str) -> Option<LocalSeconds> {
+        let r = self.pictures.get(&file_key(file)).filter(|r| r.machine == machine)?;
+        (r.samples.len() >= MIN_SAMPLES)
+            .then(|| LocalSeconds { seconds: (median(&r.samples) * 10.0).round() / 10.0, samples: r.samples.len() })
+    }
+
     /// Add one reply's speed; a record from another machine starts over.
     pub fn add(&mut self, file: &str, machine: &str, tokens_per_second: f64, now: u64) {
-        let r = self.files.entry(file_key(file)).or_default();
+        Self::push(self.files.entry(file_key(file)).or_default(), machine, tokens_per_second, now);
+    }
+
+    /// Add one picture's seconds; a record from another machine starts over.
+    pub fn add_picture(&mut self, file: &str, machine: &str, seconds: f64, now: u64) {
+        Self::push(self.pictures.entry(file_key(file)).or_default(), machine, seconds, now);
+    }
+
+    fn push(r: &mut Record, machine: &str, sample: f64, now: u64) {
         if r.machine != machine {
             *r = Record { machine: machine.to_string(), ..Record::default() };
         }
-        r.samples.push(tokens_per_second);
+        r.samples.push(sample);
         if r.samples.len() > KEEP {
             r.samples.remove(0);
         }
@@ -111,7 +141,7 @@ impl MeasuredSpeeds {
                 .and_then(|p| std::fs::read(p).ok())
                 .and_then(|b| serde_json::from_slice::<LocalSpeeds>(&b).ok())
                 .filter(|s| s.format == FORMAT)
-                .unwrap_or(LocalSpeeds { format: FORMAT, files: BTreeMap::new() })
+                .unwrap_or(LocalSpeeds { format: FORMAT, ..LocalSpeeds::default() })
         });
         f(speeds)
     }
@@ -135,15 +165,28 @@ impl MeasuredSpeeds {
             return false;
         }
         let tps = predicted_n / predicted_ms * 1000.0;
+        self.save(|s| s.add(file, machine, tps, now));
+        true
+    }
+
+    /// Record one picture or clip that took `ms`. `false` when it does not count.
+    pub fn record_picture(&self, file: &str, machine: &str, ms: f64, now: u64) -> bool {
+        if !ms.is_finite() || ms <= 0.0 {
+            return false;
+        }
+        self.save(|s| s.add_picture(file, machine, ms / 1000.0, now));
+        true
+    }
+
+    fn save(&self, change: impl FnOnce(&mut LocalSpeeds)) {
         let text = self.with(|s| {
-            s.add(file, machine, tps, now);
+            change(s);
             serde_json::to_string(s).ok()
         });
         if let (Some(p), Some(text)) = (&self.path, text) {
             // Best-effort: a sample that cannot be saved still counts until restart.
             let _ = nekko_js::fs::atomic_write(p, text.as_bytes(), Default::default());
         }
-        true
     }
 }
 
@@ -189,5 +232,29 @@ mod tests {
         let again = MeasuredSpeeds::new(Some(&dir));
         assert_eq!(again.snapshot().files["a.gguf"].samples, vec![128.0]);
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn pictures_keep_their_own_median_in_seconds_and_old_files_still_load() {
+        let dir = std::env::temp_dir().join(format!("nekko-measured-pictures-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // A file written before pictures were timed has no `pictures`.
+        std::fs::write(dir.join(FILE), r#"{"format":1,"files":{}}"#).unwrap();
+        let m = MeasuredSpeeds::new(Some(&dir));
+        assert!(!m.record_picture("/m/z_image_turbo-Q4_K.gguf", "RTX 4060|vulkan", 0.0, 1));
+        for ms in [31_000.0, 24_000.0] {
+            assert!(m.record_picture("/m/z_image_turbo-Q4_K.gguf", "RTX 4060|vulkan", ms, 1));
+        }
+        assert_eq!(m.snapshot().picture_seconds("z_image_turbo-Q4_K.gguf", "RTX 4060|vulkan"), None);
+        m.record_picture("/m/z_image_turbo-Q4_K.gguf", "RTX 4060|vulkan", 25_500.0, 2);
+        let again = MeasuredSpeeds::new(Some(&dir)).snapshot();
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(
+            again.picture_seconds("Z_Image_Turbo-Q4_K.gguf", "RTX 4060|vulkan"),
+            Some(LocalSeconds { seconds: 25.5, samples: 3 })
+        );
+        // Another card's pictures say nothing about this one, and a picture is not a reply.
+        assert_eq!(again.picture_seconds("z_image_turbo-Q4_K.gguf", "RTX 5090|cuda"), None);
+        assert_eq!(again.speed("z_image_turbo-Q4_K.gguf", "RTX 4060|vulkan"), None);
     }
 }

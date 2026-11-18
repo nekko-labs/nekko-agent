@@ -12,6 +12,7 @@
 //! and the highest severity among the matches.
 
 use crate::allowlist::{self, Dialect};
+use crate::delete_guard::{self, DeleteScope};
 use crate::jsre::JsRegex;
 use serde::{Deserialize, Serialize};
 
@@ -162,6 +163,8 @@ pub fn default_guardrails() -> Vec<GuardrailRule> {
     ]
 }
 
+/// The `ruleId` of the shipped recursive-delete rule.
+const RM_RF: &str = "rm-rf";
 /// The `ruleId` of the match added when a command is not on the read-only list.
 pub const NOT_READ_ONLY: &str = "not-read-only";
 /// The `ruleId` of the match added when a command's shell syntax cannot be checked.
@@ -196,11 +199,25 @@ pub fn classify_command(command: &str, rules: &[GuardrailRule]) -> GuardrailDeci
     classify_command_in(command, rules, Dialect::host())
 }
 
-/// Classify a command written for `dialect`'s shell.
+/// Classify a command written for `dialect`'s shell, with no folder a delete
+/// may run in without asking (deletes that could wipe a drive or a home
+/// folder are still refused).
 ///
 /// Rules are compiled on every call; a ruleset is a handful of short
 /// patterns and a command is classified once per call.
 pub fn classify_command_in(command: &str, rules: &[GuardrailRule], dialect: Dialect) -> GuardrailDecision {
+    classify_command_scoped(command, rules, dialect, &DeleteScope::default())
+}
+
+/// Classify a command run from `scope.cwd`: a delete whose every path stays
+/// inside `scope.roots` runs without asking, and the built-in `rm-rf` ask
+/// does not apply to it (#2780).
+pub fn classify_command_scoped(
+    command: &str,
+    rules: &[GuardrailRule],
+    dialect: Dialect,
+    scope: &DeleteScope,
+) -> GuardrailDecision {
     let compiled = compile(rules);
     let mut matches = Vec::new();
     match_rules(command, &compiled, &mut matches);
@@ -211,6 +228,29 @@ pub fn classify_command_in(command: &str, rules: &[GuardrailRule], dialect: Dial
         if plain != command {
             match_rules(&plain, &compiled, &mut matches);
         }
+    }
+    // A delete that could wipe a drive or a home folder: refused in every mode.
+    if let Some(m) = delete_guard::unsafe_delete(command, parsed.as_deref().ok(), dialect, scope) {
+        matches.push(m);
+    }
+    let user_allows = |text: &str| {
+        let text: Vec<u16> = text.encode_utf16().collect();
+        compiled.iter().any(|(r, re)| r.action == Action::Allow && re.find(&text).is_some())
+    };
+    let scoped = match &parsed {
+        Ok(segments) => delete_guard::scoped_deletes(segments, dialect, scope),
+        Err(_) => Vec::new(),
+    };
+    let covered = |i: usize, s: &allowlist::Segment| {
+        allowlist::read_only(&s.words, dialect) || user_allows(&s.text()) || scoped.get(i).copied().unwrap_or(false)
+    };
+    if let Ok(segments) = &parsed
+        && scoped.contains(&true)
+        && segments.iter().enumerate().all(|(i, s)| covered(i, s))
+    {
+        // Every delete in it stays in a delete root: the shipped rm -rf ask has
+        // nothing to protect. A user who made that rule a deny keeps the deny.
+        matches.retain(|m| !(m.rule_id == RM_RF && m.action == Action::Ask));
     }
     // The allowlist's own match explains an `ask` no rule explains; next to a
     // rule's ask or deny it adds nothing.
@@ -225,13 +265,7 @@ pub fn classify_command_in(command: &str, rules: &[GuardrailRule], dialect: Dial
             evidence: why.evidence,
         }),
         Ok(segments) => {
-            let user_allows = |text: &str| {
-                let text: Vec<u16> = text.encode_utf16().collect();
-                compiled.iter().any(|(r, re)| r.action == Action::Allow && re.find(&text).is_some())
-            };
-            if let Some(s) =
-                segments.iter().find(|s| !allowlist::read_only(&s.words, dialect) && !user_allows(&s.text()))
-            {
+            if let Some((_, s)) = segments.iter().enumerate().find(|(i, s)| !covered(*i, s)) {
                 matches.push(GuardrailMatch {
                     rule_id: NOT_READ_ONLY.into(),
                     label: "Not a read-only command".into(),

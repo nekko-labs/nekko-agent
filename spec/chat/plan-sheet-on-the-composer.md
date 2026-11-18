@@ -104,13 +104,13 @@ Issue: [#1671](https://github.com/nekko-labs/nekko-agent/issues/1671).
 - `[updated 2026-11-06]` Verification chips are gone from the sheet entirely: each sub-bullet's own mark shows its check. See [Sub-agents as a tree and plan checks on their bullets](../agents/subagent-tree-and-plan-check-marks.md).
 - **No verification chips elsewhere.** A step that is not a check no longer shows a verification chip or the report's detail; its report is a sub-bullet of the Verify step.
 - **Unchanged.** A plan with at most one Verify step and no reports on other steps draws as before. Loop kinds, passes, the folded line, step disclosure and chip placement are as described above.
-- **Not yet on the iPhone.** The phone still shows the activity plan and per-step verification chips ([#1672](https://github.com/nekko-labs/nekko-agent/issues/1672)).
+- `[updated 2026-11-15]` **The iPhone matches today's desktop** ([#1672](https://github.com/nekko-labs/nekko-agent/issues/1672)): no activity plan (a Claude Agent chat without Claude Code's own plan shows no sheet, as `sheetPlan`) and no verification chips (the check is a mark on the step's bullet). It does not draw a "Check the work" group: #2007 made the list flat again. The phone's `AgentPlan.activityPlan` is deleted.
 
 Verification: `planVerifyGroup.test.ts` (one Verify step left alone, several folded where the last was, reports moved off their steps, a Verify step made for reports before Ship, chips merged), `PlanSheet.test.tsx` (one Verify kind word, three sub-bullets, no chip on the Build row, CI under the Verify step), `claudeAgentPlan.test.ts` (no plan without plan calls). Hidden, off-screen Electron captures: `plan-sheet-sandbox.cjs` (both reports as sub-bullets of the one Verify step, CI under it) and `claude-agent-plan-sandbox.cjs` (no sheet before Claude Code plans and the PR card still shows; after a `TodoWrite`, its three steps with the PR on the step in progress). Not checked in a packaged build.
 
 ## On the iPhone (implemented 2026-11-01)
 
-Issue: [#1474](https://github.com/nekko-labs/nekko-agent/issues/1474). The native iPhone app draws the same sheet behind its message box: the shape, folded line, open plan, loop kinds, passes, sub-agent, verification, PR and task-link chips, and the Claude Agent plans above. See [native iOS app](../phone/native-ios-app.md) for what differs on the phone (squeezed steps open on tap, PR chips show the CI rollup only, no file chips). Unit-tested on Linux (`PlanTests`); not yet run on a simulator or device.
+Issue: [#1474](https://github.com/nekko-labs/nekko-agent/issues/1474). The native iPhone app draws the same sheet behind its message box: the shape, folded line, open plan, loop kinds, passes, sub-agent, PR and task-link chips, a reported check as a mark on the step's bullet, and Claude Code's own plan on Claude Agent chats (no plan, no sheet). See [native iOS app](../phone/native-ios-app.md) for what differs on the phone (squeezed steps open on tap, PR chips show the CI rollup only, no file chips). Unit-tested on Linux (`PlanTests`); not yet run on a simulator or device.
 
 ## Exploring folds into Building (2026-11-04)
 

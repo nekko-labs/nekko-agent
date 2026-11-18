@@ -101,6 +101,10 @@ final class Dictation {
     }
     /// Phone-only chats must never send audio to a paired computer.
     var allowComputer = true
+    /// CarPlay: the phone's on-device recognizer goes first (no relay round trip, works
+    /// in a tunnel); the computer's Whisper only when the phone can't recognize the
+    /// language on the device. Listening pauses the car's other audio instead of mixing.
+    var carMode = false
     var available: Bool { AVAudioApplication.shared.recordPermission != .denied }
     /// False for the Live Activity's mic while the app is off screen: a permission prompt
     /// can't show there (iOS holds it until the app opens), so `start` refuses instead.
@@ -271,7 +275,8 @@ final class Dictation {
         do {
             // Listening for minutes must not hush other audio; a short hold may.
             // `.allowBluetooth` (HFP) is what lets AirPods' microphone work, at call quality while listening.
-            let options: AVAudioSession.CategoryOptions = holding ? [.duckOthers, .defaultToSpeaker, .allowBluetooth] : [.mixWithOthers, .defaultToSpeaker, .allowBluetooth]
+            // In the car the radio is ducked while the car's microphone listens (CarPlay Developer Guide, Audio handling).
+            let options: AVAudioSession.CategoryOptions = holding || carMode ? [.duckOthers, .defaultToSpeaker, .allowBluetooth] : [.mixWithOthers, .defaultToSpeaker, .allowBluetooth]
             try session.setCategory(.playAndRecord, mode: .measurement, options: options)
             // Command haptics, which iOS mutes while recording by default.
             try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
@@ -590,7 +595,9 @@ final class Dictation {
         let wav = Self.wav(samples)
         do {
             let text: String?
-            if let transcribe { text = try await transcribe(wav) } else { text = try await onEngines(wav) }
+            if let transcribe { text = try await transcribe(wav) }
+            else if carMode, Self.phoneReady { text = try await onPhone(wav) }
+            else { text = try await onEngines(wav) }
             guard generation == captureGeneration else { return }
             failing = false
             let words = spellNekko((text ?? "").trimmingCharacters(in: .whitespacesAndNewlines))

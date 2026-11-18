@@ -1,5 +1,5 @@
 // Renderer-only fixture: no host, daemon, GitHub or real VM operations.
-import '../src/renderer/../../scripts/wall-polish-chrome';
+import './wall-polish-chrome';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { DEFAULT_RUNNER_SETTINGS, type RunnerView } from '@nekko-agent/shared';
@@ -7,6 +7,7 @@ import { AutomationsPane } from '../src/renderer/components/AutomationsPane';
 import { WorkflowsView } from '../src/renderer/views/WorkflowsView';
 import { useStore } from '../src/renderer/store';
 import '../src/renderer/styles.css';
+import '../src/renderer/components/monitorsDock.css';
 
 const now = Math.floor(Date.now() / 1000);
 const job = { repo: 'example/app', runId: 41, jobId: 42, workflow: 'Native iOS', job: 'Build and test', url: 'https://github.com/example/app/actions/runs/41/job/42', steps: { done: 3, total: 8, current: 'Build iOS' } };
@@ -22,7 +23,11 @@ const initial: RunnerView = {
   today: { jobs: 4, seconds: 900 }, repos: [], forkApprovalOpen: false, suggestedSize: null,
   host: { ramMb: 32768, cores: 10, recommendedMemoryMb: 16384, runnerMemoryMb: 16384, cpusPerVm: 4, onBattery: false, batteryPct: 100, networkId: 'trusted', networkTrusted: true },
 };
+// Waiting with nothing running or queued: the card names its last job (its action and PR).
+const idle: RunnerView = { ...initial, state: 'waiting', reasons: ['userActive'], slots: [], queue: [],
+  recent: [{ ...initial.recent[0], pr: { number: 2823, url: 'https://github.com/example/app/pull/2823' } }] };
 let views = [initial];
+let docked = false;
 let fail = '';
 const listeners = new Set<(v: RunnerView[]) => void>();
 const calls: unknown[] = [];
@@ -46,11 +51,15 @@ let epoch = 0;
 const root = createRoot(document.getElementById('root')!);
 function Surface() {
   const view = useStore(s => s.view);
-  return <main className="h-full overflow-hidden bg-paper text-ink"><header className="border-b border-line p-3 text-sm font-semibold">Automations</header><div style={{ height: 'calc(100% - 45px)' }}>{view === 'workflows' ? <WorkflowsView /> : <AutomationsPane tasks={[]} running={new Set()} now={now * 1000} onOpen={() => {}} />}</div></main>;
+  return <main className="h-full overflow-hidden bg-paper text-ink"><header className="border-b border-line p-3 text-sm font-semibold">Automations</header><div style={{ height: 'calc(100% - 45px)' }}>{view === 'workflows' ? <WorkflowsView /> : docked
+    // The Monitors dock, where the panel lives in the app: its button styles must leave the switch alone.
+    ? <aside className="monitors-dock" style={{ height: '100%' }}><AutomationsPane tasks={[]} running={new Set()} now={now * 1000} onOpen={() => {}} /></aside>
+    : <AutomationsPane tasks={[]} running={new Set()} now={now * 1000} onOpen={() => {}} />}</div></main>;
 }
 const show = (scene = 'active') => {
   fail = scene === 'error' ? 'Service disconnected' : scene === 'unsupported' ? 'unknown channel runner:list' : '';
-  views = scene === 'empty' ? [] : [structuredClone(initial)];
+  views = scene === 'empty' ? [] : [structuredClone(scene === 'idle' ? idle : initial)];
+  docked = scene === 'idle';
   useStore.setState({ view: 'command' });
   root.render(<Surface key={++epoch} />);
 };

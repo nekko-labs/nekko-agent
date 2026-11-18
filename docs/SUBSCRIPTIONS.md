@@ -76,7 +76,7 @@ If port 1455 is busy, the ChatGPT sign-in switches to manual mode: after you aut
 
 You can also import a sign-in you already did with the Codex CLI: `codex login` writes `~/.codex/auth.json`, and the app can read it and import the same token shape.
 
-If a subscription session expires, the provider card shows the expiry and a "Re-authenticate" button to sign in again.
+If a subscription session expires, the provider card shows the expiry and a **Sign in again** button. A reply that fails because the sign-in expired says **Sign-in expired** and has **Sign in again** right in the notice, so you can sign in without leaving the chat and then press **Retry**. A refused API key gets **Fix in Models** there instead.
 
 ## Security
 

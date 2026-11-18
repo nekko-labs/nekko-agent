@@ -19,7 +19,8 @@ final class SigningConnection: FakeConnection, ProofCaller, @unchecked Sendable 
     }
 
     private func answer(_ channel: String, _ args: [JSONValue], signed: Bool, timeout: TimeInterval?) async throws -> JSONValue {
-        if channel == Channels.sessionSetOptions, args.dropFirst().first?["allowedMcpTools"] != nil, !signed {
+        if channel == Channels.sessionSetOptions, !signed,
+           args.dropFirst().first?["allowedMcpTools"] != nil || args.dropFirst().first?["knownRecipients"] != nil {
             lock.withLock { calls.append((channel, args)) }
             throw RelayError("Not allowed from a paired phone (proof-required): \(channel)", fromComputer: true)
         }
@@ -34,10 +35,11 @@ final class SigningConnection: FakeConnection, ProofCaller, @unchecked Sendable 
 /// "Always allow this tool" on the phone (decision 0054): save, signed, then approve.
 @MainActor
 final class AlwaysAllowToolTests: XCTestCase {
-    func makeOnline(allowed: [String] = []) async throws -> (ComputersStore, SigningConnection) {
+    func makeOnline(allowed: [String] = [], known: [String] = []) async throws -> (ComputersStore, SigningConnection) {
         var conns: [SigningConnection] = []
         let session: JSONValue = ["id": "s", "title": "T", "messages": [], "queue": [],
-                                  "allowedMcpTools": .array(allowed.map(JSONValue.string))]
+                                  "allowedMcpTools": .array(allowed.map(JSONValue.string)),
+                                  "knownRecipients": .array(known.map(JSONValue.string))]
         let s = ComputersStore(store: MemoryStore(), makeConnection: { cfg in
             let c = SigningConnection(config: cfg)
             c.replies = [
@@ -166,5 +168,40 @@ final class AlwaysAllowToolTests: XCTestCase {
         XCTAssertFalse(YoloWarning.needed(from: .ask, to: .guardrails, skipped: false))
         XCTAssertFalse(YoloWarning.needed(from: .guardrails, to: .yolo, skipped: true), "Don't warn me again")
         XCTAssertEqual(YoloWarning.skipKey, "skipYoloWarning")
+    }
+
+    // MARK: Taking one back
+
+    func testNamesAnMcpToolAsTheDesktopDoes() {
+        XCTAssertEqual(ChatModel.mcpToolLabel("mcp__slack__post_message"), "Post message (Slack)")
+        XCTAssertEqual(ChatModel.mcpToolLabel("mcp__github__createIssue"), "Create Issue (Github)")
+    }
+
+    func testReadsTheChatsGrants() async throws {
+        let (s, _) = try await makeOnline(allowed: ["mcp__slack__post_message"], known: ["general"])
+        let chat = ChatModel(sessionId: "s", store: s)
+        await chat.reload()
+        XCTAssertEqual(chat.allowedMcpTools, ["mcp__slack__post_message"])
+        XCTAssertEqual(chat.knownRecipients, ["general"])
+        XCTAssertTrue(chat.hasGrants)
+    }
+
+    func testRevokingAToolSavesTheRestSigned() async throws {
+        let (s, c) = try await makeOnline(allowed: ["mcp__slack__post_message", "mcp__github__create_issue"])
+        let chat = ChatModel(sessionId: "s", store: s)
+        await chat.reload()
+        try await chat.revokeAlwaysAllowed("mcp__slack__post_message")
+        let saved = c.signedTo(Channels.sessionSetOptions)
+        XCTAssertEqual(saved.count, 1)
+        XCTAssertEqual(saved.first?.dropFirst().first?["allowedMcpTools"], ["mcp__github__create_issue"])
+        XCTAssertTrue(c.callsTo(Channels.toolApprove).isEmpty, "taking one back approves nothing")
+    }
+
+    func testForgettingARecipientSavesTheRestSigned() async throws {
+        let (s, c) = try await makeOnline(known: ["general", "ann@example.com"])
+        let chat = ChatModel(sessionId: "s", store: s)
+        await chat.reload()
+        try await chat.forgetRecipient("general")
+        XCTAssertEqual(c.signedTo(Channels.sessionSetOptions).first?.dropFirst().first?["knownRecipients"], ["ann@example.com"])
     }
 }

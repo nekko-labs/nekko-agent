@@ -23,7 +23,6 @@ import {
   DEFAULT_ASPECT,
   NARROW_ROW_H,
   NARROW_WIDTH,
-  WALL_KINDS,
   addPane,
   addZone,
   clearZone,
@@ -70,6 +69,16 @@ export function workspaceCompanions(workspaces: Workspace[], sessionId: string):
     });
   return allPanes(workspace?.root ?? null).filter((p) =>
     p.kind === 'file' || p.kind === 'files' || p.kind === 'browser' || (p.kind === 'diff' && p.refId === sessionId));
+}
+
+/** A Files window's title: the folder's own name. */
+export function folderLabel(path: string): string {
+  return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path || 'Files';
+}
+
+/** A Browser window's title: the page's host and port, or Browser before it has one. */
+export function browserLabel(url: string): string {
+  try { const u = new URL(url); return u.host || 'Browser'; } catch { return 'Browser'; }
 }
 
 export function TerminalExcerpt({ terminalId }: { terminalId: string }) {
@@ -125,10 +134,10 @@ function CompanionResizer({ sessionId }: { sessionId: string }) {
       tabIndex={0}
       title="Drag to resize · double-click to reset"
       onPointerDown={onPointerDown}
-      onDoubleClick={() => commit(0.38)}
+      onDoubleClick={() => commit(COMPANION_DEFAULT)}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft') { e.preventDefault(); commit(Math.min(0.75, share + 0.04)); }
-        if (e.key === 'ArrowRight') { e.preventDefault(); commit(Math.max(0.2, share - 0.04)); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); commit(clampCompanion(share + 0.04)); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); commit(clampCompanion(share - 0.04)); }
       }}
     />
   );
@@ -152,8 +161,8 @@ import { CREATE_OPTIONS } from './CreateMenu.js';
 import type { AgentWindowSelection } from './AgentWindowPicker.js';
 import { AgentLogsDrawer } from './AgentLogsDrawer.js';
 import { layoutWithLogsDrawer, overlayLogsDrawer, useWallLogs } from '../wallLogs.js';
-import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
-import { readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
+import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, FolderIcon, GlobeIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
+import { COMPANION_DEFAULT, clampCompanion, readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
 import { Shown } from './ModeViews.js';
@@ -162,7 +171,8 @@ import { Shown } from './ModeViews.js';
 
 
 /** The kinds the wall's compass offers, in order. */
-const WALL_ADDABLE: PaneKind[] = [...WALL_KINDS];
+/** What a window's split compass offers: the Browser and Files windows come from the Agents panel. */
+const WALL_ADDABLE: PaneKind[] = ['chat', 'terminal'];
 
 /** How many Focus heroes keep their composer mounted while parked. */
 export const WARM_COMPOSERS = 4;
@@ -787,6 +797,8 @@ export function CommandWall({
     if (pane.kind === 'chat') return sessionById.get(pane.refId)?.title ?? 'Chat';
     if (pane.kind === 'terminal') { const t = terminalById.get(pane.refId); return t ? terminalPresentation(t).title : 'Terminal'; }
     if (pane.kind === 'zone') return pane.zone ?? 'Zone';
+    if (pane.kind === 'files') return folderLabel(pane.refId);
+    if (pane.kind === 'browser') return browserLabel(pane.refId);
     return pane.kind === 'automations' ? 'Automations' : 'Insights';
   };
   const iconOf = (kind: PaneKind) => {
@@ -794,6 +806,8 @@ export function CommandWall({
     if (kind === 'terminal') return <TerminalIcon className={cls} />;
     if (kind === 'automations') return <BoltIcon className={cls} />;
     if (kind === 'insights') return <LayoutIcon className={cls} />;
+    if (kind === 'files') return <FolderIcon className={cls} />;
+    if (kind === 'browser') return <GlobeIcon className={cls} />;
     return <ChatIcon className={cls} />;
   };
 
@@ -953,6 +967,8 @@ export function CommandWall({
             <div className="command-wall-primary">
            {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat || tiled} status={agentStatus ?? 'idle'} selected={selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
+            : pane.kind === 'files' ? <ExplorerPane key={pane.refId} paneId={pane.id} root={pane.refId} named />
+            : pane.kind === 'browser' ? <BrowserPane key={pane.refId} url={pane.refId} />
             : null}
            </div>
             {pane.kind === 'chat' && showCompanions && companions.length > 0 && <CompanionResizer sessionId={pane.refId} />}

@@ -38,9 +38,6 @@ export const PlugIcon = (p: P) => (
 export const BrainIcon = (p: P) => (
   <S {...p}><path d="M12 5a3 3 0 0 0-6 .5A3 3 0 0 0 5 11a3 3 0 0 0 1 5 3 3 0 0 0 6 .5zM12 5a3 3 0 0 1 6 .5A3 3 0 0 1 19 11a3 3 0 0 1-1 5 3 3 0 0 1-6 .5z" /></S>
 );
-export const GearIcon = (p: P) => (
-  <S {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" /></S>
-);
 export const PlusIcon = (p: P) => (<S {...p}><path d="M12 5v14M5 12h14" /></S>);
 export const MinusIcon = (p: P) => (<S {...p}><path d="M5 12h14" /></S>);
 export const SearchIcon = (p: P) => (<S {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4" /></S>);
@@ -52,7 +49,6 @@ export const ShieldIcon = (p: P) => (<S {...p}><path d="M12 22s8-4 8-10V5l-8-3-8
 /** A frame with its panel down the left side: show or hide a left side panel. */
 export const PanelLeftIcon = (p: P) => (<S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /></S>);
 /** A curved two-headed arrow swinging between a frame's left side and its top: move a panel between them. */
-export const PanelSwapIcon = (p: P) => (<S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7.5 16.5Q7.5 7.5 16.5 7.5" /><path d="M14 5.5l2.5 2-2.5 2M5.5 14l2 2.5 2-2.5" /></S>);
 export const PanelIcon = (p: P) => (<S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M15 3v18" /></S>);
 export const PinIcon = (p: P) => (<S {...p}><path d="M12 17v5M9 3h6l-1 6 3 3H7l3-3z" /></S>);
 export const FileIcon = (p: P) => (<S {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></S>);

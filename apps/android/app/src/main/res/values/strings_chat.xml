@@ -115,7 +115,7 @@
     <string name="chat_terminal">Terminal</string>
     <string name="chat_dictate">Dictate</string>
     <string name="chat_photos_max">%1$d max</string>
-    <string name="chat_image_from_files">Image from files</string>
+    <string name="chat_image_from_files">Photos and videos</string>
     <string name="chat_take_photo">Take photo</string>
     <string name="chat_remove_photo">Remove photo %1$d</string>
     <string name="chat_adding_photo">Adding photo</string>
@@ -294,4 +294,59 @@
     <string name="photo_actions">Photo actions</string>
     <!-- Save to Photos on Android 9, when storage access was refused. -->
     <string name="chat_save_needs_storage">Allow storage access to save it to Photos.</string>
+    <!-- Folded by default in the transcript (#2453). -->
+    <string name="chat_progress_note">Progress note</string>
+    <string name="chat_conversation_summary">Conversation summary</string>
+    <!-- Videos from the message box (#2777). -->
+    <string name="chat_clip_sending">Sending… %1$d%%</string>
+    <string name="chat_clip_attached">Attached to the chat</string>
+    <string name="chat_clip_failed">Couldn’t send this video</string>
+    <string name="chat_remove_clip">Remove %1$s</string>
+    <!-- The agent's plan sheet over the composer (#2115). -->
+    <string name="plan_sheet">Agent plan</string>
+    <string name="plan_open_label">Plan, %1$d of %2$d done. Folds the plan</string>
+    <string name="plan_title">Plan</string>
+    <string name="plan_done_of">%1$d of %2$d done</string>
+    <string name="plan_folded_label">Plan, step %1$d of %2$d: %3$s. Shows the whole plan</string>
+    <string name="plan_position">%1$d of %2$d</string>
+    <string name="plan_paused">Paused</string>
+    <string name="plan_working">Working</string>
+    <string name="plan_done">Done</string>
+    <string name="plan_skipped">Skipped</string>
+    <string name="plan_pending">Pending</string>
+    <string name="plan_agent_reported">%1$s, agent-reported</string>
+    <string name="plan_open_evidence">%1$s, open evidence</string>
+    <string name="plan_pass">Pass %1$d</string>
+    <string name="plan_pass_label">Pass %1$d: a later check sent the work back here</string>
+    <string name="plan_pr_merged">#%1$s · Merged</string>
+    <string name="plan_pr_closed">#%1$s · Closed</string>
+    <string name="plan_pr_open">Open</string>
+    <string name="plan_pr_draft">Draft</string>
+    <string name="plan_ci_failing">CI failing</string>
+    <string name="plan_ci_passing">CI passing</string>
+    <string name="plan_ci_running">CI running</string>
+    <string name="plan_ci_none">No CI</string>
+    <string name="plan_pr_label">Pull request %1$s</string>
+    <string name="plan_subagent">Sub-agent</string>
+    <string name="plan_subagents">Sub-agents</string>
+    <string name="plan_subagents_label">Sub-agents: %1$d running, %2$d done</string>
+    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
+    <string name="response_waiting">Pending · sends when connected</string>
+    <string name="response_sending">Sending…</string>
+    <string name="response_sent">Sent</string>
+    <string name="response_stale">No longer pending</string>
+    <string name="response_failed">Couldn’t send response</string>
+    <string name="response_stale_detail">The original request is no longer pending.</string>
+    <string name="response_request_id">Request identifier: %1$s</string>
+    <string name="response_retry">Retry</string>
+    <string name="response_cancel">Cancel</string>
+    <string name="response_allow">Allow %1$s</string>
+    <string name="response_deny">Deny %1$s</string>
+    <!-- Edit under a picture an image chat made (#2230). -->
+    <string name="chat_edit_picture">Edit</string>
+    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
+    <string name="car_you">You</string>
+    <string name="car_reply">Reply</string>
+    <string name="car_mark_read">Mark as read</string>
+    <string name="car_not_sent">Not sent: this chat isn’t on the computer the phone is connected to.</string>
 </resources>

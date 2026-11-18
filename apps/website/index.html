@@ -24,18 +24,18 @@
       property="og:description"
       content="Nekko Agent is a free, open source, local-first AI coding and cowork desktop app that runs models via Ollama, LM Studio or vLLM. By NekkoLabs, Tokyo."
     />
-    <meta property="og:image" content="https://nekkoagent.com/og.png?v=plum-white-2" />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=plum-3" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:alt" content="Nekko Agent: the personal, local agent you can trust" />
+    <meta property="og:image:alt" content="Nekko Agent by NekkoLabs: your personal AI agent, on your computer and your phone" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Nekko Agent by NekkoLabs | Personal, local AI agent" />
     <meta
       name="twitter:description"
       content="Nekko Agent is a free, open source, local-first AI coding and cowork desktop app that runs models via Ollama, LM Studio or vLLM. By NekkoLabs, Tokyo."
     />
-    <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=plum-white-2" />
+    <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=plum-3" />
     <link rel="stylesheet" href="styles.css?v=18" />
     <link rel="stylesheet" href="fonts.css?v=1" />
     <!-- Structured data: so search and answer engines describe Nekko Agent accurately -->
@@ -54,6 +54,7 @@
             "@id": "https://nekkoagent.com/#website",
             "url": "https://nekkoagent.com/",
             "name": "Nekko Agent",
+            "alternateName": ["Neko Agent", "NekoAgent", "Nekko AI"],
             "description": "AI help for coding and everyday work: a fast local model server and an AI agent in one app, alongside the online models you already use.",
             "inLanguage": "en",
             "publisher": { "@id": "https://nekkolabs.com/#organization" }
@@ -62,6 +63,7 @@
             "@type": "SoftwareApplication",
             "@id": "https://nekkoagent.com/#app",
             "name": "Nekko Agent",
+            "alternateName": ["Neko Agent", "NekoAgent", "Nekko AI"],
             "url": "https://nekkoagent.com/",
             "applicationCategory": "DeveloperApplication",
             "applicationSubCategory": "AI assistant for coding and everyday work",
@@ -205,7 +207,7 @@
     </g>
           </svg>
           <span>MEET NEKKO</span>
-          <p class="mascot-cap">Meet Nekko: a small pixel cat keeping you company while your agents get to work.</p>
+          <p class="mascot-cap">Nekko comes from neko, Japanese for cat. This little one keeps you company while your agents get to work.</p>
         </div>
         <div class="scroll-hint" aria-hidden="true">SCROLL<br />▾</div>
       </section>
@@ -233,7 +235,7 @@
         <p class="chapter-lede reveal">Private, fast, and on every machine you own.</p>
 
         <div class="pillar-tour reveal" data-pillar-tour aria-roledescription="carousel" aria-label="What makes Nekko Agent different">
-          <ol class="pillar-list" aria-label="Five reasons to use Nekko Agent">
+          <ol class="pillar-list" aria-label="Six reasons to use Nekko Agent">
             <li class="pillar-item is-active">
               <button class="pillar-tab" id="pillar-tab-local" aria-current="step" aria-controls="pillar-panel" data-pillar="local"
                       data-alt="Picking a local model in Nekko Agent, then Claude Code using it over MCP">
@@ -289,10 +291,21 @@
                 <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
             </li>
+            <li class="pillar-item">
+              <button class="pillar-tab" id="pillar-tab-photo" aria-controls="pillar-panel" data-pillar="photo" tabindex="-1"
+                      data-alt="A Photo chat turning a prompt into a picture of a desk at night, then an edit that makes it a snowy morning outside the window">
+                <span class="pillar-num">06</span><span class="pillar-title">Your own image studio</span>
+              </button>
+              <div class="pillar-detail">
+                <p>A 1024 &times; 1024 picture in 16 seconds on an RTX 3070, made on your own graphics card. Then edit it with a sentence. Nekko picks a model your computer can run and downloads everything it needs.</p>
+                <a class="card-link" href="/docs/local-models" data-cta="pillar-photo-models">Local models <span aria-hidden="true">→</span></a>
+                <div class="pillar-line" aria-hidden="true"><i></i></div>
+              </div>
+            </li>
           </ol>
 
           <div class="pillar-stage">
-            <!-- Nekko peeks over the demo box. Her drawing is cloned from the beta
+            <!-- Nekko peeks over the demo box. His drawing is cloned from the beta
                  card's peek by site.js, so both stay identical. Decorative. -->
             <div class="pillar-frame">
               <div class="nekko-peek pillar-peek" data-mood="idle" data-pillar-peek aria-hidden="true"></div>
@@ -368,7 +381,7 @@
             <li>More beta-only extras to come</li>
           </ul>
           <div class="beta-stage reveal" data-beta>
-            <!-- Nekko hosts the sign-up: she peeks over the card and reacts.
+            <!-- Nekko hosts the sign-up: he peeks over the card and reacts.
                  States (data-mood): idle, watching, eager, confused, celebrate. -->
             <p class="nekko-bubble" aria-live="polite" data-bubble>Psst… want to see what's next?</p>
             <div class="nekko-peek" data-mood="idle" aria-hidden="true">

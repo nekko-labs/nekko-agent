@@ -4,7 +4,7 @@ Nekko Agent is AI help on your computer, for coding and everyday work. It reads,
 
 ## Who we are
 
-Nekko Agent is made by [Nekko Labs](https://nekkolabs.com). We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
+Nekko Agent is made by [Nekko Labs](https://nekkolabs.com), and its name comes from neko, Japanese for cat. We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
 
 We care about three things:
 
@@ -227,7 +227,11 @@ The selected agent has a tinted background across its row, so you can spot the c
 
 By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. A card whose agent opened a pull request shows it as a chip at its bottom right, with the PR icon in the colour of its state: green when open, gray for a draft, purple when merged, red when closed. With several PRs it shows the most current one and **+N**; hover the count to see them all, and click a PR to open it. Use the sliders button to group by project, date or computer instead.
 
-In the vertical Agents panel, the group heading stays at the top of the list while you scroll its agents, then yields to the next group. The horizontal row keeps its usual sideways scrolling.
+The group heading stays at the top of the list while you scroll its agents, then yields to the next group.
+
+### Switching what the Agents panel lists
+
+A row of icons at the top of the Agents panel picks which kind of window it lists: **Agents**, **Terminals**, **Photos and videos**, **Browsers** and **Files**. Click an icon, or use the arrow keys once it has focus; hover an icon for its name. Agents shows the agent cards described above. Terminals and Photos and videos show just those. Browsers lists the web pages running on your computer, such as a dev server you started, named by their page title and the folder they run from; pick one to open it in a browser window on the wall, or pick **New browser** to type an address. Files lists your connected folders and repositories; pick one to browse it in a window of its own. Neither needs an agent. Below them, under **Beside an agent**, pick an agent to show it with its Browser or Files drawer open beside it. The panel remembers your choice.
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Animations > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 
@@ -235,7 +239,7 @@ Each group initially shows up to **20 agent rows**. Choose **Show more (N)** bel
 
 ### Delegated agents in the Agents panel
 
-Delegated subagents appear as compact rows beneath their parent, joined to its card by a tree line, each led by its status (a rocket while it works, a check when done). This works in Claude chats too, where a subagent's chat is a live copy you can read but not write to. The plan above the composer also shows each subagent as a live card along its bottom: its status, its task on one line, and what it is doing right now; click a card to open that subagent. A subagent's chat opens under a banner naming the chat that spawned it; click the name to go back to it. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. On desktop and Local Web UI, suggested actions below the reply have a **This chat / Subagent** sliding selector. Typed follow-ups use the normal composer Send/Enter path; the old duplicate routing-button row is removed. You can also ask for delegation in your own message. Native phone controls are unchanged. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
+Delegated subagents appear as compact rows beneath their parent, joined to its card by a tree line, each led by its status (a rocket while it works, a check when done). This works in Claude chats too, where a subagent's chat is a live copy you can read but not write to. The plan above the composer also shows each subagent as a live card along its bottom: its status, its task on one line, and what it is doing right now; click a card to open that subagent. A subagent's chat opens under a banner naming the chat that spawned it; click the name to go back to it. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. A chat stays in Building while its subagents work, even after its own reply has finished (a Claude chat ends its turn while background subagents run on), and under that reply it says **Waiting on N sub-agents** with one row per working subagent and what it is doing; click a row to open it. On desktop and Local Web UI, suggested actions below the reply have a **This chat / Subagent** sliding selector. Typed follow-ups use the normal composer Send/Enter path; the old duplicate routing-button row is removed. You can also ask for delegation in your own message. Native phone controls are unchanged. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
 
 A turn's working steps fold into one work group whose header says what the agent did, by purpose: for example *Read guidance, looked through the code, edited 3 files*. Hover or keyboard-focus the header to read the complete summary and each purpose group with its number of calls. Click the header to open the steps. Inside it, adjacent calls with one purpose are one row that states the goal, such as *Read the project's guidance · AGENTS.md, CLAUDE.md* or *Ran the tests · passed*. When a call gave its own description (Claude Code's commands do), that description is the goal. Click a group to see its individual calls. A call waiting for your approval, a question for you, and a lone call stay rows of their own. A group with a failed call says *1 failed* and stays open.
 
@@ -259,7 +263,7 @@ Click a file link to open the file in a window beside the chat. Code is coloured
 
 ### Agent panel shortcuts
 
-Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
+Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video chats are listed under their own icons at the top of the panel.
 
 The Agent Board header also has a single **+**: hover or click it for the same three choices. Both menus use a neutral light/dark background and highlight the hovered or keyboard-focused row in your primary color. The shortcut appears beside every choice:
 

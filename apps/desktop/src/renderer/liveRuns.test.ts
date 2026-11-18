@@ -1,7 +1,7 @@
 import { rememberedConnectivityNotices } from './components/ConnectivityNotices.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '@nekko-agent/shared';
-import { LIVE_STREAM_MAX, __resetLiveRuns, applyEvent, beginResumedRun, applyReplay, clampLive, clearLiveRun, getLiveRun, runningSessionIds, takeFinishedRun } from './liveRuns.js';
+import { LIVE_STREAM_MAX, __resetLiveRuns, anchorLiveRun, applyEvent, beginResumedRun, applyReplay, clampLive, clearLiveRun, getLiveRun, runningSessionIds, takeFinishedRun } from './liveRuns.js';
 
 // The registry repaints on an animation frame; the folding itself is synchronous
 // and is what these tests are about, so the scheduler is stubbed out.
@@ -43,6 +43,18 @@ describe('liveRuns', () => {
     expect(takeFinishedRun('a')?.transcriptThroughId).toBe('saved-tool-result');
     applyEvent(text('a', 'Next turn'));
     expect(getLiveRun('a')?.transcriptThroughId).toBeUndefined();
+  });
+
+  it('pins a turn nobody sent to the message it follows, once, through its finish (#2840)', () => {
+    anchorLiveRun('a', 'nothing-running');
+    expect(getLiveRun('a')).toBeUndefined();
+    applyEvent(text('a', 'The first report is in.'));
+    anchorLiveRun('a', 'end-of-last-turn');
+    anchorLiveRun('a', 'later');
+    expect(getLiveRun('a')?.transcriptThroughId).toBe('end-of-last-turn');
+    applyEvent(call('a', 'bash'));
+    applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
+    expect(takeFinishedRun('a')?.transcriptThroughId).toBe('end-of-last-turn');
   });
 
   it('anchors live PR results before later text and retains them through replay and finish', () => {

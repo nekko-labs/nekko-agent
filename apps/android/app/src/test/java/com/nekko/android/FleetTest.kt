@@ -255,4 +255,51 @@ class FleetTest {
         assertTrue(remotes.of("aaaa").closed)
         assertTrue(repo.state.value.peers.isEmpty())
     }
+
+    /** #2059: "Connect to <name>" off keeps the pairing and the saved content, but the phone never dials it. */
+    @Test
+    fun `a computer turned off is never dialed, keeps its pairing, and turning it on or pairing again dials it`() = runTest {
+        val store = FakeStore()
+        val remotes = Rooms()
+        val repo = repo(store, remotes)
+        val a = repo.pair(link("aaaa"))
+        val b = repo.pair(link("bbbb"))
+        runCurrent()
+        val peerA = remotes.of("aaaa")
+        assertEquals(b, repo.state.value.activeId)
+
+        // Off for the computer beside the active one: its link closes and it is not reopened.
+        repo.setConnectionEnabled(a, false)
+        runCurrent()
+        assertTrue(peerA.closed)
+        assertNull(repo.state.value.peers[a])
+        assertFalse(repo.connectionEnabled(a))
+
+        // Making it the active one shows it, but doesn't dial it.
+        val dialedA = remotes.created.count { it.config.room == "aaaa" }
+        repo.connect(a)
+        runCurrent()
+        assertEquals(a, repo.state.value.activeId)
+        assertEquals(RelayState.IDLE, repo.state.value.conn)
+        assertEquals("no new connection for a computer turned off", dialedA, remotes.created.count { it.config.room == "aaaa" })
+
+        // A relaunch remembers it: still not dialed.
+        val again = Rooms()
+        val relaunched = repo(store, again)
+        relaunched.load()
+        runCurrent()
+        assertTrue("only bbbb is dialed", again.created.all { it.config.room == "bbbb" })
+        assertFalse(relaunched.connectionEnabled(a))
+
+        // On again: dialed.
+        relaunched.setConnectionEnabled(a, true)
+        runCurrent()
+        assertTrue(again.created.any { it.config.room == "aaaa" && it.connected })
+
+        // Off, then paired again: on.
+        relaunched.setConnectionEnabled(a, false)
+        relaunched.pair(link("aaaa"))
+        runCurrent()
+        assertTrue(relaunched.connectionEnabled(a))
+    }
 }

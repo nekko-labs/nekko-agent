@@ -12,28 +12,28 @@ const layouts = stylesheet('components/commandWallLayouts.css');
 const two = { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid' as const, cols: 2, rows: 1 } };
 
 describe('agent panel controls', () => {
-  it('are icon-only buttons that explain themselves in a hover tooltip instead of growing a label', () => {
-    const html = renderToStaticMarkup(<AgentPanelControls show orientation="vertical" onToggle={noop} onOrientation={noop} />);
+  it('is an icon-only button that explains itself in a hover tooltip instead of growing a label', () => {
+    const html = renderToStaticMarkup(<AgentPanelControls show onToggle={noop} />);
     expect(html).toContain('aria-label="Hide the agent panel"');
-    expect(html).toContain('aria-label="Show agents in a row"');
     expect(html).not.toContain('agent-panel-pill-label');
     expect(html).toContain('data-hover-tip="Hide agents"');
-    expect(html).toContain('data-hover-tip="Show agents in a row"');
     // No native title alongside the tooltip, and a fixed size that never grows.
     expect(html).not.toContain('title=');
     expect(cssRule(layouts, '.agent-panel-pill')).toMatchObject({ width: '28px', height: '28px' });
     expect(hasSelector(layouts, /agent-panel-pill-label/)).toBe(false);
   });
-  it('stack in a row panel and lie in a row in a column panel, and swap again when collapsed', () => {
-    const stacked = (show: boolean, orientation: 'vertical' | 'horizontal') =>
-      renderToStaticMarkup(<AgentPanelControls show={show} orientation={orientation} onToggle={noop} onOrientation={noop} />).includes('data-stacked');
-    expect(stacked(true, 'horizontal')).toBe(true);
-    expect(stacked(true, 'vertical')).toBe(false);
-    expect(stacked(false, 'vertical')).toBe(true);
-    expect(stacked(false, 'horizontal')).toBe(false);
+  it('offers no column or row switch: the panel is always a column', () => {
+    const html = renderToStaticMarkup(<AgentPanelControls show onToggle={noop} />);
+    expect(html).not.toMatch(/Show agents in a (row|column)/);
+    expect(hasSelector(layouts, /agent-panel-row|data-orientation/)).toBe(false);
+  });
+  it('lie in the header while open and stack down the wall edge when collapsed', () => {
+    const stacked = (show: boolean) => renderToStaticMarkup(<AgentPanelControls show={show} onToggle={noop} />).includes('data-stacked');
+    expect(stacked(true)).toBe(false);
+    expect(stacked(false)).toBe(true);
   });
   it('offers the panel back while collapsed', () => {
-    const html = renderToStaticMarkup(<AgentPanelControls show={false} orientation="vertical" onToggle={noop} onOrientation={noop} />);
+    const html = renderToStaticMarkup(<AgentPanelControls show={false} onToggle={noop} />);
     expect(html).toContain('aria-label="Show the agent panel"');
     expect(html).toContain('aria-pressed="false"');
     expect(html).toContain('data-collapsed="true"');

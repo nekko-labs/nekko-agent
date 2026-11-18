@@ -31,7 +31,8 @@ export interface ToolResult {
  */
 export interface AgentWatchView {
   id: string;
-  kind: 'timer' | 'pr';
+  /** `clip`: a clip an agent started (`generate_video`); it wakes the chat when the clip ends. */
+  kind: 'timer' | 'pr' | 'clip';
   url?: string;
   status: 'active' | 'done' | 'cancelled' | 'error';
   /** Timer: when it wakes. PR: the latest it waits before waking anyway. */
@@ -47,6 +48,8 @@ export interface AgentWatchView {
   checks?: 'passing' | 'failing' | 'pending' | 'none';
   /** PR watch: the PR's state as last polled (`open`, `merged`, `closed`). */
   prState?: string;
+  /** Clip watch: how far the clip got (`waiting`, `loading`, `generating`, `step:3/20`). */
+  clipStage?: string;
 }
 
 export interface ChatMessage {
@@ -403,6 +406,13 @@ export interface Session {
    * ask first (the egress gate, decision 0054); these run without asking.
    */
   allowedMcpTools?: string[];
+  /**
+   * Recipients (addresses, channels, chats, users) this chat has written to
+   * through an MCP tool, each approved once: a call to one of them does not ask
+   * again for its recipient (decision 0063). Saved by the engine after an
+   * approval; the user can take one back from the Permissions menu.
+   */
+  knownRecipients?: string[];
   /** Connector kinds whose context this chat's turns do not fetch. */
   disabledConnectors?: string[];
   /**
@@ -449,14 +459,21 @@ export interface Session {
    * Set while a turn is running, cleared when it ends. A session that still
    * carries this when the host starts was cut off by a crash or a quit, and the
    * host marks its last reply interrupted so the chat offers Continue.
+   * `afterMessageId` is the last message before the turn's own: its prompt,
+   * or, for a turn nobody sent (a Claude Code wake-up), the end of the turn
+   * before it. A window stops the saved transcript there while it draws the
+   * live reply.
    */
-  activeRun?: { startedAt: number };
+  activeRun?: { startedAt: number; afterMessageId?: string };
   /**
    * How the last turn failed, for a chat opened after the `error` event has gone.
    * Cleared when the next turn starts, or by Dismiss (null). It only applies
    * while `afterMessageId` is still the transcript's last message.
+   * `continueAt` (epoch ms): the user asked to carry on by themselves when the
+   * usage limit behind this failure resets; nekkod resumes the chat then
+   * (`limit_resume.rs`). Going with the failure, it is dropped the same ways.
    */
-  turnFailure?: { message: string; afterMessageId?: string } | null;
+  turnFailure?: { message: string; afterMessageId?: string; continueAt?: number } | null;
   /**
    * The plan the agent itself wrote for this chat, via the `update_plan` tool:
    * what it decided to do after reading the request, kept live as it works.
@@ -600,7 +617,13 @@ export type AgentEvent =
    * the window, or for a typed `/compact`): `running` while it summarizes,
    * then `done`, or `failed` with Claude Code's reason.
    */
-  | { type: 'claude_code_compacting'; sessionId: string; state: 'running' | 'done' | 'failed'; error?: string };
+  | { type: 'claude_code_compacting'; sessionId: string; state: 'running' | 'done' | 'failed'; error?: string }
+  /**
+   * The usage limit this chat was waiting on reset, and nekkod is continuing
+   * it as the user asked (`turnFailure.continueAt`). The desktop shows it as a
+   * reminder.
+   */
+  | { type: 'limit_reset'; sessionId: string; continuing: boolean };
 
 /**
  * What a session is waiting on a person for, right now.

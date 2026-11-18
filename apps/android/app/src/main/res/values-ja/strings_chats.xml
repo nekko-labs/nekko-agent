@@ -6,22 +6,7 @@
     <string name="chats_back">戻る</string>
     <string name="chats_cancel">キャンセル</string>
     <string name="chats_new_chat">新しいチャット</string>
-    <string name="chats_denied_revoked">このスマートフォンはコンピュータで削除されました。コンピュータで 設定 → リモートアクセス → デバイスをペアリング を開き、ここで新しい QR をスキャンしてください。それでも拒否される場合は、先にコンピュータで すべてのスマートフォンをサインアウト を使ってください。</string>
-    <string name="chats_denied_bad_code">このペアリングコードは期限切れか、すでに使用されています。新しい QR をスキャンしてください。</string>
-    <string name="chats_denied_unknown_device">コンピュータはまだこのスマートフォンを認識していません。ペアリング用の QR をスキャンしてください。</string>
-    <string name="chats_denied_kicked">コンピュータがこのスマートフォンの接続を切りました。もう一度ペアリングしてください。</string>
-    <string name="chats_denied_bad_key">コンピュータのペアリングキーが変更されました。新しい QR をスキャンしてください。</string>
-    <string name="chats_denied_update_required">コンピュータは最新の Nekko Agent を使うスマートフォンのみ受け付けます。接続するにはこのアプリをアップデートしてください。</string>
-    <string name="chats_denied_invalid">ペアリングに失敗しました。コンピュータで新しい QR をスキャンしてください。</string>
-    <string name="chats_banner_stopped">%1$s のリモートアクセスを停止しました。そちらでオンにしてから（設定 → リモートアクセス）、ここをタップして再接続してください。</string>
-    <string name="chats_banner_online">%1$s はオンラインです</string>
-    <string name="chats_banner_offline">%1$s はオフラインです。そちらで Nekko Agent を開いてください。</string>
-    <string name="chats_banner_connecting">%1$s に再接続中...</string>
-    <string name="chats_banner_host_not_found">このスマートフォンをペアリングしたアドレス %1$s が見つかりません。%2$s の 設定 → リモートアクセス でスマートフォンの接続方法を変更してから、もう一度ペアリングしてください。</string>
-    <string name="chats_reconnect">再接続</string>
     <string name="chats_pair_again">もう一度ペアリング</string>
-    <string name="chats_manage_computers">コンピュータを管理</string>
-    <string name="chats_encrypted_via">%1$s 経由でエンドツーエンド暗号化</string>
     <string name="chats_safety_options">%1$s の安全オプション</string>
     <string name="chats_nearby_title">このネットワーク上</string>
     <string name="chats_nearby_own_relay">独自の Relay を実行中: %1$s</string>
@@ -80,8 +65,8 @@
     <string name="chats_delete">削除</string>
     <string name="chats_delete_title">このチャットを削除しますか？</string>
     <string name="chats_delete_body">「%1$s」は %2$s から完全に削除されます。この操作は取り消せません。</string>
-    <string name="chats_outbox_note_one">再接続後に 1 件のプロンプトを送信します。</string>
-    <string name="chats_outbox_note_other">再接続後に %1$d 件のプロンプトを送信します。</string>
+    <string name="chats_outbox_note_one">1 件のプロンプトがこのスマートフォンで待機中です。%1$s が戻ると送信されます。</string>
+    <string name="chats_outbox_note_other">%1$d 件のプロンプトがこのスマートフォンで待機中です。%2$s が戻ると送信されます。</string>
     <string name="chats_waiting_to_send">送信待ち</string>
     <string name="chats_on_computer">%1$s 上</string>
     <string name="chats_search_placeholder">チャットを検索</string>
@@ -126,7 +111,6 @@
     <string name="chats_oldest_first">古い順</string>
     <string name="chats_newest_first">新しい順</string>
     <string name="chats_show">表示</string>
-    <string name="chats_previews">プレビュー</string>
     <string name="chats_completed_chats">完了したチャット</string>
     <string name="chats_empty_groups">空のグループ</string>
     <string name="chats_reorder_groups_menu">グループを並べ替え…</string>
@@ -147,7 +131,7 @@
     <string name="chats_welcome_body">ここからコンピュータの Nekko Agent を操作できます。チャットを始め、実行を追い、やりたいことを承認しましょう。</string>
     <string name="chats_welcome_scan">コンピュータの 設定 → リモートアクセス にある QR をスキャンしてください。</string>
     <string name="chats_saved_list_note">%1$s に保存したリストです。%2$s が応答すると更新されます。</string>
-    <string name="chats_saved_copy_note">最終更新: %1$s</string>
+    <string name="chats_saved_copy_note">最終更新：%1$s</string>
     <string name="chats_pending_new_chat">新しいチャット。コンピュータが戻ると開始します</string>
     <string name="chats_delete_waiting_chat">待機中のチャットを削除</string>
     <string name="chats_edit_in_new_chat">新しいチャットで編集</string>
@@ -200,6 +184,10 @@
     <string name="chats_no_providers">コンピュータの Nekko Agent でオンになっているモデルプロバイダがありません。モデル設定で追加するか有効にしてください。</string>
     <string name="chats_search_models">モデルを検索</string>
     <string name="chats_starred">スター付き</string>
+    <string name="chats_account_signed_out">サインアウト済み</string>
+    <string name="chats_account_personal_plan">個人プラン</string>
+    <string name="chats_account_organization">組織</string>
+    <string name="chats_account_switcher">Claude アカウント</string>
     <string name="chats_model_source">モデルの提供元</string>
     <string name="chats_scope_all">すべて</string>
     <string name="chats_scope_cloud">クラウド</string>
@@ -213,8 +201,6 @@
     <string name="chats_no_models_match">「%1$s」に一致するモデルはありません。</string>
     <string name="chats_loaded">読み込み済み</string>
     <string name="chats_selected">選択済み</string>
-    <string name="chats_offline_connecting">%1$s は接続中です… 今開始すると、戻ったときにチャットが始まります。それまではこのスマートフォンで待機します。</string>
-    <string name="chats_offline_offline">%1$s はオフラインです。今開始すると、戻ったときにチャットが始まります。それまではこのスマートフォンで待機します。</string>
     <string name="chats_not_started">開始されませんでした: %1$s</string>
     <string name="chats_offline_no_model">%1$s がオフラインの間にチャットを始めるには、設定 → 新しいチャット で既定モデルを選んでください。</string>
     <string name="chats_model_named">モデル · %1$s</string>
@@ -276,4 +262,17 @@
     <string name="chats_phone_forget_title">このチャットを削除しますか？</string>
     <string name="chats_phone_forget_body">メッセージはこのスマートフォンから削除されます。プロバイダ側の記録は残ります。</string>
     <string name="chats_phone_forget">削除</string>
+    <!-- New chat while the computer is away (#2475), the iPhone's two lines. -->
+    <string name="chats_reconnecting">%1$s に再接続しています</string>
+    <string name="chats_reconnecting_label">%1$s に再接続しています…</string>
+    <string name="chats_reconnect_draft">送信したプロンプトはこのスマートフォンで待機します。</string>
+    <!-- Sub-agents under their chat (#2509). -->
+    <string name="chats_subagents">サブエージェント</string>
+    <string name="chats_subagent">サブエージェント</string>
+    <string name="chats_subagent_named">サブエージェント %1$s</string>
+    <string name="chats_subagent_on">サブエージェント %1$s（%2$s）</string>
+    <!-- New chat as a composer (#2459). -->
+    <string name="chats_photo_unreadable">その画像を読み込めませんでした。</string>
+    <string name="chats_choose_model">モデルを選択</string>
+    <string name="chats_starts_on">%1$s で開始</string>
 </resources>

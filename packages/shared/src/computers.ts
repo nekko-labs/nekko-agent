@@ -17,6 +17,12 @@ export interface PairedComputer {
   pairedAt: number;
   /** An index into the computer palette. */
   color: number;
+  /**
+   * Reached through this organization's computer list with your account's
+   * keys, not paired (decision 0102). Kept in memory only: gone after a
+   * restart or when you sign out or lock.
+   */
+  fleet?: string;
 }
 
 export type ComputerState =

@@ -6,6 +6,7 @@
 //! device kicks it live. This process is the file's only writer.
 
 use crate::client::SigningKey;
+use crate::fleet::{Admitted, Binding, FleetGate};
 use crate::hello::{self, Grant, PAIRING_TTL_MS, Random, Verdict};
 use crate::jsobj::JsObj;
 use serde_json::{Value, json};
@@ -65,6 +66,15 @@ struct State {
     grant: Option<Grant>,
 }
 
+/// A device let in through the fleet (decision 0102): kept in memory only,
+/// never in `remote.json`, for as long as [`FleetGate::still`] says so.
+#[derive(Debug, Clone)]
+struct FleetDevice {
+    admitted: Admitted,
+    /// The HELLO key, which also signs its Change proofs.
+    key: String,
+}
+
 pub struct RemoteService {
     file: PathBuf,
     random: Random,
@@ -74,6 +84,10 @@ pub struct RemoteService {
     /// Read-modify-write of the file, one at a time.
     io: Mutex<()>,
     me: Weak<RemoteService>,
+    /// Who may connect through the fleet; none until the daemon sets it.
+    fleet_gate: Mutex<Option<Arc<dyn FleetGate>>>,
+    /// Fleet devices admitted, by their link id (`fleet:<device>`).
+    fleet: Mutex<std::collections::HashMap<String, FleetDevice>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -94,6 +108,8 @@ impl RemoteService {
             state: Mutex::default(),
             io: Mutex::new(()),
             me: me.clone(),
+            fleet_gate: Mutex::new(None),
+            fleet: Mutex::default(),
         })
     }
 
@@ -184,6 +200,14 @@ impl RemoteService {
             }
             return json!({ "type": "denied", "reason": "update-required" });
         }
+        if let Some(fleet) = hello_frame.get("fleet") {
+            let room = cfg.get("room").and_then(Value::as_str).unwrap_or_default().to_string();
+            return self.verify_fleet(hello_frame, fleet, &room);
+        }
+        // Fleet ids are the fleet's alone: no pairing may take one.
+        if hello_frame.get("deviceId").and_then(Value::as_str).is_some_and(crate::fleet::is_fleet_id) {
+            return json!({ "type": "denied", "reason": "invalid" });
+        }
         let mut st = lock(&self.state);
         let now = (self.clock)();
         // A code only pairs what it was minted for, so a link can't change a
@@ -233,6 +257,102 @@ impl RemoteService {
             return Verdict::Welcome { device, enrolled: *enrolled }.reply();
         }
         verdict.reply()
+    }
+
+    /// A HELLO with a `fleet` object: a device of this computer's own account,
+    /// found through an org it shares with (decision 0102). It must be signed
+    /// with its HELLO key for this exchange, as any HELLO is, and its proof must
+    /// satisfy the gate. It never brings a code and never reaches the registry.
+    fn verify_fleet(&self, hello_frame: &Value, fleet: &Value, room: &str) -> Value {
+        let deny = |reason: &str| json!({ "type": "denied", "reason": reason });
+        let text = |k: &str| hello_frame.get(k).and_then(Value::as_str).filter(|v| !v.is_empty());
+        let (Some(device_id), Some(challenge), Some(host_eph), Some(client_eph), Some(hello_key)) =
+            (text("deviceId"), text("challenge"), text("hostEph"), text("clientEph"), text("helloKey"))
+        else {
+            return deny("invalid");
+        };
+        if !crate::fleet::is_fleet_id(device_id) || nekko_js::truthy(hello_frame.get("pair")) {
+            return deny("invalid");
+        }
+        let signed = hello::hello_text(device_id, room, challenge, host_eph, client_eph);
+        let sig = text("sig").and_then(crate::proof::b64).filter(|s| s.len() == 64);
+        let key = crate::proof::parse_key(hello_key);
+        if !matches!((&key, &sig), (Some(k), Some(s)) if crate::proof::verify(k, &signed, s)) {
+            return deny("invalid");
+        }
+        let Some(gate) = lock(&self.fleet_gate).clone() else { return deny("fleet-off") };
+        let binding = Binding {
+            room: room.to_string(),
+            challenge: challenge.to_string(),
+            host_eph: host_eph.to_string(),
+            client_eph: client_eph.to_string(),
+            hello_key: hello_key.to_string(),
+        };
+        let admitted = match gate.admit(fleet, &binding) {
+            Ok(a) => a,
+            Err(reason) => return deny(reason),
+        };
+        if crate::fleet::link_device_id(&admitted.device_id) != device_id {
+            return deny("invalid");
+        }
+        let now = hello::nekko_num((self.clock)());
+        let name = if admitted.name.is_empty() { "Computer".to_string() } else { admitted.name.clone() };
+        let device = json!({
+            "id": device_id,
+            "name": hello::cut16(&name, 60),
+            "platform": hello::COMPUTER_PLATFORM,
+            "kind": hello::COMPUTER_PLATFORM,
+            "fleet": true,
+            "changeKey": hello_key,
+            "access": { "read": true, "change": true },
+            "createdAt": now.clone(),
+            "lastSeenAt": now,
+        });
+        lock(&self.fleet).insert(device_id.to_string(), FleetDevice { admitted, key: hello_key.to_string() });
+        Verdict::Welcome { device, enrolled: false }.reply()
+    }
+
+    /// Let devices of this computer's account connect through the fleet.
+    pub fn set_fleet_gate(&self, gate: Arc<dyn FleetGate>) {
+        *lock(&self.fleet_gate) = Some(gate);
+    }
+
+    /// Ask the gate again about every fleet device let in, and cut off the ones
+    /// it no longer allows: their live connections are kicked, not only their
+    /// listing hidden. The daemon calls this when the account changes and on a
+    /// timer. Returns the link ids cut off.
+    pub fn recheck_fleet(&self) -> Vec<String> {
+        let gate = lock(&self.fleet_gate).clone();
+        let held: Vec<(String, Admitted)> =
+            lock(&self.fleet).iter().map(|(id, d)| (id.clone(), d.admitted.clone())).collect();
+        let gone: Vec<String> =
+            held.into_iter().filter(|(_, a)| !gate.as_ref().is_some_and(|g| g.still(a))).map(|(id, _)| id).collect();
+        if gone.is_empty() {
+            return gone;
+        }
+        {
+            let mut fleet = lock(&self.fleet);
+            for id in &gone {
+                fleet.remove(id);
+            }
+        }
+        if let Some(h) = self.handle() {
+            for id in &gone {
+                h.kick_device(id);
+            }
+        }
+        gone
+    }
+
+    /// The fleet devices let in, for `remote:status`: `{ id, name, orgId }`.
+    fn fleet_rows(&self) -> Value {
+        let fleet = lock(&self.fleet);
+        let mut rows: Vec<Value> = fleet
+            .iter()
+            .map(|(id, d)| json!({ "id": id, "name": d.admitted.name, "orgId": d.admitted.org_id }))
+            .collect();
+        rows.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+        Value::Array(rows)
     }
 
     /// The activity entry for a legacy phone's HELLO, welcomed or refused.
@@ -287,6 +407,8 @@ impl RemoteService {
                 .with("online", Some(json!(h.is_some_and(|h| h.is_online()))))
                 .with("error", h.and_then(|h| h.last_error()).map(Value::from))
                 .with("stoppedBy", cfg.get("stoppedBy").cloned())
+                // Only while one is in: the shape is unchanged for everyone else.
+                .with("fleet", Some(self.fleet_rows()).filter(|r| r.as_array().is_some_and(|a| !a.is_empty())))
                 .to_value()
         } else {
             JsObj::new()
@@ -368,6 +490,7 @@ impl RemoteService {
 
     pub fn disable(&self) -> Result<Value, String> {
         let _io = lock(&self.io);
+        lock(&self.fleet).clear();
         let mut st = lock(&self.state);
         if let Some(h) = st.handle.take() {
             h.stop();
@@ -573,6 +696,7 @@ impl RemoteService {
             .with("devices", Some(json!([])));
         self.save(&cfg)?;
         // Every device is gone, and so is what they did.
+        lock(&self.fleet).clear();
         let _ = std::fs::remove_file(self.activity_file());
         let _ = std::fs::remove_file(self.hello_keys_file());
         {
@@ -648,6 +772,14 @@ impl crate::phone::Devices for RemoteService {
     }
 
     fn device(&self, id: &str) -> Option<crate::phone::PhoneDevice> {
+        if crate::fleet::is_fleet_id(id) {
+            let d = lock(&self.fleet).get(id).cloned()?;
+            return Some(crate::phone::PhoneDevice {
+                access: crate::phone::DeviceAccess::default(),
+                key: Some(d.key),
+                computer: true,
+            });
+        }
         let _io = lock(&self.io);
         let cfg = self.load();
         let d = Self::devices_of(&cfg)
@@ -661,6 +793,14 @@ impl crate::phone::Devices for RemoteService {
     }
 
     fn register_key(&self, id: &str, key: &str) -> Result<bool, &'static str> {
+        if crate::fleet::is_fleet_id(id) {
+            // Its HELLO key is its Change key, from the welcome on.
+            return match lock(&self.fleet).get(id) {
+                Some(d) if d.key == key => Ok(false),
+                Some(_) => Err("key-mismatch"),
+                None => Err("device-unknown"),
+            };
+        }
         let _io = lock(&self.io);
         let cfg = self.load();
         let mut devices = Self::devices_of(&cfg);
@@ -681,6 +821,10 @@ impl crate::phone::Devices for RemoteService {
     }
 
     fn record(&self, id: &str, entry: crate::phone::Activity) {
+        // A fleet device has no record here, so nothing about it is kept on disk.
+        if crate::fleet::is_fleet_id(id) {
+            return;
+        }
         let _io = lock(&self.io);
         self.record_locked(id, entry);
     }
@@ -690,6 +834,9 @@ impl crate::phone::Devices for RemoteService {
     }
 
     fn name(&self, id: &str) -> Option<String> {
+        if crate::fleet::is_fleet_id(id) {
+            return lock(&self.fleet).get(id).map(|d| d.admitted.name.clone());
+        }
         let _io = lock(&self.io);
         let cfg = self.load();
         Self::devices_of(&cfg)
@@ -712,6 +859,14 @@ impl RemoteService {
     /// desktop's *Revoke* does (kicked with 4001, `revoked` on its record),
     /// with `signedOutAt` so *Paired devices* says it was signed out from the phone.
     pub fn sign_out_device(&self, id: &str) -> Result<(), String> {
+        if crate::fleet::is_fleet_id(id) {
+            // Nothing to revoke: it is forgotten and kicked, and may come back while the account allows it.
+            lock(&self.fleet).remove(id);
+            if let Some(h) = self.handle() {
+                h.kick_device(id);
+            }
+            return Ok(());
+        }
         let _io = lock(&self.io);
         let cfg = self.load();
         let now = hello::nekko_num((self.clock)());

@@ -110,19 +110,17 @@ public struct PlanStepLinks: Equatable, Sendable {
 public enum AgentPlan {
     /// Claude Code's provider kind (`CLAUDE_CODE_PROVIDER_KIND`).
     public static let claudeCodeKind = "claude-code"
-    /// The id prefix of a step in a Claude Agent chat's activity plan (`phase:build`).
-    public static let phasePrefix = "phase:"
-    static let sent = phasePrefix + "sent"
 
     // MARK: Which plan the sheet shows
 
     /// The chat's own plan; on a Claude Agent chat without one, Claude Code's
-    /// plan rebuilt from the transcript, else the activity plan of its latest request.
-    public static func sheet(_ session: Session?, claudeCode: Bool, working: Bool) -> [PlanStep]? {
+    /// plan rebuilt from the transcript. When Claude Code wrote no plan there is
+    /// none to show (`sheetPlan`): no placeholder is made up from its tool calls.
+    public static func sheet(_ session: Session?, claudeCode: Bool) -> [PlanStep]? {
         guard let session else { return nil }
         if !session.agentPlan.isEmpty { return session.agentPlan }
         guard claudeCode else { return nil }
-        return claudeCodeOwnPlan(session.messages) ?? activityPlan(session.messages, working: working)
+        return claudeCodeOwnPlan(session.messages)
     }
 
     /// The step being worked: the active one, else the next pending one, else the last.
@@ -146,32 +144,6 @@ public enum AgentPlan {
     }
 
     // MARK: Claude Code
-
-    private static let exploreTools: Set<String> = ["Read", "Grep", "Glob", "LS", "WebSearch", "WebFetch", "NotebookRead"]
-    private static let buildTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
-    private static let shipCommand = #"\b(gh\s+pr\s+(create|merge|ready)|git\s+push)\b"#
-    private static let verifyCommand = #"\b(test|tests|vitest|jest|pytest|tsc|typecheck|lint|eslint|clippy|cargo\s+(test|check|build|clippy|fmt)|npm\s+(run\s+)?(test|build|lint|typecheck|check)|go\s+(test|build|vet)|gh\s+pr\s+checks)\b"#
-    private static let buildCommand = #"\bgit\s+(add|commit|mv|rm)\b"#
-
-    /// Where one of Claude Code's tool calls sits in the work loop; nil for its own bookkeeping.
-    public static func phase(of call: ToolCall) -> PlanStep.Kind? {
-        if exploreTools.contains(call.name) { return .explore }
-        if buildTools.contains(call.name) { return .build }
-        guard call.name == "Bash" else { return nil }
-        let command = call.input["command"]?.string ?? ""
-        func has(_ pattern: String) -> Bool { command.range(of: pattern, options: .regularExpression) != nil }
-        if has(shipCommand) { return .ship }
-        if has(verifyCommand) { return .verify }
-        if has(buildCommand) { return .build }
-        return .explore
-    }
-
-    private static let phases: [(kind: PlanStep.Kind, title: String, note: @Sendable (Int) -> String)] = [
-        (.explore, "Look through the code", { "\($0) read\($0 == 1 ? "" : "s") and searches" }),
-        (.build, "Make the changes", { "\($0) edit\($0 == 1 ? "" : "s")" }),
-        (.verify, "Check the work", { "\($0) check\($0 == 1 ? "" : "s") run" }),
-        (.ship, "Open a pull request", { _ in "" }),
-    ]
 
     private static func firstLine(_ text: String) -> String {
         text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
@@ -225,46 +197,6 @@ public enum AgentPlan {
 
     private static func taskRef(_ v: JSONValue?) -> String {
         (v?.string ?? v?.int64.map(String.init) ?? "").trimmingCharacters(in: .whitespaces)
-    }
-
-    /// A Claude Agent chat's plan when Claude Code wrote none: the work loop of
-    /// the latest request (send, explore, build, verify, ship), read from its tool calls.
-    public static func activityPlan(_ messages: [ChatMessage], working: Bool) -> [PlanStep]? {
-        guard let start = messages.lastIndex(where: { $0.role == "user" }) else { return nil }
-        let request = messages[start]
-        let after = messages[(start + 1)...]
-        var counts: [PlanStep.Kind: Int] = [:]
-        var latest: PlanStep.Kind?
-        var updatedAt = request.createdAt ?? 0
-        for m in after {
-            for call in m.toolCalls {
-                guard let p = phase(of: call) else { continue }
-                counts[p, default: 0] += 1
-                latest = p
-                updatedAt = m.createdAt ?? updatedAt
-            }
-        }
-        if latest == nil && !working { return nil }
-        let heard = after.contains { $0.role == "assistant" }
-        let at = latest.flatMap { l in phases.firstIndex { $0.kind == l } } ?? -1
-        let asked = request.createdAt ?? 0
-        let note = String(firstLine(request.content).prefix(160))
-        var steps = [PlanStep(id: sent, title: "Send the request to Claude Code", status: heard ? .done : .active,
-                              note: note.isEmpty ? nil : note, createdAt: asked, updatedAt: asked)]
-        for (i, p) in phases.enumerated() {
-            let n = counts[p.kind] ?? 0
-            let status: PlanStep.Status
-            if working && p.kind == latest { status = .active }
-            else if n > 0 { status = .done }
-            // Claude Code has answered but not reached for a tool yet: it is working out where to look.
-            else if working && latest == nil && heard && i == 0 { status = .active }
-            else if working && i > at { status = .pending }
-            else { continue }
-            let note = n > 0 ? p.note(n) : ""
-            steps.append(PlanStep(id: phasePrefix + p.kind.rawValue, title: p.title, status: status, kind: p.kind,
-                                  note: note.isEmpty ? nil : note, createdAt: asked, updatedAt: updatedAt))
-        }
-        return steps
     }
 
     // MARK: Chips placed on steps
@@ -348,7 +280,6 @@ public enum AgentPlan {
         for step in plan where byTitle[step.title.trimmingCharacters(in: .whitespaces).lowercased()] == nil {
             byTitle[step.title.trimmingCharacters(in: .whitespaces).lowercased()] = step.id
         }
-        let ids = Set(plan.map(\.id))
         var replayed: [PlanStep]?
         var active: String?
         var timeline: [(at: Int64, step: String?)] = []
@@ -358,11 +289,8 @@ public enum AgentPlan {
         }
         var creating: [String: String] = [:]
         var tasks: [String: String] = [:]
-        let phased = ids.contains(sent)
-        let lastAsk = phased ? messages.lastIndex { $0.role == "user" } ?? -1 : -1
-        for (index, message) in messages.enumerated() {
+        for message in messages {
             let at = message.createdAt ?? 0
-            if phased && index == lastAsk { active = sent; timeline.append((at, active)) }
             if let r = message.toolResult, !r.isError, let subject = creating[r.toolCallId], let id = taskId(r.output) { tasks[id] = subject }
             if message.role == "user" || message.role == "assistant" {
                 for link in projectLinks(message.content) where !links.values.contains(where: { $0.projects.contains(link) }) {
@@ -370,11 +298,6 @@ public enum AgentPlan {
                 }
             }
             for call in message.toolCalls {
-                if phased && index > lastAsk, let p = phase(of: call), ids.contains(phasePrefix + p.rawValue) {
-                    active = phasePrefix + p.rawValue
-                    timeline.append((at, active))
-                    continue
-                }
                 switch call.name {
                 case "TodoWrite":
                     work(call.input["todos"]?.array?.first { $0.str("status") == "in_progress" }?.str("content"), at)

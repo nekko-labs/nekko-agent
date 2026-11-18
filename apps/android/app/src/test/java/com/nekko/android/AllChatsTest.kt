@@ -29,7 +29,7 @@ class AllChatsTest {
         activity = mapOf("p1" to Activity.RUNNING, "shared" to Activity.NEEDS_YOU),
         workspaces = listOf(WorkspaceFolder("w1", "App")),
         peers = mapOf(
-            "mac" to Peer(conn = RelayState.ONLINE, summaries = listOf(chat("m1"), chat("shared")), activity = mapOf("m1" to Activity.NEEDS_YOU, "shared" to Activity.RUNNING),
+            "mac" to Peer(conn = RelayState.ONLINE, summaries = listOf(chat("m1"), chat("shared")), subagents = mapOf("m1" to listOf(chat("m1-kid"))), activity = mapOf("m1" to Activity.NEEDS_YOU, "shared" to Activity.RUNNING),
                 workspaces = listOf(WorkspaceFolder("w1", "App"), WorkspaceFolder("w2", "Docs"))),
             // Asleep: its saved list still shows, as on the iPhone.
             "nas" to Peer(conn = RelayState.OFFLINE, summaries = listOf(chat("n1")), savedAt = 5),
@@ -54,6 +54,9 @@ class AllChatsTest {
         assertEquals(all.places, all.shown)
         assertEquals("Studio Mac", all.place("m1")?.name)
         assertEquals(listOf(0x5b8defL, 0xa57cf0L, 0x2fb7b1L), all.places.map { it.color })
+        // #2509: a chat's sub-agents come along, and open on their parent's computer.
+        assertEquals(listOf("m1-kid"), all.subagents["m1"]?.map { it.id })
+        assertEquals("mac", all.owners["m1-kid"])
     }
 
     @Test fun `filtered to one place, the list holds only its chats`() {

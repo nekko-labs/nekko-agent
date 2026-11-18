@@ -103,6 +103,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nekko.android.R
+import com.nekko.android.chat.ChatController
 import com.nekko.android.chat.ChatUi
 import com.nekko.android.data.ComputersState
 import com.nekko.android.data.ModelPick
@@ -389,12 +390,15 @@ fun ModelEffortSheet(
     onLoadTools: suspend () -> List<ToolInfo>,
     onSetTool: suspend (name: String, on: Boolean) -> Unit,
     onDismiss: () -> Unit,
+    onRevokeTool: suspend (tool: String) -> Unit = {},
+    onForgetRecipient: suspend (recipient: String) -> Unit = {},
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
     var picking by remember { mutableStateOf(false) }
     var choosingTools by remember { mutableStateOf(false) }
+    var choosingGrants by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf<Effort?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -478,10 +482,22 @@ fun ModelEffortSheet(
                     if (chat.disabledTools.isNotEmpty()) Text("${chat.disabledTools.size} off", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
                 }
             }
+            // What this chat stopped asking about (decisions 0054, 0063), whatever the controls
+            // shown: taking one back is a safety action, not a run setting.
+            if (chat.allowedMcpTools.isNotEmpty() || chat.knownRecipients.isNotEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { choosingGrants = true }.testTag("run.grants"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.grants_title), style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+                    Text("${chat.allowedMcpTools.size + chat.knownRecipients.size}", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
+                }
+            }
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
         }
     }
     if (choosingTools) ToolsSheet(chat.disabledTools, onLoadTools, onSetTool, onDismiss = { choosingTools = false })
+    if (choosingGrants) GrantsSheet(chat.allowedMcpTools, chat.knownRecipients, onRevokeTool, onForgetRecipient, onDismiss = { choosingGrants = false })
 }
 
 /**
@@ -1062,6 +1078,68 @@ private fun ResidentRow(model: EngineStatus.Resident, name: String, budget: Long
         val bytes = model.bytes
         if (budget != null && budget > 0 && bytes != null) {
             LinearProgressIndicator(progress = { min(1f, bytes.toFloat() / budget) }, modifier = Modifier.fillMaxWidth(), color = p.accent)
+        }
+    }
+}
+
+/**
+ * What a chat no longer asks about: the MCP tools the user chose "Always allow this tool" for
+ * (decision 0054) and the recipients it has written to (decision 0063), each with a remove button.
+ * Removing one makes the next call ask again, in this chat only. A change asks for the screen lock.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GrantsSheet(
+    tools: List<String>,
+    recipients: List<String>,
+    onRevokeTool: suspend (String) -> Unit,
+    onForgetRecipient: suspend (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val p = Nekko.palette
+    val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(tools.isEmpty() && recipients.isEmpty()) { if (tools.isEmpty() && recipients.isEmpty()) onDismiss() }
+    @Composable
+    fun row(label: String, key: String, remove: String, action: suspend () -> Unit) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(key), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (busy == key) {
+                CircularProgressIndicator(color = p.accent, modifier = Modifier.size(20.dp))
+            } else {
+                IconButton(
+                    onClick = {
+                        error = null
+                        busy = key
+                        scope.launch {
+                            try { action() } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message ?: resources.getString(R.string.chat_change_failed) }
+                            busy = null
+                        }
+                    },
+                    enabled = busy == null,
+                    modifier = Modifier.semantics { contentDescription = remove }.testTag("$key.remove"),
+                ) { Icon(Icons.Outlined.Close, contentDescription = null, tint = p.inkFaint) }
+            }
+        }
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
+            Text(stringResource(R.string.grants_title), style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.padding(bottom = 8.dp))
+            error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
+            if (tools.isNotEmpty()) {
+                Text(stringResource(R.string.grants_tools), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(top = 8.dp))
+                tools.forEach { t ->
+                    val label = ChatController.mcpToolLabel(t)
+                    row(label, "grants.tool.$t", stringResource(R.string.grants_remove_tool, label)) { onRevokeTool(t) }
+                }
+            }
+            if (recipients.isNotEmpty()) {
+                Text(stringResource(R.string.grants_recipients), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(top = 8.dp))
+                recipients.forEach { r -> row(r, "grants.recipient.$r", stringResource(R.string.grants_remove_recipient, r)) { onForgetRecipient(r) } }
+            }
+            Text(stringResource(R.string.grants_note), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(top = 12.dp))
         }
     }
 }

@@ -10,7 +10,7 @@ vi.mock('../store.js', () => {
   return { useStore };
 });
 
-const { AutomationsPane } = await import('./AutomationsPane.js');
+const { AutomationsPane, AutomationsPausedLine } = await import('./AutomationsPane.js');
 
 const NOW = 1_800_000_000_000;
 const task = (over: Partial<AutomationTask>): AutomationTask => ({
@@ -23,7 +23,7 @@ describe('automations pane and the run policy', () => {
     expect(html).toContain('data-ci-runners');
     expect(html).toContain('View CI runners');
     expect(html).toContain('Loading CI runners');
-    expect(html).toContain('Nothing scheduled');
+    expect(html).toContain('All clear. Nothing scheduled.');
   });
 
   it('says a due task is waiting for you to be away, not "due now"', () => {
@@ -45,5 +45,28 @@ describe('automations pane and the run policy', () => {
       />,
     );
     expect(html).toContain('3 runs · last 1 min ago · low priority · waited 2 hr');
+  });
+
+  it('says nothing scheduled in one line, without the illustrated card or a strip chip', () => {
+    const html = renderToStaticMarkup(<AutomationsPane tasks={[]} running={new Set()} now={NOW} onOpen={() => {}} />);
+    expect(html).toContain('data-automations-empty');
+    expect(html).not.toContain('<svg viewBox="0 0 160 96"');
+    expect(html).not.toContain('border-dashed');
+    expect(html).not.toContain('class="chip');
+  });
+
+  it('draws task rows as quiet rows: no card list, no kind emoji tile', () => {
+    const html = renderToStaticMarkup(<AutomationsPane tasks={[task({ nextRunAt: NOW + 3_600_000 })]} running={new Set()} now={NOW} onOpen={() => {}} />);
+    expect(html).toContain('quiet-row');
+    expect(html).not.toContain('divide-y');
+    expect(html).not.toContain('🔁');
+  });
+
+  it('says paused in one line with Resume, the detail in its tooltip', () => {
+    const html = renderToStaticMarkup(<AutomationsPausedLine onResume={() => {}} />);
+    expect(html).toContain('All automations are paused');
+    expect(html).toContain('Resume');
+    expect(html).toContain('title="Schedules, events and polls start nothing until you resume. Run now still works."');
+    expect(html).not.toContain('border');
   });
 });

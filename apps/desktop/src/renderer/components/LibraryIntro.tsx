@@ -1,16 +1,9 @@
-import React, { useId } from 'react';
-import { Modal } from './primitives/Modal.js';
-import { CloseIcon } from '../icons.js';
+import React from 'react';
+import { PageIntro, dismissIntro, introKey, introSeen, type PageGuide } from './PageIntro.js';
 
-export const LIBRARY_INTRO_KEY = 'nekko.libraryIntroSeen';
-
-export function libraryIntroSeen(): boolean {
-  try { return localStorage.getItem(LIBRARY_INTRO_KEY) === '1'; } catch { return false; }
-}
-
-export function dismissLibraryIntro(): void {
-  try { localStorage.setItem(LIBRARY_INTRO_KEY, '1'); } catch { /* The guide remains dismissible without browser storage. */ }
-}
+export const LIBRARY_INTRO_KEY = introKey('library');
+export const libraryIntroSeen = () => introSeen('library');
+export const dismissLibraryIntro = () => dismissIntro('library');
 
 /** Original, static artwork: no network, file reads, motion or preview permissions. */
 export function LibraryArtwork() {
@@ -42,34 +35,23 @@ export function LibraryArtwork() {
   </svg>;
 }
 
+export const LIBRARY_GUIDE: PageGuide = {
+  page: 'library',
+  name: 'Library',
+  title: 'Welcome to your Library',
+  eyebrow: 'Made in a chat. Found here.',
+  lead: 'A home for the reports, pages, designs and other files your agents create, without digging through old chats.',
+  steps: [
+    ['Make something', 'Ask an agent for a report, a page or a diagram. Files it creates or links in a chat appear here automatically.'],
+    ['Find it again', 'Browse by kind or filter by name and chat. Pick a file to preview it, or open its original chat to keep working.'],
+    ['Keep it yours', 'Files stay in their original folders. Open a file in its usual app to save a copy or share it. Nothing is published automatically.'],
+  ],
+  tryLabel: 'Try this in a chat',
+  tryThis: '“Create a one-page report and link the file in your reply.”',
+  cta: 'Explore Library',
+  artwork: <LibraryArtwork />,
+};
+
 export function LibraryIntro({ onClose }: { onClose: () => void }) {
-  const title = useId();
-  return <Modal title="Welcome to your Library" labelledBy={title} onClose={onClose} overlayClassName="p-4" className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-surface shadow-2xl">
-    <div data-library-intro className="relative p-5 sm:p-8">
-      <button type="button" className="btn-icon absolute right-3 top-3" aria-label="Close Library guide" onClick={onClose}><CloseIcon className="h-4 w-4" /></button>
-      <div className="mx-auto max-w-xs"><LibraryArtwork /></div>
-      <p className="mt-1 text-center text-2xs font-semibold uppercase tracking-widest text-accent">Made in a chat. Found here.</p>
-      <h2 id={title} className="mt-2 text-center text-2xl font-semibold tracking-tight">Welcome to your Library</h2>
-      <p className="mx-auto mt-3 max-w-md text-center text-sm text-ink-soft">A home for the reports, pages, designs and other files your agents create, without digging through old chats.</p>
-      <ol className="mt-6 grid gap-4 sm:grid-cols-3">
-        {[
-          ['Make something', 'Ask an agent for a report, a page or a diagram. Files it creates or links in a chat appear here automatically.'],
-          ['Find it again', 'Browse by kind or filter by name and chat. Pick a file to preview it, or open its original chat to keep working.'],
-          ['Keep it yours', 'Files stay in their original folders. Open a file in its usual app to save a copy or share it. Nothing is published automatically.'],
-        ].map(([heading, text], i) => <li key={heading}>
-          <span className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent" aria-hidden="true">{i + 1}</span>
-          <h3 className="text-sm font-semibold">{heading}</h3>
-          <p className="mt-1 text-xs leading-relaxed text-ink-soft">{text}</p>
-        </li>)}
-      </ol>
-      <div className="mt-6 rounded-xl border border-line bg-surface-2 p-3">
-        <p className="text-xs font-semibold">Try this in a chat</p>
-        <p className="mt-1 text-sm text-ink-soft">“Create a one-page report and link the file in your reply.”</p>
-      </div>
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-2xs text-ink-faint">You can reopen this from Library guide.</p>
-        <button type="button" className="btn btn-primary" onClick={onClose}>Explore Library</button>
-      </div>
-    </div>
-  </Modal>;
+  return <PageIntro guide={LIBRARY_GUIDE} onClose={onClose} />;
 }
