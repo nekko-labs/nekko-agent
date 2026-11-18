@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { APPROVE_TOOL, WATCH_TOOL, TITLE_TOOL, askNekkod, callNekkod, handleBridgeMessage, offeredTools } from './bridge.js';
+import { APPROVE_TOOL, WATCH_TOOL, TITLE_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL, GENERATE_VIDEO_TOOL, askNekkod, callNekkod, handleBridgeMessage, offeredTools } from './bridge.js';
 
 const prompt = { tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 'toolu_1' };
 
@@ -143,5 +143,39 @@ describe('the in-turn title tool on the bridge', () => {
     expect(url).toBe('http://127.0.0.1:9/harness/tool');
     expect(init.headers.Authorization).toBe('Bearer title-token');
     expect(JSON.parse(init.body)).toEqual(call);
+  });
+});
+
+describe('the picture tools on the bridge', () => {
+  const allow = async () => ({ behavior: 'allow' as const, updatedInput: {} });
+
+  it('are offered only when nekkod names them', () => {
+    expect(offeredTools('agent_watch')).toEqual([WATCH_TOOL]);
+    expect(offeredTools('generate_image,edit_image,media_models')).toEqual([GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL]);
+  });
+
+  it('match the Nekko engine chat\'s tools, without the project path the bridge leaves to Claude Code', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const catalog = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', 'crates', 'nekko-turn', 'src', 'catalog.json'), 'utf8'));
+    const engine = Object.fromEntries(([...catalog.tools.media, catalog.tools.video] as Array<{ name: string; parameters: { properties: Record<string, unknown>; required: string[] } }>).map((t) => [t.name, t.parameters]));
+    for (const tool of [GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL, GENERATE_VIDEO_TOOL]) {
+      const own = Object.keys(tool.inputSchema.properties as object);
+      const theirs = Object.keys(engine[tool.name]!.properties).filter((k) => k !== 'path' && k !== 'inspect');
+      expect(own).toEqual(theirs);
+      expect((tool.inputSchema as { required?: string[] }).required ?? []).toEqual(engine[tool.name]!.required ?? []);
+    }
+  });
+
+  it('answer with the text and the pictures as MCP image content', async () => {
+    const run = vi.fn(async () => ({ ok: true as const, text: 'Made the picture.', images: ['iVBORw0KGgo='] }));
+    const msg = { id: 9, method: 'tools/call', params: { name: 'generate_image', arguments: { prompt: 'a kite' } } };
+    const r = (await handleBridgeMessage(msg, allow, [GENERATE_IMAGE_TOOL], run)) as any;
+    expect(r.result).toEqual({ content: [{ type: 'text', text: 'Made the picture.' }, { type: 'image', data: 'iVBORw0KGgo=', mimeType: 'image/png' }] });
+  });
+
+  it('carry the pictures from nekkod and drop anything that is not one', async () => {
+    const fetchImpl = reply(200, { ok: true, text: 'Made the picture.', images: ['AAAA', 7, ''] });
+    await expect(callNekkod('http://x', 't', { name: 'generate_image', input: { prompt: 'a kite' } }, fetchImpl)).resolves.toEqual({ ok: true, text: 'Made the picture.', images: ['AAAA'] });
   });
 });

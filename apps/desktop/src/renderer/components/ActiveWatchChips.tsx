@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { refreshAgentWatches, useAgentWatches, watchClock, watchProgress } from '../agentWatches.js';
+import { refreshAgentWatches, useAgentWatches, watchClock, watchName, watchProgress } from '../agentWatches.js';
 import { WatchIcon } from './agent-console/WatchRow.js';
 
 /** Always visible with the composer, independent of transcript virtualization. */
@@ -20,7 +20,7 @@ export function ActiveWatchChips({ sessionId, owner }: { sessionId: string; owne
       const progress = watchProgress(w);
       return <details key={w.id} className="min-w-0 max-w-full rounded-lg border border-line px-2 py-1">
         <summary className="flex cursor-pointer flex-wrap items-center gap-2" title={clock?.title}>
-          <WatchIcon />{owner && <span className="max-w-40 truncate" title={owner}>{owner} ·</span>}<span>{w.kind === 'pr' ? (w.auto ? 'Watching until merge-ready' : 'PR watcher') : 'Timer watcher'}</span>
+          <WatchIcon />{owner && <span className="max-w-40 truncate" title={owner}>{owner} ·</span>}<span>{watchName(w)}</span>
           {progress && <span className="text-ink-faint" data-watch-progress>{progress} ·</span>}
           <span>{clock?.text ?? 'Status unavailable'}</span>
         </summary>
@@ -32,9 +32,9 @@ export function ActiveWatchChips({ sessionId, owner }: { sessionId: string; owne
           <button type="button" className="btn btn-outline text-xs" disabled={busy !== null} onClick={async () => {
             setBusy(w.id); setError(null);
             try { await window.nekko.cancelAgentWatch(sessionId, w.id); refreshAgentWatches(sessionId); }
-            catch (e) { setError(`Could not cancel watcher: ${String(e)}`); }
+            catch (e) { setError(`Could not cancel ${w.kind === 'clip' ? 'the clip' : 'watcher'}: ${String(e)}`); }
             finally { setBusy(null); }
-          }}>{busy === w.id ? 'Cancelling…' : 'Cancel watcher'}</button>
+          }}>{busy === w.id ? 'Cancelling…' : w.kind === 'clip' ? 'Cancel clip' : 'Cancel watcher'}</button>
         </div>
       </details>;
     })}
