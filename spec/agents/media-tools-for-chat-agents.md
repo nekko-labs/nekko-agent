@@ -31,12 +31,12 @@ area: agents
 
 | Tool | Does | Returns to the model |
 |---|---|---|
-| `generate_image` | Makes a picture from a prompt. Optional: `model`, `size`, `count` (1-4), `style`, `format` (`png`, `webp`, `svg` where the model can) | Each file's path, plus the picture itself when the model reads images and the size is within its limits |
+| `generate_image` | Makes a picture from a prompt. Optional: `model`, `size`, `count` (1-4 on local models, always 1 on paid ones, see Decisions), `style`, `format` (`png`, `webp`, `svg` where the model can) | Each file's path, plus the picture itself when the model reads images and the size is within its limits |
 | `edit_image` | Changes one or more existing pictures (a workspace path or a picture from this chat) with a prompt | The same |
 | `generate_video` | Starts a clip from a prompt and an optional first frame | A job id at once; the clip's path when the chat wakes |
 | `media_models` | Lists the media models this chat may use: where each runs, what it can do (create, edit, video, vector), and its price per call when it has one | The list |
 
-- **Model choice.** With no `model`, the tool uses the chat's media preference, else the best local model this machine has for the task (the same recommendation Photo uses). An agent never silently gets a cloud model: a cloud model is used only when the user picked it, or Fusion may choose it (see below).
+- **Model choice.** With no `model`, the tool uses the chat's media preference (its own `imageParams`), else the Settings default, else the best local model this machine has for the task (the same recommendation Photo uses). An agent never silently gets a cloud model: a cloud model is used only when the user picked it, or Fusion may choose it (see below).
 - **Results in the chat.** Pictures and clips land beside the chat (decision 0072) and in the transcript as the tool's result, the same picture block Photo uses. The agent can then use the file (put it in a page, commit it).
 - **Video is never in the turn's way.** `generate_video` returns a job id at once; the chat wakes when the clip is ready, the same way `agent_watch` wakes it. Progress and Stop show on the job.
 
@@ -51,7 +51,7 @@ area: agents
 - **OpenRouter** on the user's key: pictures and clips (an async `/api/v1/videos`). Which picture endpoint to use is checked against OpenRouter's own API reference at that PR, since sources disagree.
 - **Recraft** (directly or through OpenRouter) for vector output: real SVG, not a traced bitmap. It is paid per picture (V4.1 vector $0.08, Pro vector $0.30 on 2026-11-18) and has no downloadable weights.
 - **A free local fallback** for vectors may trace a local picture (for example with vtracer), labelled as traced.
-- **Costs** show before a paid call (price per call from the provider's listing) and land in the Budget dock. A per-chat spending cap stops an agent looping on paid generations.
+- **Costs** show before every paid call, one picture per call (see Decisions), priced from the provider's listing, and land in the Budget dock. A per-chat spending cap stops an agent looping on paid generations.
 
 ### Fusion `[proposed]`
 
@@ -91,8 +91,8 @@ Each is one PR, evaluated before it starts; this file is updated in the same PR.
 9. **Phones:** agent-made pictures and clips on iOS and Android, and a gaps row in [iOS and Android stay in step](../phone/ios-and-android-stay-in-step.md) for anything desktop gets first.
 10. **Docs:** a page on making pictures and clips from any chat.
 
-## Open questions
+## Decisions `[settled by Davide 2026-11-18]`
 
-- Should the chat's media preference live in the model picker (a Media row) or only in Settings?
-- Does an agent-made picture count toward the Photo chat's model "last used", or stay separate?
-- Should `count` above 1 be allowed for paid models, or capped at 1 there?
+1. **Where the media model is chosen:** both. A default in Settings → Agents, plus a per-chat **Media** row in the model picker. Settings arrives with PR 2 (local models only, usually one); the picker row with PR 5, when paid cloud models make the choice matter.
+2. **Agent chats keep their own media settings.** A chat's agent stores its model, size and steps in that chat's own `imageParams`, the field Photo chats already use per chat. Nothing an agent does changes a Photo chat's settings or the model new Photo chats start with; the Settings default from decision 1 is the only shared value.
+3. **One picture per call on paid models.** `count` is fixed at 1 on any model with a price, so each paid call is one visible price. Local models may still make up to 4. **Why:** a user who sees charges they did not expect stops using the app. The per-chat spending cap stays as a second guard.
