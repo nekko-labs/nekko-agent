@@ -12,16 +12,16 @@ User intent (Philip, 2026-11-15): build it from the design system, with Gentlefa
 ## The sheet
 
 - A modal over the current view, 400 wide, one floating surface. Nothing inside it has a card, border or tile.
-- **Header**, left-aligned: the app icon, "What's new", then the running version as meta. A close button (✕, Gentleface `x`) at the top right. There is no "Got it" button.
+- **Header**, left-aligned: the app icon, "What's new", then the running version as meta. A close button (✕, Gentleface `x`) at the top right; the ✕ makes a quarter turn once on hover, focus or press, and stays still under reduced motion. There is no "Got it" button.
 - **Highlights**: up to 3 rows for the running version's line (MAJOR.MINOR). Each row is a title, one line of detail (cut with an ellipsis when it does not fit, so about 30 characters) and its PR number as right-hand meta; the row opens that PR on GitHub. Every row leads with a Gentleface icon that fits what the change is about.
-- **Show N more** opens the rest in place (height opens, content fades in) and focus moves to the first row it revealed. It is not shown when a line has 3 or fewer.
+- **Show more** adds the rest to the list. The sheet keeps the size it had: the list scrolls inside it, and the header, ✕ and footer stay put (Matt, 2026-11-18: some versions will have many changes). The new rows fade in, focus moves to the first of them and it scrolls into view. Every row is reachable by Tab, which scrolls the list. It is not shown when a line has 3 or fewer.
 - **Footer**: "See every change ↗" opens the GitHub release page for the running version (`releases/tag/v0.10.1004`). Every version the updater installs is a GitHub release with its own page. A development build (`0.10.1004-dev.…`) shows its line's highlights and opens `releases/latest`. A nightly build is not a release and has no page.
 - A line with no highlights shows the header and "See every change ↗" only.
 - Escape, ✕ and a click outside close it. Focus moves into the sheet on open and back to what opened it on close.
 
 ## Ways to open it
 
-- The title-bar pill after an update: "✓ Updated to v… · What's new". "What's new" opens the sheet and dismisses the pill; the rest of the pill still only dismisses.
+- The title-bar pill after an update says only "What's new" (Matt, 2026-11-18: the longer pill was too wide, and the sheet's header shows the version). It opens the sheet and goes away. Its accessible name and tooltip still say "Updated to v…".
 - Settings › Updates: a "What's new" button beside "Check now".
 - About Nekko Agent: a "What's new" button.
 - The command palette: "What's new", also found as "whats new", "changelog" or "release notes".
@@ -61,7 +61,7 @@ User intent (Philip, 2026-11-15): build it from the design system, with Gentlefa
   | Usage, statistics | `bar-chart-horizontal` |
   | The model server | `server` |
   | Anything else | `sparkles` |
-- The list holds as many highlights as were written for the line; the sheet shows the first 3 and puts the rest behind "Show N more". There is no upper limit yet.
+- The list holds as many highlights as were written for the line; the sheet shows the first 3 and puts the rest behind "Show more". There is no upper limit yet.
 - Until the pipeline below exists, the file is written by hand.
 
 ## Privacy and security

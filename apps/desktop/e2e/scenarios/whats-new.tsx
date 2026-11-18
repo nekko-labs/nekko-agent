@@ -14,6 +14,8 @@ import '../../src/renderer/styles.css';
 // links the sheet would open are recorded in `integration.opened` instead.
 const opened: string[] = [];
 let version = '0.10.1004';
+// What the sheet reads: the bundled file, or a long synthetic line (`integration.long`).
+let data: unknown = bundled;
 
 const settings = { providers: [], workspaces: [], experimental: {}, agent: {}, ui: {}, updates: {} } as any;
 
@@ -36,9 +38,13 @@ function Fixture() {
       opened,
       /** What the build bundles, so the journey follows the data instead of repeating it. */
       lines: Object.fromEntries(Object.entries(bundled as Record<string, unknown[]>).map(([line, list]) => [line, list.length])),
-      expected: (v: string) => ({ ...splitHighlights(highlightsFor(v)), release: releaseUrl(v) }),
+      expected: (v: string) => ({ ...splitHighlights(highlightsFor(v, data)), release: releaseUrl(v) }),
+      /** A release with many changes: line 0.97 gets `count` synthetic highlights. Shows on the next launch. */
+      long: (count: number) => {
+        data = { '0.97': Array.from({ length: count }, (_, i) => ({ title: `Synthetic change ${i + 1}`, detail: `What change ${i + 1} does for you.`, pr: 9000 + i, icon: 'sparkles' })) };
+      },
       prUrl,
-      /** Relaunch on `next`; `updatedFrom` is the version the last launch ran, which shows the "Updated to" pill. */
+      /** Relaunch on `next`; `updatedFrom` is the version the last launch ran, which shows the pill. */
       launch: (next: string, updatedFrom?: string) => {
         version = next;
         localStorage.setItem('op_last_version', updatedFrom ?? next);
@@ -57,7 +63,7 @@ function Fixture() {
       </main>
       <AboutNekko />
       <CommandPalette />
-      <WhatsNewSheet />
+      <WhatsNewSheet data={data} />
     </UpdateProvider>
   );
 }

@@ -18,7 +18,7 @@ export interface Highlight {
   icon?: string;
 }
 
-/** How many highlights show before "Show N more". */
+/** How many highlights show before "Show more". */
 export const TOP_HIGHLIGHTS = 3;
 
 const REPO_URL = 'https://github.com/nekko-labs/nekko-agent';
@@ -53,7 +53,7 @@ export function highlightsFor(version: string, data: unknown = bundled): Highlig
   return list.map(readHighlight).filter((item): item is Highlight => item !== null);
 }
 
-/** The first three, and what "Show N more" opens. */
+/** The first three, and what "Show more" adds. */
 export function splitHighlights(list: Highlight[]): { top: Highlight[]; rest: Highlight[] } {
   return { top: list.slice(0, TOP_HIGHLIGHTS), rest: list.slice(TOP_HIGHLIGHTS) };
 }

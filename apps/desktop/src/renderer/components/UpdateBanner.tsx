@@ -269,11 +269,16 @@ export function UpdateControl() {
 
   if (stage === 'installed') {
     return wrap(
-      <span className="update-pill update-done">
-        <button type="button" onClick={updater.dismissResult} title="Dismiss">✓ Updated to v{version}</button>
-        <span aria-hidden>·</span>
-        <button type="button" className="update-done-link" onClick={() => { openWhatsNew(); updater.dismissResult(); }} data-testid="update-whats-new">What's new</button>
-      </span>,
+      <button
+        type="button"
+        className="update-pill update-done"
+        onClick={() => { openWhatsNew(); updater.dismissResult(); }}
+        aria-label={`Updated to v${version}. What's new`}
+        title={`Updated to v${version}`}
+        data-testid="update-whats-new"
+      >
+        What's new
+      </button>,
     );
   }
 

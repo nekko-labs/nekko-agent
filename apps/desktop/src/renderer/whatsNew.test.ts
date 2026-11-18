@@ -54,7 +54,7 @@ describe('highlightsFor', () => {
 });
 
 describe('splitHighlights', () => {
-  it('shows three and keeps the rest for "Show N more"', () => {
+  it('shows three and keeps the rest for "Show more"', () => {
     const { top, rest } = splitHighlights([h(1), h(2), h(3), h(4), h(5)]);
     expect(top.map((x) => x.pr)).toEqual([1, 2, 3]);
     expect(rest.map((x) => x.pr)).toEqual([4, 5]);

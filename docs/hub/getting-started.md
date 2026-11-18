@@ -217,9 +217,9 @@ the top too (they offer no Auto, so no Fusion).
 
 ### See what's new in this version
 
-**What's new** lists the few changes in your version worth knowing about, each with the pull request that made it. **Show N more** opens the rest, and **See every change** opens the full release notes on GitHub. The list ships with the app, so it opens without a connection.
+**What's new** lists the few changes in your version worth knowing about, each with the pull request that made it. **Show more** lists the rest, which scroll inside the sheet, and **See every change** opens the full release notes on GitHub. The list ships with the app, so it opens without a connection.
 
-Open it from **Settings → Updates → What's new**, from **About Nekko Agent**, by typing "what's new" in the command palette (Ctrl/Cmd+K), or from the **✓ Updated to v… · What's new** pill in the title bar right after an update.
+Open it from **Settings → Updates → What's new**, from **About Nekko Agent**, by typing "what's new" in the command palette (Ctrl/Cmd+K), or from the **What's new** pill in the title bar right after an update.
 
 ### Search everything (Ctrl/Cmd+K)
 

@@ -8,11 +8,11 @@ import { highlightsFor, prUrl, releaseUrl, splitHighlights, type Highlight } fro
 /** Every row has a glyph: the highlight's own, or this when it names none we bundle. */
 const FALLBACK_ICON = 'sparkles';
 
-function HighlightRow({ item, rowRef }: { item: Highlight; rowRef?: React.Ref<HTMLDivElement> }) {
+function HighlightRow({ item, rowRef, className }: { item: Highlight; rowRef?: React.Ref<HTMLDivElement>; className?: string }) {
   const icon = item.icon && isGfIconName(item.icon) ? item.icon : FALLBACK_ICON;
 
   return (
-    <div ref={rowRef} role="listitem">
+    <div ref={rowRef} role="listitem" className={className}>
       <Row
         stacked
         leading={<GfIcon name={icon} className="text-ink-soft" />}
@@ -26,17 +26,30 @@ function HighlightRow({ item, rowRef }: { item: Highlight; rowRef?: React.Ref<HT
   );
 }
 
-function Sheet({ version, onClose }: { version: string; onClose: () => void }) {
+function Sheet({ version, data, onClose }: { version: string; data?: unknown; onClose: () => void }) {
   const titleId = useId();
-  const [expanded, setExpanded] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
   const firstMore = useRef<HTMLDivElement>(null);
+  // Set by "Show more": the height the sheet had, which it keeps while the list scrolls inside it.
+  const [height, setHeight] = useState<number | null>(null);
+  const expanded = height !== null;
 
-  const { top, rest } = splitHighlights(highlightsFor(version));
+  const { top, rest } = splitHighlights(highlightsFor(version, data));
+
+  // The laid-out height, to the fraction: `offsetHeight` rounds, and the sheet would shift by that.
   const showMore = () => {
-    setExpanded(true);
-    // The button that had focus is gone: hand it to the first row it revealed.
-    requestAnimationFrame(() => firstMore.current?.querySelector('button')?.focus());
+    if (body.current) setHeight(parseFloat(getComputedStyle(body.current).height));
   };
+
+  useEffect(() => {
+    if (!expanded) return;
+
+    // The button that had focus is gone: hand it to the first row it revealed, and bring that row into view.
+    const row = firstMore.current?.querySelector('button');
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    row?.focus({ preventScroll: true });
+    row?.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
+  }, [expanded]);
 
   return (
     <Modal
@@ -45,10 +58,10 @@ function Sheet({ version, onClose }: { version: string; onClose: () => void }) {
       onClose={onClose}
       overlayClassName="p-4"
       zIndex={100}
-      className="whats-new-sheet max-h-[calc(100dvh-2rem)] w-[400px] max-w-full overflow-y-auto rounded-xl bg-surface text-ink shadow-(--shadow-float)"
+      className="whats-new-sheet flex max-h-[calc(100dvh-2rem)] w-[400px] max-w-full flex-col overflow-hidden rounded-xl bg-surface text-ink shadow-(--shadow-float)"
     >
-      <div data-whats-new={version}>
-        <header className="flex items-center gap-2 px-5 pt-5">
+      <div ref={body} className="flex min-h-0 flex-col" style={expanded ? { height } : undefined} data-whats-new={version}>
+        <header className="flex shrink-0 items-center gap-2 px-5 pt-5">
           <NekkoAvatar size={20} stationary />
           <h2 id={titleId} className="text-base font-semibold">What's new</h2>
           <span className="text-xs tabular-nums text-ink-faint">v{version}</span>
@@ -58,23 +71,22 @@ function Sheet({ version, onClose }: { version: string; onClose: () => void }) {
         </header>
 
         {top.length > 0 && (
-          <Group as="div" role="list" label="Highlights" className="mt-2 px-2">
-            {top.map((item, i) => <HighlightRow key={`${item.pr}-${i}`} item={item} />)}
+          <div className="mt-1.5 min-h-0 flex-1 overflow-y-auto px-2 py-0.5" data-whats-new-list>
+            {/* 2px of the 8px gap above sits inside the scroller, so the focus ring on its first or last row is not clipped. */}
+            <Group as="div" role="list" label="Highlights">
+              {top.map((item, i) => <HighlightRow key={`${item.pr}-${i}`} item={item} />)}
 
-            {rest.length > 0 && (
-              <div className={`collapse-wrap ${expanded ? '' : 'collapsed'}`} data-whats-new-rest inert={!expanded}>
-                <div className="min-h-0 overflow-hidden">
-                  {rest.map((item, i) => <HighlightRow key={`${item.pr}-${i}`} item={item} rowRef={i === 0 ? firstMore : undefined} />)}
-                </div>
-              </div>
-            )}
-          </Group>
+              {expanded && rest.map((item, i) => (
+                <HighlightRow key={`${item.pr}-${i}`} item={item} rowRef={i === 0 ? firstMore : undefined} className="whats-new-more" />
+              ))}
+            </Group>
+          </div>
         )}
 
-        <footer className="flex items-center gap-2 px-5 pb-5 pt-2">
+        <footer className="flex min-h-14 shrink-0 items-center gap-2 px-5 pb-5 pt-2">
           {rest.length > 0 && !expanded && (
             <button type="button" className="btn btn-ghost -ml-3" onClick={showMore} data-whats-new-more>
-              Show {rest.length} more
+              Show more
             </button>
           )}
           <button type="button" className="ml-auto text-xs text-accent hover:underline" onClick={() => void window.nekko.openPath(releaseUrl(version))} data-whats-new-all>
@@ -90,8 +102,9 @@ function Sheet({ version, onClose }: { version: string; onClose: () => void }) {
  * The "What's new" sheet: the few changes in this version worth knowing,
  * from the highlights bundled with the build, and a link to the full release
  * notes. A modal over whatever view is showing, opened with `openWhatsNew()`.
+ * `data` replaces the bundled highlights (tests).
  */
-export function WhatsNewSheet() {
+export function WhatsNewSheet({ data }: { data?: unknown } = {}) {
   const [open, setOpen] = useState(false);
   const version = useUpdater().app?.version;
 
@@ -104,5 +117,5 @@ export function WhatsNewSheet() {
 
   if (!open || !version) return null;
 
-  return <Sheet version={version} onClose={() => setOpen(false)} />;
+  return <Sheet version={version} data={data} onClose={() => setOpen(false)} />;
 }
