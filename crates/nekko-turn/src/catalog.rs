@@ -22,6 +22,8 @@ pub struct Catalog {
     /// `generate_image`, `edit_image`, `media_models`: offered when this
     /// computer has a picture model ready (`turnTools`'s `media`).
     pub media: Vec<Value>,
+    /// `generate_video`: offered when this computer has a video model ready (`turnTools`'s `video`).
+    pub video: Value,
     pub default_turn_wrapper: String,
     /// `{ id, allowsSpawn, promptHint }`, in `ORCHESTRATION_STRATEGIES` order.
     pub strategies: Vec<Value>,
@@ -59,6 +61,7 @@ pub fn catalog() -> &'static Catalog {
             ask_user: tools["askUser"].clone(),
             decide: tools["decide"].clone(),
             media: tools["media"].as_array().cloned().unwrap_or_default(),
+            video: tools["video"].clone(),
             default_turn_wrapper: text(&v, "defaultTurnWrapper"),
             strategies: v["strategies"].as_array().cloned().unwrap_or_default(),
             default_orchestration: v["defaultOrchestration"].clone(),

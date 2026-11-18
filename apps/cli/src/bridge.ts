@@ -122,11 +122,34 @@ export const MEDIA_MODELS_TOOL = {
   inputSchema: { type: 'object', properties: {} },
 };
 
+/**
+ * A short clip (#2973), offered only where the Claude policy allows both
+ * Nekko tools and unattended runs (the clip wakes the chat when it is ready)
+ * and a video model is ready. It answers at once; the clip is kept in Nekko's data folder.
+ */
+export const GENERATE_VIDEO_TOOL = {
+  name: 'generate_video',
+  description:
+    'Start a short clip (about two seconds, an animated WebP) with a local video model on this computer (experimental), from a written description and optionally a first frame. ' +
+    'A clip takes minutes, so this returns at once: end your turn after telling the user, and this chat wakes with the path of the clip Nekko kept when it is ready (or why it failed). Copy it into the project with your own tools if the user wants it there. Nothing leaves the computer.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      prompt: { type: 'string', description: 'What happens in the clip, in detail: subject, motion, camera, style.' },
+      image: { type: 'string', description: 'Optional first frame: a picture in the chat\'s folders, or "last" for the last picture made in this chat.' },
+      model: { type: 'string', description: 'A video model id. Default: the first ready one.' },
+      size: { type: 'string', description: 'The clip\'s shape as WIDTHxHEIGHT (e.g. 832x480 or 480x832), scaled to about 832x480 pixels.' },
+      then: { type: 'string', description: 'What to do when the clip is ready, as an instruction to yourself.' },
+    },
+    required: ['prompt'],
+  },
+};
+
 type NekkoTool = { name: string; description: string; inputSchema: Record<string, unknown> };
 
 /** The Nekko tools a bridge may be told to offer, by name. */
 const NEKKO_TOOLS: Record<string, NekkoTool> = Object.fromEntries(
-  [WATCH_TOOL, TITLE_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL].map((t) => [t.name, t]),
+  [WATCH_TOOL, TITLE_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL, GENERATE_VIDEO_TOOL].map((t) => [t.name, t]),
 );
 
 /** `--tools a,b`: the known Nekko tools nekkod asked this bridge to offer. */

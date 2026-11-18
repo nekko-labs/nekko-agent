@@ -16,6 +16,7 @@ use crate::model_server::Server;
 use base64::Engine as _;
 use nekko_tools::{ToolCall, ToolContext};
 use serde_json::{Value, json};
+use std::sync::Arc;
 
 /// The tools, as the catalog names them.
 pub const TOOLS: [&str; 3] = ["generate_image", "edit_image", "media_models"];
@@ -153,6 +154,149 @@ pub async fn run_bridge(
         paths.join(", ")
     ));
     json!({ "ok": true, "text": output, "images": images })
+}
+
+/// `generate_video`'s name, apart from the picture tools: it is offered with a
+/// ready video model and answers before the clip exists.
+pub const VIDEO_TOOL: &str = "generate_video";
+
+/// What finishing a clip says when it was not asked for (`then`).
+const CLIP_THEN: &str = "Show the user the clip and continue the task.";
+
+/// A clip to start (`generate_video`): the caller has already read the first
+/// frame (as a data URL) and approved the project path, while the turn could ask.
+pub struct Clip<'a> {
+    pub session_id: &'a str,
+    pub input: &'a Value,
+    pub first_frame: Option<String>,
+    /// A new project file to also write the clip to, already approved.
+    pub project_path: Option<String>,
+    /// Where Nekko keeps the clip: the chat's own folder in its data.
+    pub kept: std::path::PathBuf,
+}
+
+/// Start a clip on this computer's video model and arm the `clip` watch that
+/// wakes the chat when it ends (made, failed, or stopped by the chat's Stop or
+/// the watch's cancel). Returns at once with what the agent is told.
+pub async fn start_clip(
+    server: Arc<Server>,
+    watches: Arc<crate::watches::Watches>,
+    c: Clip<'_>,
+) -> Result<String, String> {
+    let models = server.ready_video_models().await;
+    let model = match c.input.get("model").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+        Some(asked) => models
+            .iter()
+            .find(|m| m["id"] == asked)
+            .cloned()
+            .ok_or_else(|| format!("{asked} is not a ready video model on this computer."))?,
+        None => models.first().cloned().ok_or("No video model is ready on this computer.")?,
+    };
+    let prompt = c.input.get("prompt").and_then(Value::as_str).map(str::trim).unwrap_or_default();
+    if prompt.is_empty() {
+        return Err("Describe the clip first (prompt).".into());
+    }
+    let shape = match c.input.get("size").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
+        Some(s) => s
+            .trim()
+            .to_lowercase()
+            .split_once('x')
+            .and_then(|(w, h)| Some((w.trim().parse::<f64>().ok()?, h.trim().parse::<f64>().ok()?)))
+            .filter(|(w, h)| *w > 0.0 && *h > 0.0)
+            .ok_or("size is WIDTHxHEIGHT, for example 832x480.")?,
+        // About 16:9, which the engine scales to the documented 832x480.
+        None => (1344.0, 768.0),
+    };
+    // The request carries the shape as a picture size (multiples of 64); the
+    // engine scales it to a clip's pixel count (`video_generation_body`).
+    let snap = |n: f64| ((n / 64.0).round() * 64.0).clamp(256.0, 2048.0);
+    let ratio = shape.0 / shape.1;
+    let (shape_w, shape_h) =
+        if ratio >= 1.0 { (snap(1344.0), snap(1344.0 / ratio)) } else { (snap(1344.0 * ratio), snap(1344.0)) };
+    let (width, height) = nekko_engine::launch::clip_size(shape_w, shape_h);
+    let defaults = &model["defaults"];
+    let num = |k: &str, d: f64| defaults.get(k).and_then(Value::as_f64).unwrap_or(d);
+    let mut request = json!({
+        "modelId": model["id"], "prompt": prompt, "width": shape_w, "height": shape_h,
+        "steps": num("steps", 20.0), "cfgScale": num("cfgScale", 5.0), "seed": -1,
+    });
+    if let Some(f) = &c.first_frame {
+        request["refImages"] = json!([f]);
+    }
+    let then =
+        c.input.get("then").and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty()).unwrap_or(CLIP_THEN);
+    let cancel = nekko_loop::Cancel::default();
+    let id = watches.arm_clip(c.session_id, then, cancel.clone()).await?;
+    let label = model.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+    let (kept, project, watch, name) = (c.kept.clone(), c.project_path.clone(), id.clone(), label.clone());
+    tokio::spawn(async move {
+        let mut quiet = |_: &str| {};
+        let made = tokio::select! {
+            r = server.media_job(&request, true, &mut quiet) => r,
+            // Cancelled: the watch is already gone, so nobody is told.
+            _ = cancel.cancelled() => return,
+        };
+        let news = match made.and_then(|r| keep_clip(&r, &kept, project.as_deref())) {
+            Ok(paths) => format!("The clip is ready ({name}, {width}x{height}): {}.", paths.join(" and ")),
+            Err(e) => format!("The clip could not be made: {e}"),
+        };
+        watches.clip_finished(&watch, &news).await;
+    });
+    Ok(format!(
+        "Started a {width}x{height} clip with {label} on this computer (experimental). It takes minutes; watch {id} wakes this chat with the clip when it is ready, and the chat's Stop cancels it. Tell the user and end your turn now."
+    ))
+}
+
+/// Write a finished clip where it is kept, and to the approved project path.
+fn keep_clip(result: &Value, kept: &std::path::Path, project: Option<&str>) -> Result<Vec<String>, String> {
+    let b64 =
+        result.get("b64_json").and_then(Value::as_str).filter(|b| !b.is_empty()).ok_or("the model returned no clip")?;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|_| "the clip could not be read")?;
+    let ext = match result.get("mime_type").and_then(Value::as_str) {
+        Some("video/webm") => "webm",
+        Some("image/gif") => "gif",
+        _ => "webp",
+    };
+    std::fs::create_dir_all(kept).map_err(|e| format!("could not keep the clip: {e}"))?;
+    let file = kept.join(format!("clip-{}.{ext}", nekko_js::now_ms()));
+    std::fs::write(&file, &bytes).map_err(|e| format!("could not keep the clip: {e}"))?;
+    let mut paths = vec![file.to_string_lossy().to_string()];
+    if let Some(p) = project {
+        if let Some(parent) = std::path::Path::new(p).parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        match std::fs::write(p, &bytes) {
+            Ok(()) => paths.push(p.to_string()),
+            Err(e) => paths.push(format!("(not saved to {p}: {e})")),
+        }
+    }
+    Ok(paths)
+}
+
+/// The first frame a native call names: a workspace picture, or `last`.
+pub fn native_frame(input: &Value, session: &Value, ctx: &ToolContext) -> Result<Option<String>, String> {
+    match input.get("image").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
+        None => Ok(None),
+        Some("last") => last_picture(session).map(Some).ok_or_else(|| "No picture was made in this chat yet.".into()),
+        Some(p) => {
+            let full = nekko_tools::resolve_path(Some(&json!(p)), ctx)?;
+            nekko_tools::assert_readable(&full, ctx)?;
+            read_picture(p, &full).map(Some)
+        }
+    }
+}
+
+/// The first frame a Claude Code call names: a picture in the chat's folders, or `last`.
+pub fn bridge_frame(
+    input: &Value,
+    roots: &[std::path::PathBuf],
+    saved: &std::path::Path,
+) -> Result<Option<String>, String> {
+    match input.get("image").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
+        None => Ok(None),
+        Some("last") => newest_saved(saved).map(Some).ok_or_else(|| "No picture was made in this chat yet.".into()),
+        Some(p) => read_picture(p, &inside(roots, p)?.to_string_lossy()).map(Some),
+    }
 }
 
 /// What [`make`] needs from either caller.

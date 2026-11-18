@@ -33,8 +33,8 @@ pub fn turn_can_ask(session: &Value) -> bool {
 
 /// `turnTools(input)`: the tools a (non-sandbox) turn offers, in order. `input`
 /// is the TS `TurnToolInput`: `session`, `offline`, `orchestration`,
-/// `allowBrowserControl`, `mcpTools`, `decide`, `noTools`, and `media` (this
-/// computer has a picture model ready; the daemon's own field).
+/// `allowBrowserControl`, `mcpTools`, `decide`, `noTools`, and the daemon's
+/// own `media` and `video` (this computer has a picture / video model ready).
 pub fn turn_tools(input: &Value) -> Vec<Value> {
     let offline = truthy(input, "offline");
     let c = catalog();
@@ -110,6 +110,11 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     // Local picture models: nothing leaves the computer, so offline keeps them.
     if truthy(input, "media") && !training {
         tools.extend(c.media.iter().filter(|t| !disabled.contains(name(t))).cloned());
+    }
+    // A clip wakes the chat later through a watch, which an incognito or
+    // offline chat cannot be woken by.
+    if truthy(input, "video") && !training && !incognito && !offline && !disabled.contains(name(&c.video)) {
+        tools.push(c.video.clone());
     }
     tools
 }
@@ -490,6 +495,16 @@ mod tests {
         let off = serde_json::json!({ "id": "s", "disabledTools": ["edit_image"] });
         let some = names(serde_json::json!({ "session": off, "media": true }));
         assert!(some.iter().any(|n| n == "generate_image") && !some.iter().any(|n| n == "edit_image"), "{some:?}");
+        // The clip tool comes with a ready video model, never in incognito.
+        let clip = names(serde_json::json!({ "session": session, "video": true }));
+        assert!(clip.iter().any(|n| n == "generate_video") && !clip.iter().any(|n| n == "generate_image"), "{clip:?}");
+        let hidden = serde_json::json!({ "id": "s", "incognito": true });
+        assert!(!names(serde_json::json!({ "session": hidden, "video": true })).iter().any(|n| n == "generate_video"));
+        assert!(
+            !names(serde_json::json!({ "session": session, "video": true, "offline": true }))
+                .iter()
+                .any(|n| n == "generate_video")
+        );
         // A tools-off turn gets none.
         assert!(
             !names(serde_json::json!({ "session": session, "media": true, "noTools": true }))

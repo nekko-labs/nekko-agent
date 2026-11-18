@@ -601,6 +601,99 @@ async fn runs_the_model_server_itself() {
 }
 
 /// The stand-in `sd-server`, built beside this test if `cargo test` did not build examples.
+/// A chat's agent starts a clip (`generate_video`): the call returns at once,
+/// the clip is made through the media queue and kept beside the chat, and its
+/// `clip` watch holds the news that wakes the chat.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chats_agent_starts_a_clip_and_its_watch_gets_the_news() {
+    let data = std::env::temp_dir().join(format!("nekkod-clip-tool-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let model = data.join("models/image/QuantStack_Wan2.2-TI2V-5B-GGUF/Wan2.2-TI2V-5B-Q4_K_M.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("wan2", "Wan2.2 TI2V 5B")).unwrap();
+    let shared = data.join("models/.companions/image");
+    std::fs::create_dir_all(&shared).unwrap();
+    for f in ["vae-wan2.2.safetensors", "t5xxl-umt5-xxl-q8_0.gguf"] {
+        std::fs::write(shared.join(f), "x").unwrap();
+    }
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": free_port(), "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let workspace = data.join("project");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat = json!({ "id": "s_film", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_film.json"), chat.to_string()).unwrap();
+    let d = start_with_env(&data, json!({}), &[]);
+    let events = record_events(d.port);
+    boot_settled(&data);
+    let rig = TurnRig { data: data.clone(), workspace: workspace.clone(), d, events };
+
+    let script = vec![
+        call_tool("c_clip", "generate_video", json!({ "prompt": "waves rolling in", "path": "media/waves.webp" })),
+        say_text("started it"),
+    ];
+    let model = scripted_model(script).await;
+    let spec = turn_spec(&rig, &model, "turn_film", "s_film", json!({ "text": "Make a clip of the sea" }));
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_film", "s_film").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let first = model.requests.lock().unwrap()[0].clone();
+    let tools: Vec<String> = first["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    assert!(tools.contains(&"generate_video".to_string()), "{tools:?}");
+    assert!(!tools.contains(&"generate_image".to_string()), "a video model is not a picture model: {tools:?}");
+
+    // The call answered before the clip existed.
+    let saved = saved_session(&rig, "s_film");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_clip")
+        .map(|m| m["toolResult"].clone())
+        .expect("the clip tool's result");
+    let output = result["output"].as_str().unwrap();
+    assert!(output.starts_with("Started a 832x480 clip with "), "{output}");
+    assert!(output.contains("wakes this chat"), "{output}");
+
+    // The clip lands beside the chat and in the project, and its watch holds the news.
+    let news = until("the clip watch's news", Duration::from_secs(60), || {
+        let path = data.join("agent-watches.json");
+        async move {
+            let all: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
+            let w = all.iter().find(|w| w["kind"] == "clip" && w["sessionId"] == "s_film")?.clone();
+            let text = w["pending"]
+                .as_str()
+                .map(str::to_string)
+                .or_else(|| (w["status"] != "active").then(|| w.to_string()))?;
+            Some(text)
+        }
+    })
+    .await;
+    assert!(news.starts_with("The clip is ready (Wan2.2 TI2V 5B, 832x480): "), "{news}");
+    assert!(news.contains("media/waves.webp"), "{news}");
+    let kept: Vec<_> = std::fs::read_dir(data.join("agent-pictures/s_film")).unwrap().collect();
+    assert_eq!(kept.len(), 1);
+    assert!(workspace.join("media/waves.webp").is_file());
+    post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+}
+
 pub(crate) fn fake_sd() -> std::path::PathBuf {
     let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();

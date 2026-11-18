@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { APPROVE_TOOL, WATCH_TOOL, TITLE_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL, askNekkod, callNekkod, handleBridgeMessage, offeredTools } from './bridge.js';
+import { APPROVE_TOOL, WATCH_TOOL, TITLE_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL, GENERATE_VIDEO_TOOL, askNekkod, callNekkod, handleBridgeMessage, offeredTools } from './bridge.js';
 
 const prompt = { tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 'toolu_1' };
 
@@ -158,8 +158,8 @@ describe('the picture tools on the bridge', () => {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const catalog = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', 'crates', 'nekko-turn', 'src', 'catalog.json'), 'utf8'));
-    const engine = Object.fromEntries((catalog.tools.media as Array<{ name: string; parameters: { properties: Record<string, unknown>; required: string[] } }>).map((t) => [t.name, t.parameters]));
-    for (const tool of [GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL]) {
+    const engine = Object.fromEntries(([...catalog.tools.media, catalog.tools.video] as Array<{ name: string; parameters: { properties: Record<string, unknown>; required: string[] } }>).map((t) => [t.name, t.parameters]));
+    for (const tool of [GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL, GENERATE_VIDEO_TOOL]) {
       const own = Object.keys(tool.inputSchema.properties as object);
       const theirs = Object.keys(engine[tool.name]!.properties).filter((k) => k !== 'path' && k !== 'inspect');
       expect(own).toEqual(theirs);

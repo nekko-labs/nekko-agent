@@ -395,6 +395,16 @@ impl Server {
     /// Whether stable-diffusion.cpp is installed is checked when one loads,
     /// not here: this runs before every chat turn and stays to file reads.
     pub async fn ready_media_models(&self) -> Vec<Value> {
+        self.ready_models(false).await
+    }
+
+    /// The local video models an agent can use now (`generate_video`): as
+    /// [`Server::ready_media_models`], only those whose set makes clips.
+    pub async fn ready_video_models(&self) -> Vec<Value> {
+        self.ready_models(true).await
+    }
+
+    async fn ready_models(&self, video: bool) -> Vec<Value> {
         let Ok(rows) = self.library.list().await else { return Vec::new() };
         let dir = self.library.models_dir();
         tokio::task::spawn_blocking(move || {
@@ -412,7 +422,7 @@ impl Server {
                     } else {
                         return None;
                     };
-                    if capabilities.as_array().is_some_and(|c| c.iter().any(|x| x == "video")) {
+                    if capabilities.as_array().is_some_and(|c| c.iter().any(|x| x == "video")) != video {
                         return None;
                     }
                     let name = m.get("name").filter(|n| n.is_string()).unwrap_or(&m["id"]).clone();
