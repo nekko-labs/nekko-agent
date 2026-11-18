@@ -75,18 +75,68 @@ export const TITLE_TOOL = {
   },
 };
 
-type NekkoTool = typeof WATCH_TOOL | typeof TITLE_TOOL;
+/**
+ * The picture tools (#2973), offered when nekkod passes them in `--tools`:
+ * only where the Claude policy's `nekko_tools` row is enabled for the chat's
+ * sign-in and a picture model is ready on the computer. The same tools as a
+ * Nekko engine chat's (crates/nekko-turn/src/catalog.json), except that the
+ * picture is kept in Nekko's data folder and named in the answer: Claude
+ * Code copies it into the project with its own tools.
+ */
+const MODEL_FIELD = { type: 'string', description: 'A model id from media_models. Default: the chat\'s picture model, then Settings, then the best ready one.' };
+const SIZE_FIELD = { type: 'string', description: 'WIDTHxHEIGHT, each 256 to 2048 in multiples of 64 (e.g. 1024x1024 or 1344x768). Default 1024x1024.' };
+export const GENERATE_IMAGE_TOOL = {
+  name: 'generate_image',
+  description:
+    'Make a picture with a local image model on this computer, from a written description. Nothing leaves the computer and it costs nothing, but it can take from seconds to minutes and only one picture or clip runs at a time on this computer. ' +
+    'You get the picture back and the path of the PNG Nekko kept; copy it into the project with your own tools if the user wants it there. Describe the subject, style, composition and any text exactly. Do not use it for diagrams or charts you can write as code.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      prompt: { type: 'string', description: 'What the picture shows, in detail.' },
+      model: MODEL_FIELD,
+      size: SIZE_FIELD,
+      count: { type: 'number', description: 'How many variations, 1 to 4 (default 1).' },
+    },
+    required: ['prompt'],
+  },
+};
+export const EDIT_IMAGE_TOOL = {
+  name: 'edit_image',
+  description:
+    'Change an existing picture with a local image model that edits (see media_models): restyle it, add or remove something, change colours. Give pictures from the chat\'s folders, or "last" for the last picture made in this chat. Nothing leaves the computer.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      prompt: { type: 'string', description: 'What to change, as an instruction.' },
+      images: { type: 'array', items: { type: 'string' }, description: '1 to 4 paths (.png, .jpg, .jpeg or .webp) in the chat\'s folders, or ["last"].' },
+      model: MODEL_FIELD,
+      size: SIZE_FIELD,
+    },
+    required: ['prompt', 'images'],
+  },
+};
+export const MEDIA_MODELS_TOOL = {
+  name: 'media_models',
+  description: 'List the picture models this chat can use on this computer: id, name and what each can do (create, edit).',
+  inputSchema: { type: 'object', properties: {} },
+};
+
+type NekkoTool = { name: string; description: string; inputSchema: Record<string, unknown> };
 
 /** The Nekko tools a bridge may be told to offer, by name. */
-const NEKKO_TOOLS = { [WATCH_TOOL.name]: WATCH_TOOL, [TITLE_TOOL.name]: TITLE_TOOL } as const;
+const NEKKO_TOOLS: Record<string, NekkoTool> = Object.fromEntries(
+  [WATCH_TOOL, TITLE_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL].map((t) => [t.name, t]),
+);
 
 /** `--tools a,b`: the known Nekko tools nekkod asked this bridge to offer. */
 export function offeredTools(flag: string | undefined): NekkoTool[] {
   const names = (flag ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  return [...new Set(names)].flatMap((n) => (n in NEKKO_TOOLS ? [NEKKO_TOOLS[n as keyof typeof NEKKO_TOOLS]] : []));
+  return [...new Set(names)].flatMap((n) => (n in NEKKO_TOOLS ? [NEKKO_TOOLS[n]!] : []));
 }
 
-export type ToolAnswer = { ok: true; text: string } | { ok: false; error: string };
+/** A tool's answer; `images` are base64 PNGs (the picture tools). */
+export type ToolAnswer = { ok: true; text: string; images?: string[] } | { ok: false; error: string };
 
 /** Run one Nekko tool through nekkod. Never throws: a failure is an error result. */
 export async function callNekkod(
@@ -102,8 +152,11 @@ export async function callNekkod(
       body: JSON.stringify(call),
     });
     if (!res.ok) return { ok: false, error: `Nekko Agent refused the tool call (HTTP ${res.status}).` };
-    const answer = (await res.json()) as { ok?: unknown; text?: unknown; error?: unknown };
-    if (answer.ok === true && typeof answer.text === 'string') return { ok: true, text: answer.text };
+    const answer = (await res.json()) as { ok?: unknown; text?: unknown; error?: unknown; images?: unknown };
+    if (answer.ok === true && typeof answer.text === 'string') {
+      const images = Array.isArray(answer.images) ? answer.images.filter((i): i is string => typeof i === 'string' && i.length > 0) : [];
+      return images.length ? { ok: true, text: answer.text, images } : { ok: true, text: answer.text };
+    }
     return { ok: false, error: typeof answer.error === 'string' ? answer.error : 'Nekko Agent gave no usable answer.' };
   } catch (e) {
     return { ok: false, error: `Could not reach Nekko Agent (${(e as Error).message}).` };
@@ -161,7 +214,9 @@ export async function handleBridgeMessage(
   if (method === 'tools/call' && tools.some((t) => t.name === params?.name)) {
     const input = params?.arguments && typeof params.arguments === 'object' ? (params.arguments as Record<string, unknown>) : {};
     const answer = await run({ name: String(params.name), input });
-    return ok(answer.ok ? { content: [{ type: 'text', text: answer.text }] } : { content: [{ type: 'text', text: answer.error }], isError: true });
+    if (!answer.ok) return ok({ content: [{ type: 'text', text: answer.error }], isError: true });
+    const pictures = (answer.images ?? []).map((data) => ({ type: 'image', data, mimeType: 'image/png' }));
+    return ok({ content: [{ type: 'text', text: answer.text }, ...pictures] });
   }
   if (method === 'tools/call') {
     const decision =

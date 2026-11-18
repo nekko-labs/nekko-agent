@@ -890,6 +890,24 @@ impl Turns {
                 Err(e) => fail(&e.to_string()),
             });
         }
+        if crate::harness::BRIDGE_MEDIA.contains(&name) {
+            if !self.claude_allows(&provider, "nekko_tools").await {
+                return Some(fail(
+                    "Nekko's picture tools are not available for this Claude sign-in: on a Claude plan they wait for Anthropic's approval (Settings > Agents > Claude plan features).",
+                ));
+            }
+            let Some(server) = &self.media else { return Some(fail("Picture tools are not available here.")) };
+            let full = {
+                let (store, id) = (self.store.clone(), entry.session_id.clone());
+                tokio::task::spawn_blocking(move || store.get(&id)).await.ok().flatten().unwrap_or(session)
+            };
+            let default = settings.get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            let saved = self.data_dir.join("agent-pictures").join(&entry.session_id);
+            return Some(
+                crate::media_tools::run_bridge(server, name, &input, &full, default.as_deref(), &entry.roots, &saved)
+                    .await,
+            );
+        }
         if name != crate::harness::BRIDGE_WATCH {
             return Some(fail("Unknown Nekko tool."));
         }
@@ -1761,6 +1779,15 @@ impl Turns {
         let title_session = lock(session).clone();
         if !incognito && self.claude_title_allowed(provider, &title_session).await {
             tools.push(crate::harness::BRIDGE_TITLE.to_string());
+        }
+        // The picture tools, where a picture model is ready on this computer.
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && let Some(server) = &self.media
+            && !server.ready_media_models().await.is_empty()
+        {
+            tools.extend(crate::harness::BRIDGE_MEDIA.iter().map(|t| t.to_string()));
         }
         // A child launched with other Nekko tools is relaunched (a provider
         // switch, or the policy changed), so its bridge lists the right ones.
