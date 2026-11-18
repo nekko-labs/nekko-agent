@@ -256,6 +256,7 @@ test('every site page links to the changelog, and the sitemap and llms.txt list 
   }
   const files = build();
   assert.ok(files.get('sitemap.xml').includes('<loc>https://nekkoagent.com/changelog</loc>'));
-  assert.ok(files.get('llms.txt').includes('https://nekkoagent.com/changelog'));
+  const llmsLinks = [...files.get('llms.txt').matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]);
+  assert.ok(llmsLinks.some((link) => link === 'https://nekkoagent.com/changelog'), 'llms.txt links the changelog');
   assert.ok(files.get('docs/whats-new.html').includes('href="/changelog"'));
 });
