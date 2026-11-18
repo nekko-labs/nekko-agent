@@ -9,6 +9,7 @@
 //   apps/website/docs/media/        images the pages use
 //   apps/website/llms-full.txt      every page in one file
 //   apps/website/release.json       the latest release, for the download buttons
+//   apps/website/changelog.html     the changelog page, from docs/hub/whats-new.json
 // (Committed, they made every docs PR conflict with every other one in the
 // merge queue.) It also rewrites the generated docs section in llms.txt and the
 // docs URLs in sitemap.xml. Those two are committed: they change only with
@@ -328,6 +329,186 @@ ${rendered.html}
 `;
 }
 
+// The changelog page at /changelog (spec/brand/changelog-page.md). Its data is
+// docs/hub/whats-new.json: the highlights of each release line, with the people
+// who shipped them.
+const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i;
+const text = (v) => typeof v === 'string' && v.trim() !== '';
+
+// Validate the highlights file and list its release lines newest first. Links
+// are built from the login, PR number and tag, so each is checked here.
+export function parseWhatsNew(data) {
+  const lines = [];
+  for (const [line, entry] of Object.entries(data)) {
+    if (line.startsWith('$')) continue;
+    const fail = (why) => {
+      throw new Error(`docs/hub/whats-new.json: ${line}: ${why}`);
+    };
+    if (!/^\d+\.\d+$/.test(line)) fail('a release line is MAJOR.MINOR');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry?.date ?? '') || Number.isNaN(Date.parse(entry.date))) fail('date is YYYY-MM-DD');
+    if (!text(entry.tag) || !new RegExp(`^v${line.replace('.', '\\.')}\\.\\d+$`).test(entry.tag)) fail(`tag is v${line}.BUILD`);
+    if (!text(entry.intro)) fail('intro is missing');
+    if (!Array.isArray(entry.highlights) || !entry.highlights.length) fail('highlights are missing');
+    for (const h of entry.highlights) {
+      if (!text(h?.title)) fail('a highlight has no title');
+      if (!text(h.detail)) fail(`${h.title}: no detail`);
+      if (!Number.isInteger(h.pr) || h.pr < 1) fail(`${h.title}: no pull request number`);
+      if (!Array.isArray(h.authors) || !h.authors.length) fail(`${h.title}: no author`);
+      for (const login of h.authors) if (!LOGIN.test(login ?? '')) fail(`${h.title}: not a GitHub login: ${login}`);
+    }
+    lines.push({ line, ...entry });
+  }
+  const parts = (l) => l.line.split('.').map(Number);
+  return lines.sort((a, b) => parts(b)[0] - parts(a)[0] || parts(b)[1] - parts(a)[1]);
+}
+
+export function loadWhatsNew(root = repo) {
+  return parseWhatsNew(JSON.parse(readFileSync(join(root, 'docs', 'hub', 'whats-new.json'), 'utf8')));
+}
+
+// login (lower case) -> the avatar the contributor wall cached at deploy. Only a
+// first-party path named for that login is accepted.
+export function avatarsFrom(manifest) {
+  const avatars = new Map();
+  if (!manifest?.available || !Array.isArray(manifest.contributors)) return avatars;
+  for (const person of manifest.contributors) {
+    if (!LOGIN.test(person?.login ?? '')) continue;
+    if (new RegExp(`^/contributors/${person.login}-[a-f0-9]{16}\\.(png|jpg|webp)$`, 'i').test(person.avatar ?? '')) {
+      avatars.set(person.login.toLowerCase(), person.avatar);
+    }
+  }
+  return avatars;
+}
+
+const monthYear = (date) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+export function changelogPage(lines, avatars = new Map()) {
+  const title = "What's new · Nekko Agent";
+  const description = 'The changes worth knowing in each Nekko Agent release, and the people who shipped them.';
+  const canonical = `${ORIGIN}/changelog`;
+  const og = `${ORIGIN}/og/changelog.jpg?v=${OG_VERSION}`;
+  const person = (login) => {
+    const avatar = avatars.get(login.toLowerCase());
+    return (
+      `<a class="by" href="https://github.com/${login}" rel="noopener">` +
+      `<span class="by-avatar" aria-hidden="true">${escapeHtml(login.slice(0, 2).toUpperCase())}` +
+      (avatar ? `<img class="by-img" src="${escapeHtml(avatar)}" alt="" width="20" height="20" loading="lazy" decoding="async" />` : '') +
+      `</span>${escapeHtml(login)}</a>`
+    );
+  };
+  const jump =
+    lines.length > 1
+      ? `\n      <nav class="jump" aria-label="Releases">${lines.map((l) => `<a href="#${l.line}">${l.line}</a>`).join('')}</nav>`
+      : '';
+  const sections = lines
+    .map(
+      (l) => `
+      <section id="${l.line}" aria-labelledby="release-${l.line}">
+        <header class="release-head">
+          <h2 id="release-${l.line}">${l.line}</h2>
+          <time datetime="${l.date}">${monthYear(l.date)}</time>
+        </header>
+        <p class="release-intro">${escapeHtml(l.intro)}</p>
+        <ul class="highlights">
+${l.highlights
+  .map(
+    (h) => `          <li>
+            <h3>${escapeHtml(h.title)}</h3>
+            <p>${escapeHtml(h.detail)}</p>
+            <p class="shipped">Shipped by ${h.authors.map(person).join(' ')} <span aria-hidden="true">·</span> <a href="${GITHUB}/pull/${h.pr}" rel="noopener">#${h.pr}</a></p>
+          </li>`,
+  )
+  .join('\n')}
+        </ul>
+        <p class="release-all"><a href="${GITHUB}/releases/tag/${l.tag}" rel="noopener">See every change in ${l.line} on GitHub ↗</a></p>
+      </section>`,
+    )
+    .join('\n');
+  return `<!doctype html>
+<html lang="en" data-theme="white">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(title)}</title>
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${canonical}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="${canonical}" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:image" content="${og}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:alt" content="${escapeHtml(title)}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${og}" />
+    <meta name="theme-color" content="#fbf6f8" />
+    <script>(function(){var t=null;try{t=localStorage.getItem('nekko-theme');}catch(e){}if(t!=='white'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'white';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='white'?'#fbf6f8':'#0c0c11';})();</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
+    <link rel="stylesheet" href="/styles.css?v=18" />
+    <link rel="stylesheet" href="/fonts.css?v=1" />
+    <style>
+      .legal { max-width: 720px; margin: 0 auto; padding: 120px 20px 80px; line-height: 1.65; }
+      .legal h1 { font-size: clamp(32px, 5vw, 48px); margin: 0 0 8px; }
+      .legal h2 { font-size: 28px; margin: 0; }
+      .legal h3 { font: 600 17px/1.4 var(--sans); letter-spacing: -0.01em; margin: 0 0 2px; color: var(--ink); }
+      .legal p, .legal li { color: var(--muted); }
+      .legal a { color: var(--accent); }
+      .legal section { margin-top: 64px; scroll-margin-top: 96px; }
+      .jump { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 20px; font: 13px var(--mono); }
+      .release-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 20px; }
+      .release-head time { font: 13px var(--mono); color: var(--muted); }
+      .release-intro { margin: 8px 0 0; }
+      .highlights { list-style: none; padding: 0; margin: 32px 0 0; display: grid; gap: 28px; }
+      .highlights p { margin: 0; }
+      .highlights .shipped { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; font-size: 14px; }
+      .by { display: inline-flex; align-items: center; gap: 6px; }
+      .by-avatar { position: relative; display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; background: var(--bg-2); color: var(--ink); font: 600 8px var(--mono); }
+      .by-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .release-all { margin: 32px 0 0; }
+      .earlier { margin: 64px 0 0; }
+    </style>
+  </head>
+  <body>
+    <header class="nav">
+      <a class="brand" href="/" aria-label="Nekko Agent home"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="30" height="23" /> NEKKO AGENT</a>
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="/#contributors">About us</a>
+        <a href="/docs">Docs</a>
+        <a href="/changelog" aria-current="page">Changelog</a>
+      </nav>
+    </header>
+
+    <main class="legal">
+      <h1>What's new</h1>
+      <p>The changes worth knowing in each release.</p>${jump}
+${sections}
+
+      <p class="earlier"><a href="${GITHUB}/releases" rel="noopener">Earlier releases on GitHub ↗</a></p>
+    </main>
+
+    <footer>
+      <span class="footer-brand"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="26" height="20" /> NEKKO AGENT</span>
+      <span class="micro">MIT · Made with ❤️ by the <a href="https://nekkolabs.com/#team" target="_blank" rel="noopener">Nekko Labs team</a></span>
+      <a href="/docs">Docs</a>
+      <a href="/changelog">Changelog</a>
+      <a href="/beta">Beta</a>
+      <a href="/status">Status</a>
+      <a href="/privacy">Privacy</a>
+    </footer>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </body>
+</html>
+`;
+}
+
 function replaceBetween(text, start, end, body) {
   const a = text.indexOf(start);
   const b = text.indexOf(end);
@@ -369,6 +550,8 @@ export function build() {
   files.set('docs/search.json', JSON.stringify(index) + '\n');
   files.set('llms-full.txt', full.join('\n').trimEnd() + '\n');
   for (const [name, file] of media) files.set(`docs/media/${name}`, readFileSync(file));
+  // With initials here; the deploy adds avatars once the contributor cache exists.
+  files.set('changelog.html', changelogPage(loadWhatsNew()));
 
   const docsList = [
     '## Documentation',
@@ -469,5 +652,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.log(`wrote ${files.size} files to apps/website`);
     console.log(await writeRelease());
     console.log(await writeContributors(site));
+    // The page again, now with the avatars that refresh just cached.
+    const avatars = avatarsFrom(JSON.parse(readFileSync(join(site, 'contributors.json'), 'utf8')));
+    writeFileSync(join(site, 'changelog.html'), changelogPage(loadWhatsNew(), avatars));
+    console.log(`changelog.html: ${avatars.size} cached avatars available`);
   }
 }

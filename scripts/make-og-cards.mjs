@@ -29,12 +29,13 @@ export const STANDALONE = [
   { name: 'beta', eyebrow: 'Beta', title: 'What beta means', line: 'What you get, what to expect, and what happens to your data.', path: '/beta' },
   { name: 'status', eyebrow: 'Status', title: 'Is Nekko working?', line: 'Live status for Nekko Cloud and phone access, plus known issues.', path: '/status' },
   { name: 'privacy', eyebrow: 'Privacy', title: 'Privacy policy', line: 'What we keep, why, who handles it, and your rights.', path: '/privacy' },
+  { name: 'changelog', eyebrow: 'Changelog', title: "What's new", line: 'The changes worth knowing in each release, and who shipped them.', path: '/changelog' },
 ];
 
 // Each docs section gets its own glow, all within the plum family, so a feed of
 // Nekko links is easy to tell apart at a glance.
 const HUES = { Introduction: '#c084b5', 'Using Nekko Agent': '#b0609f', Contributing: '#8f6bc4', 'For AI agents': '#d0789a' };
-const PAGE_HUE = { beta: '#d0789a', status: '#7fa7c9', privacy: '#8f6bc4' };
+const PAGE_HUE = { beta: '#d0789a', status: '#7fa7c9', privacy: '#8f6bc4', changelog: '#c084b5' };
 
 export function cardsFor(pages) {
   return [

@@ -1,0 +1,15 @@
+{
+  "$comment": "The highlights of each release line (MAJOR.MINOR), read by the changelog page at nekkoagent.com/changelog (scripts/build-docs.mjs). date and tag are the line's newest release; authors are the GitHub logins of the pull request's author.",
+  "0.10": {
+    "date": "2026-11-16",
+    "tag": "v0.10.1004",
+    "intro": "Billing and provider setup move into quieter screens, and Ctrl/Cmd+K searches everything.",
+    "highlights": [
+      { "title": "Plan & billing in Settings", "detail": "See your plan and switch teams.", "pr": 2732, "icon": "settings", "authors": ["ermish"] },
+      { "title": "Guided Google Gemini setup", "detail": "Connect Gemini step by step.", "pr": 2726, "icon": "brain-circuit", "authors": ["ermish"] },
+      { "title": "Fusion routing strategies", "detail": "Route by model capability tier.", "pr": 2737, "icon": "router", "authors": ["ermish"] },
+      { "title": "Search everything with Ctrl/Cmd+K", "detail": "Find commands, chats and settings.", "pr": 2389, "icon": "search", "authors": ["ermish"] },
+      { "title": "Winter theme", "detail": "A snowy look with hidden extras.", "pr": 2412, "icon": "palette", "authors": ["ermish"] }
+    ]
+  }
+}

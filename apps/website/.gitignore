@@ -4,3 +4,6 @@
 # Generated from GitHub during the website build
 /contributors.json
 /contributors/
+
+# Generated from docs/hub/whats-new.json during the website build
+/changelog.html

@@ -8,6 +8,7 @@
 - [Feature guide as Markdown](https://nekkoagent.com/docs/features.md): the same content without HTML.
 - [Docs for AI agents](https://nekkoagent.com/docs/for-agents): how to find, cite and use capabilities; separate product guidance from contributor instructions.
 - [Complete documentation](https://nekkoagent.com/llms-full.txt): every published guide in one Markdown file.
+- [What's new](https://nekkoagent.com/changelog): the highlights of each release line, with the pull request and author of each.
 - [Current releases](https://github.com/nekko-labs/nekko-agent/releases): verify that a source feature is included in the user's installed version. Do not treat main-branch implementation as a released installer.
 
 ## Capabilities and boundaries
@@ -52,6 +53,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Getting started](https://nekkoagent.com/docs/index.md): What Nekko Agent is, who makes it, and how to install it or run it from source.
 - [Features by task](https://nekkoagent.com/docs/features.md): Find Nekko Agent features for local AI coding, file recovery, batch edits, memory, approvals, automation and MCP, with setup guides and limits.
 - [Walkthrough](https://nekkoagent.com/docs/walkthrough.md): A picture-by-picture tour of the app.
+- [What's new](https://nekkoagent.com/docs/whats-new.md): Where to find the highlights of each Nekko Agent release and the full release notes.
 
 ### Using Nekko Agent
 
