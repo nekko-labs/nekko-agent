@@ -329,6 +329,32 @@ class ChatControllerTest {
     }
 
     @Test
+    fun `names an MCP tool as the desktop does`() {
+        assertEquals("Post message (Slack)", ChatController.mcpToolLabel("mcp__slack__post_message"))
+        assertEquals("Create Issue (Github)", ChatController.mcpToolLabel("mcp__github__createIssue"))
+        assertEquals("Bash", ChatController.mcpToolLabel("bash"))
+    }
+
+    @Test
+    fun `the chat shows what it no longer asks about`() = runTest {
+        val caller = FakeCaller { c ->
+            when (c.channel) {
+                Channels.SESSION_GET -> buildJsonObject {
+                    put("id", sid); put("title", "t"); put("messages", JsonArray(emptyList())); put("updatedAt", 1)
+                    put("allowedMcpTools", buildJsonArray { add(JsonPrimitive("mcp__slack__post_message")) })
+                    put("knownRecipients", buildJsonArray { add(JsonPrimitive("general")); add(JsonPrimitive("ann@example.com")) })
+                }
+                else -> JsonNull
+            }
+        }
+        val chat = guardedController(caller, Guarded())
+        chat.reload()
+        val ui = ChatController.project(chat.state.value, online)
+        assertEquals(listOf("mcp__slack__post_message"), ui.allowedMcpTools)
+        assertEquals(listOf("general", "ann@example.com"), ui.knownRecipients)
+    }
+
+    @Test
     fun `always allow saves the merged list through the guarded call, then approves`() = runTest {
         val caller = FakeCaller { c ->
             when (c.channel) {

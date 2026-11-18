@@ -136,6 +136,15 @@ pub const BRIDGE_WATCH: &str = "agent_watch";
 pub const BRIDGE_TITLE: &str = "set_chat_title";
 /// The name Claude Code calls it by (and asks permission for).
 pub const BRIDGE_WATCH_TOOL: &str = "mcp__nekko_bridge__agent_watch";
+/// The picture tools (media_tools.rs), offered with `nekko_tools` when this
+/// computer has a picture model ready.
+pub const BRIDGE_MEDIA: [&str; 3] = crate::media_tools::TOOLS;
+/// The names Claude Code calls them by.
+/// `generate_video` as Claude Code calls it: offered with `nekko_tools` and
+/// `unattended_runs` (the clip wakes the chat later), when a video model is ready.
+pub const BRIDGE_VIDEO_TOOL: &str = "mcp__nekko_bridge__generate_video";
+pub const BRIDGE_MEDIA_TOOLS: [&str; 3] =
+    ["mcp__nekko_bridge__generate_image", "mcp__nekko_bridge__edit_image", "mcp__nekko_bridge__media_models"];
 
 /// Whether a `claude:capability` answer enables the row for a Claude auth.
 /// Only an explicit `enabled` counts: anything else fails closed.
@@ -639,6 +648,12 @@ pub fn decide(
     if tool == BRIDGE_WATCH_TOOL {
         return Decision::Allow;
     }
+    // The picture tools: a local model, nothing sent, nothing written into the
+    // project (the picture is kept in Nekko's data folder), pictures to edit
+    // read only from the chat's folders. As in a Nekko engine chat, they ask nothing.
+    if BRIDGE_MEDIA_TOOLS.contains(&tool) || tool == BRIDGE_VIDEO_TOOL {
+        return Decision::Allow;
+    }
     if SHELL_TOOLS.contains(&tool) {
         let command = input.get("command").and_then(serde_json::Value::as_str).unwrap_or_default();
         // Claude Code's Bash tool runs bash (Git Bash on Windows).
@@ -1027,6 +1042,19 @@ mod tests {
             assert!(matches!(decide(mode, tool, &input, &[], &roots()), Decision::Ask { .. }));
         }
         assert_eq!(decide("yolo", tool, &input, &[], &roots()), Decision::Allow);
+    }
+
+    #[test]
+    fn nekkos_picture_tools_run_without_asking_in_every_mode() {
+        for mode in ["ask", "guardrails", "yolo", "plan"] {
+            for tool in BRIDGE_MEDIA_TOOLS.into_iter().chain([BRIDGE_VIDEO_TOOL]) {
+                assert_eq!(decide(mode, tool, &serde_json::json!({}), &[], &roots()), Decision::Allow, "{mode} {tool}");
+            }
+        }
+        // The Claude Code names are the bridge's tools under its server name.
+        for (name, tool) in BRIDGE_MEDIA.iter().zip(BRIDGE_MEDIA_TOOLS) {
+            assert_eq!(tool, format!("mcp__nekko_bridge__{name}"));
+        }
     }
 
     #[test]

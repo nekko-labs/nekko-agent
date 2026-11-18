@@ -31,7 +31,8 @@ export interface ToolResult {
  */
 export interface AgentWatchView {
   id: string;
-  kind: 'timer' | 'pr';
+  /** `clip`: a clip an agent started (`generate_video`); it wakes the chat when the clip ends. */
+  kind: 'timer' | 'pr' | 'clip';
   url?: string;
   status: 'active' | 'done' | 'cancelled' | 'error';
   /** Timer: when it wakes. PR: the latest it waits before waking anyway. */
@@ -47,6 +48,8 @@ export interface AgentWatchView {
   checks?: 'passing' | 'failing' | 'pending' | 'none';
   /** PR watch: the PR's state as last polled (`open`, `merged`, `closed`). */
   prState?: string;
+  /** Clip watch: how far the clip got (`waiting`, `loading`, `generating`, `step:3/20`). */
+  clipStage?: string;
 }
 
 export interface ChatMessage {
@@ -403,6 +406,13 @@ export interface Session {
    * ask first (the egress gate, decision 0054); these run without asking.
    */
   allowedMcpTools?: string[];
+  /**
+   * Recipients (addresses, channels, chats, users) this chat has written to
+   * through an MCP tool, each approved once: a call to one of them does not ask
+   * again for its recipient (decision 0063). Saved by the engine after an
+   * approval; the user can take one back from the Permissions menu.
+   */
+  knownRecipients?: string[];
   /** Connector kinds whose context this chat's turns do not fetch. */
   disabledConnectors?: string[];
   /**

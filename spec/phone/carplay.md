@@ -5,7 +5,7 @@ area: phone
 
 # Nekko Agent in CarPlay (#2781)
 
-Status: **built in source and unit-tested on Linux (46 tests); not yet compiled by Xcode CI when written, never run in CarPlay Simulator or a car; cannot ship until Apple grants the entitlement.** Android counterpart: #2782.
+Status: **built in source and unit-tested on Linux (46 tests); not yet compiled by Xcode CI when written, never run in CarPlay Simulator or a car; cannot ship until Apple grants the entitlement.** Android counterpart: #2782. Android Auto has no category for a voice agent (its Car App Library takes navigation, places, IoT, weather, media, messaging and calling), so Android is in the car as a messaging app through its notifications. A finished reply is read aloud there, with Reply, read back by Android Auto. The command grammar and chat matching below are shared with Android in `packages/shared/fixtures/car-commands.json`.
 
 Design: [nekko-designs/carplay-design.html](../../nekko-designs/carplay-design.html). Why this category, and why speech stays on the phone: [decision 0099](../../docs/decisions/0099-carplay-is-a-voice-based-conversational-app.md).
 

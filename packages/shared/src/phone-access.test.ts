@@ -262,6 +262,13 @@ describe('chat options from a phone', () => {
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { allowedMcpTools: ['bash'] }]))).toBe('value-invalid');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { allowedMcpTools: 'mcp__x__y' }]))).toBe('value-invalid');
     expect(PHONE_GUARDED_OPTION_KEYS).toContain('allowedMcpTools');
+    // Known recipients (decision 0063): plain short strings; guarded too, since the gate cannot tell taking one back from adding one.
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { knownRecipients: ['general', 'ann@example.com'] }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { knownRecipients: [] }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { knownRecipients: 'general' }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { knownRecipients: [''] }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { knownRecipients: ['x'.repeat(201)] }]))).toBe('value-invalid');
+    expect(PHONE_GUARDED_OPTION_KEYS).toContain('knownRecipients');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { disabledTools: [] }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { executionMode: 'local' }]))).toBe('value-invalid');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { workMode: 'design', autoModel: true }]))).toBe('ok');

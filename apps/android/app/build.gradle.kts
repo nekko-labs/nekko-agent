@@ -70,6 +70,7 @@ dependencies {
     implementation(project(":protocol"))
     // OkHttpTransport's constructor exposes OkHttpClient, so the app needs it on its compile classpath.
     implementation(libs.okhttp)
+    implementation(libs.androidx.car.app)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

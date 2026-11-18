@@ -259,22 +259,36 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
   .agent-panel-pill:hover { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
 }
 .agent-panel-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* HoverTip: words for an icon-only control, floated in a portal above everything. */
+/* Every tooltip in the app (HoverTip, and native titles via TitleTips): one
+   small floating surface like a popover, with its faint edge so it reads on a
+   dark canvas. Short words stay on one line; long ones wrap at 320. */
 .hover-tip {
-  position: fixed; z-index: 1000; max-width: 240px; padding: 4px 8px;
-  border: 1px solid var(--line); border-radius: 6px; background: var(--win); color: var(--ink);
-  font-size: var(--text-xs); font-weight: 500; line-height: 1.35; white-space: nowrap;
-  box-shadow: var(--shadow-md); pointer-events: none;
-  animation: hover-tip-in 120ms ease-out;
+  position: fixed; z-index: 1000; width: max-content; max-width: min(320px, calc(100vw - 16px));
+  padding: 6px 10px; border-radius: 10px; corner-shape: squircle;
+  background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow-float), 0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent);
+  font-size: var(--text-xs); font-weight: 500; line-height: 1.4;
+  white-space: pre-line; overflow-wrap: anywhere; pointer-events: none;
+  --tip-dx: 0px; --tip-dy: -4px;
+  animation: hover-tip-in var(--dur-med) var(--ease-out);
 }
-@keyframes hover-tip-in { from { opacity: 0; } to { opacity: 1; } }
-/* In the warm window after another tip, or from the keyboard: no fade. */
+/* It moves 4px out from its anchor, whichever side it took. */
+.hover-tip[data-side='top'] { --tip-dy: 4px; }
+.hover-tip[data-side='left'] { --tip-dx: 4px; --tip-dy: 0px; }
+.hover-tip[data-side='right'] { --tip-dx: -4px; --tip-dy: 0px; }
+@keyframes hover-tip-in { from { opacity: 0; transform: translate(var(--tip-dx), var(--tip-dy)) scale(0.98); } }
+/* In the warm window after another tip, or from the keyboard: no motion. */
 .hover-tip[data-instant] { animation: none; }
+/* A rich tip (a PR or issue): a little more room, still one surface. */
+.hover-tip.hover-tip-rich { padding: 10px 12px; border-radius: 12px; white-space: normal; max-width: min(340px, calc(100vw - 16px)); }
 /* Collapsed: the controls hold the panel's corner so the way back is where it was. */
 .agent-panel-collapsed { display: flex; flex-shrink: 0; align-items: flex-start; padding: 4px 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-panel-pill, .hover-tip { transition: none; animation: none; }
+  .agent-panel-pill { transition: none; animation: none; }
+  /* Reduced motion keeps only the fade. */
+  .hover-tip { --tip-dx: 0px; --tip-dy: 0px; }
+  @keyframes hover-tip-in { from { opacity: 0; } }
 }
 /* The window-type switcher under the panel's header: one segment per kind of
    window (Agents, Terminals, Photos and videos, Browsers, Files), sharing the

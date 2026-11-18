@@ -102,6 +102,41 @@ fn needed_bytes(model: &Value, params: &Value, share: f64) -> Option<f64> {
     (need.is_finite() && need > 0.0).then_some(need)
 }
 
+/// Room for sd.cpp's working buffers on top of the files: the same assumed
+/// allowances the picture and clip recommendations use
+/// (`computeAllowanceBytes` in `nekko-machine/feed/source.json`), until peak
+/// memory is measured per family.
+const IMAGE_WORKING_BYTES: f64 = 2.0 * 1024.0 * 1024.0 * 1024.0;
+const VIDEO_WORKING_BYTES: f64 = 4.0 * 1024.0 * 1024.0 * 1024.0;
+
+/// What an image or video model will take from free GPU memory: the model
+/// file and its companion files (text encoder, VAE) plus the working
+/// allowance; with "Offload weights to CPU" only the largest file and the
+/// allowance stay on the GPU at once. `None` when the model's size is unknown.
+fn image_needed_bytes(model: &Value, params: &Value) -> Option<f64> {
+    let size = model.get("sizeBytes").and_then(Value::as_f64).filter(|s| *s > 0.0)?;
+    let set = crate::acquire::image_companion_set_for(model);
+    let files: Vec<f64> = std::iter::once(size)
+        .chain(
+            set.as_ref()
+                .and_then(|s| s.get("files"))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|f| f.get("bytes").and_then(Value::as_f64)),
+        )
+        .collect();
+    let video = set
+        .as_ref()
+        .and_then(|s| s.get("capabilities"))
+        .and_then(Value::as_array)
+        .is_some_and(|c| c.iter().any(|x| x == "video"));
+    let working = if video { VIDEO_WORKING_BYTES } else { IMAGE_WORKING_BYTES };
+    let offload = params.get("diffusion").is_some_and(|d| nekko_js::truthy(d.get("offloadToCpu")));
+    let resident = if offload { files.iter().copied().fold(0.0, f64::max) } else { files.iter().sum() };
+    Some(resident + working)
+}
+
 /// "6.3 GiB", for the log.
 fn gib(bytes: f64) -> String {
     format!("{:.1} GiB", bytes / 1024.0 / 1024.0 / 1024.0)
@@ -700,11 +735,17 @@ impl ModelServer {
         // Make room before spending minutes on a load that would push something
         // out anyway: under the resident limit, and (a llama.cpp model whose
         // size the planner knows, with a GPU probe that reads free memory)
-        // room in free GPU memory, unified memory on Apple Silicon. Idle
-        // models go first, least recently used first; a model kept resident
-        // (its own TTL of 0) never goes.
-        let need =
-            if image || mlx { None } else { needed_bytes(&model, &params, gpu_share(&model, &params, gpu_capable)) };
+        // room in free GPU memory, unified memory on Apple Silicon. An image
+        // or video model counts its companion files and sd.cpp's working
+        // allowance. Idle models go first, least recently used first; a model
+        // kept resident (its own TTL of 0) never goes.
+        let need = if mlx {
+            None
+        } else if image {
+            image_needed_bytes(&model, &params)
+        } else {
+            needed_bytes(&model, &params, gpu_share(&model, &params, gpu_capable))
+        };
         let free = match need {
             Some(_) => self.free_vram().await,
             None => None,

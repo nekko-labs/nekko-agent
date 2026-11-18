@@ -492,6 +492,7 @@
   "guidance",
   "imageParams",
   "incognito",
+  "knownRecipients",
   "memory",
   "mode",
   "modelId",
@@ -516,6 +517,7 @@
   "gitIsolation",
   "guidance",
   "incognito",
+  "knownRecipients",
   "memory",
   "offline",
   "privacy"

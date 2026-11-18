@@ -468,6 +468,8 @@ pub struct Turns {
     /// The router (`routes::route`), for a tool that asks another service
     /// (`delegation_targets` lists a provider's models).
     dispatch: OnceLock<crate::automation::Dispatcher>,
+    /// The model server, for the picture tools (media_tools.rs).
+    media: Option<Arc<crate::model_server::Server>>,
 }
 
 /// Admits the next queued prompt of a chain the daemon admitted itself
@@ -523,6 +525,7 @@ impl Turns {
             preparer: OnceLock::new(),
             background: OnceLock::new(),
             dispatch: OnceLock::new(),
+            media: None,
         }
     }
 
@@ -547,6 +550,12 @@ impl Turns {
     }
 
     /// The desktop bridge (`config.browserBridge`).
+    /// The model server, so a chat's agent can make pictures with its local models.
+    pub fn with_media(mut self, server: Arc<crate::model_server::Server>) -> Self {
+        self.media = Some(server);
+        self
+    }
+
     pub fn with_bridge(mut self, bridge: Option<(String, String)>) -> Self {
         self.bridge = bridge.map(|(url, token)| Arc::new(nekko_web::browser::HttpBridge::new(url, token)));
         self
@@ -880,6 +889,50 @@ impl Turns {
                 Ok(Err(e)) => fail(&e),
                 Err(e) => fail(&e.to_string()),
             });
+        }
+        if name == crate::media_tools::VIDEO_TOOL {
+            if !(self.claude_allows(&provider, "nekko_tools").await
+                && self.claude_allows(&provider, "unattended_runs").await)
+            {
+                return Some(fail(
+                    "Nekko's clip tool is not available for this Claude sign-in: on a Claude plan it waits for Anthropic's approval (Settings > Agents > Claude plan features).",
+                ));
+            }
+            let Some(server) = &self.media else { return Some(fail("Clips are not available here.")) };
+            let kept = self.data_dir.join("agent-pictures").join(&entry.session_id);
+            let frame = match crate::media_tools::bridge_frame(&input, &entry.roots, &kept) {
+                Ok(f) => f,
+                Err(e) => return Some(fail(&e)),
+            };
+            let clip = crate::media_tools::Clip {
+                session_id: &entry.session_id,
+                input: &input,
+                first_frame: frame,
+                project_path: None,
+                kept,
+            };
+            return Some(match crate::media_tools::start_clip(server.clone(), self.watches.clone(), clip).await {
+                Ok(text) => json!({ "ok": true, "text": text }),
+                Err(e) => fail(&e),
+            });
+        }
+        if crate::harness::BRIDGE_MEDIA.contains(&name) {
+            if !self.claude_allows(&provider, "nekko_tools").await {
+                return Some(fail(
+                    "Nekko's picture tools are not available for this Claude sign-in: on a Claude plan they wait for Anthropic's approval (Settings > Agents > Claude plan features).",
+                ));
+            }
+            let Some(server) = &self.media else { return Some(fail("Picture tools are not available here.")) };
+            let full = {
+                let (store, id) = (self.store.clone(), entry.session_id.clone());
+                tokio::task::spawn_blocking(move || store.get(&id)).await.ok().flatten().unwrap_or(session)
+            };
+            let default = settings.get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            let saved = self.data_dir.join("agent-pictures").join(&entry.session_id);
+            return Some(
+                crate::media_tools::run_bridge(server, name, &input, &full, default.as_deref(), &entry.roots, &saved)
+                    .await,
+            );
         }
         if name != crate::harness::BRIDGE_WATCH {
             return Some(fail("Unknown Nekko tool."));
@@ -1228,7 +1281,25 @@ impl Turns {
             _ => json!([]),
         };
         // The turn's composition: tools, context from disk, the system prompt.
+        // Picture tools only where they can work: a local (not sandbox, not
+        // Claude Code) chat on a computer with a picture model ready.
+        let media = !sandbox
+            && !claude_code
+            && !js::truthy(opts.get("noTools"))
+            && match &self.media {
+                Some(server) => !server.ready_media_models().await.is_empty(),
+                None => false,
+            };
+        let video = !sandbox
+            && !claude_code
+            && !js::truthy(opts.get("noTools"))
+            && match &self.media {
+                Some(server) => !server.ready_video_models().await.is_empty(),
+                None => false,
+            };
         let tool_input = json!({
+            "media": media,
+            "video": video,
             "session": loaded,
             "offline": crate::connections::offline(&loaded),
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
@@ -1742,6 +1813,25 @@ impl Turns {
         let title_session = lock(session).clone();
         if !incognito && self.claude_title_allowed(provider, &title_session).await {
             tools.push(crate::harness::BRIDGE_TITLE.to_string());
+        }
+        // The picture tools, where a picture model is ready on this computer.
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && let Some(server) = &self.media
+            && !server.ready_media_models().await.is_empty()
+        {
+            tools.extend(crate::harness::BRIDGE_MEDIA.iter().map(|t| t.to_string()));
+        }
+        // A clip wakes the chat later: it also needs the wake-up allowed, as the watch does.
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && self.claude_allows(provider, "unattended_runs").await
+            && let Some(server) = &self.media
+            && !server.ready_video_models().await.is_empty()
+        {
+            tools.push(crate::media_tools::VIDEO_TOOL.to_string());
         }
         // A child launched with other Nekko tools is relaunched (a provider
         // switch, or the policy changed), so its bridge lists the right ones.
@@ -3035,6 +3125,50 @@ impl TurnTools {
             let watches = self.turns.watches.clone();
             return Ok(self.agent_watch(&watches, call).await);
         }
+        if name == crate::media_tools::VIDEO_TOOL {
+            let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
+                return Ok(error(id, "Clips are not available in this chat."));
+            };
+            let session = lock(&self.session).clone();
+            let frame = match crate::media_tools::native_frame(&input, &session, ctx) {
+                Ok(f) => f,
+                Err(e) => return Ok(error(id, e)),
+            };
+            // A project copy is approved now, while this turn can still ask.
+            let project = match input.get("path").and_then(Value::as_str).filter(|p| !p.trim().is_empty()) {
+                Some(p) if !p.to_lowercase().ends_with(".webp") => {
+                    return Ok(error(id, "The path must end in .webp (the clip is an animated WebP)."));
+                }
+                Some(p) => {
+                    let tc = ToolCall { id: id.to_string(), name: name.to_string(), input: input.clone() };
+                    match nekko_tools::approve_new_file(&tc, ctx, Some(&json!(p))).await {
+                        Ok(p) => Some(p),
+                        Err(e) => return Ok(error(id, e)),
+                    }
+                }
+                None => None,
+            };
+            let clip = crate::media_tools::Clip {
+                session_id: &self.shared.session_id,
+                input: &input,
+                first_frame: frame,
+                project_path: project,
+                kept: self.turns.data_dir.join("agent-pictures").join(&self.shared.session_id),
+            };
+            return Ok(match crate::media_tools::start_clip(server.clone(), self.turns.watches.clone(), clip).await {
+                Ok(text) => result(id, text),
+                Err(e) => error(id, e),
+            });
+        }
+        if crate::media_tools::TOOLS.contains(&name) {
+            let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
+                return Ok(error(id, "Picture tools are not available in this chat."));
+            };
+            let session = lock(&self.session).clone();
+            let default =
+                self.turns.settings.get().get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            return Ok(crate::media_tools::run(server, crate::media_tools::Call { call, session, ctx, default }).await);
+        }
         if let Some(ctx) = &self.native
             && (name == "browser" || name == "capture")
         {
@@ -3499,9 +3633,22 @@ impl TurnTools {
                 return error(id, "Call not approved by user.");
             }
             // The approval showed these recipients: they are known in this chat now.
+            // The list is read again, not taken from before the wait: the user may
+            // have taken a recipient back while this call waited, and must not see
+            // it come back.
             if !fresh.is_empty() {
-                let mut all = known;
-                all.extend(fresh);
+                let now = self.disk().await;
+                let mut all: Vec<String> = now
+                    .as_ref()
+                    .and_then(|s| s.get("knownRecipients"))
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                    .unwrap_or_default();
+                for f in fresh {
+                    if !all.contains(&f) {
+                        all.push(f);
+                    }
+                }
                 let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
                 let _ =
                     tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "knownRecipients": all }))).await;
