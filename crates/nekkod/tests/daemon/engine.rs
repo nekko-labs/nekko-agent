@@ -783,6 +783,88 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     std::fs::remove_dir_all(root).ok();
 }
 
+/// A chat's agent makes a picture with the computer's local image model
+/// (`generate_image`, media_tools.rs): offered because a picture model is
+/// ready, drawn through the media queue, shown in the tool's result and saved
+/// in the project where the agent asked.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chats_agent_makes_a_picture_with_the_local_image_model() {
+    let data = std::env::temp_dir().join(format!("nekkod-media-tool-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let model = data.join("models/image/acme_sd/tiny-sd.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("sd1", "Tiny SD")).unwrap();
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": free_port(), "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let workspace = data.join("project");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat = json!({ "id": "s_art", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_art.json"), chat.to_string()).unwrap();
+    let d = start_with_env(&data, json!({}), &[]);
+    let events = record_events(d.port);
+    boot_settled(&data);
+    let rig = TurnRig { data: data.clone(), workspace: workspace.clone(), d, events };
+
+    let script = vec![
+        call_tool(
+            "c_img",
+            "generate_image",
+            json!({ "prompt": "a red kite", "size": "512x512", "path": "art/kite.png" }),
+        ),
+        say_text("made it"),
+    ];
+    let model = scripted_model(script).await;
+    let spec = turn_spec(&rig, &model, "turn_art", "s_art", json!({ "text": "Draw a kite for the page" }));
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_art", "s_art").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    // Offered: a picture model is ready on this computer.
+    let first = model.requests.lock().unwrap()[0].clone();
+    let tools: Vec<String> = first["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    for t in ["generate_image", "edit_image", "media_models"] {
+        assert!(tools.contains(&t.to_string()), "{t} missing from {tools:?}");
+    }
+
+    // The picture is the tool's result (the chat shows it, the model sees it) and a new project file.
+    let saved = saved_session(&rig, "s_art");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_img")
+        .map(|m| m["toolResult"].clone())
+        .expect("the picture tool's result");
+    assert!(result.get("isError").is_none(), "{result}");
+    let output = result["output"].as_str().unwrap();
+    assert!(output.starts_with("Made the picture with Tiny SD (512x512) on this computer."), "{output}");
+    assert!(output.contains("Saved to "), "{output}");
+    let image = result["images"][0].as_str().expect("the picture in the result");
+    let drawn = image.strip_prefix("data:image/png;base64,").unwrap();
+    let file = std::fs::read(workspace.join("art/kite.png")).expect("saved in the project");
+    assert_eq!(fake_base64(&file), drawn, "the saved file is the picture shown");
+    let text = String::from_utf8_lossy(&file).to_string();
+    assert!(text.starts_with("a red kite\n") && text.ends_with("|512x512"), "{text}");
+    post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+}
+
 fn fake_base64(bytes: &[u8]) -> String {
     const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();

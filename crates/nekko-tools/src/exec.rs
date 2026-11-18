@@ -185,6 +185,29 @@ async fn write_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     Ok(ToolResult::ok(call, format!("Wrote {p} ({} bytes)", js::len16(&content))))
 }
 
+/// Save bytes a host tool made (a picture) as a new file in the chat's
+/// folders: `write_file`'s path rules and approval, never over an existing
+/// file. The saved path, or why not.
+pub async fn save_new_file(
+    call: &ToolCall,
+    ctx: &ToolContext,
+    path: Option<&Value>,
+    bytes: &[u8],
+) -> Result<String, String> {
+    let p = resolve_path(path, ctx)?;
+    assert_writable(&p, ctx)?;
+    if nodefs::exists(&p) {
+        return Err(format!("{p} already exists; choose a new path."));
+    }
+    if !write_approved(call, ctx, &p, "Save").await {
+        return Err("Save not approved by user.".into());
+    }
+    record_original(ctx, &p).await?;
+    nodefs::mkdir_p(&dirname(&p))?;
+    std::fs::write(&p, bytes).map_err(|e| format!("Could not save {p}: {e}"))?;
+    Ok(p)
+}
+
 async fn edit_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     let p = resolve_path(arg(call, "path"), ctx)?;
     assert_writable(&p, ctx)?;

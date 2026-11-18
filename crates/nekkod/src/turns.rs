@@ -468,6 +468,8 @@ pub struct Turns {
     /// The router (`routes::route`), for a tool that asks another service
     /// (`delegation_targets` lists a provider's models).
     dispatch: OnceLock<crate::automation::Dispatcher>,
+    /// The model server, for the picture tools (media_tools.rs).
+    media: Option<Arc<crate::model_server::Server>>,
 }
 
 /// Admits the next queued prompt of a chain the daemon admitted itself
@@ -523,6 +525,7 @@ impl Turns {
             preparer: OnceLock::new(),
             background: OnceLock::new(),
             dispatch: OnceLock::new(),
+            media: None,
         }
     }
 
@@ -547,6 +550,12 @@ impl Turns {
     }
 
     /// The desktop bridge (`config.browserBridge`).
+    /// The model server, so a chat's agent can make pictures with its local models.
+    pub fn with_media(mut self, server: Arc<crate::model_server::Server>) -> Self {
+        self.media = Some(server);
+        self
+    }
+
     pub fn with_bridge(mut self, bridge: Option<(String, String)>) -> Self {
         self.bridge = bridge.map(|(url, token)| Arc::new(nekko_web::browser::HttpBridge::new(url, token)));
         self
@@ -1228,7 +1237,17 @@ impl Turns {
             _ => json!([]),
         };
         // The turn's composition: tools, context from disk, the system prompt.
+        // Picture tools only where they can work: a local (not sandbox, not
+        // Claude Code) chat on a computer with a picture model ready.
+        let media = !sandbox
+            && !claude_code
+            && !js::truthy(opts.get("noTools"))
+            && match &self.media {
+                Some(server) => !server.ready_media_models().await.is_empty(),
+                None => false,
+            };
         let tool_input = json!({
+            "media": media,
             "session": loaded,
             "offline": crate::connections::offline(&loaded),
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
@@ -3034,6 +3053,13 @@ impl TurnTools {
         if name == "agent_watch" {
             let watches = self.turns.watches.clone();
             return Ok(self.agent_watch(&watches, call).await);
+        }
+        if crate::media_tools::TOOLS.contains(&name) {
+            let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
+                return Ok(error(id, "Picture tools are not available in this chat."));
+            };
+            let session = lock(&self.session).clone();
+            return Ok(crate::media_tools::run(server, crate::media_tools::Call { call, session, ctx }).await);
         }
         if let Some(ctx) = &self.native
             && (name == "browser" || name == "capture")

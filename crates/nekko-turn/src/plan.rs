@@ -33,7 +33,8 @@ pub fn turn_can_ask(session: &Value) -> bool {
 
 /// `turnTools(input)`: the tools a (non-sandbox) turn offers, in order. `input`
 /// is the TS `TurnToolInput`: `session`, `offline`, `orchestration`,
-/// `allowBrowserControl`, `mcpTools`, `decide`, `noTools`.
+/// `allowBrowserControl`, `mcpTools`, `decide`, `noTools`, and `media` (this
+/// computer has a picture model ready; the daemon's own field).
 pub fn turn_tools(input: &Value) -> Vec<Value> {
     let offline = truthy(input, "offline");
     let c = catalog();
@@ -105,6 +106,10 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     }
     if truthy(input, "decide") && !offline && !disabled.contains(name(&c.decide)) {
         tools.push(c.decide.clone());
+    }
+    // Local picture models: nothing leaves the computer, so offline keeps them.
+    if truthy(input, "media") && !training {
+        tools.extend(c.media.iter().filter(|t| !disabled.contains(name(t))).cloned());
     }
     tools
 }
@@ -463,5 +468,33 @@ mod tests {
         assert!(!t.contains("chat context"));
         let turn = turn_system_prompt(&serde_json::json!({ "settings": { "pullRequests": { "linkIssue": false } } }));
         assert!(turn.contains("- Do not link PRs to issues."));
+    }
+
+    fn names(input: serde_json::Value) -> Vec<String> {
+        turn_tools(&input).iter().map(|t| name(t).to_string()).collect()
+    }
+
+    #[test]
+    fn picture_tools_come_only_with_a_ready_picture_model() {
+        let session = serde_json::json!({ "id": "s" });
+        let without = names(serde_json::json!({ "session": session }));
+        assert!(!without.iter().any(|n| n == "generate_image"), "{without:?}");
+        let with = names(serde_json::json!({ "session": session, "media": true }));
+        for tool in ["generate_image", "edit_image", "media_models"] {
+            assert!(with.iter().any(|n| n == tool), "{tool}: {with:?}");
+        }
+        // Local models: an offline chat keeps them.
+        let offline = names(serde_json::json!({ "session": session, "media": true, "offline": true }));
+        assert!(offline.iter().any(|n| n == "generate_image"), "{offline:?}");
+        // The chat's own tool switches still apply.
+        let off = serde_json::json!({ "id": "s", "disabledTools": ["edit_image"] });
+        let some = names(serde_json::json!({ "session": off, "media": true }));
+        assert!(some.iter().any(|n| n == "generate_image") && !some.iter().any(|n| n == "edit_image"), "{some:?}");
+        // A tools-off turn gets none.
+        assert!(
+            !names(serde_json::json!({ "session": session, "media": true, "noTools": true }))
+                .iter()
+                .any(|n| n == "generate_image")
+        );
     }
 }

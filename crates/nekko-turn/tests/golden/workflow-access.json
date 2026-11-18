@@ -4277,7 +4277,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4322,7 +4325,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4355,7 +4361,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4386,7 +4395,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4411,7 +4423,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4450,7 +4465,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4477,7 +4495,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4502,7 +4523,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4531,7 +4555,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4565,7 +4592,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4592,7 +4622,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {
@@ -4621,7 +4654,10 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models"
    ]
   },
   {

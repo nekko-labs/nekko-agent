@@ -58,6 +58,7 @@ mod logs;
 mod machine;
 mod mcp;
 mod mdns;
+mod media_tools;
 mod messaging;
 mod model_feed;
 mod model_server;
@@ -375,7 +376,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 sandboxes.clone(),
                 automation.training.clone(),
             )
-            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
+            .with_media(server.clone()),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),

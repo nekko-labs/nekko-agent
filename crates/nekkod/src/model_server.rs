@@ -389,6 +389,41 @@ impl Server {
         }
     }
 
+    /// The local picture models an agent can use now (`media_models`): image
+    /// models in the library (not video ones) whose companion files are all
+    /// on disk, or that need none: `{ id, name, capabilities, defaults }`.
+    /// Whether stable-diffusion.cpp is installed is checked when one loads,
+    /// not here: this runs before every chat turn and stays to file reads.
+    pub async fn ready_media_models(&self) -> Vec<Value> {
+        let Ok(rows) = self.library.list().await else { return Vec::new() };
+        let dir = self.library.models_dir();
+        tokio::task::spawn_blocking(move || {
+            rows.into_iter()
+                .filter(nekko_remote::phone_image::eligible)
+                .filter_map(|m| {
+                    let id = m.get("id").map(nekko_js::display).unwrap_or_default();
+                    let beside = acquire::companions_beside(&m, &[nekko_engine::folders::companions_dir(&dir, &id)]);
+                    let status =
+                        acquire::image_companion_status(&m, &acquire::image_companions_dir(&dir), &beside, false);
+                    let (capabilities, defaults) = if status.is_null() {
+                        (json!(["create"]), json!({}))
+                    } else if status["ready"] == true {
+                        (status["capabilities"].clone(), status["defaults"].clone())
+                    } else {
+                        return None;
+                    };
+                    if capabilities.as_array().is_some_and(|c| c.iter().any(|x| x == "video")) {
+                        return None;
+                    }
+                    let name = m.get("name").filter(|n| n.is_string()).unwrap_or(&m["id"]).clone();
+                    Some(json!({ "id": id, "name": name, "capabilities": capabilities, "defaults": defaults }))
+                })
+                .collect()
+        })
+        .await
+        .unwrap_or_default()
+    }
+
     /// What the library's model can do, from its companion set (`create`,
     /// `edit`, `video`), as the desktop reads `engine:imageCompanions`; empty
     /// for a model with no known set.

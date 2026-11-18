@@ -19,6 +19,9 @@ pub struct Catalog {
     pub report_artifact: Value,
     pub ask_user: Value,
     pub decide: Value,
+    /// `generate_image`, `edit_image`, `media_models`: offered when this
+    /// computer has a picture model ready (`turnTools`'s `media`).
+    pub media: Vec<Value>,
     pub default_turn_wrapper: String,
     /// `{ id, allowsSpawn, promptHint }`, in `ORCHESTRATION_STRATEGIES` order.
     pub strategies: Vec<Value>,
@@ -55,6 +58,7 @@ pub fn catalog() -> &'static Catalog {
             report_artifact: tools["reportArtifact"].clone(),
             ask_user: tools["askUser"].clone(),
             decide: tools["decide"].clone(),
+            media: tools["media"].as_array().cloned().unwrap_or_default(),
             default_turn_wrapper: text(&v, "defaultTurnWrapper"),
             strategies: v["strategies"].as_array().cloned().unwrap_or_default(),
             default_orchestration: v["defaultOrchestration"].clone(),

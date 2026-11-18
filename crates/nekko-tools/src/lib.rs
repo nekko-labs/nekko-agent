@@ -44,7 +44,7 @@ pub use context::{
     agent_terminal_id, approver_fn,
 };
 pub use delete_guard::{DeleteScope, UNSAFE_DELETE, delete_roots};
-pub use exec::execute;
+pub use exec::{execute, save_new_file};
 pub use guardrails::{
     Action, GuardrailDecision, GuardrailMatch, GuardrailRule, NOT_READ_ONLY, SHELL_SYNTAX, Severity, classify_command,
     classify_command_in, classify_command_scoped, default_guardrails,
