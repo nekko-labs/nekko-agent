@@ -45,13 +45,13 @@ fn pretty_name() -> Option<String> {
     None
 }
 
-#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 /// `scutil --get ComputerName` prints the name and a newline.
 pub(crate) fn parse_scutil(out: &str) -> Option<String> {
     clean(out)
 }
 
-#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 /// `PRETTY_HOSTNAME=` from `/etc/machine-info` (what `hostnamectl --pretty`
 /// reads): shell-style, optionally quoted, with backslash escapes.
 pub(crate) fn parse_machine_info(contents: &str) -> Option<String> {

@@ -89,6 +89,14 @@ final class NewChatChoicesTests: XCTestCase {
         attach(app, "automatic-new-chat")
         computer.tap()
         attach(app, "automatic-run-on-menu")
+        let rename = app.buttons["newChat.computer.rename"]
+        if rename.waitForExistence(timeout: 1) {
+            rename.tap()
+            XCTAssertTrue(app.staticTexts["Only this iPhone sees this name. Leave it empty to use the computer’s own name."].waitForExistence(timeout: 3))
+            attach(app, "automatic-rename-alert")
+            app.buttons["Cancel"].tap()
+            computer.tap()
+        }
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "MacBook")).firstMatch.tap()
         XCTAssertFalse(computer.label.contains("Auto"))
         XCTAssertFalse(app.staticTexts["newChat.auto"].exists)
