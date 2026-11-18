@@ -403,6 +403,13 @@ export interface Session {
    * ask first (the egress gate, decision 0054); these run without asking.
    */
   allowedMcpTools?: string[];
+  /**
+   * Recipients (addresses, channels, chats, users) this chat has written to
+   * through an MCP tool, each approved once: a call to one of them does not ask
+   * again for its recipient (decision 0063). Saved by the engine after an
+   * approval; the user can take one back from the Permissions menu.
+   */
+  knownRecipients?: string[];
   /** Connector kinds whose context this chat's turns do not fetch. */
   disabledConnectors?: string[];
   /**

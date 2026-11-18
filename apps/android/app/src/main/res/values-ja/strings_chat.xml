@@ -344,4 +344,9 @@
     <string name="response_deny">%1$s を拒否</string>
     <!-- Edit under a picture an image chat made (#2230). -->
     <string name="chat_edit_picture">編集</string>
+    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
+    <string name="car_you">あなた</string>
+    <string name="car_reply">返信</string>
+    <string name="car_mark_read">既読にする</string>
+    <string name="car_not_sent">送信されませんでした：このチャットは電話が接続しているコンピュータにありません。</string>
 </resources>

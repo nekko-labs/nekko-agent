@@ -197,4 +197,10 @@
     <string name="tools_preview_page">%1$d / %2$d ページ</string>
     <string name="tools_preview_card">%1$s、%2$s。コンピュータからプレビューを開きます</string>
     <string name="tools_preview_file">ファイル</string>
+    <string name="grants_title">確認なしで許可</string>
+    <string name="grants_tools">常に許可するツール</string>
+    <string name="grants_recipients">既知の宛先</string>
+    <string name="grants_remove_tool">%1$s の前に再度確認</string>
+    <string name="grants_remove_recipient">%1$s に書き込む前に再度確認</string>
+    <string name="grants_note">削除すると、このチャットでのみ次の呼び出しで再度確認します。</string>
 </resources>

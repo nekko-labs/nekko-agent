@@ -296,11 +296,19 @@ public enum PhoneProviders {
 
     /// For kinds whose models list answers without a valid key: a request a bad key is
     /// refused on (401/403). Ollama Cloud's asks for a model that doesn't exist, so it costs nothing.
-    public static func keyCheckRequest(_ p: PhoneProvider, key: String?) throws -> PhoneRequest? {
+    /// OpenAI lists models for a key with no credit, so its check is a tiny chat with `model`.
+    public static func keyCheckRequest(_ p: PhoneProvider, key: String?, model: String? = nil) throws -> PhoneRequest? {
         try validate(p, key: key)
         var h = headers(p, key: key)
         h["Accept"] = "application/json"
         switch p.kind {
+        case "openai":
+            guard let model, !model.isEmpty, model.utf8.count <= 1024 else { return nil }
+            // Reasoning models spend a few tokens before any text; 16 still costs next to nothing.
+            return PhoneRequest(url: "\(p.baseUrl)/chat/completions", headers: h, body: .object([
+                "model": .string(model), "max_completion_tokens": .int(16),
+                "messages": .array([.object(["role": .string("user"), "content": .string("Say OK.")])]),
+            ]))
         case "openrouter": return PhoneRequest(method: "GET", url: "\(p.baseUrl)/key", headers: h)
         case "ollama-cloud":
             return PhoneRequest(url: "\(p.baseUrl)/chat/completions", headers: h, body: .object([
@@ -335,7 +343,9 @@ public enum PhoneProviders {
         guard data.count <= 2_000_000, let list = (try? JSONValue.parse(data))?["data"]?.array else { return [] }
         let all = list.compactMap { m -> PhoneModel? in
             guard let id = m.str("id"), !id.isEmpty, id.utf8.count <= 1024, !id.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
-            return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id, acceptsImages: acceptsImages(m, kind: kind))
+            let context = ["context_length", "inputTokenLimit", "max_input_tokens", "context_window"].lazy.compactMap { m.long($0) }.first { $0 > 0 }
+            return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id, acceptsImages: acceptsImages(m, kind: kind),
+                              created: m.long("created"), contextLength: context)
         }
         guard kind == "openai" || kind == "gemini" else { return all }
         // OpenAI and Gemini list every model they serve; keep the ones that chat.
@@ -351,15 +361,162 @@ public enum PhoneProviders {
         return inputs.contains { $0.string == "image" }
     }
 
-    /// A safe status explanation; provider error bodies may echo credentials.
-    public static func failure(status: Int, body: Data) -> String {
-        // Never persist an untrusted response body, which can echo a credential.
+    /// The model a new chat starts on when none was chosen: the newest one that is not a
+    /// dated snapshot, a pro tier or a live (voice) model. Lists without dates keep their order.
+    public static func defaultModel(_ list: [PhoneModel]) -> PhoneModel? {
+        let plain = list.filter { m in
+            let id = m.id.lowercased()
+            return !isSnapshot(id) && !id.contains("-pro") && !id.contains("live")
+        }
+        let pool = plain.isEmpty ? list : plain
+        guard pool.contains(where: { $0.created != nil }) else { return pool.first }
+        // Stable: among equal dates the list's own order wins.
+        return pool.enumerated().max { a, b in
+            let (x, y) = (a.element.created ?? .min, b.element.created ?? .min)
+            return x == y ? a.offset > b.offset : x < y
+        }?.element
+    }
+
+    /// `o3-2025-04-16`, `claude-x-20250514`: a pinned copy of a model that also has a plain id.
+    static func isSnapshot(_ id: String) -> Bool {
+        id.range(of: #"-(\d{4}-\d{2}-\d{2}|\d{8})$"#, options: .regularExpression) != nil
+    }
+
+    /// The most a failed answer's body is read for its error code.
+    public static let errorBodyBytes = 4096
+
+    /// Our own explanation of a failed answer. Only the error's code and type are read and
+    /// compared to known values: provider message text can echo part of the key, so it is never shown.
+    public static func failure(status: Int, body: Data, headers: [String: String] = [:], kind: String = "") -> String {
+        let code = errorCodes(body)
+        let wait = retryAfter(headers)
+        if code.contains("insufficient_quota") || status == 402 {
+            return kind == "openai"
+                ? String(localized: "This key has no credit. Add billing at platform.openai.com, then try again.")
+                : String(localized: "This key has no credit left. Add billing with the provider, then try again.")
+        }
+        if code.contains("invalid_api_key") || code.contains("authentication_error") {
+            return String(localized: "The provider turned the key down (\(status)). Check the key and paste it again.")
+        }
+        if code.contains("model_not_found") {
+            return String(localized: "This key can’t use that model. Pick another one.")
+        }
+        if code.contains("overloaded_error") || status == 529 {
+            return String(localized: "The provider is busy. Try again in a moment.")
+        }
+        if status == 429 || code.contains("rate_limit_exceeded") || code.contains("rate_limit_error") || code.contains("resource_exhausted") {
+            guard let wait else { return String(localized: "Rate limited. Try again in a moment.") }
+            if wait > 90 { return String(localized: "Rate limited. Try again in \(Int((wait / 60).rounded(.up))) min.") }
+            return String(localized: "Rate limited. Try again in \(max(1, Int(wait.rounded(.up))))s.")
+        }
         switch status {
         case 401, 403: return String(localized: "The provider turned the key down (\(status))")
         case 404: return String(localized: "The provider doesn’t know that address or model (404)")
-        case 429: return String(localized: "The provider is rate limiting this key (429)")
         default: return String(localized: "The provider answered \(status)")
         }
+    }
+
+    /// The lowercased `error.code`, `error.type`, `error.status` and top-level `type` of an
+    /// error body (OpenAI, Anthropic, Gemini's list form). Nothing else is read.
+    static func errorCodes(_ body: Data) -> Set<String> {
+        guard !body.isEmpty, body.count <= errorBodyBytes, let json = try? JSONValue.parse(body) else { return [] }
+        let root = json.array?.first ?? json
+        var out = Set<String>()
+        for v in [root["error"]?["code"], root["error"]?["type"], root["error"]?["status"], root["type"]] {
+            if let s = v?.string, s.count <= 64 { out.insert(s.lowercased()) }
+        }
+        return out
+    }
+
+    /// Seconds to wait from `retry-after`, else the sooner of OpenAI's `x-ratelimit-reset-*`.
+    public static func retryAfter(_ headers: [String: String]) -> Double? {
+        let h = lowercased(headers)
+        if let s = h["retry-after"]?.trimmingCharacters(in: .whitespaces), let n = Double(s), n.isFinite, n >= 0 { return n }
+        let resets = ["x-ratelimit-reset-requests", "x-ratelimit-reset-tokens"].compactMap { h[$0].flatMap(duration) }
+        return resets.min()
+    }
+
+    /// OpenAI's reset durations: `1s`, `6m0s`, `20ms`, `1h2m3.5s`.
+    static func duration(_ text: String) -> Double? {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty, t.count <= 32 else { return nil }
+        var total = 0.0
+        var rest = Substring(t)
+        let units: [(String, Double)] = [("ms", 0.001), ("h", 3600), ("m", 60), ("s", 1)]
+        while !rest.isEmpty {
+            let digits = rest.prefix { $0.isNumber || $0 == "." }
+            guard !digits.isEmpty, let n = Double(digits) else { return nil }
+            rest = rest.dropFirst(digits.count)
+            guard let (unit, scale) = units.first(where: { rest.hasPrefix($0.0) }) else { return nil }
+            rest = rest.dropFirst(unit.count)
+            total += n * scale
+        }
+        return total.isFinite ? total : nil
+    }
+
+    static func lowercased(_ headers: [String: String]) -> [String: String] {
+        Dictionary(headers.map { ($0.key.lowercased(), $0.value) }, uniquingKeysWith: { a, _ in a })
+    }
+}
+
+/// A key's request and token budget, as the provider last reported it in its answer's
+/// headers (OpenAI's `x-ratelimit-*`, Anthropic's `anthropic-ratelimit-*`). Kept in memory only.
+public struct PhoneRateLimits: Equatable, Sendable {
+    public var requestsLimit: Int64?
+    public var requestsRemaining: Int64?
+    /// When the request budget is full again, in milliseconds since 1970.
+    public var requestsResetAt: Int64?
+    public var tokensLimit: Int64?
+    public var tokensRemaining: Int64?
+    public var tokensResetAt: Int64?
+    /// When the answer that carried these arrived, in milliseconds since 1970.
+    public var at: Int64
+
+    public init(requestsLimit: Int64? = nil, requestsRemaining: Int64? = nil, requestsResetAt: Int64? = nil,
+                tokensLimit: Int64? = nil, tokensRemaining: Int64? = nil, tokensResetAt: Int64? = nil, at: Int64) {
+        self.requestsLimit = requestsLimit
+        self.requestsRemaining = requestsRemaining
+        self.requestsResetAt = requestsResetAt
+        self.tokensLimit = tokensLimit
+        self.tokensRemaining = tokensRemaining
+        self.tokensResetAt = tokensResetAt
+        self.at = at
+    }
+
+    /// The limits in an answer's headers, or nil when it carries none.
+    public static func from(headers: [String: String], at: Int64) -> PhoneRateLimits? {
+        let h = PhoneProviders.lowercased(headers)
+        func count(_ name: String) -> Int64? { h[name].flatMap { Int64($0.trimmingCharacters(in: .whitespaces)) }.flatMap { $0 >= 0 ? $0 : nil } }
+        func reset(_ name: String) -> Int64? {
+            guard let v = h[name] else { return nil }
+            if let s = PhoneProviders.duration(v) { return at + Int64((s * 1000).rounded()) }
+            if let d = ISO8601DateFormatter().date(from: v.trimmingCharacters(in: .whitespaces)) { return Int64(d.timeIntervalSince1970 * 1000) }
+            return nil
+        }
+        var r = PhoneRateLimits(at: at)
+        for prefix in ["x-ratelimit-", "anthropic-ratelimit-"] {
+            r.requestsLimit = r.requestsLimit ?? count("\(prefix)limit-requests") ?? count("\(prefix)requests-limit")
+            r.requestsRemaining = r.requestsRemaining ?? count("\(prefix)remaining-requests") ?? count("\(prefix)requests-remaining")
+            r.requestsResetAt = r.requestsResetAt ?? reset("\(prefix)reset-requests") ?? reset("\(prefix)requests-reset")
+            r.tokensLimit = r.tokensLimit ?? count("\(prefix)limit-tokens") ?? count("\(prefix)tokens-limit")
+            r.tokensRemaining = r.tokensRemaining ?? count("\(prefix)remaining-tokens") ?? count("\(prefix)tokens-remaining")
+            r.tokensResetAt = r.tokensResetAt ?? reset("\(prefix)reset-tokens") ?? reset("\(prefix)tokens-reset")
+        }
+        return r == PhoneRateLimits(at: at) ? nil : r
+    }
+
+    /// The token and request budgets as limit windows (#2923), each used against its limit.
+    /// A budget past its reset time is full again, so it reads as unused.
+    public func providerLimits(now: Int64) -> ProviderLimits {
+        func window(_ id: String, _ label: String, _ limit: Int64?, _ remaining: Int64?, _ resetAt: Int64?) -> ProviderLimits.Window? {
+            guard let limit, limit > 0, let remaining else { return nil }
+            if let resetAt, resetAt <= now { return ProviderLimits.Window(id: id, label: label, usedPercent: 0, resetAt: nil, status: "allowed") }
+            let used = Double(limit - min(remaining, limit)) / Double(limit) * 100
+            return ProviderLimits.Window(id: id, label: label, usedPercent: used, resetAt: resetAt, status: remaining == 0 ? "rate_limited" : "allowed")
+        }
+        let windows = [window("tokens", "per-minute token", tokensLimit, tokensRemaining, tokensResetAt),
+                       window("requests", "per-minute request", requestsLimit, requestsRemaining, requestsResetAt)]
+        return ProviderLimits(planType: nil, windows: windows.compactMap { $0 }, updatedAt: at)
     }
 }
 
@@ -391,7 +548,14 @@ public struct PhoneModel: Codable, Equatable, Sendable, Identifiable {
     public let name: String
     /// Takes photos: true or false where the provider says, nil when it doesn't.
     public var acceptsImages: Bool?
-    public init(id: String, name: String, acceptsImages: Bool? = nil) { self.id = id; self.name = name; self.acceptsImages = acceptsImages }
+    /// When the provider published it (OpenAI's `created`, seconds since 1970), if it says.
+    public var created: Int64?
+    /// The context window in tokens, where the list gives one (OpenRouter's `context_length`,
+    /// Gemini's `inputTokenLimit`, Anthropic's `max_input_tokens`).
+    public var contextLength: Int64?
+    public init(id: String, name: String, acceptsImages: Bool? = nil, created: Int64? = nil, contextLength: Int64? = nil) {
+        self.id = id; self.name = name; self.acceptsImages = acceptsImages; self.created = created; self.contextLength = contextLength
+    }
 }
 
 /// An HTTP request to a provider, built here and sent by the app (`PhoneHTTP`).
@@ -412,11 +576,12 @@ public struct PhoneRequest: Equatable, Sendable {
 }
 
 /// How the phone reaches a provider: URLSession in the app, a fake in tests.
+/// Header names come back lowercased.
 public protocol PhoneHTTP: Sendable {
     /// The whole answer.
-    func send(_ request: PhoneRequest) async throws -> (status: Int, body: Data)
-    /// The answer's status, then its body line by line as it streams.
-    func lines(_ request: PhoneRequest) async throws -> (status: Int, lines: AsyncThrowingStream<String, Error>)
+    func send(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], body: Data)
+    /// The answer's status and headers, then its body line by line as it streams.
+    func lines(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], lines: AsyncThrowingStream<String, Error>)
 }
 
 /// What one line of a streamed answer says.

@@ -286,6 +286,21 @@ mod tests {
         assert_eq!(used.image_tasks[0].candidates, nekko_machine::bundled_feed().image_tasks[0].candidates);
     }
 
+    /// What `scripts/sign-model-feed.mjs` writes, signed with the shared test
+    /// key of `nekko-native/tests/golden/feed-signature.json`: the signature
+    /// verifies here, and only the tiny list inside is refused.
+    #[test]
+    fn a_list_the_release_script_signed_verifies() {
+        const FROM_NODE: &str = r#"{"payload":"eyJ0eXBlIjoibmVra28ubW9kZWxGZWVkIiwidmVyc2lvbiI6MSwic2VyaWFsIjoyOTk5MDEwMTAwMSwiaXNzdWVkQXQiOiIyOTk5LTAxLTAxVDAwOjAwOjAwWiIsImZlZWQiOnsidmVyc2lvbiI6IjI5OTktMDEtMDEuMSJ9fQ==","signature":"ZLKUBZ3GdeCbyh6wgKBv6WaCeb3kPLmb6O8HsVZPrPy2bf+lhbLgaue3og+1SeNuZzIUhvHH6j0LtI5stF5lBQ=="}"#;
+        let vector: Value =
+            serde_json::from_str(include_str!("../../nekko-native/tests/golden/feed-signature.json")).unwrap();
+        let b64 = base64::engine::general_purpose::STANDARD;
+        let key: [u8; 32] = b64.decode(vector["publicKey"].as_str().unwrap()).unwrap().try_into().unwrap();
+        let s = ModelFeedStore::with_key(key, machine(), None);
+        let err = s.apply_signed(&serde_json::from_str(FROM_NODE).unwrap()).unwrap_err();
+        assert!(err.starts_with("the list does not parse"), "{err}");
+    }
+
     #[test]
     fn versions_order_by_date_then_by_the_days_count() {
         let k = feed_version_key;

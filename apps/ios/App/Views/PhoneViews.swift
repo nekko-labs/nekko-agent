@@ -120,7 +120,10 @@ struct PhoneChatView: View {
         .floatingKeyboardDismiss()
         .navigationTitle(phone.chat(chatId)?.title ?? String(localized: "Chat"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { menu } }
+        .toolbar {
+            ToolbarItem(placement: .principal) { titleAndPlace }
+            ToolbarItem(placement: .topBarTrailing) { menu }
+        }
         .sheet(isPresented: $picking) {
             PhoneModelPicker(selected: phone.chat(chatId).map { ($0.providerId, $0.modelId) }) { p, m in
                 phone.setModel(chatId, providerId: p, modelId: m)
@@ -158,7 +161,6 @@ struct PhoneChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    placeNote(chat)
                     ForEach(chat.messages) { m in message(m, last: m.id == chat.messages.last?.id) }
                     Color.clear.frame(height: 1).id("end")
                 }
@@ -174,16 +176,26 @@ struct PhoneChatView: View {
         }
     }
 
-    /// Where the chat runs and what that means, above its first message.
-    private func placeNote(_ chat: PhoneChat) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            PlaceMark(place: .phonePlace, size: 14).padding(.top, 2)
-            Text("Runs on \(ChatPlace.phoneName) with \(modelName(chat)). It has no tools: it can’t see your computers or files.")
-                .font(.footnote).foregroundStyle(palette.inkSoft)
-                .fixedSize(horizontal: false, vertical: true)
+    /// The title, and under it once where the chat runs: "model ⟶ This iPhone" (#2921, #2922).
+    private var titleAndPlace: some View {
+        let chat = phone.chat(chatId)
+        return VStack(spacing: 0) {
+            Text(chat?.title ?? String(localized: "Chat")).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            if let chat {
+                HStack(spacing: 2) {
+                    Text(verbatim: phone.models[chat.providerId]?.first { $0.id == chat.modelId }?.name ?? chat.modelId)
+                        .lineLimit(1).truncationMode(.middle)
+                    PlaceConnector()
+                    Text(ChatPlace.phoneName).lineLimit(1).layoutPriority(1)
+                }
+                .font(.caption).foregroundStyle(palette.inkSoft)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "\(modelName(chat)) on \(ChatPlace.phoneName)"))
+                .accessibilityIdentifier("phoneChat.place")
+            }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("phoneChat.place")
+        .frame(maxWidth: 260)
     }
 
     @ViewBuilder private func message(_ m: PhoneMessage, last: Bool) -> some View {
@@ -236,6 +248,8 @@ struct PhoneChatView: View {
         // Only models that can't take photos lose the button; unknown ones keep it.
         let takesPhotos = phone.acceptsImages(providerId: chat.providerId, modelId: chat.modelId)
         return VStack(spacing: 6) {
+            // Always there once the provider has reported limits, quiet until they near (#2923).
+            PhoneLimitLine(providerId: chat.providerId) { picking = true }.padding(.horizontal, 4)
             if loadingPhotos {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
@@ -399,6 +413,8 @@ struct PhoneModelPicker: View {
     @Environment(\.palette) private var palette
     @State private var scope = ModelScope.all
     @State private var adding = false
+    /// Models whose dated snapshots are showing (`provider::model`).
+    @State private var unfolded: Set<String> = []
 
     var body: some View {
         NavigationStack {
@@ -407,7 +423,7 @@ struct PhoneModelPicker: View {
                     VStack(alignment: .leading, spacing: 12) {
                         PhoneCloudIllustration().frame(height: 100).accessibilityHidden(true)
                         Text("Chat without a computer").font(.headline)
-                        Text("Connect your own cloud provider. Your key stays in this device’s Keychain. Text chats only, with no tools or computer access.")
+                        Text("Connect your own cloud provider. Your key stays in this device’s Keychain.")
                             .font(.subheadline).foregroundStyle(palette.inkSoft)
                         Button { adding = true } label: { Label("Add a provider", systemImage: "plus") }
                             .buttonStyle(.borderedProminent)
@@ -429,28 +445,36 @@ struct PhoneModelPicker: View {
                         if list.isEmpty && phone.modelErrors[p.id] == nil {
                             ProgressView().frame(maxWidth: .infinity)
                         }
-                        Button("Reload models") { Task { await phone.loadModels(p.id) } }
-                            .accessibilityIdentifier("phoneModel.reload")
-                        ForEach(list) { m in
-                            Button {
-                                pick(p.id, m.id)
-                                dismiss()
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(m.name).foregroundStyle(palette.ink)
-                                        if m.name != m.id { Text(m.id).font(.caption).foregroundStyle(palette.inkSoft) }
-                                    }
-                                    Spacer()
-                                    if selected?.0 == p.id && selected?.1 == m.id {
-                                        Image(systemName: "checkmark").foregroundStyle(palette.accent).accessibilityLabel("Selected")
-                                    }
+                        // Dated snapshots fold under the model they pin (#2925).
+                        let byId = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                        ForEach(ModelSnapshots.fold(list.map(\.id))) { fold in
+                            let key = "\(p.id)::\(fold.main)"
+                            let open = unfolded.contains(key) || (selected?.0 == p.id && fold.dated.contains(selected?.1 ?? ""))
+                            if let m = byId[fold.main] { row(p.id, m) }
+                            if !fold.dated.isEmpty {
+                                DatedVersionsToggle(count: fold.dated.count, open: open) {
+                                    if unfolded.contains(key) { unfolded.remove(key) } else { unfolded.insert(key) }
                                 }
                             }
-                            .accessibilityIdentifier("phoneModel.row")
+                            if open {
+                                ForEach(fold.dated, id: \.self) { id in
+                                    if let m = byId[id] { row(p.id, m).padding(.leading, 16) }
+                                }
+                            }
                         }
                     } header: {
-                        SectionHeader(LocalizedStringKey(p.label))
+                        // Reload sits by the name, and the key's limits under it once an answer reported them.
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                SectionHeader(LocalizedStringKey(p.label))
+                                Spacer(minLength: 8)
+                                Button("Reload") { Task { await phone.loadModels(p.id) } }
+                                    .font(.caption.weight(.semibold)).foregroundStyle(palette.accent).textCase(nil)
+                                    .accessibilityLabel("Reload models")
+                                    .accessibilityIdentifier("phoneModel.reload")
+                            }
+                            PhoneLimitLine(providerId: p.id).textCase(nil)
+                        }
                     }
                 }
             }
@@ -463,6 +487,29 @@ struct PhoneModelPicker: View {
             .task { await phone.loadAllModels() }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func row(_ providerId: String, _ m: PhoneModel) -> some View {
+        Button {
+            pick(providerId, m.id)
+            dismiss()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(m.name).foregroundStyle(palette.ink)
+                    if m.name != m.id { Text(m.id).font(.caption).foregroundStyle(palette.inkSoft) }
+                }
+                Spacer()
+                // Context only where the provider lists it, never guessed (#2925).
+                if let meta = ModelMeta.line(local: false, contextLength: m.contextLength) {
+                    Text(verbatim: meta).font(.caption.monospacedDigit()).foregroundStyle(palette.inkSoft).lineLimit(1)
+                }
+                if selected?.0 == providerId && selected?.1 == m.id {
+                    Image(systemName: "checkmark").foregroundStyle(palette.accent).accessibilityLabel("Selected")
+                }
+            }
+        }
+        .accessibilityIdentifier("phoneModel.row")
     }
 }
 

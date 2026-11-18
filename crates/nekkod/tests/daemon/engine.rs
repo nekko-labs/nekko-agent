@@ -643,6 +643,8 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     .unwrap();
     let session = json!({ "id": "s_img", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
+    let other = json!({ "id": "s_img2", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_img2.json"), other.to_string()).unwrap();
     let d = start_with_env(&data, json!({}), &[]);
     let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
     let row = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").cloned().expect("an image row");
@@ -709,11 +711,34 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
         running.as_array().is_some_and(|r| r.contains(&json!("s_img"))).then_some(())
     })
     .await;
+    // One picture at a time on this computer: another chat's picture waits, and says so.
+    let queued = json!({ "sessionId": "s_img2", "prompt": "a red kite", "params": params });
+    let waiting = tokio::spawn(async move { post(port2, "chat:generateImage", json!([queued]), Some(TOKEN)).await });
+    let mut label = String::new();
+    while let Some(ev) = next_json(&mut events, Duration::from_secs(10)).await {
+        let p = &ev["payload"];
+        if ev["channel"] == "agent:event" && p["sessionId"] == "s_img2" && p["type"] == "image_status" {
+            label = p["label"].as_str().unwrap_or_default().to_string();
+            if label.starts_with("Waiting") {
+                break;
+            }
+        }
+    }
+    assert_eq!(label, "Waiting for another picture or clip on this computer to finish");
+    assert!(!waiting.is_finished(), "the second picture waits for the first");
     let started = Instant::now();
     post(d.port, "chat:abort", json!(["s_img"]), Some(TOKEN)).await;
     let (status, _) = running.await.unwrap();
     assert_eq!(status, 200);
     assert!(started.elapsed() < Duration::from_secs(5));
+    // The stop frees the queue: the waiting picture is made.
+    let (status, _) = waiting.await.unwrap();
+    assert_eq!(status, 200);
+    assert!(started.elapsed() < Duration::from_secs(10), "it did not wait out the stopped picture");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img2.json")).unwrap()).unwrap();
+    let made = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    assert!(made["images"][0].as_str().is_some(), "{made}");
     let saved: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
     let last = saved["messages"].as_array().unwrap().last().unwrap().clone();

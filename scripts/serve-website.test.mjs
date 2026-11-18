@@ -39,18 +39,18 @@ test('marketing preview serves only static website files and read requests', asy
   assert.doesNotMatch(page.body, /class="hero-proof/);
   for (const f of ['hero-v2.mp4', 'hero-v2-light.mp4', 'hero-v2-poster.webp', 'hero-v2-light-poster.webp']) assert.equal((await get(`/media/${f}`)).status, 200, f);
   assert.doesNotMatch(page.body, /Time to complete reply/);
-  // Why Nekko is the five-pillar tour: a vertical carousel beside one demo, the
+  // Why Nekko is the six-pillar tour: a vertical carousel beside one demo, the
   // speed pillar titled without a superlative it cannot prove. The tablist /
   // tab roles were dropped because Google's Agentic Browsing audit rejected
   // every DOM shape we could give them, including aria-owns (#2672); the
   // widget is really a carousel whose aria-roledescription already says so.
   assert.match(page.body, /data-pillar-tour/);
-  assert.equal((page.body.match(/class="pillar-tab"/g) ?? []).length, 5);
+  assert.equal((page.body.match(/class="pillar-tab"/g) ?? []).length, 6);
   assert.doesNotMatch(page.body, /role="tablist"/);
   assert.doesNotMatch(page.body, /role="tab"/);
   assert.doesNotMatch(page.body, /aria-selected=/);
   assert.match(page.body, /Fast\. Really fast\./);
-  for (const id of ['local', 'speed', 'privacy', 'fleet', 'anywhere']) {
+  for (const id of ['local', 'speed', 'privacy', 'fleet', 'anywhere', 'photo']) {
     for (const f of [`pillar-${id}.mp4`, `pillar-${id}-light.mp4`, `pillar-${id}-poster.jpg`, `pillar-${id}-light-poster.jpg`]) {
       assert.equal((await get(`/media/${f}`)).status, 200, f);
     }
@@ -70,7 +70,7 @@ test('marketing preview serves only static website files and read requests', asy
     assert.doesNotMatch(page.body, new RegExp(`href="[^"]*#${id}"`), `no links to #${id}`);
   }
   const hero = page.body.slice(page.body.indexOf('<section class="hero">'), page.body.indexOf('</section>', page.body.indexOf('<section class="hero">')));
-  assert.match(hero, /<span>MEET NEKKO<\/span>\s*<p class="mascot-cap">Meet Nekko: a small pixel cat keeping you company while your agents get to work\.<\/p>/);
+  assert.match(hero, /<span>MEET NEKKO<\/span>\s*<p class="mascot-cap">Nekko comes from neko, Japanese for cat\. This little one keeps you company while your agents get to work\.<\/p>/);
   assert.doesNotMatch(page.body, /class="[^"]*mf-foot/);
   assert.doesNotMatch(profiles, /cannot (read|reach|access) another profile&rsquo;s (files|folders)/);
   // The benchmark summary keeps the result, its conditions, the measured losses
