@@ -4,7 +4,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 
-const DEMOS = { local: 225, speed: 228, privacy: 220, fleet: 205, anywhere: 205 }; // poster frame
+const DEMOS = { local: 225, speed: 228, privacy: 220, fleet: 205, anywhere: 205, photo: 225 }; // poster frame
 const exe = process.argv[2];
 const browser = exe ? [`--browser-executable=${exe}`] : [];
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';

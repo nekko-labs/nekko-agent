@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { parseList } from "../auth.js";
 import { migrate } from "../migrate.js";
 import { buildServer } from "../server.js";
 import { supabaseVerifier } from "../supabase.js";
@@ -32,6 +33,9 @@ const app = buildServer({
   // Organizations are always on locally; NEKKO_ORGS_ALLOWED_EMAILS can still narrow them.
   orgsEnabled: true,
   orgsAllowedEmails: (process.env.NEKKO_ORGS_ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
+  // Invite-only gate, to try the apps' message: NEKKO_ACCOUNTS_ALLOWED_DOMAINS=nekkolabs.com
+  accountsAllowedDomains: parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_DOMAINS),
+  accountsAllowedEmails: parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_EMAILS),
   allowedOrigins: [],
   logger: false,
   // Tests sign several devices in from one address.

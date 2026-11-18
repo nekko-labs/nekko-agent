@@ -99,8 +99,11 @@ pub async fn route(
                 }
                 None => Vec::new(),
             };
+            let updated = recs.feed_version != nekko_machine::bundled_feed().version;
             let mut v = serde_json::to_value(recs).map_err(|e| e.to_string())?;
             v["nudges"] = serde_json::to_value(nudges).map_err(|e| e.to_string())?;
+            // A signed newer list (model_feed.rs) rather than the one this version shipped.
+            v["feedSource"] = json!(if updated { "update" } else { "bundled" });
             Ok(v)
         }
         // `task` (or every task with `null`): remember its current pick as seen.

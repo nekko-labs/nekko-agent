@@ -226,7 +226,7 @@ export function RecommendationList({
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-2xs text-ink-faint">
         <span>
-          From the model list shipped with this version ({recs.feedVersion}). Speeds are for the start of a conversation: ~ marks an estimate, "here" what this machine measured.
+          {feedText(recs)} Speeds are for the start of a conversation: ~ marks an estimate, "here" what this machine measured.
         </span>
         <button className="btn btn-ghost py-1 text-xs" onClick={onRecheck} disabled={checking}>
           {checking ? 'Checking…' : 'Check this machine again'}
@@ -234,6 +234,13 @@ export function RecommendationList({
       </div>
     </details>
   );
+}
+
+/** Where the list came from: the one this version shipped, or a newer one an update check brought. */
+export function feedText(recs: Pick<Recommendations, 'feedVersion' | 'feedSource'>): string {
+  return recs.feedSource === 'update'
+    ? `From an updated model list (${recs.feedVersion}), newer than the one this version shipped.`
+    : `From the model list shipped with this version (${recs.feedVersion}).`;
 }
 
 /** "4.6 GB of 7 GB (estimated)": a picture model's memory is not measured yet, so it says so. */

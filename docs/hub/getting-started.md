@@ -4,7 +4,7 @@ Nekko Agent is AI help on your computer, for coding and everyday work. It reads,
 
 ## Who we are
 
-Nekko Agent is made by [Nekko Labs](https://nekkolabs.com). We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
+Nekko Agent is made by [Nekko Labs](https://nekkolabs.com), and its name comes from neko, Japanese for cat. We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
 
 We care about three things:
 

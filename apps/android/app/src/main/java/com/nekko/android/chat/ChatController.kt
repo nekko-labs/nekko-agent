@@ -107,6 +107,10 @@ data class ChatUi(
     val runOptions: Map<String, JsonElement> = emptyMap(),
     /** The tools this chat may not call. */
     val disabledTools: List<String> = emptyList(),
+    /** MCP tools this chat runs without asking ("Always allow this tool", decision 0054). */
+    val allowedMcpTools: List<String> = emptyList(),
+    /** Recipients this chat writes to without asking (decision 0063). */
+    val knownRecipients: List<String> = emptyList(),
     /** The chat's own tool policy; null follows the computer's default. */
     val mode: PcSettings.ChatMode? = null,
     /** The transcript is the phone's saved copy, saved then: read-only until the computer answers (OF-5). */
@@ -697,6 +701,17 @@ class ChatController(
         /** Only MCP tools offer **Always allow this tool**: their server alone says what they do (`offersToolScope` on the desktop). */
         fun offersToolScope(toolName: String): Boolean = toolName.startsWith("mcp__")
 
+        /** An MCP tool's name for people: `mcp__slack__post_message` reads "Post message (Slack)", as `toolPickerLabel` on the desktop. */
+        fun mcpToolLabel(name: String): String {
+            fun humanize(s: String): String {
+                val words = s.replace(Regex("([a-z0-9])([A-Z])"), "$1 $2").replace(Regex("[_./:-]+"), " ").trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+                return if (words.isEmpty()) "Unnamed tool" else words.substring(0, 1).uppercase() + words.substring(1)
+            }
+            val parts = name.split("__")
+            if (!name.startsWith("mcp__") || parts.size < 3) return humanize(name)
+            return "${humanize(parts.drop(2).joinToString(" "))} (${humanize(parts[1].ifEmpty { "MCP" })})"
+        }
+
         /** The session's own model, else the computer's default (never the `__auto__` sentinel). */
         fun resolveModel(session: Session?, defaults: RemoteDefaults): Pair<String?, String?> {
             val providerId = session?.providerId ?: defaults.defaultProviderId
@@ -776,6 +791,8 @@ class ChatController(
                 effort = Effort.parse(state.session?.effort),
                 runOptions = state.session?.runOptions ?: emptyMap(),
                 disabledTools = state.session?.disabledTools ?: emptyList(),
+                allowedMcpTools = state.session?.allowedMcpTools ?: emptyList(),
+                knownRecipients = state.session?.knownRecipients ?: emptyList(),
                 mode = state.session?.mode,
                 context = state.context,
                 contextTokens = liveTokens(state.context, turn),

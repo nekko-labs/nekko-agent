@@ -793,6 +793,19 @@ async fn an_always_allowed_mcp_tool_stops_asking_and_others_still_ask() {
 /// approves everything. Returns each approval as `(call id, reason)`, and the
 /// chat as saved.
 async fn mcp_turn(name: &str, session_extra: Value, script: Vec<String>) -> (Vec<(String, String)>, Value, Mcp) {
+    mcp_turn_with(name, session_extra, script, None).await
+}
+
+/// [`mcp_turn`], and `while_first_waits` (a `session:setOptions` patch) is
+/// applied while the first approval waits, as the user changing the chat's
+/// permissions from the menu would.
+async fn mcp_turn_with(
+    name: &str,
+    session_extra: Value,
+    script: Vec<String>,
+    while_first_waits: Option<Value>,
+) -> (Vec<(String, String)>, Value, Mcp) {
+    let mut while_first_waits = while_first_waits;
     let docs = mcp().await;
     let mut session = json!({
         "id": SESSION, "title": "Eval", "mode": "guardrails", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
@@ -817,6 +830,10 @@ async fn mcp_turn(name: &str, session_extra: Value, script: Vec<String>) -> (Vec
         if let Some(a) = pending.get(SESSION).and_then(|p| p.get("approval")) {
             let id = a["call"]["id"].as_str().unwrap_or_default().to_string();
             asked.push((id.clone(), a["reason"].as_str().unwrap_or_default().to_string()));
+            if let Some(patch) = while_first_waits.take() {
+                let (status, body) = post(rig.d.port, "session:setOptions", json!([SESSION, patch]), Some(TOKEN)).await;
+                assert_eq!(status, 200, "{body}");
+            }
             post(rig.d.port, "tool:approve", json!([SESSION, id, true]), Some(TOKEN)).await;
             continue;
         }
@@ -881,6 +898,33 @@ async fn a_new_recipient_asks_even_for_an_always_allowed_tool() {
     assert!(asked[0].1.contains("has not written to before: random"), "{}", asked[0].1);
     assert_eq!(docs.sent.lock().unwrap().len(), 3);
     assert_eq!(saved["knownRecipients"], json!(["general", "random"]));
+}
+
+/// A recipient or an always-allowed tool the user takes back from the menu,
+/// mid-turn, stays taken back: the next call asks again, and approving a new
+/// recipient does not bring the old one back with it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_permission_taken_back_mid_turn_asks_again() {
+    let (asked, saved, docs) = mcp_turn_with(
+        "outward-revoke",
+        json!({ "allowedMcpTools": ["mcp__srv__post_message"], "knownRecipients": ["general"] }),
+        vec![
+            call_tool("c_new", "mcp__srv__post_message", json!({ "channel": "random", "text": "one" })),
+            call_tool("c_general", "mcp__srv__post_message", json!({ "channel": "general", "text": "two" })),
+            say_text("done"),
+        ],
+        // While c_new waits, the user removes "general" and the always-allowed tool.
+        Some(json!({ "knownRecipients": [], "allowedMcpTools": [] })),
+    )
+    .await;
+    let ids: Vec<&str> = asked.iter().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(ids, ["c_new", "c_general"], "{asked:?}");
+    // The first call's output tainted the chat, so the tool asks with the egress gate's reason.
+    assert!(asked[1].1.starts_with("Call mcp__srv__post_message?"), "the tool asks again: {}", asked[1].1);
+    assert!(asked[1].1.contains("It writes to general."), "so does the recipient: {}", asked[1].1);
+    assert_eq!(docs.sent.lock().unwrap().len(), 2);
+    assert_eq!(saved["knownRecipients"], json!(["random", "general"]));
+    assert_eq!(saved["allowedMcpTools"], json!([]));
 }
 
 /// The chat's audit trail (`audit:read`): every turn, tool call and approval,

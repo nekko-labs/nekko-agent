@@ -305,6 +305,8 @@ data class Session(
     val disabledTools: List<String> = emptyList(),
     /** MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in this chat (decision 0054). */
     val allowedMcpTools: List<String> = emptyList(),
+    /** Recipients this chat has written to through an MCP tool (decision 0063): writing to one again does not ask. */
+    val knownRecipients: List<String> = emptyList(),
     /** The agent's plan (`update_plan`), for the plan sheet over the composer (#2115). */
     val agentPlan: List<PlanStep> = emptyList(),
 ) {
@@ -347,6 +349,7 @@ data class Session(
                 executionMode = o.str("executionMode"),
                 disabledTools = o["disabledTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 allowedMcpTools = o["allowedMcpTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
+                knownRecipients = o["knownRecipients"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 agentPlan = PlanStep.list(o["agentPlan"]),
             )
         }

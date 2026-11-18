@@ -8,6 +8,9 @@
 # no autoscaling, no volume, no dedicated IPv4. About $2/month plus bandwidth.
 # It stays on: the cloud machines' hours, over-plan stop and 7-day delete run
 # on timers inside this process.
+# Nekko Cloud is invite-only while it goes live (issue #2932): before the Supabase
+# secrets, run: fly secrets set NEKKO_ACCOUNTS_ALLOWED_DOMAINS=nekkolabs.com
+# (a plain secret or an [env] line both work; the value is not sensitive).
 # Nekko Cloud machines also need: fly secrets set FLY_API_TOKEN=<deploy token
 # for nekko-cloud-machines> NEKKO_MACHINE_IMAGE=registry.fly.io/nekko-cloud-machines@sha256:<digest>
 

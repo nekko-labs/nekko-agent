@@ -78,6 +78,8 @@ Missing, ambiguous, changed or expired targets/confirmations are refused with an
 
 None disables the card. All enabled iOS levels draw counts and voice, with an inert Settings preview of the same view. Minimal removes chat text from pushed state. Standard/Detailed still permit their existing chat detail payloads through the relay and Apple's push service even though the dashboard does not draw those details. Choose Minimal for counts without chat text; a counts-only view is not a new transport privacy guarantee.
 
+**Settings preview per level (2026-11-17, [#2928](https://github.com/nekko-labs/nekko-agent/issues/2928), native-unverified):** the preview draws the card from `buildCard` at the chosen level, so it matches what a push carries. None shows no card, only "Nothing on the Lock Screen". Minimal draws the counts and lists no chat text. Standard and Detailed draw the same counts (the card never draws chat rows, decision 0070); under the preview Standard lists the first chats' name and current step, and Detailed adds the latest reply line, labelled in the footer as carried by the relay and Apple's push service but not drawn. The level change cross-fades in 0.2 s. Android has no preview yet ([#2933](https://github.com/nekko-labs/nekko-agent/issues/2933)).
+
 Dashboard and Settings catalog labels have the existing seven-language coverage. Command parsing and dispatcher replies remain initially English; adding catalog entries does not localize dynamically returned English replies. Android notification action labels are localized, not the entire foreground voice sheet.
 
 ## Strict native acceptance follow-up (2026-11-09)

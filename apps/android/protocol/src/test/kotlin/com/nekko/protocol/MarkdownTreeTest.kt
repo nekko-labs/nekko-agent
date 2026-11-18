@@ -62,8 +62,45 @@ class MarkdownTreeTest {
     @Test fun `wrapped and continued lines hang under their item`() {
         val md = "- a long item\n  that wraps\n  - child\n  more for the parent\n- lazy\ncontinuation\n\n  second paragraph of lazy"
         assertEquals(
-            listOf(ListBlock(bullets(item("a long item\nthat wraps\nmore for the parent", null, listOf(bullets(item("child")))), item("lazy\ncontinuation\n\nsecond paragraph of lazy")))),
+            listOf(ListBlock(bullets(item("a long item that wraps more for the parent", null, listOf(bullets(item("child")))), item("lazy continuation\n\nsecond paragraph of lazy")))),
             parse(md),
+        )
+    }
+
+    /** Models hard-wrap near 80 columns; on a phone those breaks land mid-line. */
+    @Test fun `a hard-wrapped item reflows but a hard break stays`() {
+        val md = "- Nekko reads the repository and writes a plan that\n  covers each step before\n  it changes a file\n- two spaces  \n  keep a break\n- a backslash\\\n  keeps one too"
+        assertEquals(
+            listOf(ListBlock(bullets(
+                item("Nekko reads the repository and writes a plan that covers each step before it changes a file"),
+                item("two spaces\nkeep a break"),
+                item("a backslash\nkeeps one too"),
+            ))),
+            parse(md),
+        )
+        // A chat paragraph still keeps its single newlines, as people type them.
+        assertEquals(listOf(Paragraph("line one\nline two")), parse("line one\nline two"))
+    }
+
+    @Test fun `typographic bullets are list items`() {
+        assertEquals(
+            listOf(Paragraph("Options:"), ListBlock(bullets(*listOf("one", "two", "three", "four", "five", "six", "seven").map { item(it) }.toTypedArray()))),
+            parse("Options:\n• one\n◦ two\n▪ three\n‣ four\n– five\n· six\n• seven"),
+        )
+        // Glued to a word, they stay text.
+        assertEquals(listOf(Paragraph("•not a list\n–nor this")), parse("•not a list\n–nor this"))
+    }
+
+    @Test fun `a loose list stays one list`() {
+        val md = "- a\n\n- b\n\n\n- c\n  more of c"
+        val want = listOf(ListBlock(bullets(item("a"), item("b"), item("c more of c"))))
+        assertEquals(want, parse(md))
+        assertEquals(want, MarkdownParser.blocks(md))
+        assertEquals(listOf(ListBlock(numbers(1, item("a"), item("b")))), parse("1. a\n\n2. b"))
+        // A paragraph between items still splits them.
+        assertEquals(
+            listOf(ListBlock(bullets(item("a"))), Paragraph("between"), ListBlock(bullets(item("b")))),
+            parse("- a\n\nbetween\n\n- b"),
         )
     }
 
@@ -141,6 +178,8 @@ class MarkdownTreeTest {
     @Test fun `segments split only where nothing carries across`() {
         val md = "# A\npara\n\n- x\n\n  - y\n\n```\none\n\ntwo\n```\n\nlast"
         assertEquals(listOf("# A\npara", "- x\n\n  - y", "```\none\n\ntwo\n```", "last"), MarkdownParser.segments(md))
+        // An item after a blank line joins an open list; after a paragraph or a heading it starts fresh.
+        assertEquals(listOf("- a\n\n- b", "# H", "- c", "para", "- d"), MarkdownParser.segments("- a\n\n- b\n\n# H\n\n- c\n\npara\n\n- d"))
     }
 
     /** The cached, segment-by-segment parse is the same as one pass, so streaming can't change the result. */
@@ -163,6 +202,14 @@ class MarkdownTreeTest {
 
             > quote
             > more
+
+            - loose
+              wrapped
+
+            - list
+
+            • dot
+            after
 
             ```mermaid
             graph TD

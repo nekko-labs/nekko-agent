@@ -135,6 +135,14 @@ fn mcp_tool_list(v: &Value) -> bool {
     })
 }
 
+/// `knownRecipients` from a phone: plain non-empty strings, at most 200 of up
+/// to 200 characters, as `isRecipientList` in packages/shared/src/phone-access.ts.
+fn recipient_list(v: &Value) -> bool {
+    v.as_array().is_some_and(|a| {
+        a.len() <= 200 && a.iter().all(|r| r.as_str().is_some_and(|s| !s.is_empty() && s.encode_utf16().count() <= 200))
+    })
+}
+
 fn strings(v: &Value) -> Vec<String> {
     v.as_array().map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default()
 }
@@ -577,6 +585,10 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
             // "Always allow this tool" (decision 0054): MCP tool names only.
             if arg(1).get("allowedMcpTools").is_some_and(|v| !mcp_tool_list(v)) {
                 return Err(denied("value-invalid", "allowedMcpTools"));
+            }
+            // The recipients a chat writes to without asking (decision 0063).
+            if arg(1).get("knownRecipients").is_some_and(|v| !recipient_list(v)) {
+                return Err(denied("value-invalid", "knownRecipients"));
             }
             if let Some(effort) = arg(1).get("effort")
                 && !effort.as_str().is_some_and(|e| has(&policy().effort_levels, e))
@@ -2545,11 +2557,24 @@ mod tests {
                 json!({ "memory": "all" }),
                 json!({ "guidance": "off" }),
                 json!({ "allowedMcpTools": ["mcp__slack__post_message"] }),
+                // Taking a recipient back, or adding one, is signed either way: the gate
+                // does not hold the chat's list, so it cannot tell which.
+                json!({ "knownRecipients": [] }),
+                json!({ "knownRecipients": ["general"] }),
             ] {
                 assert!(set(guarded.clone()).unwrap_err().contains("proof-required"), "{guarded}");
             }
-            // "Always allow this tool" names MCP tools only, whatever the proof.
-            for bad in [json!({ "allowedMcpTools": ["bash"] }), json!({ "allowedMcpTools": "mcp__x__y" })] {
+            // "Always allow this tool" names MCP tools only, and recipients are
+            // short non-empty strings, whatever the proof.
+            let long = "x".repeat(201);
+            for bad in [
+                json!({ "allowedMcpTools": ["bash"] }),
+                json!({ "allowedMcpTools": "mcp__x__y" }),
+                json!({ "knownRecipients": "general" }),
+                json!({ "knownRecipients": [""] }),
+                json!({ "knownRecipients": [7] }),
+                json!({ "knownRecipients": [long] }),
+            ] {
                 assert!(set(bad.clone()).unwrap_err().contains("value-invalid"), "{bad}");
             }
             assert_eq!(calls.lock().unwrap().iter().filter(|(c, _)| c == "session:setOptions").count(), 1);

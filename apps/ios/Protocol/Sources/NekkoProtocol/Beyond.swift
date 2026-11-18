@@ -357,11 +357,25 @@ public struct ProviderLimits: Equatable, Sendable {
         /// `allowed`, `warning` or `rate_limited`.
         public let status: String
         public var limited: Bool { status == "rate_limited" }
+
+        public init(id: String, label: String, usedPercent: Double, resetAt: Int64?, status: String) {
+            self.id = id
+            self.label = label
+            self.usedPercent = usedPercent
+            self.resetAt = resetAt
+            self.status = status
+        }
     }
 
     public let planType: String?
     public let windows: [Window]
     public let updatedAt: Int64?
+
+    public init(planType: String?, windows: [Window], updatedAt: Int64?) {
+        self.planType = planType
+        self.windows = windows
+        self.updatedAt = updatedAt
+    }
 
     public static func from(_ v: JSONValue?) -> ProviderLimits? {
         guard let v, v.object != nil else { return nil }

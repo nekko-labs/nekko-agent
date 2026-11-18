@@ -250,6 +250,14 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
 > and ChatGPT subscriptions and local model servers still need a computer.
 >
+> **Model on device** (iPhone): New chat shows the model and where it runs on one line, such as
+> *gpt-6.1-sol · OpenAI ⟶ This iPhone*. Tap the model to change it, or the device to choose
+> another computer or This iPhone. Until you send your first message, New chat also shows **Nekko
+> can do more with these**: pair a computer, add a folder, connect a git provider and connect a
+> task tool. Each row opens its setup and ticks when it's done. Later, while no computer, folder or
+> git provider is connected, one line offers **Connect**. Close either with **×** (and **Undo** if
+> you change your mind); it stays closed on this iPhone.
+>
 > **Connectors** (iPhone): **Settings → Connectors** (or **Connectors** in the chat list's menu)
 > connects this iPhone to a git provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) and to
 > project tools (Linear, Jira, Floop, Asana, ClickUp, Trello, Todoist). Each token stays in this
@@ -622,6 +630,14 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > the chat through the lock. Without push (not built yet), these only arrive while the phone is still
 > connected. If Android restricts Nekko in the background, Settings says so and opens the app's
 > system page.
+>
+> **In the car (Android Auto):** while the phone is on Android Auto, a finished reply is read aloud
+> there: the chat's name and the first 200 or so characters of its reply, in plain words. Say
+> **Reply** and dictate an answer; Android Auto reads it back and asks before sending it to that chat.
+> It waits on the phone while the computer is offline, and goes only to a chat on the computer the
+> phone is connected to. Off the car, notifications stay as above, without the reply. Approvals,
+> Stop and the chat list aren't in the car on Android: Android Auto only takes Reply and Mark as read
+> from an app like this.
 
 The phone clients are native apps: SwiftUI in `apps/ios` and Kotlin/Jetpack Compose in
 `apps/android`. They drive chats on your computer over the encrypted relay. The former

@@ -344,4 +344,9 @@
     <string name="response_deny">Refuser %1$s</string>
     <!-- Edit under a picture an image chat made (#2230). -->
     <string name="chat_edit_picture">Modifier</string>
+    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
+    <string name="car_you">Vous</string>
+    <string name="car_reply">Répondre</string>
+    <string name="car_mark_read">Marquer comme lu</string>
+    <string name="car_not_sent">Non envoyé : cette discussion n’est pas sur l’ordinateur auquel le téléphone est connecté.</string>
 </resources>

@@ -344,4 +344,9 @@
     <string name="response_deny">%1$s ablehnen</string>
     <!-- Edit under a picture an image chat made (#2230). -->
     <string name="chat_edit_picture">Bearbeiten</string>
+    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
+    <string name="car_you">Du</string>
+    <string name="car_reply">Antworten</string>
+    <string name="car_mark_read">Als gelesen markieren</string>
+    <string name="car_not_sent">Nicht gesendet: Dieser Chat ist nicht auf dem Computer, mit dem das Telefon verbunden ist.</string>
 </resources>

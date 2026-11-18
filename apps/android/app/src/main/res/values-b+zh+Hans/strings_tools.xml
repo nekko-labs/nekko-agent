@@ -197,4 +197,10 @@
     <string name="tools_preview_page">第 %1$d 页，共 %2$d 页</string>
     <string name="tools_preview_card">%1$s，%2$s。从你的电脑打开预览</string>
     <string name="tools_preview_file">文件</string>
+    <string name="grants_title">无需询问即允许</string>
+    <string name="grants_tools">始终允许的工具</string>
+    <string name="grants_recipients">已知收件人</string>
+    <string name="grants_remove_tool">在 %1$s 之前再次询问</string>
+    <string name="grants_remove_recipient">在写给 %1$s 之前再次询问</string>
+    <string name="grants_note">移除后，下一次调用会再次询问，仅限此聊天。</string>
 </resources>

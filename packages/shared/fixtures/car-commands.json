@@ -1,0 +1,406 @@
+{
+ "about": "What a driver says to Nekko in the car, and which chat a spoken name means. Run by the iPhone's CarCommandsTests (CarPlay) and Android's CarCommandsTest (Android Auto, #2782). Change both grammars together. command.kind: status, read, tell, allow, deny, stop, newChat, yes, no, pick, again, unknown; chat absent means the chat Talk was opened on (or none). A match case without chats uses the default chats.",
+ "chats": [
+  {
+   "id": "a",
+   "title": "Fix flaky login test"
+  },
+  {
+   "id": "b",
+   "title": "Billing retries"
+  },
+  {
+   "id": "c",
+   "title": "Release notes 0.9.8"
+  },
+  {
+   "id": "d",
+   "title": "Billing dashboard"
+  },
+  {
+   "id": "e",
+   "title": "Authentication refactor"
+  }
+ ],
+ "parse": [
+  {
+   "say": "status",
+   "command": {
+    "kind": "status"
+   }
+  },
+  {
+   "say": "What's happening?",
+   "command": {
+    "kind": "status"
+   }
+  },
+  {
+   "say": "what is going on",
+   "command": {
+    "kind": "status"
+   }
+  },
+  {
+   "say": "Nekko, what needs me",
+   "command": {
+    "kind": "status"
+   }
+  },
+  {
+   "say": "anything need me",
+   "command": {
+    "kind": "status"
+   }
+  },
+  {
+   "say": "catch me up",
+   "command": {
+    "kind": "status"
+   }
+  },
+  {
+   "say": "How's it going",
+   "command": {
+    "kind": "status"
+   }
+  },
+  {
+   "say": "hey nekko status",
+   "command": {
+    "kind": "status"
+   }
+  },
+  {
+   "say": "Yes.",
+   "command": {
+    "kind": "yes"
+   }
+  },
+  {
+   "say": "go ahead",
+   "command": {
+    "kind": "yes"
+   }
+  },
+  {
+   "say": "never mind",
+   "command": {
+    "kind": "no"
+   }
+  },
+  {
+   "say": "cancel",
+   "command": {
+    "kind": "no"
+   }
+  },
+  {
+   "say": "the second one",
+   "command": {
+    "kind": "pick",
+    "n": 2
+   }
+  },
+  {
+   "say": "3",
+   "command": {
+    "kind": "pick",
+    "n": 3
+   }
+  },
+  {
+   "say": "say that again",
+   "command": {
+    "kind": "again"
+   }
+  },
+  {
+   "say": "Tell billing to run the tests first.",
+   "command": {
+    "kind": "tell",
+    "chat": "billing",
+    "message": "run the tests first"
+   }
+  },
+  {
+   "say": "send to the login chat saying ship it",
+   "command": {
+    "kind": "tell",
+    "chat": "login",
+    "message": "ship it"
+   }
+  },
+  {
+   "say": "ask Release notes: is the changelog done",
+   "command": {
+    "kind": "tell",
+    "chat": "Release notes",
+    "message": "is the changelog done"
+   }
+  },
+  {
+   "say": "Nekko, reply to docs that it looks good",
+   "command": {
+    "kind": "tell",
+    "chat": "docs",
+    "message": "it looks good"
+   }
+  },
+  {
+   "say": "tell Billing to use PostgreSQL",
+   "command": {
+    "kind": "tell",
+    "chat": "Billing",
+    "message": "use PostgreSQL"
+   }
+  },
+  {
+   "say": "read billing",
+   "command": {
+    "kind": "read",
+    "chat": "billing"
+   }
+  },
+  {
+   "say": "what did the login chat say",
+   "command": {
+    "kind": "read",
+    "chat": "login"
+   }
+  },
+  {
+   "say": "read me the latest from release notes",
+   "command": {
+    "kind": "read",
+    "chat": "release notes"
+   }
+  },
+  {
+   "say": "read it",
+   "command": {
+    "kind": "read"
+   }
+  },
+  {
+   "say": "what did it say",
+   "command": {
+    "kind": "read"
+   }
+  },
+  {
+   "say": "allow",
+   "command": {
+    "kind": "allow"
+   }
+  },
+  {
+   "say": "approve it",
+   "command": {
+    "kind": "allow"
+   }
+  },
+  {
+   "say": "allow billing",
+   "command": {
+    "kind": "allow",
+    "chat": "billing"
+   }
+  },
+  {
+   "say": "approve that in the billing chat",
+   "command": {
+    "kind": "allow",
+    "chat": "billing"
+   }
+  },
+  {
+   "say": "deny billing",
+   "command": {
+    "kind": "deny",
+    "chat": "billing"
+   }
+  },
+  {
+   "say": "stop the login chat",
+   "command": {
+    "kind": "stop",
+    "chat": "login"
+   }
+  },
+  {
+   "say": "stop",
+   "command": {
+    "kind": "stop"
+   }
+  },
+  {
+   "say": "stop it",
+   "command": {
+    "kind": "stop"
+   }
+  },
+  {
+   "say": "start a chat to look into the flaky test",
+   "command": {
+    "kind": "newChat",
+    "message": "look into the flaky test"
+   }
+  },
+  {
+   "say": "Start a new chat about the release notes",
+   "command": {
+    "kind": "newChat",
+    "message": "the release notes"
+   }
+  },
+  {
+   "say": "new chat: fix the login bug",
+   "command": {
+    "kind": "newChat",
+    "message": "fix the login bug"
+   }
+  },
+  {
+   "say": "Use the staging database instead.",
+   "command": {
+    "kind": "tell",
+    "message": "Use the staging database instead"
+   },
+   "inChat": true
+  },
+  {
+   "say": "Use the staging database instead.",
+   "command": {
+    "kind": "unknown",
+    "text": "Use the staging database instead"
+   }
+  },
+  {
+   "say": "stop",
+   "command": {
+    "kind": "stop"
+   },
+   "inChat": true
+  },
+  {
+   "say": "status",
+   "command": {
+    "kind": "status"
+   },
+   "inChat": true
+  }
+ ],
+ "matches": [
+  {
+   "query": "login",
+   "match": {
+    "kind": "one",
+    "ids": [
+     "a"
+    ]
+   }
+  },
+  {
+   "query": "the flaky test",
+   "match": {
+    "kind": "one",
+    "ids": [
+     "a"
+    ]
+   }
+  },
+  {
+   "query": "release notes",
+   "match": {
+    "kind": "one",
+    "ids": [
+     "c"
+    ]
+   }
+  },
+  {
+   "query": "billing retry",
+   "match": {
+    "kind": "one",
+    "ids": [
+     "b"
+    ]
+   }
+  },
+  {
+   "query": "auth",
+   "match": {
+    "kind": "one",
+    "ids": [
+     "e"
+    ]
+   }
+  },
+  {
+   "query": "Fix flaky login test",
+   "match": {
+    "kind": "one",
+    "ids": [
+     "a"
+    ]
+   }
+  },
+  {
+   "query": "billing",
+   "match": {
+    "kind": "several",
+    "ids": [
+     "b",
+     "d"
+    ]
+   }
+  },
+  {
+   "query": "groceries",
+   "match": {
+    "kind": "none"
+   }
+  },
+  {
+   "query": "the chat",
+   "match": {
+    "kind": "none"
+   }
+  },
+  {
+   "query": "docs",
+   "match": {
+    "kind": "one",
+    "ids": [
+     "x"
+    ]
+   },
+   "chats": [
+    {
+     "id": "x",
+     "title": "Docs"
+    },
+    {
+     "id": "y",
+     "title": "Docs site redesign"
+    }
+   ]
+  },
+  {
+   "query": "cafe",
+   "match": {
+    "kind": "one",
+    "ids": [
+     "z"
+    ]
+   },
+   "chats": [
+    {
+     "id": "z",
+     "title": "Café menu"
+    }
+   ]
+  }
+ ]
+}
