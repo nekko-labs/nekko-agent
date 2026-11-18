@@ -18,6 +18,16 @@ describe('describeInterruption', () => {
     expect(describeInterruption('429 rate limit: too many tokens per min', true).title).toBe('Reply failed');
   });
 
+  it('names a refused sign-in as expired, still a failure, so the notice can offer Sign in again', () => {
+    const expired = describeInterruption('chatgpt 401: { "error": { "message": "Provided authentication token is expired. Please try signing in again.", "code": "token_expired" } }', true);
+    expect(expired).toMatchObject({ paused: false, signInExpired: true, title: 'Sign-in expired' });
+    expect(describeInterruption('openai 401: Incorrect API key provided (invalid_api_key)', true).signInExpired).toBe(true);
+    expect(describeInterruption('Rate limit exceeded', true).signInExpired).toBe(false);
+    expect(describeInterruption('Stopped', true).signInExpired).toBe(false);
+    // 4010 tokens is not a 401.
+    expect(describeInterruption('openai 400: 4010 tokens over', true).signInExpired).toBe(false);
+  });
+
   it('explains terminated without inventing a cause or calling it a pause', () => {
     const result = describeInterruption('terminated', true);
     expect(result.paused).toBe(false);
