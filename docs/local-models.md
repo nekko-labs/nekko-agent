@@ -31,7 +31,7 @@ This is experimental: clips take minutes, memory use is estimated, and there is 
 
 When your computer has a picture model ready, the agent in any chat on this computer can make and change pictures with it: ask for an illustration, an icon or a mock-up while you work. The picture appears in the chat and the agent can look at it to check the result. Ask it to save the picture in the project (for example `assets/hero.png`) and it saves a new file, asking first in the same way as for any other file it writes. Nothing leaves your computer and making a picture asks nothing.
 
-The agent uses the chat's picture model if you chose one, otherwise the first ready one that can do the job. Only one picture or clip is made at a time on your computer, so a second one waits. When a picture model has to push the chat's own model out of memory, it is unloaded again once the picture is done, and the chat's model loads again for the next reply. Sandbox and Claude Agent chats do not have these tools yet.
+The agent uses the chat's picture model if you chose one, then the one in **Settings → Agents → Pictures** (Automatic by default), otherwise the first ready one that can do the job. Only one picture or clip is made at a time on your computer, so a second one waits. When a picture model has to push the chat's own model out of memory, it is unloaded again once the picture is done, and the chat's model loads again for the next reply. Sandbox and Claude Agent chats do not have these tools yet.
 
 ## Your first local model
 

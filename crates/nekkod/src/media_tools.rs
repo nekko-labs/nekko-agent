@@ -5,7 +5,8 @@
 //!   ([`crate::model_server::Server::media_job`]): one local picture or clip at a
 //!   time, sized before it loads, swapped back when it pushed the chat's model out.
 //! - The model: the one asked for, else this chat's own picture model
-//!   (`imageParams.modelId`), else the first ready one that can do the task.
+//!   (`imageParams.modelId`), else Settings → Agents → Pictures
+//!   (`agentPictureModel`), else the first ready one that can do the task.
 //! - The picture lands in the tool's result (`images`), so the chat shows it and
 //!   the model sees it; with `inspect: false` only the saved file is reported.
 //!   A `path` also saves it in the project as a new file, with `write_file`'s approval.
@@ -38,6 +39,8 @@ pub struct Call<'a> {
     pub session: Value,
     /// The chat's native tool context: paths, approvals and Stop.
     pub ctx: &'a ToolContext,
+    /// `settings.agentPictureModel`: the default when the call and the chat name none.
+    pub default: Option<String>,
 }
 
 pub async fn run(server: &Server, c: Call<'_>) -> Value {
@@ -50,7 +53,7 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
     }
     let edit = name == "edit_image";
     let need = if edit { "edit" } else { "create" };
-    let model = match choose(&models, &input, &c.session, need) {
+    let model = match choose(&models, &input, &c.session, c.default.as_deref(), need) {
         Ok(m) => m,
         Err(e) => return err(id, e),
     };
@@ -184,8 +187,16 @@ fn can(model: &Value, need: &str) -> bool {
     model["capabilities"].as_array().is_some_and(|c| c.iter().any(|x| x == need))
 }
 
-/// The model to use: asked for, the chat's own, or the first ready one that can.
-fn choose(models: &[Value], input: &Value, session: &Value, need: &str) -> Result<Value, String> {
+/// The model to use: asked for, the chat's own, the Settings default, or the
+/// first ready one that can. A chat or default model that is not ready, or
+/// cannot do the task, is passed over rather than refused.
+fn choose(
+    models: &[Value],
+    input: &Value,
+    session: &Value,
+    default: Option<&str>,
+    need: &str,
+) -> Result<Value, String> {
     let verb = if need == "edit" { "edits pictures" } else { "makes pictures" };
     if let Some(asked) = input.get("model").and_then(Value::as_str).filter(|s| !s.is_empty()) {
         let Some(m) = models.iter().find(|m| m["id"] == asked) else {
@@ -196,8 +207,10 @@ fn choose(models: &[Value], input: &Value, session: &Value, need: &str) -> Resul
         }
         return Ok(m.clone());
     }
-    let own = session.get("imageParams").and_then(|p| p.get("modelId"));
-    own.and_then(|o| models.iter().find(|m| &m["id"] == o && can(m, need)))
+    let own = session.get("imageParams").and_then(|p| p.get("modelId")).and_then(Value::as_str);
+    let ready = |id: Option<&str>| id.and_then(|id| models.iter().find(|m| m["id"] == id && can(m, need)));
+    ready(own)
+        .or_else(|| ready(default))
         .or_else(|| models.iter().find(|m| can(m, need)))
         .cloned()
         .ok_or_else(|| format!("No model on this computer {verb}. The user can get one from a Photo chat."))
@@ -281,14 +294,29 @@ mod tests {
     #[test]
     fn the_model_is_the_one_asked_for_then_the_chats_then_the_first_that_can() {
         let none = json!({});
-        assert_eq!(choose(&models(), &none, &none, "create").unwrap()["id"], "z");
-        assert_eq!(choose(&models(), &none, &none, "edit").unwrap()["id"], "k");
+        assert_eq!(choose(&models(), &none, &none, None, "create").unwrap()["id"], "z");
+        assert_eq!(choose(&models(), &none, &none, None, "edit").unwrap()["id"], "k");
         let chat = json!({ "imageParams": { "modelId": "k" } });
-        assert_eq!(choose(&models(), &none, &chat, "create").unwrap()["id"], "k");
-        assert_eq!(choose(&models(), &json!({ "model": "z" }), &chat, "create").unwrap()["id"], "z");
-        assert!(choose(&models(), &json!({ "model": "z" }), &none, "edit").unwrap_err().contains("cannot do that"));
-        assert!(choose(&models(), &json!({ "model": "nope" }), &none, "create").unwrap_err().contains("media_models"));
-        assert!(choose(&[], &none, &none, "create").is_err());
+        assert_eq!(choose(&models(), &none, &chat, None, "create").unwrap()["id"], "k");
+        assert_eq!(choose(&models(), &json!({ "model": "z" }), &chat, None, "create").unwrap()["id"], "z");
+        assert!(
+            choose(&models(), &json!({ "model": "z" }), &none, None, "edit").unwrap_err().contains("cannot do that")
+        );
+        assert!(
+            choose(&models(), &json!({ "model": "nope" }), &none, None, "create").unwrap_err().contains("media_models")
+        );
+        assert!(choose(&[], &none, &none, None, "create").is_err());
+    }
+
+    #[test]
+    fn the_settings_default_comes_after_the_chats_own_model() {
+        let none = json!({});
+        assert_eq!(choose(&models(), &none, &none, Some("k"), "create").unwrap()["id"], "k");
+        let chat = json!({ "imageParams": { "modelId": "z" } });
+        assert_eq!(choose(&models(), &none, &chat, Some("k"), "create").unwrap()["id"], "z");
+        // A default that cannot do the task, or is not ready, is passed over.
+        assert_eq!(choose(&models(), &none, &none, Some("z"), "edit").unwrap()["id"], "k");
+        assert_eq!(choose(&models(), &none, &none, Some("gone"), "create").unwrap()["id"], "z");
     }
 
     #[test]
