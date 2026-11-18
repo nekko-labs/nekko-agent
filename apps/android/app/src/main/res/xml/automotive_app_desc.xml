@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto (#2782): replies read aloud and answered by voice through messaging notifications. -->
+<automotiveApp>
+    <uses name="notification" />
+</automotiveApp>

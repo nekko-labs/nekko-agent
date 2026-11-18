@@ -5104,6 +5104,11 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
   .permission-choice, .permission-info { min-height: 44px; }
   .permission-info { width: 44px; }
 }
+/* "Allowed in this chat": the always-allowed MCP tools and known recipients, each removable. */
+.permission-grants { margin-top: var(--q-group); padding-top: var(--q-group); border-top: 1px solid var(--line); }
+.permission-grants-heading { padding: var(--q-tight) var(--q-inline); color: var(--ink-faint); font-size: var(--text-2xs); font-weight: 500; }
+.permission-grant { display: flex; align-items: center; gap: var(--q-tight); min-height: var(--q-row-dense); padding-left: 30px; font-size: var(--text-xs); color: var(--ink); }
+.permission-grants-note { padding: var(--q-inline) var(--q-inline) var(--q-tight) 30px; color: var(--ink-faint); font-size: var(--text-2xs); line-height: 1.5; }
 /* The switches that are on, shown on the closed menu: one group, 4px apart. */
 .permission-marks { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; color: var(--ink-faint); }
 .permission-mark { display: inline-flex; animation: permission-check-in var(--dur-med) var(--ease-out); }

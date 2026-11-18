@@ -44,6 +44,8 @@ class ConnectionKeeper(
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     val notices = Notices(context)
+    /** On Android Auto: finished replies are read aloud in the car (#2782). */
+    val carMode = CarMode(context)
 
     private val foreground = MutableStateFlow(false)
     private val lastEventAt = MutableStateFlow(0L)
@@ -131,6 +133,20 @@ class ConnectionKeeper(
         val s = repo.state.value
         // Only the chats the phone lists: not subagents, tasks or training runs.
         val chat = s.summaries.firstOrNull { it.id == sessionId } ?: return
+        // In the car, a finished reply is read aloud there, with Reply (#2782). The words come from
+        // the chat itself, as the list may not have them yet; without them, the usual notice.
+        val computerId = s.activeId
+        if (event == PhoneEvent.FINISHED && carMode.inCar.value && computerId != null) {
+            scope.launch {
+                val reply = try {
+                    com.nekko.protocol.Session.from(repo.caller.call(com.nekko.protocol.Channels.SESSION_GET, kotlinx.serialization.json.JsonPrimitive(sessionId)))
+                        ?.let { com.nekko.protocol.CarReply.latest(it.messages) }
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }
+                if (reply != null) notices.postCar(sessionId, chat.title, computerId, reply)
+                else notices.post(EventNotice.of(sessionId, event, chat.title, s.active?.name ?: "your computer", lock.enabled.value, callId))
+            }
+            return
+        }
         notices.post(
             EventNotice.of(
                 sessionId = sessionId,
