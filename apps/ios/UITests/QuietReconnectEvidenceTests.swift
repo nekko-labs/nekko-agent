@@ -22,7 +22,10 @@ final class QuietReconnectEvidenceTests: XCTestCase {
         XCTAssertTrue(newChat.descendants(matching: .any)["reconnect.title"].firstMatch.exists)
         XCTAssertTrue(newChat.descendants(matching: .any)["newChat.start"].firstMatch.waitForExistence(timeout: 10))
         attach(newChat, "quiet-reconnect-new-chat")
-        sleep(4)
+        for frame in 1...8 {
+            Thread.sleep(forTimeInterval: 0.25)
+            attach(newChat, String(format: "quiet-reconnect-dot-%02d", frame))
+        }
         XCTAssertTrue(notice.exists, "The reconnecting state must remain steady throughout the recording")
         newChat.terminate()
     }
