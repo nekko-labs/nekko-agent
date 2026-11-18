@@ -26,6 +26,7 @@ import { GitHubStarSupport } from '../components/GitHubStarSupport.js';
 import { EXPERIMENTAL_FLAGS, saveSettings } from '../settingsIndex.js';
 import { zoomOf } from '../textScale.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
+import { PictureModelSettings } from '../components/PictureModelSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
 import { hasAppChrome } from '../chrome.js';
@@ -381,6 +382,7 @@ export function SettingsView() {
                   );
                 })}
               </SettingsSection>
+              <SettingsSection id="agent-pictures" title="Pictures" help="Agents in chats on this computer can make and edit pictures with its picture models. Nothing leaves the computer."><div className="mt-(--q-inline)"><ErrorBoundary label="Pictures"><PictureModelSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
               <SettingsSection id="delegation-routes" title="Delegation routes"><div className="mt-(--q-inline)"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
               <ErrorBoundary label="Hooks"><HooksSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>

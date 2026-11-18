@@ -31,7 +31,8 @@ export interface ToolResult {
  */
 export interface AgentWatchView {
   id: string;
-  kind: 'timer' | 'pr';
+  /** `clip`: a clip an agent started (`generate_video`); it wakes the chat when the clip ends. */
+  kind: 'timer' | 'pr' | 'clip';
   url?: string;
   status: 'active' | 'done' | 'cancelled' | 'error';
   /** Timer: when it wakes. PR: the latest it waits before waking anyway. */
@@ -47,6 +48,8 @@ export interface AgentWatchView {
   checks?: 'passing' | 'failing' | 'pending' | 'none';
   /** PR watch: the PR's state as last polled (`open`, `merged`, `closed`). */
   prState?: string;
+  /** Clip watch: how far the clip got (`waiting`, `loading`, `generating`, `step:3/20`). */
+  clipStage?: string;
 }
 
 export interface ChatMessage {

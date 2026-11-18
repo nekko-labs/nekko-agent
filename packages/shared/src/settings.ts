@@ -210,6 +210,12 @@ export interface AppSettings {
   /** Fusion's ranking policy; permission remains per-chat. */
   fusion?: import('./fusion.js').FusionSettings;
   /**
+   * The local picture model a chat's agent uses (`generate_image`,
+   * `edit_image`) when neither the call nor the chat names one. Absent:
+   * Automatic, the chat's Photo model, else the first ready one.
+   */
+  agentPictureModel?: string;
+  /**
    * Default off. The user has Anthropic's own permission to use the
    * approval-gated features (scheduled runs, Nekko tools, the context note,
    * plan usage) on a Claude plan through Claude Code; nekkod then enables those
