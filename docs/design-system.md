@@ -23,6 +23,7 @@ Reach for these in order and stop at the first that works:
 ## Surfaces
 
 - A page is one surface (`--paper`). A popover or menu is one floating surface (`--surface`, `--shadow-float`). Nothing inside either gets a card, a border or a tinted tile.
+- A tooltip is a small popover: the same surface, shadow and faint edge, 10px corners. Use `HoverTip` (with `content` for something richer, like `PrTip`) or a plain `title`, which `TitleTips` draws in the same style. Never style a tooltip of your own.
 - Allowed objects, because they are things rather than grouping: text fields, the composer, code blocks, a dragged item (`--shadow-lift`), workbench panels, a destructive confirmation.
 
 ## Spacing: 8 and 20
@@ -95,6 +96,7 @@ Every action answers with motion: short, decelerating, never bouncing. One curve
 | Expand, add a row | Height opens, content fades in | 200ms |
 | Remove a row | Fades, then the gap closes | 160ms |
 | Popover, menu | Fades in, rises 4px, scales from 0.98 at its anchor | 200ms in, 150ms out |
+| Tooltip | Fades in, moves 4px out from its anchor, scales from 0.98; none when sliding between tips | 200ms in, gone at once |
 | Status change | Word crossfades, glyph changes | 200ms |
 | Meter, theme | Width or colour eases to the new value | `--dur-slow` 260ms |
 | Toast | Rises 8px and fades in; fades out after 4s | 200ms |
