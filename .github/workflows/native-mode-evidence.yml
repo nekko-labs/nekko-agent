@@ -107,6 +107,23 @@ jobs:
       matrix:
         revision: [before, after]
     steps:
+      - name: Require the original native batch SDK (diagnostic only)
+        run: |
+          set -euo pipefail
+          selected=
+          for app in /Applications/Xcode*.app; do
+            [[ -d "$app/Contents/Developer" ]] || continue
+            version=$(DEVELOPER_DIR="$app/Contents/Developer" xcodebuild -version)
+            printf '%s\n%s\n' "$app" "$version"
+            if [[ "$version" == $'Xcode 27.2\nBuild version 27B52' ]]; then
+              selected="$app/Contents/Developer"
+            fi
+          done
+          if [[ -z "$selected" ]]; then
+            echo '::error::Original batch SDK Xcode 27.2 (27B52) is not installed; no native acceptance test was started.'
+            exit 1
+          fi
+          echo "DEVELOPER_DIR=$selected" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || inputs.source_ref }}
