@@ -108,12 +108,12 @@ Talk to Nekko opens a foreground sheet behind the app lock; entry never starts t
 
 ### Quiet reconnecting notices (#2473)
 
-Implemented in source; focused native tests and matched visual evidence are required before this is marked verified.
+Implemented and verified on an isolated API 32 emulator; physical-device and accessibility coverage remains explicit below.
 
 - Main's Android `ConnectionRow` (#2633) is unchanged. This work does not restore `ConnectionBanner`, add a row pulse or add a separate queued-count fixture.
 - The borderless text-chat composer says `{computer} is reconnecting.` or `{computer} is offline.`, then `Prompts you send wait on this phone.` New Chat keeps its existing fixed-width animated ellipsis and uses the same factual second line. Drafting alone does not queue or send anything; the user must choose Send.
 - A saved transcript shows only localized `Updated last on {timestamp}`. The saved-list explanation and image-chat no-text-queue explanation are unchanged.
-- Acceptance: matched Chat and New Chat screenshots use the same isolated emulator/runtime and fixture data on base and head; the existing New Chat dot motion is recorded and inspected. Physical-device, large-text and foldable-posture limits remain explicit.
+- Verification (2026-11-19): focused `QuietReconnectTest` and `OutboxTest` passed; debug app and androidTest APKs built. The same memory-only harness ran against base `7906f9408` and the integrated head on a headless-created Pixel 5 / API 32 AVD. Both Chat/New Chat journeys and both motion holds passed. Matched 1080x2340 screenshots were inspected: localized saved-copy metadata is one timestamp, factual copy appears on both real surfaces, and main's `ConnectionRow` is unchanged. Device screenshots sampled during the hold contain the repeating one/two/three-dot states; matched 1.375-second clips were inspected. Physical Android hardware, large text, TalkBack and foldable postures remain unverified.
 
 ### Image settings fallback and localized resources (2026-11-08)
 
