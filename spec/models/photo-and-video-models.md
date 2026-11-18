@@ -214,6 +214,6 @@ Each is one PR (a stack where noted). Tracked in the issue linked from this file
 5. **Models: Image and Video filters** `[implemented, see above]`: kind filters, picture picks in Best for this machine, supporting files fetched after any picture download, offload set from the recommendation.
 6. **Photo: edit an existing photo** `[implemented, see above]`: attachments and **Edit** on a reply, reference images to sd-server, the capability check and the edit-model offer.
 7. **Video: local generation (experimental)** `[implemented, see above]`: the Wan 2.2 TI2V 5B set, `videoCreate` recommendations, the clip job on `/sdcpp/v1/vid_gen` with progress and cancel, the clip in chat. Still open: the Video chat (#2149), a length control, measured memory and time per clip.
-8. **Cloud image and video providers:** bring-your-own-key providers, privacy prompts under decision 0065.
+8. **Cloud image and video providers:** bring-your-own-key providers, privacy prompts under decision 0065. Planned together with the tools that let any chat's agent use these models, in [media tools for chat agents](../agents/media-tools-for-chat-agents.md) (#2973).
 9. **Phones:** the same menu, introductions and model choice on iOS and Android, driving the computer; a gaps row in [iOS and Android stay in step](../phone/ios-and-android-stay-in-step.md) for anything that lands on desktop first.
 10. **Docs:** a "Make pictures and videos" page on the docs site.
