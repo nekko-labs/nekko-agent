@@ -3059,7 +3059,9 @@ impl TurnTools {
                 return Ok(error(id, "Picture tools are not available in this chat."));
             };
             let session = lock(&self.session).clone();
-            return Ok(crate::media_tools::run(server, crate::media_tools::Call { call, session, ctx }).await);
+            let default =
+                self.turns.settings.get().get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            return Ok(crate::media_tools::run(server, crate::media_tools::Call { call, session, ctx, default }).await);
         }
         if let Some(ctx) = &self.native
             && (name == "browser" || name == "capture")
