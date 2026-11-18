@@ -379,8 +379,15 @@ pub fn image_size(params: &Value) -> String {
 
 /// `imageStageLabel(stage, size)`.
 pub fn image_stage_label(stage: &str, size: &str) -> String {
-    if stage == "loading" { "Loading the image model".into() } else { format!("Generating a {size} image") }
+    match stage {
+        "loading" => "Loading the image model".into(),
+        "waiting" => WAITING_LABEL.into(),
+        _ => format!("Generating a {size} image"),
+    }
 }
+
+/// While another picture or clip on this computer finishes first (one media job at a time).
+pub const WAITING_LABEL: &str = "Waiting for another picture or clip on this computer to finish";
 
 /// What starting an image turn came to.
 #[derive(Debug, Clone, PartialEq)]
@@ -504,6 +511,9 @@ pub fn video_reply(result: &Value, params: &Value, seed: &Value, ms: u64, now: u
 pub fn clip_stage_label(stage: &str, size: &str) -> String {
     if stage == "loading" {
         return "Loading the video model".into();
+    }
+    if stage == "waiting" {
+        return WAITING_LABEL.into();
     }
     match stage.strip_prefix("step:").and_then(|s| s.split_once('/')) {
         Some((n, total)) => format!("Making a {size} clip · step {n} of {total}"),

@@ -385,6 +385,20 @@ class ChatViewModel(
         setRunOption("disabledTools", kotlinx.serialization.json.JsonArray(off.map { kotlinx.serialization.json.JsonPrimitive(it) }))
     }
 
+    /**
+     * Take back "Always allow this tool" (decision 0054): the tool's next call in this chat asks
+     * again. Signed with the screen lock, as saving it was (`PHONE_GUARDED_OPTION_KEYS`).
+     */
+    suspend fun revokeAlwaysAllowed(tool: String, allowed: List<String>) =
+        setRunOption("allowedMcpTools", kotlinx.serialization.json.JsonArray(allowed.filter { it != tool }.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+
+    /**
+     * Forget a recipient (decision 0063): the next call that writes to it asks again. Signed: the
+     * computer's gate cannot tell taking one back from adding one.
+     */
+    suspend fun forgetRecipient(recipient: String, known: List<String>) =
+        setRunOption("knownRecipients", kotlinx.serialization.json.JsonArray(known.filter { it != recipient }.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+
     suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
         repo.setChatMode(sessionId, mode, stepUp)
         controller.reload()

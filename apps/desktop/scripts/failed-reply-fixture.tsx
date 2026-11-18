@@ -16,6 +16,9 @@ const provider = { id: 'fixture', kind: 'ollama', baseUrl: 'http://127.0.0.1:114
 const models = [{ id: 'fixture-model', providerId: 'fixture', name: 'Fixture model', contextWindow: 128000 }];
 const at = Date.UTC(2026, 10, 4, 15, 0);
 const FAILURE = "You've hit your usage limit.";
+const EXPIRED = 'chatgpt 401: { "error": { "message": "Provided authentication token is expired. Please try signing in again.", "type": "invalid_request_error", "code": "token_expired", "param": null }, "status": 401 }';
+const chatgpt = { ...provider, kind: 'chatgpt', baseUrl: 'https://chatgpt.com/backend-api/codex', label: 'ChatGPT', tokenKey: 'fixture-token' };
+const openaiKey = { ...provider, kind: 'openai', baseUrl: 'https://api.openai.com/v1', label: 'OpenAI', auth: 'key' };
 
 function makeSession(afterMessageId: string) {
   const call = { id: 'c1', name: 'grep', input: { pattern: 'swipe' } };
@@ -48,12 +51,12 @@ Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if
 function Fixture() {
   const [epoch, setEpoch] = useState(0);
   /** A fresh pane on `next`, the way a chat opens after a restart. */
-  const open = (next: any) => {
+  const open = (next: any, active: any = provider) => {
     clearLiveRun('alpha');
     record = next;
     calls.length = 0;
     localStorage.clear();
-    useStore.setState({ view: 'chat', providers: [provider], models, activeProviderId: 'fixture', sessions: [], terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: 'alpha', activeProjectId: null, settings: { providers: [provider], workspaces: [] } } as never);
+    useStore.setState({ view: 'chat', providers: [active], models, activeProviderId: 'fixture', sessions: [], terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: 'alpha', activeProjectId: null, settings: { providers: [active], workspaces: [] } } as never);
     putCachedSession(record);
     setEpoch(e => e + 1);
   };
@@ -64,6 +67,10 @@ function Fixture() {
     // Stopped before `turnFailure` recorded a Stop: only the transcript's end tells.
     cutOff: () => { const { turnFailure: _, ...s } = makeSession('t1'); open(s); },
     running: () => { const { turnFailure: _, ...s } = makeSession('t1'); open({ ...s, activeRun: { startedAt: at } }); },
+    // A refused sign-in: a subscription signs in again in place, a key goes to Models.
+    expired: () => { const s = makeSession('t1'); open({ ...s, turnFailure: { ...s.turnFailure, message: EXPIRED } }, chatgpt); },
+    badKey: () => { const s = makeSession('t1'); open({ ...s, turnFailure: { ...s.turnFailure, message: 'openai 401: Incorrect API key provided (invalid_api_key)' } }, openaiKey); },
+    view: () => useStore.getState().view,
     reopen: () => open(record),
     calls: () => calls,
   } });

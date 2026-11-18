@@ -6,7 +6,7 @@ import { MODEL_LIST_TIMEOUT_MS, filteredModelGroups, isModelPickerEscape, modelR
 import type { AutoQuality, FusionStrategy, ModelInfo, ProviderConfig } from '@nekko-agent/shared';
 import {
   AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, claudeCreditsAvailable, claudePlanNote, claudePlanUsageNotice, formatModelPriceLabel,
-  isLocalProvider, limitsKeyFor, modelPricing, resolveModelAvailability, shortModelName,
+  isLocalProvider, limitsKeyFor, modelPricing, resolveClaudeAlias, resolveModelAvailability, shortModelName,
 } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
@@ -214,7 +214,13 @@ export function ModelPicker({
   const currentProvider = allProviders.find((p) => p.id === providerId);
   const providerLabel = currentProvider ? nameOf(currentProvider) : 'No provider';
   // `models` is the previous provider's until the new list lands; the picker may already hold it.
-  const currentModel = models.find((m) => m.id === modelId) ?? (providerId ? byProvider[providerId]?.find((m) => m.id === modelId) : undefined);
+  const listed = providerId ? byProvider[providerId] : undefined;
+  const currentModel = models.find((m) => m.id === modelId) ?? listed?.find((m) => m.id === modelId)
+    // A chat saved on a family alias (`opus`) reads as the newest model of that family.
+    ?? (modelId && currentProvider?.kind === 'claude-code' ? (() => {
+      const to = resolveClaudeAlias(modelId, listed ?? models);
+      return to === modelId ? undefined : (listed ?? models).find((m) => m.id === to);
+    })() : undefined);
   // A Claude subscription chat gets its model picked by Claude Code: once it
   // has reported which version it resolved the chip reads that instead of the alias.
   const claudeCodeResolved = currentProvider?.kind === 'claude-code' && resolvedModelId

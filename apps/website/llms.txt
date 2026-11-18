@@ -1,6 +1,6 @@
 # Nekko Agent
 
-> Nekko Agent is open-source, local-first AI help for coding and everyday work, plus a local model server. Run models on your computer or use supported online providers; work with project files, tools and scheduled tasks under explicit permissions. Free, MIT licensed, by Nekko Labs.
+> Nekko Agent is open-source, local-first AI help for coding and everyday work, plus a local model server. Run models on your computer or use supported online providers; work with project files, tools and scheduled tasks under explicit permissions. Free, MIT licensed, by Nekko Labs. The name Nekko comes from neko, Japanese for cat.
 
 ## Start with the user's task
 

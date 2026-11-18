@@ -16,6 +16,8 @@ const zImage = pic({ modelId: 'z-image-turbo', name: 'Z-Image Turbo', repo: 'lee
 const klein = pic({ modelId: 'flux2-klein-4b', name: 'FLUX.2 klein 4B', owner: 'Black Forest Labs', repo: 'leejet/FLUX.2-klein-4B-GGUF', capabilities: ['create', 'edit'], companionSet: 'flux2-klein-4b', quant: 'Q4_0', downloadLabel: 'Q4_0', files: ['flux-2-klein-4b-Q4_0.gguf'], weightsBytes: 2.46 * GB, companionBytes: 2.83 * GB, downloadBytes: 5.29 * GB, memoryBytes: 4.6 * GB, offloadToCpu: true, fit: 'fits' });
 const recs = {
   ...(fixture as any).rtx4060,
+  // `#update` shows a list an update check brought.
+  ...(location.hash === '#update' ? { feedVersion: '2026-12-01.2', feedSource: 'update' } : {}),
   imageTasks: [
     { task: 'imageCreate', label: 'Create pictures', capability: 'create', pick: zImage, options: [zImage, klein] },
     { task: 'imageEdit', label: 'Edit photos', capability: 'edit', pick: klein, options: [klein] },

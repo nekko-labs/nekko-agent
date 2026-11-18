@@ -203,4 +203,11 @@
     <string name="tools_preview_page">Page %1$d of %2$d</string>
     <string name="tools_preview_card">%1$s, %2$s. Opens a preview from your computer</string>
     <string name="tools_preview_file">file</string>
+    <!-- What a chat no longer asks about (decisions 0054, 0063): the Model sheet's list. -->
+    <string name="grants_title">Allowed without asking</string>
+    <string name="grants_tools">Always allowed tools</string>
+    <string name="grants_recipients">Known recipients</string>
+    <string name="grants_remove_tool">Ask again before %1$s</string>
+    <string name="grants_remove_recipient">Ask again before writing to %1$s</string>
+    <string name="grants_note">Removing one makes the next call ask again, in this chat only.</string>
 </resources>

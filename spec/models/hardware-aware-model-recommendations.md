@@ -24,7 +24,16 @@ A feed built offline and shipped with the app (`crates/nekko-machine/src/model-f
 
 The client never searches, scrapes or benchmarks anything to make a recommendation. Community benchmarks may inform the editorial source; they are not read at runtime.
 
-**Online refresh** (planned, not built): a newer feed signed and published beside the release's update feed, verified and kept in the data directory the way the Claude policy override is (`crates/nekkod/src/claude_policy.rs`), falling back to the bundled snapshot. See [decision 0002](../../docs/decisions/0002-bundled-model-feed-with-measured-calibration.md).
+**Online refresh** `[implemented 2026-11-18 (#2916): daemon and release step unit-tested with test keys, and a list signed by the release script verified by the daemon; no real release key exists, so no release publishes a list and no user gets one today]`. A release can carry a newer `model-feed.json` beside its update feed file, signed with the release signing key. On each update check nekkod fetches it, verifies it and recommends from it, the way the Claude policy override is handled (`crates/nekkod/src/model_feed.rs`). See [decision 0002](../../docs/decisions/0002-bundled-model-feed-with-measured-calibration.md).
+
+- **Used only when** the signature verifies, the list's format is the one this daemon reads, its version is newer than the built-in list's, and its serial is above the last one applied. Anything else leaves the list in use as it was. While the release key is the all-zero placeholder, every signed list is refused.
+- **Kept** in the data directory (`model-feed.signed.json`) and verified again at each start. After an app update whose built-in list is the newer one, the saved one is no longer used.
+- **What it can bring without a release:** chat models, new quants or repositories of a picture family the engine already knows, a different order of candidates, and measured picture times per hardware class.
+- **What it cannot:** a picture or video family whose text encoder and VAE the engine does not name (`acquire.rs`). Such a model is left out of the list and off its tasks, since it would download and not start.
+- **Boundary:** the list names Hugging Face repositories and files only. Where a download comes from stays the engine's, and an unsigned or altered list is never read.
+- **Published by the release:** `scripts/sign-model-feed.mjs` signs the list the release ships and the release workflow uploads it as `model-feed.json` beside the update feed, once, from the Linux job. Its serial follows the list's version (`YYYY-MM-DD.N`). While the built-in key is the placeholder nothing is published, since no app would accept it; once a real key is built in, a missing or mismatched secret fails the release. A list between releases is the same file signed and uploaded to the latest release by hand: there is no workflow for it yet.
+- **Said in Models:** Best for this machine ends with "From an updated model list (version), newer than the one this version shipped." when the list came from an update check, and "From the model list shipped with this version (version)." otherwise (`feedSource` on `machine:recommendations`).
+- **Still to do:** a real release signing key; a workflow to publish a list between releases.
 
 ## Picking `[implemented, unit-tested over six reference machines]`
 

@@ -280,6 +280,25 @@ fly secrets set SUPABASE_SERVICE_ROLE_KEY='<service_role or secret key>'
 Without it, deleted accounts' Supabase users wait in `pending_auth_deletions`
 and are deleted on the first hourly run after the key is set.
 
+### Invite-only: the account gate
+
+To switch Nekko Cloud on for Nekko Labs accounts only (issue #2932), set before the Supabase secrets:
+
+```bash
+fly secrets set NEKKO_ACCOUNTS_ALLOWED_DOMAINS='nekkolabs.com'   # and/or NEKKO_ACCOUNTS_ALLOWED_EMAILS='a@x.com,b@y.com'
+```
+
+Comma-separated, case-insensitive; with either set, only an account whose **proven** email (an emailed code or link, or Supabase's confirmed-email record; never editable user metadata) is on the list gets in:
+
+- `POST /v1/auth/session` answers `403 {"error":"account-not-available"}` for anyone else and creates no user, signup link or token.
+- Every bearer-token route (`authenticate` in `src/auth.ts`) answers 401 for a token whose account is not allowed, so narrowing the list cuts off tokens already issued. The email comes from the existing token lookup: no extra query.
+- A domain matches exactly: `nekkolabs.com` does not admit `x@mail.nekkolabs.com` or `x@evilnekkolabs.com`.
+- Left open on purpose: `/healthz`, `/v1/signups` (and confirm/unsubscribe), `/v1/feedback`, `/v1/donations`, the Stripe webhook and `/v1/auth/config`. None is tied to a Nekko Cloud account, and Fly and Stripe need to reach two of them.
+- Unrelated to `NEKKO_STAFF_EMAILS` (who sees unreleased features), but staff accounts should be inside the gate.
+- Unset: everyone with a proven email may sign in, as before. Remove the variables to open Nekko Cloud up.
+
+`npm run dev:local` honors the same variables.
+
 Setting a plan by hand (Team, or before billing is on): `update users set plan = 'pro' where lower(email) = lower('…');`
 
 ## Billing: Stripe

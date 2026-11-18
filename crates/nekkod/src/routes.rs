@@ -87,6 +87,9 @@ pub struct Ctx {
     /// The Claude policy: the shipped table, a verified signed override, and
     /// the dev-only preview (`claude:*`, and the gates the Claude paths call).
     pub claude_policy: Arc<crate::claude_policy::ClaudePolicyStore>,
+    /// A signed model list newer than the bundled one, verified and handed to
+    /// `machine` (`machine:recommendations` reads it there).
+    pub model_feed: Arc<crate::model_feed::ModelFeedStore>,
     /// The messaging bridges (`messaging:status`).
     pub messaging: Arc<crate::messaging::Messaging>,
     /// What Electron main used to answer (dialogs, shell, microphone, updater), for the desktop app.

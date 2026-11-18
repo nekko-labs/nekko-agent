@@ -13,13 +13,16 @@ public struct PhoneMessage: Codable, Equatable, Sendable, Identifiable {
     public var error: String?
     /// Persisted marker so partial replies are recognized after process death.
     public var incomplete: Bool?
+    /// The user's photos, as image data URLs. Absent in chats saved before photos.
+    public var images: [String]?
 
-    public init(id: String, role: Role, text: String, at: Int64, error: String? = nil) {
+    public init(id: String, role: Role, text: String, at: Int64, error: String? = nil, images: [String]? = nil) {
         self.id = id
         self.role = role
         self.text = text
         self.at = at
         self.error = error
+        self.images = images?.isEmpty == true ? nil : images
     }
 }
 
@@ -77,6 +80,8 @@ public final class PhoneChats {
     public private(set) var chats: [PhoneChat] = []
     public private(set) var models: [String: [PhoneModel]] = [:]
     public private(set) var modelErrors: [String: String] = [:]
+    /// Each provider's request and token budget as its last answer reported it, by provider id.
+    public private(set) var rateLimits: [String: PhoneRateLimits] = [:]
     /// Chats whose reply is streaming in now.
     public private(set) var running: Set<String> = []
     /// The tokens this iPhone's chats used, by provider, model and day. Kept on the phone only.
@@ -92,7 +97,7 @@ public final class PhoneChats {
     @ObservationIgnored private var providerEpoch: [String: UUID] = [:]
     @ObservationIgnored private var modelLoads: [String: UUID] = [:]
     @ObservationIgnored private var counts: [String: PhoneTokenCount] = [:]
-    @ObservationIgnored private var modelTasks: [String: Task<(status: Int, body: Data), Error>] = [:]
+    @ObservationIgnored private var modelTasks: [String: Task<(status: Int, headers: [String: String], body: Data), Error>] = [:]
     @ObservationIgnored private var tests: [UUID: (String, Task<String?, Never>)] = [:]
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
 
@@ -161,7 +166,7 @@ public final class PhoneChats {
 
     /// OpenRouter's sign-in answers with a code; swap it for the API key it stands for.
     public func openRouterKey(code: String, verifier: String) async throws -> String {
-        let (status, body) = try await http.send(PhoneProviders.openRouterKeyRequest(code: code, verifier: verifier))
+        let (status, _, body) = try await http.send(PhoneProviders.openRouterKeyRequest(code: code, verifier: verifier))
         guard (200..<300).contains(status) else { throw PhoneProviders.Problem.signIn }
         guard let key = PhoneProviders.openRouterKey(from: body) else { throw PhoneProviders.Problem.signIn }
         return key
@@ -192,6 +197,7 @@ public final class PhoneChats {
         providers.removeAll { $0.id == providerId }
         models[providerId] = nil
         modelErrors[providerId] = nil
+        rateLimits[providerId] = nil
         saveProviders()
     }
 
@@ -213,11 +219,12 @@ public final class PhoneChats {
             let task = Task { try Task.checkCancellation(); return try await http.send(req) }
             modelTasks[providerId] = task
             defer { if modelLoads[providerId] == load { modelTasks[providerId] = nil } }
-            let (status, body) = try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
+            let (status, headers, body) = try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
             try Task.checkCancellation()
             guard providerEpoch[providerId] == epoch, modelLoads[providerId] == load, provider(providerId) == p else { return [] }
+            noteLimits(providerId, headers)
             guard (200..<300).contains(status) else {
-                modelErrors[providerId] = PhoneProviders.failure(status: status, body: body)
+                modelErrors[providerId] = PhoneProviders.failure(status: status, body: body.prefix(PhoneProviders.errorBodyBytes), headers: headers, kind: p.kind)
                 return []
             }
             let list = PhoneProviders.models(from: body, kind: p.kind)
@@ -249,11 +256,16 @@ public final class PhoneChats {
         if kind.listsModels {
             let list = await loadModels(providerId)
             if let why = modelErrors[providerId] ?? (list.isEmpty ? String(localized: "The provider listed no models.") : nil) { return why }
-            // OpenRouter and Ollama Cloud list models to anyone; ask something a bad key is refused on.
-            guard let check = try? PhoneProviders.keyCheckRequest(p, key: key(providerId)) else { return nil }
+            // OpenRouter and Ollama Cloud list models to anyone, and OpenAI lists them for a key
+            // with no credit: ask something such a key is refused on.
+            let model = PhoneProviders.defaultModel(list)?.id
+            guard let check = try? PhoneProviders.keyCheckRequest(p, key: key(providerId), model: model) else { return nil }
             do {
-                let (status, body) = try await http.send(check)
-                return status == 401 || status == 403 ? PhoneProviders.failure(status: status, body: body) : nil
+                let (status, headers, body) = try await http.send(check)
+                noteLimits(providerId, headers)
+                // Ollama's check names a model that doesn't exist: only a refused key fails it.
+                let refused = p.kind == "openai" ? !(200..<300).contains(status) : status == 401 || status == 403
+                return refused ? PhoneProviders.failure(status: status, body: body.prefix(PhoneProviders.errorBodyBytes), headers: headers, kind: p.kind) : nil
             } catch {
                 return String(localized: "Could not reach the provider to check the key. Try again.")
             }
@@ -265,10 +277,13 @@ public final class PhoneChats {
             let req = try PhoneProviders.chatRequest(p, key: key(providerId), model: model,
                 messages: [PhoneMessage(id: "t", role: .user, text: "Say OK.", at: now())], system: nil, maxTokens: 8)
             try Task.checkCancellation()
-            let (status, lines) = try await http.lines(req)
+            let (status, headers, lines) = try await http.lines(req)
             try Task.checkCancellation()
             guard providerEpoch[providerId] == epoch, provider(providerId) == p else { return "Provider changed. Test again." }
-            guard (200..<300).contains(status) else { return PhoneProviders.failure(status: status, body: Data()) }
+            noteLimits(providerId, headers)
+            guard (200..<300).contains(status) else {
+                return PhoneProviders.failure(status: status, body: await Self.errorBody(lines), headers: headers, kind: p.kind)
+            }
             var parser = PhoneStreamParser()
             for try await line in lines {
                 try Task.checkCancellation()
@@ -290,20 +305,26 @@ public final class PhoneChats {
     // MARK: Chats
 
     /// Start a chat here and send its first message.
-    public func create(providerId: String, modelId: String, first: String) -> String {
+    public func create(providerId: String, modelId: String, first: String, images: [String] = []) -> String {
         let id = PhoneProviders.chatPrefix + newId()
         var chat = PhoneChat(id: id, title: PhoneChat.title(from: first), providerId: providerId, modelId: modelId, createdAt: now())
-        if chat.title.isEmpty { chat.title = String(localized: "New chat") }
+        if chat.title.isEmpty { chat.title = images.isEmpty ? String(localized: "New chat") : String(localized: "Photo") }
         chats.append(chat)
-        send(id, first)
+        send(id, first, images: images)
         return id
     }
 
-    /// Add the user's message and stream the reply.
-    public func send(_ chatId: String, _ text: String) {
+    /// Whether a model takes photos. Unknown counts as yes: a model that can't says so in its reply.
+    public func acceptsImages(providerId: String, modelId: String) -> Bool {
+        models[providerId]?.first { $0.id == modelId }?.acceptsImages ?? true
+    }
+
+    /// Add the user's message (text, photos or both) and stream the reply.
+    public func send(_ chatId: String, _ text: String, images: [String] = []) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !running.contains(chatId), let i = index(chatId) else { return }
-        chats[i].messages.append(PhoneMessage(id: newId(), role: .user, text: text, at: now()))
+        let images = Array(images.filter { PhoneProviders.imagePart($0) != nil }.prefix(PhoneProviders.maxImages))
+        guard !text.isEmpty || !images.isEmpty, !running.contains(chatId), let i = index(chatId) else { return }
+        chats[i].messages.append(PhoneMessage(id: newId(), role: .user, text: text, at: now(), images: images))
         chats[i].archivedAt = nil
         reply(chatId)
     }
@@ -374,6 +395,7 @@ public final class PhoneChats {
         chats = []
         models = [:]
         modelErrors = [:]
+        rateLimits = [:]
         usage = PhoneUsageLedger()
         tone = .standard
         files?.remove(PhoneProviders.computerId)
@@ -409,10 +431,11 @@ public final class PhoneChats {
             var completed = false
             do {
                 try Task.checkCancellation()
-                let (status, lines) = try await http.lines(request)
+                let (status, headers, lines) = try await http.lines(request)
                 try Task.checkCancellation()
+                self?.noteLimits(p.id, headers)
                 if !(200..<300).contains(status) {
-                    failure = PhoneProviders.failure(status: status, body: Data())
+                    failure = PhoneProviders.failure(status: status, body: await Self.errorBody(lines), headers: headers, kind: p.kind)
                 } else {
                     var parser = PhoneStreamParser()
                     read: for try await line in lines {
@@ -472,6 +495,24 @@ public final class PhoneChats {
         }
         chats[i].updatedAt = now()
         save()
+    }
+
+    private func noteLimits(_ providerId: String, _ headers: [String: String]) {
+        guard provider(providerId) != nil, let limits = PhoneRateLimits.from(headers: headers, at: now()) else { return }
+        rateLimits[providerId] = limits
+    }
+
+    /// The start of a failed answer's body, for its error code; a longer one is not read.
+    nonisolated static func errorBody(_ lines: AsyncThrowingStream<String, Error>) async -> Data {
+        var out = Data()
+        do {
+            for try await line in lines {
+                out.append(contentsOf: line.utf8)
+                out.append(10)
+                if out.count > PhoneProviders.errorBodyBytes { return Data() }
+            }
+        } catch {}
+        return out
     }
 
     private func index(_ chatId: String) -> Int? { chats.firstIndex { $0.id == chatId } }

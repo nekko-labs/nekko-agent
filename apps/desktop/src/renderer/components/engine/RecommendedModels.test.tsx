@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { Recommendations } from '@nekko-agent/shared';
-import { RecommendationList, UpgradeNudges } from './RecommendedModels.js';
+import { RecommendationList, UpgradeNudges, feedText } from './RecommendedModels.js';
 import { hardwareText, isDownloaded, nudgeTitle, speedText } from './recommendationText.js';
 // What the daemon answers for four reference machines (`machine:recommendations`
 // over the bundled feed), with each task's alternatives left out.
@@ -84,5 +84,13 @@ describe('the recommendations block', () => {
 
   it('says nothing without an upgrade', () => {
     expect(renderToStaticMarkup(<UpgradeNudges recs={recs.m5max} onDownload={vi.fn()} onDismiss={vi.fn()} />)).toBe('');
+  });
+});
+
+describe('where the model list came from', () => {
+  it('says when it is newer than the one this version shipped', () => {
+    expect(feedText({ feedVersion: '2026-10-22.1' })).toBe('From the model list shipped with this version (2026-10-22.1).');
+    expect(feedText({ feedVersion: '2026-10-22.1', feedSource: 'bundled' })).toContain('shipped with this version');
+    expect(feedText({ feedVersion: '2026-12-01.2', feedSource: 'update' })).toBe('From an updated model list (2026-12-01.2), newer than the one this version shipped.');
   });
 });

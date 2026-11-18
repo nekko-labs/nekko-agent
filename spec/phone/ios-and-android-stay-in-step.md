@@ -40,15 +40,17 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 
 | Capability | iPhone | Android | Gap / follow-up |
 | --- | --- | --- | --- |
+| Live card level preview ([#2928](https://github.com/nekko-labs/nekko-agent/issues/2928), 2026-11-17) | Settings shows the Lock Screen card built at the chosen level, with the chat lines that level sends under it | Radio rows with text only, no preview | [#2933](https://github.com/nekko-labs/nekko-agent/issues/2933) |
 | Voice without foregrounding | iOS 18+: authenticated LiveActivityIntent + AudioRecordingIntent path implemented, hardware unverified | Notification opens foreground sheet behind app lock; explicit Listen required; no background microphone | No-app goal remains unmet on Android. Track under dashboard #2046; validate supported native paths before claiming parity. |
 | Older OS fallback | iOS 17: Open app for voice opens list without auto-listening | Foreground sheet as above | iOS 17 is an app handoff, not equivalent background voice or an app-wide voice sheet. |
 | Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
 | Native proof | No new native test/evidence pass or physical-device proof claimed | No new native test/evidence pass or physical-device proof claimed | Run native builds/tests, inspect matched evidence and verify device auth/microphone/lifecycle before closing the verification gap. |
 | Chat environment: repositories and question actions (desktop since #2404) | Actioned `ask_user` options show as plain answers; no repository list | Same | [#2415](https://github.com/nekko-labs/nekko-agent/issues/2415) |
 | Run a suggested command in the chat's terminal ([spec](../chat/run-suggested-commands-in-a-terminal.md), desktop since #2595) | No Run on shell blocks | Same | [#2607](https://github.com/nekko-labs/nekko-agent/issues/2607) (iPhone), [#2608](https://github.com/nekko-labs/nekko-agent/issues/2608) (Android) |
-| Nekko in the car: voice-first, active work, Results of voice commands ([spec](carplay.md)) | CarPlay app built 2026-11-14 ([#2781](https://github.com/nekko-labs/nekko-agent/issues/2781)): Linux-tested logic, not yet in CarPlay Simulator; waits on Apple's entitlement | Nothing yet; Android Auto counterpart to work out | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
+| Nekko in the car: voice-first, active work, Results of voice commands ([spec](carplay.md)) | CarPlay app built 2026-11-14 ([#2781](https://github.com/nekko-labs/nekko-agent/issues/2781)): Linux-tested logic, not yet in CarPlay Simulator; waits on Apple's entitlement | Android Auto as a messaging app through notifications (2026-11-17): a finished reply read aloud in the car, with Reply. No Work list, Results, Allow/Deny or Stop: Android Auto has no category for a voice agent | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Built 2026-11-09 ([#2423](https://github.com/nekko-labs/nekko-agent/issues/2423)): inline card, link to the repository only, verified in Native iOS CI, not on a device | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | Both: the native store rating request once on the App Store and Google Play (planned). |
 | Open your own computer from an organization's list with no pairing ([spec](../platform/organizations.md), desktop since #2806) | Separate issue #2804 | Protocol layer only (`FleetLink`, unit-tested); no Cloud sign-in, keyring unlock or org list in the app | [#2835](https://github.com/nekko-labs/nekko-agent/issues/2835) |
+| Take back an always-allowed MCP tool or a known recipient (desktop since #2960, decisions 0054 and 0063) | Built 2026-11-17: Model panel → **Allowed without asking** (`ChatGrantsList`), each removal signed with Face ID or the passcode (`knownRecipients` joins `PHONE_GUARDED_OPTION_KEYS`); NekkoKit-tested, app target CI-built | Built 2026-11-18: Model sheet → **Allowed without asking** (`GrantsSheet`), each removal signed with the screen lock through `setRunOption`; controller JVM-tested | None: both phones have it. |
 
 ## Pending response messages (#2476, #2497)
 
@@ -77,12 +79,12 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
 | Computer controls: Cloud fleet group | Waits with Nekko Cloud (#2122); service management, the Models filter and Connect to <computer> landed (2026-11-12/13) | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
-| Live card: chats as chips that open the chat | Focused chat and its actions only | [#2116](https://github.com/nekko-labs/nekko-agent/issues/2116) |
 | Push notifications | No push; the keep-alive service covers an open connection | [#2121](https://github.com/nekko-labs/nekko-agent/issues/2121) |
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
-| CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | No Android Auto app | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
+| CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | Replies read aloud and answered by voice in Android Auto (notifications); no Work list, Results, approvals or Stop | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
+| New chat: model ⟶ device on one line, the connect checklist and note, the limit line, picker size and context (iPhone #2921-#2925, 2026-11-17) | Still two rows and the "no tools" note | [#2950](https://github.com/nekko-labs/nekko-agent/issues/2950) |
 
 Android features the iPhone lacks have not been audited yet.
 

@@ -459,6 +459,10 @@ struct ChatView: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                     .accessibilityIdentifier("chat.savedCopy")
             }
+            // Always there while the provider reports limits, quiet until they near (#2923).
+            if !chat.isImageChat && chat.savedAt == nil {
+                ComputerLimitLine(providerId: chat.providerId) { showModels = true }.padding(.horizontal, 4)
+            }
             Composer(chat: chat, openTerminals: { showTerminals = true }, openFiles: { showFiles = true })
         }
         .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
