@@ -632,6 +632,14 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > the chat through the lock. Without push (not built yet), these only arrive while the phone is still
 > connected. If Android restricts Nekko in the background, Settings says so and opens the app's
 > system page.
+>
+> **In the car (Android Auto):** while the phone is on Android Auto, a finished reply is read aloud
+> there: the chat's name and the first 200 or so characters of its reply, in plain words. Say
+> **Reply** and dictate an answer; Android Auto reads it back and asks before sending it to that chat.
+> It waits on the phone while the computer is offline, and goes only to a chat on the computer the
+> phone is connected to. Off the car, notifications stay as above, without the reply. Approvals,
+> Stop and the chat list aren't in the car on Android: Android Auto only takes Reply and Mark as read
+> from an app like this.
 
 The phone clients are native apps: SwiftUI in `apps/ios` and Kotlin/Jetpack Compose in
 `apps/android`. They drive chats on your computer over the encrypted relay. The former

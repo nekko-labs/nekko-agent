@@ -537,6 +537,14 @@ export function isMcpToolList(value: unknown): boolean {
   return Array.isArray(value) && value.length <= 200 && value.every((t) => typeof t === 'string' && t.startsWith('mcp__') && t.length <= 200);
 }
 
+/**
+ * `knownRecipients` from a phone: the recipients a chat writes to without
+ * asking (decision 0063), as plain strings, at most 200 of up to 200 characters.
+ */
+export function isRecipientList(value: unknown): boolean {
+  return Array.isArray(value) && value.length <= 200 && value.every((r) => typeof r === 'string' && r.length > 0 && r.length <= 200);
+}
+
 /** Whether moving from `current` (a mode, or nothing) to `next` raises the mode. An unknown mode counts as the most permissive. */
 export function phoneRaisesMode(next: unknown, current: unknown): boolean {
   const rank = (m: unknown) => {
@@ -734,6 +742,7 @@ export const PHONE_SESSION_OPTION_KEYS = [
   'guidance',
   'imageParams',
   'incognito',
+  'knownRecipients',
   'memory',
   'mode',
   'modelId',
@@ -751,11 +760,12 @@ export const PHONE_SESSION_OPTION_KEYS = [
 
 /**
  * Options that change what an agent may touch or where its data goes (`allowedMcpTools`:
- * "Always allow this tool", decision 0054). They take
+ * "Always allow this tool", decision 0054; `knownRecipients`: who the chat may
+ * write to without asking, decision 0063). They take
  * the same signed proof as raising a mode, in either direction, since the gate
  * can't always rank two values.
  */
-export const PHONE_GUARDED_OPTION_KEYS = ['allowedMcpTools', 'cloudOnly', 'disabledConnectors', 'disabledMcpServers', 'disabledTools', 'executionMode', 'gitIsolation', 'guidance', 'incognito', 'memory', 'offline', 'privacy'] as const;
+export const PHONE_GUARDED_OPTION_KEYS = ['allowedMcpTools', 'cloudOnly', 'disabledConnectors', 'disabledMcpServers', 'disabledTools', 'executionMode', 'gitIsolation', 'guidance', 'incognito', 'knownRecipients', 'memory', 'offline', 'privacy'] as const;
 
 /** The values a closed chat option may take (the store checks the rest). */
 export const PHONE_OPTION_VALUES = {
@@ -1171,6 +1181,7 @@ export function screenPhoneCall(
       }
       if (own(patch, 'mode')) chatMode(patch.mode, 'mode');
       if (own(patch, 'allowedMcpTools') && !isMcpToolList(patch.allowedMcpTools)) throw new PhoneAccessError('value-invalid', 'allowedMcpTools');
+      if (own(patch, 'knownRecipients') && !isRecipientList(patch.knownRecipients)) throw new PhoneAccessError('value-invalid', 'knownRecipients');
       if (own(patch, 'effort') && !(PHONE_EFFORT_LEVELS as readonly unknown[]).includes(patch.effort)) throw new PhoneAccessError('value-invalid', 'effort');
       for (const [key, allowed] of Object.entries(PHONE_OPTION_VALUES)) {
         if (own(patch, key) && !(allowed as readonly unknown[]).includes(patch[key])) throw new PhoneAccessError('value-invalid', key);

@@ -197,4 +197,10 @@
     <string name="tools_preview_page">Página %1$d de %2$d</string>
     <string name="tools_preview_card">%1$s, %2$s. Abre una vista previa desde tu computadora</string>
     <string name="tools_preview_file">archivo</string>
+    <string name="grants_title">Permitido sin preguntar</string>
+    <string name="grants_tools">Herramientas siempre permitidas</string>
+    <string name="grants_recipients">Destinatarios conocidos</string>
+    <string name="grants_remove_tool">Volver a preguntar antes de %1$s</string>
+    <string name="grants_remove_recipient">Volver a preguntar antes de escribir a %1$s</string>
+    <string name="grants_note">Si quitas uno, la siguiente llamada vuelve a preguntar, solo en este chat.</string>
 </resources>

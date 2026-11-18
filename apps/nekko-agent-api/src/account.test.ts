@@ -204,3 +204,78 @@ describe("sign-in with Supabase", () => {
     expect((await a.inject({ method: "GET", url: "/v1/auth/me", headers: h(t2) })).statusCode).toBe(401);
   });
 });
+
+describe("invite-only account gate (#2932)", () => {
+  const gated = (gate: { domains?: string[]; emails?: string[] }) =>
+    buildServer({
+      db,
+      allowedOrigins: [],
+      accountsAllowedDomains: gate.domains,
+      accountsAllowedEmails: gate.emails,
+      signIn: { supabaseUrl: URL_, supabaseAnonKey: "anon-public", verify: supabaseVerifier({ url: URL_, jwks, fetchUser }) },
+    });
+  const me = (a: ReturnType<typeof app>, token: string) => a.inject({ method: "GET", url: "/v1/auth/me", headers: { authorization: `Bearer ${token}` } });
+  const counts = async () => (await db.query<{ u: number; t: number; s: number }>(
+    "select (select count(*)::int from users) as u, (select count(*)::int from api_tokens) as t, (select count(*)::int from signups) as s", [])).rows[0];
+
+  it("lets an allowed domain in, case-insensitively", async () => {
+    const a = gated({ domains: ["nekkolabs.com"] });
+    const res = await signIn(a, { email: "Philip@NekkoLabs.com" });
+    expect(res.statusCode).toBe(201);
+    expect((await me(a, res.json().token)).statusCode).toBe(200);
+  });
+
+  it("refuses everyone else with 403 account-not-available and creates nothing", async () => {
+    const a = gated({ domains: ["nekkolabs.com"] });
+    const res = await signIn(a, { email: "ada@example.com" });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe("account-not-available");
+    expect(res.json().message).toMatch(/invite-only/);
+    expect(await counts()).toEqual({ u: 0, t: 0, s: 0 });
+  });
+
+  it("matches the domain exactly: not a subdomain, not a look-alike", async () => {
+    const a = gated({ domains: ["nekkolabs.com"] });
+    for (const email of ["x@mail.nekkolabs.com", "x@evilnekkolabs.com", "x@nekkolabs.com.evil.io", "nekkolabs.com@evil.io"]) {
+      expect((await signIn(a, { email })).statusCode, email).toBe(403);
+    }
+  });
+
+  it("allows single emails, and does not link a waiting signup for a refused one", async () => {
+    const a = gated({ emails: ["Ada@Example.com"] });
+    await db.query("insert into signups (email) values ('bob@example.com')", []);
+    expect((await signIn(a, { email: "bob@example.com" })).statusCode).toBe(403);
+    expect((await db.query("select status, user_id from signups", [])).rows).toEqual([{ status: "pending", user_id: null }]);
+    expect((await signIn(a, { sub: "auth-user-2", email: "ada@example.com" })).statusCode).toBe(201);
+  });
+
+  it("needs a proven email, not a claimed one", async () => {
+    const a = gated({ domains: ["nekkolabs.com"] });
+    const res = await signIn(a, { email: "philip@nekkolabs.com", amr: [{ method: "password" }], user_metadata: { email_verified: true } });
+    expect(res.statusCode).toBe(403);
+    expect(await counts()).toEqual({ u: 0, t: 0, s: 0 });
+  });
+
+  it("cuts off an existing token when the list narrows, and restores it when it widens", async () => {
+    const open = app();
+    const { token } = (await signIn(open, { email: "ada@example.com" })).json();
+    expect((await me(open, token)).statusCode).toBe(200);
+    const narrow = gated({ domains: ["nekkolabs.com"] });
+    for (const url of ["/v1/auth/me", "/v1/sync/state", "/v1/staff/features"]) {
+      expect((await narrow.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } })).statusCode, url).toBe(401);
+    }
+    expect((await me(gated({ emails: ["ada@example.com"] }), token)).statusCode).toBe(200);
+  });
+
+  it("refuses a token whose account email was never proven", async () => {
+    const open = app();
+    const { token } = (await signIn(open, { email: "philip@nekkolabs.com", amr: [{ method: "password" }] })).json();
+    expect((await me(gated({ domains: ["nekkolabs.com"] }), token)).statusCode).toBe(401);
+  });
+
+  it("keeps the public routes open", async () => {
+    const a = gated({ domains: ["nekkolabs.com"] });
+    expect((await a.inject({ method: "GET", url: "/healthz" })).statusCode).toBe(200);
+    expect((await a.inject({ method: "GET", url: "/v1/auth/config" })).statusCode).toBe(200);
+  });
+});

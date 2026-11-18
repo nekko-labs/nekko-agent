@@ -311,13 +311,13 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
 /// system's own tar (bsdtar on Windows and macOS writes zip from the name).
 fn engine_archive(dir: &std::path::Path) -> (String, &'static str, Vec<u8>) {
     let (build, name, exe) = if cfg!(windows) {
-        ("win-x64-cpu", "llama-b12238-bin-win-cpu-x64.zip", "llama-server.exe")
+        ("win-x64-cpu", "llama-b12242-bin-win-cpu-x64.zip", "llama-server.exe")
     } else if cfg!(target_os = "macos") {
-        ("macos-arm64-metal", "llama-b12238-bin-macos-arm64.tar.gz", "llama-server")
+        ("macos-arm64-metal", "llama-b12242-bin-macos-arm64.tar.gz", "llama-server")
     } else if cfg!(target_arch = "aarch64") {
-        ("linux-arm64-cpu", "llama-b12238-bin-ubuntu-arm64.tar.gz", "llama-server")
+        ("linux-arm64-cpu", "llama-b12242-bin-ubuntu-arm64.tar.gz", "llama-server")
     } else {
-        ("linux-x64-cpu", "llama-b12238-bin-ubuntu-x64.tar.gz", "llama-server")
+        ("linux-x64-cpu", "llama-b12242-bin-ubuntu-x64.tar.gz", "llama-server")
     };
     let src = dir.join("archive-src/build/bin");
     std::fs::create_dir_all(&src).unwrap();
@@ -354,11 +354,11 @@ async fn fake_github(name: &'static str, archive: Vec<u8>) -> u16 {
     let port = listener.local_addr().unwrap().port();
     let digest: String = sha2::Sha256::digest(&archive).iter().map(|b| format!("{b:02x}")).collect();
     let release = json!({
-        "tag_name": "b12238",
+        "tag_name": "b12242",
         "assets": [{ "name": name, "browser_download_url": format!("http://127.0.0.1:{port}/dl/{name}"), "size": archive.len(), "digest": format!("sha256:{digest}") }],
     });
     let app = axum::Router::new()
-        .route("/repos/ggml-org/llama.cpp/releases/tags/b12238", get(move || async move { axum::Json(release) }))
+        .route("/repos/ggml-org/llama.cpp/releases/tags/b12242", get(move || async move { axum::Json(release) }))
         .route(&format!("/dl/{name}"), get(move || async move { archive }));
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -380,12 +380,12 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, preview) = post(d.port, "engine:installPreview", json!(["llama", build]), Some(TOKEN)).await;
     assert_eq!(
         (preview["version"].clone(), preview["files"][0]["name"].clone()),
-        (json!("b12238"), json!(name)),
+        (json!("b12242"), json!(name)),
         "{preview}"
     );
     let (status, started) = post(d.port, "engine:install", json!([build, "llama"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
-    assert_eq!(started["message"], "Downloading llama.cpp b12238.", "{started}");
+    assert_eq!(started["message"], "Downloading llama.cpp b12242.", "{started}");
     let job =
         job_until(d.port, started["jobId"].as_str().unwrap(), |j| j["state"] == "done" || j["state"] == "failed").await;
     assert_eq!(job["state"], "done", "{job}");
@@ -395,7 +395,7 @@ async fn installs_and_removes_the_engine_itself() {
     assert!(!data.join("engine").join(&build).join(name).exists(), "the archive is gone once unpacked");
     let record: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("engine/engine.json")).unwrap()).unwrap();
-    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12238")));
+    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12242")));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -405,7 +405,7 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, detected) = post(d.port, "engine:detect", json!(["llama"]), Some(TOKEN)).await;
     assert_eq!(
         (detected["source"].clone(), detected["version"].clone()),
-        (json!("managed"), json!("b12238")),
+        (json!("managed"), json!("b12242")),
         "{detected}"
     );
     assert!(
@@ -643,6 +643,8 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     .unwrap();
     let session = json!({ "id": "s_img", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
+    let other = json!({ "id": "s_img2", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_img2.json"), other.to_string()).unwrap();
     let d = start_with_env(&data, json!({}), &[]);
     let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
     let row = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").cloned().expect("an image row");
@@ -709,11 +711,34 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
         running.as_array().is_some_and(|r| r.contains(&json!("s_img"))).then_some(())
     })
     .await;
+    // One picture at a time on this computer: another chat's picture waits, and says so.
+    let queued = json!({ "sessionId": "s_img2", "prompt": "a red kite", "params": params });
+    let waiting = tokio::spawn(async move { post(port2, "chat:generateImage", json!([queued]), Some(TOKEN)).await });
+    let mut label = String::new();
+    while let Some(ev) = next_json(&mut events, Duration::from_secs(10)).await {
+        let p = &ev["payload"];
+        if ev["channel"] == "agent:event" && p["sessionId"] == "s_img2" && p["type"] == "image_status" {
+            label = p["label"].as_str().unwrap_or_default().to_string();
+            if label.starts_with("Waiting") {
+                break;
+            }
+        }
+    }
+    assert_eq!(label, "Waiting for another picture or clip on this computer to finish");
+    assert!(!waiting.is_finished(), "the second picture waits for the first");
     let started = Instant::now();
     post(d.port, "chat:abort", json!(["s_img"]), Some(TOKEN)).await;
     let (status, _) = running.await.unwrap();
     assert_eq!(status, 200);
     assert!(started.elapsed() < Duration::from_secs(5));
+    // The stop frees the queue: the waiting picture is made.
+    let (status, _) = waiting.await.unwrap();
+    assert_eq!(status, 200);
+    assert!(started.elapsed() < Duration::from_secs(10), "it did not wait out the stopped picture");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img2.json")).unwrap()).unwrap();
+    let made = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    assert!(made["images"][0].as_str().is_some(), "{made}");
     let saved: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
     let last = saved["messages"].as_array().unwrap().last().unwrap().clone();

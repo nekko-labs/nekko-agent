@@ -46,6 +46,14 @@ app.whenReady().then(async () => {
         await shot('models-image-search-more');
       }
     }
+    // The same page with a model list an update check brought.
+    // A hash alone is a same-page navigation: reload so the fixture reads it.
+    await win.loadFile(path.join(out, 'index.html'), { hash: 'update' });
+    await run('location.reload()').catch(() => undefined);
+    await sleep(800);
+    await settle("!!document.querySelector('[data-recommendations]') && document.body.innerText.includes('models')");
+    report.checks.feedLine = await run("[...document.querySelectorAll('[data-recommendations] span')].map(s => s.textContent).find(t => t.startsWith('From ')) || null");
+    await shot('models-feed-update');
   } catch (e) { report.errors.push(String(e)); process.exitCode = 1; }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 1));

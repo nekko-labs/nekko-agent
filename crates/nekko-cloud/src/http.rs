@@ -56,11 +56,14 @@ async fn answer(res: reqwest::Response) -> Result<Value, HttpError> {
         return Ok(body);
     }
     let code = body.get("error").or(body.get("error_code")).and_then(Value::as_str).unwrap_or("").to_string();
+    // Nekko Cloud is switched on for Nekko Labs accounts only (#2932); say so in our words whatever the server sent.
+    let invite_only = "Nekko Cloud is invite-only for now. This account isn't on the list yet.";
     let message = ["message", "msg", "error_description"]
         .iter()
-        .find_map(|k| body.get(*k).and_then(Value::as_str))
+        .find_map(|k| body.get(*k).and_then(Value::as_str).filter(|_| code != "account-not-available"))
         .map(str::to_string)
         .unwrap_or_else(|| match (status, code.as_str()) {
+            (_, "account-not-available") => invite_only.into(),
             (402, _) => "Sync needs a Pro or Team plan.".into(),
             (401, _) => "You're signed out of Nekko Cloud. Sign in again.".into(),
             (429, _) => "Too many requests. Try again in a minute.".into(),

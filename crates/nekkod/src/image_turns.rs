@@ -169,16 +169,9 @@ impl ImageTurns {
                 let kind = if stage.starts_with("step:") { "generating" } else { stage };
                 say(json!({ "type": "image_status", "sessionId": session_id, "stage": kind, "label": label(stage) }));
             };
-            if video {
-                tokio::select! {
-                    r = server.generate_video_with(&started.request, &mut on_stage) => Some(r),
-                    _ = cancel.cancelled() => None,
-                }
-            } else {
-                tokio::select! {
-                    r = server.generate_image_with(&started.request, &mut on_stage) => Some(r),
-                    _ = cancel.cancelled() => None,
-                }
+            tokio::select! {
+                r = server.media_job(&started.request, video, &mut on_stage) => Some(r),
+                _ = cancel.cancelled() => None,
             }
         };
         let stopped = generated.is_none() || cancel.is_cancelled();

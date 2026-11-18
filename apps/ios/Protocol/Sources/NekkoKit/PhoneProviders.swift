@@ -343,7 +343,9 @@ public enum PhoneProviders {
         guard data.count <= 2_000_000, let list = (try? JSONValue.parse(data))?["data"]?.array else { return [] }
         let all = list.compactMap { m -> PhoneModel? in
             guard let id = m.str("id"), !id.isEmpty, id.utf8.count <= 1024, !id.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
-            return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id, acceptsImages: acceptsImages(m, kind: kind), created: m.long("created"))
+            let context = ["context_length", "inputTokenLimit", "max_input_tokens", "context_window"].lazy.compactMap { m.long($0) }.first { $0 > 0 }
+            return PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id, acceptsImages: acceptsImages(m, kind: kind),
+                              created: m.long("created"), contextLength: context)
         }
         guard kind == "openai" || kind == "gemini" else { return all }
         // OpenAI and Gemini list every model they serve; keep the ones that chat.
@@ -502,6 +504,20 @@ public struct PhoneRateLimits: Equatable, Sendable {
         }
         return r == PhoneRateLimits(at: at) ? nil : r
     }
+
+    /// The token and request budgets as limit windows (#2923), each used against its limit.
+    /// A budget past its reset time is full again, so it reads as unused.
+    public func providerLimits(now: Int64) -> ProviderLimits {
+        func window(_ id: String, _ label: String, _ limit: Int64?, _ remaining: Int64?, _ resetAt: Int64?) -> ProviderLimits.Window? {
+            guard let limit, limit > 0, let remaining else { return nil }
+            if let resetAt, resetAt <= now { return ProviderLimits.Window(id: id, label: label, usedPercent: 0, resetAt: nil, status: "allowed") }
+            let used = Double(limit - min(remaining, limit)) / Double(limit) * 100
+            return ProviderLimits.Window(id: id, label: label, usedPercent: used, resetAt: resetAt, status: remaining == 0 ? "rate_limited" : "allowed")
+        }
+        let windows = [window("tokens", "per-minute token", tokensLimit, tokensRemaining, tokensResetAt),
+                       window("requests", "per-minute request", requestsLimit, requestsRemaining, requestsResetAt)]
+        return ProviderLimits(planType: nil, windows: windows.compactMap { $0 }, updatedAt: at)
+    }
 }
 
 /// A provider this iPhone calls itself. Holds no secret: the key is in the Keychain.
@@ -534,8 +550,11 @@ public struct PhoneModel: Codable, Equatable, Sendable, Identifiable {
     public var acceptsImages: Bool?
     /// When the provider published it (OpenAI's `created`, seconds since 1970), if it says.
     public var created: Int64?
-    public init(id: String, name: String, acceptsImages: Bool? = nil, created: Int64? = nil) {
-        self.id = id; self.name = name; self.acceptsImages = acceptsImages; self.created = created
+    /// The context window in tokens, where the list gives one (OpenRouter's `context_length`,
+    /// Gemini's `inputTokenLimit`, Anthropic's `max_input_tokens`).
+    public var contextLength: Int64?
+    public init(id: String, name: String, acceptsImages: Bool? = nil, created: Int64? = nil, contextLength: Int64? = nil) {
+        self.id = id; self.name = name; self.acceptsImages = acceptsImages; self.created = created; self.contextLength = contextLength
     }
 }
 

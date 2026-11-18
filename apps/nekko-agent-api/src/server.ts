@@ -2,6 +2,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerAccount, type SignInConfig } from "./account.js";
 import { registerBilling, type Stripe } from "./billing.js";
+import { accountGateFrom } from "./auth.js";
 import { DEFAULT_STAFF_EMAILS, type Feature, type Features, registerFeatures } from "./features.js";
 import type { Alert } from "./alerts.js";
 import type { Db } from "./db.js";
@@ -42,6 +43,13 @@ export interface ServerOptions {
   orgsEnabled?: boolean;
   /** Lower-case emails; when non-empty only these accounts may create orgs, accept invites or use the org fleet. */
   orgsAllowedEmails?: string[];
+  /**
+   * Account gate (issue #2932): when either list is non-empty only accounts
+   * with a proven email in them may sign in or use a token. Lower-case.
+   * Unrelated to staffEmails, which only switches unreleased features on.
+   */
+  accountsAllowedDomains?: string[];
+  accountsAllowedEmails?: string[];
   /** Stripe plans and billing (issue #2724); without it the /v1/billing routes are absent. */
   stripe?: Stripe;
   /** Lower-case emails of Nekko team accounts, who switch unreleased features on. Defaults to DEFAULT_STAFF_EMAILS. */
@@ -83,6 +91,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     // library-multiplayer joins once the service runs its relay (#2751).
     available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud"]),
   };
+  const gate = accountGateFrom(opts.accountsAllowedDomains, opts.accountsAllowedEmails);
+  if (gate) app.decorate("accountGate", gate);
   const { max, windowMs } = opts.rateLimit ?? { max: 5, windowMs: 60 * 60 * 1000 };
   const hits = new Map<string, { count: number; resetAt: number }>();
 
