@@ -51,24 +51,6 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
     if name == "media_models" {
         return ok(id, list(&models));
     }
-    let edit = name == "edit_image";
-    let need = if edit { "edit" } else { "create" };
-    let model = match choose(&models, &input, &c.session, c.default.as_deref(), need) {
-        Ok(m) => m,
-        Err(e) => return err(id, e),
-    };
-    let prompt = input.get("prompt").and_then(Value::as_str).map(str::trim).unwrap_or_default();
-    if prompt.is_empty() {
-        return err(id, "Describe the picture first (prompt).");
-    }
-    let (width, height) = match size(&input, &c.session) {
-        Ok(s) => s,
-        Err(e) => return err(id, e),
-    };
-    let count = if edit { 1 } else { input.get("count").and_then(Value::as_f64).map_or(1, |n| n as u64) };
-    if !(1..=MAX_COUNT).contains(&count) {
-        return err(id, format!("count is 1 to {MAX_COUNT}."));
-    }
     let inspect = input.get("inspect") != Some(&Value::Bool(false));
     let path = input.get("path").filter(|p| p.as_str().is_some_and(|s| !s.trim().is_empty()));
     if !inspect && path.is_none() {
@@ -79,19 +61,135 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
     {
         return err(id, "The path must end in .png.");
     }
-    if path.is_some() && count > 1 {
+    if path.is_some() && input.get("count").and_then(Value::as_f64).is_some_and(|n| n > 1.0) {
         return err(id, "Save one picture at a time: use count 1 with a path.");
     }
-    let refs = if edit {
-        match pictures(&input, &c.session, c.ctx) {
-            Ok(r) => r,
-            Err(e) => return err(id, e),
-        }
-    } else {
-        Vec::new()
+    let ctx = c.ctx;
+    let read = |p: &str| -> Result<String, String> {
+        let full = nekko_tools::resolve_path(Some(&json!(p)), ctx)?;
+        nekko_tools::assert_readable(&full, ctx)?;
+        read_picture(p, &full)
     };
+    let request = Request {
+        name,
+        input: &input,
+        session: &c.session,
+        default: c.default.as_deref(),
+        last: last_picture(&c.session),
+        read: &read,
+    };
+    let made = tokio::select! {
+        r = make(server, &models, request) => r,
+        _ = c.ctx.cancel.cancelled() => return err(id, "Stopped before the picture finished."),
+    };
+    let Made { images, mut output } = match made {
+        Ok(m) => m,
+        Err(e) => return err(id, e),
+    };
+    if let Some(p) = path {
+        let call = ToolCall { id: id.to_string(), name: name.to_string(), input: input.clone() };
+        let bytes = match base64::engine::general_purpose::STANDARD.decode(&images[0]) {
+            Ok(b) => b,
+            Err(_) => return err(id, "The model returned a picture that could not be read."),
+        };
+        match nekko_tools::save_new_file(&call, c.ctx, Some(p), &bytes).await {
+            Ok(saved) => output.push_str(&format!(" Saved to {saved}.")),
+            Err(e) => output.push_str(&format!(" It was not saved: {e}")),
+        }
+    }
+    let mut out = ok(id, output);
+    if inspect {
+        out["images"] = json!(images.iter().map(|b| format!("data:image/png;base64,{b}")).collect::<Vec<_>>());
+    }
+    out
+}
+
+/// A Claude Code chat's call through its bridge (`POST /harness/tool`): the
+/// same pictures, kept in `saved` (the chat's own folder in Nekko's data, so
+/// nothing is written into the project behind Claude Code's back) and named
+/// in the answer, which Claude Code can copy with its own tools and their
+/// approvals. Pictures to edit come from the chat's folders (`roots`) or `last`.
+/// The answer is the bridge's `{ ok, text, images? }`, images as bare base64 PNG.
+pub async fn run_bridge(
+    server: &Server,
+    name: &str,
+    input: &Value,
+    session: &Value,
+    default: Option<&str>,
+    roots: &[std::path::PathBuf],
+    saved: &std::path::Path,
+) -> Value {
+    let fail = |e: String| json!({ "ok": false, "error": e });
+    let models = server.ready_media_models().await;
+    if name == "media_models" {
+        return json!({ "ok": true, "text": list(&models) });
+    }
+    let read = |p: &str| -> Result<String, String> {
+        let full = inside(roots, p)?;
+        read_picture(p, &full.to_string_lossy())
+    };
+    let request = Request { name, input, session, default, last: newest_saved(saved), read: &read };
+    let Made { images, mut output } = match make(server, &models, request).await {
+        Ok(m) => m,
+        Err(e) => return fail(e),
+    };
+    if let Err(e) = std::fs::create_dir_all(saved) {
+        return fail(format!("Could not keep the picture: {e}"));
+    }
+    let stamp = nekko_js::now_ms();
+    let mut paths = Vec::new();
+    for (i, b) in images.iter().enumerate() {
+        let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b) else {
+            return fail("The model returned a picture that could not be read.".into());
+        };
+        let file = saved.join(format!("picture-{stamp}-{}.png", i + 1));
+        if let Err(e) = std::fs::write(&file, bytes) {
+            return fail(format!("Could not keep the picture: {e}"));
+        }
+        paths.push(file.to_string_lossy().to_string());
+    }
+    output.push_str(&format!(
+        " Kept at {}. Copy it into the project with your own tools if the user wants it there.",
+        paths.join(", ")
+    ));
+    json!({ "ok": true, "text": output, "images": images })
+}
+
+/// What [`make`] needs from either caller.
+struct Request<'a> {
+    name: &'a str,
+    input: &'a Value,
+    session: &'a Value,
+    default: Option<&'a str>,
+    /// The picture `"last"` names, when there is one.
+    last: Option<String>,
+    /// A picture to edit, from the chat's folders, as a data URL.
+    read: &'a (dyn Fn(&str) -> Result<String, String> + Sync),
+}
+
+struct Made {
+    /// Bare base64 PNGs.
+    images: Vec<String>,
+    output: String,
+}
+
+/// Choose the model, check the call, and make the pictures through the media queue.
+async fn make(server: &Server, models: &[Value], r: Request<'_>) -> Result<Made, String> {
+    let edit = r.name == "edit_image";
+    let need = if edit { "edit" } else { "create" };
+    let model = choose(models, r.input, r.session, r.default, need)?;
+    let prompt = r.input.get("prompt").and_then(Value::as_str).map(str::trim).unwrap_or_default();
+    if prompt.is_empty() {
+        return Err("Describe the picture first (prompt).".into());
+    }
+    let (width, height) = size(r.input, r.session)?;
+    let count = if edit { 1 } else { r.input.get("count").and_then(Value::as_f64).map_or(1, |n| n as u64) };
+    if !(1..=MAX_COUNT).contains(&count) {
+        return Err(format!("count is 1 to {MAX_COUNT}."));
+    }
+    let refs = if edit { pictures(r.input, r.last.as_deref(), r.read)? } else { Vec::new() };
     let defaults = &model["defaults"];
-    let params = c.session.get("imageParams").filter(|p| p.get("modelId") == model.get("id"));
+    let params = r.session.get("imageParams").filter(|p| p.get("modelId") == model.get("id"));
     let pick = |k: &str, fallback: f64| {
         params
             .and_then(|p| p.get(k))
@@ -111,29 +209,25 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
     if !refs.is_empty() {
         request["refImages"] = json!(refs);
     }
-
     let mut images = Vec::new();
     for _ in 0..count {
         let mut quiet = |_: &str| {};
-        let made = tokio::select! {
-            r = server.media_job(&request, false, &mut quiet) => r,
-            _ = c.ctx.cancel.cancelled() => return err(id, "Stopped before the picture finished."),
-        };
-        match made {
-            Ok(result) => images.extend(
-                result
-                    .get("data")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|d| d.get("b64_json").and_then(Value::as_str))
-                    .map(str::to_string),
-            ),
-            Err(e) => return err(id, format!("The picture could not be made: {e}")),
-        }
+        let result = server
+            .media_job(&request, false, &mut quiet)
+            .await
+            .map_err(|e| format!("The picture could not be made: {e}"))?;
+        images.extend(
+            result
+                .get("data")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|d| d.get("b64_json").and_then(Value::as_str))
+                .map(str::to_string),
+        );
     }
     if images.is_empty() {
-        return err(id, "The model finished without a picture.");
+        return Err("The model finished without a picture.".into());
     }
     let label = model.get("name").and_then(Value::as_str).unwrap_or_default();
     let what = if edit {
@@ -143,23 +237,7 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
     } else {
         "Made the picture"
     };
-    let mut output = format!("{what} with {label} ({width}x{height}) on this computer.");
-    if let Some(p) = path {
-        let call = ToolCall { id: id.to_string(), name: name.to_string(), input: input.clone() };
-        let bytes = match base64::engine::general_purpose::STANDARD.decode(&images[0]) {
-            Ok(b) => b,
-            Err(_) => return err(id, "The model returned a picture that could not be read."),
-        };
-        match nekko_tools::save_new_file(&call, c.ctx, Some(p), &bytes).await {
-            Ok(saved) => output.push_str(&format!(" Saved to {saved}.")),
-            Err(e) => output.push_str(&format!(" It was not saved: {e}")),
-        }
-    }
-    let mut out = ok(id, output);
-    if inspect {
-        out["images"] = json!(images.iter().map(|b| format!("data:image/png;base64,{b}")).collect::<Vec<_>>());
-    }
-    out
+    Ok(Made { images, output: format!("{what} with {label} ({width}x{height}) on this computer.") })
 }
 
 /// `media_models`'s answer.
@@ -235,30 +313,59 @@ fn size(input: &Value, session: &Value) -> Result<(u64, u64), String> {
     Ok((side("width").unwrap_or(DEFAULT_SIDE), side("height").unwrap_or(DEFAULT_SIDE)))
 }
 
-/// The pictures to edit, as data URLs: workspace files, or `last`.
-fn pictures(input: &Value, session: &Value, ctx: &ToolContext) -> Result<Vec<String>, String> {
+/// The pictures to edit, as data URLs: files from the chat's folders, or `last`.
+fn pictures(
+    input: &Value,
+    last: Option<&str>,
+    read: &(dyn Fn(&str) -> Result<String, String> + Sync),
+) -> Result<Vec<String>, String> {
     let list: Vec<&str> =
         input.get("images").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
     if list.is_empty() || list.len() > 4 {
-        return Err("Give 1 to 4 pictures to change (workspace paths, or \"last\").".into());
+        return Err("Give 1 to 4 pictures to change (paths in the chat's folders, or \"last\").".into());
     }
     list.iter()
         .map(|p| {
             if *p == "last" {
-                return last_picture(session).ok_or_else(|| "No picture was made in this chat yet.".to_string());
+                last.map(str::to_string).ok_or_else(|| "No picture was made in this chat yet.".to_string())
+            } else {
+                read(p)
             }
-            let full = nekko_tools::resolve_path(Some(&json!(p)), ctx)?;
-            nekko_tools::assert_readable(&full, ctx)?;
-            let mime = match full.rsplit('.').next().map(str::to_lowercase).as_deref() {
-                Some("png") => "image/png",
-                Some("jpg" | "jpeg") => "image/jpeg",
-                Some("webp") => "image/webp",
-                _ => return Err(format!("{p}: use a .png, .jpg, .jpeg or .webp picture.")),
-            };
-            let bytes = std::fs::read(&full).map_err(|e| format!("Could not read {p}: {e}"))?;
-            Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
         })
         .collect()
+}
+
+/// A picture file as a data URL, by its extension.
+fn read_picture(asked: &str, full: &str) -> Result<String, String> {
+    let mime = match full.rsplit('.').next().map(str::to_lowercase).as_deref() {
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        _ => return Err(format!("{asked}: use a .png, .jpg, .jpeg or .webp picture.")),
+    };
+    let bytes = std::fs::read(full).map_err(|e| format!("Could not read {asked}: {e}"))?;
+    Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
+/// A path inside one of the chat's folders (relative to the first), links
+/// resolved, or why not.
+fn inside(roots: &[std::path::PathBuf], asked: &str) -> Result<std::path::PathBuf, String> {
+    let first = roots.first().ok_or("This chat has no folder to read pictures from.")?;
+    let path = std::path::Path::new(asked);
+    let joined = if path.is_absolute() { path.to_path_buf() } else { first.join(path) };
+    let real = joined.canonicalize().map_err(|_| format!("{asked} was not found."))?;
+    let ok = roots.iter().filter_map(|r| r.canonicalize().ok()).any(|r| real.starts_with(&r));
+    if ok { Ok(real) } else { Err(format!("{asked} is outside this chat's folders.")) }
+}
+
+/// The newest picture kept for a Claude Code chat: what its `last` names.
+fn newest_saved(dir: &std::path::Path) -> Option<String> {
+    let newest = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".png"))
+        .max_by_key(|e| e.file_name())?;
+    read_picture("last", &newest.path().to_string_lossy()).ok()
 }
 
 /// The last picture this chat's picture tools made.

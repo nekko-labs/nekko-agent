@@ -3,7 +3,7 @@
 use crate::common::*;
 
 /// A GGUF header with enough geometry for the planner (`gguf-fixture.ts`).
-fn tiny_gguf(arch: &str, name: &str) -> Vec<u8> {
+pub(crate) fn tiny_gguf(arch: &str, name: &str) -> Vec<u8> {
     let s = |v: &str| {
         let mut b = (v.len() as u64).to_le_bytes().to_vec();
         b.extend_from_slice(v.as_bytes());
@@ -441,7 +441,7 @@ async fn installs_and_removes_the_engine_itself() {
 }
 
 /// The stand-in `llama-server`, built beside this test if `cargo test` did not build examples.
-fn fake_llama() -> std::path::PathBuf {
+pub(crate) fn fake_llama() -> std::path::PathBuf {
     let exe = format!("fake_llama_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
     let path = deps.parent().unwrap().join("examples").join(exe);
@@ -601,7 +601,7 @@ async fn runs_the_model_server_itself() {
 }
 
 /// The stand-in `sd-server`, built beside this test if `cargo test` did not build examples.
-fn fake_sd() -> std::path::PathBuf {
+pub(crate) fn fake_sd() -> std::path::PathBuf {
     let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
     let path = deps.parent().unwrap().join("examples").join(exe);
