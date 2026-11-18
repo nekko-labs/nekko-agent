@@ -10,6 +10,8 @@ const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 app.on('window-all-closed', () => {});
+// JSON.stringify leaves <, >, / and U+2028/2029 raw; escape them before splicing into evaluated code.
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], tips: {}, errors: [] };
 const targets = [
@@ -34,7 +36,7 @@ app.whenReady().then(async () => {
     for (const [name, selector] of targets) {
       win.webContents.sendInputEvent({ type: 'mouseMove', x: 890, y: 710 });
       await sleep(800);
-      const box = JSON.parse(await run(`JSON.stringify((() => { const b = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; })())`));
+      const box = JSON.parse(await run(`JSON.stringify((() => { const b = document.querySelector(${js(selector)}).getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; })())`));
       win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(box.x + box.w / 2), y: Math.round(box.y + box.h / 2) });
       await sleep(900);
       win.webContents.invalidate();
