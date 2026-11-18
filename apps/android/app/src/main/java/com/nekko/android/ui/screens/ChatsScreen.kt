@@ -1505,13 +1505,13 @@ internal fun savedListNote(
     template: String = "Saved list from %1\$s. It updates when %2\$s answers.",
 ): String = savedNote(template, savedAt, computer, now, zone)
 
-/** "Saved copy from 10:42. It updates when Mac answers.": a chat read from the phone's copy (OF-5). */
+/** "Updated last on 10:42": a chat read from the phone's copy (OF-5). */
 internal fun savedCopyNote(
     savedAt: Long,
     computer: String,
     now: Long = System.currentTimeMillis(),
     zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
-    template: String = "Saved copy from %1\$s. It updates when %2\$s answers.",
+    template: String = "Updated last on %1\$s",
 ): String = savedNote(template, savedAt, computer, now, zone)
 
 private fun savedNote(template: String, savedAt: Long, computer: String, now: Long, zone: java.time.ZoneId): String {

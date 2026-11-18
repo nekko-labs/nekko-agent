@@ -29,7 +29,7 @@ import com.nekko.android.ui.theme.Nekko
 import kotlinx.coroutines.delay
 
 /**
- * "NAME is reconnecting..." over "Draft your message now and it will send when NAME reconnects"
+ * "NAME is reconnecting..." over the factual "Prompts you send wait on this phone."
  * (the iPhone's ReconnectingNotice, #2475). The three dots always take their full width; only
  * their opacity cycles, every 0.4 s, so nothing beside them moves. With animations off they stay
  * still and all shown; the cycle stops while the app is in the background.
@@ -60,6 +60,6 @@ fun ReconnectingNotice(name: String, modifier: Modifier = Modifier) {
                 }
             }
         }
-        Text(stringResource(R.string.chats_reconnect_draft, name), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.testTag("reconnect.draft"))
+        Text(stringResource(R.string.chats_reconnect_draft), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.testTag("reconnect.draft"))
     }
 }

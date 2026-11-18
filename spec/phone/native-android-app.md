@@ -106,6 +106,15 @@ Talk to Nekko opens a foreground sheet behind the app lock; entry never starts t
 
 **Verification so far:** 71 JVM tests (protocol, relay state machine against a fake agent, transcript reconciliation, chat logic, repository, ask form); the Kotlin crypto produces byte-identical output to WebCrypto and the agent's `packages/shared` implementation opens Kotlin-sealed frames; a live integration test drives the real relay and a headless agent with a fake model (enrollment, provider-key stripping, streamed turn, a guarded `rm -rf` held for approval and denied from the phone, reconnection without a code, refusal of a stranger and of a spent code); lint is clean and debug + minified release APKs build. **Unverified:** the Compose UI on an emulator or device (layout, themes, keyboard, deep links, scanner, Keystore on real hardware), pairing against the managed relay, and the TalkBack/large-font pass.
 
+### Quiet reconnecting notices (#2473)
+
+Implemented and verified on an isolated API 32 emulator; physical-device and accessibility coverage remains explicit below.
+
+- Main's Android `ConnectionRow` (#2633) is unchanged. This work does not restore `ConnectionBanner`, add a row pulse or add a separate queued-count fixture.
+- The borderless text-chat composer says `{computer} is reconnecting.` or `{computer} is offline.`, then `Prompts you send wait on this phone.` New Chat keeps its existing fixed-width animated ellipsis and uses the same factual second line. Drafting alone does not queue or send anything; the user must choose Send.
+- A saved transcript shows only localized `Updated last on {timestamp}`. The saved-list explanation and image-chat no-text-queue explanation are unchanged.
+- Verification (2026-11-19): focused `QuietReconnectTest` and `OutboxTest` passed; debug app and androidTest APKs built. The same memory-only harness ran against base `7906f9408` and the integrated head on a headless-created Pixel 5 / API 32 AVD. Both Chat/New Chat journeys and both motion holds passed. Matched 1080x2340 screenshots were inspected: localized saved-copy metadata is one timestamp, factual copy appears on both real surfaces, and main's `ConnectionRow` is unchanged. Device screenshots sampled during the hold contain the repeating one/two/three-dot states; matched 1.375-second clips were inspected. Physical Android hardware, large text, TalkBack and foldable postures remain unverified.
+
 ### Image settings fallback and localized resources (2026-11-08)
 
 When an image session has no saved image parameters, sending refuses explicitly and asks the owner to choose/save settings. The settings editor uses the protocol default CFG4, not an artificial invalid CFG4.5. Saved fractional parameters are preserved exactly and still require explicit correction; no automatic rounding or unsigned fallback is introduced. Voice/image resource keys are translated into all six existing additional locales; key/placeholder and XML checks pass, while native localized rendering and linguistic review remain unverified.
@@ -219,4 +228,3 @@ The iPhone's CarPlay app (#2781, spec/phone/carplay.md), as far as Android Auto 
 - **Not in the car on Android:** the Work list, Results, Allow / Deny, Stop and new chats. Android Auto takes only Reply and Mark as read from a messaging notification, and a templated app would need a category Google accepts. Speech is Android Auto's (Google's) recognizer, not the phone's own as on CarPlay.
 - **Shared grammar:** the iPhone's car command grammar and chat matching are pinned by `packages/shared/fixtures/car-commands.json` (the iPhone's CarCommandsTests and Android's CarCommandsTest). Android's port, `CarCommands`, isn't used yet: it is ready for a car app if a category allows one.
 - **Like CarPlay:** the app lock doesn't hide the car's conversation (the driver can't unlock there; see carplay.md, open question 3).
-

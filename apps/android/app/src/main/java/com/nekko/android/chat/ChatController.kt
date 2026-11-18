@@ -751,7 +751,7 @@ class ChatController(
                 else -> null
             }
             val sendsLater = if (!image && away && env.canQueue) {
-                "${env.computerName} is ${if (env.conn == RelayState.OFFLINE) "offline" else "reconnecting"}. What you send waits on this phone and goes when it’s back."
+                "${env.computerName} is ${if (env.conn == RelayState.OFFLINE) "offline" else "reconnecting"}.\nPrompts you send wait on this phone."
             } else {
                 null
             }

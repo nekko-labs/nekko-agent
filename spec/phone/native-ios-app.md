@@ -379,6 +379,16 @@ Implemented in the task branch, native verification pending. Photo additions and
 
 The primary app icon has an iOS dark luminosity variant: the existing Nekko outline in brand plum (#854F6C) on opaque charcoal. The existing light icon and seasonal alternate are unchanged. Acceptance: photos survive reopening without waiting for a typing debounce; removal also survives; the native composer contains its thumbnails; Home Screen dark appearance selects the dark asset while light retains the original. Protocol regression tests and matched native screenshots are required before marking verified. Android durability parity is tracked in #2043.
 
+### Quiet reconnecting notices (#2473)
+
+Implemented and verified on isolated iOS 27.0 simulators with Xcode 27.2; physical-device and accessibility coverage remains explicit below.
+
+- Main's iPhone `ConnectionStrip` (#2636) is unchanged. This work does not restore the removed banner, add a strip pulse or alter the strip's queued-prompt detail.
+- The borderless text-chat composer says `{computer} is reconnecting.` or `{computer} is offline.`, then `Prompts you send wait on this iPhone.` New Chat keeps its existing fixed-width animated ellipsis and uses the same factual second line. Drafting alone does not queue or send anything; the user must choose Send.
+- A saved transcript shows only `Updated last on {timestamp}`, preserving the existing localized time and date for older copies. The saved-list explanation is unchanged.
+- Image chats retain their no-text-queue explanation. Retry, pairing repair, Tailscale help, safety exits, delivery, queue persistence, encryption and authorization are unchanged.
+- Verification (2026-11-19): an unchanged harness rendered real Chat and New Chat surfaces on headless-created iPhone 18 Pro / iOS 27.0 simulators for current main `54c1b1f72` and the integrated head. Both native builds, both `SavedListNoteTests` cases and both UI journeys passed. Matched 1206x2622 screenshots were inspected: the composer is borderless, saved-copy metadata is one timestamp, factual copy appears on both surfaces, and no connection-strip change is present. Eight 250 ms New Chat samples cycle through one, two and three fixed-width dots; the resulting two-second clip was inspected. Physical iPhone/iPad, large text, VoiceOver and older iOS runtimes remain unverified.
+
 ## Readable chat titles and compact composer options (#2413)
 
 Implemented; native before/after verification pending. Chat-list titles normalize embedded whitespace for display without editing saved titles. They use up to two lines and the full content width; the relative timestamp shares the model/context metadata row instead of competing with the title. VoiceOver still receives the complete title.
