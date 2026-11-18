@@ -191,6 +191,12 @@ pub fn view(w: &Value) -> Value {
     if let Some(e) = w.get("lastError").filter(|e| js::truthy(Some(e))) {
         put("lastError", Some(json!(js::slice16(&js::display(e), 300))));
     }
+    // A clip's stage (`waiting`, `loading`, `generating`, `step:3/20`), for the chip.
+    if str_of(w, "kind") == Some("clip")
+        && let Some(stage) = w.get("clipStage").filter(|s| s.is_string())
+    {
+        put("clipStage", Some(stage.clone()));
+    }
     // The PR as last polled, so the chip shows progress without a model turn.
     if let Some(snap) = str_of(w, "fingerprint").and_then(pr_snapshot) {
         for (k, as_k) in [("checks", "checks"), ("state", "prState")] {
@@ -502,6 +508,8 @@ impl Watches {
             .unwrap_or_default()
             .iter()
             .filter(|w| str_of(w, "status") == Some("active"))
+            // A clip's deadline is only a safety net, not when the chat wakes: its chip says how it is doing.
+            .filter(|w| str_of(w, "kind") != Some("clip"))
             .map(|w| num(w, "deadlineAt"))
             .collect();
         if deadlines.is_empty() {
@@ -770,6 +778,12 @@ impl Watches {
         self.patch(id, json!({ "pending": news, "nextPollAt": (self.now)() })).await;
     }
 
+    /// How far a clip got (the media job's stages), for its chip.
+    pub async fn clip_progress(&self, id: &str, session_id: &str, stage: &str) {
+        self.patch(id, json!({ "clipStage": stage })).await;
+        self.host.status_changed(session_id);
+    }
+
     fn stop_clip(&self, id: &str) {
         if let Some(c) = self.clips.lock().unwrap_or_else(|e| e.into_inner()).remove(id) {
             c.cancel();
@@ -1007,6 +1021,9 @@ mod tests {
         r.w.tick(None).await;
         assert!(r.resumes().is_empty());
         assert_eq!(r.all()[0]["kind"], "clip");
+        assert_eq!(r.w.next_wake_at("s"), Value::Null, "a clip is not a timed wake-up");
+        r.w.clip_progress(&id, "s", "step:3/20").await;
+        assert_eq!(view(&r.all()[0])["clipStage"], "step:3/20", "the chip reads the stage");
         r.w.clip_finished(&id, "The clip is ready: /data/clip-1.webp.").await;
         r.w.tick(None).await;
         let resumes = r.resumes();

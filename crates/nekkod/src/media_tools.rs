@@ -229,10 +229,26 @@ pub async fn start_clip(
     let id = watches.arm_clip(c.session_id, then, cancel.clone()).await?;
     let label = model.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
     let (kept, project, watch, name) = (c.kept.clone(), c.project_path.clone(), id.clone(), label.clone());
+    let (stages, mut heard) = tokio::sync::mpsc::unbounded_channel::<String>();
+    {
+        // The chip follows the job's stages; a stage that repeats is not news.
+        let (watches, id, session) = (watches.clone(), id.clone(), c.session_id.to_string());
+        tokio::spawn(async move {
+            let mut last = String::new();
+            while let Some(stage) = heard.recv().await {
+                if stage != last {
+                    watches.clip_progress(&id, &session, &stage).await;
+                    last = stage;
+                }
+            }
+        });
+    }
     tokio::spawn(async move {
-        let mut quiet = |_: &str| {};
+        let mut tell = |stage: &str| {
+            let _ = stages.send(stage.to_string());
+        };
         let made = tokio::select! {
-            r = server.media_job(&request, true, &mut quiet) => r,
+            r = server.media_job(&request, true, &mut tell) => r,
             // Cancelled: the watch is already gone, so nobody is told.
             _ = cancel.cancelled() => return,
         };
