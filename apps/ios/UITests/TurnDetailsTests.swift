@@ -118,6 +118,28 @@ final class TurnDetailsTests: XCTestCase {
         return abs(pixels - integer) <= max(pixels.ulp, integer.ulp) * 8 ? integer : pixels
     }
 
+    /// Compare sizes in physical coordinates using the same integer-only ULP
+    /// canonicalization as the strict gutter checks. Never round a subpixel change.
+    private func physicalSize(_ size: CGSize, scale: Double) -> CGSize {
+        CGSize(width: physicalCoordinate(Double(size.width), scale: scale),
+               height: physicalCoordinate(Double(size.height), scale: scale))
+    }
+
+    func testSizeNormalizationRejectsPhysicalLayoutChanges() {
+        let a = CGSize(width: 370, height: 236.33333333333337)
+        let b = CGSize(width: 370, height: 236.33333333333326)
+        XCTAssertEqual(physicalSize(a, scale: 3), physicalSize(b, scale: 3))
+        for scale in [2.0, 3.0] {
+            let original = CGSize(width: 370, height: 236)
+            for delta in [-1.0, -0.5, -0.25, 0.25, 0.5, 1.0] {
+                let wider = CGSize(width: original.width + delta / scale, height: original.height)
+                let taller = CGSize(width: original.width, height: original.height + delta / scale)
+                XCTAssertNotEqual(physicalSize(wider, scale: scale), physicalSize(original, scale: scale))
+                XCTAssertNotEqual(physicalSize(taller, scale: scale), physicalSize(original, scale: scale))
+            }
+        }
+    }
+
     func testCoordinateNormalizationRejectsPhysicalOverflow() {
         for scale in [2.0, 3.0] {
             let boundary = 16.0 * scale
@@ -205,8 +227,10 @@ final class TurnDetailsTests: XCTestCase {
         let renderedApp = launch(measure + render + largest)
         let rendered = try reading(renderedApp, name: "layout-xxxl-rendered", rendered: true)
         try assertContentBounds(rendered, app: renderedApp)
-        XCTAssertEqual(try rendered.frame("metrics").size, try original.frame("metrics").size)
-        XCTAssertEqual(try rendered.frame("footer").size, try original.frame("footer").size)
+        XCTAssertEqual(physicalSize(try rendered.frame("metrics").size, scale: rendered.scale),
+                       physicalSize(try original.frame("metrics").size, scale: original.scale))
+        XCTAssertEqual(physicalSize(try rendered.frame("footer").size, scale: rendered.scale),
+                       physicalSize(try original.frame("footer").size, scale: original.scale))
         XCTAssertEqual(rendered.dynamicType, "accessibility5")
         XCTAssertFalse(rendered.truncated)
         XCTAssertGreaterThan(rendered.lines.count, 1, "the actual metric text must wrap")
@@ -233,8 +257,10 @@ final class TurnDetailsTests: XCTestCase {
         let top = try revealLine(first, app: scrollApp, name: "turn-details-xxxl-first-line")
         let last = try XCTUnwrap(rendered.lines.last)
         let bottom = try revealLine(last, app: scrollApp, name: "turn-details-xxxl-last-line")
-        XCTAssertEqual(try top.frame("metrics").size, textFrame.size)
-        XCTAssertEqual(try bottom.frame("metrics").size, textFrame.size)
+        XCTAssertEqual(physicalSize(try top.frame("metrics").size, scale: top.scale),
+                       physicalSize(textFrame.size, scale: rendered.scale))
+        XCTAssertEqual(physicalSize(try bottom.frame("metrics").size, scale: bottom.scale),
+                       physicalSize(textFrame.size, scale: rendered.scale))
         // Prove the successful endpoint checks did not simply read the same
         // clipped position twice when the content is taller than the viewport.
         XCTAssertNotEqual(try top.frame("metrics").minY, try bottom.frame("metrics").minY)
@@ -244,7 +270,8 @@ final class TurnDetailsTests: XCTestCase {
         // Comparing this AX frame isolates selection-related accessibility inflation.
         let noSelectionApp = launch(measure + largest + ["-turnDetailsNoSelection"])
         let noSelection = try reading(noSelectionApp, name: "layout-xxxl-no-selection-control", rendered: false)
-        XCTAssertEqual(try noSelection.frame("metrics").size, try original.frame("metrics").size)
+        XCTAssertEqual(physicalSize(try noSelection.frame("metrics").size, scale: noSelection.scale),
+                       physicalSize(try original.frame("metrics").size, scale: original.scale))
         try assertContentBounds(noSelection, app: noSelectionApp)
     }
 }
