@@ -21,10 +21,10 @@ describe('the pill after an update', () => {
     expect(buttons[1]).toContain('aria-label="Dismiss"');
   });
 
-  it('draws the dismiss as the Gentleface x, with no text of its own', () => {
+  it('draws the dismiss as the Gentleface x alone, hidden from the name', () => {
     const dismiss = html.match(/<button[\s\S]*?<\/button>/g)![1]!;
 
     expect(dismiss).toContain('M11.5 2.997C11.636 2.997');
-    expect(dismiss.replace(/<[^>]+>/g, '').trim()).toBe('');
+    expect(dismiss).toMatch(/^<button[^>]*><span[^>]*aria-hidden="true"[^>]*>.*<\/span><\/button>$/s);
   });
 });
