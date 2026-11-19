@@ -85,6 +85,7 @@ for (const mode of ['success', 'test-failure', 'runtime', 'skip', 'build-failure
 
 test('workflow isolates diagnostics from normal shards, evidence dispatches and batch statuses', () => {
   const diagnostic = workflow.split('  turn-details-diagnostic:\n')[1].split('  protocol-and-build:\n')[0];
+  assert.match(workflow, /group:.*inputs.turn_details_diagnostic && '-turn-details'/);
   assert.match(workflow, /diagnostic-contracts:[\s\S]*?runs-on: ubuntu-latest[\s\S]*?node --test scripts\/ios-turn-details-diagnostic.test.mjs/);
   assert.match(diagnostic, /permissions:\n      contents: read/);
   assert.match(diagnostic, /test "\$RUNNER_ENVIRONMENT" = self-hosted/);

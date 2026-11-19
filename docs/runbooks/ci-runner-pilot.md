@@ -143,7 +143,8 @@ final collection. Review scoped files before publishing: never upload a whole ra
 artifact/log directory containing fixture keys or unrelated diagnostics.
 
 This opt-in job has read-only repository permissions, skips the normal four-shard
-suite, and **never posts `Native iOS (batch)` statuses**. Existing scheduled/batch
+suite, uses a separate concurrency group so it cannot cancel a normal batch,
+and **never posts `Native iOS (batch)` statuses**. Existing scheduled/batch
 suite commands, budgets, and runner access rules are unchanged. Local behavioral
 controls verify input guards, cleanup and failure retention; original-runner
 execution and matched native acceptance remain **unverified until a separately
