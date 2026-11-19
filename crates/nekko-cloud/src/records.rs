@@ -21,8 +21,16 @@ pub fn account_local_id(epoch: u32) -> String {
     format!("epoch-{epoch}")
 }
 
-/// The largest plaintext a chat record may be (the server caps a sealed object at 1 MiB).
-pub const MAX_CHAT_BYTES: usize = 1_000_000;
+/// The largest plaintext a chat record may be. Sealed (version, salt, Padmé frame, tag) it stays
+/// under Nekko Cloud's 16 MiB object cap. Long agent sessions run to a few MB, mostly tool output.
+pub const MAX_CHAT_BYTES: usize = 16_000_000;
+/// Nekko Cloud's cap on one sealed object (`MAX_OBJECT_BYTES` in apps/nekko-agent-api).
+pub const MAX_SEALED_BYTES: usize = 16 << 20;
+/// The sealed size of a record with this much plaintext.
+pub fn sealed_len(plaintext: usize) -> usize {
+    // Version byte, salt, the frame (a 4-byte length, Padmé-padded, at least 256 bytes), GCM tag.
+    1 + 32 + nekko_sync::padme((plaintext + 4).max(256)) + 16
+}
 /// A string longer than this that is a `data:` URL is a picture or a file, not text.
 const INLINE_DATA_MIN: usize = 1024;
 pub const IMAGE_NOTE: &str = "[picture not synced]";
@@ -193,6 +201,21 @@ mod tests {
         );
         let huge = json!({ "id": "a", "messages": [{ "content": "x".repeat(MAX_CHAT_BYTES) }] });
         assert_eq!(chat_plaintext(&huge), Err(Skip::TooLarge));
+        let big = json!({ "id": "a", "messages": [{ "content": "x".repeat(4_500_000) }] });
+        assert!(chat_plaintext(&big).is_ok(), "a long agent session syncs");
+    }
+
+    #[test]
+    fn the_largest_chat_fits_the_server_cap_once_sealed() {
+        assert!(sealed_len(MAX_CHAT_BYTES) <= MAX_SEALED_BYTES);
+        use base64::Engine;
+        let kr = nekko_sync::Keyring::generate();
+        let oid = nekko_sync::object_id(&kr, CHAT, "a").unwrap();
+        for n in [10, 300_000, 4_500_000] {
+            let blob = nekko_sync::seal_record(&kr, "acct", 1, CHAT, &oid, 1, &vec![b'x'; n]).unwrap();
+            let sealed = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(blob).unwrap();
+            assert_eq!(sealed.len(), sealed_len(n));
+        }
     }
 
     #[test]
