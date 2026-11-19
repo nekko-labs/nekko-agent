@@ -1,6 +1,6 @@
 {
   "name": "@nekko-agent/desktop",
-  "version": "0.9.8",
+  "version": "0.10.1004",
   "private": true,
   "description": "Nekko Agent desktop app.",
   "author": {
