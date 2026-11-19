@@ -29,6 +29,15 @@ describe('dock reorder headers', () => {
     expect(html).not.toContain('aria-label="Budget monitor"');
     expect(html).toContain('aria-label="Minimize Hardware monitor"');
   });
+  it('boxes only the dock\'s own controls: header icons and the Automations view stay quiet', () => {
+    expect(render('right')).toContain('<div class="monitors-dock__app">');
+    const css = stylesheet('components/monitorsDock.css');
+    // The catch-all once outranked the header's quieter rule (#3025), so it leaves these out itself, inside :where() so it
+    // still loses to the dock's narrower rules (Budget's range buttons, text buttons).
+    const boxed = cssValue('.monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button))');
+    expect(cssRule(css, boxed)).toMatchObject({ border: '1px solid var(--line)' });
+    expect(cssRule(css, '.monitors-dock__monitor-header button')).toMatchObject({ border: '0', background: 'transparent' });
+  });
   it('shows no landing zone until a panel is lifted, and styles the zone and the lifted panel', () => {
     const html = render('right');
     expect(html).not.toContain('monitors-dock__landing');
@@ -37,7 +46,7 @@ describe('dock reorder headers', () => {
     // The zone opens on a 0fr to 1fr grid row (no height tween); its span is the panel's height plus one gap.
     expect(cssRule(css, '.monitors-dock__landing')['grid-template-rows']).toBe('0fr');
     expect(cssRule(css, '.monitors-dock__landing[data-open]')['grid-template-rows']).toBe('1fr');
-    expect(cssRule(css, '.monitors-dock__landing > span')).toMatchObject({ height: 'var(--landing-height)', 'margin-bottom': '12px' });
+    expect(cssRule(css, '.monitors-dock__landing > span')).toMatchObject({ height: 'var(--landing-height)', 'margin-bottom': '8px' });
     expect(Object.values(cssRule(css, '.monitors-dock__landing > span')).join(' ')).toMatch(/\bdashed\b/);
     expect(cssRule(css, '.monitors-dock__monitor[data-monitor-lifted]').display).toBe('none');
   });

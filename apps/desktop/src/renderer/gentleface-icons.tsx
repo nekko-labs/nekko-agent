@@ -39,7 +39,9 @@ export type GfIconName =
   | 'bar-chart-horizontal'
   | 'globe'
   | 'image'
-  | 'settings';
+  | 'settings'
+  | 'x'
+  | 'minus';
 
 type Variant = { line: string; solid: string };
 
@@ -140,17 +142,30 @@ const PATHS: Record<GfIconName, Variant> = {
     line: "<path d=\"M6.856 1.144C6.952 1.241 7 1.359 7 1.5L7 4.5C7 4.641 6.952 4.759 6.856 4.856C6.759 4.952 6.641 5 6.5 5L2.5 5C2.359 5 2.241 4.952 2.144 4.856C2.048 4.759 2 4.641 2 4.5L2 1.5C2 1.359 2.048 1.241 2.144 1.144C2.241 1.048 2.359 1 2.5 1L6.5 1C6.641 1 6.759 1.048 6.856 1.144ZM6 2L3 2L3 4L6 4L6 2ZM2.144 6.144C2.241 6.048 2.359 6 2.5 6L13.5 6C13.641 6 13.759 6.048 13.856 6.144C13.952 6.241 14 6.359 14 6.5L14 9.5C14 9.641 13.952 9.759 13.856 9.856C13.759 9.952 13.641 10 13.5 10L2.5 10C2.359 10 2.241 9.952 2.144 9.856C2.048 9.759 2 9.641 2 9.5L2 6.5C2 6.359 2.048 6.241 2.144 6.144ZM13 9L13 7L3 7L3 9L13 9ZM10 11.5L10 14.5C10 14.641 9.952 14.759 9.856 14.856C9.759 14.952 9.641 15 9.5 15L2.5 15C2.359 15 2.241 14.952 2.144 14.856C2.048 14.759 2 14.641 2 14.5L2 11.5C2 11.359 2.048 11.241 2.144 11.144C2.241 11.048 2.359 11 2.5 11L9.5 11C9.641 11 9.759 11.048 9.856 11.144C9.952 11.241 10 11.359 10 11.5ZM3 14L9 14L9 12L3 12L3 14Z\"/>",
     solid: "<path d=\"M2 1.5C2 1.359 2.048 1.241 2.144 1.144C2.241 1.048 2.359 1 2.5 1L6.5 1C6.641 1 6.759 1.048 6.856 1.144C6.952 1.241 7 1.359 7 1.5L7 4.5C7 4.641 6.952 4.759 6.856 4.856C6.759 4.952 6.641 5 6.5 5L2.5 5C2.359 5 2.241 4.952 2.144 4.856C2.048 4.759 2 4.641 2 4.5L2 1.5ZM13.5 6C13.641 6 13.759 6.048 13.856 6.144C13.952 6.241 14 6.359 14 6.5L14 9.5C14 9.641 13.952 9.759 13.856 9.856C13.759 9.952 13.641 10 13.5 10L2.5 10C2.359 10 2.241 9.952 2.144 9.856C2.048 9.759 2 9.641 2 9.5L2 6.5C2 6.359 2.048 6.241 2.144 6.144C2.241 6.048 2.359 6 2.5 6L13.5 6ZM2 11.5C2 11.359 2.048 11.241 2.144 11.144C2.241 11.048 2.359 11 2.5 11L9.5 11C9.641 11 9.759 11.048 9.856 11.144C9.952 11.241 10 11.359 10 11.5L10 14.5C10 14.641 9.952 14.759 9.856 14.856C9.759 14.952 9.641 15 9.5 15L2.5 15C2.359 15 2.241 14.952 2.144 14.856C2.048 14.759 2 14.641 2 14.5L2 11.5Z\"/>",
   },
+  "x": {
+    line: "<path d=\"M11.5 2.997C11.636 2.997 11.754 3.047 11.854 3.146C11.951 3.244 12 3.362 12 3.5C12 3.638 11.951 3.756 11.854 3.854L8.207 7.5L11.854 11.146C11.953 11.246 12.003 11.364 12.003 11.5C12.003 11.636 11.953 11.754 11.854 11.854C11.754 11.953 11.636 12.003 11.5 12.003C11.364 12.003 11.246 11.953 11.146 11.854L7.5 8.207L3.854 11.854C3.756 11.951 3.638 12 3.5 12C3.362 12 3.244 11.951 3.146 11.854C3.047 11.754 2.997 11.636 2.997 11.5C2.997 11.364 3.047 11.246 3.146 11.146L6.793 7.5L3.146 3.854C3.047 3.754 2.997 3.636 2.997 3.5C2.997 3.364 3.047 3.246 3.146 3.146C3.246 3.047 3.364 2.997 3.5 2.997C3.636 2.997 3.754 3.047 3.854 3.146L7.5 6.793L11.146 3.146C11.246 3.047 11.364 2.997 11.5 2.997Z\"/>",
+    solid: "<path d=\"M7.5 6.793L11.146 3.146C11.246 3.047 11.364 2.997 11.5 2.997C11.636 2.997 11.754 3.047 11.854 3.146C11.951 3.244 12 3.362 12 3.5C12 3.638 11.951 3.756 11.854 3.854L8.207 7.5L11.854 11.146C11.953 11.246 12.003 11.364 12.003 11.5C12.003 11.636 11.953 11.754 11.854 11.854C11.754 11.953 11.636 12.003 11.5 12.003C11.364 12.003 11.246 11.953 11.146 11.854L7.5 8.207L3.854 11.854C3.756 11.951 3.638 12 3.5 12C3.362 12 3.244 11.951 3.146 11.854C3.047 11.754 2.997 11.636 2.997 11.5C2.997 11.364 3.047 11.246 3.146 11.146L6.793 7.5L3.146 3.854C3.047 3.754 2.997 3.636 2.997 3.5C2.997 3.364 3.047 3.246 3.146 3.146C3.246 3.047 3.364 2.997 3.5 2.997C3.636 2.997 3.754 3.047 3.854 3.146L7.5 6.793Z\"/>",
+  },
+  "minus": {
+    line: "<path d=\"M12.856 7.144C12.952 7.241 13 7.359 13 7.5C13 7.641 12.952 7.759 12.856 7.856C12.759 7.952 12.641 8 12.5 8L2.5 8C2.359 8 2.241 7.952 2.144 7.856C2.048 7.759 2 7.641 2 7.5C2 7.359 2.048 7.241 2.144 7.144C2.241 7.048 2.359 7 2.5 7L12.5 7C12.641 7 12.759 7.048 12.856 7.144Z\"/>",
+    solid: "<path d=\"M12.5 7C12.641 7 12.759 7.048 12.856 7.144C12.952 7.241 13 7.359 13 7.5C13 7.641 12.952 7.759 12.856 7.856C12.759 7.952 12.641 8 12.5 8L2.5 8C2.359 8 2.241 7.952 2.144 7.856C2.048 7.759 2 7.641 2 7.5C2 7.359 2.048 7.241 2.144 7.144C2.241 7.048 2.359 7 2.5 7L12.5 7Z\"/>",
+  },
 };
 
-// Locally authored motion for compound glyphs not animated by Gentleface 0.3.0.
-// Keep the licensed upstream line artwork intact; animate it, not a substitute icon.
+// Locally authored motion for glyphs Gentleface ships without one (compound
+// marks, and the plain x and minus). Keep the licensed upstream line artwork
+// intact; animate it, not a substitute icon.
+const LOCAL_MOTION: Partial<Record<GfIconName, string>> = {
+  'shield-question': '<animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" values="0 7.5 8;-7 7.5 8;5 7.5 8;-2 7.5 8;0 7.5 8"/>',
+  'brain-circuit': '<animateTransform attributeName="transform" type="translate" dur="1s" repeatCount="indefinite" values="0 0;0 -.65;0 .2;0 -.2;0 0"/>',
+  // A quarter turn with a little overshoot: the x lands back on its own shape.
+  x: '<animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" keyTimes="0;.45;.7;1" values="0 7.5 7.5;100 7.5 7.5;86 7.5 7.5;90 7.5 7.5" calcMode="spline" keySplines=".3 0 .2 1;.4 0 .6 1;.4 0 .6 1"/>',
+  // Dips toward where a minimized monitor goes, then settles.
+  minus: '<animateTransform attributeName="transform" type="translate" dur="1s" repeatCount="indefinite" keyTimes="0;.4;.7;1" values="0 0;0 2;0 -.5;0 0" calcMode="spline" keySplines=".3 0 .2 1;.4 0 .6 1;.4 0 .6 1"/>',
+};
 const COMPOUND_MOTION: Partial<typeof GENTLEFACE_MOTION> = Object.fromEntries(
-  ['shield-question', 'brain-circuit'].map(name => [name, {
-    svg: '<svg viewBox="0 0 16 16"><g fill="currentColor" stroke="none">' +
-      (name === 'shield-question'
-        ? '<animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" values="0 7.5 8;-7 7.5 8;5 7.5 8;-2 7.5 8;0 7.5 8"/>'
-        : '<animateTransform attributeName="transform" type="translate" dur="1s" repeatCount="indefinite" values="0 0;0 -.65;0 .2;0 -.2;0 0"/>') +
-      PATHS[name as GfIconName].line + '</g></svg>',
+  Object.entries(LOCAL_MOTION).map(([name, motion]) => [name, {
+    svg: '<svg viewBox="0 0 16 16"><g fill="currentColor" stroke="none">' + motion + PATHS[name as GfIconName].line + '</g></svg>',
     frames: [0, 1] as [number, number],
   }]),
 );
@@ -257,6 +272,9 @@ export const GfGlobeIcon = (p: P) => <GfIcon {...p} name="globe" />;
 export const GfImageIcon = (p: P) => <GfIcon {...p} name="image" />;
 /** Settings: a cog. */
 export const SettingsIcon = (p: P) => <GfIcon {...p} name="settings" />;
+/** A monitor's close and minimize. */
+export const GfCloseIcon = (p: P) => <GfIcon {...p} name="x" />;
+export const GfMinusIcon = (p: P) => <GfIcon {...p} name="minus" />;
 /** The Agents panel's Agents view. */
 export const GfBotsIcon = (p: P) => <GfIcon {...p} name="bots" />;
 
