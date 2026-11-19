@@ -31,6 +31,7 @@ regress = { version = "0.12", features = ["utf16"] }
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 resvg = { version = "0.50", default-features = false }
 roxmltree = "0.21"
+vtracer = "0.6"
 # Code mode's sandbox: QuickJS, no loader, no std modules, so its code reaches nothing but the bindings it is given.
 rquickjs = { version = "0.14", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }

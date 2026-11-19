@@ -825,7 +825,7 @@
   "media": [
    {
     "name": "generate_image",
-    "description": "Make a picture with a local image model on this computer, from a written description. Nothing leaves the computer and it costs nothing, but it can take from seconds to minutes and only one picture or clip runs at a time on this computer. The picture shows in the chat. Describe the subject, style, composition and any text exactly. Use it for illustrations, icons, mock-ups and placeholder art the user asked for; do not use it for diagrams or charts you can write as code. For logos, icons, badges and flat illustrations that must scale or be edited as code, ask for format \"svg\": a cloud vector model (Recraft, on the user's OpenRouter, asked with its price) returns a real SVG, made safe, with its code in the result for you to place in a page or change. Do not use svg for photos or realistic scenes; for a simple icon or diagram you can also write the SVG yourself.",
+    "description": "Make a picture with a local image model on this computer, from a written description. Nothing leaves the computer and it costs nothing, but it can take from seconds to minutes and only one picture or clip runs at a time on this computer. The picture shows in the chat. Describe the subject, style, composition and any text exactly. Use it for illustrations, icons, mock-ups and placeholder art the user asked for; do not use it for diagrams or charts you can write as code. For logos, icons, badges and flat illustrations that must scale or be edited as code, ask for format \"svg\": a cloud vector model (Recraft, on the user's OpenRouter, asked with its price) returns a real SVG; without one, a local picture is traced to SVG for free (cruder). Either way it is made safe and its code is in the result for you to place in a page or change. Do not use svg for photos or realistic scenes; for a simple icon or diagram you can also write the SVG yourself.",
     "parameters": {
      "type": "object",
      "properties": {
@@ -847,7 +847,7 @@
         "png",
         "svg"
        ],
-       "description": "png (default) for pictures; svg for a vector picture (logos, icons, flat illustrations). With svg and no model, the user's cloud vector model is used."
+       "description": "png (default) for pictures; svg for a vector picture (logos, icons, flat illustrations). With svg and no model: the user's cloud vector model (Recraft) if there is one, else a local picture traced to SVG."
       },
       "count": {
        "type": "number",

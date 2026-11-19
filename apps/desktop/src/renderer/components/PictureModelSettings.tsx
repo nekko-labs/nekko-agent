@@ -42,6 +42,29 @@ export function PictureModelControl({ value, choices, onChange }: { value: strin
   </label>;
 }
 
+/**
+ * Settings' word on vector pictures (SVG, #2973): what an agent gets when it
+ * asks for one here, and the better option when there is one to add.
+ */
+export function vectorLine(hasOpenRouter: boolean, hasLocal: boolean): { lead: string; detail: string } {
+  if (hasOpenRouter) {
+    return { lead: 'Recraft through OpenRouter · recommended', detail: 'Clean, editable SVG for logos and icons, about $0.08 a picture on your OpenRouter account, asked first.' };
+  }
+  if (hasLocal) {
+    return { lead: 'Traced from this computer’s pictures · free', detail: 'Fine for flat art, cruder than a real vector. Add OpenRouter as a model provider for clean SVG from Recraft.' };
+  }
+  return { lead: 'Not available yet', detail: 'Get a picture model from a Photo chat to trace pictures locally, or add OpenRouter as a model provider for Recraft.' };
+}
+
+export function VectorGraphicsLine({ hasOpenRouter, hasLocal }: { hasOpenRouter: boolean; hasLocal: boolean }) {
+  const { lead, detail } = vectorLine(hasOpenRouter, hasLocal);
+  return <div className="mt-3 flex flex-wrap items-baseline gap-x-2 text-xs" data-vector-graphics>
+    <span className="flex-1 text-ink-soft">Vector graphics (SVG)</span>
+    <span className="text-ink">{lead}</span>
+    <span className="w-full text-2xs text-ink-faint">{detail}</span>
+  </div>;
+}
+
 export function PictureModelSettings({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => Promise<void> }) {
   const [choices, setChoices] = useState<PictureModelChoice[] | null>(null);
   const [error, setError] = useState('');
@@ -58,6 +81,9 @@ export function PictureModelSettings({ settings, update }: { settings: AppSettin
   const save = (id: string | undefined) => { setError(''); void update({ agentPictureModel: id }).catch((e) => setError(String(e))); };
   return <div className="min-w-0">
     <PictureModelControl value={settings.agentPictureModel} choices={choices} onChange={save} />
+    {choices !== null && <VectorGraphicsLine
+      hasOpenRouter={settings.providers.some((p) => p.kind === 'openrouter' && p.enabled !== false)}
+      hasLocal={choices.length > 0} />}
     {error && <p role="alert" className="mt-2 text-xs text-danger-text">{error}</p>}
   </div>;
 }

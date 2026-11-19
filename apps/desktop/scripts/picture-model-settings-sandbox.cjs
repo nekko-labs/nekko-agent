@@ -40,7 +40,8 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 50 && !(await run(`!!${control}`)); i++) await sleep(100);
     const scroll = `${control}.closest('section').scrollIntoView({ block: 'center' })`;
     await run(scroll); await sleep(200);
-    await shot('pictures-desktop');
+    await shot(process.env.NEKKO_TEST_SOURCE ? 'pictures-before' : 'pictures-desktop');
+    report.checks.push({ name: 'vector graphics line', text: await run("document.querySelector('[data-vector-graphics]')?.innerText ?? null") });
     await check('Automatic first, then the ready picture models only',
       `JSON.stringify([...${control}.options].map(o => o.textContent)) === JSON.stringify(['Automatic', 'Z-Image Turbo', 'FLUX.2 klein 4B · edits too'])`);
     await run(`(() => { const e = ${control}; const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(e, 'flux2-klein-4b'); e.dispatchEvent(new Event('change', { bubbles: true })); })()`);

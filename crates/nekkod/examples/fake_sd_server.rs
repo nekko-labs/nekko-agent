@@ -4,7 +4,8 @@
 //! the model server uses for image models) and `/v1/images/generations` with
 //! one tiny "image" that is the prompt field and size it was sent. A
 //! prompt containing `slow` is answered after 30 seconds, so a test can stop
-//! the turn while it waits.
+//! the turn while it waits. A prompt in the flat style of a picture to be
+//! traced to SVG gets a real 16x16 PNG.
 //!
 //! Clips (`POST /sdcpp/v1/vid_gen`) are jobs: the first status read says
 //! `generating` with a step-1-of-2 preview, the next `completed`, with a
@@ -99,7 +100,13 @@ async fn main() {
                 // The prompt as sent: the text, then `<sd_cpp_extra_args>` with the
                 // steps, guidance and seed, and the size as `size`.
                 let said = format!("{prompt}|{}", body.0["size"].as_str().unwrap_or(""));
-                let b64 = base64(said.as_bytes());
+                // A picture asked for in the flat style of one to be traced to SVG:
+                // a real 16x16 PNG (a blue square on white), so the trace has pixels.
+                let b64 = if prompt.contains("Flat vector illustration") {
+                    FLAT_PNG.to_string()
+                } else {
+                    base64(said.as_bytes())
+                };
                 Json(json!({ "created": 1, "data": [{ "b64_json": b64 }] }))
             }),
         );
@@ -107,6 +114,8 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port.parse::<u16>().unwrap())).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
+
+const FLAT_PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAHklEQVR4nGP4TyJgGOQaBBIeYEWjGuirgRgwCDUAADgRkd8hNJkaAAAAAElFTkSuQmCC";
 
 fn base64(bytes: &[u8]) -> String {
     const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

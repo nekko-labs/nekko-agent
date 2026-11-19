@@ -383,7 +383,7 @@ export function SettingsView() {
                   );
                 })}
               </SettingsSection>
-              <SettingsSection id="agent-pictures" title="Pictures" help="Agents in chats on this computer can make and edit pictures with its picture models. Nothing leaves the computer."><div className="mt-(--q-inline)"><ErrorBoundary label="Pictures"><PictureModelSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
+              <SettingsSection id="agent-pictures" title="Pictures" help="Agents in chats on this computer can make and edit pictures with its picture models, or with paid cloud models on your OpenRouter account, which ask first."><div className="mt-(--q-inline)"><ErrorBoundary label="Pictures"><PictureModelSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
               <SettingsSection id="delegation-routes" title="Delegation routes"><div className="mt-(--q-inline)"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
               <ErrorBoundary label="Hooks"><HooksSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>

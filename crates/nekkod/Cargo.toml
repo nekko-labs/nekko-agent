@@ -66,6 +66,8 @@ reqwest = { workspace = true, features = ["native-tls"] }
 # SVG from cloud vector models: parsed to be made safe (svg_safe.rs), drawn as a PNG preview.
 resvg.workspace = true
 roxmltree.workspace = true
+# Local vector pictures: a local picture traced to SVG.
+vtracer.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"

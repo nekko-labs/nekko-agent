@@ -603,6 +603,15 @@ async fn make(server: &Server, models: &[Value], r: Request<'_>) -> Result<Made,
             .or_else(|| defaults.get(k).and_then(Value::as_f64))
             .unwrap_or(fallback)
     };
+    // A picture that will be traced: flat shapes and colours trace cleanly.
+    let styled;
+    let prompt = if vector {
+        styled = format!("{prompt}. {TRACE_STYLE}");
+        styled.as_str()
+    } else {
+        prompt
+    };
+    let count = if vector { 1 } else { count };
     let mut request = json!({
         "modelId": model["id"],
         "prompt": prompt,
@@ -636,6 +645,9 @@ async fn make(server: &Server, models: &[Value], r: Request<'_>) -> Result<Made,
         return Err("The model finished without a picture.".into());
     }
     let label = model.get("name").and_then(Value::as_str).unwrap_or_default();
+    if vector {
+        return traced_made(&images[0], label);
+    }
     let what = if edit {
         "Changed the picture"
     } else if images.len() > 1 {
@@ -709,6 +721,26 @@ fn vector_made(b64: &str, name: &str, cost: f64) -> Result<Made, String> {
         .map_err(|_| "The model returned an SVG that could not be read.")?;
     let raw = String::from_utf8(raw).map_err(|_| "The model returned an SVG that is not text.")?;
     let svg = crate::svg_safe::sanitize(&raw).map_err(|e| format!("The vector picture was refused: {e}"))?;
+    vector_result(svg, format!("Made a vector picture (SVG) with {name} through OpenRouter (cost ${cost:.3})."))
+}
+
+/// What a picture to be traced is asked to look like.
+const TRACE_STYLE: &str = "Flat vector illustration: a few solid flat colours, simple bold shapes, clean edges, plain white background, no gradients, no shadows, no texture, no small detail.";
+
+/// A local picture traced to SVG (svg_safe::trace_png): free and on this
+/// computer, but a trace, not a native vector, and the result says so.
+fn traced_made(png_b64: &str, label: &str) -> Result<Made, String> {
+    let png =
+        base64::engine::general_purpose::STANDARD.decode(png_b64).map_err(|_| "The picture could not be read.")?;
+    let svg = crate::svg_safe::trace_png(&png).map_err(|e| format!("The picture could not be traced: {e}"))?;
+    let lead = format!(
+        "Traced a vector picture (SVG) from a picture made with {label} on this computer (free). A trace, not a native vector: fine for flat art; for clean logos and icons, Recraft through the user's OpenRouter is better."
+    );
+    vector_result(svg, lead)
+}
+
+/// A safe SVG as the tool returns it: the code (up to [`SVG_SHOWN`]), a PNG preview, the file to save.
+fn vector_result(svg: String, lead: String) -> Result<Made, String> {
     let png = crate::svg_safe::preview_png(&svg, 1024)?;
     let shown = if svg.len() > SVG_SHOWN {
         let cut = (0..=SVG_SHOWN).rev().find(|i| svg.is_char_boundary(*i)).unwrap_or(0);
@@ -717,7 +749,7 @@ fn vector_made(b64: &str, name: &str, cost: f64) -> Result<Made, String> {
         svg.clone()
     };
     let output = format!(
-        "Made a vector picture (SVG) with {name} through OpenRouter (cost ${cost:.3}). Made safe: no scripts, event handlers or outside links. Use it inline in HTML, as an <img> file, or change its fills and strokes below. SVG ({} bytes):\n```svg\n{shown}\n```",
+        "{lead} Made safe: no scripts, event handlers or outside links. Use it inline in HTML, as an <img> file, or change its fills and strokes below. SVG ({} bytes):\n```svg\n{shown}\n```",
         svg.len()
     );
     Ok(Made { images: vec![base64::engine::general_purpose::STANDARD.encode(png)], output, svg: Some(svg) })
@@ -743,7 +775,7 @@ fn list(models: &[Value]) -> String {
                     };
                     format!("{best}cloud through OpenRouter, {about}${p:.3} a picture, asks before paying")
                 }
-                _ => "local, free".to_string(),
+                _ => "local, free (format svg: traced from a local picture)".to_string(),
             };
             format!(
                 "- {} ({}): {}, {place}",
@@ -800,7 +832,8 @@ fn choose(
         let Some(m) = models.iter().find(|m| m["id"] == asked) else {
             return Err(format!("{asked} is not a ready picture model here. Call media_models for the list."));
         };
-        if !can(m, need) {
+        let traceable = need == "vector" && m["source"] != "cloud" && can(m, "create");
+        if !can(m, need) && !traceable {
             return Err(format!("{asked} cannot do that; choose one that {verb} (media_models)."));
         }
         return Ok(m.clone());
@@ -809,10 +842,16 @@ fn choose(
     // there is, so it is the default when the user's OpenRouter offers it,
     // asked with its price like any paid picture (decided by Davide 2026-11-19).
     if need == "vector" {
-        return models.iter().find(|m| can(m, "vector")).cloned().ok_or_else(|| {
-            "No vector model is available: add OpenRouter as a provider to use Recraft, or write the SVG as code."
-                .to_string()
-        });
+        // Without one, a local picture is traced (free, cruder): the next best.
+        return models
+            .iter()
+            .find(|m| can(m, "vector"))
+            .or_else(|| models.iter().find(|m| m["source"] != "cloud" && can(m, "create")))
+            .cloned()
+            .ok_or_else(|| {
+                "No vector model is available: add OpenRouter as a provider to use Recraft, get a picture model to trace one locally, or write the SVG as code."
+                    .to_string()
+            });
     }
     let own = session.get("imageParams").and_then(|p| p.get("modelId")).and_then(Value::as_str);
     let ready = |id: Option<&str>| id.and_then(|id| models.iter().find(|m| m["id"] == id && can(m, need)));
@@ -990,11 +1029,13 @@ mod tests {
         all.push(json!({ "id": "openrouter:p:recraft/recraft-v4.1-vector", "name": "Recraft V4.1 Vector", "capabilities": ["create", "vector"], "source": "cloud", "priceUsd": 0.08, "priceExact": true }));
         let svg = json!({ "format": "svg" });
         assert_eq!(choose(&all, &svg, &json!({}), None, "vector").unwrap()["name"], "Recraft V4.1 Vector");
-        assert!(choose(&models(), &svg, &json!({}), None, "vector").unwrap_err().contains("add OpenRouter"));
-        assert!(
-            choose(&all, &json!({ "model": "z", "format": "svg" }), &json!({}), None, "vector")
-                .unwrap_err()
-                .contains("cannot do that")
+        // No cloud vector model: a local picture model, to trace.
+        assert_eq!(choose(&models(), &svg, &json!({}), None, "vector").unwrap()["id"], "z");
+        assert!(choose(&[], &svg, &json!({}), None, "vector").unwrap_err().contains("add OpenRouter"));
+        // A local model named for a vector is traced.
+        assert_eq!(
+            choose(&all, &json!({ "model": "z", "format": "svg" }), &json!({}), None, "vector").unwrap()["id"],
+            "z"
         );
         assert!(list(&all).contains("best for vectors (format svg"));
     }

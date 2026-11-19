@@ -131,6 +131,28 @@ pub fn preview_png(svg: &str, max: u32) -> Result<Vec<u8>, String> {
     pixmap.encode_png().map_err(|e| e.to_string())
 }
 
+/// A local picture (PNG) traced to SVG with `vtracer`'s poster preset (a few
+/// flat colours, smooth curves), then made safe like any other SVG. A trace,
+/// not a native vector: clean on flat art, heavy on detailed pictures.
+pub fn trace_png(png: &[u8]) -> Result<String, String> {
+    let pixmap =
+        resvg::tiny_skia::Pixmap::decode_png(png).map_err(|e| format!("the picture could not be read: {e}"))?;
+    let pixels: Vec<u8> = pixmap
+        .pixels()
+        .iter()
+        .flat_map(|p| {
+            let c = p.demultiply();
+            [c.red(), c.green(), c.blue(), c.alpha()]
+        })
+        .collect();
+    let image = vtracer::ColorImage { pixels, width: pixmap.width() as usize, height: pixmap.height() as usize };
+    let mut config = vtracer::Config::from_preset(vtracer::Preset::Poster);
+    // Fewer, larger shapes than the preset: specks make a heavy file.
+    config.filter_speckle = 8;
+    let traced = vtracer::convert(image, config)?;
+    sanitize(&traced.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,6 +189,17 @@ mod tests {
         assert!(sanitize(entity).is_err());
         assert!(sanitize("<html/>").is_err());
         assert!(sanitize("not xml").is_err());
+    }
+
+    #[test]
+    fn a_flat_picture_traces_to_a_safe_svg() {
+        // A blue square on white, drawn as a PNG, traced back to paths.
+        let square = sanitize(r##"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#fff"/><rect x="16" y="16" width="32" height="32" fill="#1060e0"/></svg>"##).unwrap();
+        let png = preview_png(&square, 64).unwrap();
+        let svg = trace_png(&png).unwrap();
+        assert!(svg.starts_with("<svg") && svg.contains("<path"), "{svg}");
+        assert!(svg.to_lowercase().contains("#1060e0") || svg.to_lowercase().contains("rgb(16,96,224)"), "{svg}");
+        assert!(trace_png(b"not a png").is_err());
     }
 
     #[test]

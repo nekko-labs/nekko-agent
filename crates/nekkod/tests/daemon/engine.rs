@@ -1056,6 +1056,71 @@ async fn a_vector_picture_comes_from_recraft_made_safe() {
     assert!(file.contains("<circle") && !file.contains("steal"), "{file}");
 }
 
+/// A vector picture with no cloud vector model: the local picture model makes
+/// a flat picture and it is traced to a safe SVG, said to be a trace.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_vector_picture_without_recraft_is_traced_from_a_local_picture() {
+    let data = std::env::temp_dir().join(format!("nekkod-trace-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let model = data.join("models/image/acme_sd/tiny-sd.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("sd1", "Tiny SD")).unwrap();
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": free_port(), "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let workspace = data.join("project");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat = json!({ "id": "s_trace", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_trace.json"), chat.to_string()).unwrap();
+    let d = start_with_env(&data, json!({}), &[]);
+    let events = record_events(d.port);
+    boot_settled(&data);
+    let rig = TurnRig { data: data.clone(), workspace: workspace.clone(), d, events };
+    let script = vec![
+        call_tool(
+            "c_icon",
+            "generate_image",
+            json!({ "prompt": "a blue square icon", "format": "svg", "size": "256x256", "path": "icons/square.svg" }),
+        ),
+        say_text("traced"),
+    ];
+    let model = scripted_model(script).await;
+    let spec = turn_spec(&rig, &model, "turn_trace", "s_trace", json!({ "text": "An icon" }));
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_trace", "s_trace").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_trace");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_icon")
+        .unwrap()["toolResult"]
+        .clone();
+    let output = result["output"].as_str().unwrap();
+    assert!(
+        output.starts_with("Traced a vector picture (SVG) from a picture made with Tiny SD on this computer (free)."),
+        "{output}"
+    );
+    assert!(output.contains("Recraft through the user's OpenRouter is better"), "{output}");
+    assert!(output.contains("```svg\n<svg") && output.contains("<path"), "{output}");
+    assert!(result["images"][0].as_str().unwrap().starts_with("data:image/png;base64,"));
+    let file = std::fs::read_to_string(workspace.join("icons/square.svg")).unwrap();
+    assert!(file.starts_with("<svg") && file.contains("<path"), "{file}");
+    post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+}
+
 pub(crate) fn fake_sd() -> std::path::PathBuf {
     let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
