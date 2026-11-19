@@ -263,7 +263,12 @@ final class TurnDetailsTests: XCTestCase {
                        physicalSize(textFrame.size, scale: rendered.scale))
         // Prove the successful endpoint checks did not simply read the same
         // clipped position twice when the content is taller than the viewport.
-        XCTAssertNotEqual(try top.frame("metrics").minY, try bottom.frame("metrics").minY)
+        // When it fits (CI's 306pt transcript holds the 192pt text, #2241),
+        // revealLine already proved both lines fully visible without a drag.
+        let viewport = try top.frame("transcript").intersection(scrollApp.frame)
+        if try top.frame("metrics").height > viewport.height {
+            XCTAssertNotEqual(try top.frame("metrics").minY, try bottom.frame("metrics").minY)
+        }
         scrollApp.terminate()
 
         // Diagnostic control only: selection stays enabled in the shipped view.
