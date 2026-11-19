@@ -440,6 +440,8 @@ export interface Session {
   cloudOnly?: boolean;
   /** Incognito: don't persist the transcript or touch memory. */
   incognito?: boolean;
+  /** Keep this chat out of Nekko Cloud sync (it stays on this computer). Unset or false: it syncs. */
+  syncOff?: boolean;
   /** Privacy Shield: what this chat hides from a cloud model (see privacy.ts). */
   privacy?: import('./privacy.js').SessionPrivacy;
   /** Pinned to the top of the chat list. */

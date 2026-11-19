@@ -45,7 +45,6 @@ export interface CloudStatus {
   sync: {
     phase: SyncPhase;
     enabled: boolean;
-    includeLocalOnly: boolean;
     recoveryConfirmed: boolean;
     keyEpoch: number | null;
     lastSyncAt: number | null;

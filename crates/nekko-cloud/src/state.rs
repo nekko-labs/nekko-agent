@@ -79,8 +79,6 @@ pub struct State {
     pub account: Option<Account>,
     /// Sync is on for this device.
     pub enabled: bool,
-    /// Include "Local only" (offline) chats.
-    pub include_local_only: bool,
     /// The user said they saved the recovery key.
     pub recovery_confirmed: bool,
     pub device_id: Option<String>,
@@ -129,8 +127,8 @@ impl State {
 
     /// Forget everything about sync (another account signed in, or Delete everything synced).
     pub fn reset_sync(&mut self) {
-        let keep = (self.account.clone(), self.device_label.clone(), self.include_local_only);
-        *self = State { account: keep.0, device_label: keep.1, include_local_only: keep.2, ..State::default() };
+        let keep = (self.account.clone(), self.device_label.clone());
+        *self = State { account: keep.0, device_label: keep.1, ..State::default() };
     }
 }
 
