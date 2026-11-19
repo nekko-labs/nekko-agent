@@ -80,7 +80,7 @@ final class PhoneDirectCloudTests: XCTestCase {
         let checklist = app.descendants(matching: .any)["connectChecklist"]
         XCTAssertTrue(checklist.waitForExistence(timeout: 5), "the checklist over the first message")
         for row in ["computer", "folder", "git", "tasks"] {
-            XCTAssertTrue(app.buttons["connectChecklist.(row)"].exists, row)
+            XCTAssertTrue(app.buttons["connectChecklist.\(row)"].exists, row)
         }
         attach(app, "connect-checklist-first-message")
         app.buttons["connectChecklist.close"].tap()
