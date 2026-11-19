@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Chat menu: copy chat ID with one click"
 area: agents
 ---
