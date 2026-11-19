@@ -347,6 +347,9 @@ struct Shared {
     /// The data folder the chat's audit trail is written in; `None` until the
     /// chat is loaded, and for an incognito chat.
     audit_to: Mutex<Option<PathBuf>>,
+    /// Where the chat is in the agent loop (`nekko_store::loop_phase`), as the
+    /// forwarder last saw it, for `chat:activity`.
+    phase: Arc<Mutex<Option<&'static str>>>,
 }
 
 /// What an unattended turn tracks: its tool access (`toolAccess`,
@@ -626,6 +629,18 @@ impl Turns {
         ids.dedup();
         ids.extend(self.harness.running_subagents());
         ids
+    }
+
+    /// Each running turn's chat and where it is in the agent loop, for
+    /// `chat:activity`. A chat with two turns (a wake-up) is listed once.
+    pub fn running_phases(&self) -> Vec<(String, Option<&'static str>)> {
+        let mut out: Vec<(String, Option<&'static str>)> = Vec::new();
+        for s in lock(&self.running).values() {
+            if !out.iter().any(|(id, _)| id == &s.session_id) {
+                out.push((s.session_id.clone(), *lock(&s.phase)));
+            }
+        }
+        out
     }
 
     /// `turn:abort`: stop a turn by id; true when there was one.
@@ -1024,6 +1039,7 @@ impl Turns {
             active: std::sync::atomic::AtomicBool::new(!claude_code),
             turn_id: turn_id.clone(),
             audit_to: Mutex::new(None),
+            phase: Arc::default(),
         });
         {
             let mut running = lock(&self.running);
@@ -1461,6 +1477,7 @@ impl Turns {
                 started_at,
                 last_error: shared.last_error.clone(),
                 latest: shared.latest.clone(),
+                phase: shared.phase.clone(),
             },
         ));
 
@@ -2572,6 +2589,8 @@ struct Forward {
     /// first checkpoint that finds it; one that finds it taken saves the chat
     /// as it stands, which already has that newer transcript.
     latest: Arc<Mutex<Option<Vec<Value>>>>,
+    /// [`Shared::phase`]: kept current as the chat moves along the loop.
+    phase: Arc<Mutex<Option<&'static str>>>,
 }
 
 /// The turn's events, in order. A checkpoint is saved before the UI is told
@@ -2588,6 +2607,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     // When the chat's deferred checkpoint save is due to be written.
     let mut save_due: Option<tokio::time::Instant> = None;
     let mut phase = lock(&f.session).get("messages").and_then(Value::as_array).and_then(|m| nekko_store::loop_phase(m));
+    *lock(&f.phase) = phase;
     loop {
         let due = deltas.due();
         let out = tokio::select! {
@@ -2669,6 +2689,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         let moved = next.is_some() && next != phase;
         if moved {
             phase = next;
+            *lock(&f.phase) = phase;
         }
         if is_checkpoint(&event) {
             // Saves land in order.
