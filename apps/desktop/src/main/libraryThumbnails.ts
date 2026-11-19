@@ -4,6 +4,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync,
 import { join } from 'node:path';
 import { LIBRARY_THUMBNAIL_CHANNELS } from '@nekko-agent/shared';
 
+/** `http://127.0.0.1:5123` for any URL on that origin; empty for one that does not parse, which matches nothing. */
+export function originOf(url: string): string {
+  try { return new URL(url).origin; } catch { return ''; }
+}
+
 /** Largest total size of all cached thumbnails on disk (50 MiB). */
 const MAX_DISK_BYTES = 50 * 1024 * 1024;
 /** Maximum number of thumbnail files kept. */
@@ -55,9 +60,11 @@ export function registerLibraryThumbnails(
   // All windows in this partition share these restrictions.
   const captureSession = session.fromPartition('nekko-thumb-capture');
   captureSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  // The preview origins being captured right now: a page reaches its own preview server and nothing else,
+  // not other loopback services. The server's own policy already keeps it off the network; this is the second wall.
+  const capturing = new Map<string, number>();
   captureSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
-    // Allow only requests back to the same 127.0.0.1 origin (the preview server).
-    callback({ cancel: !details.url.startsWith('http://127.0.0.1:') });
+    callback({ cancel: !capturing.has(originOf(details.url)) });
   });
 
   /** Evict oldest files when the store is over its limits. */
@@ -116,6 +123,15 @@ export function registerLibraryThumbnails(
   const captureQueue: Array<() => void> = [];
 
   async function doCapture(url: string): Promise<string | null> {
+    const origin = originOf(url);
+    capturing.set(origin, (capturing.get(origin) ?? 0) + 1);
+    try { return await captureWindow(url); } finally {
+      const left = (capturing.get(origin) ?? 1) - 1;
+      if (left > 0) capturing.set(origin, left); else capturing.delete(origin);
+    }
+  }
+
+  async function captureWindow(url: string): Promise<string | null> {
     // One shared partition so Electron doesn't leak one per capture.
     const win = new BrowserWindow({
       show: false,
