@@ -134,6 +134,16 @@ Production files/project configuration are never copied from the harness. The
 entire class must run: eight passing tests, zero failures/skips, native screenshots
 and a readable summary are required; no scroll/clipping assertions are relaxed.
 
+Before package tests or project generation, the isolated job runs `brew install
+xcodegen` (the same bootstrap as the ordinary suite) and checks `xcodegen --version`
+on the capture process's PATH. Both commands write to the retained build log and
+fail closed before simulator creation. Do not install tools on the owner's host.
+The first authorized owner run [44448793600](https://github.com/nekko-labs/nekko-agent/actions/runs/44448793600)
+reached the exact host/runtime checks but stopped with `spawnSync xcodegen ENOENT`;
+zero native tests ran. Issue #3016 adds this bootstrap and negative controls for
+installation and executable-check failures. Corrected owner execution, all eight
+results and actual simulator cleanup still require a separately authorized run.
+
 The `native-ios-turn-details-diagnostic` artifact retains pins, host OS/locale,
 selected SDK/runtime, simulator locale/accessibility domains, build log, raw
 xcresult, summary and unrounded layout/screenshot attachments, including on test

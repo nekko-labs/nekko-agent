@@ -53,7 +53,7 @@ export function capture({ app, harness }, run = (cmd, args, options = {}) =>
     env = { ...process.env, DEVELOPER_DIR: developer };
     record('developer.txt', developer);
     const command = (cmd, args) => {
-      if (['swift', 'xcodegen'].includes(cmd) || cmd === 'xcodebuild' && !args.includes('-version')) {
+      if (['brew', 'swift', 'xcodegen'].includes(cmd) || cmd === 'xcodebuild' && !args.includes('-version')) {
         const log = openSync(resolve(evidence, 'build.log'), 'a');
         try { return run(cmd, args, { env, cwd: resolve('source/apps/ios'), stdio: ['ignore', log, log] }); }
         finally { closeSync(log); }
@@ -68,6 +68,9 @@ export function capture({ app, harness }, run = (cmd, args, options = {}) =>
     }
     const test = run('git', ['-C', 'harness', 'show', `${harness}:${TEST_FILE}`]);
     writeFileSync(resolve('source', TEST_FILE), test);
+    // Match the ordinary suite's bootstrap inside the retained-failure boundary (#3016).
+    command('brew', ['install', 'xcodegen']);
+    command('xcodegen', ['--version']);
     command('swift', ['test', '--package-path', 'Protocol']);
     command('xcodegen', ['generate']);
     device = command('xcrun', ['simctl', 'create', 'Nekko-Turn-Details-Diagnostic', DEVICE_TYPE, RUNTIME]).trim();
