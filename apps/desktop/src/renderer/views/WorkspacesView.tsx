@@ -258,6 +258,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
   const [archivedMenu, setArchivedMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [copiedChatId, setCopiedChatId] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The chat whose card title is a text field, from the pencil or the menu's Rename.
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const renameChat = async (id: string, typed: string | null) => {
@@ -281,6 +282,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     return true;
   };
   const contextRow = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); const ids = selected.includes(id) ? selected.filter(x => sessions.some(s => s.id === x)) : [id]; setSelected(ids); setMenu({x:e.clientX,y:e.clientY,ids}); };
+  const doCopyId = (id: string) => {
+    void navigator.clipboard?.writeText(id).then(() => {
+      if (copiedTimerRef.current != null) clearTimeout(copiedTimerRef.current);
+      setCopiedChatId(true);
+      copiedTimerRef.current = setTimeout(() => {
+        setCopiedChatId(false);
+        copiedTimerRef.current = null;
+      }, 1500);
+    });
+  };
   const runAction = async (action: 'archive' | 'delete' | 'stop' | 'continue', ids: string[]) => {
     setMenu(null);
     if (action === 'delete' && !await confirmDeletion('Permanently delete ' + ids.length + ' chat(s)? This cannot be undone.')) return;
@@ -1097,20 +1108,33 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       style={{ gap: 'var(--pane-gap)', minHeight: 0 }}
     >
       {viewMenu && <AgentPanelViewMenu x={viewMenu.x} y={viewMenu.y} view={view} onChange={setView} onClose={closeViewMenu} />}
-      {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => { setMenu(null); setCopiedChatId(false); }}>
+      {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => { if (copiedTimerRef.current != null) clearTimeout(copiedTimerRef.current); copiedTimerRef.current = null; setMenu(null); setCopiedChatId(false); }}>
         {menu.ids.length === 1
           ? <div
               role="menuitem"
               tabIndex={0}
               data-quiet-row
               className="flex cursor-pointer items-center justify-between break-all px-3 py-2 font-mono text-2xs text-ink-faint"
-              onClick={() => { void navigator.clipboard?.writeText(menu.ids[0]).then(() => { setCopiedChatId(true); setTimeout(() => setCopiedChatId(false), 1500); }); }}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void navigator.clipboard?.writeText(menu.ids[0]).then(() => { setCopiedChatId(true); setTimeout(() => setCopiedChatId(false), 1500); }); } }}
+              onClick={() => doCopyId(menu.ids[0])}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doCopyId(menu.ids[0]); } }}
             >
-              <span><span className="select-none">Chat ID: </span>{menu.ids[0]}</span>
-              {copiedChatId
-                ? <span className="ml-2 shrink-0 text-ink" aria-live="polite">Copied</span>
-                : <span className="quiet-row-action ml-2 shrink-0"><CopyIcon className="h-3 w-3" /></span>}
+              <span><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></span>
+              <span className="relative ml-2 shrink-0 inline-flex items-center">
+                <span
+                  className="quiet-row-action"
+                  aria-hidden={copiedChatId || undefined}
+                  style={copiedChatId ? { opacity: 0, transition: 'opacity var(--dur-med) var(--ease-out)', pointerEvents: 'none' } : undefined}
+                >
+                  <CopyIcon className="h-3 w-3" />
+                </span>
+                <span
+                  className="pointer-events-none absolute right-0 whitespace-nowrap text-ink"
+                  style={{ opacity: copiedChatId ? 1 : 0, transition: 'opacity var(--dur-med) var(--ease-out)' }}
+                  aria-live="polite"
+                >
+                  Copied
+                </span>
+              </span>
             </div>
           : <div className="select-text break-all px-3 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length} sessions selected</div>}
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
