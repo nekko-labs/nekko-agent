@@ -1988,6 +1988,12 @@ impl Turns {
         let mut seen: Option<String> = None;
         let mut model: Option<String> = None;
         let mut compacted = false;
+        // Claude Code's shell commands in the chat's command log, the Logs
+        // drawer (#3067). An incognito chat leaves nothing on disk.
+        let mut shell_log = crate::claude_command_log::ShellLog::default();
+        let log_folder =
+            crate::spawn::workspace_ids(&lock(session)).first().and_then(Value::as_str).map(str::to_string);
+        let chat_secrets = self.secrets.for_chat(&session_id);
         let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {
             Mapped::Message(mut message) => {
                 if let Some(compaction) = message.get_mut("compaction") {
@@ -1996,7 +2002,13 @@ impl Turns {
                 }
                 history.push(message)
             }
-            Mapped::Event(event) => send(event, &history),
+            Mapped::Event(event) => {
+                if !incognito && let Some(text) = shell_log.text(&event) {
+                    let text = nekko_tools::sanitize_for_terminal(&chat_secrets.redact(&text));
+                    self.agent_logs.append(&session_id, log_folder.as_deref(), &text);
+                }
+                send(event, &history)
+            }
             Mapped::Init(init) => {
                 seen = Some(init.session_id);
                 model = init.model.or(model.take());
