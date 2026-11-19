@@ -917,6 +917,40 @@ async fn a_paid_cloud_clip_is_chosen_with_prices_then_confirmed() {
     assert!(usage.lines().any(|l| l.contains("\"kind\":\"video\"") && l.contains("\"costUsd\":2.35")), "{usage}");
 }
 
+/// The desktop's clip picker confirms the total with its answers: the clip
+/// starts with no second approval. The card carries every combination's price.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cloud_clip_confirmed_in_the_picker_needs_no_second_approval() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter_video(seen.clone()).await;
+    let chat = json!({ "id": "s_pick", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("clip-picker", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model = scripted_model(vec![
+        call_tool("c_pick", "generate_video", json!({ "prompt": "waves", "model": "openrouter:p_or:google/veo-3.1" })),
+        say_text("started"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_pick", "s_pick", json!({ "text": "A clip" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(&rig, json!({ "providers": [scripted.clone(), openrouter.clone()] })).await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let card = wait_pending(rig.d.port, "s_pick", "question", "c_pick-clip").await;
+    assert_eq!(card["clip"]["model"], "Veo 3.1");
+    assert_eq!(card["clip"]["prices"]["8 seconds|With audio|1080p"], json!(3.2));
+    let answers = json!([{ "questionId": "q1", "labels": ["8 seconds"] }, { "questionId": "q2", "labels": ["With audio"] },
+        { "questionId": "q3", "labels": ["1080p"] }, { "questionId": "total", "labels": ["3.20"] }]);
+    let (status, body) = post(rig.d.port, "chat:answer", json!(["s_pick", "c_pick-clip", answers]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_pick", "s_pick").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let sent = seen.lock().unwrap().clone();
+    assert_eq!((sent[0]["duration"].clone(), sent[0]["resolution"].clone()), (json!(8), json!("1080p")));
+}
+
 pub(crate) fn fake_sd() -> std::path::PathBuf {
     let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
