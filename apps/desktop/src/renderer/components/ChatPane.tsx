@@ -2705,10 +2705,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const welcomeState = chatWelcomeState({ loaded: !!session, messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
   const wavePreset = useStore((s) => s.resolvedPreset);
   const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(wavePreset) : null;
-  const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
+  // A new Photo chat opens the same way, with its own model row and, until a picture model is ready, the setup in the box.
+  const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && (imageMode || (hasProvider && !welcomeState.modelChoice)) && !!session && !question && !approval;
   // Someone's first ever new chat opens the "Send your first prompt" intro over it, once.
   const [firstPromptIntroClosed, setFirstPromptIntroClosed] = useState(false);
-  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart, settings: s.settings, sessions: s.sessions, setupOpen: s.onboardingOpen }));
+  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart: cleanStart && !imageMode, settings: s.settings, sessions: s.sessions, setupOpen: s.onboardingOpen }));
   const closeFirstPromptIntro = useCallback(() => {
     setFirstPromptIntroClosed(true);
     // If saving fails it simply shows again next time.
@@ -2958,6 +2959,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <p className="mx-auto mt-1 max-w-sm text-sm text-ink-faint">
                     {setupNeeded
                       ? 'Connect an AI account or a local model. We’ll walk you through it — no technical experience needed.'
+                      : imageMode
+                        ? 'Describe the picture you want: what is in it, where, the light and the style.'
                       : needsModel
                         ? 'Choose a model here, or let Auto pick per message.'
                         : 'Ask a question or hand over a task. Use / for skills and prompts, @ to attach files, + for photos, videos and folders. Paste or drop any file.'}
@@ -2967,7 +2970,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <button className="btn btn-primary" onClick={() => useStore.getState().setView('models')}>Set up my first agent →</button>
                 ) : null}
                 {imageMode && session && surface !== 'transcript' && <PhotoModelSetup session={session} onReady={photoReady} onShown={setPhotoSetupShown} />}
-                {surface !== 'transcript' && welcomeState.modelChoice && !(imageMode && photoSetupShown) && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
+                {surface !== 'transcript' && welcomeState.modelChoice && !imageMode && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
                   <div className="flex items-center justify-between gap-2 px-2">
                     <span className="text-xs font-medium text-ink-soft">Choose a model</span>
 
@@ -3131,7 +3134,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
         <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : cleanStart ? 'px-4' : 'px-1'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
-          {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} />}
+          {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} kind={imageMode ? 'photo' : 'agent'} title={imageMode && photoSetupShown ? 'Let’s get Photo ready.' : undefined} />}
           {firstPromptIntro && <Suspense fallback={null}><FirstPromptIntro onClose={closeFirstPromptIntro} /></Suspense>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : cleanStart ? 'w-[min(90%,calc(100%-8px))]' : 'w-full'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
@@ -3145,7 +3148,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 <button type="button" className="btn btn-ghost h-7 px-2 py-0 text-xs" aria-label="Dismiss" title="Dismiss" onClick={() => { LONG_DISMISSED.add(sessionId); setLongDismissed((n) => n + 1); }}>Not now</button>
               </div>
             )}
-            <div className="composer relative">
+            <div className="composer relative" data-photo-setup-open={(cleanStart && imageMode && photoSetupShown) || undefined}>
+            {cleanStart && imageMode && session && <div data-photo-setup-slot><PhotoModelSetup session={session} onReady={photoReady} onShown={setPhotoSetupShown} /></div>}
             {/* The resize grip is part of the box: a wide invisible hit area on
                 its top border, with a pill that lights up there on hover. */}
             {surface !== 'composer' && !cleanStart && <div
@@ -3235,7 +3239,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             </div>
             </>)}
             {imageMode && session && editOffer && <EditModelOffer session={session} onReady={photoReady} onDismiss={() => setEditOffer(false)} />}
-            {showControls && imageMode && session && (
+            {showControls && imageMode && session && !wallWindow && (
               <div className="flex min-w-0 items-center gap-1 overflow-hidden border-b border-line px-2 py-1">
                 <ImageModeControls key={imageControlsKey} session={session} onChange={setSession} busy={streaming} />
               </div>
@@ -3468,7 +3472,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <MarkdownEditor
                     ref={composerRef}
                     className={`relative ${compact ? 'min-h-[44px]' : 'min-h-[64px]'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-5 pb-2 pt-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
-                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (setupNeeded ? 'Add a model provider in Models first' : 'Message Nekko Agent…  (/ for prompts, @ to attach files)')}
+                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe your picture: who or what, where, the light, the style…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (setupNeeded ? 'Add a model provider in Models first' : 'Message Nekko Agent…  (/ for prompts, @ to attach files)')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}
@@ -3697,6 +3701,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   {(header || wallWindow) && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
                       {wallWindow && !imageMode && modelControls}
+                      {wallWindow && imageMode && session && <ImageModeControls key={imageControlsKey} session={session} onChange={setSession} busy={streaming} />}
                       {wallWindow && !imageMode && expertMode && asksFirst}
                       {!wallWindow && <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" hidePrivacy={!showPrivacy} />}
                     </div>

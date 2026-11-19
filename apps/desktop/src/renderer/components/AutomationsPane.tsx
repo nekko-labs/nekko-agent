@@ -98,7 +98,7 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
   const paused = useStore((s) => s.settings?.automationsPaused === true);
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-y-auto p-3">
+    <section className="flex h-full min-h-0 flex-col overflow-y-auto px-3 py-2">
       {tasks.length > 0 && (
         <PaneMetadata>
           <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{active} active of {tasks.length}</span>

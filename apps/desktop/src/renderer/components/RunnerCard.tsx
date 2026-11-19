@@ -323,7 +323,7 @@ function Jobs({ view, now, compact }: { view: RunnerView; now: number; compact: 
   // The panel is one flat list (each row's dot says queued or running), and completed jobs wait behind one row.
   if (compact) {
     return (
-      <div className="text-xs text-ink-soft" data-runner-jobs>
+      <div className="flex flex-col gap-2 text-xs text-ink-soft" data-runner-jobs>
         {(running.length > 0 || queue.length > 0) && (
           <ul>
             {running.map((s, i) => <RunningJob key={s.vm ?? i} slot={s} runnerId={view.config.id} now={now} compact />)}

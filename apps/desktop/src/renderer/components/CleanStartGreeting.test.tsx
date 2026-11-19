@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CleanStartGreeting, GREETING_QUESTIONS, greetingForChat } from './CleanStartGreeting.js';
+import { CleanStartGreeting, GREETING_QUESTIONS, PHOTO_GREETINGS, greetingForChat } from './CleanStartGreeting.js';
 
 afterEach(() => vi.useRealTimers());
 describe('Clean-start greeting', () => {
@@ -34,5 +34,17 @@ describe('Clean-start greeting', () => {
     expect(phrases(23)).toContain('Hey there, night owl.');
     expect(phrases(14)).not.toContain('Morning, early bird.');
     expect(phrases(14)).not.toContain('Hey there, night owl.');
+  });
+});
+
+describe('Photo clean-start greeting', () => {
+  it('asks about the picture, stays stable per chat, and fits one line', () => {
+    expect(PHOTO_GREETINGS).toContain(greetingForChat('photo-chat', 0, 'photo'));
+    expect(greetingForChat('photo-chat', 0, 'photo')).toBe(greetingForChat('photo-chat', Date.now(), 'photo'));
+    const longest = Math.max(...GREETING_QUESTIONS.map((g) => g.length));
+    for (const g of PHOTO_GREETINGS) expect(g.length).toBeLessThanOrEqual(longest);
+  });
+  it('shows a given title instead of a greeting', () => {
+    expect(renderToStaticMarkup(<CleanStartGreeting kind="photo" title="Let’s get Photo ready." />)).toContain('<h2>Let’s get Photo ready.</h2>');
   });
 });
