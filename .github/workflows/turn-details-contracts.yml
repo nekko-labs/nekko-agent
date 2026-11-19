@@ -1,16 +1,16 @@
-name: TurnDetails diagnostic contracts
+name: TurnDetails workflow contracts
 on:
   pull_request:
     paths:
       - '.github/workflows/ios-native.yml'
-      - '.github/workflows/ios-turn-details-contracts.yml'
+      - '.github/workflows/turn-details-contracts.yml'
       - 'scripts/ios-turn-details-diagnostic*'
       - 'scripts/ios-suite-shards*'
   push:
     branches: [main]
     paths:
       - '.github/workflows/ios-native.yml'
-      - '.github/workflows/ios-turn-details-contracts.yml'
+      - '.github/workflows/turn-details-contracts.yml'
       - 'scripts/ios-turn-details-diagnostic*'
       - 'scripts/ios-suite-shards*'
 permissions:
