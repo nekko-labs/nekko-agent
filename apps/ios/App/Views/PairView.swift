@@ -52,6 +52,7 @@ struct WelcomeView: View {
             case .cloud: CloudView()
             case .syncedChat(let id): SyncedChatView(chatId: id)
             case .phoneModels: PhoneModelsView()
+            case .phoneProvider(let id): PhoneProviderDetailView(providerId: id)
             default: EmptyView()
             }
         }

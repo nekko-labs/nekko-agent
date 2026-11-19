@@ -29,6 +29,8 @@ enum Route: Hashable {
     case simpleMode
     /// Settings → Models on this iPhone: the providers chats here run on (decision 0050).
     case phoneModels
+    /// One of this iPhone's providers: its page (on or off, test, new key, remove).
+    case phoneProvider(String)
     /// Connectors: a git provider and project tools, connected on this iPhone itself (decision 0058).
     case connectors
     /// The selected git provider's pull requests, with one-tap prompts (decision 0058).
@@ -240,6 +242,7 @@ struct RouteView: View {
         case .customize: CustomizeView()
         case .simpleMode: SimpleModeSettingsView()
         case .phoneModels: PhoneModelsView()
+        case .phoneProvider(let id): PhoneProviderDetailView(providerId: id)
         case .connectors: ConnectorsView()
         case .pullRequests: PullRequestsView(path: $path)
         }

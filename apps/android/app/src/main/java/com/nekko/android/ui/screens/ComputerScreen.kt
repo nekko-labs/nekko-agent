@@ -318,9 +318,17 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
         AlertDialog(
             onDismissRequest = { renaming = false },
             title = { Text(stringResource(R.string.settings_rename_computer)) },
-            text = { OutlinedTextField(value = name, onValueChange = { name = it.take(40) }, singleLine = true, label = { Text(stringResource(R.string.settings_name)) }) },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(40) },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.settings_name)) },
+                    supportingText = { Text(stringResource(R.string.settings_rename_computer_hint)) },
+                )
+            },
             confirmButton = {
-                TextButton(onClick = { scope.launch { repo.rename(c.id, name) }; renaming = false }, enabled = name.isNotBlank()) { Text(stringResource(R.string.settings_save)) }
+                TextButton(onClick = { scope.launch { repo.rename(c.id, name) }; renaming = false }) { Text(stringResource(R.string.settings_save)) }
             },
             dismissButton = { TextButton(onClick = { renaming = false }) { Text(stringResource(R.string.settings_cancel)) } },
         )

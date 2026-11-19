@@ -250,6 +250,7 @@
     <string name="settings_how_3">Tu computadora se conecta hacia un relay; nunca abre un puerto. Todo está cifrado de extremo a extremo con una llave que solo tienen tus dispositivos.</string>
     <string name="settings_how_4">Quita este teléfono cuando quieras desde la misma pantalla de tu computadora. Pierde el acceso de inmediato.</string>
     <string name="settings_rename_computer">Renombrar computadora</string>
+    <string name="settings_rename_computer_hint">Solo este teléfono ve este nombre. Déjalo vacío para usar el nombre del propio ordenador.</string>
     <string name="settings_forget_title">¿Olvidar %1$s?</string>
     <string name="settings_forget_text">Este teléfono elimina la llave de vinculación. Por seguridad, quita también el teléfono en tu computadora (Ajustes → Acceso remoto).</string>
     <string name="settings_forget">Olvidar</string>

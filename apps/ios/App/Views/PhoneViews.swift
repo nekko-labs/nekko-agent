@@ -190,8 +190,9 @@ struct PhoneChatView: View {
                     Text(ChatPlace.phoneName).lineLimit(1).layoutPriority(1)
                 }
                 .font(.caption).foregroundStyle(palette.inkSoft)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(String(localized: "\(modelName(chat)) on \(ChatPlace.phoneName)"))
+                // Plain text to accessibility, like ChatView's subtitle: a custom element this
+                // short fails the accessibility audit's hit-region check.
+                .accessibilityRepresentation { Text(String(localized: "\(modelName(chat)) on \(ChatPlace.phoneName)")) }
                 .accessibilityIdentifier("phoneChat.place")
             }
         }
@@ -463,9 +464,10 @@ struct PhoneModelPicker: View {
                             }
                         }
                     } header: {
-                        // Reload sits by the name, and the key's limits under it once an answer reported them.
+                        // Reload sits by the provider mark and name, and the key's limits under it once an answer reported them.
                         VStack(alignment: .leading, spacing: 2) {
-                            HStack {
+                            HStack(spacing: 8) {
+                                ProviderMarkImage(kind: p.kind, size: 16)
                                 SectionHeader(LocalizedStringKey(p.label))
                                 Spacer(minLength: 8)
                                 Button("Reload") { Task { await phone.loadModels(p.id) } }
@@ -527,105 +529,6 @@ private struct PhoneCloudIllustration: View {
     }
 }
 
-// MARK: Settings → Models on this iPhone
-
-/// The providers this iPhone calls itself: add one with its key, turn one off,
-/// test it, give it a new key, remove it. Keys stay in this iPhone's Keychain.
-struct PhoneModelsView: View {
-    @Environment(PhoneChats.self) private var phone
-    @Environment(\.palette) private var palette
-    @State private var adding = false
-    @State private var rekeying: PhoneProvider?
-    @State private var newKey = ""
-    @State private var removing: PhoneProvider?
-    @State private var tested: [String: String] = [:]
-    @State private var testing: Set<String> = []
-
-    var body: some View {
-        List {
-            Section {
-                Text("Chats can run on \(ChatPlace.phoneName) itself, with no computer: the iPhone calls the provider with your own key. The key stays in this iPhone’s Keychain and is never sent to a computer, the relay or Nekko Cloud. These chats have no tools.")
-                    .font(.footnote).foregroundStyle(palette.inkSoft)
-                    .listRowBackground(Color.clear)
-            }
-            Section {
-                ForEach(phone.providers) { p in row(p) }
-                Button { adding = true } label: { Label("Add a provider", systemImage: "plus") }
-                    .accessibilityIdentifier("phoneModels.add")
-            } header: { SectionHeader("Providers") }
-            Section {
-                ForEach(PhoneProviders.notOnPhone) { item in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.label).foregroundStyle(palette.ink)
-                        Text(item.why).font(.caption).foregroundStyle(palette.inkSoft)
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            } header: { SectionHeader("On a computer only") }
-        }
-        .appBackground()
-        .navigationTitle("Models on \(ChatPlace.phoneName)")
-        .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $adding) { AddPhoneProviderSheet() }
-        .alert("New key", isPresented: Binding(get: { rekeying != nil }, set: { if !$0 { rekeying = nil } })) {
-            SecureField("Key", text: $newKey)
-            Button("Cancel", role: .cancel) { newKey = "" }
-            Button("Save") {
-                if let p = rekeying {
-                    phone.setKey(p.id, newKey)
-                    Task { await test(p.id) }
-                }
-                newKey = ""
-            }
-        } message: {
-            Text(rekeying.map { PhoneProviders.kind($0.kind)?.keyName ?? "" } ?? "")
-        }
-        .confirmationDialog("Remove \(removing?.label ?? "")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
-                            titleVisibility: .visible) {
-            Button("Remove", role: .destructive) { if let p = removing { phone.remove(p.id) } }
-        } message: {
-            Text("Its key is deleted from this iPhone. Its chats stay to read.")
-        }
-        .task { await phone.loadAllModels() }
-    }
-
-    private func row(_ p: PhoneProvider) -> some View {
-        Toggle(isOn: Binding(get: { p.enabled }, set: { phone.setEnabled(p.id, $0) })) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(p.label).foregroundStyle(palette.ink)
-                Text(status(p)).font(.caption).foregroundStyle(phone.modelErrors[p.id] != nil || tested[p.id] != nil ? palette.danger : palette.inkSoft)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .tint(palette.accent)
-        .accessibilityIdentifier("phoneModels.provider")
-        .contextMenu {
-            Button { Task { await test(p.id) } } label: { Label("Test", systemImage: "checkmark.seal") }
-            Button { rekeying = p } label: { Label("New key", systemImage: "key") }
-            Button(role: .destructive) { removing = p } label: { Label("Remove", systemImage: "trash") }
-        }
-        .swipeActions {
-            Button(role: .destructive) { removing = p } label: { Label("Remove", systemImage: "trash") }
-            Button { rekeying = p } label: { Label("New key", systemImage: "key") }.tint(palette.running)
-        }
-    }
-
-    private func status(_ p: PhoneProvider) -> String {
-        if testing.contains(p.id) { return String(localized: "Testing…") }
-        if let e = tested[p.id] ?? phone.modelErrors[p.id] { return e }
-        let count = phone.models[p.id]?.count ?? 0
-        let models = count == 0 ? p.kindLabel : count == 1 ? String(localized: "\(p.kindLabel) · 1 model") : String(localized: "\(p.kindLabel) · \(count) models")
-        return phone.hasKey(p.id) || PhoneProviders.kind(p.kind)?.keyOptional == true ? models : String(localized: "\(models) · no key")
-    }
-
-    private func test(_ id: String) async {
-        testing.insert(id)
-        tested[id] = nil
-        tested[id] = await phone.test(id)
-        testing.remove(id)
-    }
-}
-
 /// Add a provider to this iPhone. OpenRouter is one button: a browser sign-in
 /// hands the key back. Kinds with a key page are guided: open it, copy the key,
 /// come back and tap Paste, and the provider is checked and kept by itself.
@@ -636,14 +539,22 @@ struct AddPhoneProviderSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.webAuthenticationSession) private var webAuth
-    @State private var kindId = PhoneProviders.kinds[0].id
-    @State private var label = PhoneProviders.kinds[0].label
-    @State private var url = ""
+    @State private var kindId: String
+    @State private var label: String
+    @State private var url: String
     @State private var key = ""
     @State private var workspace = ""
     @State private var opened = false
     @State private var busy = false
     @State private var failed: String?
+
+    /// A kind to start on, from a provider button; nil starts on the first.
+    init(initialKind: String? = nil) {
+        let k = initialKind.flatMap(PhoneProviders.kind) ?? PhoneProviders.kinds[0]
+        _kindId = State(initialValue: k.id)
+        _label = State(initialValue: k.label)
+        _url = State(initialValue: initialKind != nil && k.urlRequired ? k.defaultUrl : "")
+    }
 
     private var kind: PhoneProviders.Kind { PhoneProviders.kind(kindId) ?? PhoneProviders.kinds[0] }
     private var keySite: String? { kind.keyPage.flatMap { URL(string: $0)?.host() } }

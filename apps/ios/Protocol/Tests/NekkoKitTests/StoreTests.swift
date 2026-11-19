@@ -290,9 +290,25 @@ final class StoreTests: XCTestCase {
         reloaded.load()
         reloaded.learnPlatform("darwin", for: id, name: "New name")
         XCTAssertEqual(reloaded.active?.name, "Mac")
+        s.rename(id, to: "   ")
+        XCTAssertEqual(s.active?.name, "Mac", "an empty rename keeps the name until the computer reports one")
+        s.learnPlatform("darwin", for: id, name: "Work Mac")
+        XCTAssertEqual(s.active?.name, "Work Mac", "an empty rename hands naming back to the computer")
         let info = AppInfo.from(["hostname": "system", "computerName": "custom"])
         XCTAssertEqual(info.hostname, "system")
         XCTAssertEqual(info.computerName, "custom")
+    }
+
+    func testAStrippedMacHostnameGivesWayToTheFriendlyName() async throws {
+        let s = makeStore()
+        s.load()
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        s.learnPlatform("darwin", for: id, name: "MacBookPro") // What builds before #2919 reported.
+        XCTAssertEqual(s.active?.name, "MacBookPro")
+        let reloaded = makeStore()
+        reloaded.load()
+        reloaded.learnPlatform("darwin", for: id, name: "Philip’s MacBook Pro")
+        XCTAssertEqual(reloaded.active?.name, "Philip’s MacBook Pro")
     }
 
     func testEventsTrackActivityAppearanceAndRefreshTheList() async throws {

@@ -86,6 +86,9 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
 | CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | Replies read aloud and answered by voice in Android Auto (notifications); no Work list, Results, approvals or Stop | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 | New chat: model ⟶ device on one line, the connect checklist and note, the limit line, picker size and context (iPhone #2921-#2925, 2026-11-17) | Still two rows and the "no tools" note | [#2950](https://github.com/nekko-labs/nekko-agent/issues/2950) |
+| Real brand marks on sign-in and provider headings (iPhone #2930, 2026-11-17) | Android has no Nekko Cloud sign-in yet; provider marks exist on chat rows only | [#2938](https://github.com/nekko-labs/nekko-agent/issues/2938) |
+| Models on This Phone: provider buttons, Anthropic choice with a disabled Claude subscription and a sad Nekko (iPhone #2931, 2026-11-17) | Not started | [#2939](https://github.com/nekko-labs/nekko-agent/issues/2939) |
+| Settings: Nekko Cloud profile on top, Computers second, avatar rows with a plus (iPhone #2929, 2026-11-17) | Not started | [#2940](https://github.com/nekko-labs/nekko-agent/issues/2940) |
 
 Android features the iPhone lacks have not been audited yet.
 

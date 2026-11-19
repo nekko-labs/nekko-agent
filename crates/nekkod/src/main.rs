@@ -47,6 +47,7 @@ mod feedback;
 mod fleet;
 mod gcp;
 mod harness;
+mod host_name;
 mod hub;
 mod hypergate;
 mod image_turns;
@@ -259,7 +260,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             },
             dir,
             api_url: feedback::cloud_url(),
-            device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
+            device_label: host_name::friendly_host_name().chars().take(40).collect(),
             sessions: sessions.clone(),
             publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
             busy: Arc::new(move |id| busy.get().is_some_and(|t| t.running_sessions().iter().any(|s| s == id))),
@@ -293,10 +294,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         app_version: cfg.app_version.clone().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
         name: {
             let store = settings.store.clone();
-            Arc::new(move || {
-                let host = gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string();
-                small_services::computer_name(&store.get(), &host)
-            })
+            Arc::new(move || small_services::computer_name(&store.get(), &host_name::friendly_host_name()))
         },
         models: {
             let library = library.clone();

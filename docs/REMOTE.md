@@ -111,10 +111,13 @@ fresh QR from the phone. You do not need to revoke it first, and your other phon
 iPhone and Android update the existing computer when its identity key is unchanged, even after a
 relay address changes, keeping its nickname and saved data.
 
-**Computer name** in the same settings card starts with your computer's system name. Enter a name
-and click **Save name**, or clear it to use the system name again. The phone learns it when it
-connects or refreshes. You can still use **Rename** on the phone for a nickname just on that phone;
-that nickname is kept when the computer's shared name changes or you pair it again.
+**Computer name** in the same settings card starts with your computer's system name: the name in
+**System Settings → General → About** on a Mac (such as "Philip's MacBook Pro"), the pretty hostname
+on Linux, and the PC's name on Windows. Enter a name and click **Save name**, or clear it to use the
+system name again. The phone learns it when it connects or refreshes. You can still use **Rename**
+on the phone for a nickname just on that phone (on the iPhone it is also in the New chat device
+menu); that nickname is kept when the computer's shared name changes or you pair it again. Clear the
+nickname to go back to the computer's own name.
 
 A full reset or **Sign out all phones** changes the computer's identity key as well as its pairing
 credentials. For safety the phone does not merge different keys just because their names match.
@@ -237,10 +240,16 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > its name. **View → Group by → Computer** puts a heading over each computer's chats, and
 > **View → Show** turns the computer's name and icon off.
 >
+> **Settings on the iPhone** (iPhone): your Nekko Cloud account is the first row, like the Apple Account in iOS Settings; tap it to sign in or open sync. **Computers** come second, each computer a row you tap for its page, with a plus to add one. **Models on This iPhone** lists your providers the same way.
+>
 > **Chats on this iPhone** (iPhone): the phone can run chats itself, with no computer, on a cloud
 > model provider. Add one in **Settings → Models on this iPhone**: the Claude API, OpenAI,
 > OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock, Claude in Microsoft Foundry,
-> Claude on Vertex AI, or any OpenAI-compatible server over https, with your own key. OpenRouter is
+> Claude on Vertex AI, or any OpenAI-compatible server over https, with your own key. Each provider
+> shows its own logo, the same marks the desktop uses. Tap a provider's button to add it; each
+> provider you have is a row that opens its page (on or off, Test, New key, Remove). Choosing the
+> Claude API first shows its options: an API key works, while the Claude subscription is dimmed,
+> because Anthropic doesn't allow it from a phone. OpenRouter is
 > one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude API, OpenAI,
 > Gemini and Ollama Cloud, tap **Open** to reach the key page, copy a key, come back and tap
 > **Paste**; Nekko checks it and connects. The key stays in this iPhone's Keychain

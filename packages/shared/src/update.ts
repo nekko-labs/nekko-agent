@@ -13,8 +13,10 @@ export interface AppInfo {
   version: string;
   /** System hostname, without the local-network suffix. */
   hostname?: string;
-  /** Owner-selected display name, or the system hostname. */
+  /** Owner-selected display name, or the system name. */
   computerName?: string;
+  /** The name the OS shows people (a Mac's ComputerName, Linux's pretty hostname), else the hostname. */
+  systemName?: string;
   platform: string;
   edition: 'desktop' | 'web';
   /** SK-3: whether a phone may quit Nekko Agent here (`app:quit`), the desktop's switch; absent from older computers. */

@@ -250,6 +250,7 @@
     <string name="settings_how_3">Seu computador se conecta a um relay; ele nunca abre uma porta. Tudo é criptografado de ponta a ponta com uma chave que só seus dispositivos têm.</string>
     <string name="settings_how_4">Remova este celular a qualquer momento na mesma tela do computador. Ele perde o acesso na hora.</string>
     <string name="settings_rename_computer">Renomear computador</string>
+    <string name="settings_rename_computer_hint">Só este telefone vê este nome. Deixe vazio para usar o nome do próprio computador.</string>
     <string name="settings_forget_title">Esquecer %1$s?</string>
     <string name="settings_forget_text">Este celular apaga a chave de pareamento. Por segurança, remova também o celular no computador (Configurações → Acesso remoto).</string>
     <string name="settings_forget">Esquecer</string>
