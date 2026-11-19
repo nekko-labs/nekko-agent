@@ -180,6 +180,8 @@ export interface HtmlPreviewServer {
   serve(file: string, options: HtmlPreviewOptions): Promise<HtmlPreviewServe>;
   release(id: string): void;
   close(): Promise<void>;
+  /** True when this id is currently in the served-pages set (not yet released or evicted). */
+  hasPage(id: string): boolean;
 }
 
 const inside = (root: string, target: string) => {
@@ -317,6 +319,9 @@ export function createHtmlPreviewServer(options: HtmlPreviewServerOptions = {}):
     },
     release(id) {
       if (typeof id === 'string') pages.delete(id);
+    },
+    hasPage(id) {
+      return typeof id === 'string' && pages.has(id);
     },
     async close() {
       pages.clear();

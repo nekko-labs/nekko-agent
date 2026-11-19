@@ -23,6 +23,7 @@ import { startAgentBrowser } from './agentBrowser.js';
 import { guardSession } from './connectionsGuard.js';
 import { registerArtifactPreview } from './artifactPreview.js';
 import { registerHtmlPreview } from './htmlPreview.js';
+import { registerLibraryThumbnails } from './libraryThumbnails.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
@@ -635,7 +636,8 @@ if (!isPrimary) app.quit();
 
 app.whenReady().then(async () => {
   registerArtifactPreview((sender) => applicationWindows.has(sender.id));
-  registerHtmlPreview((sender) => applicationWindows.has(sender.id));
+  const isPreviewServedUrl = registerHtmlPreview((sender) => applicationWindows.has(sender.id));
+  registerLibraryThumbnails((sender) => applicationWindows.has(sender.id), isPreviewServedUrl);
   if (!isPrimary) return;
   // No File/Edit/View/Window bar: it cost a whole strip of chrome above the UI
   // to duplicate shortcuts the app already owns. macOS keeps its menu — there

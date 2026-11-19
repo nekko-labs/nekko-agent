@@ -9,7 +9,7 @@ import { prefersReducedMotion } from '../displays.js';
 import { FilePane } from '../components/FilePane.js';
 import { LibraryArtwork, LibraryIntro, libraryIntroSeen, dismissLibraryIntro } from '../components/LibraryIntro.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
-import { LibraryFileIcon } from '../components/library/LibraryFileIcon.js';
+import { LibraryFileThumbnail } from '../components/library/LibraryFileThumbnail.js';
 import { DesignCanvas } from '../components/library/DesignCanvas.js';
 import { TilePreview } from '../components/library/TilePreview.js';
 import { LibrarySyncGlyph, LibrarySyncSummary, useLibrarySync } from '../components/library/LibrarySync.js';
@@ -143,6 +143,15 @@ export function ArtifactsView() {
   })));
   const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen());
   const closeIntro = () => { dismissLibraryIntro(); setShowIntro(false); };
+  // The list from the previous visit: shown immediately for a zero-layout-shift
+  // repeat visit, then kept as the floor while new batches arrive (#3043).
+  const [storedIndex] = useState<ArtifactEntry[] | null>(() => {
+    try {
+      const raw = localStorage.getItem('library:index:v1');
+      return raw ? (JSON.parse(raw) as ArtifactEntry[]) : null;
+    } catch { return null; }
+  });
+  // Accumulates the full live scan; starts null and grows batch by batch.
   const [fromChats, setFromChats] = useState<ArtifactEntry[] | null>(null);
   // The designs sitting in each project's designs folder, whoever put them there.
   const [fromFolders, setFromFolders] = useState<ArtifactEntry[] | null>(null);
@@ -201,6 +210,12 @@ export function ArtifactsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, workspaces]);
 
+  // Persist the most recent full index so the next visit paints at once (#3043).
+  useEffect(() => {
+    if (!chatsRead || fromChats === null) return;
+    try { localStorage.setItem('library:index:v1', JSON.stringify(fromChats)); } catch { /* storage unavailable */ }
+  }, [chatsRead, fromChats]);
+
   // Only the folders' listings are read (names, no contents), again whenever a chat changes.
   const folders = workspaces.map((w) => `${w.id}:${w.path}`).join('|');
   useEffect(() => {
@@ -212,9 +227,18 @@ export function ArtifactsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folders, key]);
 
+  // What to display this render: once all chats are read the live scan wins;
+  // until then, show the stored index (or its union with the batches so far)
+  // so the list never shrinks below the cache while loading.
+  const displayedFromChats = chatsRead
+    ? fromChats
+    : fromChats === null
+      ? storedIndex
+      : mergeArtifacts([storedIndex ?? [], fromChats]);
+
   const merged = useMemo(
-    () => (fromChats || fromFolders ? withFolderDesigns(fromChats ?? [], fromFolders ?? []) : null),
-    [fromChats, fromFolders],
+    () => (displayedFromChats || fromFolders ? withFolderDesigns(displayedFromChats ?? [], fromFolders ?? []) : null),
+    [displayedFromChats, fromFolders],
   );
   // Which of those files are still on disk: a chat can name a file it never wrote, or one deleted since.
   // A file shows until its folder has been listed.
@@ -301,13 +325,16 @@ export function ArtifactsView() {
   const openPath = selected ? version ?? selected.path : '';
   const onCanvas = !!selected && selected.kind === 'design' && isHtml(openPath);
 
-  const revisions = new Map(sessions.map((s) => [s.id, s.updatedAt]));
   const row = (e: ArtifactEntry) => {
     const active = selected?.path === e.path;
+    // Use the file's own message timestamp as the revision key (#3043).
+    // The chat's updatedAt would invalidate all thumbnails on every new message;
+    // e.at is the timestamp of the message that produced/linked this specific file.
+    const revision = e.at;
     return (
       <div key={e.path} role="listitem" className={`group rounded-lg ${active ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
         <button type="button" data-artifact-row className="flex w-full min-w-0 items-center gap-3 px-2 py-1 text-left" onClick={() => select(e)} title={e.path}>
-          <LibraryFileIcon kind={e.kind} className="h-7 w-7 shrink-0 rounded-md" />
+          <LibraryFileThumbnail kind={e.kind} path={e.path} revision={revision} className="h-7 w-7 shrink-0 rounded-md" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
             {!listWide && <span className="block truncate text-2xs text-ink-faint">{fromAndWhen(e)}</span>}
@@ -333,7 +360,7 @@ export function ArtifactsView() {
     return (
     <div key={e.path} role="listitem" className="library-tile" data-library-tile>
       <button type="button" className="library-tile-main" onClick={() => select(e)} title={e.path}>
-        <TilePreview revision={revisions.get(e.sessionId) ?? e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} badge={sync(e)} />
+        <TilePreview revision={e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} badge={sync(e)} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
           <span className="library-tile-meta">{fromAndWhen(e)}</span>
@@ -355,9 +382,46 @@ export function ArtifactsView() {
     );
   };
 
+  // True while no list at all is known yet: first visit with nothing in
+  // localStorage and no batch read yet. On repeat visits the stored index
+  // fills this immediately, so the skeleton is never shown again.
+  const loading = displayedFromChats === null;
   // No files at all yet: the illustrated placeholder fills the page in every layout.
   const noFiles = indexed && total === 0;
   const empty = query && entries && shown.length === 0 ? 'Nothing matches.' : null;
+
+  /** Pulsing placeholder rows and tiles shown before the first list is known (#3043). */
+  const listSkeleton = (
+    <div className="px-2 pb-3 pt-1" aria-hidden="true">
+      <div className="mb-2 h-4 w-20 animate-pulse rounded-md bg-surface-2 opacity-60" />
+      {Array.from({ length: 8 }, (_, i) => (
+        <div key={i} className="mb-1 flex items-center gap-3 rounded-lg px-2 py-1">
+          <div className="h-7 w-7 shrink-0 animate-pulse rounded-md bg-surface-2 opacity-60" style={{ animationDelay: `${i * 60}ms` }} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="h-3 w-3/4 animate-pulse rounded-sm bg-surface-2 opacity-60" style={{ animationDelay: `${i * 60 + 20}ms` }} />
+            <div className="h-2.5 w-1/2 animate-pulse rounded-sm bg-surface-2 opacity-50" style={{ animationDelay: `${i * 60 + 40}ms` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const tileSkeleton = (
+    <div className="px-5 pb-8 pt-2" aria-hidden="true">
+      <div className="mb-3 h-4 w-24 animate-pulse rounded-md bg-surface-2 opacity-60" />
+      <div className="library-tiles">
+        {Array.from({ length: 12 }, (_, i) => (
+          <div key={i} className="library-tile">
+            <div className="library-tile-preview animate-pulse bg-surface-2 opacity-60" style={{ animationDelay: `${i * 50}ms` }} />
+            <div className="mt-2 space-y-1 px-1">
+              <div className="h-3 w-4/5 animate-pulse rounded-sm bg-surface-2 opacity-60" style={{ animationDelay: `${i * 50 + 20}ms` }} />
+              <div className="h-2.5 w-3/5 animate-pulse rounded-sm bg-surface-2 opacity-50" style={{ animationDelay: `${i * 50 + 35}ms` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   const placeholder = (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center" data-library-empty>
@@ -387,7 +451,7 @@ export function ArtifactsView() {
         )}
         <span className="ml-auto" />
         {everything && <LibrarySyncSummary library={library} entries={everything} />}
-        <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{entries ?`${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
+        <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : loading ? '' : 'Reading chats…'}</span>
         <button type="button" className="btn btn-ghost shrink-0 px-3 py-1 text-xs" onClick={() => setShowIntro(true)}>Library guide</button>
         {!noFiles && <SlideToggle label="Layout" options={LAYOUT_OPTIONS} value={layout} onChange={pickLayout} iconOnly className="hidden shrink-0 md:inline-flex" transitionName="library-layout" />}
       </header>
@@ -401,13 +465,15 @@ export function ArtifactsView() {
             </label>
           </div>
           <div className={`min-h-0 flex-1 overflow-y-auto px-2 pb-3 ${listWide ? 'md:px-4' : ''}`} role="list" aria-label="Library files">
-            {empty && <p className="px-3 py-2 text-xs text-ink-faint">{empty}</p>}
-            {shown.map((g) => (
-              <section key={g.kind.id} className="mb-1" data-artifact-kind={g.kind.id} aria-label={g.kind.label}>
-                <GroupHeading group={g} collapsible={all} collapsed={isFolded(g.kind.id)} onToggle={() => toggle(g.kind.id)} />
-                <Fold open={!isFolded(g.kind.id)}>{g.items.map(row)}</Fold>
-              </section>
-            ))}
+            {loading ? listSkeleton : <>
+              {empty && <p className="px-3 py-2 text-xs text-ink-faint">{empty}</p>}
+              {shown.map((g) => (
+                <section key={g.kind.id} className="mb-1" data-artifact-kind={g.kind.id} aria-label={g.kind.label}>
+                  <GroupHeading group={g} collapsible={all} collapsed={isFolded(g.kind.id)} onToggle={() => toggle(g.kind.id)} />
+                  <Fold open={!isFolded(g.kind.id)}>{g.items.map(row)}</Fold>
+                </section>
+              ))}
+            </>}
           </div>
         </aside>
 
@@ -441,6 +507,8 @@ export function ArtifactsView() {
                   : <FilePane path={openPath} readOnly={selected.kind === 'design' || selected.source === 'cloud'} />}
               </div>
             </>
+          ) : loading ? (
+            <div className="min-h-0 flex-1 overflow-y-auto" aria-busy="true">{tileSkeleton}</div>
           ) : browsing ? (
             <div className="library-canvas min-h-0 flex-1 overflow-y-auto px-5 pb-8" data-library-canvas>
               {shown.map((g) => {
