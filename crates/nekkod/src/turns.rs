@@ -4049,14 +4049,21 @@ impl TurnTools {
         // The choice, priced answer by answer, on the chat's own question card.
         let suggested = crate::media_tools::ClipChoice::suggested(&model, input);
         let card = crate::media_tools::clip_questions(&model, &suggested);
-        let choice = if card["questions"].as_array().is_some_and(|q| !q.is_empty()) {
+        // The card also carries every combination's price, so a client that
+        // knows it (the desktop's clip picker) shows a live total and confirms
+        // it with the answers; one that does not shows the plain questions.
+        let (choice, answers) = if card["questions"].as_array().is_some_and(|q| !q.is_empty()) {
             let ask = json!({ "id": format!("{id}-clip"), "name": "ask_user", "input": card });
-            match self.ask_answers(&ask).await {
-                Some(answers) => crate::media_tools::clip_answer(&card, &answers, &suggested),
+            let clip = json!({
+                "model": model["name"], "via": "OpenRouter", "sendsPicture": frame.is_some(),
+                "prices": crate::media_tools::clip_prices(&model, &card, &suggested),
+            });
+            match self.ask_answers(&ask, Some(clip)).await {
+                Some(answers) => (crate::media_tools::clip_answer(&card, &answers, &suggested), answers),
                 None => return error(id, "No clip was chosen, so nothing was started or charged."),
             }
         } else {
-            suggested
+            (suggested, json!([]))
         };
         let Some(price) = choice.price(&model) else {
             return error(id, "That clip has no published price, so it was not started.");
@@ -4067,7 +4074,11 @@ impl TurnTools {
             "Make a {} clip with {name} through OpenRouter for ${price:.2}, on your OpenRouter account. Once started it cannot be stopped and is charged even if you stop the chat; the clip is still kept.{frame_note} leave this computer for OpenRouter and the model's provider.",
             choice.describe()
         );
-        if !self.turns.request_spend_approval(&self.shared, call, &reason).await {
+        // The picker's "Make clip · $2.40" is the confirmation when its total is
+        // exactly this price; otherwise the total is confirmed on its own.
+        if !crate::media_tools::confirmed_total(&answers, price)
+            && !self.turns.request_spend_approval(&self.shared, call, &reason).await
+        {
             return error(id, "The paid clip was not approved, so nothing was started or charged.");
         }
         // A project copy is approved now, while this turn can still ask.
@@ -4132,13 +4143,16 @@ impl TurnTools {
 
     /// Ask the chat's question card and wait for the answers; `None` when it
     /// was cancelled or nobody answered (an unattended run).
-    async fn ask_answers(&self, call: &Value) -> Option<Value> {
+    async fn ask_answers(&self, call: &Value, clip: Option<Value>) -> Option<Value> {
         if self.shared.unattended.is_on() {
             return None;
         }
         let call_id = str_at(call, "id").unwrap_or_default().to_string();
-        let request =
+        let mut request =
             turn::parse_ask_request(&call_id, call.get("input").unwrap_or(&Value::Null), nekko_js::now_ms()).ok()?;
+        if let Some(c) = clip {
+            request["clip"] = c;
+        }
         let session_id = self.shared.session_id.clone();
         let rx = self.turns.pending.park_question(&session_id, &request);
         self.shared.emit(json!({ "type": "question", "sessionId": session_id, "request": request }));
