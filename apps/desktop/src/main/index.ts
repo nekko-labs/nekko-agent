@@ -9,7 +9,7 @@ import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDat
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
 import { fixedWindowBounds, initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
-import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
+import { registerDevLaunch, reportDevReady, reportDevStatus, type DevActivity } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { resolveAppIcon } from './appIcon.js';
 import { desktopVersion } from './appVersion.js';
@@ -777,6 +777,11 @@ app.whenReady().then(async () => {
   void engine.call<ApiServerStatus>(IpcChannels.apiServerStatus)
     .then((s) => reportDevReady({ version: appVersion, api: s ? { url: s.clientUrl, enabled: s.settings.enabled } : null, dataDir }))
     .catch(() => reportDevReady({ version: appVersion, api: null, dataDir }));
+  // ...and, once a second, what the agents are doing, for its pinned status line.
+  reportDevStatus({
+    activity: () => engine ? engine.call<DevActivity>(IpcChannels.chatActivity) : Promise.reject(new Error('no engine')),
+    quitting: () => quitting,
+  }, app, BrowserWindow.getAllWindows());
 
   app.on('activate', () => {
     showWindow();

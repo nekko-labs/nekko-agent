@@ -15,6 +15,8 @@ npm run dev          # build the Rust daemon and the app, then launch the deskto
 
 To stop a dev run, press **Enter** or **q** (or Ctrl+C) in its terminal. The app quits the normal way, stopping the engine and any model servers it started; press again to force it, which ends the whole process tree. A run that hasn't exited after 10 seconds is forced too.
 
+While it runs, the terminal's bottom row stays pinned under the logs: what the agents are doing (**Building 2 · Verifying 1**, or **Idle**), a stop in progress, or **No word from the app** if its main process stops answering for 3 seconds (the indicator only moves while the app keeps reporting, so a frozen app shows as frozen). `NEKKO_DEV_STATUS=off npm run dev` turns the line off for a terminal that handles scroll regions badly.
+
 For a separate task worktree, follow the [isolated typecheck bootstrap](docs/runbooks/worktree-typecheck.md). It installs that worktree's dependencies and builds its declarations without borrowing another running checkout's packages. The typecheck-only install does not prepare Electron or native binaries for runtime tests.
 
 ## Project layout

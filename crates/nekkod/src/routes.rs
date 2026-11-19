@@ -7,7 +7,7 @@ use nekko_term::{
     resolve_shell,
 };
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -395,6 +395,7 @@ impl Table {
             handler!(|ctx, channel, args| Ok(merge_pending(json!({}), ctx.turns.pending.snapshot()))),
         );
         t.add(&["chat:running"], handler!(|ctx, channel, args| Ok(json!(running_chats(ctx)))));
+        t.add(&["chat:activity"], handler!(|ctx, channel, args| Ok(chat_activity(ctx))));
         t.add(
             crate::model_tunnel::CHANNELS,
             handler!(|ctx, channel, args| ctx.tunnel.clone().route(ctx, channel, &args).await),
@@ -910,6 +911,38 @@ pub fn running_chats(ctx: &Ctx) -> Vec<String> {
     ids
 }
 
+/// `chat:activity`: how many chats are working, by where they are in the
+/// agent loop, as the Agent board groups them (`statusGroupOf` in
+/// agentPanelView.ts). The `npm run dev` status line reads it every second, so
+/// it touches no chat files.
+pub fn chat_activity(ctx: &Ctx) -> Value {
+    let waiting = ctx.turns.pending.snapshot();
+    let waiting: HashSet<&str> =
+        waiting.as_object().map(|m| m.keys().map(String::as_str).collect()).unwrap_or_default();
+    activity_counts(&ctx.turns.running_phases(), &waiting, &ctx.image_turns.running_sessions())
+}
+
+/// [`chat_activity`] from what is running: a chat waiting on an answer or an
+/// approval needs input; one checking or landing its work is verifying;
+/// anything else working (reading, editing, making a picture, a turn that has
+/// only just started) is building.
+fn activity_counts(turns: &[(String, Option<&str>)], waiting: &HashSet<&str>, images: &[String]) -> Value {
+    let (mut building, mut verifying, mut input) = (0, 0, 0);
+    let mut seen: HashSet<&str> = HashSet::new();
+    for (id, phase) in turns {
+        if !seen.insert(id) {
+            continue;
+        }
+        match phase {
+            _ if waiting.contains(id.as_str()) => input += 1,
+            Some("verifying" | "shipping") => verifying += 1,
+            _ => building += 1,
+        }
+    }
+    building += images.iter().filter(|id| seen.insert(id)).count();
+    json!({ "building": building, "verifying": verifying, "input": input })
+}
+
 /// Merge the host's pending input with the daemon's, the daemon's winning
 /// field by field (`mergePending` in daemon-turn.ts).
 fn merge_pending(host: Value, daemon: Value) -> Value {
@@ -1321,6 +1354,23 @@ async fn session_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn activity_counts_working_chats_by_phase() {
+        let turns = vec![
+            ("a".to_string(), Some("building")),
+            ("b".to_string(), Some("verifying")),
+            ("c".to_string(), Some("shipping")),
+            ("d".to_string(), Some("verifying")),
+            ("e".to_string(), Some("exploring")),
+            ("f".to_string(), None),
+            ("a".to_string(), Some("building")),
+        ];
+        let waiting: HashSet<&str> = ["d"].into_iter().collect();
+        let images = vec!["g".to_string(), "a".to_string()];
+        assert_eq!(activity_counts(&turns, &waiting, &images), json!({ "building": 4, "verifying": 2, "input": 1 }));
+        assert_eq!(activity_counts(&[], &HashSet::new(), &[]), json!({ "building": 0, "verifying": 0, "input": 0 }));
+    }
 
     #[tokio::test]
     async fn session_listings_count_only_active_watches_and_preserve_phone_summaries() {

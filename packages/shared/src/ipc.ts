@@ -179,6 +179,8 @@ export const IpcChannels = {
   chatProvideSecret: 'chat:provideSecret',
   chatPending: 'chat:pending',
   chatRunning: 'chat:running',
+  /** Working chats by agent-loop phase, for the `npm run dev` status line. */
+  chatActivity: 'chat:activity',
 
   terminalsList: 'terminals:list',
   terminalShells: 'terminal:shells',
