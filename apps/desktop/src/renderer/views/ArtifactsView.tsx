@@ -267,10 +267,9 @@ export function ArtifactsView() {
   // other computers' files join the list as read-only copies. Nothing shows unless it is open to the account.
   // `getRevision` gives each entry the same revision token that LibraryFileThumbnail uses, so the
   // engine receives the correct cached thumbnail for every file (#3044).
-  const getRevision = useMemo(
-    () => (e: ArtifactEntry) => sessions.reduce<string | number>((rev, s) => (s.id === e.sessionId ? s.updatedAt : rev), e.at),
-    [sessions],
-  );
+  // We use e.at (the message timestamp that produced/linked the file) so that sending a new message
+  // in a chat does not invalidate all its files' thumbnails.
+  const getRevision = (e: ArtifactEntry) => e.at;
   const library = useLibrarySync(entries, getRevision);
   const remote = useMemo(() => groupDesignVersions(remoteEntries(library?.remote ?? [])), [library?.remote]);
   // Map of path -> thumbnail data URL for remote files that sent a thumbnail from their computer (#3044).

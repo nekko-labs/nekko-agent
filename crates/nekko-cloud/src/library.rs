@@ -147,7 +147,11 @@ pub fn parse(bytes: &[u8]) -> Option<LibraryRecord> {
     if !KINDS.contains(&kind.as_str()) {
         return None;
     }
-    let thumb = s(&v, "thumb").unwrap_or_default();
+    // Validate and bound the thumbnail on receive, same rules as on send.
+    let thumb: String = s(&v, "thumb").map(|t| {
+        if !t.starts_with("data:image/") { return String::new(); }
+        t.chars().take(MAX_THUMB).collect()
+    }).unwrap_or_default();
 
     // Thumb-only record (#3044): no "data" field; the file was over 8 MB on the other computer.
     // Must have a thumbnail to be useful; without one it is ignored.

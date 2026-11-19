@@ -10,6 +10,12 @@ import { thumbnailKind } from './thumbnailCache.js';
  * thumbnail data embedded in the sealed record (#3044). Falls back to the kind
  * icon in both cases when no thumbnail is available.
  */
+/** Returns the value only when it is a WebP or PNG data URL, otherwise null. */
+function safeThumb(data: string | undefined): string | null {
+  if (!data) return null;
+  return /^data:image\/(webp|png);base64,[A-Za-z0-9+/=]+$/.test(data) ? data : null;
+}
+
 export function LibraryFileThumbnail({ kind, path, revision, thumbnailData, className = '' }: {
   kind: ArtifactKind;
   path: string;
@@ -23,15 +29,15 @@ export function LibraryFileThumbnail({ kind, path, revision, thumbnailData, clas
   thumbnailData?: string;
   className?: string;
 }) {
-  const [url, setUrl] = useState<string | null>(thumbnailData ?? null);
+  const [url, setUrl] = useState<string | null>(() => safeThumb(thumbnailData));
 
   // For local files: read from the on-disk cache when no pre-fetched thumbnail is available.
   const canCheck = !thumbnailData && !!window.nekko?.libraryThumbGet && revision !== undefined;
   const hasKind = !!thumbnailKind(path) || isServableHtml(path);
 
   useEffect(() => {
-    // If a pre-fetched thumbnail was supplied, use it directly (remote files, #3044).
-    if (thumbnailData !== undefined) { setUrl(thumbnailData || null); return; }
+    // If a pre-fetched thumbnail was supplied, validate and use it directly (remote files, #3044).
+    if (thumbnailData !== undefined) { setUrl(safeThumb(thumbnailData)); return; }
     if (!canCheck || !hasKind) return;
     let live = true;
     window.nekko.libraryThumbGet!(path, revision!).then((cached) => {
