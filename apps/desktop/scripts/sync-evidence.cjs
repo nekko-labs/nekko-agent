@@ -123,6 +123,25 @@ async function main() {
   await a.click('[data-testid=cloud-send-code]');
   await a.waitForSelector('[data-testid=cloud-otp-0]');
   await both(a, '03-code', 'page');
+  // Clicking outside closes the window but the code still waits: Sign in reopens it.
+  const signInLabel = (t) => a.waitForFunction((x) => document.querySelector('[data-testid=sync-sign-in]')?.textContent === x, t, { timeout: 5000 });
+  await a.mouse.click(8, 8);
+  await a.waitForSelector('[data-testid=cloud-signin]', { state: 'detached' });
+  await signInLabel('Enter your sign-in code');
+  await both(a, '03a-code-waiting');
+  await a.click('[data-testid=sync-sign-in]');
+  await a.waitForSelector('[data-testid=cloud-otp-0]');
+  // Cancel drops the waiting code: the window starts over, and so does the next one.
+  await a.click('[data-testid=cloud-code-cancel]');
+  await a.waitForSelector('[data-testid=cloud-send-code]');
+  await both(a, '03b-cancelled', 'page');
+  await a.keyboard.press('Escape');
+  await signInLabel('Sign in to Nekko Cloud');
+  await a.click('[data-testid=sync-sign-in]');
+  if (await a.inputValue('[data-testid=cloud-email]') !== '') throw new Error('a cancelled sign-in came back');
+  await a.fill('[data-testid=cloud-email]', email);
+  await a.click('[data-testid=cloud-send-code]');
+  await a.waitForSelector('[data-testid=cloud-otp-0]');
   await a.fill('[data-testid=cloud-otp-0]', '123456');
   await phase(a, 'Off');
   await both(a, '04-off');

@@ -3,17 +3,29 @@ import { type CloudOAuthProvider, type CloudStatus, cloudError } from '@nekko-ag
 import { NekkoAvatar } from '../Mascot.js';
 import './cloud.css';
 
+/** An emailed sign-in code waiting to be typed. */
+export interface PendingCode { email: string; sentAt: number }
+
+const RESEND_AFTER_S = 30;
+/** Matches the Supabase project's email code lifetime (10 minutes); an older code is no use, so the window starts over. */
+export const CODE_LIFETIME_MS = 10 * 60_000;
+
 /**
  * Sign in to Nekko Cloud: GitHub, Google or Apple in the browser, or a code
  * emailed to you. Supabase Auth checks who you are; the engine keeps the
  * resulting device token, and the renderer never sees it.
+ *
+ * A code already sent lives in the parent (`pending`), so closing this window
+ * and opening it again goes straight back to typing that code; Cancel drops it.
  */
-export function CloudSignIn({ status, onClose }: { status: CloudStatus | null; onClose: () => void }) {
-  const [step, setStep] = useState<'start' | 'code'>('start');
-  const [email, setEmail] = useState('');
+export function CloudSignIn({ status, pending, onPending, onClose }: {
+  status: CloudStatus | null; pending: PendingCode | null; onPending: (p: PendingCode | null) => void; onClose: () => void;
+}) {
+  const [step, setStep] = useState<'start' | 'code'>(pending ? 'code' : 'start');
+  const [email, setEmail] = useState(pending?.email ?? '');
   const [busy, setBusy] = useState<'' | 'email' | 'code' | CloudOAuthProvider>('');
   const [error, setError] = useState('');
-  const [resendIn, setResendIn] = useState(0);
+  const [resendIn, setResendIn] = useState(pending ? Math.max(0, RESEND_AFTER_S - Math.floor((Date.now() - pending.sentAt) / 1000)) : 0);
 
   // Signed in (from here or from the browser callback): done.
   useEffect(() => {
@@ -43,8 +55,9 @@ export function CloudSignIn({ status, onClose }: { status: CloudStatus | null; o
 
   const sendCode = () => run('email', async () => {
     await window.nekko.cloudSendCode(email.trim());
+    onPending({ email: email.trim(), sentAt: Date.now() });
     setStep('code');
-    setResendIn(30);
+    setResendIn(RESEND_AFTER_S);
   });
 
   const oauth = (provider: CloudOAuthProvider) => run(provider, async () => {
@@ -92,7 +105,7 @@ export function CloudSignIn({ status, onClose }: { status: CloudStatus | null; o
           <CodeStep email={email} busy={busy === 'code'} resendIn={resendIn}
             onVerify={(code) => run('code', () => window.nekko.cloudVerifyCode(email.trim(), code))}
             onResend={() => void sendCode()}
-            onBack={() => { setStep('start'); setError(''); }} />
+            onCancel={() => { onPending(null); setStep('start'); setError(''); }} />
         )}
         {error && <p role="alert" className="mt-3 text-center text-xs text-(--danger)">{error}</p>}
         <p className="cloud-fineprint">
@@ -104,8 +117,8 @@ export function CloudSignIn({ status, onClose }: { status: CloudStatus | null; o
   );
 }
 
-function CodeStep({ email, busy, resendIn, onVerify, onResend, onBack }: {
-  email: string; busy: boolean; resendIn: number; onVerify: (code: string) => void; onResend: () => void; onBack: () => void;
+function CodeStep({ email, busy, resendIn, onVerify, onResend, onCancel }: {
+  email: string; busy: boolean; resendIn: number; onVerify: (code: string) => void; onResend: () => void; onCancel: () => void;
 }) {
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
   const refs = useRef<(HTMLInputElement | null)[]>([]);
@@ -142,7 +155,7 @@ function CodeStep({ email, busy, resendIn, onVerify, onResend, onBack }: {
         {busy ? 'Signing in…' : 'Sign in'}
       </button>
       <div className="mt-3 flex justify-between text-xs">
-        <button className="text-ink-faint hover:text-ink-soft" onClick={onBack}>Use a different email</button>
+        <button className="text-ink-faint hover:text-ink-soft" onClick={onCancel} data-testid="cloud-code-cancel">Cancel</button>
         <button className="text-ink-faint hover:text-ink-soft disabled:opacity-50" disabled={resendIn > 0} onClick={onResend}>
           {resendIn > 0 ? `Send again in ${resendIn}s` : 'Send a new code'}
         </button>
