@@ -85,6 +85,12 @@ export interface LibrarySyncFile {
   kind: string;
   /** The chat it came from (its title), or the project of a designs-folder file. */
   chat: string;
+  /**
+   * A small thumbnail for the file, as a data URL (base64 PNG or WebP, capped
+   * at ~200 KB). The engine embeds it in the sealed record so another computer
+   * can show it before the full file is opened (#3044).
+   */
+  thumbnailData?: string;
 }
 
 /** Another computer's Library file, copied here read-only. */
@@ -93,7 +99,7 @@ export interface LibraryRemoteFile {
   deviceId: string;
   /** That computer's name. */
   device: string;
-  /** The copy on this computer. */
+  /** The copy on this computer, or the original path for thumb-only records (over 8 MB). */
   path: string;
   /** Where it is on the other computer. */
   originalPath: string;
@@ -102,6 +108,10 @@ export interface LibraryRemoteFile {
   chat: string;
   modifiedAt: number;
   size: number;
+  /** The file's small thumbnail from the sealed record (#3044), as a data URL. */
+  thumbnailData?: string;
+  /** True when only a thumbnail record was pushed (the file was over 8 MB and skipped). */
+  thumbOnly?: boolean;
 }
 
 export interface LibrarySyncStatus {

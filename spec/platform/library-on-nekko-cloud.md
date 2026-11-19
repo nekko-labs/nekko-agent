@@ -60,8 +60,22 @@ Planned, behind `library-multiplayer` (off). The switch exists in Nekko Cloud; t
 - Share ids are 128-bit random. Anyone holding a link can read the file until the owner stops sharing; anyone holding an edit link can change it.
 - Public reads carry no cookies or account, are not cached, and are rate-limited with the sync routes.
 
+## Thumbnails in synced Library records (#3044)
+
+Requested 2026-11-19 (depends on #3043).
+
+Each sealed Library record also carries a small thumbnail (PNG or WebP, at most ~200 KB), so another computer's Library shows the file's visual before the full file is opened or even copied.
+
+- **Push side.** Before calling `library:sync`, the desktop renderer looks up the file's thumbnail from the disk cache (`library-thumbs/`) using the same revision token that `LibraryFileThumbnail` uses. If a thumbnail is in the cache it is included in the `librarySync` files payload. The engine appends it to the sealed record plaintext as a `"thumb"` field (base64url). A change in the thumbnail alone triggers a new sealed record (tracked via `thumbnail_digest` in `LibrarySynced`).
+- **Files over 8 MB** still get a thumbnail record when one is available. A `thumb-only` record (no `"data"` field, just file metadata and `"thumb"`) is pushed for the same object ID and collection. The server stores ciphertext only.
+- **Pull side.** When the engine opens a Library record from another computer, it stores the thumbnail in `RemoteFile.thumbnail_data`. The `library.remote` status includes `thumbnailData` for each file and `thumbOnly: true` for over-8-MB files. Thumb-only files appear in Library with the original path (read-only, no local copy) and the synced thumbnail.
+- **Renderer.** `ArtifactsView` builds a `remoteThumbs` map from `library.remote` and passes `thumbnailData` from it to `LibraryFileThumbnail` for every remote row. `LibraryFileThumbnail` accepts an optional `thumbnailData` prop: when provided it is used directly (skipping the disk lookup), so remote files show their thumbnail immediately on status update.
+
+Verified: 3 new Rust unit tests (file record carries thumbnail through, thumb-only record round-trips, non-data-URL thumbnails from app are refused); renderer TypeScript tests pass clean.
+
 ## Status
 
 - Implemented and tested against PGlite (`apps/nekko-agent-api`, `src/shares.ts`, migration `0017`, `shares.test.ts`): both switches, share create, read, list, change, stop, restore, delete for good, versions and going back, edit links, storage limits, Library revision history, the 30-day purge.
 - Syncing Library files (#2748): implemented in the engine and the desktop app, see Sync above.
+- Thumbnails in synced records (#3044): implemented; see Thumbnails section above.
 - Not done: the rest of the app side (Share in Library, the versions and recently deleted lists), the link page on nekkoagent.com, the multiplayer relay and editor, a docs page beyond [Encrypted sync](../../docs/SYNC-ENCRYPTION.md). Not deployed.

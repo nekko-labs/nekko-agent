@@ -518,12 +518,22 @@ impl Cloud {
             let remote: Vec<Value> = s
                 .library_remote
                 .iter()
-                .filter(|(_, f)| !f.copy.is_empty())
+                // Include files with a local copy, and thumb-only files that have a thumbnail.
+                .filter(|(_, f)| !f.copy.is_empty() || (f.thumb_only && !f.thumbnail_data.is_empty()))
                 .map(|(id, f)| {
-                    json!({
-                        "id": id, "deviceId": f.device_id, "device": f.device, "path": f.copy, "originalPath": f.path,
+                    // Thumb-only files have no local copy; expose the original path instead.
+                    let path = if f.thumb_only { f.path.clone() } else { f.copy.clone() };
+                    let mut obj = json!({
+                        "id": id, "deviceId": f.device_id, "device": f.device, "path": path, "originalPath": f.path,
                         "title": f.title, "kind": f.kind, "chat": f.chat, "modifiedAt": f.modified_at, "size": f.size,
-                    })
+                    });
+                    if !f.thumbnail_data.is_empty() {
+                        obj["thumbnailData"] = json!(f.thumbnail_data);
+                    }
+                    if f.thumb_only {
+                        obj["thumbOnly"] = json!(true);
+                    }
+                    obj
                 })
                 .collect();
             json!({ "on": on, "files": files, "remote": remote })
@@ -1586,6 +1596,15 @@ impl Cloud {
         }
         match rec {
             LibraryRecord::File(mut f, data) => {
+                if f.thumb_only {
+                    // Thumb-only record (#3044): the file was too large on the other computer.
+                    // Store the metadata and thumbnail but write nothing to disk.
+                    lock(&self.live).pulled += 1;
+                    return self.edit(|s| {
+                        s.revisions.insert(oid.into(), rev);
+                        s.library_remote.insert(oid.into(), f);
+                    });
+                }
                 // Files from one folder on one computer share a folder here, so a design's
                 // numbered versions still read as one design.
                 let folder = self.library_dir().join(library::folder_key(&f.device_id, &f.path));
@@ -1728,6 +1747,8 @@ impl Cloud {
 
         enum Work {
             File { path: String, size: u64, modified: f64 },
+            /// A file over 8 MB: push only a thumbnail record (#3044).
+            Thumb { path: String, size: u64, modified: f64 },
             Gone { path: String },
         }
         let mut work = Vec::new();
@@ -1757,8 +1778,20 @@ impl Cloud {
                         .map_or(0.0, |d| d.as_millis() as f64);
                     if size > library::MAX_FILE_BYTES {
                         skipped.insert(path.clone(), "tooLarge");
-                    } else if !synced.is_some_and(|k| k.key_id == key_id && k.size == size && k.modified_at == modified)
-                    {
+                        // Even for oversized files, sync a thumbnail record if one is available (#3044).
+                        let thumb = st.library_files.get(path).map(|f| f.thumbnail_data.as_str()).unwrap_or("");
+                        if !thumb.is_empty() {
+                            let thumb_digest = records::digest(thumb.as_bytes());
+                            if synced.is_none_or(|k| k.key_id != key_id || k.thumbnail_digest != thumb_digest) {
+                                work.push(Work::Thumb { path: path.clone(), size, modified });
+                            }
+                        }
+                    } else if !synced.is_some_and(|k| {
+                        k.key_id == key_id && k.size == size && k.modified_at == modified
+                            && k.thumbnail_digest == st.library_files.get(path)
+                                .map(|f| if f.thumbnail_data.is_empty() { String::new() } else { records::digest(f.thumbnail_data.as_bytes()) })
+                                .unwrap_or_default()
+                    }) {
                         work.push(Work::File { path: path.clone(), size, modified });
                     }
                 }
@@ -1787,7 +1820,7 @@ impl Cloud {
             while let Some(next) = items.peek() {
                 let estimate = match next {
                     Work::File { size, .. } => (*size as usize) * 4 / 3 + 1024,
-                    Work::Gone { .. } => 256,
+                    Work::Thumb { .. } | Work::Gone { .. } => 512,
                 };
                 if !objects.is_empty() && (objects.len() == PUSH_BATCH || bytes + estimate > PUSH_BYTES) {
                     break;
@@ -1801,8 +1834,23 @@ impl Cloud {
                         (
                             path,
                             plain,
-                            LibrarySynced { modified_at: at, size: 0, digest: String::new(), deleted: true, key_id },
+                            LibrarySynced {
+                                modified_at: at, size: 0, digest: String::new(),
+                                deleted: true, key_id, thumbnail_digest: String::new(),
+                            },
                         )
+                    }
+                    Work::Thumb { path, size, modified } => {
+                        // Thumb-only record for a file over 8 MB (#3044).
+                        let Some(f) = st.library_files.get(&path) else { continue };
+                        if f.thumbnail_data.is_empty() { continue; }
+                        let thumbnail_digest = records::digest(f.thumbnail_data.as_bytes());
+                        let plain = library::thumb_plaintext(&device_id, &st.device_label, f, modified, size);
+                        let synced = LibrarySynced {
+                            modified_at: modified, size, digest: String::new(),
+                            deleted: false, key_id, thumbnail_digest,
+                        };
+                        (path, plain, synced)
                     }
                     Work::File { path, size, modified } => {
                         let Some(f) = st.library_files.get(&path) else { continue };
@@ -1814,15 +1862,22 @@ impl Cloud {
                             skipped.insert(path, "tooLarge");
                             continue;
                         }
-                        // The content and what Library says about it, not the time: a file saved
-                        // again unchanged is only noted, not uploaded.
+                        // The content, metadata, and thumbnail: a file saved again unchanged (and
+                        // whose thumbnail hasn't changed) is only noted, not uploaded.
                         let what = serde_json::to_vec(&json!([f.title, f.kind, f.chat])).unwrap_or_default();
                         let digest = records::digest(&[what, data.clone()].concat());
-                        let synced = LibrarySynced { modified_at: modified, size, digest, deleted: false, key_id };
+                        let thumbnail_digest = if f.thumbnail_data.is_empty() {
+                            String::new()
+                        } else {
+                            records::digest(f.thumbnail_data.as_bytes())
+                        };
+                        let synced = LibrarySynced {
+                            modified_at: modified, size, digest, deleted: false, key_id, thumbnail_digest,
+                        };
                         if st
                             .library
                             .get(&path)
-                            .is_some_and(|k| !k.deleted && k.key_id == key_id && k.digest == synced.digest)
+                            .is_some_and(|k| !k.deleted && k.key_id == key_id && k.digest == synced.digest && k.thumbnail_digest == synced.thumbnail_digest)
                         {
                             self.edit(|s| {
                                 s.library.insert(path.clone(), synced.clone());
