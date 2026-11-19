@@ -227,7 +227,7 @@ export function ArtifactsView() {
     const list = paths.split('\n');
     const listDir = (path: string) => window.nekko.listDir(path);
     presentPaths(listDir, list).then(async (present) => {
-      const moved = await movedPaths(listDir, list.filter((p) => !present.has(p.toLowerCase())));
+      const moved = await movedPaths(listDir, list);
       if (live) setPresence({ checked: new Set(list.map((p) => p.toLowerCase())), present, moved });
     });
     return () => { live = false; };

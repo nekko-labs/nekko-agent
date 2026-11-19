@@ -251,17 +251,19 @@ export async function presentPaths(
 /**
  * Where a file that is gone from its git worktree lives now: the same place in
  * the repo's main checkout, once its branch merged and the worktree was
- * removed. Keyed by the old path, lower-cased; only files found there.
+ * removed. Keyed by the old path, lower-cased; only files the main checkout
+ * lists and the worktree no longer does (a worktree folder that is gone or
+ * cannot be listed counts as gone). Paths outside a worktree are skipped.
  */
 export async function movedPaths(
   listDir: (path: string) => Promise<Array<{ name: string }>>,
-  missing: readonly string[],
+  paths: readonly string[],
 ): Promise<Map<string, string>> {
-  const moves = missing.flatMap((p) => { const to = mainCheckoutPath(p); return to ? [[p, to] as const] : []; });
+  const moves = paths.flatMap((p) => { const to = mainCheckoutPath(p); return to ? [[normalize(p), to] as const] : []; });
   const folderOf = (p: string) => p.slice(0, p.lastIndexOf('/'));
-  // Each folder listed once; one that cannot be listed moves nothing (unlike `presentPaths`, which keeps).
+  // Each folder listed once; one that cannot be listed lists nothing.
   const names = new Map<string, Set<string>>();
-  const folders = [...new Set(moves.map(([, to]) => folderOf(to)))];
+  const folders = [...new Set(moves.flatMap(([from, to]) => [folderOf(from), folderOf(to)]))];
   for (let i = 0; i < folders.length; i += PRESENCE_BATCH) {
     await Promise.all(folders.slice(i, i + PRESENCE_BATCH).map(async (folder) => {
       try {
@@ -270,10 +272,9 @@ export async function movedPaths(
       } catch { /* Not there. */ }
     }));
   }
+  const lists = (p: string) => !!names.get(folderOf(p).toLowerCase())?.has(p.slice(p.lastIndexOf('/') + 1).toLowerCase());
   const out = new Map<string, string>();
-  for (const [from, to] of moves) {
-    if (names.get(folderOf(to).toLowerCase())?.has(to.slice(to.lastIndexOf('/') + 1).toLowerCase())) out.set(from.toLowerCase(), to);
-  }
+  for (const [from, to] of moves) if (!lists(from) && lists(to)) out.set(from.toLowerCase(), to);
   return out;
 }
 

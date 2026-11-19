@@ -71,6 +71,13 @@ describe('designs made out of sight', () => {
     const listDir = async (path: string) => { if (!disk[path]) throw new Error('ENOENT'); return disk[path].map((name) => ({ name })); };
     const moved = await movedPaths(listDir, [`${tree}/nekko-designs/task-details-design.html`, `${tree}/nekko-designs/gone.html`, '/plain/gone.html']);
     expect([...moved]).toEqual([[`${tree}/nekko-designs/task-details-design.html`.toLowerCase(), `${root}/floop/nekko-designs/task-details-design.html`]]);
+    // A worktree that is still there keeps its own copy; one listed empty (the host's answer for a missing folder) has moved.
+    const live = { ...disk, [`${root}/floop/.worktrees/open/nekko-designs`]: ['task-details-design.html'], [`${root}/floop/.worktrees/empty/nekko-designs`]: [] };
+    const liveList = async (path: string) => { if (!live[path]) throw new Error('ENOENT'); return live[path].map((name) => ({ name })); };
+    expect([...(await movedPaths(liveList, [
+      `${root}/floop/.worktrees/open/nekko-designs/task-details-design.html`,
+      `${root}/floop/.worktrees/empty/nekko-designs/task-details-design.html`,
+    ])).values()]).toEqual([`${root}/floop/nekko-designs/task-details-design.html`]);
 
     const chat = sessionArtifacts({ id: 'p', title: 'Floop', messages: [msg('a', '', 5, { toolCalls: [grep(`${tree}/nekko-designs/task-details-design.html`)] })] }, root);
     const folder = folderDesigns('floop', [{ path: `${root}/floop/nekko-designs/task-details-design.html`, name: 'task-details-design.html' }]);
