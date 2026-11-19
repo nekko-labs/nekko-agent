@@ -577,7 +577,7 @@ fn severity(s: nekko_tools::Severity) -> &'static str {
     }
 }
 
-const SHELL_TOOLS: &[&str] = &["Bash", "PowerShell"];
+pub(crate) const SHELL_TOOLS: &[&str] = &["Bash", "PowerShell"];
 const EDIT_TOOLS: &[&str] = &["Edit", "MultiEdit", "Write", "NotebookEdit"];
 
 /// Whether `path` is inside one of the chat's folders (relative paths are

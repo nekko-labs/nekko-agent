@@ -232,6 +232,22 @@ pub fn fake_claude() {
             tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
             out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
             out(result("planned", "completed"));
+        } else if text == "shell" {
+            // A shell command and a file read: only the command reaches the chat's command log.
+            for (id, name, input, output) in [
+                ("toolu_sh", "Bash", json!({ "command": "npm test" }), "3 passed"),
+                ("toolu_rd", "Read", json!({ "file_path": "notes.txt" }), "not a command"),
+            ] {
+                out(assistant(
+                    &format!("m_{id}"),
+                    json!([{ "type": "tool_use", "id": id, "name": name, "input": input }]),
+                ));
+                out(json!({ "type": "user", "message": { "role": "user", "content": [{
+                    "type": "tool_result", "tool_use_id": id, "content": output,
+                }] }, "parent_tool_use_id": null }));
+            }
+            out(assistant("m_sh", json!([{ "type": "text", "text": "tested" }])));
+            out(result("tested", "completed"));
         } else if text == "compact first" {
             // Claude Code compacting before it answers, as it prints the status around it.
             out(json!({ "type": "system", "subtype": "status", "status": "compacting", "session_id": session }));
@@ -637,6 +653,28 @@ async fn runs_turns_on_one_claude_code_process_and_keeps_its_session() {
     let replies = assistant_texts(&second);
     let pid = |r: &str| r.split(':').next().unwrap().to_string();
     assert_eq!(pid(&replies[0]), pid(&replies[1]), "{replies:?}");
+}
+
+/// Claude Code's shell commands reach the chat's command log, the agent
+/// window's Logs drawer (#3067), with their output; its other tools do not.
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_codes_shell_commands_reach_the_chats_command_log() {
+    let rig = rig("shell", "yolo", true);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, "sh1", "shell")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "sh1", "s_cc").await;
+    assert_eq!(end["aborted"], false, "{end}");
+    // The log is written on its own thread: give it a moment.
+    let path = rig.data.join("sessions/s_cc.commands.log");
+    let mut log = String::new();
+    for _ in 0..50 {
+        log = std::fs::read_to_string(&path).unwrap_or_default();
+        if log.contains("3 passed") {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(log, "$ npm test\r\n3 passed\r\n");
 }
 
 /// Claude Code builds its own system prompt, so the engine's context block

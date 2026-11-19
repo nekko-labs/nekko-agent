@@ -24,6 +24,7 @@ mod boot;
 mod catalog;
 mod chat_client;
 mod chat_secrets;
+mod claude_command_log;
 mod claude_plan;
 mod claude_policy;
 mod cli_install;

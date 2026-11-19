@@ -315,7 +315,7 @@ fn grep(call: &ToolCall, ctx: &ToolContext) -> Outcome {
 
 /// What the command-log terminal is sent: control characters other than tab
 /// and newline dropped, newlines as `\r\n`.
-pub(crate) fn sanitize_for_terminal(text: &str) -> String {
+pub fn sanitize_for_terminal(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         match c {
