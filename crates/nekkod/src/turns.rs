@@ -1328,7 +1328,7 @@ impl Turns {
             && !claude_code
             && !js::truthy(opts.get("noTools"))
             && match &self.media {
-                Some(server) => !server.ready_video_models().await.is_empty(),
+                Some(server) => cloud_pictures || !server.ready_video_models().await.is_empty(),
                 None => false,
             };
         let tool_input = json!({
@@ -2894,6 +2894,97 @@ struct TurnTools {
     taint: Mutex<crate::taint::Taint>,
 }
 
+/// How often a cloud clip's state is read, after a first look soon after it starts.
+const CLOUD_CLIP_FIRST_LOOK: Duration = Duration::from_secs(2);
+const CLOUD_CLIP_POLL: Duration = Duration::from_secs(20);
+/// How long a cloud clip is waited for before the chat is told it did not come.
+const CLOUD_CLIP_LIMIT: Duration = Duration::from_secs(60 * 60);
+
+/// A started cloud clip, followed in the background until OpenRouter says it
+/// ended: kept (and copied to the approved project path) when made, its cost
+/// recorded either way, the chat woken through its `clip` watch. A cancelled
+/// watch (the chat's Stop) is not woken, but the clip is still kept.
+struct CloudClipJob {
+    dispatch: crate::automation::Dispatcher,
+    watches: Arc<crate::watches::Watches>,
+    accounts: Arc<Accounts>,
+    session_id: String,
+    watch: String,
+    job: String,
+    model: String,
+    label: String,
+    price: f64,
+    kept: PathBuf,
+    project: Option<String>,
+}
+
+impl CloudClipJob {
+    async fn run(self) {
+        let started = std::time::Instant::now();
+        let mut wait = CLOUD_CLIP_FIRST_LOOK;
+        let news = loop {
+            tokio::time::sleep(wait).await;
+            wait = CLOUD_CLIP_POLL;
+            if started.elapsed() > CLOUD_CLIP_LIMIT {
+                break format!("The clip did not arrive within an hour ({}); it may still be charged.", self.label);
+            }
+            let Ok(state) = (self.dispatch)("media:cloudVideoPoll".into(), vec![json!({ "jobId": self.job })]).await
+            else {
+                continue;
+            };
+            let cost = state["costUsd"].as_f64();
+            match state["status"].as_str().unwrap_or_default() {
+                "completed" => {
+                    self.record(cost.unwrap_or(self.price));
+                    break match self.keep().await {
+                        Ok(paths) => format!("The clip is ready ({}): {}.", self.label, paths.join(" and ")),
+                        Err(e) => format!("The clip was made but could not be kept: {e}"),
+                    };
+                }
+                status @ ("failed" | "cancelled" | "expired") => {
+                    if let Some(c) = cost.filter(|c| *c > 0.0) {
+                        self.record(c);
+                    }
+                    let why = state["error"].as_str().map(|e| format!(": {e}")).unwrap_or_default();
+                    break format!("The clip {status} on OpenRouter ({}){why}.", self.label);
+                }
+                _ => {}
+            }
+        };
+        self.watches.clip_finished(&self.watch, &news).await;
+    }
+
+    fn record(&self, cost: f64) {
+        let (provider, model) = crate::cloud_media::parse_cloud_id(&self.model).unwrap_or(("", &self.model));
+        self.accounts.usage_line(&json!({
+            "ts": nekko_js::now_ms(), "providerId": provider, "modelId": model, "sessionId": self.session_id,
+            "inputTokens": 0, "outputTokens": 0, "local": false, "kind": "video", "costUsd": cost,
+        }));
+    }
+
+    async fn keep(&self) -> Result<Vec<String>, String> {
+        use base64::Engine as _;
+        let file = (self.dispatch)("media:cloudVideoFetch".into(), vec![json!({ "jobId": self.job })]).await?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(file["b64"].as_str().unwrap_or_default())
+            .map_err(|_| "the clip could not be read")?;
+        std::fs::create_dir_all(&self.kept).map_err(|e| e.to_string())?;
+        let kept = self.kept.join(format!("clip-{}.mp4", nekko_js::now_ms()));
+        std::fs::write(&kept, &bytes).map_err(|e| e.to_string())?;
+        let mut paths = vec![kept.to_string_lossy().to_string()];
+        if let Some(p) = &self.project {
+            if let Some(parent) = std::path::Path::new(p).parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            match std::fs::write(p, &bytes) {
+                Ok(()) => paths.push(p.clone()),
+                Err(e) => paths.push(format!("(not saved to {p}: {e})")),
+            }
+        }
+        Ok(paths)
+    }
+}
+
 /// How much a chat may spend on paid pictures each time the user allows it.
 const PICTURE_ALLOWANCE_USD: f64 = 1.0;
 
@@ -2927,6 +3018,16 @@ impl crate::media_tools::CloudSide for ChatCloud<'_> {
         Box::pin(async move {
             let Some(d) = self.tools.turns.dispatch.get() else { return Vec::new() };
             match d("media:cloudModels".into(), vec![]).await {
+                Ok(Value::Array(list)) => list,
+                _ => Vec::new(),
+            }
+        })
+    }
+
+    fn video_models(&self) -> CloudFut<'_, Vec<Value>> {
+        Box::pin(async move {
+            let Some(d) = self.tools.turns.dispatch.get() else { return Vec::new() };
+            match d("media:cloudVideoModels".into(), vec![]).await {
                 Ok(Value::Array(list)) => list,
                 _ => Vec::new(),
             }
@@ -3253,6 +3354,13 @@ impl TurnTools {
             let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
                 return Ok(error(id, "Clips are not available in this chat."));
             };
+            if input
+                .get("model")
+                .and_then(Value::as_str)
+                .is_some_and(|m| crate::cloud_media::parse_cloud_id(m).is_some())
+            {
+                return Ok(self.cloud_clip(id, call, &input, ctx).await);
+            }
             let session = lock(&self.session).clone();
             let frame = match crate::media_tools::native_frame(&input, &session, ctx) {
                 Ok(f) => f,
@@ -3904,6 +4012,141 @@ impl TurnTools {
 
     /// `askUser`: park the turn on a question until it is answered, the turn
     /// stops, or (with an unattended limit set) nobody answers in time.
+    /// A paid clip on the user's OpenRouter provider (`generate_video` naming a
+    /// cloud model; decided 2026-11-19): the user picks length, audio and
+    /// resolution on a question card with each answer's price, then confirms
+    /// the total, in every mode, YOLO included. The clip is made in the
+    /// background and wakes the chat through a `clip` watch. It cannot be
+    /// stopped once started, so a Stop only ends the waiting: the clip is still
+    /// kept when it arrives, and its cost recorded.
+    async fn cloud_clip(&self, id: &str, call: &Value, input: &Value, ctx: &ToolContext) -> Value {
+        let session = lock(&self.session).clone();
+        if crate::connections::offline(&session) || str_at(&session, "models") == Some("local") || self.incognito {
+            return error(id, "Paid cloud clips are not available in an offline, Local only or incognito chat.");
+        }
+        let Some(d) = self.turns.dispatch.get().cloned() else {
+            return error(id, "Cloud clips are not available here.");
+        };
+        let asked = input.get("model").and_then(Value::as_str).unwrap_or_default();
+        let models = match d("media:cloudVideoModels".into(), vec![]).await {
+            Ok(Value::Array(list)) => list,
+            _ => Vec::new(),
+        };
+        let Some(model) = models.into_iter().find(|m| m["id"] == asked) else {
+            return error(id, format!("{asked} is not a priced video model on the user's OpenRouter provider."));
+        };
+        let prompt = input.get("prompt").and_then(Value::as_str).map(str::trim).unwrap_or_default().to_string();
+        if prompt.is_empty() {
+            return error(id, "Describe the clip first (prompt).");
+        }
+        let frame = match crate::media_tools::native_frame(input, &session, ctx) {
+            Ok(f) => f,
+            Err(e) => return error(id, e),
+        };
+        if frame.is_some() && model["firstFrame"] != true {
+            return error(id, "This video model cannot start from a picture.");
+        }
+        // The choice, priced answer by answer, on the chat's own question card.
+        let suggested = crate::media_tools::ClipChoice::suggested(&model, input);
+        let card = crate::media_tools::clip_questions(&model, &suggested);
+        let choice = if card["questions"].as_array().is_some_and(|q| !q.is_empty()) {
+            let ask = json!({ "id": format!("{id}-clip"), "name": "ask_user", "input": card });
+            match self.ask_answers(&ask).await {
+                Some(answers) => crate::media_tools::clip_answer(&card, &answers, &suggested),
+                None => return error(id, "No clip was chosen, so nothing was started or charged."),
+            }
+        } else {
+            suggested
+        };
+        let Some(price) = choice.price(&model) else {
+            return error(id, "That clip has no published price, so it was not started.");
+        };
+        let name = model["name"].as_str().unwrap_or_default().to_string();
+        let frame_note = if frame.is_some() { " The prompt and the first picture" } else { " The prompt" };
+        let reason = format!(
+            "Make a {} clip with {name} through OpenRouter for ${price:.2}, on your OpenRouter account. Once started it cannot be stopped and is charged even if you stop the chat; the clip is still kept.{frame_note} leave this computer for OpenRouter and the model's provider.",
+            choice.describe()
+        );
+        if !self.turns.request_spend_approval(&self.shared, call, &reason).await {
+            return error(id, "The paid clip was not approved, so nothing was started or charged.");
+        }
+        // A project copy is approved now, while this turn can still ask.
+        let project = match input.get("path").and_then(Value::as_str).filter(|p| !p.trim().is_empty()) {
+            Some(p) if !p.to_lowercase().ends_with(".mp4") => {
+                return error(id, "The path must end in .mp4 (a cloud clip is an MP4).");
+            }
+            Some(p) => {
+                let tc = ToolCall { id: id.to_string(), name: "generate_video".into(), input: input.clone() };
+                match nekko_tools::approve_new_file(&tc, ctx, Some(&json!(p))).await {
+                    Ok(p) => Some(p),
+                    Err(e) => return error(id, e),
+                }
+            }
+            None => None,
+        };
+        let mut start = json!({ "id": asked, "prompt": prompt, "duration": choice.duration, "audio": choice.audio });
+        if let Some(r) = &choice.resolution {
+            start["resolution"] = json!(r);
+        }
+        if let Some(f) = &frame {
+            start["firstFrame"] = json!(f);
+        }
+        let job = match d("media:cloudVideoStart".into(), vec![start]).await {
+            Ok(v) => v["jobId"].as_str().unwrap_or_default().to_string(),
+            Err(e) => return error(id, format!("The clip could not be started: {e}")),
+        };
+        let then = input.get("then").and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty());
+        let then = then.unwrap_or("Show the user the clip and continue the task.");
+        let watch =
+            match self.turns.watches.arm_clip(&self.shared.session_id, then, nekko_loop::Cancel::default()).await {
+                Ok(w) => w,
+                Err(e) => {
+                    return error(
+                        id,
+                        format!("The clip was started on OpenRouter but its wake-up could not be armed: {e}"),
+                    );
+                }
+            };
+        let job_task = CloudClipJob {
+            dispatch: d,
+            watches: self.turns.watches.clone(),
+            accounts: self.turns.accounts.clone(),
+            session_id: self.shared.session_id.clone(),
+            watch: watch.clone(),
+            job,
+            model: asked.to_string(),
+            label: format!("{name}, {}", choice.describe()),
+            price,
+            kept: self.turns.data_dir.join("agent-pictures").join(&self.shared.session_id),
+            project,
+        };
+        tokio::spawn(job_task.run());
+        result(
+            id,
+            format!(
+                "Started a {} clip with {name} through OpenRouter (${price:.2}). It takes minutes; watch {watch} wakes this chat with the clip when it is ready. It cannot be stopped. Tell the user and end your turn now.",
+                choice.describe()
+            ),
+        )
+    }
+
+    /// Ask the chat's question card and wait for the answers; `None` when it
+    /// was cancelled or nobody answered (an unattended run).
+    async fn ask_answers(&self, call: &Value) -> Option<Value> {
+        if self.shared.unattended.is_on() {
+            return None;
+        }
+        let call_id = str_at(call, "id").unwrap_or_default().to_string();
+        let request =
+            turn::parse_ask_request(&call_id, call.get("input").unwrap_or(&Value::Null), nekko_js::now_ms()).ok()?;
+        let session_id = self.shared.session_id.clone();
+        let rx = self.turns.pending.park_question(&session_id, &request);
+        self.shared.emit(json!({ "type": "question", "sessionId": session_id, "request": request }));
+        let answers = rx.await.unwrap_or(json!([]));
+        self.shared.emit(json!({ "type": "question_resolved", "sessionId": session_id, "callId": call_id }));
+        answers.as_array().is_some_and(|a| !a.is_empty()).then_some(answers)
+    }
+
     async fn ask(&self, call: &Value) -> String {
         let c = turn::catalog::catalog();
         let call_id = str_at(call, "id").unwrap_or_default().to_string();

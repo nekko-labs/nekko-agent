@@ -27,6 +27,8 @@ Choose it as the model in a Photo chat and describe the clip. Attach a photo to 
 
 The agent in a chat on this computer can start a clip too (not in incognito or offline chats). It answers at once and the chat is free while the clip is made; when it is ready, the chat wakes with where the clip was saved, and the agent carries on. Stopping the chat, or cancelling the clip's watch, stops the clip.
 
+With **OpenRouter** as a provider, the agent can also make a clip with a cloud video model such as Veo, on your OpenRouter account. Before anything starts, Nekko asks you to pick the length, whether it has sound, and the resolution, with the price of each choice (the shortest, silent, lowest-resolution clip is suggested), then asks you to confirm the total, even in YOLO. A cloud clip cannot be stopped once it has started: stopping the chat stops the waiting, but the clip is still made, charged and saved. Its cost counts in the **Budget** monitor.
+
 This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) are not supported yet: a search under **Models → Video** keeps them behind **Show more from Hugging Face**.
 
 ### Pictures from any chat

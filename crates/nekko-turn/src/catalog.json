@@ -910,7 +910,7 @@
   ],
   "video": {
    "name": "generate_video",
-   "description": "Start a short clip (about two seconds, an animated WebP) with a local video model on this computer (experimental), from a written description and optionally a first frame. A clip takes minutes, so this returns at once: end your turn after telling the user, and this chat wakes with the clip's path when it is ready (or why it failed). Only one picture or clip runs at a time on this computer; the chat's Stop cancels it. Nothing leaves the computer.",
+   "description": "Start a short clip from a written description, optionally from a first frame. With no model, or a local one, it is made on this computer (experimental, about two seconds, an animated WebP; nothing leaves the computer). With a cloud video model from media_models (on the user's OpenRouter account, priced per second), the user first picks length, audio and resolution with their prices and confirms the total; it cannot be stopped once started. Either way this returns at once: end your turn after telling the user, and this chat wakes with the clip's path when it is ready (or why it failed). Only one local picture or clip runs at a time on this computer; the chat's Stop cancels a local clip.",
    "parameters": {
     "type": "object",
     "properties": {
@@ -924,15 +924,27 @@
      },
      "model": {
       "type": "string",
-      "description": "A video model id. Default: the first ready one."
+      "description": "A video model id from media_models. Default: the first ready local one. A cloud model is used only when named here."
      },
      "size": {
       "type": "string",
       "description": "The clip's shape as WIDTHxHEIGHT (e.g. 832x480 or 480x832); it is scaled to about 832x480 pixels. Default: the first frame's shape, else 832x480."
      },
+     "duration": {
+      "type": "number",
+      "description": "Cloud models: the length in seconds to suggest to the user (one the model offers). Default: the shortest."
+     },
+     "audio": {
+      "type": "boolean",
+      "description": "Cloud models: suggest a clip with sound (costs more). Default false."
+     },
+     "resolution": {
+      "type": "string",
+      "description": "Cloud models: the resolution to suggest (e.g. 720p). Default: the lowest the model offers."
+     },
      "path": {
       "type": "string",
-      "description": "Optional new workspace-relative path ending in .webp to also save the clip in the project (approved now, the same as write_file)."
+      "description": "Optional new workspace-relative path to also save the clip in the project (approved now, the same as write_file): .webp for a local clip, .mp4 for a cloud one."
      },
      "then": {
       "type": "string",
