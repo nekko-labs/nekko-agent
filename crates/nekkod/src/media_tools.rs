@@ -83,10 +83,15 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
     if !inspect && path.is_none() {
         return err(id, "With inspect false, give a path to save the picture to; otherwise it would be lost.");
     }
+    let svg = input.get("format").and_then(Value::as_str) == Some("svg");
+    if svg && name == "edit_image" {
+        return err(id, "Vector output is for new pictures (generate_image with format svg).");
+    }
+    let ext = if svg { ".svg" } else { ".png" };
     if let Some(p) = path.and_then(Value::as_str)
-        && !p.to_lowercase().ends_with(".png")
+        && !p.to_lowercase().ends_with(ext)
     {
-        return err(id, "The path must end in .png.");
+        return err(id, format!("The path must end in {ext}."));
     }
     if path.is_some() && input.get("count").and_then(Value::as_f64).is_some_and(|n| n > 1.0) {
         return err(id, "Save one picture at a time: use count 1 with a path.");
@@ -110,15 +115,18 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
         r = make(server, &models, request) => r,
         _ = c.ctx.cancel.cancelled() => return err(id, "Stopped before the picture finished."),
     };
-    let Made { images, mut output } = match made {
+    let Made { images, mut output, svg } = match made {
         Ok(m) => m,
         Err(e) => return err(id, e),
     };
     if let Some(p) = path {
         let call = ToolCall { id: id.to_string(), name: name.to_string(), input: input.clone() };
-        let bytes = match base64::engine::general_purpose::STANDARD.decode(&images[0]) {
-            Ok(b) => b,
-            Err(_) => return err(id, "The model returned a picture that could not be read."),
+        let bytes = match &svg {
+            Some(code) => code.clone().into_bytes(),
+            None => match base64::engine::general_purpose::STANDARD.decode(&images[0]) {
+                Ok(b) => b,
+                Err(_) => return err(id, "The model returned a picture that could not be read."),
+            },
         };
         match nekko_tools::save_new_file(&call, c.ctx, Some(p), &bytes).await {
             Ok(saved) => output.push_str(&format!(" Saved to {saved}.")),
@@ -157,7 +165,7 @@ pub async fn run_bridge(
         read_picture(p, &full.to_string_lossy())
     };
     let request = Request { name, input, session, default, last: newest_saved(saved), read: &read, cloud: None };
-    let Made { images, mut output } = match make(server, &models, request).await {
+    let Made { images, mut output, .. } = match make(server, &models, request).await {
         Ok(m) => m,
         Err(e) => return fail(e),
     };
@@ -408,6 +416,55 @@ pub fn clip_questions(model: &Value, suggested: &ClipChoice) -> Value {
     json!({ "questions": questions })
 }
 
+/// The price of every combination the card offers, keyed `length|audio|resolution`
+/// by the answers' labels (a question not asked is empty), so a picker can show
+/// the total as the user changes the answers. Unpriced combinations are left out.
+pub fn clip_prices(model: &Value, questions: &Value, suggested: &ClipChoice) -> Value {
+    let labels = |header: &str| -> Vec<String> {
+        questions["questions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|q| q["header"] == header)
+            .and_then(|q| q["options"].as_array())
+            .map(|o| o.iter().filter_map(|x| x["label"].as_str().map(str::to_string)).collect())
+            .unwrap_or_else(|| vec![String::new()])
+    };
+    let mut out = serde_json::Map::new();
+    for length in labels("Length") {
+        for audio in labels("Audio") {
+            for res in labels("Resolution") {
+                let mut c = suggested.clone();
+                if let Some(d) = length.split_whitespace().next().and_then(|n| n.parse().ok()) {
+                    c.duration = d;
+                }
+                if !audio.is_empty() {
+                    c.audio = audio == "With audio";
+                }
+                if !res.is_empty() {
+                    c.resolution = Some(res.clone());
+                }
+                if let Some(p) = c.price(model) {
+                    out.insert(format!("{length}|{audio}|{res}"), json!((p * 100.0).round() / 100.0));
+                }
+            }
+        }
+    }
+    Value::Object(out)
+}
+
+/// The total a picker confirmed with its answers (`{ questionId: "total", labels: ["2.40"] }`),
+/// when it is exactly the price Nekko computed for that choice.
+pub fn confirmed_total(answers: &Value, price: f64) -> bool {
+    answers
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|a| a["questionId"] == "total")
+        .and_then(|a| a["labels"].as_array()?.first()?.as_str()?.parse::<f64>().ok())
+        .is_some_and(|t| (t - (price * 100.0).round() / 100.0).abs() < 0.005)
+}
+
 /// The choice the user made on [`clip_questions`]' card (`[{ questionId, labels }]`),
 /// starting from the suggested one for anything not asked or not answered.
 pub fn clip_answer(questions: &Value, answers: &Value, suggested: &ClipChoice) -> ClipChoice {
@@ -504,15 +561,24 @@ struct Request<'a> {
 }
 
 struct Made {
-    /// Bare base64 PNGs.
+    /// Bare base64 PNGs (for a vector picture, its preview).
     images: Vec<String>,
     output: String,
+    /// A vector picture's sanitized SVG, which is what a `path` saves.
+    svg: Option<String>,
 }
 
 /// Choose the model, check the call, and make the pictures through the media queue.
 async fn make(server: &Server, models: &[Value], r: Request<'_>) -> Result<Made, String> {
     let edit = r.name == "edit_image";
-    let need = if edit { "edit" } else { "create" };
+    let vector = r.input.get("format").and_then(Value::as_str) == Some("svg");
+    let need = if edit {
+        "edit"
+    } else if vector {
+        "vector"
+    } else {
+        "create"
+    };
     let model = choose(models, r.input, r.session, r.default, need)?;
     let prompt = r.input.get("prompt").and_then(Value::as_str).map(str::trim).unwrap_or_default();
     if prompt.is_empty() {
@@ -526,7 +592,7 @@ async fn make(server: &Server, models: &[Value], r: Request<'_>) -> Result<Made,
     let refs = if edit { pictures(r.input, r.last.as_deref(), r.read)? } else { Vec::new() };
     if model["source"] == "cloud" {
         let cloud = r.cloud.ok_or("Cloud pictures are not available in this chat.")?;
-        return paid(cloud, &model, prompt, (width, height), count, refs).await;
+        return paid(cloud, &model, prompt, (width, height), count, refs, vector).await;
     }
     let defaults = &model["defaults"];
     let params = r.session.get("imageParams").filter(|p| p.get("modelId") == model.get("id"));
@@ -577,7 +643,7 @@ async fn make(server: &Server, models: &[Value], r: Request<'_>) -> Result<Made,
     } else {
         "Made the picture"
     };
-    Ok(Made { images, output: format!("{what} with {label} ({width}x{height}) on this computer.") })
+    Ok(Made { images, output: format!("{what} with {label} ({width}x{height}) on this computer."), svg: None })
 }
 
 /// One picture from a paid cloud model: its price asked for (or covered by
@@ -589,6 +655,7 @@ async fn paid(
     size: (u64, u64),
     count: u64,
     refs: Vec<String>,
+    vector: bool,
 ) -> Result<Made, String> {
     if count > 1 {
         return Err("Paid models make one picture per call, so each charge is shown; call again for another.".into());
@@ -598,8 +665,9 @@ async fn paid(
     let about = if model["priceExact"] == true { "" } else { "about " };
     let photos =
         if refs.is_empty() { "The prompt" } else { "The prompt and the pictures to change leave this computer:" };
+    let kind = if vector { "1 vector picture (SVG)" } else { "1 picture" };
     let what = format!(
-        "Make 1 picture with {name} through OpenRouter for {about}${price:.3}, on your OpenRouter account. {photos} sent to OpenRouter and the model's provider."
+        "Make {kind} with {name} through OpenRouter for {about}${price:.3}, on your OpenRouter account. {photos} sent to OpenRouter and the model's provider."
     );
     cloud.spend(price, &what).await?;
     let mut request = json!({
@@ -608,6 +676,9 @@ async fn paid(
     if !refs.is_empty() {
         request["images"] = json!(refs);
     }
+    if vector {
+        request["format"] = json!("svg");
+    }
     let made = cloud.image(request).await.map_err(|e| format!("The picture could not be made: {e}"))?;
     let cost = made["costUsd"].as_f64().unwrap_or(price);
     cloud.spent(cost, model["id"].as_str().unwrap_or_default()).await;
@@ -615,8 +686,41 @@ async fn paid(
     if b64.is_empty() {
         return Err("The model finished without a picture.".into());
     }
+    if vector {
+        return vector_made(&b64, name, cost);
+    }
     let verb = if refs.is_empty() { "Made the picture" } else { "Changed the picture" };
-    Ok(Made { images: vec![b64], output: format!("{verb} with {name} through OpenRouter (cost ${cost:.3}).") })
+    Ok(Made {
+        images: vec![b64],
+        output: format!("{verb} with {name} through OpenRouter (cost ${cost:.3})."),
+        svg: None,
+    })
+}
+
+/// The SVG code shown to the agent at most, so a very detailed vector does not flood its context.
+const SVG_SHOWN: usize = 12_000;
+
+/// A vector picture as the tool returns it: the SVG made safe (svg_safe.rs),
+/// a PNG preview for the chat and for models that read pictures, and the code
+/// itself for the agent to place in a page or change.
+fn vector_made(b64: &str, name: &str, cost: f64) -> Result<Made, String> {
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .map_err(|_| "The model returned an SVG that could not be read.")?;
+    let raw = String::from_utf8(raw).map_err(|_| "The model returned an SVG that is not text.")?;
+    let svg = crate::svg_safe::sanitize(&raw).map_err(|e| format!("The vector picture was refused: {e}"))?;
+    let png = crate::svg_safe::preview_png(&svg, 1024)?;
+    let shown = if svg.len() > SVG_SHOWN {
+        let cut = (0..=SVG_SHOWN).rev().find(|i| svg.is_char_boundary(*i)).unwrap_or(0);
+        format!("{}\n<!-- … {} more bytes; save it with path to get all of it -->", &svg[..cut], svg.len() - cut)
+    } else {
+        svg.clone()
+    };
+    let output = format!(
+        "Made a vector picture (SVG) with {name} through OpenRouter (cost ${cost:.3}). Made safe: no scripts, event handlers or outside links. Use it inline in HTML, as an <img> file, or change its fills and strokes below. SVG ({} bytes):\n```svg\n{shown}\n```",
+        svg.len()
+    );
+    Ok(Made { images: vec![base64::engine::general_purpose::STANDARD.encode(png)], output, svg: Some(svg) })
 }
 
 /// `media_models`'s answer.
@@ -632,7 +736,12 @@ fn list(models: &[Value]) -> String {
             let place = match m["priceUsd"].as_f64() {
                 Some(p) if m["source"] == "cloud" => {
                     let about = if m["priceExact"] == true { "" } else { "about " };
-                    format!("cloud through OpenRouter, {about}${p:.3} a picture, asks before paying")
+                    let best = if can.contains(&"vector") {
+                        "best for vectors (format svg: logos, icons, flat illustrations), "
+                    } else {
+                        ""
+                    };
+                    format!("{best}cloud through OpenRouter, {about}${p:.3} a picture, asks before paying")
                 }
                 _ => "local, free".to_string(),
             };
@@ -695,6 +804,15 @@ fn choose(
             return Err(format!("{asked} cannot do that; choose one that {verb} (media_models)."));
         }
         return Ok(m.clone());
+    }
+    // Vector pictures: Recraft (or another cloud vector model) is the best
+    // there is, so it is the default when the user's OpenRouter offers it,
+    // asked with its price like any paid picture (decided by Davide 2026-11-19).
+    if need == "vector" {
+        return models.iter().find(|m| can(m, "vector")).cloned().ok_or_else(|| {
+            "No vector model is available: add OpenRouter as a provider to use Recraft, or write the SVG as code."
+                .to_string()
+        });
     }
     let own = session.get("imageParams").and_then(|p| p.get("modelId")).and_then(Value::as_str);
     let ready = |id: Option<&str>| id.and_then(|id| models.iter().find(|m| m["id"] == id && can(m, need)));
@@ -854,6 +972,48 @@ mod tests {
         assert_eq!(chosen, ClipChoice { duration: 6, audio: true, resolution: Some("720p".into()) });
         assert_eq!(chosen.price(&veo()), Some(2.4000000000000004));
         assert_eq!(some_durations(&[2, 3, 4, 5, 6, 7, 8, 9, 10]), vec![2, 4, 6, 8, 10]);
+        // Every combination priced for a live total; a confirmed total must match.
+        let prices = clip_prices(&veo(), &q, &s);
+        assert_eq!(prices["4 seconds|No audio|720p"], json!(0.8));
+        assert_eq!(prices["6 seconds|With audio|720p"], json!(2.4));
+        assert_eq!(prices.as_object().unwrap().len(), 3 * 2 * 2);
+        let with_total =
+            json!([{ "questionId": "q1", "labels": ["6 seconds"] }, { "questionId": "total", "labels": ["2.40"] }]);
+        assert!(confirmed_total(&with_total, 2.4000000000000004));
+        assert!(!confirmed_total(&with_total, 1.6));
+        assert!(!confirmed_total(&answers, 2.4));
+    }
+
+    #[test]
+    fn a_vector_picture_goes_to_the_cloud_vector_model_by_default() {
+        let mut all = models();
+        all.push(json!({ "id": "openrouter:p:recraft/recraft-v4.1-vector", "name": "Recraft V4.1 Vector", "capabilities": ["create", "vector"], "source": "cloud", "priceUsd": 0.08, "priceExact": true }));
+        let svg = json!({ "format": "svg" });
+        assert_eq!(choose(&all, &svg, &json!({}), None, "vector").unwrap()["name"], "Recraft V4.1 Vector");
+        assert!(choose(&models(), &svg, &json!({}), None, "vector").unwrap_err().contains("add OpenRouter"));
+        assert!(
+            choose(&all, &json!({ "model": "z", "format": "svg" }), &json!({}), None, "vector")
+                .unwrap_err()
+                .contains("cannot do that")
+        );
+        assert!(list(&all).contains("best for vectors (format svg"));
+    }
+
+    #[test]
+    fn a_vector_picture_comes_back_safe_with_its_code_and_a_preview() {
+        let raw = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10" onload="x()"><script>alert(1)</script><circle cx="5" cy="5" r="4" fill="#e33"/></svg>"##;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(raw);
+        let made = vector_made(&b64, "Recraft V4.1 Vector", 0.08).unwrap();
+        let svg = made.svg.unwrap();
+        assert!(!svg.contains("script") && !svg.contains("onload"), "{svg}");
+        assert!(
+            made.output
+                .starts_with("Made a vector picture (SVG) with Recraft V4.1 Vector through OpenRouter (cost $0.080).")
+        );
+        assert!(made.output.contains("```svg\n<svg"), "{}", made.output);
+        let png = base64::engine::general_purpose::STANDARD.decode(&made.images[0]).unwrap();
+        assert_eq!(&png[1..4], b"PNG");
+        assert!(vector_made(&base64::engine::general_purpose::STANDARD.encode("<html/>"), "x", 0.0).is_err());
     }
 
     #[test]
