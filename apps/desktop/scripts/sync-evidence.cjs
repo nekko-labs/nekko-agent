@@ -143,11 +143,9 @@ async function main() {
   await a.click('[data-testid=cloud-send-code]');
   await a.waitForSelector('[data-testid=cloud-otp-0]');
   await a.fill('[data-testid=cloud-otp-0]', '123456');
-  await phase(a, 'Off');
-  await both(a, '04-off');
-  // Turn on: the recovery key, the kit, typing it back.
-  await a.click('[data-testid=sync-turn-on]');
-  await a.waitForSelector('[data-testid=recovery-key]');
+  // Signing in turns sync on by itself: the recovery key, the kit, typing it back. Nobody clicks Turn on.
+  await a.waitForSelector('[data-testid=recovery-key]', { timeout: 20000 });
+  if (await a.locator('[data-testid=sync-turn-on]').count()) throw new Error('sync waited for Turn on after signing in');
   const recovery = (await a.locator('[data-testid=recovery-key] span').allTextContents()).join('-');
   await both(a, '05-recovery-key', 'page');
   await a.check('[data-testid=recovery-saved]');
@@ -159,11 +157,18 @@ async function main() {
   await phase(a, 'Up to date');
   await both(a, '07-up-to-date');
 
-  // B: same account, so it has to join; it asks, and shows its code.
-  await call(B, 'cloud:sendCode', [email]);
-  await call(B, 'cloud:verifyCode', [email, '123456']);
+  // B: same account, signed in through the window. Sync can't start by itself here (the account
+  // already syncs), so it lands on adding this computer, quietly; it asks, and shows its code.
   const b = await page(B);
+  await b.click('[data-testid=sync-sign-in]');
+  await b.fill('[data-testid=cloud-email]', email);
+  await b.click('[data-testid=cloud-send-code]');
+  await b.waitForSelector('[data-testid=cloud-otp-0]');
+  await b.fill('[data-testid=cloud-otp-0]', '123456');
   await phase(b, 'Add this computer');
+  await b.waitForTimeout(1500);
+  if (await b.locator('[data-testid=sync-settings] [role=alert]').count()) throw new Error(`an error showed: ${await b.locator('[data-testid=sync-settings] [role=alert]').first().textContent()}`);
+  if (await b.locator('[data-testid=recovery-key]').count()) throw new Error('a second computer made a new recovery key');
   await both(b, '08-needs-join');
   await b.click('[data-testid=sync-request-join]');
   await phase(b, 'Waiting for approval');
