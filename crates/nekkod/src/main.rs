@@ -100,6 +100,7 @@ mod spawn;
 mod speeds;
 mod subagent_model;
 mod subagents;
+mod svg_safe;
 mod taint;
 mod telemetry;
 mod tooling;

@@ -154,6 +154,11 @@ pub fn model_row(provider: &str, m: &Value, (price, exact): (f64, bool)) -> Opti
     if has("input_modalities", "image") {
         can.push("edit");
     }
+    // Vectorization models (Recraft's vector models, Quiver) answer `output_format: svg`.
+    let named = format!("{} {}", id, m.get("name").and_then(Value::as_str).unwrap_or_default()).to_lowercase();
+    if ["vector", "svg", "quiver"].iter().any(|w| named.contains(w)) {
+        can.push("vector");
+    }
     let name = m.get("name").and_then(Value::as_str).unwrap_or(id);
     Some(json!({
         "id": cloud_id(provider, id), "name": name, "capabilities": can, "defaults": {},
@@ -208,7 +213,8 @@ async fn image(ctx: &Ctx, req: &Value) -> Result<Value, String> {
     }
     let (base, key) = access(ctx, provider).await?;
     let mut body = json!({
-        "model": model, "prompt": req.get("prompt").cloned().unwrap_or(Value::Null), "n": 1, "output_format": "png",
+        "model": model, "prompt": req.get("prompt").cloned().unwrap_or(Value::Null), "n": 1,
+        "output_format": if req.get("format").and_then(Value::as_str) == Some("svg") { "svg" } else { "png" },
     });
     if let Some(r) = req.get("aspectRatio").and_then(Value::as_str) {
         body["aspect_ratio"] = json!(r);

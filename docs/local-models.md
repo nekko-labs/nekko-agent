@@ -29,6 +29,10 @@ The agent in a chat on this computer can start a clip too (not in incognito or o
 
 With **OpenRouter** as a provider, the agent can also make a clip with a cloud video model such as Veo, on your OpenRouter account. Before anything starts, Nekko asks you to pick the length, whether it has sound, and the resolution, with the price of each choice (the shortest, silent, lowest-resolution clip is suggested), then asks you to confirm the total, even in YOLO. A cloud clip cannot be stopped once it has started: stopping the chat stops the waiting, but the clip is still made, charged and saved. Its cost counts in the **Budget** monitor.
 
+### Vector graphics (SVG)
+
+For a logo, an icon or a flat illustration that has to scale or be edited, ask the agent for an SVG. With **OpenRouter** as a provider, Nekko uses **Recraft**'s vector model, the best there is for this, and asks first with its price (about $0.08 a picture). The SVG is checked before you see it: scripts, event handlers and links to other sites are removed. The chat shows a preview, the agent gets the SVG code to put in a page or change, and it can save the file in your project.
+
 This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) are not supported yet: a search under **Models → Video** keeps them behind **Show more from Hugging Face**.
 
 ### Pictures from any chat

@@ -917,6 +917,111 @@ async fn a_paid_cloud_clip_is_chosen_with_prices_then_confirmed() {
     assert!(usage.lines().any(|l| l.contains("\"kind\":\"video\"") && l.contains("\"costUsd\":2.35")), "{usage}");
 }
 
+/// A stand-in OpenRouter with Recraft's vector model: an SVG that carries a script.
+async fn fake_openrouter_vector(seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>) -> u16 {
+    use axum::extract::Path;
+    use axum::routing::{get, post};
+    let models = json!({ "data": [{ "id": "recraft/recraft-v4.1-vector", "name": "Recraft V4.1 Vector",
+        "architecture": { "input_modalities": ["text"], "output_modalities": ["image"] } }] });
+    let endpoints = json!({ "data": { "endpoints": [{ "pricing": [{ "billable": "output_image", "unit": "image", "cost_usd": "0.08" }] }] } });
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" onload="steal()"><script>steal()</script><circle cx="12" cy="12" r="10" fill="#ff5a36"/></svg>"##;
+    let b64 = {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode(svg)
+    };
+    let app = axum::Router::new()
+        .route("/api/v1/images/models", get(move || async move { axum::Json(models) }))
+        .route(
+            "/api/v1/images/models/{*rest}",
+            get(move |Path(_rest): Path<String>| {
+                let endpoints = endpoints.clone();
+                async move { axum::Json(endpoints) }
+            }),
+        )
+        .route(
+            "/api/v1/images",
+            post(move |axum::Json(body): axum::Json<Value>| {
+                let (seen, b64) = (seen.clone(), b64.clone());
+                async move {
+                    seen.lock().unwrap().push(body);
+                    axum::Json(json!({ "data": [{ "b64_json": b64, "media_type": "image/svg+xml" }], "usage": { "cost": 0.08 } }))
+                }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+/// A vector picture: with format svg and no model the user's Recraft is used,
+/// asked with its price; the SVG comes back made safe, with its code for the
+/// agent and a PNG preview, and is saved in the project.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_vector_picture_comes_from_recraft_made_safe() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter_vector(seen.clone()).await;
+    let chat = json!({ "id": "s_svg", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("vector-picture", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model = scripted_model(vec![
+        call_tool(
+            "c_logo",
+            "generate_image",
+            json!({ "prompt": "a round orange logo", "format": "svg", "path": "brand/logo.svg" }),
+        ),
+        say_text("done"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_svg", "s_svg", json!({ "text": "A logo" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(&rig, json!({ "providers": [scripted.clone(), openrouter.clone()] })).await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let asked = wait_pending(rig.d.port, "s_svg", "approval", "c_logo").await;
+    let reason = asked["reason"].as_str().unwrap_or_default();
+    assert!(
+        reason.contains("Make 1 vector picture (SVG) with Recraft V4.1 Vector through OpenRouter for $0.080"),
+        "{reason}"
+    );
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_svg", "c_logo", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_svg", "s_svg").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let sent = seen.lock().unwrap().clone();
+    assert_eq!(
+        (sent[0]["model"].clone(), sent[0]["output_format"].clone()),
+        (json!("recraft/recraft-v4.1-vector"), json!("svg"))
+    );
+    let saved = saved_session(&rig, "s_svg");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_logo")
+        .unwrap()["toolResult"]
+        .clone();
+    let output = result["output"].as_str().unwrap();
+    assert!(
+        output.starts_with("Made a vector picture (SVG) with Recraft V4.1 Vector through OpenRouter (cost $0.080)."),
+        "{output}"
+    );
+    assert!(output.contains("```svg") && output.contains("<circle"), "{output}");
+    assert!(!output.contains("steal"), "the script and handler are gone: {output}");
+    assert!(output.contains("Saved to "), "{output}");
+    assert!(
+        result["images"][0].as_str().unwrap().starts_with("data:image/png;base64,"),
+        "the chat shows a PNG preview"
+    );
+    let file = std::fs::read_to_string(rig.workspace.join("brand/logo.svg")).unwrap();
+    assert!(file.contains("<circle") && !file.contains("steal"), "{file}");
+}
+
 pub(crate) fn fake_sd() -> std::path::PathBuf {
     let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
