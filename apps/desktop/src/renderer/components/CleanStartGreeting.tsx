@@ -34,23 +34,40 @@ export const GREETING_QUESTIONS = [
   'A little help, a little momentum.',
 ] as const;
 
+/** A new Photo chat's greetings: about the picture, never about tasks. */
+export const PHOTO_GREETINGS = [
+  'What should we draw?',
+  'What would you like to see?',
+  'What picture is in your head?',
+  'Let’s make a picture.',
+  'Paint it with words.',
+  'Picture this.',
+  'What are we imagining today?',
+  'Describe it, and we’ll draw it.',
+] as const;
+
+const pick = (sessionId: string, phrases: readonly string[]) => {
+  let hash = 0;
+  for (const char of sessionId) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
+  return phrases[hash % phrases.length];
+};
+
 /** Derive copy from saved chat identity, never elapsed time or render count. */
-export function greetingForChat(sessionId: string, createdAt?: number): string {
+export function greetingForChat(sessionId: string, createdAt?: number, kind: 'agent' | 'photo' = 'agent'): string {
+  if (kind === 'photo') return pick(sessionId, PHOTO_GREETINGS);
   const hour = createdAt === undefined ? -1 : new Date(createdAt).getHours();
   const phrases: readonly string[] = hour >= 4 && hour < 10
     ? [...GREETING_QUESTIONS, 'Morning, early bird.', 'Good morning. What’s first?']
     : hour >= 21 || (hour >= 0 && hour < 4)
       ? [...GREETING_QUESTIONS, 'Hey there, night owl.', 'A quiet night for a bright idea.']
       : GREETING_QUESTIONS;
-  let hash = 0;
-  for (const char of sessionId) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
-  return phrases[hash % phrases.length];
+  return pick(sessionId, phrases);
 }
 
-/** Bundled local copy: stable across remounts, with no timers or model calls. */
-export function CleanStartGreeting({ sessionId = '', createdAt }: { sessionId?: string; createdAt?: number }) {
+/** Bundled local copy: stable across remounts, with no timers or model calls. `title` replaces the greeting (Photo's setup). */
+export function CleanStartGreeting({ sessionId = '', createdAt, kind = 'agent', title }: { sessionId?: string; createdAt?: number; kind?: 'agent' | 'photo'; title?: string }) {
   return <div className="clean-start-greeting fade-in" data-clean-start-greeting>
     <GreetingNekko />
-    <h2>{greetingForChat(sessionId, createdAt)}</h2>
+    <h2>{title ?? greetingForChat(sessionId, createdAt, kind)}</h2>
   </div>;
 }
