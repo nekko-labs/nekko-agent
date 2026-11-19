@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ImageCompanionStatus, LocalModel } from '@nekko-agent/shared';
-import { PictureModelControl, readyPictureModels } from './PictureModelSettings.js';
+import { PictureModelControl, VectorGraphicsLine, readyPictureModels, vectorLine } from './PictureModelSettings.js';
 
 const model = (id: string, name: string, modality = 'image') => ({ id, name, modality }) as unknown as LocalModel;
 const status = (ready: boolean, capabilities: string[]) => ({ ready, capabilities }) as unknown as ImageCompanionStatus;
@@ -48,5 +48,22 @@ describe('PictureModelControl', () => {
     expect(html(undefined, [])).toContain('No picture model is ready on this computer.');
     expect(html(undefined, [])).not.toContain('<select');
     expect(html(undefined, null)).toContain('Looking for picture models');
+  });
+});
+
+describe('Vector graphics line', () => {
+  it('recommends Recraft when OpenRouter is set up, else says what tracing is and how to do better', () => {
+    expect(vectorLine(true, true).lead).toBe('Recraft through OpenRouter · recommended');
+    expect(vectorLine(true, false).lead).toBe('Recraft through OpenRouter · recommended');
+    expect(vectorLine(false, true).lead).toBe('Traced from this computer’s pictures · free');
+    expect(vectorLine(false, true).detail).toContain('Add OpenRouter');
+    expect(vectorLine(false, false).lead).toBe('Not available yet');
+  });
+
+  it('renders as one quiet line under the picture model', () => {
+    const html = renderToStaticMarkup(<VectorGraphicsLine hasOpenRouter={false} hasLocal />);
+    expect(html).toContain('data-vector-graphics');
+    expect(html).toContain('Vector graphics (SVG)');
+    expect(html).toContain('Traced from this computer’s pictures · free');
   });
 });

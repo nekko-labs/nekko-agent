@@ -31,9 +31,13 @@ With **OpenRouter** as a provider, the agent can also make a clip with a cloud v
 
 ### Vector graphics (SVG)
 
-For a logo, an icon or a flat illustration that has to scale or be edited, ask the agent for an SVG. With **OpenRouter** as a provider, Nekko uses **Recraft**'s vector model, the best there is for this, and asks first with its price (about $0.08 a picture). The SVG is checked before you see it: scripts, event handlers and links to other sites are removed. The chat shows a preview, the agent gets the SVG code to put in a page or change, and it can save the file in your project.
+For a logo, an icon or a flat illustration that has to scale or be edited, ask the agent for an SVG. There are three ways, and **Settings → Agents → Pictures** shows which you have under **Vector graphics (SVG)**:
 
-This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) are not supported yet: a search under **Models → Video** keeps them behind **Show more from Hugging Face**.
+- **Recraft through OpenRouter (recommended).** With OpenRouter as a model provider, Nekko uses Recraft's vector model, the best there is for this: clean shapes you can edit. It asks first with its price (about $0.08 a picture), on your OpenRouter account.
+- **Traced on this computer (free).** Without OpenRouter, Nekko makes a flat-style picture with your local picture model and traces it into an SVG. Good enough for simple flat art; cruder than a real vector, and heavy on detailed pictures. The result says it is a trace.
+- **Written by the agent.** For a simple icon or a diagram, the agent can write the SVG code itself, with no picture model at all.
+
+Whichever way it comes, the SVG is checked first: scripts, event handlers and links to other sites are removed. The chat shows a preview, and the agent gets the SVG code. To use it in a site, ask the agent to save it in the project (for example `assets/logo.svg`) and reference it like any image, `<img src="assets/logo.svg" alt="…">`, or to paste the code inline so you can change its colours with CSS.
 
 ### Pictures from any chat
 
