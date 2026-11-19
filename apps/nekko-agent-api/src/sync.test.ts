@@ -363,7 +363,7 @@ describe("push and pull", () => {
     expect(second.more).toBe(false);
     expect(second.objects.map((o: { objectId: string }) => o.objectId)).toEqual([ids[1], ids[2]]);
     expect(PULL_PAGE_BYTES).toBe(8 << 20);
-  });
+  }, 30_000); // ~36 MB through PGlite: 8 s on a CI runner, past the 5 s default
 
   it("answers conflicts and stale key epochs per object", async () => {
     const a = app();
