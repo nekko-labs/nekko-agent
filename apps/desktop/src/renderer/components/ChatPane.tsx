@@ -11,6 +11,7 @@ import { shouldShowFirstPromptIntro } from '../firstPromptIntroGate.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
+import { toolPaths } from '../artifactPaths.js';
 import { ChatArtifacts } from './ChatArtifacts.js';
 import { MarkdownSession } from './Markdown.js';
 import { MarkdownRefs } from './ReplyRefChips.js';
@@ -435,10 +436,12 @@ function ChatHeader({
  * only when its own data does.
  */
 const TranscriptRowView = memo(function TranscriptRowView({
-  row, streaming, readOnly, prByUrl, sessionId, basePath, cuts, onEditResend, onCopyToComposer, onSplit, onDelete, onRestart, onImageClick, onImageContextMenu, onEditImage,
+  row, streaming, readOnly, prByUrl, sessionId, basePath, knownPaths, cuts, onEditResend, onCopyToComposer, onSplit, onDelete, onRestart, onImageClick, onImageContextMenu, onEditImage,
 }: {
   row: TranscriptRow;
   basePath?: string;
+  /** The files the chat's tools named, where a relative name in a reply really is. */
+  knownPaths?: readonly string[];
   streaming: boolean;
   /** An archived chat: nothing on a row may change the conversation. */
   readOnly: boolean;
@@ -484,7 +487,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
         chronological
       />
       </MarkdownSession.Provider>
-      {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath).filter(artifact => !artifact.inlineImage)} sessionId={sessionId} />}
+      {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath, knownPaths).filter(artifact => !artifact.inlineImage)} sessionId={sessionId} />}
       {/* A PR card right after the message that first names it. */}
       {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" sessionId={sessionId} />)}
     </>
@@ -2663,6 +2666,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   }, [sessionId]);
   const onDelete = useCallback((id: string) => { void takeBack('delete', id); }, [takeBack]);
   const onRestart = useCallback((id: string) => { void takeBack('restart', id); }, [takeBack]);
+  // Joined so the rows keep one array (and stay memoized) until a new path is named.
+  const knownKey = session ? toolPaths(session.messages).join('\n') : '';
+  const knownPaths = useMemo(() => (knownKey ? knownKey.split('\n') : undefined), [knownKey]);
   const artifactBasePath = session?.workspaceId ? session.gitWorktrees?.[session.workspaceId]?.path ?? settings?.workspaces.find((w) => w.id === session.workspaceId)?.path : undefined;
   // Run on a suggested command (#2595): a local chat the user can write in.
   // Sandbox work never runs on this computer's shell, so it gets no Run.
@@ -2681,6 +2687,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       <TranscriptRowView
         row={row}
         basePath={artifactBasePath}
+        knownPaths={knownPaths}
         streaming={streaming}
         readOnly={readOnly}
         prByUrl={prByUrl}
@@ -2696,7 +2703,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         onEditImage={imageMode ? editPicture : undefined}
       />
     ),
-    [artifactBasePath, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu, imageMode, editPicture],
+    [artifactBasePath, knownPaths, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu, imageMode, editPicture],
   );
   // Width of the text column, for the height estimates of rows not yet measured.
   const columnWidth = Math.max(0, (paneWidth || 800) - 60);

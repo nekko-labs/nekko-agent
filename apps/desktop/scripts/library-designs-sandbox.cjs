@@ -97,8 +97,8 @@ app.whenReady().then(async () => {
     await check(`document.querySelectorAll('[data-artifact-row]').length === 10`, 'source-files-agent-notes-and-non-designs-stay-out');
     await check(`document.querySelector('[data-library-group]').dataset.libraryGroup === 'design'`, 'designer-leads-with-designs');
     await check(`${row('Onboarding')}.textContent.includes('Shop designs folder') && ${row('Login')}.textContent.includes('Pricing page') && ${row('Checkout design')}.textContent.includes('Checkout redesign')`, 'each-design-names-its-chat-or-its-folder');
-    // Folders are listed (the designs folder, and each chat file's folder to see it is still there); only images are read, for their tiles.
-    await check(`(layoutFixture.read ?? []).every(p => /\\.(png|jpe?g|gif|webp|svg)$/i.test(p)) && JSON.stringify([...new Set(layoutFixture.listed)].sort()) === ${js(JSON.stringify(['/work/.scratch', '/work/nekko-designs', '/work/nekko-designs/settings', '/work/office', '/work/reports', '/work/site']))}`, 'folders-are-listed-and-only-images-read');
+    // Folders are listed (the project, its designs folder, and each chat file's folder to see it is still there); only images and documents are read, for their tiles.
+    await check(`(layoutFixture.read ?? []).every(p => /\\.(png|jpe?g|gif|webp|svg|md|markdown|txt)$/i.test(p)) && JSON.stringify([...new Set(layoutFixture.listed)].sort()) === ${js(JSON.stringify(['/work', '/work/.scratch', '/work/nekko-designs', '/work/nekko-designs/settings', '/work/office', '/work/reports', '/work/site']))}`, 'folders-are-listed-and-only-images-read');
     await radio('Layout', 'Full cards'); await sleep(600);
     await shot('desktop-cards');
     await check(`(() => { const tile = t => [...document.querySelectorAll('[data-library-tile]')].find(e => e.querySelector('.library-tile-title').textContent === t); return !/Open chat/.test(tile('Hero').textContent) && /Open file/.test(tile('Hero').textContent) && /Open chat/.test(tile('Checkout design').textContent); })()`, 'folder-card-has-no-chat-to-open');
