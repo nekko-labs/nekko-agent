@@ -5,7 +5,8 @@ import { CLAUDE_CODE_PROVIDER_KIND, getExecutionMode, groupToolsByCategory, tool
 import { ModePanel, modeButtonLabel } from './ModePanel.js';
 import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
-import { WrenchIcon, PlaneIcon, IncognitoIcon, PlugIcon, PlusIcon, GlobeIcon, GlobeOffIcon } from '../icons.js';
+import { WrenchIcon, PlaneIcon, IncognitoIcon, PlugIcon, PlusIcon, GlobeIcon, GlobeOffIcon, CloudIcon } from '../icons.js';
+import { useSyncOn } from './cloud/useSyncOn.js';
 import { afterPaint } from '../afterPaint.js';
 import { useFloatingMenu } from './floatingMenu.js';
 import { PrivacyShieldMenu } from './PrivacyShield.js';
@@ -346,6 +347,9 @@ export const INTERNET_LOCKED_HINT = 'This cloud model needs an internet connecti
 /** Incognito's hover text, on and off. It never carries over to a new chat. */
 export const INCOGNITO_ON_HINT = 'Incognito is on: this chat is not saved and memory is not updated. Turn it off to keep this chat. New chats start without it.';
 export const INCOGNITO_OFF_HINT = "Incognito: don't save this chat or update memory. For this chat only.";
+/** The Sync switch's hover text, on and off. */
+export const SYNC_ON_HINT = 'Sync is on: this chat is end-to-end encrypted and kept on your other devices. Turn it off to keep it on this computer.';
+export const SYNC_OFF_HINT = 'Sync is off: this chat stays on this computer. A copy synced before stays in Nekko Cloud until you delete everything synced.';
 
 /** A tiny shield glyph for the Hypergate recommendation row. */
 function ShieldSmall() {
@@ -365,7 +369,7 @@ const MODE_DESC: Record<ChatMode, string> = {
 /**
  * The per-chat execution row of the instrument strip above the composer: how
  * tools run (mode, which tools) on the left, and the privacy controls
- * (Offline, Privacy Shield, Incognito) parked on the right behind a hairline divider, so
+ * (Offline, Privacy Shield, Sync, Incognito) parked on the right behind a hairline divider, so
  * "what this agent may do" reads apart from "what it may reach".
  *
  * The two families look different on purpose: value pickers are bordered fields
@@ -402,6 +406,7 @@ export function ChatControls({
   only?: 'mode' | 'privacy';
 }) {
   const settings = useStore((s) => s.settings);
+  const syncOn = useSyncOn();
   // A Claude Agent chat runs Claude Code's tools, never code mode (see ModePanel).
   const claudeAgent = useStore((s) => !!session && s.providers?.find((p) => p.id === session.providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND);
   const [modeOpen, setModeOpen] = useState(false);
@@ -451,6 +456,7 @@ export function ChatControls({
   const mode: ChatMode = sandbox ? 'ask' : session.mode ?? settings?.defaultChatMode ?? 'guardrails';
   const offline = !!session.offline;
   const incognito = !!session.incognito;
+  const synced = !session.syncOff;
 
   const patch = async (p: Partial<Session>) => onChange(await window.nekko.setSessionOptions(session.id, p as any));
 
@@ -514,6 +520,18 @@ export function ChatControls({
 
         {/* Privacy Shield: what a cloud model may read. */}
         {session.chatType !== 'image' && !hidePrivacy && <PrivacyShieldMenu session={session} draft={draft} onChange={onChange} />}
+
+        {/* Sync: only while this computer syncs, and never for an incognito chat (which can't). */}
+        {syncOn && !incognito && <button
+          className="ctl-toggle whitespace-nowrap"
+          data-sync-toggle
+          onClick={() => patch({ syncOff: synced })}
+          aria-pressed={synced}
+          title={synced ? SYNC_ON_HINT : SYNC_OFF_HINT}
+        >
+          <span className="ctl-dot" />
+          <CloudIcon className="h-3.5 w-3.5" /> <span className="foot-label">Sync</span>
+        </button>}
 
         {/* Incognito: a warning when on, and for this chat only. */}
         <button

@@ -124,7 +124,6 @@ const api: NekkoApi = {
   syncRevoke: (deviceId) => inv(IpcChannels.syncRevoke, deviceId),
   syncNow: () => inv(IpcChannels.syncNow),
   syncSetEnabled: (on) => inv(IpcChannels.syncSetEnabled, on),
-  syncSetIncludeLocalOnly: (on) => inv(IpcChannels.syncSetIncludeLocalOnly, on),
   syncDeleteAll: () => inv(IpcChannels.syncDeleteAll),
   orgList: () => inv(IpcChannels.orgList),
   orgCreate: (name) => inv(IpcChannels.orgCreate, name),

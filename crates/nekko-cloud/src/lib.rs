@@ -77,7 +77,6 @@ pub const CHANNELS: &[&str] = &[
     "sync:revoke",
     "sync:now",
     "sync:setEnabled",
-    "sync:setIncludeLocalOnly",
     "sync:deleteAll",
     "org:list",
     "org:create",
@@ -279,12 +278,6 @@ impl Cloud {
                 }
                 Ok(self.changed())
             }
-            "sync:setIncludeLocalOnly" => {
-                let on = args.first().and_then(Value::as_bool).unwrap_or(false);
-                self.edit(|s| s.include_local_only = on)?;
-                self.kick();
-                Ok(self.changed())
-            }
             "sync:deleteAll" => self.delete_all().await,
             c if c.starts_with("org:") || c.starts_with("fleet:") => self.route_org(c, args).await,
             _ => Err(format!("unknown channel {channel}")),
@@ -450,7 +443,6 @@ impl Cloud {
             "sync": {
                 "phase": phase,
                 "enabled": s.enabled,
-                "includeLocalOnly": s.include_local_only,
                 "recoveryConfirmed": s.recovery_confirmed,
                 "keyEpoch": s.key_id,
                 "lastSyncAt": s.last_sync_at,
@@ -1471,7 +1463,7 @@ impl Cloud {
                 continue;
             }
             let Some(chat) = self.sessions.get(id) else { continue };
-            match records::chat_plaintext(&chat, st.include_local_only) {
+            match records::chat_plaintext(&chat) {
                 Ok(plain) => {
                     let digest = records::digest(&plain);
                     if known.is_some_and(|k| k.digest == digest) {
@@ -1483,7 +1475,7 @@ impl Cloud {
                     *skipped
                         .entry(match skip {
                             Skip::Incognito => "incognito",
-                            Skip::LocalOnly => "localOnly",
+                            Skip::SyncOff => "syncOff",
                             Skip::TooLarge => "tooLarge",
                         })
                         .or_default() += 1;

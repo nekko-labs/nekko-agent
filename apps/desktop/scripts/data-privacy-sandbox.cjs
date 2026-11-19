@@ -10,7 +10,7 @@ app.setPath('userData', path.join(out, 'profile'));
 const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], checks: [], errors: [] };
-const status = { signedIn: true, account: { email: 'sam@example.com', plan: 'pro', canSync: true }, oauthPending: false, keysStoredIn: 'macOS Keychain', sync: { phase: 'off', enabled: false, includeLocalOnly: false, recoveryConfirmed: false, keyEpoch: null, lastSyncAt: null, error: null, progress: null, chats: 0, pushed: 0, pulled: 0, skipped: {}, fingerprint: null, joinCode: null, devices: [], usage: null } };
+const status = { signedIn: true, account: { email: 'sam@example.com', plan: 'pro', canSync: true }, oauthPending: false, keysStoredIn: 'macOS Keychain', sync: { phase: 'off', enabled: false, recoveryConfirmed: false, keyEpoch: null, lastSyncAt: null, error: null, progress: null, chats: 0, pushed: 0, pulled: 0, skipped: {}, fingerprint: null, joinCode: null, devices: [], usage: null } };
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));

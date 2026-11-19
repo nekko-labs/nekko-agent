@@ -33,6 +33,7 @@ const OPTION_KEYS: &[&str] = &[
     "offline",
     "cloudOnly",
     "incognito",
+    "syncOff",
     "executionMode",
     "gitIsolation",
     "autoModel",
@@ -167,6 +168,7 @@ const USER_FIELDS: &[&str] = &[
     "offline",
     "cloudOnly",
     "incognito",
+    "syncOff",
     "executionMode",
     "gitIsolation",
     "sandbox",
@@ -968,6 +970,7 @@ impl SessionStore {
             "cloudOnly",
             "privacy",
             "incognito",
+            "syncOff",
         ] {
             if let Some(v) = src.get(key) {
                 s.insert(key.into(), v.clone());
@@ -1406,6 +1409,25 @@ mod tests {
         assert_eq!(store.take_queued_text(&id).unwrap(), ["one", "two"]);
         assert_eq!(store.get(&id).unwrap()["queue"], json!([photo, "after the photo"]));
         assert!(store.take_queued_text(&id).unwrap().is_empty(), "the photo holds its place");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn sync_off_is_a_chat_option_a_turn_keeps_and_a_fork_carries() {
+        let dir = std::env::temp_dir().join(format!("nekko-sync-off-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        let store = SessionStore::new(&dir);
+        let mut session = store.create(None).unwrap();
+        let id = session["id"].as_str().unwrap().to_string();
+        session["messages"] =
+            json!([{"id":"u1","role":"user","content":"hi"},{"id":"a1","role":"assistant","content":"hello"}]);
+        store.save_turn(&mut session, None).unwrap();
+        assert_eq!(store.set_options(&id, &json!({"syncOff": true})).unwrap().unwrap()["syncOff"], json!(true));
+        // A turn that started before the switch saves without undoing it.
+        store.save_turn(&mut session, None).unwrap();
+        assert_eq!(store.get(&id).unwrap()["syncOff"], json!(true));
+        let fork = store.fork(&id, &json!("a1")).unwrap().unwrap();
+        assert_eq!(fork["syncOff"], json!(true));
         std::fs::remove_dir_all(dir).ok();
     }
 

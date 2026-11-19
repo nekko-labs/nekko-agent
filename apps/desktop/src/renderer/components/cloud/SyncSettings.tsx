@@ -132,11 +132,7 @@ export function SyncSettings() {
             </div>
           </div>
           <div className="sync-row">
-            <div className="text-sm">
-              <div className="font-medium text-ink">Include Local only chats</div>
-              <div className="mt-(--q-tight) text-xs text-ink-faint">Chats in the Local only mode stay on this computer unless you include them. Incognito chats never sync.</div>
-            </div>
-            <Toggle label="Include Local only chats" value={status.sync.includeLocalOnly} onChange={(on) => void act('local', () => window.nekko.syncSetIncludeLocalOnly(on))} />
+            <p className="text-xs text-ink-faint">Every chat syncs except incognito ones. To keep a chat on this computer, turn off <strong className="font-medium text-ink-soft">Sync</strong> beside the message box in that chat.</p>
           </div>
           <Devices devices={status.sync.devices} pending={pending} busy={!!busy} act={act} />
           {others === 0 && (
