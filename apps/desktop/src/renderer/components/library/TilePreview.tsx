@@ -33,13 +33,15 @@ function useSeen(ref: React.RefObject<HTMLElement | null>): boolean {
  * network), cannot be clicked or focused, and is served only once its tile is
  * near the screen. It is released when the tile goes.
  */
-export function TilePreview({ kind, path, ext, revision, className = '', mover }: {
+export function TilePreview({ kind, path, ext, revision, className = '', mover, badge }: {
   kind: ArtifactKind;
   path: string;
   ext: string;
   revision?: string | number;
   className?: string;
   mover?: string;
+  /** Drawn over the preview's top-right corner (Library's sync state). */
+  badge?: React.ReactNode;
 }) {
   const box = useRef<HTMLSpanElement>(null);
   const seen = useSeen(box);
@@ -110,6 +112,7 @@ export function TilePreview({ kind, path, ext, revision, className = '', mover }
           className="library-live-frame" data-ready={ready || undefined}
           style={{ width: FRAME.width, height: Math.ceil(height / scale), transform: `scale(${scale})` }} />
       )}
+      {badge}
     </span>
   );
 }
