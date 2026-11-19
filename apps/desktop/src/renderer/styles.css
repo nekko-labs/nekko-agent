@@ -4501,17 +4501,24 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Models, Settings and Automations share one side menu: inset from the window's
    edge with no divider, starting at the top of the page beside its content. */
 .models-layout, .settings-panel, .automations-layout { display: flex; gap: 40px; width: 100%; max-width: 112rem; height: 100%; min-height: 0; margin-inline: auto; padding-inline: clamp(20px, 4vw, 80px); }
+/* Models spans the whole window so its scrollbar sits at the window's right
+   edge. The gutter the shared column puts on each side (its padding plus the
+   centring margin past 112rem) moves onto the rail's left and into the
+   scroller's right padding, so the content keeps the same width and place.
+   Percentages in both resolve against this full-width layout. */
+.models-layout { --models-gutter: calc(clamp(20px, 4vw, 80px) + max(0px, (100% - 112rem) / 2)); max-width: none; padding-inline: 0; }
 .models-rail, .automations-rail { flex: 0 0 192px; min-height: 0; overflow-y: auto; padding: 20px 0; }
+.models-rail { margin-left: var(--models-gutter); }
 .automations-rail { flex-basis: 240px; }
 .models-rail .view-title, .automations-rail .view-title { margin-bottom: 20px; }
 .automations-filters { margin-top: 20px; }
 .automations-content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 0 64px; }
 .models-navigation { display: flex; flex-direction: column; gap: 8px; }
 .models-navigation .settings-nav-item { min-height: 40px; font-size: var(--text-sm); }
-/* The scroller reaches 8px past the column on each side, padded back in, so rows
-   that bleed into that margin (the model library's hover rows) fit instead of
-   giving the page a sideways scroll. */
-.models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; margin-inline: -8px; padding: 20px 8px 64px; }
+/* The scroller reaches 8px left of the column, padded back in, so rows that bleed
+   into that margin (the model library's hover rows) fit instead of giving the
+   page a sideways scroll. On the right it runs to the window's edge. */
+.models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; margin-left: -8px; padding: 20px var(--models-gutter) 64px 8px; }
 .models-layout .models-section { max-width: none; }
 /* The biggest heading in its section: titles nested below step down a size. */
 .models-section-heading { display: flex; align-items: center; gap: 8px; font-size: var(--text-2xl); font-weight: 600; margin-bottom: 16px; }
@@ -4576,7 +4583,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-section { min-width: 0; }
 /* Cloud on top, Local below, on one page; the side menu jumps to each and to Local's own sections. */
 [data-models-section] { scroll-margin-top: 12px; }
-.models-section-local { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
+.models-section-local { margin-top: 80px; padding-top: 40px; border-top: 1px solid var(--line); }
 /* Local's own entries hang off a tree line under its icon, their labels in line
    with its label; the line lights beside the current one. Spaced like Settings. */
 .models-navigation .models-nav-sub { position: relative; margin-left: 15px; width: calc(100% - 15px); padding-left: 17px; border-radius: 0 var(--radius-lg) var(--radius-lg) 0; color: var(--ink-soft); }
@@ -4584,24 +4591,24 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-navigation .models-nav-sub[aria-current] { color: var(--ink); }
 .models-navigation .models-nav-sub[aria-current]::before { top: 0; width: 2px; background: var(--accent); }
 @media (max-width: 1000px) {
-  .models-layout { flex-direction: column; gap: 20px; padding-inline: 20px; }
-  .models-rail { flex: none; max-height: 40%; padding: 12px 0 0; }
+  .models-layout { --models-gutter: 20px; flex-direction: column; gap: 20px; }
+  .models-rail { flex: none; max-height: 40%; padding: 12px 0 0; margin-inline: var(--models-gutter); }
   .models-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
   .models-navigation .settings-nav-item { width: 100%; }
   .models-navigation .models-nav-sub { margin: 0; width: 100%; padding-left: 8px; border-radius: var(--radius-lg); }
   .models-navigation .models-nav-sub::before { content: none; }
-  .models-workspace { height: auto; min-height: 0; padding-block: 0 48px; }
+  .models-workspace { height: auto; min-height: 0; margin-left: 0; padding: 0 var(--models-gutter) 48px; }
   /* Automations keeps its side menu down to a phone width, one item a row. */
   .automations-rail .models-navigation { display: flex; }
   .automations-layout { gap: 20px; padding-inline: 20px; }
 }
 @media (max-width: 767px) {
-  .models-layout { padding-inline: 16px; }
+  .models-layout { --models-gutter: 16px; }
   /* Like Settings: the menu and filters become a band above the list. */
   .automations-layout { flex-direction: column; gap: 0; padding-inline: 16px; }
   .automations-rail { flex: none; max-height: 40%; padding: 12px 0; border-bottom: 1px solid var(--line); }
   .automations-content { padding-top: 16px; }
-  .models-section-local { margin-top: 40px; }
+  .models-section-local { margin-top: 60px; }
   .models-local-connections { margin-top: 40px; }
   .models-provider-bar { gap: 12px; }
 }
