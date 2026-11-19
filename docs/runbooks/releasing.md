@@ -1,6 +1,6 @@
 # Versions and releases
 
-Every build is `MAJOR.MINOR.BUILD` ([spec](../../spec/product/version-numbers.md), [decision 0055](../decisions/0055-versions-are-major-minor-and-a-per-platform-nightly-build.md)), fixed width `x.xx.xxxx` from the 0.10 line on ([decision 0080](../decisions/0080-versions-are-fixed-width-from-the-0.10-line.md)): MINOR 10-99, BUILD 1000-9999, the release at `.1000`. MAJOR.MINOR come from the newest release tag; BUILD is counted per platform by the nightlies. Do not bump a `package.json`, `Cargo.toml`, `project.yml` or `build.gradle.kts` version in a PR unless Philip asks: nothing reads them for a release, they are only what local and PR builds report (all 0.9.8 since #2540).
+Every build is `MAJOR.MINOR.BUILD` ([spec](../../spec/product/version-numbers.md), [decision 0055](../decisions/0055-versions-are-major-minor-and-a-per-platform-nightly-build.md)), fixed width `x.xx.xxxx` from the 0.10 line on ([decision 0080](../decisions/0080-versions-are-fixed-width-from-the-0.10-line.md)): MINOR 10-99, BUILD 1000-9999, the release at `.1000`. MAJOR.MINOR come from the newest release tag; BUILD is counted per platform by the nightlies. Do not bump a `package.json`, `Cargo.toml`, `project.yml` or `build.gradle.kts` version in a PR unless Philip asks: nothing reads them for a release, they are only what local and PR builds report (all 0.10.1004 since 2026-11-19, the then-latest release).
 
 ## Start a new MAJOR.MINOR (a release)
 

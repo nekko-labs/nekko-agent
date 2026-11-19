@@ -1,6 +1,6 @@
 {
   "name": "@nekko-agent/profile",
-  "version": "0.9.8",
+  "version": "0.10.1004",
   "private": true,
   "type": "module",
   "description": "Node-side pieces the desktop app and the Local Web UI share: the user's data folder (where it lives, moving it, older installs' profiles), the running app, and the local server for HTML previews.",
