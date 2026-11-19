@@ -184,6 +184,10 @@ const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 const DRAIN: std::time::Duration = std::time::Duration::from_secs(2);
 /// A shutdown that takes longer than this is cut short (children ended, exit 1).
 const SHUTDOWN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(8);
+/// Shutting down agents' simulators gets this long, from the start of cleanup.
+/// Well inside [`SHUTDOWN_DEADLINE`], and inside the 6 s the desktop app gives
+/// the daemon before it sends SIGTERM (engine-process.ts `stop`).
+const SIMULATORS_WITHIN: std::time::Duration = std::time::Duration::from_secs(4);
 /// Children still running at the end get this long after SIGTERM before SIGKILL.
 const SWEEP_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
 
@@ -563,6 +567,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }
     }
 
+    // Simulators and emulators agents booted go down with the daemon, since
+    // the agents that would have shut them down are stopping. Started first
+    // so it runs alongside the rest of the cleanup, and awaited at the end.
+    let simulators_down = tokio::spawn(simulators::shutdown_agent_devices(SIMULATORS_WITHIN));
+
     // Running turns hold their newest checkpoint for up to two seconds: write them.
     {
         let sessions = sessions.clone();
@@ -583,6 +592,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     terminals.close_all();
     mcp.stop_all();
     processes.kill_all();
+    let _ = simulators_down.await;
     Ok(())
 }
 

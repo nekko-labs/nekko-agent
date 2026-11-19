@@ -122,3 +122,15 @@ async fn a_call_on_a_known_device_is_attributed_at_once_and_its_output_kept() {
     );
     assert!(lock(&reg.state).recent[0].text.contains("NEW-UDID-HERE"));
 }
+
+#[test]
+fn quitting_stops_only_the_devices_agents_used() {
+    let devices = vec![ios(IPAD, "Nekko-1314-iPad", 600), ios(PHONE, "My own phone", 60)];
+    let mut uses = HashMap::new();
+    uses.insert(IPAD.to_string(), Use { session_id: "chat-a".into(), at: 1_000 });
+    // A device the record names that is no longer booted is not stopped again.
+    uses.insert("0000AAAA-0000-0000-0000-000000000000".to_string(), Use { session_id: "chat-b".into(), at: 2_000 });
+    let stopping: Vec<&str> = used_by_agents(&devices, &uses).iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(stopping, vec!["Nekko-1314-iPad"]);
+    assert!(used_by_agents(&devices, &HashMap::new()).is_empty());
+}
