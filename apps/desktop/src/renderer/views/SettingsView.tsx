@@ -9,6 +9,7 @@ import { useStore } from '../store.js';
 import { PromptProfilesSettings } from '../components/PromptProfilesSettings.js';
 import { QuietTabs, StatusDot } from '../components/primitives/index.js';
 import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
+import { openWhatsNew } from '../whatsNew.js';
 import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
@@ -1135,7 +1136,7 @@ function GuardrailsSection({
   );
 }
 
-function UpdatesSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+export function UpdatesSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   const updater = useUpdater();
   const [licensesOpen, setLicensesOpen] = useState(false);
   const { app: info, info: status, stage } = updater;
@@ -1187,6 +1188,7 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
         <button className="btn btn-ghost py-1 text-xs" onClick={() => void updater.check(true)} disabled={stage === 'checking' || stage === 'downloading' || stage === 'installing'}>
           {stage === 'checking' ? 'Checking…' : 'Check now'}
         </button>
+        <button className="btn btn-ghost py-1 text-xs" onClick={openWhatsNew} data-testid="settings-whats-new">What's new</button>
         {stage === 'available' && (isWeb ? (
           <button className="btn btn-primary py-1 text-xs" onClick={() => void updater.install()}>Refresh now</button>
         ) : (

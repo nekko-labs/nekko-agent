@@ -293,6 +293,7 @@
   "Zone name",
   "Zoom in",
   "Zoom out",
+  "about-whats-new",
   "billing-manage",
   "billing-plan",
   "billing-price",
@@ -364,6 +365,7 @@
   "recovery-kit",
   "recovery-saved",
   "recovery-typed",
+  "settings-whats-new",
   "star-ask-later",
   "star-ask-never",
   "star-ask-star",
@@ -385,5 +387,7 @@
   "sync-turn-on",
   "team-switches",
   "telegram",
-  "terminal-viewers-badge"
+  "terminal-viewers-badge",
+  "update-dismiss",
+  "update-whats-new"
 ]

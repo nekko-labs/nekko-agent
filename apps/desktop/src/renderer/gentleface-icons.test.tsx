@@ -35,6 +35,16 @@ describe('Gentleface controls', () => {
     }
   });
 
+  it('bundles the 0.6.0 glyphs as line and solid artwork in the inherited colour', () => {
+    for (const name of ['search', 'keyboard', 'palette', 'cloud', 'puzzle', 'sparkles'] as const) {
+      const html = renderToStaticMarkup(<GfIcon name={name} />);
+      expect(html, name).toContain('gf-icon-line');
+      expect(html, name).toContain('gf-icon-solid');
+      expect(html, name).toContain('fill="currentColor"');
+      expect(html, name).not.toMatch(/<script|<foreignObject|\bon\w+=|(?:href|src)=/i);
+    }
+  });
+
   it('keeps the previously unused helpers wired to real semantic controls', () => {
     const controls = {
       'components/ModePanel.tsx': ['BrainCircuitIcon', 'ShieldQuestionIcon'],

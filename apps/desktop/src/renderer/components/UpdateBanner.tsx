@@ -1,6 +1,8 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AppInfo, UpdateInfo } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
+import { openWhatsNew } from '../whatsNew.js';
+import { GfCloseIcon } from '../gentleface-icons.js';
 
 const LS_LAST_VERSION = 'op_last_version';
 const LS_SKIPPED_VERSION = 'nekko_skipped_update';
@@ -232,10 +234,43 @@ export function UpdateProgress({ percent, installing = false }: { percent?: numb
   );
 }
 
+/** The title-bar pill after an update: "What's new" opens the sheet, the ✕ only dismisses. */
+export function UpdatedPill({ version, onOpen, onDismiss }: { version: string; onOpen: () => void; onDismiss: () => void }) {
+  return (
+    <span className="update-pill update-done" role="group" aria-label={`Updated to v${version}`}>
+      <button
+        type="button"
+        className="update-done-open"
+        onClick={onOpen}
+        aria-label={`Updated to v${version}. What's new`}
+        title={`Updated to v${version}`}
+        data-testid="update-whats-new"
+      >
+        What's new
+      </button>
+
+      <button type="button" className="update-done-dismiss" onClick={onDismiss} aria-label="Dismiss" title="Dismiss" data-testid="update-dismiss">
+        <GfCloseIcon className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
 export function UpdateControl() {
   const updater = useUpdater();
   const [showDetails, setShowDetails] = useState(false);
   const { app, info, stage } = updater;
+  const versionPill = useRef<HTMLButtonElement>(null);
+  // Set by the pill's ✕: the button it was pressed on goes away, so focus moves to the version pill.
+  const focusVersion = useRef(false);
+
+  useEffect(() => {
+    if (stage === 'installed' || !focusVersion.current) return;
+
+    focusVersion.current = false;
+    versionPill.current?.focus();
+  }, [stage]);
+
   if (!app || app.edition !== 'desktop') return null;
 
   const version = app.version;
@@ -268,9 +303,11 @@ export function UpdateControl() {
 
   if (stage === 'installed') {
     return wrap(
-      <button className="update-pill update-done" onClick={updater.dismissResult} title="Dismiss">
-        ✓ Updated to v{version}
-      </button>,
+      <UpdatedPill
+        version={version}
+        onOpen={() => { openWhatsNew(); updater.dismissResult(); }}
+        onDismiss={() => { focusVersion.current = true; updater.dismissResult(); }}
+      />,
     );
   }
 
@@ -311,6 +348,7 @@ export function UpdateControl() {
   const checked = info?.state === 'none' && !info.message;
   return wrap(
     <button
+      ref={versionPill}
       className="update-pill update-version"
       onClick={() => void updater.check(true)}
       aria-label={`Check for updates. Current version ${version}${checked ? ', latest' : ''}.`}

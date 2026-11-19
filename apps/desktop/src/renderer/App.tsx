@@ -16,6 +16,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
 import { RailBackdrop } from './components/RailBackdrop.js';
 import { AboutNekko } from './components/AboutNekko.js';
+import { WhatsNewSheet } from './components/WhatsNewSheet.js';
 import { FeedbackSheet, openFeedback } from './components/FeedbackSheet.js';
 import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
@@ -269,6 +270,7 @@ export function App() {
       {/* The window's own title bar, in the desktop shell only. */}
       <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
       <ErrorBoundary label="About"><AboutNekko /></ErrorBoundary>
+      <ErrorBoundary label="What's new"><WhatsNewSheet /></ErrorBoundary>
       <ErrorBoundary label="Feedback"><FeedbackSheet /></ErrorBoundary>
 
       {!settingsLoaded ? (
