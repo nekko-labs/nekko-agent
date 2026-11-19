@@ -274,7 +274,7 @@ final class PhoneChatsTests: XCTestCase {
         await s.settled(id)
         s.rename(id, to: "Trip")
         s.setPinned(id, true)
-        s.complete(id)
+        s.archive(id)
         XCTAssertEqual(s.summaries.first?.title, "Trip")
         XCTAssertTrue(s.summaries.first?.pinned == true)
         XCTAssertTrue(s.summaries.first?.archived == true)

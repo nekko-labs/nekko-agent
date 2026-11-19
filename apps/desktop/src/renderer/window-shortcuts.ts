@@ -1,10 +1,10 @@
-export type WindowAction = 'complete' | 'minimize' | 'delete';
+export type WindowAction = 'archive' | 'minimize' | 'delete';
 const modifier = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent) ? 'Cmd+' : 'Ctrl+';
-export const WINDOW_HOTKEYS = { complete: `${modifier}Shift+E`, minimize: `${modifier}Shift+M`, delete: `${modifier}Shift+Delete` };
+export const WINDOW_HOTKEYS = { archive: `${modifier}Shift+E`, minimize: `${modifier}Shift+M`, delete: `${modifier}Shift+Delete` };
 
 export function windowActionForKey(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'repeat' | 'isComposing' | 'defaultPrevented'>): WindowAction | null {
   if (e.defaultPrevented || e.repeat || e.isComposing || e.altKey || !e.shiftKey || !(e.ctrlKey || e.metaKey) || (e.ctrlKey && e.metaKey)) return null;
-  return e.key.toLowerCase() === 'e' ? 'complete' : e.key.toLowerCase() === 'm' ? 'minimize' : e.key === 'Delete' ? 'delete' : null;
+  return e.key.toLowerCase() === 'e' ? 'archive' : e.key.toLowerCase() === 'm' ? 'minimize' : e.key === 'Delete' ? 'delete' : null;
 }
 
 const panes = new Map<string, { element: HTMLElement; run: (action: WindowAction) => void }>();

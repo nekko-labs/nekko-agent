@@ -52,7 +52,7 @@ CI have been removed. Remaining native feature gaps below stay tracked separatel
 
 - **The computer's settings:** *Settings → On <computer>* sets its default chat
   mode (YOLO after the YOLO warning, as for a chat's own mode; *Settings →
-  Security → Warn before YOLO* turns it back on), the long-press action (Complete or
+  Security → Warn before YOLO* turns it back on), the long-press action (Archive or
   Delete) and delete confirmation; a long-press on a chat runs that action.
 
 - **The + menu:** left of the message box, Send on the right. **Dictate**,

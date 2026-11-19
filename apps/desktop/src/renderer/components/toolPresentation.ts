@@ -27,7 +27,7 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   decide: 'Classify or score content',
   agent_watch: 'Schedule a follow-up',
   set_chat_title: 'Name this chat',
-  complete_session: 'Mark this chat complete',
+  complete_session: 'Archive this chat',
   remember: 'Remember something about you',
 };
 

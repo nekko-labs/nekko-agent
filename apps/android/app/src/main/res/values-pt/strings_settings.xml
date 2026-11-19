@@ -160,8 +160,8 @@
     <string name="settings_pc_offline_unknown">%1$s está offline. O modo de chat, a ação de chat e a confirmação de exclusão aparecem aqui quando ele se conectar.</string>
     <string name="settings_chat_mode_new">Modo de chat para novos chats</string>
     <string name="settings_long_press">Toque longo em um chat para</string>
-    <string name="settings_complete_it">Concluí-lo</string>
-    <string name="settings_complete_it_detail">Move para Concluídos em %1$s; nada é excluído</string>
+    <string name="settings_archive_it">Arquivá-lo</string>
+    <string name="settings_archive_it_detail">Move para Arquivados em %1$s; nada é excluído</string>
     <string name="settings_delete_it">Excluí-lo</string>
     <string name="settings_delete_it_detail">Remove de %1$s para sempre</string>
     <string name="settings_confirm_delete">Confirmar antes de excluir</string>

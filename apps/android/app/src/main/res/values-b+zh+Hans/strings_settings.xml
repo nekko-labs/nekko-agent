@@ -160,8 +160,8 @@
     <string name="settings_pc_offline_unknown">%1$s 已离线。连接后，这里会显示其聊天模式、聊天操作和删除确认。</string>
     <string name="settings_chat_mode_new">新聊天的模式</string>
     <string name="settings_long_press">长按聊天时</string>
-    <string name="settings_complete_it">标记为完成</string>
-    <string name="settings_complete_it_detail">移到 %1$s 上的“已完成”；不会删除任何内容</string>
+    <string name="settings_archive_it">归档</string>
+    <string name="settings_archive_it_detail">移到 %1$s 上的“已归档”；不会删除任何内容</string>
     <string name="settings_delete_it">删除</string>
     <string name="settings_delete_it_detail">从 %1$s 永久删除</string>
     <string name="settings_confirm_delete">删除前确认</string>

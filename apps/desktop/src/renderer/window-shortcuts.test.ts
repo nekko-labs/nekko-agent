@@ -10,19 +10,19 @@ describe('shortcut labels', () => {
     return (await import('./window-shortcuts.js')).WINDOW_HOTKEYS;
   }
   it.each(['MacIntel', 'iPad'])('uses Cmd on %s', async (platform) => {
-    expect(await hotkeysOn(platform)).toEqual({ complete: 'Cmd+Shift+E', minimize: 'Cmd+Shift+M', delete: 'Cmd+Shift+Delete' });
+    expect(await hotkeysOn(platform)).toEqual({ archive: 'Cmd+Shift+E', minimize: 'Cmd+Shift+M', delete: 'Cmd+Shift+Delete' });
   });
   it.each(['Win32', 'Linux x86_64'])('uses Ctrl on %s', async (platform) => {
-    expect(await hotkeysOn(platform)).toEqual({ complete: 'Ctrl+Shift+E', minimize: 'Ctrl+Shift+M', delete: 'Ctrl+Shift+Delete' });
+    expect(await hotkeysOn(platform)).toEqual({ archive: 'Ctrl+Shift+E', minimize: 'Ctrl+Shift+M', delete: 'Ctrl+Shift+Delete' });
   });
   it('falls back to the user agent when the platform is empty', async () => {
-    expect((await hotkeysOn('', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')).complete).toBe('Cmd+Shift+E');
-    expect((await hotkeysOn('', 'Mozilla/5.0 (X11; Linux x86_64)')).complete).toBe('Ctrl+Shift+E');
+    expect((await hotkeysOn('', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')).archive).toBe('Cmd+Shift+E');
+    expect((await hotkeysOn('', 'Mozilla/5.0 (X11; Linux x86_64)')).archive).toBe('Ctrl+Shift+E');
   });
 });
 
 describe('focused window shortcuts', () => {
-  it.each([['E', 'complete'], ['m', 'minimize'], ['Delete', 'delete']])('maps %s for Ctrl and Cmd', (value, action) => {
+  it.each([['E', 'archive'], ['m', 'minimize'], ['Delete', 'delete']])('maps %s for Ctrl and Cmd', (value, action) => {
     expect(windowActionForKey({ ...key, key: value })).toBe(action);
     expect(windowActionForKey({ ...key, key: value, ctrlKey: false, metaKey: true })).toBe(action);
   });
@@ -43,7 +43,7 @@ describe('focused window shortcuts', () => {
     listener(event);
     expect(add).toHaveBeenCalledOnce();
     expect(a).not.toHaveBeenCalled();
-    expect(b).toHaveBeenCalledExactlyOnceWith('complete');
+    expect(b).toHaveBeenCalledExactlyOnceWith('archive');
     modal = true;
     listener(event);
     expect(b).toHaveBeenCalledOnce();

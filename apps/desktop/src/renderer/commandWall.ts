@@ -391,7 +391,7 @@ function wallChat(s: SessionSummary): boolean {
  * What a wall starts with, and what a wall from before zones becomes: two
  * zones side by side holding the two most recently active chats of `pool`
  * (an empty zone for each one missing). Everything else is minimized, which
- * only takes it off the board: no chat is completed.
+ * only takes it off the board: no chat is archived.
  */
 export function seedWall(state: CommandWallState, pool: SessionSummary[], now: number): CommandWallState {
   const ids = pool.filter((s) => wallChat(s) && !s.parentSessionId).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, START_ZONES).map((s) => s.id);
@@ -401,7 +401,7 @@ export function seedWall(state: CommandWallState, pool: SessionSummary[], now: n
 
 /**
  * Keep the wall honest against what exists: a zone whose chat is gone or
- * archived (completing a chat takes it off the board) or whose terminal is
+ * archived (archiving a chat takes it off the board) or whose terminal is
  * gone is emptied, never removed. New chats are not opened on the board by
  * themselves; they wait in the agents panel. Called once both lists have
  * loaded; returns the same object when nothing changed.

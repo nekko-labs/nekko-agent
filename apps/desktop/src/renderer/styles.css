@@ -3052,16 +3052,16 @@
   }
 }
 
-/* Stardust left where a completed row folded shut (see completionExit.ts).
+/* Stardust left where an archived row folded shut (see archiveExit.ts).
    Fixed to the viewport so it outlives the row; never interactive. */
-.completion-stardust {
+.archive-stardust {
   position: fixed;
   z-index: 100;
   width: 0;
   height: 0;
   pointer-events: none;
 }
-.completion-stardust i {
+.archive-stardust i {
   position: absolute;
   left: 0;
   top: 0;
@@ -3074,11 +3074,11 @@
   opacity: 0;
   animation: stardust-drift 700ms var(--dust-delay) cubic-bezier(.2, .6, .3, 1) both;
 }
-.completion-stardust i:nth-of-type(3n + 2) {
+.archive-stardust i:nth-of-type(3n + 2) {
   background: var(--accent-2);
   box-shadow: 0 0 4px 1px color-mix(in srgb, var(--accent-2) 55%, transparent);
 }
-.completion-stardust i.is-star {
+.archive-stardust i.is-star {
   width: calc(var(--dust-size) * 2.4);
   height: calc(var(--dust-size) * 2.4);
   margin: calc(var(--dust-size) * -1.2);
@@ -3099,7 +3099,7 @@
   100% { opacity: 0; transform: translate(var(--dust-x), var(--dust-y)) scale(.2) rotate(90deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .completion-stardust { display: none; }
+  .archive-stardust { display: none; }
 }
 
 /* Agent status: a working agent's rocket hovers in flight, its colour

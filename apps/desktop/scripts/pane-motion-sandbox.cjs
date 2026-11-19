@@ -18,7 +18,7 @@ const report = { timelines: {}, captures: [], errors: [] };
 const SAMPLE = (action, ms) => `new Promise((resolve) => {
   const frames = []; const t0 = performance.now();
   const box = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return { id: el.dataset.wallPane, x: Math.round(r.x), w: Math.round(r.width), y: Math.round(r.y), h: Math.round(r.height), op: +(+s.opacity).toFixed(2), clip: s.clipPath === 'none' ? undefined : s.clipPath, leaving: el.hasAttribute('data-wall-leaving') || undefined }; };
-  const tick = () => { const t = Math.round(performance.now() - t0); frames.push({ t, panes: [...document.querySelectorAll('[data-wall-pane]')].filter(el => el.getClientRects().length).map(box), dust: document.querySelectorAll('.completion-stardust').length });
+  const tick = () => { const t = Math.round(performance.now() - t0); frames.push({ t, panes: [...document.querySelectorAll('[data-wall-pane]')].filter(el => el.getClientRects().length).map(box), dust: document.querySelectorAll('.archive-stardust').length });
     if (t < ${ms}) requestAnimationFrame(tick); else resolve(frames); };
   ${action}; requestAnimationFrame(tick);
 })`;

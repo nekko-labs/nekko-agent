@@ -1,7 +1,7 @@
 import type { View } from './store.js';
 import type { GoTarget } from './displays.js';
 
-export type VoiceIntent = { kind: 'dictation'; text: string } | { kind: 'new-session' } | { kind: 'complete-session' } | { kind: 'navigate'; view: View } | { kind: 'go'; target: GoTarget } | { kind: 'erase' } | { kind: 'clear' } | { kind: 'send' } | { kind: 'status' } | { kind: 'ship' } | { kind: 'open-chat'; query: string; text: string } | { kind: 'pick'; n: 1 | 2 | 3 } | { kind: 'yes' } | { kind: 'no' } | { kind: 'unknown'; text: string };
+export type VoiceIntent = { kind: 'dictation'; text: string } | { kind: 'new-session' } | { kind: 'archive-session' } | { kind: 'navigate'; view: View } | { kind: 'go'; target: GoTarget } | { kind: 'erase' } | { kind: 'clear' } | { kind: 'send' } | { kind: 'status' } | { kind: 'ship' } | { kind: 'open-chat'; query: string; text: string } | { kind: 'pick'; n: 1 | 2 | 3 } | { kind: 'yes' } | { kind: 'no' } | { kind: 'unknown'; text: string };
 
 /** Only an explicit leading address can turn dictation into an app action. */
 export function parseVoiceIntent(text: string): VoiceIntent {
@@ -11,7 +11,7 @@ export function parseVoiceIntent(text: string): VoiceIntent {
   if (!address) return { kind: 'dictation', text: trimmed };
   const command = trimmed.slice(address[0].length).toLowerCase().replace(/\u2019/g, "'").replace(/[.!?]+$/, '').trim();
   if (/^(?:(?:create|start|open)(?: a)? new (?:session|chat|agent)|new (?:agent )?(?:session|chat|agent)|let's (?:make|start|create) a new (?:change|session|chat|task))$/.test(command)) return { kind: 'new-session' };
-  if (/^(?:complete|finish|archive) (?:this|the current) (?:session|chat|agent)$/.test(command)) return { kind: 'complete-session' };
+  if (/^(?:complete|finish|archive) (?:this|the current) (?:session|chat|agent)$/.test(command)) return { kind: 'archive-session' };
   if (/^(?:erase|scratch|cancel|undo) that$/.test(command)) return { kind: 'erase' };
   if (/^clear(?: everything| all| it)?$/.test(command)) return { kind: 'clear' };
   if (/^send(?: it| that)?$/.test(command)) return { kind: 'send' };

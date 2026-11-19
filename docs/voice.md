@@ -32,7 +32,7 @@ Start with "Nekko" at the beginning of a sentence: "Fix the login bug. Nekko, se
 | "Nekko, how's it going" | Shows what the chat is doing: working, waiting for you, or watching a PR. |
 | "Nekko, open the one about billing" | Opens the chat that matches. If several match, pick one by tapping it or saying "Nekko, the first one". If none match, the words are typed. |
 | "Nekko, ship it" | See below. |
-| "Nekko, complete this session" | Completes the chat, after you confirm. |
+| "Nekko, archive this chat" | Archives the chat, after you confirm. "Complete this session" works too. |
 | "Nekko, open settings", "Nekko, switch to desktop 2" | Opens a page, or switches desktops or screens. |
 
 Each command shows a short message ("Erased", "Sent", "New chat") so you know it ran. If a message can't be sent (no model picked, for example), the reason shows and your words stay in the message box. Commands about a chat (erase, clear, send, ship, how's it going, complete) work on the chat you're looking at; with none open you'll see "Open a chat first".
@@ -44,7 +44,7 @@ Each command shows a short message ("Erased", "Sent", "New chat") so you know it
 - An open PR **and** a question waiting: you choose **Merge owner/repo#123** (the PR's name) or **Go ahead**.
 - Still working: "It's still working".
 
-**Confirming.** Only merging and completing a chat ask first. Say "Nekko, yes" or tap **Confirm**; "Nekko, no" or **Cancel** to back out. A question waits one minute, then goes away, so a "yes" much later does nothing.
+**Confirming.** Only merging and archiving a chat ask first. Say "Nekko, yes" or tap **Confirm**; "Nekko, no" or **Cancel** to back out. A question waits one minute, then goes away, so a "yes" much later does nothing.
 
 To use the microphone for dictation only, turn off **Enable "Nekko..." commands** in Settings > Dictation. This switch is on the computer only: the phones always listen for "Nekko" commands. On Android they run from the message box's **+ → Dictate** microphone, which types your words at each pause; **Hold to talk** does the same for one held phrase.
 

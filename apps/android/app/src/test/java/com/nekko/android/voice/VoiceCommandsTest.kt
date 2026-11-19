@@ -29,7 +29,7 @@ class VoiceCommandsTest {
                 "open-chat" -> VoiceIntent.OpenChat(value("query"), value("text"))
                 "pick" -> VoiceIntent.Pick(value("n").toInt())
                 "new-session" -> VoiceIntent.NewSession
-                "complete-session" -> VoiceIntent.CompleteSession
+                "archive-session" -> VoiceIntent.ArchiveSession
                 "erase" -> VoiceIntent.Erase
                 "clear" -> VoiceIntent.Clear
                 "send" -> VoiceIntent.Send

@@ -70,7 +70,7 @@
     <string name="chats_restore_failed">Couldn’t restore that chat.</string>
     <string name="chats_change_failed">Couldn’t change that chat.</string>
     <string name="chats_rename_failed">Couldn’t rename that chat.</string>
-    <string name="chats_completed_on">Completed on %1$s. Restore it to the active chats, or delete it for good.</string>
+    <string name="chats_archived_on">Archived on %1$s. Restore it to the active chats, or delete it for good.</string>
     <string name="chats_restore">Restore</string>
     <string name="chats_delete">Delete</string>
     <string name="chats_delete_title">Delete this chat?</string>
@@ -88,11 +88,11 @@
     <string name="chats_needs_you">Needs you</string>
     <string name="chats_no_active_agents">No active agents</string>
     <string name="chats_action_delete_body">Delete it from %1$s. You can change this action in Settings.</string>
-    <string name="chats_action_complete_body">Move it to Completed on %1$s. Nothing is deleted; you can change this action in Settings.</string>
+    <string name="chats_action_archive_body">Move it to Archived on %1$s. Nothing is deleted; you can change this action in Settings.</string>
     <string name="chats_pin">Pin</string>
     <string name="chats_unpin">Unpin</string>
     <string name="chats_rename">Rename</string>
-    <string name="chats_complete">Complete</string>
+    <string name="chats_archive">Archive</string>
     <string name="chats_chat_actions">Chat actions</string>
     <string name="chats_pinned">Pinned</string>
     <string name="chats_working">Working</string>
@@ -121,7 +121,7 @@
     <string name="chats_oldest_first">Oldest first</string>
     <string name="chats_newest_first">Newest first</string>
     <string name="chats_show">Show</string>
-    <string name="chats_completed_chats">Completed chats</string>
+    <string name="chats_archived_chats">Archived chats</string>
     <string name="chats_empty_groups">Empty groups</string>
     <string name="chats_reorder_groups_menu">Reorder groups…</string>
     <string name="chats_reset_defaults">Reset to defaults</string>
@@ -137,7 +137,7 @@
     <string name="chats_order_kept">The order is kept on this phone.</string>
     <string name="chats_done">Done</string>
     <string name="chats_restore_or_delete">Restore or delete</string>
-    <string name="chats_completed">Completed</string>
+    <string name="chats_archived">Archived</string>
     <string name="chats_welcome_body">Drive Nekko Agent on your computer from here: start chats, follow runs, and approve what it wants to do.</string>
     <string name="chats_welcome_scan">Scan the QR in Settings → Remote access on your computer.</string>
     <string name="chats_saved_list_note">Saved list from %1$s. It updates when %2$s answers.</string>
@@ -158,13 +158,13 @@
     <string name="chats_terminals">Terminals</string>
     <string name="chats_chat_mode">Chat mode</string>
     <string name="chats_change_this_failed">Couldn’t change this chat.</string>
-    <string name="chats_complete_this_failed">Couldn’t complete this chat.</string>
+    <string name="chats_archive_this_failed">Couldn’t archive this chat.</string>
     <string name="chats_chat_empty">Ask your computer to do something. It can use its folders, tools and models.</string>
     <string name="chats_omitted_one">1 earlier message is on the computer.</string>
     <string name="chats_omitted_other">%1$d earlier messages are on the computer.</string>
     <string name="chats_tokens_per_second">%1$s tokens/s</string>
     <string name="chats_restore_this_failed">Couldn’t restore this chat.</string>
-    <string name="chats_completed_bar">This chat is completed. Restore it to keep going.</string>
+    <string name="chats_archived_bar">This chat is archived. Restore it to keep going.</string>
     <string name="chats_restoring">Restoring…</string>
     <string name="chats_no_camera">No camera app on this phone.</string>
 
@@ -241,7 +241,7 @@
     <string name="chats_report_issue">Report an issue</string>
     <string name="chats_dismiss_note">Dismiss note</string>
     <string name="chats_group_general">General</string>
-    <string name="chats_group_completed">Completed</string>
+    <string name="chats_group_archived">Archived</string>
     <string name="chats_group_all">All chats</string>
     <string name="chats_group_today">Today</string>
     <string name="chats_group_yesterday">Yesterday</string>

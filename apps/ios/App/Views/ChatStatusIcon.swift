@@ -4,7 +4,8 @@ import SwiftUI
 /// Match desktop's shapes, so colour is never the only status cue.
 struct ChatStatusIcon: View {
     let activity: Activity?
-    var completed = false
+    /// An archived chat with nothing live to show leads with the archive box, not a check.
+    var archived = false
     var waiting = false
     var activeWatchCount: Int64 = 0
     @Environment(\.palette) private var palette
@@ -21,7 +22,13 @@ struct ChatStatusIcon: View {
             } else if waiting {
                 glyph(ClockGlyph(), palette.inkFaint)
             } else if activeWatchCount <= 0 {
-                glyph(CheckGlyph(), palette.inkFaint)
+                if archived {
+                    // The one SF Symbol here: archive has no glyph of ours. Faint ink, no accent.
+                    Image(systemName: "archivebox").font(.system(size: 15)).foregroundStyle(palette.inkFaint)
+                        .frame(width: 18, height: 18)
+                } else {
+                    glyph(CheckGlyph(), palette.inkFaint)
+                }
             } else {
                 glyph(SleepGlyph(), palette.inkFaint)
             }
@@ -40,6 +47,7 @@ struct ChatStatusIcon: View {
         if activity == .needsYou { return String(localized: "Needs you") }
         if activity == .failed { return String(localized: "Error") }
         if waiting { return String(localized: "Waiting to send") }
-        return activeWatchCount <= 0 ? String(localized: "Done") : String(localized: "Watching")
+        if activeWatchCount > 0 { return String(localized: "Watching") }
+        return archived ? String(localized: "Archived") : String(localized: "Done")
     }
 }
