@@ -464,9 +464,10 @@ struct PhoneModelPicker: View {
                             }
                         }
                     } header: {
-                        // Reload sits by the name, and the key's limits under it once an answer reported them.
+                        // Reload sits by the provider mark and name, and the key's limits under it once an answer reported them.
                         VStack(alignment: .leading, spacing: 2) {
-                            HStack {
+                            HStack(spacing: 8) {
+                                ProviderMarkImage(kind: p.kind, size: 16)
                                 SectionHeader(LocalizedStringKey(p.label))
                                 Spacer(minLength: 8)
                                 Button("Reload") { Task { await phone.loadModels(p.id) } }
