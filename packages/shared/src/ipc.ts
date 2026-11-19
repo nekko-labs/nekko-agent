@@ -515,6 +515,8 @@ export const IpcChannels = {
   syncNow: 'sync:now',
   syncSetEnabled: 'sync:setEnabled',
   syncDeleteAll: 'sync:deleteAll',
+  // The files Library lists on this computer, for Library sync (crates/nekko-cloud, #2748).
+  librarySync: 'library:sync',
   // Nekko Cloud organizations and the shared computer fleet (crates/nekko-cloud).
   orgList: 'org:list',
   orgCreate: 'org:create',
@@ -680,6 +682,12 @@ export interface NekkoApi {
   syncNow(): Promise<import('./cloud.js').CloudStatus>;
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
+  /**
+   * Tell the engine which files Library lists here, so they sync to Nekko Cloud
+   * when Library sync is open to the account (`status.library` is not null).
+   * Merged with what it already knows; a file leaves only when it is gone from disk.
+   */
+  librarySync(files: import('./cloud.js').LibrarySyncFile[]): Promise<import('./cloud.js').CloudStatus>;
   /** Organizations you belong to and invites waiting for you. */
   orgList(): Promise<import('./cloud.js').OrgList>;
   /** Create an organization (needs an unlocked account on Pro or Team); this device creates its key. */

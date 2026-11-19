@@ -36,6 +36,8 @@ const app = buildServer({
   // Invite-only gate, to try the apps' message: NEKKO_ACCOUNTS_ALLOWED_DOMAINS=nekkolabs.com
   accountsAllowedDomains: parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_DOMAINS),
   accountsAllowedEmails: parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_EMAILS),
+  // Team accounts that may switch unreleased features (the Library itest signs in as one); unset keeps the usual team.
+  staffEmails: process.env.NEKKO_STAFF_EMAILS ? parseList(process.env.NEKKO_STAFF_EMAILS) : undefined,
   allowedOrigins: [],
   logger: false,
   // Tests sign several devices in from one address.

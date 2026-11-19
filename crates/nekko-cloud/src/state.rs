@@ -16,6 +16,8 @@ pub struct Account {
     pub staff: bool,
     /// Plans and billing are switched on for this account (#2724).
     pub billing: bool,
+    /// Library files sync to Nekko Cloud for this account (the `library-cloud` switch, #2748).
+    pub library_cloud: bool,
 }
 
 impl Account {
@@ -28,8 +30,54 @@ impl Account {
             can_sync: a["canSync"].as_bool().unwrap_or(false),
             staff: a["staff"].as_bool().unwrap_or(false),
             billing: a["features"]["billing"].as_bool().unwrap_or(false),
+            library_cloud: a["features"]["library-cloud"].as_bool().unwrap_or(false),
         }
     }
+}
+
+/// A file Library lists on this computer, as the app reported it (`library:sync`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LibraryFile {
+    pub path: String,
+    pub title: String,
+    /// Library's kind (`doc`, `web`, `design`, `diagram`, `data`, `office`, `image`).
+    pub kind: String,
+    /// The chat it came from (its title), or the project for a designs-folder file.
+    pub chat: String,
+}
+
+/// One Library file as this device last pushed it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LibrarySynced {
+    /// The file's modified time and size when pushed, to skip an unchanged file without reading it.
+    pub modified_at: f64,
+    pub size: u64,
+    /// A digest of the record's plaintext.
+    pub digest: String,
+    /// A tombstone was pushed: the file is gone from this computer.
+    pub deleted: bool,
+    /// The key epoch it was pushed under (older ones are pushed again).
+    pub key_id: u32,
+}
+
+/// A Library file another computer of this account synced, kept here as a read-only copy.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RemoteFile {
+    pub device_id: String,
+    /// That computer's name.
+    pub device: String,
+    /// Its path there.
+    pub path: String,
+    pub title: String,
+    pub kind: String,
+    pub chat: String,
+    pub modified_at: f64,
+    pub size: u64,
+    /// Where the copy is on this computer (`<data>/cloud/library/<object id>/<name>`).
+    pub copy: String,
 }
 
 /// One synced chat as this device last pushed or applied it.
@@ -108,6 +156,12 @@ pub struct State {
     pub fleet: BTreeMap<String, Share>,
     /// Highest descriptor revision opened per `<orgId>/<deviceId>`: a lower one is a rollback.
     pub fleet_seen: BTreeMap<String, u64>,
+    /// The files Library lists here, per path (#2748). Kept until the file is gone from disk.
+    pub library_files: BTreeMap<String, LibraryFile>,
+    /// Per path: what was last pushed of each.
+    pub library: BTreeMap<String, LibrarySynced>,
+    /// Other computers' Library files, per object id.
+    pub library_remote: BTreeMap<String, RemoteFile>,
 }
 
 impl State {

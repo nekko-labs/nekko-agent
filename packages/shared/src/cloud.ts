@@ -36,8 +36,10 @@ export interface CloudStatus {
     /** A Nekko team account, which may switch unreleased Cloud features (decision 0092). */
     staff?: boolean;
     /** Unreleased Cloud features switched on for this account. */
-    features?: { billing?: boolean };
+    features?: { billing?: boolean; libraryCloud?: boolean };
   } | null;
+  /** Library sync (#2748); null unless the account's plan syncs and the `library-cloud` switch is on for it. */
+  library?: LibrarySyncStatus | null;
   /** A browser sign-in (GitHub, Google, Apple) is waiting for its callback. */
   oauthPending: boolean;
   /** Where this device's keys live ("macOS Keychain"…). */
@@ -64,6 +66,50 @@ export interface CloudStatus {
     devices: SyncDevice[];
     usage: { bytes: number; limit: number } | null;
   };
+}
+
+/**
+ * One Library file's sync state. `off`: sync is not on for this computer.
+ * `pending`: new or changed, waiting for the next sync (about a minute at
+ * most). `syncing`: uploading now. `synced`: backed up as of the last sync.
+ * `tooLarge`: over 8 MB. `unreadable`: could not be read. `noRoom`: the plan's
+ * storage is full.
+ */
+export type LibraryFileSync = 'off' | 'pending' | 'syncing' | 'synced' | 'tooLarge' | 'unreadable' | 'noRoom';
+
+/** A file Library lists here, as `librarySync` reports it. */
+export interface LibrarySyncFile {
+  path: string;
+  title: string;
+  /** Library's kind: doc, web, design, diagram, data, office or image. */
+  kind: string;
+  /** The chat it came from (its title), or the project of a designs-folder file. */
+  chat: string;
+}
+
+/** Another computer's Library file, copied here read-only. */
+export interface LibraryRemoteFile {
+  id: string;
+  deviceId: string;
+  /** That computer's name. */
+  device: string;
+  /** The copy on this computer. */
+  path: string;
+  /** Where it is on the other computer. */
+  originalPath: string;
+  title: string;
+  kind: string;
+  chat: string;
+  modifiedAt: number;
+  size: number;
+}
+
+export interface LibrarySyncStatus {
+  /** Sync is on for this computer (its keys are held and Sync this computer is on). */
+  on: boolean;
+  /** Per path listed here. */
+  files: Record<string, LibraryFileSync>;
+  remote: LibraryRemoteFile[];
 }
 
 export type CloudOAuthProvider = 'github' | 'google' | 'apple';

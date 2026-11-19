@@ -442,6 +442,7 @@ function makeWebClient(): NekkoApi {
     syncNow: () => call(IpcChannels.syncNow),
     syncSetEnabled: (on) => call(IpcChannels.syncSetEnabled, on),
     syncDeleteAll: () => call(IpcChannels.syncDeleteAll),
+    librarySync: (files) => call(IpcChannels.librarySync, files),
     orgList: () => call(IpcChannels.orgList),
     orgCreate: (name) => call(IpcChannels.orgCreate, name),
     orgGet: (orgId) => call(IpcChannels.orgGet, orgId),
