@@ -30,6 +30,9 @@ pub const KINDS: &[&str] = &["doc", "web", "design", "diagram", "data", "office"
 pub const MAX_FILES: usize = 5000;
 const MAX_PATH: usize = 4096;
 const MAX_TEXT: usize = 300;
+/// Maximum thumbnail size (base64 characters). ~200 KB decoded keeps the sealed record well
+/// under the 16 MiB cap even when added to an 8 MB file.
+const MAX_THUMB: usize = 300_000;
 
 /// The record's local id: this computer and the file's path on it.
 pub fn local_id(device_id: &str, path: &str) -> String {
@@ -47,6 +50,12 @@ pub fn folder_key(device_id: &str, path: &str) -> String {
 pub fn files_from_app(v: &Value) -> Vec<LibraryFile> {
     let text =
         |f: &Value, k: &str| f.get(k).and_then(Value::as_str).unwrap_or("").chars().take(MAX_TEXT).collect::<String>();
+    let thumb = |f: &Value| -> String {
+        // Accept only well-formed data URLs; strip down to `MAX_THUMB` characters.
+        let raw = f.get("thumbnailData").and_then(Value::as_str).unwrap_or("");
+        if !raw.starts_with("data:image/") { return String::new(); }
+        raw.chars().take(MAX_THUMB).collect()
+    };
     v.as_array()
         .map(|list| {
             list.iter()
@@ -59,7 +68,13 @@ pub fn files_from_app(v: &Value) -> Vec<LibraryFile> {
                     if path.len() > MAX_PATH || !absolute || path.contains('\0') || !KINDS.contains(&kind.as_str()) {
                         return None;
                     }
-                    Some(LibraryFile { title: text(f, "title"), chat: text(f, "chat"), path, kind })
+                    Some(LibraryFile {
+                        title: text(f, "title"),
+                        chat: text(f, "chat"),
+                        path,
+                        kind,
+                        thumbnail_data: thumb(f),
+                    })
                 })
                 .collect()
         })
@@ -67,13 +82,31 @@ pub fn files_from_app(v: &Value) -> Vec<LibraryFile> {
 }
 
 pub fn file_plaintext(device_id: &str, device: &str, f: &LibraryFile, modified_at: f64, bytes: &[u8]) -> Vec<u8> {
-    serde_json::to_vec(&json!({
+    let mut v = json!({
         "v": 1,
         "file": {
             "deviceId": device_id, "device": device, "path": f.path, "title": f.title, "kind": f.kind,
             "chat": f.chat, "modifiedAt": modified_at, "size": bytes.len(),
         },
         "data": b64_encode(bytes),
+    });
+    if !f.thumbnail_data.is_empty() {
+        v["thumb"] = json!(f.thumbnail_data);
+    }
+    serde_json::to_vec(&v).unwrap_or_default()
+}
+
+/// A plaintext record for a file that is too large to sync (#3044): carries metadata and a
+/// thumbnail only. No "data" field. Applied the same way as a file record on other computers,
+/// but nothing is written to disk (the copy stays empty).
+pub fn thumb_plaintext(device_id: &str, device: &str, f: &LibraryFile, modified_at: f64, size: u64) -> Vec<u8> {
+    serde_json::to_vec(&json!({
+        "v": 1,
+        "file": {
+            "deviceId": device_id, "device": device, "path": f.path, "title": f.title, "kind": f.kind,
+            "chat": f.chat, "modifiedAt": modified_at, "size": size,
+        },
+        "thumb": f.thumbnail_data,
     }))
     .unwrap_or_default()
 }
@@ -110,9 +143,40 @@ pub fn parse(bytes: &[u8]) -> Option<LibraryRecord> {
         return Some(LibraryRecord::Deleted { device_id: s(&v, "deviceId")?, path: s(&v, "path")? });
     }
     let f = v.get("file")?;
-    let data = b64_decode(v.get("data")?.as_str()?).ok()?;
     let kind = s(f, "kind")?;
-    if !KINDS.contains(&kind.as_str()) || data.len() as u64 > MAX_FILE_BYTES {
+    if !KINDS.contains(&kind.as_str()) {
+        return None;
+    }
+    // Validate and bound the thumbnail on receive, same rules as on send.
+    let thumb: String = s(&v, "thumb").map(|t| {
+        if !t.starts_with("data:image/") { return String::new(); }
+        t.chars().take(MAX_THUMB).collect()
+    }).unwrap_or_default();
+
+    // Thumb-only record (#3044): no "data" field; the file was over 8 MB on the other computer.
+    // Must have a thumbnail to be useful; without one it is ignored.
+    if v.get("data").is_none() {
+        if thumb.is_empty() {
+            return None;
+        }
+        let file = RemoteFile {
+            device_id: s(f, "deviceId")?,
+            device: s(f, "device").unwrap_or_default(),
+            path: s(f, "path")?,
+            title: s(f, "title").unwrap_or_default(),
+            kind,
+            chat: s(f, "chat").unwrap_or_default(),
+            modified_at: f.get("modifiedAt").and_then(Value::as_f64).unwrap_or(0.0),
+            size: f.get("size").and_then(Value::as_u64).unwrap_or(0),
+            copy: String::new(),
+            thumbnail_data: thumb,
+            thumb_only: true,
+        };
+        return Some(LibraryRecord::File(file, vec![]));
+    }
+
+    let data = b64_decode(v.get("data")?.as_str()?).ok()?;
+    if data.len() as u64 > MAX_FILE_BYTES {
         return None;
     }
     let file = RemoteFile {
@@ -125,6 +189,8 @@ pub fn parse(bytes: &[u8]) -> Option<LibraryRecord> {
         modified_at: f.get("modifiedAt").and_then(Value::as_f64).unwrap_or(0.0),
         size: data.len() as u64,
         copy: String::new(),
+        thumbnail_data: thumb,
+        thumb_only: false,
     };
     Some(LibraryRecord::File(file, data))
 }
@@ -157,7 +223,7 @@ mod tests {
     use super::*;
 
     fn file(path: &str) -> LibraryFile {
-        LibraryFile { path: path.into(), title: "Checkout".into(), kind: "design".into(), chat: "Shop".into() }
+        LibraryFile { path: path.into(), title: "Checkout".into(), kind: "design".into(), chat: "Shop".into(), thumbnail_data: String::new() }
     }
 
     #[test]
@@ -182,9 +248,51 @@ mod tests {
             br#"{"v":1,"file":{"deviceId":"d","path":"/a","kind":"virus"},"data":""}"#,
             br#"{"v":1,"file":{"deviceId":"d","path":"/a","kind":"doc"},"data":"!!"}"#,
             br#"{"v":1,"file":{"path":"/a","kind":"doc"},"data":""}"#,
+            // thumb-only without a thumbnail is ignored
+            br#"{"v":1,"file":{"deviceId":"d","path":"/a","kind":"doc"}}"#,
         ] {
             assert_eq!(parse(bad), None, "{}", String::from_utf8_lossy(bad));
         }
+    }
+
+    #[test]
+    fn a_file_record_carries_a_thumbnail_through() {
+        let mut f = file("/u/p/checkout.html");
+        f.thumbnail_data = "data:image/png;base64,iVBORw0KGgo=".into();
+        let plain = file_plaintext("dev1", "Desk", &f, 10.0, b"<h1>hi</h1>");
+        let Some(LibraryRecord::File(remote, data)) = parse(&plain) else { panic!("did not open") };
+        assert_eq!(data, b"<h1>hi</h1>");
+        assert_eq!(remote.thumbnail_data, "data:image/png;base64,iVBORw0KGgo=");
+        assert!(!remote.thumb_only);
+    }
+
+    #[test]
+    fn a_thumb_only_record_round_trips() {
+        let mut f = file("/u/p/large-video.mp4");
+        f.kind = "image".into();
+        f.thumbnail_data = "data:image/webp;base64,ZGF0YQ==".into();
+        let plain = thumb_plaintext("dev2", "Laptop", &f, 999.0, 10_000_000);
+        let Some(LibraryRecord::File(remote, data)) = parse(&plain) else { panic!("did not open") };
+        assert!(data.is_empty());
+        assert!(remote.thumb_only);
+        assert_eq!(remote.thumbnail_data, "data:image/webp;base64,ZGF0YQ==");
+        assert_eq!(remote.size, 10_000_000);
+        assert_eq!(remote.copy, "");
+        // The local id comes from LibraryRecord, not RemoteFile directly.
+        let rec = LibraryRecord::File(remote, data);
+        assert_eq!(rec.local_id(), local_id("dev2", "/u/p/large-video.mp4"));
+    }
+
+    #[test]
+    fn thumbnails_from_app_are_stripped_to_data_url_prefix_only() {
+        let got = files_from_app(&json!([
+            { "path": "/a/x.md", "kind": "doc", "title": "X", "chat": "", "thumbnailData": "data:image/png;base64,abc=" },
+            { "path": "/b/y.md", "kind": "doc", "title": "Y", "chat": "", "thumbnailData": "javascript:alert(1)" },
+            { "path": "/c/z.md", "kind": "doc", "title": "Z", "chat": "" },
+        ]));
+        assert_eq!(got[0].thumbnail_data, "data:image/png;base64,abc=");
+        assert_eq!(got[1].thumbnail_data, ""); // non-data-URL refused
+        assert_eq!(got[2].thumbnail_data, ""); // absent -> empty
     }
 
     #[test]

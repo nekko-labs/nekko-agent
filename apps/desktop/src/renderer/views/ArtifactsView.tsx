@@ -259,8 +259,21 @@ export function ArtifactsView() {
 
   // Library on Nekko Cloud (#2748): the engine is told this computer's files and backs them up;
   // other computers' files join the list as read-only copies. Nothing shows unless it is open to the account.
-  const library = useLibrarySync(entries);
+  // `getRevision` gives each entry the same revision token that LibraryFileThumbnail uses, so the
+  // engine receives the correct cached thumbnail for every file (#3044).
+  // We use e.at (the message timestamp that produced/linked the file) so that sending a new message
+  // in a chat does not invalidate all its files' thumbnails.
+  const getRevision = (e: ArtifactEntry) => e.at;
+  const library = useLibrarySync(entries, getRevision);
   const remote = useMemo(() => groupDesignVersions(remoteEntries(library?.remote ?? [])), [library?.remote]);
+  // Map of path -> thumbnail data URL for remote files that sent a thumbnail from their computer (#3044).
+  const remoteThumbs = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of (library?.remote ?? [])) {
+      if (r.thumbnailData) m.set(r.path.replaceAll('\\', '/'), r.thumbnailData);
+    }
+    return m;
+  }, [library?.remote]);
   const everything = useMemo(() => (entries && remote.length ? [...entries, ...remote] : entries), [entries, remote]);
 
   // The kinds that have files lead the slider; the setup answer's kind comes first.
@@ -328,7 +341,7 @@ export function ArtifactsView() {
     return (
       <div key={e.path} role="listitem" className={`group rounded-lg ${active ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
         <button type="button" data-artifact-row className="flex w-full min-w-0 items-center gap-3 px-2 py-1 text-left" onClick={() => select(e)} title={e.path}>
-          <LibraryFileThumbnail kind={e.kind} path={e.path} revision={revision} className="h-7 w-7 shrink-0 rounded-md" />
+          <LibraryFileThumbnail kind={e.kind} path={e.path} revision={revision} thumbnailData={e.source === 'cloud' ? remoteThumbs.get(e.path) : undefined} className="h-7 w-7 shrink-0 rounded-md" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
             {!listWide && <span className="block truncate text-2xs text-ink-faint">{fromAndWhen(e)}</span>}

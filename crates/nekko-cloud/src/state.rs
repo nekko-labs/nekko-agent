@@ -45,6 +45,9 @@ pub struct LibraryFile {
     pub kind: String,
     /// The chat it came from (its title), or the project for a designs-folder file.
     pub chat: String,
+    /// A small thumbnail for the file (base64url PNG or WebP, capped at ~200 KB), as reported
+    /// by the app. Embedded in the sealed record so other computers can show it (#3044).
+    pub thumbnail_data: String,
 }
 
 /// One Library file as this device last pushed it.
@@ -60,6 +63,8 @@ pub struct LibrarySynced {
     pub deleted: bool,
     /// The key epoch it was pushed under (older ones are pushed again).
     pub key_id: u32,
+    /// A digest of the last-pushed thumbnail, to push again when it changes (#3044).
+    pub thumbnail_digest: String,
 }
 
 /// A Library file another computer of this account synced, kept here as a read-only copy.
@@ -78,6 +83,12 @@ pub struct RemoteFile {
     pub size: u64,
     /// Where the copy is on this computer (`<data>/cloud/library/<object id>/<name>`).
     pub copy: String,
+    /// A small thumbnail from the sealed record (base64url PNG or WebP), shown before
+    /// the file is opened on this computer (#3044). Empty when the record had none.
+    pub thumbnail_data: String,
+    /// True when only a thumbnail record was pushed (the file was over 8 MB, #3044).
+    /// Such records have no copy on disk; the original path is shown as the entry path.
+    pub thumb_only: bool,
 }
 
 /// One synced chat as this device last pushed or applied it.

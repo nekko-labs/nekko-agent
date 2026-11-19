@@ -11,8 +11,16 @@ const REPORT_MS = 800;
  * Library sync for this view: follows the engine's cloud status, and tells it
  * which files Library lists here whenever that list changes (only while Library
  * sync is open to the account). Returns the status's `library` part, or null.
+ *
+ * `getRevision` maps an entry to the revision token used to key its disk
+ * thumbnail (the same value passed to `LibraryFileThumbnail`). When provided,
+ * the hook attaches each file's current thumbnail to the payload so the engine
+ * can embed it in the sealed record for other computers (#3044).
  */
-export function useLibrarySync(entries: readonly ArtifactEntry[] | null): LibrarySyncStatus | null {
+export function useLibrarySync(
+  entries: readonly ArtifactEntry[] | null,
+  getRevision?: (e: ArtifactEntry) => string | number,
+): LibrarySyncStatus | null {
   const [status, setStatus] = useState<CloudStatus | null>(null);
   useEffect(() => {
     let live = true;
@@ -26,9 +34,33 @@ export function useLibrarySync(entries: readonly ArtifactEntry[] | null): Librar
   const key = syncKey(files);
   useEffect(() => {
     if (!open || !files.length || !window.nekko?.librarySync) return;
-    const timer = setTimeout(() => { window.nekko.librarySync(files).then(setStatus).catch(() => {}); }, REPORT_MS);
+    const timer = setTimeout(async () => {
+      try {
+        // Attach cached thumbnails to the files so the engine can embed them in sealed records (#3044).
+        // This is best-effort: if thumbnails aren't cached yet they'll be included next time.
+        let filesWithThumbs = files;
+        if (window.nekko?.libraryThumbGet && getRevision && entries) {
+          const entryMap = new Map(
+            (entries as ArtifactEntry[]).filter((e) => e.source !== 'cloud').map((e) => [e.path, e]),
+          );
+          const thumbed = await Promise.all(
+            files.map(async (f) => {
+              const e = entryMap.get(f.path);
+              if (!e) return f;
+              const rev = getRevision(e);
+              const thumbnailData = await window.nekko.libraryThumbGet!(f.path, rev).catch(() => null);
+              return thumbnailData ? { ...f, thumbnailData } : f;
+            }),
+          );
+          filesWithThumbs = thumbed;
+        }
+        const s = await window.nekko.librarySync(filesWithThumbs);
+        setStatus(s);
+      } catch { /* non-fatal */ }
+    }, REPORT_MS);
     return () => clearTimeout(timer);
-    // `key` stands for `files`.
+    // `key` stands for `files`. `getRevision` and `entries` are captured at call time
+    // inside the async callback, so they don't need to be in the dep array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, key]);
   return library;
