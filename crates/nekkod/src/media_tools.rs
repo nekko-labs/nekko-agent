@@ -61,6 +61,8 @@ pub struct Call<'a> {
     pub default: Option<String>,
     /// Cloud pictures, where this chat may use them (not offline or Local only).
     pub cloud: Option<&'a dyn CloudSide>,
+    /// The chat's Fusion strategy (`settings.fusion.strategy`), when the chat is in Fusion.
+    pub fusion: Option<String>,
 }
 
 pub async fn run(server: &Server, c: Call<'_>) -> Value {
@@ -77,6 +79,23 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
             clips.extend(cloud.video_models().await);
         }
         return ok(id, format!("{}{}", list(&models), video_list(&clips)));
+    }
+    // Fusion picks the model when nothing named one (decided 2026-11-19): the
+    // call, the chat's own model and the Settings default still win, and a
+    // paid pick still asks with its price. Vectors keep their own default.
+    let mut input = input;
+    let mut route = None;
+    let need = if name == "edit_image" { "edit" } else { "create" };
+    let named = input.get("model").and_then(Value::as_str).is_some_and(|m| !m.is_empty())
+        || c.session.pointer("/imageParams/modelId").and_then(Value::as_str).is_some_and(|m| !m.is_empty())
+        || c.default.as_deref().is_some_and(|d| !d.is_empty());
+    if let Some(strategy) = c.fusion.as_deref()
+        && !named
+        && input.get("format").and_then(Value::as_str) != Some("svg")
+        && let Some((model, why)) = fusion_pick(&models, need, strategy)
+    {
+        input["model"] = model["id"].clone();
+        route = Some(why);
     }
     let inspect = input.get("inspect") != Some(&Value::Bool(false));
     let path = input.get("path").filter(|p| p.as_str().is_some_and(|s| !s.trim().is_empty()));
@@ -119,6 +138,9 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
         Ok(m) => m,
         Err(e) => return err(id, e),
     };
+    if let Some(why) = &route {
+        output = format!("{why} {output}");
+    }
     if let Some(p) = path {
         let call = ToolCall { id: id.to_string(), name: name.to_string(), input: input.clone() };
         let bytes = match &svg {
@@ -755,6 +777,90 @@ fn vector_result(svg: String, lead: String) -> Result<Made, String> {
     Ok(Made { images: vec![base64::engine::general_purpose::STANDARD.encode(png)], output, svg: Some(svg) })
 }
 
+/// A media model's capability, suggested from its name like the chat models'
+/// tiers (2 small … 5 frontier): an estimate for Fusion's Quality first, not a
+/// benchmark. Unknown names rank lowest.
+pub fn media_tier(model: &Value) -> u8 {
+    let name = format!("{} {}", model["id"].as_str().unwrap_or_default(), model["name"].as_str().unwrap_or_default())
+        .to_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| name.contains(w));
+    if has(&[
+        "nano banana",
+        "nano-banana",
+        "gemini",
+        "gpt-image",
+        "gpt image",
+        "imagen",
+        "seedream",
+        "ideogram",
+        "recraft",
+        "veo",
+        "kling",
+        "runway",
+        "sora",
+        "hailuo",
+    ]) || (name.contains("flux") && has(&["pro", "max", "ultra"]))
+    {
+        5
+    } else if has(&["qwen-image", "qwen image", "qwen_image", "hidream"]) {
+        4
+    } else if has(&["z-image", "z image", "z_image", "flux", "klein", "wan"]) {
+        3
+    } else if has(&["stable-diffusion", "stable diffusion", "sdxl", "sd3", "sd1", "sd 1"]) {
+        2
+    } else {
+        1
+    }
+}
+
+const STRATEGY_LABELS: [(&str, &str); 5] = [
+    ("balanced", "Balanced"),
+    ("economical", "Economical"),
+    ("quality", "Quality first"),
+    ("local-first", "Local first"),
+    ("capacity", "Capacity fallback"),
+];
+
+/// Fusion's media pick for a strategy (decided 2026-11-19), with the reason
+/// the result shows. Quality first takes the highest tier, cloud included,
+/// the cheaper on a tie; every other strategy stays on this computer when a
+/// local model can do the task and else takes the cheapest cloud one.
+pub fn fusion_pick(models: &[Value], need: &str, strategy: &str) -> Option<(Value, String)> {
+    let label = STRATEGY_LABELS.iter().find(|(k, _)| *k == strategy).map_or("Balanced", |(_, l)| *l);
+    let price = |m: &Value| if m["source"] == "cloud" { m["priceUsd"].as_f64().unwrap_or(f64::MAX) } else { 0.0 };
+    let able: Vec<&Value> = models.iter().filter(|m| can(m, need)).collect();
+    let pick = if strategy == "quality" {
+        able.iter().copied().max_by(|a, b| media_tier(a).cmp(&media_tier(b)).then(price(b).total_cmp(&price(a))))
+    } else {
+        able.iter()
+            .copied()
+            .find(|m| m["source"] != "cloud")
+            .or_else(|| able.iter().copied().min_by(|a, b| price(a).total_cmp(&price(b))))
+    }?;
+    let name = pick["name"].as_str().unwrap_or_default();
+    let place = if pick["source"] == "cloud" {
+        format!("{name} through OpenRouter (${:.3} a picture, asked first)", price(pick))
+    } else {
+        format!("{name} on this computer (free)")
+    };
+    Some((pick.clone(), format!("Fusion ({label}) chose {place}.")))
+}
+
+/// Fusion's clip pick: Quality first takes a cloud video model when there is
+/// one, every other strategy a local one first.
+pub fn fusion_clip_pick(local: &[Value], cloud: &[Value], strategy: &str) -> Option<(Value, String)> {
+    let label = STRATEGY_LABELS.iter().find(|(k, _)| *k == strategy).map_or("Balanced", |(_, l)| *l);
+    let (first, second) = if strategy == "quality" { (cloud, local) } else { (local, cloud) };
+    let pick = first.first().or_else(|| second.first())?;
+    let name = pick["name"].as_str().unwrap_or_default();
+    let place = if pick["source"] == "cloud" {
+        format!("{name} through OpenRouter (you choose and confirm the price)")
+    } else {
+        format!("{name} on this computer (free)")
+    };
+    Some((pick.clone(), format!("Fusion ({label}) chose {place}.")))
+}
+
 /// `media_models`'s answer.
 fn list(models: &[Value]) -> String {
     if models.is_empty() {
@@ -1055,6 +1161,34 @@ mod tests {
         let png = base64::engine::general_purpose::STANDARD.decode(&made.images[0]).unwrap();
         assert_eq!(&png[1..4], b"PNG");
         assert!(vector_made(&base64::engine::general_purpose::STANDARD.encode("<html/>"), "x", 0.0).is_err());
+    }
+
+    #[test]
+    fn fusion_picks_a_media_model_by_strategy() {
+        let mut all = models();
+        all.push(json!({ "id": "openrouter:p:google/gemini-3-pro-image", "name": "Nano Banana Pro", "capabilities": ["create", "edit"], "source": "cloud", "priceUsd": 0.04, "priceExact": true }));
+        all.push(json!({ "id": "openrouter:p:black-forest-labs/flux-2-pro", "name": "FLUX.2 Pro", "capabilities": ["create"], "source": "cloud", "priceUsd": 0.03, "priceExact": true }));
+        for s in ["balanced", "economical", "local-first", "capacity"] {
+            let (m, why) = fusion_pick(&all, "create", s).unwrap();
+            assert_eq!(m["id"], "z", "{s}");
+            assert!(why.ends_with("chose Z-Image on this computer (free)."), "{why}");
+        }
+        // Quality first: the top tier, the cheaper of two frontier models.
+        let (m, why) = fusion_pick(&all, "create", "quality").unwrap();
+        assert_eq!(m["name"], "FLUX.2 Pro");
+        assert_eq!(why, "Fusion (Quality first) chose FLUX.2 Pro through OpenRouter ($0.030 a picture, asked first).");
+        // No local model can do it: the cheapest cloud one.
+        let cloud_only: Vec<Value> = all.iter().filter(|m| m["source"] == "cloud").cloned().collect();
+        assert_eq!(fusion_pick(&cloud_only, "edit", "local-first").unwrap().0["name"], "Nano Banana Pro");
+        assert!(fusion_pick(&[], "create", "balanced").is_none());
+        assert_eq!(media_tier(&json!({ "id": "qwen-image-q4", "name": "Qwen Image" })), 4);
+        assert_eq!(media_tier(&json!({ "id": "z", "name": "Z-Image" })), 3);
+        // Clips: Quality first goes to the cloud, the rest stay local.
+        let local = vec![json!({ "id": "wan", "name": "Wan2.2 TI2V 5B" })];
+        let cloud = vec![json!({ "id": "openrouter:p:google/veo-3.1", "name": "Veo 3.1", "source": "cloud" })];
+        assert_eq!(fusion_clip_pick(&local, &cloud, "quality").unwrap().0["name"], "Veo 3.1");
+        assert_eq!(fusion_clip_pick(&local, &cloud, "balanced").unwrap().0["name"], "Wan2.2 TI2V 5B");
+        assert_eq!(fusion_clip_pick(&[], &cloud, "local-first").unwrap().0["name"], "Veo 3.1");
     }
 
     #[test]

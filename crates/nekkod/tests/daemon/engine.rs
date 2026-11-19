@@ -1121,6 +1121,49 @@ async fn a_vector_picture_without_recraft_is_traced_from_a_local_picture() {
     post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
 }
 
+/// A chat in Fusion that names no picture model: Fusion picks one by its
+/// strategy, says so in the result, and a paid pick still asks with its price.
+#[tokio::test(flavor = "multi_thread")]
+async fn fusion_picks_the_picture_model_and_says_why() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter(seen.clone()).await;
+    let chat = json!({ "id": "s_fuse", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "autoModel": true,
+        "autoProviderSwitch": true, "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("fusion-picture", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model =
+        scripted_model(vec![call_tool("c_fuse", "generate_image", json!({ "prompt": "a kite" })), say_text("made it")])
+            .await;
+    let mut spec = turn_spec(&rig, &model, "turn_fuse", "s_fuse", json!({ "text": "A kite" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(
+        &rig,
+        json!({ "providers": [scripted.clone(), openrouter.clone()], "fusion": { "strategy": "quality" } }),
+    )
+    .await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    // The paid pick still asks, even in YOLO.
+    wait_pending(rig.d.port, "s_fuse", "approval", "c_fuse").await;
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_fuse", "c_fuse", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_fuse", "s_fuse").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_fuse");
+    let output = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_fuse")
+        .unwrap()["toolResult"]["output"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(output.starts_with("Fusion (Quality first) chose Acme Pic through OpenRouter ($0.030 a picture, asked first). Made the picture with Acme Pic"), "{output}");
+}
+
 pub(crate) fn fake_sd() -> std::path::PathBuf {
     let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
