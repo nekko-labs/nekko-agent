@@ -3354,12 +3354,37 @@ impl TurnTools {
             let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
                 return Ok(error(id, "Clips are not available in this chat."));
             };
+            // Fusion picks the clip model when the call names none (decided 2026-11-19).
+            let mut input = input.clone();
+            let mut route = None;
+            if input.get("model").and_then(Value::as_str).is_none_or(str::is_empty)
+                && let Some(strategy) = self.fusion_strategy()
+            {
+                let local = server.ready_video_models().await;
+                let cloud = match self.turns.dispatch.get() {
+                    Some(d) if !self.local_only() => match d("media:cloudVideoModels".into(), vec![]).await {
+                        Ok(Value::Array(list)) => list,
+                        _ => Vec::new(),
+                    },
+                    _ => Vec::new(),
+                };
+                if let Some((m, why)) = crate::media_tools::fusion_clip_pick(&local, &cloud, &strategy) {
+                    input["model"] = m["id"].clone();
+                    route = Some(why);
+                }
+            }
+            let routed = |mut v: Value| {
+                if let (Some(why), Some(out)) = (&route, v.get("output").and_then(Value::as_str)) {
+                    v["output"] = json!(format!("{why} {out}"));
+                }
+                v
+            };
             if input
                 .get("model")
                 .and_then(Value::as_str)
                 .is_some_and(|m| crate::cloud_media::parse_cloud_id(m).is_some())
             {
-                return Ok(self.cloud_clip(id, call, &input, ctx).await);
+                return Ok(routed(self.cloud_clip(id, call, &input, ctx).await));
             }
             let session = lock(&self.session).clone();
             let frame = match crate::media_tools::native_frame(&input, &session, ctx) {
@@ -3387,10 +3412,12 @@ impl TurnTools {
                 project_path: project,
                 kept: self.turns.data_dir.join("agent-pictures").join(&self.shared.session_id),
             };
-            return Ok(match crate::media_tools::start_clip(server.clone(), self.turns.watches.clone(), clip).await {
-                Ok(text) => result(id, text),
-                Err(e) => error(id, e),
-            });
+            return Ok(routed(
+                match crate::media_tools::start_clip(server.clone(), self.turns.watches.clone(), clip).await {
+                    Ok(text) => result(id, text),
+                    Err(e) => error(id, e),
+                },
+            ));
         }
         if crate::media_tools::TOOLS.contains(&name) {
             let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
@@ -3404,9 +3431,10 @@ impl TurnTools {
             let side = ChatCloud { tools: self, call };
             let cloud = (!local_only && self.turns.dispatch.get().is_some())
                 .then_some(&side as &dyn crate::media_tools::CloudSide);
+            let fusion = self.fusion_strategy();
             return Ok(crate::media_tools::run(
                 server,
-                crate::media_tools::Call { call, session, ctx, default, cloud },
+                crate::media_tools::Call { call, session, ctx, default, cloud, fusion },
             )
             .await);
         }
@@ -4139,6 +4167,29 @@ impl TurnTools {
                 choice.describe()
             ),
         )
+    }
+
+    /// The chat's Fusion strategy when the chat is in Fusion (`fusionEnabled`
+    /// in shared/fusion.ts: Auto with provider switching, not offline or
+    /// incognito), from `settings.fusion.strategy`, Balanced by default.
+    fn fusion_strategy(&self) -> Option<String> {
+        let s = lock(&self.session).clone();
+        let on = s.get("autoModel") == Some(&Value::Bool(true))
+            && s.get("autoProviderSwitch") == Some(&Value::Bool(true))
+            && !js::truthy(s.get("offline"))
+            && !js::truthy(s.get("incognito"));
+        on.then(|| {
+            let settings = self.turns.settings.get();
+            let strategy = settings.pointer("/fusion/strategy").and_then(Value::as_str).unwrap_or("balanced");
+            let known = ["balanced", "economical", "quality", "local-first", "capacity"];
+            (if known.contains(&strategy) { strategy } else { "balanced" }).to_string()
+        })
+    }
+
+    /// An offline or Local only chat: no cloud media.
+    fn local_only(&self) -> bool {
+        let s = lock(&self.session);
+        crate::connections::offline(&s) || str_at(&s, "models") == Some("local")
     }
 
     /// Ask the chat's question card and wait for the answers; `None` when it
