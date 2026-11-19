@@ -41,6 +41,8 @@ type BoxFut<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Sen
 /// unless the chat's allowance covers it, and records what it cost.
 pub trait CloudSide: Send + Sync {
     fn models(&self) -> BoxFut<'_, Vec<Value>>;
+    /// The user's OpenRouter video models (`generate_video` names one; priced per second).
+    fn video_models(&self) -> BoxFut<'_, Vec<Value>>;
     fn image(&self, request: Value) -> BoxFut<'_, Result<Value, String>>;
     /// May this call spend about `price` dollars? `what` is the approval's text.
     fn spend<'a>(&'a self, price: f64, what: &'a str) -> BoxFut<'a, Result<(), String>>;
@@ -70,7 +72,11 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
         models.extend(cloud.models().await);
     }
     if name == "media_models" {
-        return ok(id, list(&models));
+        let mut clips = server.ready_video_models().await;
+        if let Some(cloud) = c.cloud {
+            clips.extend(cloud.video_models().await);
+        }
+        return ok(id, format!("{}{}", list(&models), video_list(&clips)));
     }
     let inspect = input.get("inspect") != Some(&Value::Bool(false));
     let path = input.get("path").filter(|p| p.as_str().is_some_and(|s| !s.trim().is_empty()));
@@ -284,6 +290,154 @@ pub async fn start_clip(
     ))
 }
 
+/// What a paid cloud clip is made with: the user's choice from [`clip_questions`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClipChoice {
+    pub duration: u64,
+    pub audio: bool,
+    pub resolution: Option<String>,
+}
+
+impl ClipChoice {
+    /// The cheapest clip the model makes, or what the agent asked for where the model offers it.
+    pub fn suggested(model: &Value, input: &Value) -> ClipChoice {
+        let durations: Vec<u64> =
+            model["durations"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+        let asked = input.get("duration").and_then(Value::as_u64).filter(|d| durations.contains(d));
+        let resolutions = strings(&model["resolutions"]);
+        let res = input
+            .get("resolution")
+            .and_then(Value::as_str)
+            .and_then(|r| resolutions.iter().find(|x| x.eq_ignore_ascii_case(r)).cloned())
+            .or_else(|| resolutions.first().cloned());
+        ClipChoice {
+            duration: asked.unwrap_or_else(|| durations.iter().copied().min().unwrap_or(4)),
+            audio: model["audio"] == true && input.get("audio") == Some(&Value::Bool(true)),
+            resolution: res,
+        }
+    }
+
+    /// What it costs, from the model's per-second rates; `None` when unpriced.
+    pub fn price(&self, model: &Value) -> Option<f64> {
+        let rate = crate::cloud_media::rate_per_second(&model["pricing"], self.audio, self.resolution.as_deref())?;
+        Some(rate * self.duration as f64)
+    }
+
+    pub fn describe(&self) -> String {
+        let audio = if self.audio { "with audio" } else { "without audio" };
+        match &self.resolution {
+            Some(r) => format!("{} s, {audio}, {r}", self.duration),
+            None => format!("{} s, {audio}", self.duration),
+        }
+    }
+}
+
+fn strings(v: &Value) -> Vec<String> {
+    v.as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect()
+}
+
+fn usd(n: f64) -> String {
+    format!("${n:.2}")
+}
+
+/// Up to five of a model's durations: the shortest, the longest, and some between.
+fn some_durations(all: &[u64]) -> Vec<u64> {
+    let mut d = all.to_vec();
+    d.sort_unstable();
+    d.dedup();
+    if d.len() <= 5 {
+        return d;
+    }
+    let last = d.len() - 1;
+    (0..5).map(|i| d[i * last / 4]).collect()
+}
+
+/// The question card a paid cloud clip asks first (decided 2026-11-19): how
+/// long, with or without audio, at which resolution, each answer with its
+/// price, the suggested one first. A question with one answer is left out.
+pub fn clip_questions(model: &Value, suggested: &ClipChoice) -> Value {
+    let mut questions = Vec::new();
+    let price = |c: &ClipChoice| c.price(model).map(usd).unwrap_or_else(|| "not priced".into());
+    let first = |mut opts: Vec<(bool, Value)>| -> Vec<Value> {
+        opts.sort_by_key(|(is, _)| !*is);
+        opts.into_iter().map(|(_, o)| o).collect()
+    };
+    let durations: Vec<u64> = model["durations"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+    let picks = some_durations(&durations);
+    if picks.len() > 1 {
+        let opts = picks
+            .iter()
+            .map(|d| {
+                let c = ClipChoice { duration: *d, ..suggested.clone() };
+                let mark = if *d == suggested.duration { " (suggested)" } else { "" };
+                (
+                    *d == suggested.duration,
+                    json!({ "label": format!("{d} seconds"), "description": format!("{}{mark}", price(&c)) }),
+                )
+            })
+            .collect();
+        questions
+            .push(json!({ "header": "Length", "question": "How long should the clip be?", "options": first(opts) }));
+    }
+    if model["audio"] == true {
+        let opts = [false, true]
+            .iter()
+            .map(|a| {
+                let c = ClipChoice { audio: *a, ..suggested.clone() };
+                let mark = if *a == suggested.audio { " (suggested)" } else { "" };
+                let label = if *a { "With audio" } else { "No audio" };
+                (*a == suggested.audio, json!({ "label": label, "description": format!("{}{mark}", price(&c)) }))
+            })
+            .collect();
+        questions.push(json!({ "header": "Audio", "question": "Should the clip have sound?", "options": first(opts) }));
+    }
+    let resolutions = strings(&model["resolutions"]);
+    if resolutions.len() > 1 {
+        let opts = resolutions
+            .iter()
+            .take(5)
+            .map(|r| {
+                let c = ClipChoice { resolution: Some(r.clone()), ..suggested.clone() };
+                let is = suggested.resolution.as_deref() == Some(r.as_str());
+                let mark = if is { " (suggested)" } else { "" };
+                (is, json!({ "label": r, "description": format!("{}{mark}", price(&c)) }))
+            })
+            .collect();
+        questions.push(json!({ "header": "Resolution", "question": "At which resolution?", "options": first(opts) }));
+    }
+    json!({ "questions": questions })
+}
+
+/// The choice the user made on [`clip_questions`]' card (`[{ questionId, labels }]`),
+/// starting from the suggested one for anything not asked or not answered.
+pub fn clip_answer(questions: &Value, answers: &Value, suggested: &ClipChoice) -> ClipChoice {
+    let mut c = suggested.clone();
+    let list = questions["questions"].as_array().cloned().unwrap_or_default();
+    for (i, q) in list.iter().enumerate() {
+        let id = format!("q{}", i + 1);
+        let Some(label) = answers
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|a| a["questionId"] == id.as_str())
+            .and_then(|a| a["labels"].as_array()?.first()?.as_str())
+        else {
+            continue;
+        };
+        match q["header"].as_str() {
+            Some("Length") => {
+                if let Some(d) = label.split_whitespace().next().and_then(|n| n.parse().ok()) {
+                    c.duration = d;
+                }
+            }
+            Some("Audio") => c.audio = label == "With audio",
+            Some("Resolution") => c.resolution = Some(label.to_string()),
+            _ => {}
+        }
+    }
+    c
+}
+
 /// Write a finished clip where it is kept, and to the approved project path.
 fn keep_clip(result: &Value, kept: &std::path::Path, project: Option<&str>) -> Result<Vec<String>, String> {
     let b64 =
@@ -493,6 +647,31 @@ fn list(models: &[Value]) -> String {
     format!("Picture models this chat can use:\n{}", rows.join("\n"))
 }
 
+/// `media_models`'s clip section: the video models `generate_video` can name.
+fn video_list(models: &[Value]) -> String {
+    if models.is_empty() {
+        return String::new();
+    }
+    let rows: Vec<String> = models
+        .iter()
+        .map(|m| {
+            let id = m["id"].as_str().unwrap_or_default();
+            let name = m["name"].as_str().unwrap_or_default();
+            if m["source"] != "cloud" {
+                return format!("- {id} ({name}): clips, local, free");
+            }
+            let cheapest = ClipChoice::suggested(m, &json!({}));
+            let from = cheapest.price(m).map(|p| format!("from {} for {}", usd(p), cheapest.describe())).unwrap_or_default();
+            let lengths: Vec<String> = m["durations"].as_array().into_iter().flatten().map(|d| d.to_string()).collect();
+            format!(
+                "- {id} ({name}): clips of {} s, cloud through OpenRouter, {from}; the user picks length, audio and resolution with prices before paying",
+                lengths.join("/")
+            )
+        })
+        .collect();
+    format!("\n\nVideo models (generate_video):\n{}", rows.join("\n"))
+}
+
 fn can(model: &Value, need: &str) -> bool {
     model["capabilities"].as_array().is_some_and(|c| c.iter().any(|x| x == need))
 }
@@ -647,6 +826,34 @@ mod tests {
             choose(&models(), &json!({ "model": "nope" }), &none, None, "create").unwrap_err().contains("media_models")
         );
         assert!(choose(&[], &none, &none, None, "create").is_err());
+    }
+
+    fn veo() -> Value {
+        json!({ "id": "openrouter:p:google/veo-3.1", "name": "Veo 3.1", "durations": [4, 6, 8], "resolutions": ["720p", "1080p"],
+            "audio": true, "firstFrame": true,
+            "pricing": { "duration_seconds_without_audio": "0.20", "duration_seconds_with_audio": "0.40" } })
+    }
+
+    #[test]
+    fn a_paid_clip_suggests_the_cheapest_and_prices_every_answer() {
+        let s = ClipChoice::suggested(&veo(), &json!({}));
+        assert_eq!(s, ClipChoice { duration: 4, audio: false, resolution: Some("720p".into()) });
+        assert_eq!(s.price(&veo()), Some(0.8));
+        let q = clip_questions(&veo(), &s);
+        let qs = q["questions"].as_array().unwrap();
+        assert_eq!(qs.len(), 3);
+        assert_eq!(qs[0]["options"][0], json!({ "label": "4 seconds", "description": "$0.80 (suggested)" }));
+        assert_eq!(qs[0]["options"][2]["description"], "$1.60");
+        assert_eq!(qs[1]["options"][1], json!({ "label": "With audio", "description": "$1.60" }));
+        // What the agent asked for, where the model offers it, is the suggestion.
+        let asked = ClipChoice::suggested(&veo(), &json!({ "duration": 8, "audio": true, "resolution": "1080P" }));
+        assert_eq!(asked, ClipChoice { duration: 8, audio: true, resolution: Some("1080p".into()) });
+        let answers =
+            json!([{ "questionId": "q1", "labels": ["6 seconds"] }, { "questionId": "q2", "labels": ["With audio"] }]);
+        let chosen = clip_answer(&q, &answers, &s);
+        assert_eq!(chosen, ClipChoice { duration: 6, audio: true, resolution: Some("720p".into()) });
+        assert_eq!(chosen.price(&veo()), Some(2.4000000000000004));
+        assert_eq!(some_durations(&[2, 3, 4, 5, 6, 7, 8, 9, 10]), vec![2, 4, 6, 8, 10]);
     }
 
     #[test]
