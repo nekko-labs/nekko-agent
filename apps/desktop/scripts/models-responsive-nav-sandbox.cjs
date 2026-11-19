@@ -65,10 +65,11 @@ app.whenReady().then(async () => {
         const nav = document.querySelector('[aria-label="Models sections"]');
         const r=nav.getBoundingClientRect();
         const buttons=[...nav.querySelectorAll('button')].map(e=>({text:e.textContent,y:e.getBoundingClientRect().y,height:e.getBoundingClientRect().height}));
-        return {width:innerWidth,columns:families.filter(r=>Math.abs(r.y-families[0].y)<2).length,families,overflow:root.scrollWidth>root.clientWidth+1,pageOverflow:document.documentElement.scrollWidth>innerWidth+1,nav:{x:r.x,y:r.y,width:r.width,height:r.height},buttons};
+        return {width:innerWidth,scrollerRight:root.getBoundingClientRect().right,columns:families.filter(r=>Math.abs(r.y-families[0].y)<2).length,families,overflow:root.scrollWidth>root.clientWidth+1,pageOverflow:document.documentElement.scrollWidth>innerWidth+1,nav:{x:r.x,y:r.y,width:r.width,height:r.height},buttons};
       })()`);
       report.metrics.push(metric);
       assert(!metric.overflow && !metric.pageOverflow, 'no overflow at ' + width);
+      assert(Math.abs(metric.scrollerRight - width) < 1, 'scrollbar at the window edge at ' + width);
       assert(metric.columns === (width === 1920 ? 3 : width === 1440 ? 2 : 1), 'responsive columns at ' + width);
       if (width >= 1440) assert(metric.nav.y > 160 && metric.nav.height < 360, 'floating centre-left navigation at ' + width);
       for (const id of ['local','library','connections']) {
@@ -77,6 +78,12 @@ app.whenReady().then(async () => {
         const expected = {local:'Local model server',library:'Models',connections:'Connected servers'}[id];
         assert(selected === expected, id + ' navigation at ' + width);
         if ([1440,390].includes(width) && id !== 'local') await shot(id + '-' + width);
+      }
+      if ([1440,390].includes(width)) {
+        // The Cloud to Local boundary, Local's heading mid-screen.
+        await run(`(() => { const root = document.querySelector('.models-workspace'); root.dispatchEvent(new WheelEvent('wheel', {bubbles: true})); root.scrollTop += document.querySelector('.models-section-local').getBoundingClientRect().top - root.getBoundingClientRect().top - root.clientHeight / 2; })()`);
+        await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        await shot('boundary-' + width);
       }
     }
     win.setContentSize(1920, 1000);
