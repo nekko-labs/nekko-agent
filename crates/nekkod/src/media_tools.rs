@@ -416,6 +416,55 @@ pub fn clip_questions(model: &Value, suggested: &ClipChoice) -> Value {
     json!({ "questions": questions })
 }
 
+/// The price of every combination the card offers, keyed `length|audio|resolution`
+/// by the answers' labels (a question not asked is empty), so a picker can show
+/// the total as the user changes the answers. Unpriced combinations are left out.
+pub fn clip_prices(model: &Value, questions: &Value, suggested: &ClipChoice) -> Value {
+    let labels = |header: &str| -> Vec<String> {
+        questions["questions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|q| q["header"] == header)
+            .and_then(|q| q["options"].as_array())
+            .map(|o| o.iter().filter_map(|x| x["label"].as_str().map(str::to_string)).collect())
+            .unwrap_or_else(|| vec![String::new()])
+    };
+    let mut out = serde_json::Map::new();
+    for length in labels("Length") {
+        for audio in labels("Audio") {
+            for res in labels("Resolution") {
+                let mut c = suggested.clone();
+                if let Some(d) = length.split_whitespace().next().and_then(|n| n.parse().ok()) {
+                    c.duration = d;
+                }
+                if !audio.is_empty() {
+                    c.audio = audio == "With audio";
+                }
+                if !res.is_empty() {
+                    c.resolution = Some(res.clone());
+                }
+                if let Some(p) = c.price(model) {
+                    out.insert(format!("{length}|{audio}|{res}"), json!((p * 100.0).round() / 100.0));
+                }
+            }
+        }
+    }
+    Value::Object(out)
+}
+
+/// The total a picker confirmed with its answers (`{ questionId: "total", labels: ["2.40"] }`),
+/// when it is exactly the price Nekko computed for that choice.
+pub fn confirmed_total(answers: &Value, price: f64) -> bool {
+    answers
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|a| a["questionId"] == "total")
+        .and_then(|a| a["labels"].as_array()?.first()?.as_str()?.parse::<f64>().ok())
+        .is_some_and(|t| (t - (price * 100.0).round() / 100.0).abs() < 0.005)
+}
+
 /// The choice the user made on [`clip_questions`]' card (`[{ questionId, labels }]`),
 /// starting from the suggested one for anything not asked or not answered.
 pub fn clip_answer(questions: &Value, answers: &Value, suggested: &ClipChoice) -> ClipChoice {
@@ -923,6 +972,16 @@ mod tests {
         assert_eq!(chosen, ClipChoice { duration: 6, audio: true, resolution: Some("720p".into()) });
         assert_eq!(chosen.price(&veo()), Some(2.4000000000000004));
         assert_eq!(some_durations(&[2, 3, 4, 5, 6, 7, 8, 9, 10]), vec![2, 4, 6, 8, 10]);
+        // Every combination priced for a live total; a confirmed total must match.
+        let prices = clip_prices(&veo(), &q, &s);
+        assert_eq!(prices["4 seconds|No audio|720p"], json!(0.8));
+        assert_eq!(prices["6 seconds|With audio|720p"], json!(2.4));
+        assert_eq!(prices.as_object().unwrap().len(), 3 * 2 * 2);
+        let with_total =
+            json!([{ "questionId": "q1", "labels": ["6 seconds"] }, { "questionId": "total", "labels": ["2.40"] }]);
+        assert!(confirmed_total(&with_total, 2.4000000000000004));
+        assert!(!confirmed_total(&with_total, 1.6));
+        assert!(!confirmed_total(&answers, 2.4));
     }
 
     #[test]

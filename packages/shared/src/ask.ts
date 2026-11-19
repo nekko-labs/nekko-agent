@@ -62,6 +62,15 @@ export interface AskRequest {
   questions: AskQuestion[];
   /** When the agent asked, for "waiting 4m" on a board card. */
   askedAt: number;
+  /**
+   * A paid cloud clip's choice (#2973): the questions are its length, audio and
+   * resolution, and `prices` holds every combination's total, keyed
+   * `length|audio|resolution` by option labels (empty for a question not asked).
+   * A client that knows it shows one card with a live total and confirms it by
+   * adding `{ questionId: 'total', labels: ['2.40'] }` to the answers; one that
+   * does not shows the plain questions, and the total is confirmed after.
+   */
+  clip?: { model: string; via: string; sendsPicture: boolean; prices: Record<string, number> };
 }
 
 /** What the user picked for one question. */

@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { ClipPicker } from './ClipPicker.js';
 import type { AskAction, AskAnswer, AskOption, AskQuestion, AskRequest, RemoteRepo } from '@nekko-agent/shared';
 import { ChevronIcon } from '../icons.js';
 import { RepoBrowser } from './RepoBrowser.js';
@@ -33,7 +34,13 @@ import { ASK_OTHER_LABEL, isAskComplete } from '@nekko-agent/shared';
  * Skip clears only the current page, preserving every other answer. The last
  * page submits all choices (or resolves with no answers if every page was skipped).
  */
-export function QuestionCard({
+/** A paid cloud clip's choice gets its own card with a live total; anything else the stepper. */
+export function QuestionCard(props: Parameters<typeof StepQuestionCard>[0]) {
+  if (props.request.clip) return <ClipPicker request={props.request} onAnswer={props.onAnswer} onSkip={props.onSkip} />;
+  return <StepQuestionCard {...props} />;
+}
+
+function StepQuestionCard({
   request,
   onAnswer,
   onSkip,
