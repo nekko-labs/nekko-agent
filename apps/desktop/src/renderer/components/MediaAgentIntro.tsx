@@ -14,7 +14,7 @@ export const MEDIA_INTROS = {
       ['Local-first made easy', 'You’ll be surprised how easy it is to build it yourself instead of relying on a paid service.'],
     ],
     cta: 'Create your first image',
-    limit: 'Requires a compatible local image model. Photo currently creates images from text; editing an existing photo is not supported.',
+    limit: 'Start from scratch or edit existing photos using local models.',
   },
   video: {
     name: 'Video', title: 'Make room for your story.', subtitle: 'From the first idea to the final frame.',
