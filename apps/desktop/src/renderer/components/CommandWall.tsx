@@ -1074,7 +1074,7 @@ export function CommandWall({
         <ContextAction disabled={allPanes(state.root).length < 2} onClick={() => {
           const id = zoneMenu.paneId;
           setZoneMenu(null);
-          // The agent in it is minimized, not stopped or completed.
+          // The agent in it is minimized, not stopped or archived.
           setState((s) => {
             const root = removePane(s.root, id);
             return { ...s, root, activeZone: s.activeZone === id ? allPanes(root)[0]?.id ?? null : s.activeZone };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FRAME, FRAME_MAX, KEY_STEP, MARGIN, TARGETS_MAX, WHEEL_MAX, ZOOM, dotSpacing, fitView, frameSize, isAnimating, keyAction, readPreviewHand, readPreviewState, readPreviewTargets, readPreviewWheel, zoomAt } from './designCanvasView.js';
+import { FRAME, FRAME_MAX, KEY_STEP, MARGIN, TARGETS_MAX, WHEEL_MAX, ZOOM, dotSpacing, fitView, frameSize, isAnimating, keyAction, readPreviewHand, readPreviewState, readPreviewTargets, readPreviewWheel, readPreviewZoomKey, zoomAt, zoomKey, zoomKeyAction } from './designCanvasView.js';
 
 const state = (over: Record<string, unknown> = {}) => ({ nekkoPreview: 'state', animations: 0, media: 0, frames: 0, paused: false, width: 1440, height: 900, ...over });
 
@@ -83,9 +83,37 @@ describe('design canvas view', () => {
     expect((key('-') as { z: number }).z).toBeCloseTo(0.5 / ZOOM.step);
     expect((key('1') as { z: number }).z).toBe(1);
     expect(key('0')).toBe('fit');
-    expect(key('0', { metaKey: true })).toBeNull();
-    expect(key('=', { ctrlKey: true })).toBeNull();
     expect(key('a')).toBeNull();
+    // Other modified keys stay the app's.
+    expect(key('1', { ctrlKey: true })).toBeNull();
+    expect(key('ArrowRight', { metaKey: true })).toBeNull();
+    expect(key('=', { ctrlKey: true, altKey: true })).toBeNull();
+  });
+
+  it('takes the browser zoom keys for the design, not the app', () => {
+    const view = { z: 0.5, x: 100, y: 40 };
+    const canvas = { width: 1000, height: 600 };
+    const key = (k: string, over: Record<string, boolean> = {}) => keyAction({ key: k, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...over }, view, canvas);
+    for (const mod of [{ ctrlKey: true }, { metaKey: true }] as Array<Record<string, boolean>>) {
+      expect((key('=', mod) as { z: number }).z).toBeCloseTo(0.5 * ZOOM.step);
+      expect((key('+', { ...mod, shiftKey: true }) as { z: number }).z).toBeCloseTo(0.5 * ZOOM.step);
+      expect((key('-', mod) as { z: number }).z).toBeCloseTo(0.5 / ZOOM.step);
+      expect(key('0', mod)).toBe('fit');
+    }
+    expect(zoomKey({ key: '=', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false })).toBe('in');
+    expect(zoomKey({ key: '_', ctrlKey: false, metaKey: true, shiftKey: true, altKey: false })).toBe('out');
+    expect(zoomKey({ key: '=', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false })).toBeNull();
+    expect(zoomKey({ key: '0', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false })).toBeNull();
+    // Zooming in keeps the middle of the canvas still.
+    const after = zoomKeyAction('in', view, canvas) as { z: number; x: number; y: number };
+    expect((500 - after.x) / after.z).toBeCloseTo((500 - view.x) / view.z);
+    expect(zoomKeyAction('fit', view, canvas)).toBe('fit');
+  });
+
+  it('reads a zoom key pressed in the page, and nothing else', () => {
+    expect(readPreviewZoomKey({ nekkoPreview: 'zoomKey', key: 'in' })).toBe('in');
+    expect(readPreviewZoomKey({ nekkoPreview: 'zoomKey', key: 'fit' })).toBe('fit');
+    for (const bad of [null, 'in', { nekkoPreview: 'zoomKey' }, { nekkoPreview: 'zoomKey', key: 'reset' }, { nekkoPreview: 'hand', key: 'in' }]) expect(readPreviewZoomKey(bad)).toBeNull();
   });
 
   it('keeps the dotted surface between 12 and 36 pixels at every zoom', () => {

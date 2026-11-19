@@ -970,11 +970,11 @@ final class LiveRelayTests: XCTestCase {
     }
 
     /// Fresh lists fold status groups, including after an online or offline relaunch.
-    /// Open the completed chats as a user would; still assert their rows and contents below.
+    /// Open the archived chats as a user would; still assert their rows and contents below.
     private func expandDoneGroup(in app: XCUIApplication) {
         let done = app.buttons["chats.group.status:done"].firstMatch
         guard done.waitForExistence(timeout: busyWait) else {
-            XCTFail("the completed chats have a Done group")
+            XCTFail("the archived chats have a Done group")
             return
         }
         // SwiftUI can append the status icon's Selected trait to the disclosure value.

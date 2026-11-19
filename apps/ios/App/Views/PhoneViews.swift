@@ -344,7 +344,7 @@ struct PhoneChatView: View {
             if chat?.archivedAt != nil {
                 Button { phone.restore(chatId) } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
             } else {
-                Button { phone.complete(chatId) } label: { Label("Complete", systemImage: "checkmark.circle") }
+                Button { phone.archive(chatId) } label: { Label("Archive", systemImage: "archivebox") }
             }
             Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
         } label: {

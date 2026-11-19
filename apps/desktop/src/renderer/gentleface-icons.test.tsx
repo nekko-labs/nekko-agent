@@ -38,7 +38,7 @@ describe('Gentleface controls', () => {
   it('keeps the previously unused helpers wired to real semantic controls', () => {
     const controls = {
       'components/ModePanel.tsx': ['BrainCircuitIcon', 'ShieldQuestionIcon'],
-      'components/PaneFrame.tsx': ['CheckCircleIcon'],
+      'components/PaneFrame.tsx': ['ArchiveIcon'],
       'components/cloud/SyncSettings.tsx': ['LogOutIcon'],
       'components/RemoteAccess.tsx': ['RouterIcon', 'LogOutIcon'],
       'views/WorkflowsView.tsx': ['WorkflowIcon'],
@@ -51,7 +51,7 @@ describe('Gentleface controls', () => {
   });
 
   it('embeds only self-contained trusted SVG motion with valid one-shot intervals', () => {
-    expect(Object.keys(GENTLEFACE_MOTION)).toHaveLength(15);
+    expect(Object.keys(GENTLEFACE_MOTION)).toHaveLength(16);
     for (const { svg, frames } of Object.values(GENTLEFACE_MOTION)) {
       expect(svg).toMatch(/^<svg\s/);
       expect(svg).not.toMatch(/<script|<foreignObject|\bon\w+=|(?:href|src)="(?:https?:|data:|javascript:)/i);

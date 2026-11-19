@@ -11,12 +11,13 @@ import {
   type Session,
 } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
-import { WarningIcon } from '../../icons.js';
+import { CheckIcon, WarningIcon } from '../../icons.js';
 import { formatBytes } from '../runtimes/verdict.js';
 import { groupDownloads, isActive, type DownloadGroup } from '../engine/downloadGroups.js';
 import { Progress, Step } from '../engine/FirstLocalModel.js';
 import { ensureRecommendedOffload } from './imageOffload.js';
 import { pictureModelBlurb, pictureTimeText } from '../engine/pictureModelText.js';
+import './photoStart.css';
 
 /**
  * A Photo chat with no picture model: two or three models picked for this
@@ -251,6 +252,7 @@ export function PhotoModelSetup({
       recs={recs}
       cards={cards}
       choice={choice}
+      recommended={task.pick?.modelId}
       phase={phase}
       engineReady={engineReady}
       canInstallEngine={canInstallEngine}
@@ -264,11 +266,31 @@ export function PhotoModelSetup({
   );
 }
 
+const STEP_LABELS = ['Choose a model', 'Download', 'Describe your picture'] as const;
+
+/** Where the first-model setup is: 1 choose, 2 download, 3 the message box. */
+export function PhotoSetupProgress({ at }: { at: 0 | 1 | 2 }) {
+  return (
+    <ol className="photo-setup-steps" aria-label="Photo setup">
+      {STEP_LABELS.map((label, i) => {
+        const state = i < at ? 'done' : i === at ? 'current' : 'pending';
+        return (
+          <li key={label} data-state={state} aria-current={state === 'current' ? 'step' : undefined}>
+            <span className="photo-setup-step-mark" aria-hidden="true">{state === 'done' ? <CheckIcon className="h-3 w-3" /> : i + 1}</span>
+            <span>{label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /** The setup itself, from props only. */
 export function PhotoSetupSteps({
   recs,
   cards,
   choice,
+  recommended,
   phase,
   engineReady,
   canInstallEngine,
@@ -282,6 +304,8 @@ export function PhotoSetupSteps({
   recs: Recommendations;
   cards: ImageRecommendedOption[];
   choice?: ImageRecommendedOption;
+  /** The model picked for this machine, marked Recommended. */
+  recommended?: string;
   phase: PhotoSetupPhase;
   engineReady: boolean;
   canInstallEngine: boolean;
@@ -293,7 +317,7 @@ export function PhotoSetupSteps({
   onShowAll: () => void;
 }) {
   const seeAll = (
-    <button className="text-accent underline-offset-2 hover:underline" onClick={onShowAll}>
+    <button type="button" className="photo-setup-link" onClick={onShowAll}>
       See all picture models
     </button>
   );
@@ -304,78 +328,88 @@ export function PhotoSetupSteps({
     const state = (s: (typeof order)[number]) => (order.indexOf(s) < order.indexOf(step) ? 'done' : s === step ? 'active' : 'pending');
     const group = phase.kind === 'working' ? phase.group : undefined;
     return (
-      <div className="card w-full max-w-xl p-5 text-left" data-photo-setup="working">
-        <p className="mb-3 text-sm font-semibold">Setting up a picture model</p>
-        <ul className="space-y-4" aria-label="Setup steps">
+      <div className="photo-setup" data-photo-setup="working">
+        {capability === 'create' && <PhotoSetupProgress at={1} />}
+        <div className="photo-setup-head">
+          <h3>Setting up a picture model</h3>
+          <p>This can take a while. You can keep using Nekko; it also shows in Models &gt; Downloads.</p>
+        </div>
+        <ul className="photo-setup-tasks" aria-label="Setup steps">
           {!engineReady && <Step state={state('engine')} label="Get the free engine that makes pictures">{step === 'engine' && group && <Progress group={group} />}</Step>}
           <Step state={state('model')} label="Download the model">{step === 'model' && group && <Progress group={group} />}</Step>
           <Step state={state('files')} label="Download its supporting files">{step === 'files' && group && <Progress group={group} />}</Step>
         </ul>
-        <p className="mt-4 text-xs text-ink-faint">This can take a while. You can keep using Nekko; it also shows in Models &gt; Downloads.</p>
-        {group && <button className="btn btn-ghost mt-3 text-xs" onClick={onCancel}>Cancel</button>}
+        {group && <div className="photo-setup-actions"><button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button></div>}
       </div>
     );
   }
 
   const none = !cards.some((c) => c.fit !== 'tooBig');
   return (
-    <div className="w-full max-w-xl text-left" data-photo-setup={phase.kind}>
-      <p className="mb-1 text-center text-sm font-semibold">{capability === 'edit' ? 'Choose a model that edits photos' : 'Choose a picture model'}</p>
-      <p className="mb-4 text-center text-xs text-ink-soft">
-        {capability === 'edit'
-          ? 'It runs on this computer, so your photos stay here.'
-          : 'It runs on this computer, so your prompts and pictures stay here.'}
-      </p>
+    <div className="photo-setup" data-photo-setup={phase.kind}>
+      {capability === 'create' && <PhotoSetupProgress at={0} />}
+      <div className="photo-setup-head">
+        <h3>{capability === 'edit' ? 'Choose a model that edits photos' : 'Choose a picture model'}</h3>
+        <p>
+          {capability === 'edit'
+            ? 'It runs on this computer, so your photos stay here.'
+            : 'It runs on this computer, so your prompts and pictures stay here.'}
+        </p>
+      </div>
       {phase.kind === 'failed' && (
-        <p role="alert" className="mb-3 flex items-start gap-2 rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--danger)' }}>
+        <p role="alert" className="photo-setup-alert">
           <span className="mt-0.5 shrink-0" style={{ color: 'var(--danger)' }}><WarningIcon className="h-4 w-4" /></span>
           <span>The download stopped: {phase.message} Press the button to try again; it picks up where it left off.</span>
         </p>
       )}
       {none ? (
-        <p className="rounded-lg border border-line p-4 text-center text-sm text-ink-soft">
-          None of the recommended picture models fits this computer. {seeAll}
-        </p>
+        <p className="photo-setup-note">None of the recommended picture models fits this computer. {seeAll}</p>
       ) : (
-        <div role="radiogroup" aria-label="Picture model" className="grid gap-2">
+        <div role="radiogroup" aria-label="Picture model" className="photo-setup-options">
           {cards.map((c) => {
             const on = c.modelId === choice?.modelId;
             const off = c.fit === 'tooBig';
             return (
               <button
                 key={c.modelId}
+                type="button"
                 role="radio"
                 aria-checked={on}
                 disabled={off}
-                className="card flex flex-col items-start gap-1 p-4 text-left transition-colors disabled:opacity-60"
-                style={on ? { borderColor: 'var(--accent)', boxShadow: '0 0 0 1px var(--accent)' } : undefined}
+                className="photo-setup-option quiet-row"
                 onClick={() => onChoose(c.modelId)}
                 data-photo-model={c.modelId}
               >
-                <span className="flex w-full items-baseline justify-between gap-2">
-                  <span className="text-sm font-semibold">{c.name}</span>
-                  <span className="shrink-0 text-xs text-ink-faint">{formatBytes(c.downloadBytes)}</span>
+                <span className="photo-setup-radio" aria-hidden="true" />
+                <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+                  <span className="photo-setup-option-title">
+                    {c.name}
+                    {c.modelId === recommended && !off && <span className="photo-setup-pick">Recommended</span>}
+                  </span>
+                  <span className="photo-setup-option-detail">{off ? 'Too large for this computer.' : pictureModelBlurb(c)}</span>
                 </span>
-                <span className="text-xs text-ink-soft">{pictureModelBlurb(c)}</span>
-                <span className="text-xs" style={{ color: off ? 'var(--danger)' : 'var(--ink-faint)' }}>{photoFitLine(c, recs)}</span>
+                <span className="photo-setup-option-size">{formatBytes(c.downloadBytes)}</span>
               </button>
             );
           })}
         </div>
       )}
       {!none && choice && (
-        <div className="mt-4 flex flex-col items-center gap-2">
-          <button className="btn btn-primary px-6" disabled={busy || !canInstallEngine} onClick={onSetUp}>
-            {busy ? 'Starting…' : `Download and set up · ${formatBytes(choice.downloadBytes)}`}
-          </button>
-          <p className="max-w-md text-center text-xs text-ink-faint">
+        <>
+          <p className="photo-setup-fit">{photoFitLine(choice, recs)}</p>
+          <div className="photo-setup-actions">
+            <button type="button" className="btn btn-primary" disabled={busy || !canInstallEngine} onClick={onSetUp}>
+              {busy ? 'Starting…' : `Download and set up · ${formatBytes(choice.downloadBytes)}`}
+            </button>
+            {seeAll}
+          </div>
+          <p className="photo-setup-note">
             {canInstallEngine
               ? `Includes its supporting files${engineReady ? '' : ', plus the free engine that makes pictures'}. Nothing downloads until you press the button. ${choice.license} license.`
               : 'The picture engine has no build for this computer yet.'}
           </p>
-        </div>
+        </>
       )}
-      <p className="mt-4 text-center text-xs text-ink-faint">{seeAll}</p>
     </div>
   );
 }

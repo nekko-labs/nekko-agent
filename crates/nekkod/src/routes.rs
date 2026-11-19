@@ -549,6 +549,10 @@ impl Table {
             }),
         );
         t.add(crate::context::CHANNELS, handler!(|ctx, channel, args| crate::context::route(ctx, channel, args).await));
+        t.add(
+            crate::cloud_media::CHANNELS,
+            handler!(|ctx, channel, args| crate::cloud_media::route(ctx, channel, &args).await),
+        );
         t.add(crate::side::CHANNELS, handler!(|ctx, channel, args| crate::side::route(ctx, channel, &args).await));
         t.add(
             crate::privacy::CHANNELS,

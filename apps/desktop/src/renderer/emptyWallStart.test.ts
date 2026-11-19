@@ -9,7 +9,7 @@ describe('empty wall new-chat screen', () => {
     expect(reusableEmptyChat([chat('old', { createdAt: 1 }), chat('new', { createdAt: 5 })])).toBe('new');
   });
 
-  it('never reuses a used, queued, completed, image, sub-agent, automation or training chat', () => {
+  it('never reuses a used, queued, archived, image, sub-agent, automation or training chat', () => {
     expect(reusableEmptyChat([
       chat('used', { messageCount: 2 }),
       chat('queued', { queue: ['go'] }),
@@ -28,11 +28,11 @@ describe('empty wall new-chat screen', () => {
   });
 
   it('starts only on a loaded, empty wall with a usable provider', () => {
-    const ok = { listsReady: true, hasWindows: false, readingCompleted: false, providerReady: true };
+    const ok = { listsReady: true, hasWindows: false, readingArchived: false, providerReady: true };
     expect(shouldStartFromEmptyWall(ok)).toBe(true);
     expect(shouldStartFromEmptyWall({ ...ok, listsReady: false })).toBe(false);
     expect(shouldStartFromEmptyWall({ ...ok, hasWindows: true })).toBe(false);
-    expect(shouldStartFromEmptyWall({ ...ok, readingCompleted: true })).toBe(false);
+    expect(shouldStartFromEmptyWall({ ...ok, readingArchived: true })).toBe(false);
     expect(shouldStartFromEmptyWall({ ...ok, providerReady: false })).toBe(false);
   });
 });

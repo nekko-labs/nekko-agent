@@ -1,4 +1,4 @@
-export { InfoIcon, FolderOpenIcon as FolderIcon, GfTerminalIcon as TerminalIcon, GfServerIcon as ServerIcon, GfSendIcon as SendIcon, GfLockIcon as LockIcon, GfGaugeIcon as GaugeIcon } from './gentleface-icons.js';
+export { InfoIcon, GfArchiveIcon as ArchiveIcon, FolderOpenIcon as FolderIcon, GfTerminalIcon as TerminalIcon, GfServerIcon as ServerIcon, GfSendIcon as SendIcon, GfLockIcon as LockIcon, GfGaugeIcon as GaugeIcon } from './gentleface-icons.js';
 import React from 'react';
 import type { ComputerIcon as ComputerIconName } from '@nekko-agent/shared';
 
@@ -77,7 +77,6 @@ export const BranchIcon = (p: P) => (<S {...p}><circle cx="6" cy="6" r="2.4" /><
 /** A git worktree: a second checkout folder hanging off the same repository. */
 export const WorktreeIcon = (p: P) => (<S {...p}><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h4.5A1.5 1.5 0 0 1 17 8.5V10" /><rect x="7" y="12" width="14" height="8" rx="1.5" /><path d="M5 5v9.5a1.5 1.5 0 0 0 1.5 1.5H7" /></S>);
 export const CloseIcon = (p: P) => (<S {...p}><path d="M18 6 6 18M6 6l12 12" /></S>);
-export const ArchiveIcon = (p: P) => (<S {...p}><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></S>);
 export const BinocularsIcon = (p: P) => (<S {...p}><circle cx="6.5" cy="15.5" r="3.5" /><circle cx="17.5" cy="15.5" r="3.5" /><path d="M10 15.5h4M3 15.5 5 6.5a1.5 1.5 0 0 1 3 0v5.5M21 15.5l-2-9a1.5 1.5 0 0 0-3 0v5.5M8 9h8" /></S>);
 /** A price tag: a task in a project-management tool. */
 export const TagIcon = (p: P) => (<S {...p}><path d="M3 9V5a2 2 0 0 1 2-2h4l12 12-6 6L3 9z" /><circle cx="7.5" cy="7.5" r="1.2" /></S>);

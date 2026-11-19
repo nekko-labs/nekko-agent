@@ -61,7 +61,7 @@ Construct one `VoiceRunner(scope, host)` bound to the original target. Implement
 | `text` | Current composer draft; preserve user edits. |
 | `allowed()` | Synchronous foreground/unlocked/original-target/online check, also checked after suspension. |
 | `send()` | Normal guarded composer send; return true only when accepted, no silent offline queue success for voice. Clear draft only via the normal successful send path. |
-| `complete()` | Existing view-model complete path; keep Change proof policy. |
+| `archive()` | Existing view-model archive path; keep Change proof policy. |
 | `ship()` | Fresh PR list, running state and exact current question call ID for this chat. |
 | `merge(pr)` | Existing signed/proof/step-up PR merge path; revalidate PR ID/state; null only on confirmed success. |
 | `answer(questionId, text)` | Match the **same** still-pending question ID; use the existing answer format/proof path, never answer a replacement question. |

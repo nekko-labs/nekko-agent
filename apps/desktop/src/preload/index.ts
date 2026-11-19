@@ -125,6 +125,7 @@ const api: NekkoApi = {
   syncNow: () => inv(IpcChannels.syncNow),
   syncSetEnabled: (on) => inv(IpcChannels.syncSetEnabled, on),
   syncDeleteAll: () => inv(IpcChannels.syncDeleteAll),
+  librarySync: (files) => inv(IpcChannels.librarySync, files),
   orgList: () => inv(IpcChannels.orgList),
   orgCreate: (name) => inv(IpcChannels.orgCreate, name),
   orgGet: (orgId) => inv(IpcChannels.orgGet, orgId),

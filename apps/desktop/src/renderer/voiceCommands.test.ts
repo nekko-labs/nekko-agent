@@ -19,8 +19,8 @@ describe('voice intent', () => {
     expect(parseVoiceIntent(text)).toEqual({ kind: 'navigate', view: 'settings' });
     expect(parseVoiceIntent('Necklace open settings')).toMatchObject({ kind: 'dictation' });
   });
-  it('recognizes completion without auto-execution', () => {
-    expect(parseVoiceIntent('Nekko complete this session')).toEqual({ kind: 'complete-session' });
+  it('recognizes archiving without auto-execution', () => {
+    expect(parseVoiceIntent('Nekko complete this session')).toEqual({ kind: 'archive-session' });
   });
   it.each([['Nekko go to the model server tab', 'modelserver'], ['Nekko open settings', 'settings'], ['Nekko show agents', 'command']])('routes %s', (text, view) => {
     expect(parseVoiceIntent(text)).toEqual({ kind: 'navigate', view });

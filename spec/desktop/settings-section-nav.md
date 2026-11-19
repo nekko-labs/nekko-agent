@@ -86,7 +86,7 @@ Design, applied to every section (the design system's rules, nothing new):
 
 Placement:
 
-- General holds how the app behaves day to day: Notifications; Chats (the chat pane's top-right action, Complete idle agents after, Confirm deletions); Desktop behavior (closing the window, low memory); Language and help (language, Show tips, the setup wizard); Dictation; Chat history. These rows used to sit inside Customize > Appearance, which now holds only the theme and background animation.
+- General holds how the app behaves day to day: Notifications; Chats (the chat pane's top-right action, Archive idle agents after, Confirm deletions); Desktop behavior (closing the window, low memory); Language and help (language, Show tips, the setup wizard); Dictation; Chat history. These rows used to sit inside Customize > Appearance, which now holds only the theme and background animation.
 - Safety leads with Chat modes, the default for new chats, and Warn before No restrictions, then Sandbox, Guardrails and Security. The chat mode is the first safety decision people make, and it used to sit under Agents.
 - Customize keeps how Nekko looks and addresses you; Agents keeps how agents run.
 - Search within Settings and the command palette follow the moves: their entries for the moved controls point at General or Safety, and page searches such as "chat modes" or "close window" land on the new group. Section anchors (`#notifications`, `#desktop-behavior`, `#automations`, `#customization`, `#settings-style`, `#settings-animations`, `#settings-simple`, the Security anchor) are unchanged.

@@ -544,7 +544,7 @@ final class StoreTests: XCTestCase {
         c.replies[Channels.settingsUpdate] = { _ in ["defaultChatMode": "yolo"] }
         c.online()
         await settle()
-        try await s.completeChat("s1")
+        try await s.archiveChat("s1")
         XCTAssertEqual(s.summaries.first?.archived, true)
         XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["s1", ["archivedAt": 1000]])
         try await s.restoreChat("s1")

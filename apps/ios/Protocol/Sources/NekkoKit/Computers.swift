@@ -954,7 +954,7 @@ public final class ComputersStore {
     }
 
     /// App came to the foreground: reconnect now rather than after the backoff,
-    /// and re-read the list (chats completed or started meanwhile send no event).
+    /// and re-read the list (chats archived or started meanwhile send no event).
     public func nudge() {
         resume()
         client?.nudge()
@@ -1360,8 +1360,8 @@ public final class ComputersStore {
 
     // Each takes the chat's computer (`on`): nil is the active one, another is reached through its fleet link.
 
-    /// Complete a chat (the desktop's archive): nothing is deleted.
-    public func completeChat(_ sessionId: String, on computer: String? = nil) async throws {
+    /// Archive a chat: nothing is deleted.
+    public func archiveChat(_ sessionId: String, on computer: String? = nil) async throws {
         let at = now()
         _ = try await caller(computer).call(Channels.sessionSetOptions, [.string(sessionId), ["archivedAt": .int(at)]])
         edit(sessionId, on: computer) { $0.archived = true; $0.archivedAt = at }

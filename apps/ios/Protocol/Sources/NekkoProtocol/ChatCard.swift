@@ -110,7 +110,7 @@ public enum ChatCard {
     }
 
     /// Context matters while the chat is in progress: running, waiting on you,
-    /// stopped on an error, or idle with a watch armed. A finished or completed
+    /// stopped on an error, or idle with a watch armed. A finished or archived
     /// chat has no context pressure left, so its card leaves the gauge off.
     public static func showsContext(_ s: SessionSummary, activity: Activity?) -> Bool {
         !s.archived && (activity != nil || s.running || s.activeWatchCount > 0)

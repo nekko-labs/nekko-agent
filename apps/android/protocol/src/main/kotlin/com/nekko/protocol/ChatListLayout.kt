@@ -17,7 +17,7 @@ import java.util.Locale
  * setting.
  *
  * The defaults are the list as it was: by project, in the desktop's dragged
- * order (newest first for the rest), with previews and completed chats shown,
+ * order (newest first for the rest), with previews and archived chats shown,
  * and empty project folders hidden.
  */
 data class ChatListView(
@@ -25,8 +25,8 @@ data class ChatListView(
     val sortBy: SortBy = SortBy.MANUAL,
     /** Manual order has no direction: it is whatever was dragged on the computer. */
     val ascending: Boolean = false,
-    /** Completed chats, after their group's active ones (in a Completed group when not by project). */
-    val showCompleted: Boolean = true,
+    /** Archived chats, after their group's active ones (in an Archived group when not by project). */
+    val showArchived: Boolean = true,
     /** Project folders with no chats in them. */
     val showEmptyGroups: Boolean = false,
     val showModel: Boolean = true,
@@ -63,7 +63,7 @@ data class ChatListView(
         put("groupBy", groupBy.wire)
         put("sortBy", sortBy.wire)
         put("ascending", ascending)
-        put("showCompleted", showCompleted)
+        put("showCompleted", showArchived) // persisted key, unchanged by the Archive rename
         put("showEmptyGroups", showEmptyGroups)
         put("showModel", showModel)
         put("showContext", showContext)
@@ -85,7 +85,7 @@ data class ChatListView(
                 groupBy = GroupBy.entries.firstOrNull { it.wire == o.str("groupBy") } ?: STANDARD.groupBy,
                 sortBy = SortBy.entries.firstOrNull { it.wire == o.str("sortBy") } ?: STANDARD.sortBy,
                 ascending = flag("ascending", STANDARD.ascending),
-                showCompleted = flag("showCompleted", STANDARD.showCompleted),
+                showArchived = flag("showCompleted", flag("showArchived", STANDARD.showArchived)), // legacy key wins; the new one is read too
                 showEmptyGroups = flag("showEmptyGroups", STANDARD.showEmptyGroups),
                 showModel = flag("showModel", STANDARD.showModel),
                 showContext = flag("showContext", STANDARD.showContext),
@@ -103,7 +103,7 @@ data class ChatListView(
 data class ChatSection(
     val key: String,
     val name: String,
-    /** Active chats in the view's order, then completed ones (most recently completed first). */
+    /** Active chats in the view's order, then archived ones (most recently archived first). */
     val chats: List<SessionSummary>,
     val activeCount: Int,
     val doneCount: Int,
@@ -111,7 +111,7 @@ data class ChatSection(
     /** Ungrouped chats have no disclosure; every other group opens only when chosen (the iPhone's, #2107). */
     fun isOpen(opened: Set<String>): Boolean = key == ChatGroup.GENERAL || key == "all" || key in opened
 
-    /** Attention wins over work; completed chats never make a group look busy. */
+    /** Attention wins over work; archived chats never make a group look busy. */
     fun headerActivity(activity: Map<String, Activity>): Activity? {
         val active = chats.filter { !it.archived }
         if (active.any { activity[it.id] == Activity.NEEDS_YOU }) return Activity.NEEDS_YOU
@@ -128,7 +128,7 @@ data class ChatSection(
         else key in setOf("status:building", "status:verifying") && headerActivity(activity) == Activity.RUNNING
 
     companion object {
-        const val COMPLETED = "__completed"
+        const val ARCHIVED = "__completed" // group key kept: persisted in collapsed-group state
     }
 }
 
@@ -174,14 +174,14 @@ object ChatSections {
     ): List<ChatSection> {
         val sort = comparator(view)
         fun done(list: List<SessionSummary>) =
-            if (view.showCompleted) list.filter { it.archived }.sortedByDescending { it.archivedAt ?: 0L } else emptyList()
-        fun section(key: String, name: String, active: List<SessionSummary>, completed: List<SessionSummary>) =
-            ChatSection(key, name, active + completed, active.size, completed.size)
+            if (view.showArchived) list.filter { it.archived }.sortedByDescending { it.archivedAt ?: 0L } else emptyList()
+        fun section(key: String, name: String, active: List<SessionSummary>, archived: List<SessionSummary>) =
+            ChatSection(key, name, active + archived, active.size, archived.size)
 
         if (view.groupBy == ChatListView.GroupBy.PROJECT) {
             val groups = ChatGroup.of(chats, folders).mapNotNull { g ->
                 val active = if (view.sortBy == ChatListView.SortBy.MANUAL) g.active else g.active.sortedWith(sort)
-                val s = section(g.key, g.name, active, done(g.completed))
+                val s = section(g.key, g.name, active, done(g.archived))
                 // General is listed only when it has chats; a folder unless empty ones are hidden.
                 if (s.chats.isEmpty() && (g.key == ChatGroup.GENERAL || !view.showEmptyGroups)) null else s
             }
@@ -199,10 +199,10 @@ object ChatSections {
         }
 
         val active = chats.filter { !it.archived }.sortedWith(sort)
-        val completedAll = done(chats)
-        val completed = if (completedAll.isEmpty()) emptyList() else listOf(section(ChatSection.COMPLETED, "Completed", emptyList(), completedAll))
+        val archivedAll = done(chats)
+        val archived = if (archivedAll.isEmpty()) emptyList() else listOf(section(ChatSection.ARCHIVED, "Archived", emptyList(), archivedAll))
         if (view.groupBy == ChatListView.GroupBy.NONE || view.groupBy == ChatListView.GroupBy.COMPUTER) {
-            return (if (active.isEmpty()) emptyList() else listOf(section("all", "All chats", active, emptyList()))) + completed
+            return (if (active.isEmpty()) emptyList() else listOf(section("all", "All chats", active, emptyList()))) + archived
         }
         val defs = if (view.groupBy == ChatListView.GroupBy.STATUS) STATUS_GROUPS else DATE_GROUPS
         val grouped = active.groupBy { s ->
@@ -211,7 +211,7 @@ object ChatSections {
         return defs.mapNotNull { (key, name) ->
             val items = grouped[key].orEmpty()
             if (items.isEmpty() && !view.showEmptyGroups) null else section(key, name, items, emptyList())
-        } + completed
+        } + archived
     }
 
     /**

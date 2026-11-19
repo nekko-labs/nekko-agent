@@ -311,13 +311,13 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
 /// system's own tar (bsdtar on Windows and macOS writes zip from the name).
 fn engine_archive(dir: &std::path::Path) -> (String, &'static str, Vec<u8>) {
     let (build, name, exe) = if cfg!(windows) {
-        ("win-x64-cpu", "llama-b12292-bin-win-cpu-x64.zip", "llama-server.exe")
+        ("win-x64-cpu", "llama-b12316-bin-win-cpu-x64.zip", "llama-server.exe")
     } else if cfg!(target_os = "macos") {
-        ("macos-arm64-metal", "llama-b12292-bin-macos-arm64.tar.gz", "llama-server")
+        ("macos-arm64-metal", "llama-b12316-bin-macos-arm64.tar.gz", "llama-server")
     } else if cfg!(target_arch = "aarch64") {
-        ("linux-arm64-cpu", "llama-b12292-bin-ubuntu-arm64.tar.gz", "llama-server")
+        ("linux-arm64-cpu", "llama-b12316-bin-ubuntu-arm64.tar.gz", "llama-server")
     } else {
-        ("linux-x64-cpu", "llama-b12292-bin-ubuntu-x64.tar.gz", "llama-server")
+        ("linux-x64-cpu", "llama-b12316-bin-ubuntu-x64.tar.gz", "llama-server")
     };
     let src = dir.join("archive-src/build/bin");
     std::fs::create_dir_all(&src).unwrap();
@@ -354,11 +354,11 @@ async fn fake_github(name: &'static str, archive: Vec<u8>) -> u16 {
     let port = listener.local_addr().unwrap().port();
     let digest: String = sha2::Sha256::digest(&archive).iter().map(|b| format!("{b:02x}")).collect();
     let release = json!({
-        "tag_name": "b12292",
+        "tag_name": "b12316",
         "assets": [{ "name": name, "browser_download_url": format!("http://127.0.0.1:{port}/dl/{name}"), "size": archive.len(), "digest": format!("sha256:{digest}") }],
     });
     let app = axum::Router::new()
-        .route("/repos/ggml-org/llama.cpp/releases/tags/b12292", get(move || async move { axum::Json(release) }))
+        .route("/repos/ggml-org/llama.cpp/releases/tags/b12316", get(move || async move { axum::Json(release) }))
         .route(&format!("/dl/{name}"), get(move || async move { archive }));
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -380,12 +380,12 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, preview) = post(d.port, "engine:installPreview", json!(["llama", build]), Some(TOKEN)).await;
     assert_eq!(
         (preview["version"].clone(), preview["files"][0]["name"].clone()),
-        (json!("b12292"), json!(name)),
+        (json!("b12316"), json!(name)),
         "{preview}"
     );
     let (status, started) = post(d.port, "engine:install", json!([build, "llama"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
-    assert_eq!(started["message"], "Downloading llama.cpp b12292.", "{started}");
+    assert_eq!(started["message"], "Downloading llama.cpp b12316.", "{started}");
     let job =
         job_until(d.port, started["jobId"].as_str().unwrap(), |j| j["state"] == "done" || j["state"] == "failed").await;
     assert_eq!(job["state"], "done", "{job}");
@@ -395,7 +395,7 @@ async fn installs_and_removes_the_engine_itself() {
     assert!(!data.join("engine").join(&build).join(name).exists(), "the archive is gone once unpacked");
     let record: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("engine/engine.json")).unwrap()).unwrap();
-    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12292")));
+    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12316")));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -405,7 +405,7 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, detected) = post(d.port, "engine:detect", json!(["llama"]), Some(TOKEN)).await;
     assert_eq!(
         (detected["source"].clone(), detected["version"].clone()),
-        (json!("managed"), json!("b12292")),
+        (json!("managed"), json!("b12316")),
         "{detected}"
     );
     assert!(
@@ -692,6 +692,105 @@ async fn a_chats_agent_starts_a_clip_and_its_watch_gets_the_news() {
     assert_eq!(kept.len(), 1);
     assert!(workspace.join("media/waves.webp").is_file());
     post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+}
+
+/// A stand-in OpenRouter: one picture model priced per picture, and the
+/// requests it got, so a test sees the key and body that reached it.
+async fn fake_openrouter(seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>) -> u16 {
+    use axum::extract::Path;
+    use axum::http::HeaderMap;
+    use axum::routing::{get, post};
+    let models = json!({ "data": [{ "id": "acme/pic", "name": "Acme Pic",
+        "architecture": { "input_modalities": ["text", "image"], "output_modalities": ["image"] } }] });
+    let endpoints = json!({ "data": { "endpoints": [{ "pricing": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.03 }] }] } });
+    let app = axum::Router::new()
+        .route("/api/v1/images/models", get(move || async move { axum::Json(models) }))
+        .route(
+            "/api/v1/images/models/{*rest}",
+            get(move |Path(rest): Path<String>| {
+                let endpoints = endpoints.clone();
+                async move { if rest == "acme/pic/endpoints" { axum::Json(endpoints) } else { axum::Json(json!({})) } }
+            }),
+        )
+        .route(
+            "/api/v1/images",
+            post(move |headers: HeaderMap, axum::Json(body): axum::Json<Value>| {
+                let seen = seen.clone();
+                async move {
+                    let auth = headers.get("authorization").and_then(|v| v.to_str().ok()).unwrap_or_default().to_string();
+                    seen.lock().unwrap().push(json!({ "auth": auth, "body": body }));
+                    axum::Json(json!({ "data": [{ "b64_json": "UElD", "media_type": "image/png" }], "usage": { "cost": 0.031 } }))
+                }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+/// A paid cloud picture through the user's OpenRouter provider: asked for with
+/// its price even in YOLO, made with the user's key, its cost recorded, and a
+/// second picture within the chat's allowance not asked again.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_paid_cloud_picture_asks_with_its_price_even_in_yolo() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter(seen.clone()).await;
+    let chat = json!({ "id": "s_cloud", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("cloud-picture", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model = scripted_model(vec![
+        call_tool("c_pic1", "generate_image", json!({ "prompt": "a red kite", "model": "openrouter:p_or:acme/pic" })),
+        call_tool("c_pic2", "generate_image", json!({ "prompt": "a blue kite", "model": "openrouter:p_or:acme/pic" })),
+        say_text("made them"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_cloud", "s_cloud", json!({ "text": "Two kites" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(&rig, json!({ "providers": [scripted.clone(), openrouter.clone()] })).await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+
+    // YOLO does not wave a charge through: the first picture asks, with its price.
+    let asked = wait_pending(rig.d.port, "s_cloud", "approval", "c_pic1").await;
+    let reason = asked["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("Make 1 picture with Acme Pic through OpenRouter for $0.030"), "{reason}");
+    assert!(reason.contains("up to $1.00"), "{reason}");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cloud", "c_pic1", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_cloud", "s_cloud").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let saved = saved_session(&rig, "s_cloud");
+    let result = |id: &str| {
+        saved["messages"].as_array().unwrap().iter().find(|m| m["toolResult"]["toolCallId"] == id).unwrap()["toolResult"].clone()
+    };
+    for id in ["c_pic1", "c_pic2"] {
+        let r = result(id);
+        assert!(
+            r["output"]
+                .as_str()
+                .unwrap()
+                .starts_with("Made the picture with Acme Pic through OpenRouter (cost $0.031)."),
+            "{r}"
+        );
+        assert_eq!(r["images"][0], "data:image/png;base64,UElD");
+    }
+    // The second, within the allowance, did not ask; both were charged and counted.
+    assert_eq!(saved["pictureSpend"]["allowedUsd"], 1.0);
+    assert!((saved["pictureSpend"]["spentUsd"].as_f64().unwrap() - 0.062).abs() < 1e-9, "{}", saved["pictureSpend"]);
+    let calls = seen.lock().unwrap().clone();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0]["auth"], "Bearer sk-or-test");
+    assert_eq!((calls[0]["body"]["model"].clone(), calls[0]["body"]["n"].clone()), (json!("acme/pic"), json!(1)));
+    assert_eq!(calls[0]["body"]["aspect_ratio"], "1:1");
+    let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap_or_default();
+    let pictures = usage.lines().filter(|l| l.contains("\"kind\":\"picture\"")).count();
+    assert_eq!(pictures, 2, "{usage}");
 }
 
 pub(crate) fn fake_sd() -> std::path::PathBuf {

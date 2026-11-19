@@ -180,8 +180,8 @@
     <string name="settings_pc_offline_unknown">%1$s is offline. Its chat mode, chat action and delete confirmation show here once it’s connected.</string>
     <string name="settings_chat_mode_new">Chat mode for new chats</string>
     <string name="settings_long_press">Long-press a chat to</string>
-    <string name="settings_complete_it">Complete it</string>
-    <string name="settings_complete_it_detail">Moves it to Completed on %1$s; nothing is deleted</string>
+    <string name="settings_archive_it">Archive it</string>
+    <string name="settings_archive_it_detail">Moves it to Archived on %1$s; nothing is deleted</string>
     <string name="settings_delete_it">Delete it</string>
     <string name="settings_delete_it_detail">Removes it from %1$s for good</string>
     <string name="settings_confirm_delete">Confirm before deleting</string>

@@ -1,4 +1,4 @@
-import { AUTO_COMPLETE_CHOICES, autoCompleteDays, promptCachingEnabled, telemetryChoice, type AppSettings } from '@nekko-agent/shared';
+import { AUTO_ARCHIVE_CHOICES, autoArchiveDays, promptCachingEnabled, telemetryChoice, type AppSettings } from '@nekko-agent/shared';
 import { LANGUAGES } from './i18n.js';
 import { textScaleOf, useStore } from './store.js';
 import { TEXT_SCALES } from './textScale.js';
@@ -49,8 +49,8 @@ export const SETTINGS_INDEX: SettingEntry[] = [
   })),
   { id: 'background-animation', label: 'Background animation', group: 'customize', keywords: 'appearance pixel wave power', control: toggle((s) => s.backgroundAnimation !== false, (v) => ({ backgroundAnimation: v })) },
   { id: 'language', label: 'Language', group: 'general', keywords: 'locale translation', control: { kind: 'select', options: [{ value: '', label: 'System default' }, ...LANGUAGES.map((l) => ({ value: l.code, label: l.label }))], get: (s) => s.language ?? '', set: (v) => ({ language: v || undefined }) } },
-  { id: 'chat-pane-action', label: 'Chat pane top-right action', group: 'general', keywords: 'complete delete close x', control: { kind: 'select', options: [{ value: 'complete', label: 'Complete' }, { value: 'delete', label: 'Delete' }], get: (s) => s.chatPaneAction ?? 'complete', set: (v) => ({ chatPaneAction: v === 'delete' ? 'delete' : 'complete' }) } },
-  { id: 'auto-complete', label: 'Complete idle agents after', group: 'general', keywords: 'archive inactive', control: { kind: 'select', options: AUTO_COMPLETE_CHOICES.map((c) => ({ value: String(c.days), label: c.label })), get: (s) => String(autoCompleteDays(s.autoCompleteAfterDays)), set: (v) => ({ autoCompleteAfterDays: Number(v) }) } },
+  { id: 'chat-pane-action', label: 'Chat pane top-right action', group: 'general', keywords: 'archive complete delete close x', control: { kind: 'select', options: [{ value: 'complete', label: 'Archive' }, { value: 'delete', label: 'Delete' }], get: (s) => s.chatPaneAction ?? 'complete', set: (v) => ({ chatPaneAction: v === 'delete' ? 'delete' : 'complete' }) } },
+  { id: 'auto-archive', label: 'Archive idle agents after', group: 'general', keywords: 'archive complete inactive', control: { kind: 'select', options: AUTO_ARCHIVE_CHOICES.map((c) => ({ value: String(c.days), label: c.label })), get: (s) => String(autoArchiveDays(s.autoCompleteAfterDays)), set: (v) => ({ autoCompleteAfterDays: Number(v) }) } },
   { id: 'tips', label: 'Show tips', group: 'general', control: toggle((s) => s.showTips !== false, (v) => ({ showTips: v })) },
   { id: 'warn-before-yolo', label: 'Warn before No restrictions', group: 'safety', keywords: 'yolo no restrictions warning approvals safety', control: toggle((s) => s.skipYoloWarning !== true, (v) => ({ skipYoloWarning: !v })) },
   { id: 'confirm-deletions', label: 'Confirm deletions', group: 'general', keywords: 'delete prompt', control: toggle((s) => s.skipDeleteConfirmation !== true, (v) => ({ skipDeleteConfirmation: !v })) },
@@ -76,7 +76,7 @@ export const SETTINGS_INDEX: SettingEntry[] = [
 /** Each Settings group with the sections it holds, so searching "hooks" or "guardrails" can jump there. */
 export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: string }> = [
   { group: 'support', label: 'Help out the Nekko Team', keywords: 'support star starred github improve usage crash reports telemetry privacy' },
-  { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history chats complete idle delete confirm desktop behavior close window tray low memory language tips setup wizard' },
+  { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history chats archive complete idle delete confirm desktop behavior close window tray low memory language tips setup wizard' },
   { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access sync' },
   { group: 'customize', label: 'Customize', keywords: 'view appearance theme agents wall customization fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
   { group: 'agents', label: 'Agents', keywords: 'agent loop hooks spec-driven development orchestration delegation routes automations' },

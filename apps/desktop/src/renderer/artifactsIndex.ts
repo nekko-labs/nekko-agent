@@ -70,8 +70,13 @@ export interface ArtifactEntry {
   sessionTitle: string;
   /** When the message that produced or linked it was written; 0 when no chat mentioned it. */
   at: number;
-  /** Linked from a reply, written by the agent and never linked, or found in a project's designs folder. */
-  source: 'linked' | 'written' | 'folder';
+  /**
+   * Linked from a reply, written by the agent and never linked, found in a project's designs folder,
+   * or another computer's file through Nekko Cloud (a read-only copy, #2748).
+   */
+  source: 'linked' | 'written' | 'folder' | 'cloud';
+  /** For a `cloud` file: the computer it came from. */
+  device?: string;
   /** A design saved more than once: every version, oldest first. The entry itself is the newest. */
   versions?: DesignVersion[];
 }

@@ -107,6 +107,18 @@ Follow-up to [#2170](https://github.com/nekko-labs/nekko-agent/issues/2170), rec
 
 Acceptance: focused component tests and desktop typecheck/build pass; actual isolated Electron tests cover default/Advanced views, failure and retry, missing-runtime readiness, opening Photo and 1100/744/390/320 widths in dark/light. Captured pixels still require inspection: the browser screenshot tool timed out and native screenshot inspection returned `UnknownVizError`. No claim of real downloads, inference quality, native-phone parity or physical-foldable verification is made by these fixture checks. The earlier live sd-server verification gap in #2177 remains separate.
 
+## A new Photo chat opens like the agent chat `[implemented 2026-11-19 (#3023); unit-tested and captured in an isolated renderer fixture with a stub engine; not yet run against a real download]`
+
+Philip asked (2026-11-19) for the new Photo chat's model, shape and prompt page to take after the agent chat's clean start, with a multi-step process for someone who has no model yet.
+
+- **The clean start.** A new Photo chat in a wall window opens on the agent chat's clean start: Nekko and a Photo greeting ("What should we draw?", "Picture this.", stable per chat, never about tasks) over the frosted message box, placeholder "Describe your picture: who or what, where, the light, the style…". No chat provider is needed, since Photo runs on the image engine. The "Send your first prompt" introduction is never shown over it.
+- **Controls in the box's own bar**, beside attach, the microphone and Send, as the agent chat carries its model: **Model**, **Shape** and **Advanced**, each a quiet popover rather than a native dropdown. A narrow window drops the "Model" caption and the ratio before anything clips.
+- **Shapes are named for where the picture goes**, most used first: Square (icons, profile pictures, posts), Wide 16:9 (YouTube thumbnails, backgrounds), Tall 9:16 (phone wallpapers, stories), Landscape 4:3 (photos, slides), Portrait 3:4 (posters, prints). Each shows its outline at its ratio. A size from before that is not on the list stays selected as Custom.
+- **With no picture model**, the box holds the setup instead of the editor, under "Let’s get Photo ready.", as numbered steps: **1 Choose a model** (the picks for this machine as rows with a radio, the pick marked Recommended, one fit line for the chosen model, **Download and set up** and **See all picture models**), **2 Download** (engine, weights, supporting files with progress and Cancel), **3 Describe your picture**, which is the message box itself: it replaces the setup when the model is ready. The edit-model offer keeps the same rows without the numbered steps.
+- **Outside the wall** (a chat on its own) the transcript welcome stays, with a Photo subtitle instead of the agent chat's `/`, `@` and `+` help, and without the empty "Choose a model" box; the controls ride the box's top row as before, as the same popovers.
+
+Not here yet: the introduction's own **Choose your first model** action (the intro now always says **Create your first image** and the steps follow in the chat), iPhone and Android parity for the clean start, and light-theme captures.
+
 ## Local video clips (experimental) `[implemented 2026-11-08 (#2177); engine-, turn- and daemon-tested against a stand-in sd-server; not yet run against a real one]`
 
 Built overnight on 2026-11-08 with decisions taken without review (Davide asked for it); each is marked **Decision** so it can be revisited, and recorded in [decision 0068](../../docs/decisions/0068-local-video-clips-run-as-sd-server-jobs.md) (proposed).
@@ -133,7 +145,7 @@ So local video does not need a second engine such as ComfyUI.
 
 ### 1. Pressing Photo or Video with no suitable model
 
-The first-use introduction (#2149) runs first. If no model can do the job, its single action becomes **Choose your first model** instead of **Try Photo** / **Try Video**. Closing the introduction leaves the same choice in the chat's empty state, which replaces today's single line.
+The first-use introduction (#2149) runs first. If no model can do the job, its single action becomes **Choose your first model** instead of **Create your first image** / **Try Video**. Closing the introduction leaves the same choice in the chat's empty state, which replaces today's single line.
 
 ### 2. The choice, inside the chat
 

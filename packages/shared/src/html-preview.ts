@@ -92,6 +92,15 @@ export interface PreviewHand {
   down: boolean;
 }
 
+/**
+ * Ctrl/Cmd with Plus, Minus or 0 pressed inside the design: the canvas zooms
+ * in, out, or fits the design, as it does for the same keys outside it.
+ */
+export interface PreviewZoomKey {
+  nekkoPreview: 'zoomKey';
+  key: 'in' | 'out' | 'fit';
+}
+
 export interface HtmlPreviewServed {
   /** Hand back to `release` when the preview closes. */
   id: string;

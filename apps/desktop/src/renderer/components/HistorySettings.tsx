@@ -34,16 +34,16 @@ export function HistorySettings({ openSync, refreshSessions }: { openSync: () =>
     try {
       const count = await window.nekko.clearHistory(range);
       setConfirming(false);
-      setResult(`${count} completed chat${count === 1 ? '' : 's'} deleted.`);
+      setResult(`${count} archived chat${count === 1 ? '' : 's'} deleted.`);
       await Promise.all([load(), refreshSessions()]);
     } catch (e) { await Promise.allSettled([load(), refreshSessions()]); setError(`Could not clear chat history: ${(e as Error).message}. Some chats may already have been removed. Refresh before trying again.`); }
     finally { setBusy(false); }
   };
   return (
-    <SettingsSection title="Chat history" help="Completed chats are kept until you delete them. Nothing is automatically deleted." data-history-settings>
-      <p className="mt-(--q-inline) text-xs text-ink-soft">{usage ? `${historyStorageLabel(usage.bytes)} of local chat history · ${usage.count} completed chats` : 'Measuring local chat history…'}</p>
+    <SettingsSection title="Chat history" help="Archived chats are kept until you delete them. Nothing is automatically deleted." data-history-settings>
+      <p className="mt-(--q-inline) text-xs text-ink-soft">{usage ? `${historyStorageLabel(usage.bytes)} of local chat history · ${usage.count} archived chats` : 'Measuring local chat history…'}</p>
       {usage && <HistoryStorageNotice bytes={usage.bytes} openSync={openSync} />}
-      <label htmlFor="history-range" className="mt-(--q-group) block text-sm font-medium">Clear completed chat history</label>
+      <label htmlFor="history-range" className="mt-(--q-group) block text-sm font-medium">Clear archived chat history</label>
       <p id="history-range-hint" className="mt-(--q-tight) text-xs text-ink-faint">Active and running chats are kept. This removes local conversations and their command logs, not project files or settings.</p>
       <details className="mt-(--q-tight) text-xs text-ink-faint">
         <summary className="w-fit cursor-pointer transition-colors duration-(--dur-fast) hover:text-ink">How ranges count</summary>
@@ -58,7 +58,7 @@ export function HistorySettings({ openSync, refreshSessions }: { openSync: () =>
       </div>
       {confirming && (
         <div role="alertdialog" aria-labelledby="history-confirm-title" aria-describedby="history-confirm-hint" className="mt-(--q-inline) rounded-xl p-4" style={{ background: 'var(--danger-soft)' }}>
-          <h3 id="history-confirm-title" className="text-sm font-semibold">Delete completed chats: {HISTORY_RANGES.find(r => r.value === range)?.label}?</h3>
+          <h3 id="history-confirm-title" className="text-sm font-semibold">Delete archived chats: {HISTORY_RANGES.find(r => r.value === range)?.label}?</h3>
           <p id="history-confirm-hint" className="mt-(--q-tight) text-xs text-ink-soft">These local conversations and command logs will be permanently deleted. This cannot be undone.</p>
           <div className="mt-(--q-inline) flex flex-wrap gap-2">
             <button type="button" className="btn btn-ghost py-1 text-xs" disabled={busy} onClick={() => setConfirming(false)} autoFocus data-history-cancel>Cancel</button>
@@ -76,7 +76,7 @@ export function HistoryStorageNotice({ bytes, openSync }: { bytes: number; openS
   return bytes >= HISTORY_WARNING_BYTES ? (
         <div role="status" className="mt-(--q-inline) text-xs" data-history-warning>
           <p className="font-medium text-warning-text">Your chat history uses 1 GB or more.</p>
-          <p className="mt-(--q-tight) text-ink-soft">Clear old completed chats below, or explore Nekko Cloud sync to keep a synced copy. Sync does not automatically free local space.</p>
+          <p className="mt-(--q-tight) text-ink-soft">Clear old archived chats below, or explore Nekko Cloud sync to keep a synced copy. Sync does not automatically free local space.</p>
           <button type="button" className="btn btn-ghost mt-(--q-inline) py-1 text-xs" onClick={openSync} data-history-sync>Open Nekko Cloud sync</button>
         </div>
   ) : null;

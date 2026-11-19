@@ -41,10 +41,14 @@ describe('wall clean start', () => {
     expect(isClean(renderChatPane(chatSession(), { commandCenter: true, cleanStart: true }))).toBe(false);
     expect(isClean(renderChatPane(empty(), { commandCenter: true, cleanStart: true, surface: 'transcript' }))).toBe(false);
     expect(isClean(renderChatPane(empty(), { commandCenter: true, cleanStart: true, readOnly: true }))).toBe(false);
-    expect(isClean(renderChatPane(empty({ chatType: 'image' }), { commandCenter: true, cleanStart: true }))).toBe(false);
-    // No provider yet: the setup welcome shows instead.
+    // A new Photo chat opens the same way, with its greeting.
+    const photo = renderChatPane(empty({ chatType: 'image' }), { commandCenter: true, cleanStart: true });
+    expect(isClean(photo)).toBe(true);
+    expect(photo).toContain('data-clean-start-greeting');
+    // No provider yet: the setup welcome shows instead, except in Photo, which needs no chat provider.
     useStore.setState({ providers: [] });
     expect(isClean(renderChatPane(empty(), { commandCenter: true, cleanStart: true }))).toBe(false);
+    expect(isClean(renderChatPane(empty({ chatType: 'image' }), { commandCenter: true, cleanStart: true }))).toBe(true);
   });
 
   it('hides the header, transcript, footer and monitor while on', () => {

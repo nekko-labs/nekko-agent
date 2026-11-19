@@ -38,8 +38,8 @@ class BeyondTest {
         """{"id":"sub","title":"x","updatedAt":99,"parentSessionId":"s1"}""",
     ).map { SessionSummary.from(json(it))!! }
 
-    @Test fun `search across completed chats`() {
-        assertEquals("accents and case don't matter; completed chats count", listOf("s2"), ChatSearch.matches(chats, "cafe resume").map { it.id })
+    @Test fun `search across archived chats`() {
+        assertEquals("accents and case don't matter; archived chats count", listOf("s2"), ChatSearch.matches(chats, "cafe resume").map { it.id })
         assertEquals("every word, anywhere", listOf("s1"), ChatSearch.matches(chats, "BUG find").map { it.id })
         assertEquals(chats.size, ChatSearch.matches(chats, "  ").size)
         assertTrue(ChatSearch.matches(chats, "nothing like it").isEmpty())

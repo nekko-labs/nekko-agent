@@ -6,7 +6,7 @@ import type { Direction } from './layout.js';
  * translate from the old place runs off), and the window itself is
  * revealed from, or folded into, the edge on its far side over the same time
  * and curve, so its moving edge rides the seam with its neighbours. A closing
- * window leaves stardust along the edge it folded into, as a completed row in
+ * window leaves stardust along the edge it folded into, as an archived row in
  * the Agents panel does.
  */
 export const WALL_PUSH_MS = 220;
@@ -124,7 +124,7 @@ export function foldWindow(el: HTMLElement, layer: HTMLElement, side: Direction)
 }
 
 /**
- * The completed row's stardust, laid along one edge of a box and drifting out
+ * The archived row's stardust, laid along one edge of a box and drifting out
  * past it. Lives on the body, so it outlasts the window it came from.
  */
 export function scatterEdgeDust(rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>, side: Direction): void {
@@ -133,7 +133,7 @@ export function scatterEdgeDust(rect: Pick<DOMRect, 'left' | 'top' | 'width' | '
   if (length <= 0) return;
   const out = side === 'right' || side === 'down' ? 1 : -1;
   const dust = document.createElement('div');
-  dust.className = 'completion-stardust';
+  dust.className = 'archive-stardust';
   dust.setAttribute('aria-hidden', 'true');
   dust.style.left = `${side === 'right' ? rect.left + rect.width : side === 'left' ? rect.left : rect.left + rect.width / 2}px`;
   dust.style.top = `${side === 'down' ? rect.top + rect.height : side === 'up' ? rect.top : rect.top + rect.height / 2}px`;

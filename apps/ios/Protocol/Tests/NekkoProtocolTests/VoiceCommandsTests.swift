@@ -8,7 +8,7 @@ final class VoiceCommandsTests: XCTestCase {
         switch v.str("kind") {
         case "dictation": return .dictation(v.str("text") ?? "")
         case "new-session": return .newSession
-        case "complete-session": return .completeSession
+        case "archive-session": return .archiveSession
         case "navigate": return .navigate(v.str("view") ?? "")
         case "erase": return .erase
         case "clear": return .clear

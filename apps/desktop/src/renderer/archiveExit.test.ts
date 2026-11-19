@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { completeWithExit, scatterStardust, STARDUST_MS } from './completionExit.js';
+import { archiveWithExit, scatterStardust, STARDUST_MS } from './archiveExit.js';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
@@ -34,28 +34,28 @@ function stubPage(reducedMotion: boolean) {
   return { append };
 }
 
-describe('completion exit', () => {
-  it('completes straight away, without animating, for reduced motion', async () => {
+describe('archive exit', () => {
+  it('archives straight away, without animating, for reduced motion', async () => {
     const { append } = stubPage(true);
     const { row } = makeRow();
-    const complete = vi.fn(async () => true);
-    await completeWithExit(row as unknown as HTMLElement, complete);
-    expect(complete).toHaveBeenCalledOnce();
+    const archive = vi.fn(async () => true);
+    await archiveWithExit(row as unknown as HTMLElement, archive);
+    expect(archive).toHaveBeenCalledOnce();
     expect(row.animate).not.toHaveBeenCalled();
     expect(append).not.toHaveBeenCalled();
   });
 
-  it('starts completion straight away, then closes the row to the left and collapses its height', async () => {
+  it('starts archiving straight away, then closes the row to the left and collapses its height', async () => {
     const { append } = stubPage(false);
     const { row, animations } = makeRow();
-    const complete = vi.fn(async () => {
+    const archive = vi.fn(async () => {
       // Engine work starts in parallel with the exit so the close feels snappy.
       expect(animations).toHaveLength(0);
       expect(append).not.toHaveBeenCalled();
       return true;
     });
-    await completeWithExit(row as unknown as HTMLElement, complete);
-    expect(complete).toHaveBeenCalledOnce();
+    await archiveWithExit(row as unknown as HTMLElement, archive);
+    expect(archive).toHaveBeenCalledOnce();
     expect(animations[0].keyframes.at(-1)?.clipPath).toBe('inset(0 100% 0 0 round 8px)');
     expect(animations[1].keyframes[0].height).toBe('40px');
     expect(animations[1].keyframes.at(-1)?.height).toBe('0px');
@@ -63,22 +63,22 @@ describe('completion exit', () => {
     expect(append).toHaveBeenCalledOnce();
   });
 
-  it('puts the row back when completion fails', async () => {
+  it('puts the row back when archiving fails', async () => {
     stubPage(false);
     const { row, animations } = makeRow();
-    await completeWithExit(row as unknown as HTMLElement, async () => false);
+    await archiveWithExit(row as unknown as HTMLElement, async () => false);
     expect(animations.every((a) => a.cancel.mock.calls.length === 1)).toBe(true);
     expect(row.style.pointerEvents).toBe('');
-    expect(row.dataset.completing).toBeUndefined();
+    expect(row.dataset.archiving).toBeUndefined();
   });
 
   it('ignores a second click while the row is already leaving', async () => {
     stubPage(false);
     const { row } = makeRow();
-    row.dataset.completing = 'true';
-    const complete = vi.fn(async () => true);
-    await completeWithExit(row as unknown as HTMLElement, complete);
-    expect(complete).not.toHaveBeenCalled();
+    row.dataset.archiving = 'true';
+    const archive = vi.fn(async () => true);
+    await archiveWithExit(row as unknown as HTMLElement, archive);
+    expect(archive).not.toHaveBeenCalled();
   });
 
   it('does not wait on animations that never finish', async () => {
@@ -86,16 +86,16 @@ describe('completion exit', () => {
     vi.stubGlobal('window', { matchMedia: () => ({ matches: false }), setTimeout });
     const { row } = makeRow();
     row.animate.mockImplementation((keyframes: Keyframe[]) => ({ keyframes, cancel: vi.fn(), finished: new Promise<never>(() => {}) }));
-    const complete = vi.fn(async () => true);
-    await completeWithExit(row as unknown as HTMLElement, complete);
-    expect(complete).toHaveBeenCalledOnce();
+    const archive = vi.fn(async () => true);
+    await archiveWithExit(row as unknown as HTMLElement, archive);
+    expect(archive).toHaveBeenCalledOnce();
   });
 
-  it('still completes when the row is not on screen', async () => {
+  it('still archives when the row is not on screen', async () => {
     stubPage(false);
-    const complete = vi.fn(async () => true);
-    await completeWithExit(null, complete);
-    expect(complete).toHaveBeenCalledOnce();
+    const archive = vi.fn(async () => true);
+    await archiveWithExit(null, archive);
+    expect(archive).toHaveBeenCalledOnce();
   });
 
   it('anchors the stardust at the left edge of the row and clears it after its run', () => {
@@ -106,7 +106,7 @@ describe('completion exit', () => {
     vi.stubGlobal('document', { createElement, body: { append } });
     vi.stubGlobal('window', { setTimeout });
     scatterStardust({ left: 10, top: 100, width: 200, height: 40 });
-    expect(dust.className).toBe('completion-stardust');
+    expect(dust.className).toBe('archive-stardust');
     expect(dust.style.left).toBe('16px');
     expect(dust.style.top).toBe('120px');
     expect(dust.append).toHaveBeenCalledTimes(14);

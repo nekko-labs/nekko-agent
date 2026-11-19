@@ -629,6 +629,7 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
     <dl className="monitors-dock__breakdown" aria-label={`Budget breakdown, ${BUDGET_RANGE_LABEL[range].toLowerCase()}`}>
       <div data-row="local"><dt>Local models</dt><dd>{avoided ? formatUSD(avoided.local) : 'Unavailable'}{ranged?.localTokens != null && <small>{ranged.localTokens.toLocaleString()} tokens</small>}</dd></div>
       <div data-row="subscription"><dt>Subscriptions</dt><dd>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</dd></div>
+      {ranged && ranged.pictures > 0 && <div data-row="pictures"><dt>Paid pictures</dt><dd>{formatUSD(ranged.pictureCost)}<small>{ranged.pictures === 1 ? '1 picture' : `${ranged.pictures.toLocaleString()} pictures`}</small></dd></div>}
       <div data-row="top"><dt>Top paid agent</dt><dd>{topTitle ? <><span className="monitors-dock__breakdown-name" title={topTitle}>{topTitle}</span>{formatUSD(top![1])}</> : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</dd></div>
       <div data-row="tokens"><dt>Tokens</dt><dd title={ranged ? `${ranged.input.toLocaleString()} in · ${ranged.output.toLocaleString()} out` : undefined}>{ranged ? `${compact(ranged.input)} in · ${compact(ranged.output)} out` : 'Unavailable'}</dd></div>
     </dl>

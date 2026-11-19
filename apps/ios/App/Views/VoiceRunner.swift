@@ -34,7 +34,7 @@ final class VoiceRunner {
         /// nil once merged, else why not.
         var merge: (PullRequest) async -> String? = { _ in nil }
         var answer: (AskRequest, String) async throws -> Void = { _, _ in }
-        var complete: () async throws -> Void = {}
+        var archive: () async throws -> Void = {}
         var title: () -> String = { "this chat" }
     }
 
@@ -224,11 +224,11 @@ final class VoiceRunner {
             if await send() { done("Sent") }
         case .status:
             done(host.status())
-        case .completeSession:
+        case .archiveSession:
             let title = host.title()
-            return Pending(message: "Complete \"\(title)\"? \(Self.sayYes)", confirm: true, options: [Option(label: "Confirm") { [weak self] in
-                try await self?.host.complete()
-                self?.done("Completed \(title)")
+            return Pending(message: "Archive \"\(title)\"? \(Self.sayYes)", confirm: true, options: [Option(label: "Confirm") { [weak self] in
+                try await self?.host.archive()
+                self?.done("Archived \(title)")
             }])
         case .ship:
             return try await ship(pending)

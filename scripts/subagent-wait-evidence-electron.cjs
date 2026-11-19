@@ -10,7 +10,7 @@ const capture=async name=>{await stable();await win.capturePage(undefined,{stayH
 const check=async(name,s)=>{try{report.checks.push({name,value:await run(s)})}catch(e){report.checks.push({name,error:String(e)})}};
 try{await win.loadFile(path.join(dir,'index.html'));await sleep(800);await stable();
 for(const theme of ['light','dark']){await run(`document.documentElement.dataset.theme='${theme}'`);await sleep(300);await stable();
-await check(theme+' parent group',`(()=>{const row=document.querySelector('[data-completion-row="parent"]');let el=row;while(el&&!el.querySelector('h2,h3,[role=heading]'))el=el.parentElement;return el?(el.querySelector('h2,h3,[role=heading]')||{}).textContent:null})()`);
+await check(theme+' parent group',`(()=>{const row=document.querySelector('[data-archive-row="parent"]');let el=row;while(el&&!el.querySelector('h2,h3,[role=heading]'))el=el.parentElement;return el?(el.querySelector('h2,h3,[role=heading]')||{}).textContent:null})()`);
 await check(theme+' footer',`document.querySelector('[data-footer]').innerText`);
 await capture(`subagent-wait-${kind}-${theme}`);}
 report.background={focused:win.isFocused(),bounds:win.getBounds()};

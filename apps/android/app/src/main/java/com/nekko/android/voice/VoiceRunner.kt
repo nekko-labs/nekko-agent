@@ -37,7 +37,7 @@ class VoiceRunner(
         /** Null only after successful merge; all proof/step-up still belongs to the host. */
         suspend fun merge(pr: PullRequest): String? = "Merge is unavailable."
         suspend fun answer(questionId: String, text: String) {}
-        suspend fun complete() {}
+        suspend fun archive() {}
         fun title(): String = "this chat"
     }
     class Option internal constructor(val label: String, internal val run: suspend () -> Unit)
@@ -177,11 +177,11 @@ class VoiceRunner(
                 VoiceIntent.Clear -> { last = ""; host.text = ""; show("Cleared", true) }
                 VoiceIntent.Send -> send(run)
                 VoiceIntent.Status -> show(host.status(), true)
-                VoiceIntent.CompleteSession -> {
+                VoiceIntent.ArchiveSession -> {
                     val title = host.title()
-                    offer("Complete \"$title\"? $SAY_YES", true, listOf(Option("Confirm") {
+                    offer("Archive \"$title\"? $SAY_YES", true, listOf(Option("Confirm") {
                         val active = generation
-                        current(active); host.complete(); current(active); show("Completed $title", true)
+                        current(active); host.archive(); current(active); show("Archived $title", true)
                     }))
                 }
                 VoiceIntent.Ship -> ship(run)

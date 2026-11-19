@@ -63,3 +63,13 @@ describe('usage attribution over a range', () => {
     expect(attributionRange([day('2026-11-09')] as never)).toBeNull();
   });
 });
+
+it('a range counts its paid pictures, already part of its spend', () => {
+  const now = new Date('2026-11-19T12:00:00Z');
+  const day = (date: string, extra: object = {}) => ({ date, input: 0, output: 0, cost: 0.071, ...extra });
+  const usage = { daily: [day('2026-11-19', { pictures: 2, pictureCost: 0.071 }), day('2026-11-18')] } as never;
+  expect(budgetRange(usage, 'today', now)).toMatchObject({ spend: 0.071, pictures: 2, pictureCost: 0.071 });
+  expect(budgetRange(usage, '1wk', now)).toMatchObject({ pictures: 2, pictureCost: 0.071 });
+  const none = { daily: [day('2026-11-19')] } as never;
+  expect(budgetRange(none, 'today', now)).toMatchObject({ pictures: 0, pictureCost: 0 });
+});

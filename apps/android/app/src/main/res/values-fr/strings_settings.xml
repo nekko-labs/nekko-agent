@@ -160,8 +160,8 @@
     <string name="settings_pc_offline_unknown">%1$s est hors ligne. Son mode de discussion, l’action sur les discussions et la confirmation de suppression s’afficheront ici une fois connecté.</string>
     <string name="settings_chat_mode_new">Mode des nouvelles discussions</string>
     <string name="settings_long_press">Appui long sur une discussion pour</string>
-    <string name="settings_complete_it">La terminer</string>
-    <string name="settings_complete_it_detail">La déplace dans Terminées sur %1$s ; rien n’est supprimé</string>
+    <string name="settings_archive_it">L’archiver</string>
+    <string name="settings_archive_it_detail">La déplace dans Archivées sur %1$s ; rien n’est supprimé</string>
     <string name="settings_delete_it">La supprimer</string>
     <string name="settings_delete_it_detail">La supprime définitivement de %1$s</string>
     <string name="settings_confirm_delete">Confirmer avant de supprimer</string>
