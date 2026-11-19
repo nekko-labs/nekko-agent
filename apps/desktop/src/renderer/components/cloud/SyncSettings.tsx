@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type CloudStatus, type SyncDevice, cloudError } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/Toggle.js';
 import { StatusDot } from '../primitives/index.js';
@@ -50,13 +50,32 @@ export function SyncSettings() {
     }
   }, []);
 
-  const turnOn = () => act('on', async () => {
-    const r = await window.nekko.syncTurnOn();
-    if (r.recoveryKey) setRecovery({ key: r.recoveryKey });
-    return r;
+  const turnOn = (auto = false) => act('on', async () => {
+    try {
+      const r = await window.nekko.syncTurnOn();
+      if (r.recoveryKey) setRecovery({ key: r.recoveryKey });
+      return r;
+    } catch (e) {
+      // Started by a sign-in, an account that already syncs elsewhere just shows how to add this computer.
+      if (auto && String(e).includes('needs-join')) return window.nekko.cloudStatus();
+      throw e;
+    }
   });
 
   const phase = status?.sync.phase ?? 'signed-out';
+
+  // Signing in here turns sync on by default, so the recovery key shows at once. Only a sign-in this
+  // window sees happen counts: opening Settings while signed in, or after turning sync off, starts nothing.
+  const wasSignedIn = useRef<boolean | null>(null);
+  const autoOn = useRef(false);
+  useEffect(() => {
+    if (!status) return;
+    if (wasSignedIn.current === false && status.signedIn) autoOn.current = true;
+    wasSignedIn.current = status.signedIn;
+    if (!autoOn.current || !status.signedIn) return;
+    autoOn.current = false;
+    if (phase === 'off') void turnOn(true);
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
   const others = status?.sync.devices.filter((d) => !d.thisDevice && !d.revoked).length ?? 0;
   const pending = status?.sync.devices.filter((d) => !d.trusted && !d.revoked && !d.thisDevice && d.askedToJoin) ?? [];
 
