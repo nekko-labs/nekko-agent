@@ -25,7 +25,19 @@ Nekko can make short clips on your computer with **Wan 2.2 TI2V 5B**. In **Model
 
 Choose it as the model in a Photo chat and describe the clip. Attach a photo to use it as the first frame. A clip is about two seconds (33 frames at 16 frames a second) in your chat's shape, or the photo's, at about 832×480. It appears in the chat as an animated picture, with its length beside it. The progress line shows the sampling steps, and **Stop** cancels the clip on the engine.
 
+The agent in a chat on this computer can start a clip too (not in incognito or offline chats). It answers at once and the chat is free while the clip is made; when it is ready, the chat wakes with where the clip was saved, and the agent carries on. Stopping the chat, or cancelling the clip's watch, stops the clip.
+
 This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) are not supported yet: a search under **Models → Video** keeps them behind **Show more from Hugging Face**.
+
+### Pictures from any chat
+
+When your computer has a picture model ready, the agent in any chat on this computer can make and change pictures with it: ask for an illustration, an icon or a mock-up while you work. The picture appears in the chat and the agent can look at it to check the result. Ask it to save the picture in the project (for example `assets/hero.png`) and it saves a new file, asking first in the same way as for any other file it writes. Nothing leaves your computer and making a picture asks nothing.
+
+The agent uses the chat's picture model if you chose one, then the one in **Settings → Agents → Pictures** (Automatic by default), otherwise the first ready one that can do the job. Only one picture or clip is made at a time on your computer, so a second one waits. When a picture model has to push the chat's own model out of memory, it is unloaded again once the picture is done, and the chat's model loads again for the next reply. Sandbox chats do not have these tools.
+
+If you have added **OpenRouter** as a provider, the agent can also use its picture models (for example Nano Banana or FLUX): they are on your OpenRouter account and paid from your OpenRouter credit, not by Nekko. The agent uses one only when it is named: ask the agent for that model (the Settings picture list shows only this computer's models for now). Every paid picture asks first with its price, even in YOLO; approving allows paid pictures in that chat up to $1.00, after which it asks again. The prompt, and any picture being changed, is sent to OpenRouter and the model's provider. Offline and Local only chats never use them. What they cost (OpenRouter's own figure) counts in the **Budget** monitor's actual spend, with a **Paid pictures** line when there were some in the range.
+
+In a **Claude Agent** chat (Claude Code), the agent gets the same tools when Claude Code runs on an Anthropic API key or a cloud account: it sees the picture, and Nekko keeps the file in its own data folder and tells the agent where, so Claude Code can copy it into the project with its own tools. On a **Claude plan** these tools stay off for now: Anthropic has not yet approved Nekko's tools inside Claude Code on a plan. Until it does, make pictures in a Photo chat or in a chat on another model (a local model, ChatGPT, Gemini or OpenRouter). If you have Anthropic's own written approval, **Settings → Agents → Claude plan features** turns them on for your install.
 
 ## Your first local model
 
@@ -208,6 +220,11 @@ that: `lms server start` and `lms server stop` are a real lifecycle, and `lms lo
 carries the context length and GPU share. It publishes no layer geometry anywhere, so
 its projections are partial (see below). Driving it needs the CLI on the same machine as
 the server, so a remote LM Studio can be read but not controlled.
+
+Nekko Agent never opens LM Studio just because you looked at it. When LM Studio is
+closed, its card on the Models page says so and offers **Open and test**, which starts
+its server and checks the connection. The only time Nekko Agent opens it by itself is
+when you send a message to one of its models while it is closed.
 
 **vLLM** is deliberately connect-existing only. It serves one model per process with
 everything fixed by the launch command, and it is Linux plus NVIDIA plus Python in

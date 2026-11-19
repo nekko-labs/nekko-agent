@@ -86,7 +86,7 @@ fun ChatVoiceControls(
             appLock?.status?.value?.locked != true && appLock?.covered?.value != true &&
             computerId != null && state.activeId == computerId && state.conn == RelayState.ONLINE &&
             ui.ready && ui.savedAt == null && ui.chatType != "image" && vm.repo.overlays.value[vm.sessionId] == null &&
-            state.summaries.firstOrNull { it.id == vm.sessionId }?.archivedAt == null && vm.completedAt.value == null
+            state.summaries.firstOrNull { it.id == vm.sessionId }?.archivedAt == null && vm.archivedAt.value == null
     }
     fun voiceAllowed(): Boolean = baseAllowed() && VoiceAudioOwner.owns(token) && epoch == leaseEpoch &&
         runCatching { vm.repo.remote() === link }.getOrDefault(false)
@@ -135,7 +135,7 @@ fun ChatVoiceControls(
                 destination = DraftStore.NEW_CHAT; go()
             }
             override fun openSettings() { requireAllowed(); (settings ?: error("Settings is unavailable here."))() }
-            override suspend fun complete() { requireAllowed(); vm.complete(); requireAllowed() }
+            override suspend fun archive() { requireAllowed(); vm.archive(); requireAllowed() }
             override suspend fun ship(): VoiceRunner.ShipFacts {
                 val run = leaseEpoch
                 requireAllowed(run)

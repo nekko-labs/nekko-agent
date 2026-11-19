@@ -39,6 +39,17 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Quitting shuts down agents' simulators (#3001, 2026-11-19)
+Area: engine daemon
+Result: regression (quit time, only while an agent's simulator is booted)
+Conditions: Apple M1 Max, macOS 27.2; debug `nekkod` started with `--config-stdin`, a scratch data dir and no engine, stopped by closing stdin 2 s after ready; time from closing stdin to exit. One simulator the user booted was running in every run. Same build for both rows.
+
+| Metric | No agent simulator booted | One agent simulator booted |
+|---|---|---|
+| Daemon quit time | 1.01 s, 0.92 s | 3.9 s (1 run) |
+
+Why: the daemon now runs `simctl shutdown` for each simulator an agent used before it exits, capped at 4 s; with none to stop it adds nothing beyond one `ps`. Not measured: a release build, an Android emulator, several devices at once (they stop in parallel). Source: #3001.
+
 ## Design canvas paints a drag without re-rendering (#2756, 2026-11-14)
 Area: renderer
 Result: improvement (main-thread work); no effect on frame pacing in this harness

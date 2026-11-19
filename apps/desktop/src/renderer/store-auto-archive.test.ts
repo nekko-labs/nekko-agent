@@ -37,40 +37,40 @@ function seed(sessions: Session[], autoCompleteAfterDays?: number) {
 
 beforeEach(() => engine());
 
-describe('completing idle agents', () => {
-  it('completes agents idle past a month by default, and closes their windows', async () => {
+describe('archiving idle agents', () => {
+  it('archives agents idle past a month by default, and closes their windows', async () => {
     seed([chat('old', 31), chat('recent', 29)]);
-    expect(await useStore.getState().autoCompleteIdle(NOW)).toBe(1);
+    expect(await useStore.getState().autoArchiveIdle(NOW)).toBe(1);
     expect(Object.keys(saved)).toEqual(['old']);
     const s = useStore.getState();
     expect(s.workspaces).toHaveLength(0);
     expect(s.activeSessionId).not.toBe('old');
-    expect(s.toasts.at(-1)?.message).toContain('Completed 1 agent idle for over 1 month');
+    expect(s.toasts.at(-1)?.message).toContain('Archived 1 agent idle for over 1 month');
   });
   it('honours the chosen window and Never', async () => {
     seed([chat('old', 10)], 7);
-    expect(await useStore.getState().autoCompleteIdle(NOW)).toBe(1);
+    expect(await useStore.getState().autoArchiveIdle(NOW)).toBe(1);
     engine();
     seed([chat('old', 1000)], 0);
-    expect(await useStore.getState().autoCompleteIdle(NOW)).toBe(0);
+    expect(await useStore.getState().autoArchiveIdle(NOW)).toBe(0);
     expect(window.nekko.setSessionOptions).not.toHaveBeenCalled();
   });
   it('skips pinned, sub-agent, task, running and waiting agents', async () => {
     engine({ running: ['live'], pending: { asking: { question: {} } } });
     seed([chat('pinned', 90, { pinned: true }), chat('child', 90, { parentSessionId: 'p' }), chat('task', 90, { taskId: 't' }),
       chat('live', 90), chat('asking', 90), chat('gone', 90, { archivedAt: NOW - DAY })]);
-    expect(await useStore.getState().autoCompleteIdle(NOW)).toBe(0);
+    expect(await useStore.getState().autoArchiveIdle(NOW)).toBe(0);
   });
   it('does nothing when it cannot tell what is running', async () => {
     engine();
     (window.nekko.runningSessions as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('offline'));
     seed([chat('old', 90)]);
-    expect(await useStore.getState().autoCompleteIdle(NOW)).toBe(0);
+    expect(await useStore.getState().autoArchiveIdle(NOW)).toBe(0);
   });
   it('keeps a chat whose save failed open and retries it next time', async () => {
     engine({ fail: 'old' });
     seed([chat('old', 90), chat('other', 90)]);
-    expect(await useStore.getState().autoCompleteIdle(NOW)).toBe(1);
+    expect(await useStore.getState().autoArchiveIdle(NOW)).toBe(1);
     expect(useStore.getState().workspaces.map((w) => w.anchor.refId)).toEqual(['old']);
   });
 });

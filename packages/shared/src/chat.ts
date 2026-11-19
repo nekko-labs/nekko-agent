@@ -31,7 +31,8 @@ export interface ToolResult {
  */
 export interface AgentWatchView {
   id: string;
-  kind: 'timer' | 'pr';
+  /** `clip`: a clip an agent started (`generate_video`); it wakes the chat when the clip ends. */
+  kind: 'timer' | 'pr' | 'clip';
   url?: string;
   status: 'active' | 'done' | 'cancelled' | 'error';
   /** Timer: when it wakes. PR: the latest it waits before waking anyway. */
@@ -47,6 +48,8 @@ export interface AgentWatchView {
   checks?: 'passing' | 'failing' | 'pending' | 'none';
   /** PR watch: the PR's state as last polled (`open`, `merged`, `closed`). */
   prState?: string;
+  /** Clip watch: how far the clip got (`waiting`, `loading`, `generating`, `step:3/20`). */
+  clipStage?: string;
 }
 
 export interface ChatMessage {
@@ -437,6 +440,8 @@ export interface Session {
   cloudOnly?: boolean;
   /** Incognito: don't persist the transcript or touch memory. */
   incognito?: boolean;
+  /** Keep this chat out of Nekko Cloud sync (it stays on this computer). Unset or false: it syncs. */
+  syncOff?: boolean;
   /** Privacy Shield: what this chat hides from a cloud model (see privacy.ts). */
   privacy?: import('./privacy.js').SessionPrivacy;
   /** Pinned to the top of the chat list. */

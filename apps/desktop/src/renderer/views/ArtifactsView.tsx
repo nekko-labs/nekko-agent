@@ -12,6 +12,8 @@ import { SlideToggle, type SlideOption } from '../components/library/SlideToggle
 import { LibraryFileIcon } from '../components/library/LibraryFileIcon.js';
 import { DesignCanvas } from '../components/library/DesignCanvas.js';
 import { TilePreview } from '../components/library/TilePreview.js';
+import { LibrarySyncGlyph, LibrarySyncSummary, useLibrarySync } from '../components/library/LibrarySync.js';
+import { fileSync, remoteEntries } from '../components/library/librarySyncState.js';
 import {
   LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
   type LibraryLayout,
@@ -32,8 +34,8 @@ const when = (at: number) => {
   const d = new Date(at);
   return at <= 0 || Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
-/** Where a file came from: its chat, or for a design found in a project's designs folder, that project. */
-const cameFrom = (e: ArtifactEntry) => (e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
+/** Where a file came from: its chat, the project for a design found in its designs folder, or another computer. */
+const cameFrom = (e: ArtifactEntry) => (e.source === 'cloud' ? `From ${e.device}` : e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
 const fromAndWhen = (e: ArtifactEntry) => [cameFrom(e), when(e.at), e.versions && `${e.versions.length} versions`].filter(Boolean).join(' · ');
 /** A design the canvas can show: an HTML page. Images and the rest open in the file pane. */
 const isHtml = (path: string) => /\.html?$/i.test(path);
@@ -151,7 +153,7 @@ export function ArtifactsView() {
   // Which version of the picked design is open (its newest when null), and whether its file is shown instead of the canvas.
   const [version, setVersion] = useState<string | null>(null);
   const [asFile, setAsFile] = useState(false);
-  const [includeCompleted, setIncludeCompleted] = useState(true);
+  const [includeArchived, setIncludeArchived] = useState(true);
   const [show, setShow] = useState<Show>('all');
   const [layout, setLayout] = useState<LibraryLayout>(loadLibraryLayout);
   const [collapsed, setCollapsed] = useState<Set<ArtifactKind>>(loadCollapsedKinds);
@@ -161,8 +163,8 @@ export function ArtifactsView() {
   // Transcripts are read a few at a time from the newest chat back; cached
   // ones paint at once. Only paths are kept, never file contents.
   const candidates = useMemo(
-    () => artifactCandidates(sessions.filter((s: SessionSummary) => includeCompleted || !s.archivedAt)),
-    [sessions, includeCompleted],
+    () => artifactCandidates(sessions.filter((s: SessionSummary) => includeArchived || !s.archivedAt)),
+    [sessions, includeArchived],
   );
   const key = candidates.map((s) => `${s.id}:${s.updatedAt}`).join('|');
   useEffect(() => {
@@ -221,10 +223,16 @@ export function ArtifactsView() {
   }, [merged, presence]);
   const indexed = chatsRead && fromFolders !== null;
 
+  // Library on Nekko Cloud (#2748): the engine is told this computer's files and backs them up;
+  // other computers' files join the list as read-only copies. Nothing shows unless it is open to the account.
+  const library = useLibrarySync(entries);
+  const remote = useMemo(() => groupDesignVersions(remoteEntries(library?.remote ?? [])), [library?.remote]);
+  const everything = useMemo(() => (entries && remote.length ? [...entries, ...remote] : entries), [entries, remote]);
+
   // The kinds that have files lead the slider; the setup answer's kind comes first.
-  const kinds = useMemo(() => orderForProfile(groupArtifacts(entries ?? []), profile), [entries, profile]);
-  const groups = useMemo(() => orderForProfile(groupArtifacts(entries ?? [], query), profile), [entries, query, profile]);
-  const total = entries?.length ?? 0;
+  const kinds = useMemo(() => orderForProfile(groupArtifacts(everything ?? []), profile), [everything, profile]);
+  const groups = useMemo(() => orderForProfile(groupArtifacts(everything ?? [], query), profile), [everything, query, profile]);
+  const total = everything?.length ?? 0;
   // A kind whose last file left (a chat was archived away) falls back to All.
   const current: Show = show === 'all' || kinds.some((g) => g.kind.id === show) ? show : 'all';
   const all = current === 'all';
@@ -288,6 +296,7 @@ export function ArtifactsView() {
             <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
             {!listWide && <span className="block truncate text-2xs text-ink-faint">{fromAndWhen(e)}</span>}
           </span>
+          {sync(e)}
           {listWide && <>
             <span className="hidden w-48 truncate font-mono text-2xs text-ink-faint lg:block">{e.filename}</span>
             <span className="hidden w-56 truncate text-2xs text-ink-faint sm:block">{cameFrom(e)}</span>
@@ -298,12 +307,17 @@ export function ArtifactsView() {
     );
   };
 
+  // A file's cloud: at the end of its row, and in its preview's top-right corner.
+  function sync(e: ArtifactEntry) {
+    const state = fileSync(library, e);
+    return state ? <LibrarySyncGlyph state={state} device={e.device} /> : null;
+  }
   const tile = (e: ArtifactEntry) => {
     const n = idOf(e.path);
     return (
     <div key={e.path} role="listitem" className="library-tile" data-library-tile>
       <button type="button" className="library-tile-main" onClick={() => select(e)} title={e.path}>
-        <TilePreview revision={revisions.get(e.sessionId) ?? e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
+        <TilePreview revision={revisions.get(e.sessionId) ?? e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} badge={sync(e)} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
           <span className="library-tile-meta">{fromAndWhen(e)}</span>
@@ -339,8 +353,8 @@ export function ArtifactsView() {
       <p className="mt-2 max-w-sm rounded-xl border border-line bg-surface-2 px-3 py-2 text-xs text-ink-soft">
         Try asking an agent: “Create a one-page report and link the file in your reply.”
       </p>
-      {!includeCompleted && (
-        <button type="button" className="btn btn-ghost mt-1 text-xs" onClick={() => setIncludeCompleted(true)}>Include completed chats</button>
+      {!includeArchived && (
+        <button type="button" className="btn btn-ghost mt-1 text-xs" onClick={() => setIncludeArchived(true)}>Include archived chats</button>
       )}
     </div>
   );
@@ -355,7 +369,9 @@ export function ArtifactsView() {
             <SlideToggle label="Show" options={typeOptions} value={current} onChange={pickShow} transitionName="library-show" />
           </div>
         )}
-        <span className="ml-auto shrink-0 text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
+        <span className="ml-auto" />
+        {everything && <LibrarySyncSummary library={library} entries={everything} />}
+        <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{entries ?`${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
         <button type="button" className="btn btn-ghost shrink-0 px-3 py-1 text-xs" onClick={() => setShowIntro(true)}>Library guide</button>
         {!noFiles && <SlideToggle label="Layout" options={LAYOUT_OPTIONS} value={layout} onChange={pickLayout} iconOnly className="hidden shrink-0 md:inline-flex" transitionName="library-layout" />}
       </header>
@@ -365,7 +381,7 @@ export function ArtifactsView() {
           <div className={`space-y-2 px-3 pb-2 pt-3 ${listWide ? 'md:px-5' : ''}`}>
             <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter Library" value={query} onChange={(e) => setQuery(e.target.value)} />
             <label className="flex items-center gap-2 text-2xs text-ink-faint">
-              <input type="checkbox" checked={includeCompleted} onChange={(e) => setIncludeCompleted(e.target.checked)} /> Include completed chats
+              <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} /> Include archived chats
             </label>
           </div>
           <div className={`min-h-0 flex-1 overflow-y-auto px-2 pb-3 ${listWide ? 'md:px-4' : ''}`} role="list" aria-label="Library files">
@@ -405,7 +421,8 @@ export function ArtifactsView() {
                 {onCanvas && !asFile
                   ? <DesignCanvas path={openPath} title={selected.title} versions={selected.versions} onVersion={setVersion} onSource={() => setAsFile(true)} />
                   // A design changes by a new version beside it, never in place, so it opens view-only.
-                  : <FilePane path={openPath} readOnly={selected.kind === 'design'} />}
+                  // Another computer's file is a copy: it changes there, never here.
+                  : <FilePane path={openPath} readOnly={selected.kind === 'design' || selected.source === 'cloud'} />}
               </div>
             </>
           ) : browsing ? (

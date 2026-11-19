@@ -7,7 +7,7 @@ describe('chat history Settings', () => {
   it('offers exactly the five explicit cleanup windows', () => {
     expect(HISTORY_RANGES.map(r => r.value)).toEqual(['today', 'last-week', 'older-2-weeks', 'older-1-month', 'older-6-months']);
     const html = renderToStaticMarkup(<HistorySettings openSync={() => {}} refreshSessions={async () => {}} />);
-    expect(html).toContain('Completed chats are kept until you delete them');
+    expect(html).toContain('Archived chats are kept until you delete them');
     expect(html).toContain('Active and running chats are kept');
     expect(html).toContain('<option value="older-1-month" selected="">');
     expect(html).not.toContain('data-history-confirm');

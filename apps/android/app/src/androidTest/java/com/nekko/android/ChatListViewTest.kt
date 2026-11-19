@@ -183,7 +183,7 @@ class ChatListViewTest {
         compose.onNodeWithTag("chats.view.show").performClick()
         settle()
         compose.onNodeWithText("Previews").assertDoesNotExist()
-        compose.onNodeWithText("Completed chats").assertExists()
+        compose.onNodeWithText("Archived chats").assertExists()
         shot("2c-show")
         compose.onNodeWithTag("chats.view.back").performClick()
         settle()

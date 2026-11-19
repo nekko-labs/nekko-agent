@@ -468,7 +468,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public let providerId: String?
     /// The project folder (`workspace:list` id); nil for General.
     public let workspaceId: String?
-    /// When the chat was completed (the desktop's archive); nil while active.
+    /// When the chat was archived; nil while active.
     public var archivedAt: Int64?
     /// Manual position from the desktop sidebar's drag order.
     public let order: Double?
@@ -488,7 +488,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public var chatType: String? = nil
     public var imageParams: ImageChatParams? = nil
 
-    /// Real, top-level chats, active or completed: what the phone lists.
+    /// Real, top-level chats, active or archived: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
 
     public static func from(_ v: JSONValue?) -> SessionSummary? {
@@ -514,7 +514,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
         (list?.array ?? []).compactMap(from)
     }
 
-    /// Every top-level chat, completed ones included, newest first.
+    /// Every top-level chat, archived ones included, newest first.
     public static func visible(_ list: JSONValue?) -> [SessionSummary] {
         (list?.array ?? []).compactMap(from).filter(\.isVisible).sorted { $0.updatedAt > $1.updatedAt }
     }
@@ -538,8 +538,8 @@ public struct ChatGroup: Equatable, Sendable, Identifiable {
     public let name: String
     /// Active chats: dragged ones in manual order first, then most recent.
     public let active: [SessionSummary]
-    /// Completed chats, most recently completed first.
-    public let completed: [SessionSummary]
+    /// Archived chats, most recently archived first.
+    public let archived: [SessionSummary]
     public var id: String { key }
 
     public static func of(_ chats: [SessionSummary], folders: [WorkspaceFolder]) -> [ChatGroup] {
@@ -555,12 +555,12 @@ public struct ChatGroup: Equatable, Sendable, Identifiable {
                 default: return a.updatedAt > b.updatedAt
                 }
             }
-            let completed = all.filter(\.archived).sorted { ($0.archivedAt ?? 0) > ($1.archivedAt ?? 0) }
-            return ChatGroup(key: key, name: name, active: active, completed: completed)
+            let archivedChats = all.filter(\.archived).sorted { ($0.archivedAt ?? 0) > ($1.archivedAt ?? 0) }
+            return ChatGroup(key: key, name: name, active: active, archived: archivedChats)
         }
         var out: [ChatGroup] = []
         let g = group(general, "General")
-        if !g.active.isEmpty || !g.completed.isEmpty { out.append(g) }
+        if !g.active.isEmpty || !g.archived.isEmpty { out.append(g) }
         out += folders.map { group($0.id, $0.name) }
         return out
     }
@@ -683,7 +683,7 @@ public struct RemoteDefaults: Equatable, Sendable {
 /// The computer's settings a phone may see and change (`PHONE_SETTINGS_KEYS`).
 public struct PcSettings: Equatable, Sendable {
     public enum ChatMode: String, CaseIterable, Sendable { case ask, guardrails, yolo }
-    public enum ChatAction: String, CaseIterable, Sendable { case complete, delete }
+    public enum ChatAction: String, CaseIterable, Sendable { case archive = "complete", delete }  // rawValue "complete" is the persisted settings value (desktop, Android, older builds)
 
     public var effort: Effort?
     public var defaultChatMode: ChatMode?
@@ -720,7 +720,7 @@ public struct PcSettings: Equatable, Sendable {
 
     /// What the computer does when a key is unset (shared/settings.ts defaults).
     public var effectiveMode: ChatMode { defaultChatMode ?? .guardrails }
-    public var effectiveAction: ChatAction { chatPaneAction ?? .complete }
+    public var effectiveAction: ChatAction { chatPaneAction ?? .archive }
     public var confirmDelete: Bool { skipDeleteConfirmation != true }
 
     public static func from(_ v: JSONValue?) -> PcSettings {

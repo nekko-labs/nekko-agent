@@ -253,6 +253,21 @@ app.whenReady().then(async () => {
       await run(`(() => { const c = document.querySelector('[data-design-canvas]').getBoundingClientRect(); document.querySelector('[data-design-canvas]').dispatchEvent(new MouseEvent('dblclick', { clientX: c.left + c.width / 2, clientY: c.bottom - 20, bubbles: true })); })()`); await sleep(250);
       await check(`${zoom} > ${fittedStill}`, 'double-click-zooms-in');
       await click('[data-design-zoom]'); await sleep(200);
+      // Ctrl with + and 0 zoom and fit the design, not the app's text size, even with a button focused
+      // (the zoom button was just clicked) and from inside the design.
+      const appZoom = `[window.devicePixelRatio, document.documentElement.style.zoom].join('|')`;
+      const appBefore = await run(appZoom);
+      const ctrlKey = (key, where = `document.activeElement || document.body`) => `(${where}).dispatchEvent(new KeyboardEvent('keydown', { key: ${js(key)}, ctrlKey: true, bubbles: true, cancelable: true }))`;
+      await run(ctrlKey('=', `document.querySelector('[data-design-zoom]')`)); await sleep(250);
+      await check(`${zoom} > ${fittedStill} && ${appZoom} === ${js(appBefore)}`, 'ctrl-plus-zooms-the-design-not-the-app');
+      await run(ctrlKey('0')); await sleep(250);
+      await check(`${zoom} === ${fittedStill} && ${appZoom} === ${js(appBefore)}`, 'ctrl-zero-fits-the-design-not-the-app');
+      await inDesign(ctrlKey('=', 'document.body')); await sleep(250);
+      await check(`${zoom} > ${fittedStill} && ${appZoom} === ${js(appBefore)}`, 'ctrl-plus-in-the-design-zooms-the-design');
+      await shot('design-ctrl-zoomed');
+      await inDesign(ctrlKey('-', 'document.body')); await inDesign(ctrlKey('-', 'document.body')); await sleep(250);
+      await check(`${zoom} < ${fittedStill}`, 'ctrl-minus-in-the-design-zooms-out');
+      await click('[data-design-zoom]'); await sleep(200);
       await click('[data-design-highlight]'); await sleep(200);
       await check(`!document.querySelector('[data-design-targets]') && document.querySelector('[data-design-highlight]').getAttribute('aria-pressed') === 'false'`, 'highlight-turns-off');
       // A recording: the canvas moved by the keyboard, then the clickable parts outlined.

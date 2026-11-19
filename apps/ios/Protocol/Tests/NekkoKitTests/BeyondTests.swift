@@ -225,10 +225,10 @@ final class BeyondTests: XCTestCase {
         XCTAssertTrue(s.pcSettings.automationsPaused)
     }
 
-    func testContinueAndSearchAcrossCompletedChats() async throws {
+    func testContinueAndSearchAcrossArchivedChats() async throws {
         let (s, _) = try await makeStore()
-        XCTAssertEqual(ChatSearch.continueChat(s.summaries)?.id, "s3", "the most recent active chat, never a completed one or a sub-agent")
-        XCTAssertEqual(ChatSearch.matches(s.summaries, "cafe resume").map(\.id), ["s2"], "accents and case don't matter; completed chats count")
+        XCTAssertEqual(ChatSearch.continueChat(s.summaries)?.id, "s3", "the most recent active chat, never an archived one or a sub-agent")
+        XCTAssertEqual(ChatSearch.matches(s.summaries, "cafe resume").map(\.id), ["s2"], "accents and case don't matter; archived chats count")
         XCTAssertEqual(ChatSearch.matches(s.summaries, "BUG find").map(\.id), ["s1"], "every word, anywhere")
         XCTAssertEqual(ChatSearch.matches(s.summaries, "  ").count, s.summaries.count)
         XCTAssertTrue(ChatSearch.matches(s.summaries, "nothing like it").isEmpty)

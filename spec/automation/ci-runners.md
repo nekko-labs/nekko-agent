@@ -73,6 +73,29 @@ at 1000px and 390px and focused tests. Live provider/VM actions and native mobil
 surfaces are not exercised by this change. No credentials or host data enter the
 fixture, and no new network or runner permissions are granted.
 
+## Repository-only TurnDetails diagnostic `[implemented; native execution unverified]`
+
+Issue #2995 adds an opt-in input to the existing Native iOS workflow for a later
+matched-environment investigation, not a new product UI or a passing batch status.
+Only approved `main`/`ci/ios-batch` dispatches on the existing owner-Mac runner are
+accepted; hosted fallback, moving app/harness refs and mixed batch/evidence inputs
+fail closed. Exact SDK/runtime pins and the complete eight-test TurnDetails class
+are required, with only its test file overlaid and no changed production/assertions.
+Pins, host/locale context, raw xcresult and layout/screenshot attachments remain
+available on failure; cleanup touches only the created simulator. Raw artifacts
+are not automatically published and may contain fixture data. Runner access rules
+and the default four-shard suite are unchanged. Local behavioral controls cover
+validation, verdict preservation and cleanup. The first authorized owner execution
+(run 44448793600) reached macOS 27.2 / Xcode 27.2 build 27B52 and the required runtime,
+but failed on missing XcodeGen before simulator creation or any native test (#3016).
+The diagnostic now provisions XcodeGen using the ordinary suite's `brew install
+xcodegen` convention and checks the executable before package tests/generation;
+bootstrap output and errors remain in the retained-failure boundary. Local negative
+controls cover installation and PATH-check failures without creating a simulator.
+Corrected native execution, exercised simulator cleanup, font/locale equivalence
+and matched acceptance of #2990 are still **unverified**.
+See the [dispatch runbook](../../docs/runbooks/ci-runner-pilot.md#focused-turndetails-diagnostic-opt-in-native-execution-unverified).
+
 ## What it is for `[planned]`
 
 One button turns a Mac running Nekko Agent into a CI runner. The provider's own job queue hands it `runs-on` jobs, and every job runs in a throwaway macOS VM that is deleted when the job ends. Job code never runs on the host.

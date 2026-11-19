@@ -1,4 +1,4 @@
-import type { PreviewState, PreviewTargets, PreviewWheel } from '@nekko-agent/shared';
+import type { PreviewState, PreviewTargets, PreviewWheel, PreviewZoomKey } from '@nekko-agent/shared';
 
 /**
  * The arithmetic of the design canvas, kept apart from the component so it can
@@ -118,16 +118,42 @@ export function readPreviewTargets(data: unknown, frame: CanvasSize): PreviewTar
 /** How far an arrow key moves the canvas, in screen pixels; Shift moves further. */
 export const KEY_STEP = { near: 60, far: 300 };
 
+type KeyLike = { key: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean };
+
+/**
+ * Ctrl/Cmd with Plus, Minus or 0: a browser's zoom keys. While a design is on
+ * the canvas they zoom the design and fit it, never the app's text size.
+ */
+export function zoomKey(e: KeyLike): PreviewZoomKey['key'] | null {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return null;
+  if (e.key === '+' || e.key === '=') return 'in';
+  if (e.key === '-' || e.key === '_') return 'out';
+  if (e.key === '0' && !e.shiftKey) return 'fit';
+  return null;
+}
+
+/** A zoom key pressed in the page (see `zoomKey`), or null for anything else. */
+export function readPreviewZoomKey(data: unknown): PreviewZoomKey['key'] | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  return d.nekkoPreview === 'zoomKey' && (d.key === 'in' || d.key === 'out' || d.key === 'fit') ? d.key : null;
+}
+
+/** What a zoom key does to the view: a step at the middle, or a fit. */
+export function zoomKeyAction(key: PreviewZoomKey['key'], view: CanvasView, canvas: CanvasSize): CanvasView | 'fit' {
+  if (key === 'fit') return 'fit';
+  return zoomAt(view, key === 'in' ? ZOOM.step : 1 / ZOOM.step, { x: canvas.width / 2, y: canvas.height / 2 });
+}
+
 /**
  * What a key does on the canvas: arrows move it, + and - zoom at the middle,
- * 0 fits the design and 1 shows it at 100%. Null for any other key, and for
- * any key with Ctrl, Cmd or Alt, which belong to the app.
+ * 0 fits the design and 1 shows it at 100%; Ctrl/Cmd with +, - or 0 zooms and
+ * fits the same way. Null for any other key, and for any other key with Ctrl,
+ * Cmd or Alt, which belong to the app.
  */
-export function keyAction(
-  e: { key: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean },
-  view: CanvasView,
-  canvas: CanvasSize,
-): CanvasView | 'fit' | null {
+export function keyAction(e: KeyLike, view: CanvasView, canvas: CanvasSize): CanvasView | 'fit' | null {
+  const zoom = zoomKey(e);
+  if (zoom) return zoomKeyAction(zoom, view, canvas);
   if (e.ctrlKey || e.metaKey || e.altKey) return null;
   const step = e.shiftKey ? KEY_STEP.far : KEY_STEP.near;
   const middle = { x: canvas.width / 2, y: canvas.height / 2 };

@@ -1,6 +1,6 @@
 /**
  * Long side lists render a page of rows and a "Show more" button, like the file
- * tree: 400 completed chats or models are not 400 rows to mount on every open.
+ * tree: 400 archived chats or models are not 400 rows to mount on every open.
  * The transcript's windowing fits one tall scroller; these lists sit inside
  * other scrollers (the agent panel, the engine page) with groups and expanding
  * rows, so paging is the simpler fit.

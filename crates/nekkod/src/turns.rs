@@ -347,6 +347,9 @@ struct Shared {
     /// The data folder the chat's audit trail is written in; `None` until the
     /// chat is loaded, and for an incognito chat.
     audit_to: Mutex<Option<PathBuf>>,
+    /// Where the chat is in the agent loop (`nekko_store::loop_phase`), as the
+    /// forwarder last saw it, for `chat:activity`.
+    phase: Arc<Mutex<Option<&'static str>>>,
 }
 
 /// What an unattended turn tracks: its tool access (`toolAccess`,
@@ -468,6 +471,8 @@ pub struct Turns {
     /// The router (`routes::route`), for a tool that asks another service
     /// (`delegation_targets` lists a provider's models).
     dispatch: OnceLock<crate::automation::Dispatcher>,
+    /// The model server, for the picture tools (media_tools.rs).
+    media: Option<Arc<crate::model_server::Server>>,
 }
 
 /// Admits the next queued prompt of a chain the daemon admitted itself
@@ -523,6 +528,7 @@ impl Turns {
             preparer: OnceLock::new(),
             background: OnceLock::new(),
             dispatch: OnceLock::new(),
+            media: None,
         }
     }
 
@@ -547,6 +553,12 @@ impl Turns {
     }
 
     /// The desktop bridge (`config.browserBridge`).
+    /// The model server, so a chat's agent can make pictures with its local models.
+    pub fn with_media(mut self, server: Arc<crate::model_server::Server>) -> Self {
+        self.media = Some(server);
+        self
+    }
+
     pub fn with_bridge(mut self, bridge: Option<(String, String)>) -> Self {
         self.bridge = bridge.map(|(url, token)| Arc::new(nekko_web::browser::HttpBridge::new(url, token)));
         self
@@ -619,6 +631,18 @@ impl Turns {
         ids
     }
 
+    /// Each running turn's chat and where it is in the agent loop, for
+    /// `chat:activity`. A chat with two turns (a wake-up) is listed once.
+    pub fn running_phases(&self) -> Vec<(String, Option<&'static str>)> {
+        let mut out: Vec<(String, Option<&'static str>)> = Vec::new();
+        for s in lock(&self.running).values() {
+            if !out.iter().any(|(id, _)| id == &s.session_id) {
+                out.push((s.session_id.clone(), *lock(&s.phase)));
+            }
+        }
+        out
+    }
+
     /// `turn:abort`: stop a turn by id; true when there was one.
     pub fn abort(&self, turn_id: &str) -> bool {
         let Some(shared) = lock(&self.running).get(turn_id).cloned() else { return false };
@@ -666,6 +690,17 @@ impl Turns {
     /// The approval prompt: the live policy first (the user can allow the
     /// rest of the turn while it waits), then park and ask.
     async fn request_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value) -> bool {
+        self.ask_approval(shared, call, reason, severity, false).await
+    }
+
+    /// A call that spends the user's money (a paid cloud picture): asked in
+    /// every mode, YOLO included (decided 2026-11-19), and denied outright in
+    /// an unattended run, whatever its tool policy allows.
+    async fn request_spend_approval(&self, shared: &Shared, call: &Value, reason: &str) -> bool {
+        self.ask_approval(shared, call, reason, &json!("high"), true).await
+    }
+
+    async fn ask_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value, spend: bool) -> bool {
         let call_id = str_at(call, "id").unwrap_or_default().to_string();
         // The audit trail keeps what was asked and who answered, never the
         // reason (it quotes addresses and recipients).
@@ -675,11 +710,11 @@ impl Turns {
                 "answer": answer, "by": by,
             }))
         };
-        if shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
+        if !spend && shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
             note("approved", json!({ "via": "workflow policy" }));
             return true;
         }
-        if self.live_mode(shared).await == "yolo" {
+        if !spend && self.live_mode(shared).await == "yolo" {
             note("approved", json!({ "via": "yolo" }));
             return true;
         }
@@ -881,6 +916,50 @@ impl Turns {
                 Err(e) => fail(&e.to_string()),
             });
         }
+        if name == crate::media_tools::VIDEO_TOOL {
+            if !(self.claude_allows(&provider, "nekko_tools").await
+                && self.claude_allows(&provider, "unattended_runs").await)
+            {
+                return Some(fail(
+                    "Nekko's clip tool is not available for this Claude sign-in: on a Claude plan it waits for Anthropic's approval (Settings > Agents > Claude plan features).",
+                ));
+            }
+            let Some(server) = &self.media else { return Some(fail("Clips are not available here.")) };
+            let kept = self.data_dir.join("agent-pictures").join(&entry.session_id);
+            let frame = match crate::media_tools::bridge_frame(&input, &entry.roots, &kept) {
+                Ok(f) => f,
+                Err(e) => return Some(fail(&e)),
+            };
+            let clip = crate::media_tools::Clip {
+                session_id: &entry.session_id,
+                input: &input,
+                first_frame: frame,
+                project_path: None,
+                kept,
+            };
+            return Some(match crate::media_tools::start_clip(server.clone(), self.watches.clone(), clip).await {
+                Ok(text) => json!({ "ok": true, "text": text }),
+                Err(e) => fail(&e),
+            });
+        }
+        if crate::harness::BRIDGE_MEDIA.contains(&name) {
+            if !self.claude_allows(&provider, "nekko_tools").await {
+                return Some(fail(
+                    "Nekko's picture tools are not available for this Claude sign-in: on a Claude plan they wait for Anthropic's approval (Settings > Agents > Claude plan features).",
+                ));
+            }
+            let Some(server) = &self.media else { return Some(fail("Picture tools are not available here.")) };
+            let full = {
+                let (store, id) = (self.store.clone(), entry.session_id.clone());
+                tokio::task::spawn_blocking(move || store.get(&id)).await.ok().flatten().unwrap_or(session)
+            };
+            let default = settings.get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            let saved = self.data_dir.join("agent-pictures").join(&entry.session_id);
+            return Some(
+                crate::media_tools::run_bridge(server, name, &input, &full, default.as_deref(), &entry.roots, &saved)
+                    .await,
+            );
+        }
         if name != crate::harness::BRIDGE_WATCH {
             return Some(fail("Unknown Nekko tool."));
         }
@@ -971,6 +1050,7 @@ impl Turns {
             active: std::sync::atomic::AtomicBool::new(!claude_code),
             turn_id: turn_id.clone(),
             audit_to: Mutex::new(None),
+            phase: Arc::default(),
         });
         {
             let mut running = lock(&self.running);
@@ -1228,7 +1308,32 @@ impl Turns {
             _ => json!([]),
         };
         // The turn's composition: tools, context from disk, the system prompt.
+        // Picture tools only where they can work: a local (not sandbox, not
+        // Claude Code) chat on a computer with a picture model ready.
+        // A cloud picture model can serve too: an enabled OpenRouter provider
+        // (no network read here), in a chat that may reach the cloud.
+        let cloud_pictures = !crate::connections::offline(&loaded)
+            && str_at(&loaded, "models") != Some("local")
+            && settings.get("providers").and_then(Value::as_array).is_some_and(|ps| {
+                ps.iter().any(|p| str_at(p, "kind") == Some("openrouter") && p.get("enabled") != Some(&json!(false)))
+            });
+        let media = !sandbox
+            && !claude_code
+            && !js::truthy(opts.get("noTools"))
+            && match &self.media {
+                Some(server) => cloud_pictures || !server.ready_media_models().await.is_empty(),
+                None => false,
+            };
+        let video = !sandbox
+            && !claude_code
+            && !js::truthy(opts.get("noTools"))
+            && match &self.media {
+                Some(server) => !server.ready_video_models().await.is_empty(),
+                None => false,
+            };
         let tool_input = json!({
+            "media": media,
+            "video": video,
             "session": loaded,
             "offline": crate::connections::offline(&loaded),
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
@@ -1390,6 +1495,7 @@ impl Turns {
                 started_at,
                 last_error: shared.last_error.clone(),
                 latest: shared.latest.clone(),
+                phase: shared.phase.clone(),
             },
         ));
 
@@ -1742,6 +1848,25 @@ impl Turns {
         let title_session = lock(session).clone();
         if !incognito && self.claude_title_allowed(provider, &title_session).await {
             tools.push(crate::harness::BRIDGE_TITLE.to_string());
+        }
+        // The picture tools, where a picture model is ready on this computer.
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && let Some(server) = &self.media
+            && !server.ready_media_models().await.is_empty()
+        {
+            tools.extend(crate::harness::BRIDGE_MEDIA.iter().map(|t| t.to_string()));
+        }
+        // A clip wakes the chat later: it also needs the wake-up allowed, as the watch does.
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && self.claude_allows(provider, "unattended_runs").await
+            && let Some(server) = &self.media
+            && !server.ready_video_models().await.is_empty()
+        {
+            tools.push(crate::media_tools::VIDEO_TOOL.to_string());
         }
         // A child launched with other Nekko tools is relaunched (a provider
         // switch, or the policy changed), so its bridge lists the right ones.
@@ -2482,6 +2607,8 @@ struct Forward {
     /// first checkpoint that finds it; one that finds it taken saves the chat
     /// as it stands, which already has that newer transcript.
     latest: Arc<Mutex<Option<Vec<Value>>>>,
+    /// [`Shared::phase`]: kept current as the chat moves along the loop.
+    phase: Arc<Mutex<Option<&'static str>>>,
 }
 
 /// The turn's events, in order. A checkpoint is saved before the UI is told
@@ -2498,6 +2625,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     // When the chat's deferred checkpoint save is due to be written.
     let mut save_due: Option<tokio::time::Instant> = None;
     let mut phase = lock(&f.session).get("messages").and_then(Value::as_array).and_then(|m| nekko_store::loop_phase(m));
+    *lock(&f.phase) = phase;
     loop {
         let due = deltas.due();
         let out = tokio::select! {
@@ -2579,6 +2707,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         let moved = next.is_some() && next != phase;
         if moved {
             phase = next;
+            *lock(&f.phase) = phase;
         }
         if is_checkpoint(&event) {
             // Saves land in order.
@@ -2763,6 +2892,91 @@ struct TurnTools {
     /// Whether this chat has read untrusted content, and the addresses it
     /// was shown (the egress gate, decision 0054).
     taint: Mutex<crate::taint::Taint>,
+}
+
+/// How much a chat may spend on paid pictures each time the user allows it.
+const PICTURE_ALLOWANCE_USD: f64 = 1.0;
+
+/// A chat's paid cloud pictures (media_tools::CloudSide), through the
+/// daemon's `media:cloud*` channels, which keep the OpenRouter key. The
+/// chat's allowance is `pictureSpend: { allowedUsd, spentUsd }` on the chat.
+struct ChatCloud<'a> {
+    tools: &'a TurnTools,
+    call: &'a Value,
+}
+
+type CloudFut<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
+impl ChatCloud<'_> {
+    fn spending(&self) -> (f64, f64) {
+        let s = lock(&self.tools.session);
+        let num = |k: &str| s.pointer(&format!("/pictureSpend/{k}")).and_then(Value::as_f64).unwrap_or(0.0);
+        (num("allowedUsd"), num("spentUsd"))
+    }
+
+    async fn set_spending(&self, allowed: f64, spent: f64) {
+        if let Some(obj) = lock(&self.tools.session).as_object_mut() {
+            obj.insert("pictureSpend".into(), json!({ "allowedUsd": allowed, "spentUsd": spent }));
+        }
+        persist(&self.tools.store, &self.tools.session, self.tools.incognito).await;
+    }
+}
+
+impl crate::media_tools::CloudSide for ChatCloud<'_> {
+    fn models(&self) -> CloudFut<'_, Vec<Value>> {
+        Box::pin(async move {
+            let Some(d) = self.tools.turns.dispatch.get() else { return Vec::new() };
+            match d("media:cloudModels".into(), vec![]).await {
+                Ok(Value::Array(list)) => list,
+                _ => Vec::new(),
+            }
+        })
+    }
+
+    fn image(&self, request: Value) -> CloudFut<'_, Result<Value, String>> {
+        Box::pin(async move {
+            let d = self.tools.turns.dispatch.get().ok_or("Cloud pictures are not available here.")?;
+            d("media:cloudImage".into(), vec![request]).await
+        })
+    }
+
+    fn spend<'a>(&'a self, price: f64, what: &'a str) -> CloudFut<'a, Result<(), String>> {
+        Box::pin(async move {
+            let (allowed, spent) = self.spending();
+            // Within what the user already allowed in this chat: no question.
+            if spent + price <= allowed + 1e-9 {
+                return Ok(());
+            }
+            let input = self.call.get("input").cloned().unwrap_or(Value::Null);
+            let kinds = crate::dlp::in_input(&input, &self.tools.private_terms().await);
+            let carries = if kinds.is_empty() {
+                String::new()
+            } else {
+                format!(" The prompt carries {}.", crate::dlp::describe(&kinds))
+            };
+            let reason = format!(
+                "{what}{carries} Approve to allow paid pictures in this chat up to ${PICTURE_ALLOWANCE_USD:.2} from now (spent here so far: ${spent:.2}); past that, it asks again."
+            );
+            if !self.tools.turns.request_spend_approval(&self.tools.shared, self.call, &reason).await {
+                return Err("The paid picture was not approved, so nothing was charged.".into());
+            }
+            self.set_spending(spent + PICTURE_ALLOWANCE_USD, spent).await;
+            Ok(())
+        })
+    }
+
+    fn spent<'a>(&'a self, cost: f64, model: &'a str) -> CloudFut<'a, ()> {
+        Box::pin(async move {
+            let (allowed, spent) = self.spending();
+            self.set_spending(allowed, spent + cost).await;
+            let (provider, model_id) = crate::cloud_media::parse_cloud_id(model).unwrap_or(("", model));
+            self.tools.turns.accounts.usage_line(&json!({
+                "ts": nekko_js::now_ms(), "providerId": provider, "modelId": model_id,
+                "sessionId": self.tools.shared.session_id, "inputTokens": 0, "outputTokens": 0,
+                "local": false, "kind": "picture", "costUsd": cost,
+            }));
+        })
+    }
 }
 
 /// Why a call in a tainted chat asks (decision 0054).
@@ -2983,7 +3197,7 @@ impl TurnTools {
         match name {
             "set_chat_title" => return Ok(self.set_title(id, &input).await),
             "remember" => return Ok(self.remember(call, id, &input).await),
-            "complete_session" => return Ok(self.complete(id, &input).await),
+            "complete_session" => return Ok(self.archive(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             turn::secret::REQUEST_SECRET => return Ok(self.request_secret(call).await),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
@@ -3034,6 +3248,59 @@ impl TurnTools {
         if name == "agent_watch" {
             let watches = self.turns.watches.clone();
             return Ok(self.agent_watch(&watches, call).await);
+        }
+        if name == crate::media_tools::VIDEO_TOOL {
+            let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
+                return Ok(error(id, "Clips are not available in this chat."));
+            };
+            let session = lock(&self.session).clone();
+            let frame = match crate::media_tools::native_frame(&input, &session, ctx) {
+                Ok(f) => f,
+                Err(e) => return Ok(error(id, e)),
+            };
+            // A project copy is approved now, while this turn can still ask.
+            let project = match input.get("path").and_then(Value::as_str).filter(|p| !p.trim().is_empty()) {
+                Some(p) if !p.to_lowercase().ends_with(".webp") => {
+                    return Ok(error(id, "The path must end in .webp (the clip is an animated WebP)."));
+                }
+                Some(p) => {
+                    let tc = ToolCall { id: id.to_string(), name: name.to_string(), input: input.clone() };
+                    match nekko_tools::approve_new_file(&tc, ctx, Some(&json!(p))).await {
+                        Ok(p) => Some(p),
+                        Err(e) => return Ok(error(id, e)),
+                    }
+                }
+                None => None,
+            };
+            let clip = crate::media_tools::Clip {
+                session_id: &self.shared.session_id,
+                input: &input,
+                first_frame: frame,
+                project_path: project,
+                kept: self.turns.data_dir.join("agent-pictures").join(&self.shared.session_id),
+            };
+            return Ok(match crate::media_tools::start_clip(server.clone(), self.turns.watches.clone(), clip).await {
+                Ok(text) => result(id, text),
+                Err(e) => error(id, e),
+            });
+        }
+        if crate::media_tools::TOOLS.contains(&name) {
+            let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
+                return Ok(error(id, "Picture tools are not available in this chat."));
+            };
+            let session = lock(&self.session).clone();
+            let default =
+                self.turns.settings.get().get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            // Paid cloud pictures: never in an offline or Local only chat.
+            let local_only = crate::connections::offline(&session) || str_at(&session, "models") == Some("local");
+            let side = ChatCloud { tools: self, call };
+            let cloud = (!local_only && self.turns.dispatch.get().is_some())
+                .then_some(&side as &dyn crate::media_tools::CloudSide);
+            return Ok(crate::media_tools::run(
+                server,
+                crate::media_tools::Call { call, session, ctx, default, cloud },
+            )
+            .await);
         }
         if let Some(ctx) = &self.native
             && (name == "browser" || name == "capture")
@@ -3593,18 +3860,18 @@ impl TurnTools {
         }
     }
 
-    async fn complete(&self, id: &str, input: &Value) -> Value {
+    async fn archive(&self, id: &str, input: &Value) -> Value {
         if input.as_object().is_some_and(|o| !o.is_empty()) {
-            return error(id, "complete_session takes no arguments and only completes the current chat.");
+            return error(id, "complete_session takes no arguments and only archives the current chat.");
         }
         let Some(disk) = self.disk().await else {
-            return error(id, "Session not found; completion was not saved.");
+            return error(id, "Session not found; the archive was not saved.");
         };
         let at = disk.get("archivedAt").filter(|v| !v.is_null()).cloned().unwrap_or(json!(nekko_js::now_ms()));
         let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
         let saved = tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "archivedAt": at }))).await.ok();
         let Some(Ok(Some(saved))) = saved else {
-            return error(id, "Session not found; completion was not saved.");
+            return error(id, "Session not found; the archive was not saved.");
         };
         if let Some(obj) = lock(&self.session).as_object_mut() {
             obj.insert("archivedAt".into(), saved.get("archivedAt").cloned().unwrap_or(Value::Null));
@@ -3612,7 +3879,7 @@ impl TurnTools {
         self.meta();
         result(
             id,
-            "This session is marked completed (archived). Messages are retained under the app\u{2019}s archive retention policy. You can restore it from completed chats.",
+            "This chat is archived. It is kept until the user deletes it, and they can restore it from Archived chats.",
         )
     }
 

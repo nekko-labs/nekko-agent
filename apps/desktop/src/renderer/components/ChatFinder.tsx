@@ -182,7 +182,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
             {hit.snippet && <span className="block truncate text-2xs text-ink-faint">{hit.snippet}</span>}
           </span>
           {label && <span className="chat-finder-badge shrink-0" data-finder-badge>{label}</span>}
-          {s.archivedAt ? <span className="shrink-0 text-2xs text-ink-faint">Completed</span> : null}
+          {s.archivedAt ? <span className="shrink-0 text-2xs text-ink-faint">Archived</span> : null}
           <span className="shrink-0 text-2xs tabular-nums text-ink-faint" data-finder-age>{finderAge(s.updatedAt, now)}</span>
         </button>
       </div>

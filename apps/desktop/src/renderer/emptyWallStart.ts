@@ -4,7 +4,7 @@ import type { SessionSummary, WallLayout, WallLayoutMode } from '@nekko-agent/sh
  * An emptied Agents wall opens the Focused new-chat screen instead of the
  * "The wall is empty" placeholder. This picks the chat it shows: the newest
  * top-level chat that was never used (no messages, nothing queued, not
- * completed, not an automation or training run), so emptying the wall again
+ * archived, not an automation or training run), so emptying the wall again
  * does not pile up blank chats. `null` means a fresh chat is needed.
  */
 export function reusableEmptyChat(sessions: SessionSummary[]): string | null {
@@ -22,16 +22,16 @@ export function reusableEmptyChat(sessions: SessionSummary[]): string | null {
  * Whether this wall should open the new-chat screen now. Only once the
  * session lists have loaded (the empty lists a view mounts with are not an
  * empty wall), only with a usable provider (otherwise the empty state's setup
- * path applies), and not while a completed chat is being read. A second
+ * path applies), and not while an archived chat is being read. A second
  * window (another screen or desktop) opens on its new-chat screen too.
  */
 export function shouldStartFromEmptyWall(opts: {
   listsReady: boolean;
   hasWindows: boolean;
-  readingCompleted: boolean;
+  readingArchived: boolean;
   providerReady: boolean;
 }): boolean {
-  return opts.listsReady && !opts.hasWindows && !opts.readingCompleted && opts.providerReady;
+  return opts.listsReady && !opts.hasWindows && !opts.readingArchived && opts.providerReady;
 }
 
 /**

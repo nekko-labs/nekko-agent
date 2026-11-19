@@ -133,7 +133,7 @@ So local video does not need a second engine such as ComfyUI.
 
 ### 1. Pressing Photo or Video with no suitable model
 
-The first-use introduction (#2149) runs first. If no model can do the job, its single action becomes **Choose your first model** instead of **Try Photo** / **Try Video**. Closing the introduction leaves the same choice in the chat's empty state, which replaces today's single line.
+The first-use introduction (#2149) runs first. If no model can do the job, its single action becomes **Choose your first model** instead of **Create your first image** / **Try Video**. Closing the introduction leaves the same choice in the chat's empty state, which replaces today's single line.
 
 ### 2. The choice, inside the chat
 

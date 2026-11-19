@@ -963,7 +963,7 @@ public final class ChatModel {
         let name = store.active?.name ?? "your computer"
         let state = store.conn == .offline ? "offline" : "reconnecting"
         if isImageChat { return "\(name) is \(state). Reconnect to generate; your draft is kept here and is never sent as text." }
-        return "\(name) is \(state). What you send waits on this iPhone and goes when it’s back."
+        return "\(name) is \(state).\nPrompts you send wait on this iPhone."
     }
 
     /// This chat's prompts waiting in the outbox, oldest first.

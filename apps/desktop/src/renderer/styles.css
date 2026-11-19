@@ -3052,16 +3052,16 @@
   }
 }
 
-/* Stardust left where a completed row folded shut (see completionExit.ts).
+/* Stardust left where an archived row folded shut (see archiveExit.ts).
    Fixed to the viewport so it outlives the row; never interactive. */
-.completion-stardust {
+.archive-stardust {
   position: fixed;
   z-index: 100;
   width: 0;
   height: 0;
   pointer-events: none;
 }
-.completion-stardust i {
+.archive-stardust i {
   position: absolute;
   left: 0;
   top: 0;
@@ -3074,11 +3074,11 @@
   opacity: 0;
   animation: stardust-drift 700ms var(--dust-delay) cubic-bezier(.2, .6, .3, 1) both;
 }
-.completion-stardust i:nth-of-type(3n + 2) {
+.archive-stardust i:nth-of-type(3n + 2) {
   background: var(--accent-2);
   box-shadow: 0 0 4px 1px color-mix(in srgb, var(--accent-2) 55%, transparent);
 }
-.completion-stardust i.is-star {
+.archive-stardust i.is-star {
   width: calc(var(--dust-size) * 2.4);
   height: calc(var(--dust-size) * 2.4);
   margin: calc(var(--dust-size) * -1.2);
@@ -3099,7 +3099,7 @@
   100% { opacity: 0; transform: translate(var(--dust-x), var(--dust-y)) scale(.2) rotate(90deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .completion-stardust { display: none; }
+  .archive-stardust { display: none; }
 }
 
 /* Agent status: a working agent's rocket hovers in flight, its colour
@@ -4508,7 +4508,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .automations-content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 0 64px; }
 .models-navigation { display: flex; flex-direction: column; gap: 8px; }
 .models-navigation .settings-nav-item { min-height: 40px; font-size: var(--text-sm); }
-.models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: 20px 0 64px; }
+/* The scroller reaches 8px past the column on each side, padded back in, so rows
+   that bleed into that margin (the model library's hover rows) fit instead of
+   giving the page a sideways scroll. */
+.models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; margin-inline: -8px; padding: 20px 8px 64px; }
 .models-layout .models-section { max-width: none; }
 /* The biggest heading in its section: titles nested below step down a size. */
 .models-section-heading { display: flex; align-items: center; gap: 8px; font-size: var(--text-2xl); font-weight: 600; margin-bottom: 16px; }
@@ -4587,7 +4590,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   .models-navigation .settings-nav-item { width: 100%; }
   .models-navigation .models-nav-sub { margin: 0; width: 100%; padding-left: 8px; border-radius: var(--radius-lg); }
   .models-navigation .models-nav-sub::before { content: none; }
-  .models-workspace { height: auto; min-height: 0; padding: 0 0 48px; }
+  .models-workspace { height: auto; min-height: 0; padding-block: 0 48px; }
   /* Automations keeps its side menu down to a phone width, one item a row. */
   .automations-rail .models-navigation { display: flex; }
   .automations-layout { gap: 20px; padding-inline: 20px; }
@@ -4732,6 +4735,16 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 [data-library-layout="cards"] .library-tile-main { align-items: stretch; text-align: left; }
 [data-library-layout="cards"] .library-tile-preview { aspect-ratio: 16 / 10; border-radius: 9px; margin-bottom: 4px; }
 .library-tile-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Library on Nekko Cloud (#2748): each file's cloud, in its preview's top-right
+   corner and at the end of its row. Backed up is the success colour; waiting,
+   uploading and another computer's file are quiet ink; not backed up is faint. */
+.library-sync { display: inline-grid; flex-shrink: 0; place-items: center; width: 22px; height: 22px; border-radius: 999px; color: var(--ink-faint); transition: color 200ms ease-out; }
+.library-sync[data-library-sync="synced"] { color: var(--success); }
+.library-sync[data-library-sync="syncing"], .library-sync[data-library-sync="remote"] { color: var(--ink-soft); }
+.library-sync[data-library-sync="noRoom"] { color: var(--warning); }
+.library-live > .library-sync { position: absolute; top: 6px; right: 6px; z-index: 2; background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 16%, transparent); }
+[data-library-layout="small"] .library-live > .library-sync { top: 3px; right: 3px; width: 18px; height: 18px; }
+[data-library-layout="small"] .library-live > .library-sync svg { width: 11px; height: 11px; }
 /* A tile showing the file itself: a page laid out at a desktop width and shrunk
    from its top-left corner, or an image cropped to the tile. The kind's drawing
    sits underneath until the page has settled. White is the web's own page

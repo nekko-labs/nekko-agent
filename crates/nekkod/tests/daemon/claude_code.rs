@@ -154,6 +154,26 @@ pub fn fake_claude() {
             let reply = json!({ "probe": probe, "answer": answer }).to_string();
             out(assistant("m_title", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "picture probe" {
+            // The picture tools: whether the bridge lists them, and what a call
+            // gets (made even when unoffered: the daemon must refuse it itself).
+            let offered =
+                ["generate_image", "edit_image", "media_models"].iter().all(|t| offered.iter().any(|o| o == t));
+            let answer: Value = rt.block_on(async {
+                reqwest::Client::new()
+                    .post(format!("{url}/harness/tool"))
+                    .bearer_auth(&token)
+                    .json(&json!({ "name": "generate_image", "input": { "prompt": "a red kite", "size": "256x256" } }))
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap()
+            });
+            let reply = json!({ "offered": offered, "answer": answer }).to_string();
+            out(assistant("m_pic", json!([{ "type": "text", "text": reply }])));
+            out(result(&reply, "completed"));
         } else if text == "background" || text == "background-slow" {
             // Start a background command, end the turn, then wake when it
             // finishes, with nothing written: a turn of Claude Code's own
@@ -434,6 +454,10 @@ pub fn fake_claude() {
                 json!({ "type": "user", "message": { "role": "user", "content": [{ "type": "text", "text": "[Request interrupted by user]" }] }, "parent_tool_use_id": null }),
             );
             out(result("", "aborted_streaming"));
+            // As Claude Code 2.1 does about 1.6 s after a fresh launch: a
+            // bookkeeping line that lands between turns when the first was stopped.
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            out(json!({ "type": "system", "subtype": "commands_changed", "session_id": session }));
         } else {
             let reply = format!("echo {}: {text}", std::process::id());
             out(assistant("m_e", json!([{ "type": "text", "text": reply }])));
@@ -978,6 +1002,37 @@ async fn stop_interrupts_claude_code_and_keeps_the_partial_reply() {
     assert!(last["content"].as_str().unwrap().starts_with("1\n2"));
 }
 
+/// A bookkeeping line Claude Code prints after a Stop's `result` is not work
+/// of its own: it opens no wake-up turn, so the chat's next message is
+/// answered instead of waiting behind a turn that never ends.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_message_after_a_stop_is_answered() {
+    let rig = rig("stop-next", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccS1", "hang")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    until("the reply to start streaming", Duration::from_secs(30), || async {
+        let streamed = rig.events.lock().unwrap().iter().any(|e| e["sessionId"] == "s_cc" && e["type"] == "text");
+        streamed.then_some(())
+    })
+    .await;
+    let (status, body) = post(rig.d.port, "chat:abort", json!(["s_cc"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "ccS1", "s_cc").await;
+    assert_eq!(end["aborted"], true, "{end}");
+    // Past the late `commands_changed`, so the idle watch has read it.
+    tokio::time::sleep(Duration::from_millis(800)).await;
+
+    let (status, body) =
+        post(rig.d.port, "chat:turn", json!([spec(&rig, "ccS2", "after the stop")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    // `aborted` would still read the first turn's Stop: the reply is the check.
+    let (_, end) = turn_record(&rig, "ccS2", "s_cc").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let replies = assistant_texts(&saved(&rig));
+    assert!(replies.last().is_some_and(|r| r.ends_with(": after the stop")), "{replies:?}");
+    assert!(saved(&rig).get("activeRun").is_none_or(Value::is_null), "no turn is left running");
+}
+
 /// The chats on disk that are not `s_cc`, for what a sub-agent left.
 fn children(rig: &Rig) -> Vec<Value> {
     std::fs::read_dir(rig.data.join("sessions"))
@@ -1483,4 +1538,64 @@ async fn claude_code_compacting_reaches_the_chat_as_it_runs() {
     assert_eq!(states, [json!("running"), json!("done")]);
     let k = kinds(&events);
     assert!(k.ends_with(&["usage".into(), "done".into()]), "{k:?}");
+}
+
+/// The picture tools reach a Claude Code chat only where the Claude policy's
+/// `nekko_tools` row is enabled for its sign-in (an API key here) and a
+/// picture model is ready; elsewhere (an unread sign-in, which counts as a
+/// plan) they are neither listed nor run, even when called.
+#[tokio::test(flavor = "multi_thread")]
+async fn picture_tools_reach_claude_code_only_where_the_policy_allows_them() {
+    let rig = rig("pictures", "guardrails", true);
+    let model = rig.data.join("models/image/acme_sd/tiny-sd.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, crate::engine::tiny_gguf("sd1", "Tiny SD")).unwrap();
+    let sd_dir = rig.data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    let engine = json!({ "buildId": "fake", "binPath": crate::engine::fake_sd(), "version": "fake" });
+    std::fs::write(sd_dir.join("engine.json"), engine.to_string()).unwrap();
+    let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
+    let key = provider("cc_key", json!({ "authSource": "nekko-anthropic-key" }));
+    let unread = provider("cc", json!({}));
+    for (i, (p, allowed)) in [(unread, false), (key, true)].into_iter().enumerate() {
+        write_settings(
+            &rig,
+            json!({
+                "providers": [p.clone()],
+                "engineBinPath": crate::engine::fake_llama(),
+                "engine": { "port": free_port(), "modelFolders": [] },
+            }),
+        )
+        .await;
+        let turn = format!("pic-{i}");
+        let (status, body) =
+            post(rig.d.port, "chat:turn", json!([spec_on(&rig, &turn, "picture probe", p)]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (events, end) = turn_record(&rig, &turn, "s_cc").await;
+        assert_eq!(end["aborted"], false, "{end}");
+        let saved = saved(&rig);
+        let reply = assistant_texts(&saved).last().cloned().unwrap_or_else(|| panic!("case {i}: no reply; {events:?}"));
+        let probe: Value = serde_json::from_str(&reply).unwrap();
+        assert_eq!(probe["offered"], allowed, "case {i}: {probe}");
+        assert_eq!(probe["answer"]["ok"], allowed, "case {i}: {probe}");
+        if allowed {
+            let text = probe["answer"]["text"].as_str().unwrap();
+            assert!(text.starts_with("Made the picture with Tiny SD (256x256) on this computer."), "{text}");
+            assert!(text.contains("Kept at "), "{text}");
+            let images = probe["answer"]["images"].as_array().unwrap();
+            assert_eq!(images.len(), 1, "{probe}");
+            let kept: Vec<_> = std::fs::read_dir(rig.data.join("agent-pictures/s_cc")).unwrap().collect();
+            assert_eq!(kept.len(), 1, "the picture is kept in Nekko's data, not the project");
+            assert!(
+                std::fs::read_dir(&rig.workspace).unwrap().all(|e| !e
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .ends_with(".png"))
+            );
+        } else {
+            assert!(probe["answer"]["error"].as_str().unwrap().contains("does not offer generate_image"), "{probe}");
+        }
+    }
+    post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
 }

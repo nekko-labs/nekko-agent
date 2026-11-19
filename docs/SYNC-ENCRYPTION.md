@@ -44,7 +44,7 @@ flowchart TB
 - **Free** keeps everything on your own devices, as today.
 - **Downgrading never locks you out.** If a Pro plan ends, your devices can still download and decrypt what was synced, and you can delete it; only new uploads stop.
 - **Delete everything synced** removes every record, keyring and device from Nekko Cloud at once. Your account stays, and your chats stay on your devices.
-- **Delete account** (Settings > Sync, next to Sign out) deletes your Nekko Cloud account itself: what's synced, your keys and devices, your sign-ins and any cloud computer. You type your account's email to confirm. Every device is signed out, and your chats stay on your devices; to remove those from a computer too, use **Settings > System > Delete everything** there.
+- **Delete account** (Settings > Sync > Danger zone) deletes your Nekko Cloud account itself: what's synced, your keys and devices, your sign-ins and any cloud computer. You type your account's email to confirm. Every device is signed out, and your chats stay on your devices; to remove those from a computer too, use **Settings > System > Delete everything** there.
 
 ## Help improve Nekko Agent (opt-in)
 
@@ -137,7 +137,9 @@ Where the keys live: on a Mac, the Keychain; on Windows, Credential Manager; on 
 
 ## What syncs
 
-Every chat, except incognito chats (never) and chats in the Local only mode (unless you include them in Settings → Sync). Pictures and attached files are left out of the synced copy (a short note stands in), so a record is mostly text; a chat whose text is over 1 MB isn't synced and Settings says how many. The newest change to a chat wins; a chat a reply is being written in is never overwritten from the cloud. Deleting a chat deletes it on your other devices. The iPhone reads synced chats (they stay readable offline) but doesn't change them.
+Every chat, except incognito chats (never) and chats you turned **Sync** off for (the switch beside the message box, shown while this computer syncs). Pictures and attached files are left out of the synced copy (a short note stands in), so a record is mostly text; a chat whose text is over 16 MB isn't synced and Settings says how many (long agent sessions run to a few MB, mostly tool output). The newest change to a chat wins; a chat a reply is being written in is never overwritten from the cloud. Deleting a chat deletes it on your other devices. The iPhone reads synced chats (they stay readable offline) but doesn't change them.
+
+**Library files** (while the `library-cloud` switch is on for the account, #2748): each file Library lists on a computer, up to 8 MB, is a sealed `library` record, sealed with the account keyring exactly like a chat. Its local id is the computer's device id and the file's path there (`deviceId⏎path`), so two computers never write the same record and an opened record must hash back to the object id it came under. The plaintext is `{"v":1,"file":{"deviceId","device","path","title","kind","chat","modifiedAt","size"},"data":base64url}`, or the tombstone `{"v":1,"deleted":true,"deletedAt","deviceId","path"}` once the file is gone from that computer's disk (a file Library merely stops listing stays synced). Another computer keeps a read-only copy under its cloud folder, filed by a keyed digest of the source computer and folder, never by a name from the record; the copies go with the sync keys. Nekko Cloud keeps each replaced revision of a `library` record for 30 days ([Library on Nekko Cloud](../spec/platform/library-on-nekko-cloud.md)).
 
 ## Locked out?
 

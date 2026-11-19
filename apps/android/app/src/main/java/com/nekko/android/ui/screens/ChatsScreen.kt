@@ -92,6 +92,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Settings
@@ -128,7 +129,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -239,11 +239,11 @@ fun ChatsScreen(
     var pulling by remember { mutableStateOf(false) }
     val active = s.active
     val computerName = active?.name ?: stringResource(R.string.chats_your_computer)
-    // Long-press on a chat: the computer's own action (Complete or Delete) for it.
+    // Long-press on a chat: the computer's own action (Archive or Delete) for it.
     var pressed by remember { mutableStateOf<SessionSummary?>(null) }
     var confirmDelete by remember { mutableStateOf<SessionSummary?>(null) }
     var actionError by remember { mutableStateOf<String?>(null) }
-    // Long-press on a completed chat: Restore it, or delete it for good.
+    // Long-press on an archived chat: Restore it, or delete it for good.
     var pressedDone by remember { mutableStateOf<SessionSummary?>(null) }
     // Groups showing all their chats; kept while a chat is open.
     var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
@@ -314,7 +314,7 @@ fun ChatsScreen(
     val needsYou = remember(all, view) {
         if (view.groupBy == ChatListView.GroupBy.STATUS) emptyList() else all.chats.filter { !it.archived && all.activity[it.id] == Activity.NEEDS_YOU }
     }
-    // Search: every word, any case or accent, in the title, first prompt or last reply, completed chats too.
+    // Search: every word, any case or accent, in the title, first prompt or last reply, archived chats too.
     var query by rememberSaveable { mutableStateOf("") }
     // Search chats, from the computer menu: a field under the top bar (the mode pill steps away) until closed.
     var searching by rememberSaveable { mutableStateOf(false) }
@@ -337,7 +337,7 @@ fun ChatsScreen(
         actionError = null
         onOwner(chat) { scope.launch {
             try {
-                if (delete) repo.deleteChat(chat.id) else repo.completeChat(chat.id)
+                if (delete) repo.deleteChat(chat.id) else repo.archiveChat(chat.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -406,7 +406,7 @@ fun ChatsScreen(
         AlertDialog(
             onDismissRequest = { pressedDone = null },
             title = { Text(plainText(chat.title).ifEmpty { newChat }, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            text = { Text(stringResource(R.string.chats_completed_on, all.place(chat.id)?.name ?: computerName)) },
+            text = { Text(stringResource(R.string.chats_archived_on, all.place(chat.id)?.name ?: computerName)) },
             confirmButton = {
                 TextButton(onClick = { pressedDone = null; restore(chat) }) { Text(stringResource(R.string.chats_restore), color = p.accent) }
             },
@@ -576,7 +576,7 @@ fun ChatsScreen(
                                     }
                                 }
                                 itemsIndexed(found, key = { _, it -> "found:${it.id}" }) { _, summary ->
-                                    if (summary.archived) CompletedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
+                                    if (summary.archived) ArchivedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
                                     else activeRow(summary)
                                 }
                             } else if (all.chats.isEmpty()) {
@@ -629,7 +629,7 @@ fun ChatsScreen(
                                     }
                                 }
                                 itemsIndexed(if (showAll) g.chats else shown, key = { _, it -> "${g.key}:${it.id}" }) { _, summary ->
-                                    if (summary.archived) CompletedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
+                                    if (summary.archived) ArchivedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
                                     else activeRow(summary)
                                 }
                                 if (hidden > 0) {
@@ -871,7 +871,7 @@ private fun ChatActionDialog(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     if (delete) stringResource(R.string.chats_action_delete_body, computer)
-                    else stringResource(R.string.chats_action_complete_body, computer),
+                    else stringResource(R.string.chats_action_archive_body, computer),
                 )
                 TextButton(onClick = onPin, modifier = Modifier.testTag("chats.pin")) {
                     Icon(Icons.Filled.PushPin, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -885,7 +885,7 @@ private fun ChatActionDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(stringResource(if (delete) R.string.chats_delete else R.string.chats_complete), color = if (delete) p.danger else p.accent)
+                Text(stringResource(if (delete) R.string.chats_delete else R.string.chats_archive), color = if (delete) p.danger else p.accent)
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.chats_cancel)) } },
@@ -1352,7 +1352,7 @@ private fun ChatListViewMenu(
                 }
                 ViewPage.SHOW -> {
                     back(stringResource(R.string.chats_show))
-                    choice(stringResource(R.string.chats_completed_chats), view.showCompleted) { onChange(view.copy(showCompleted = !view.showCompleted)) }
+                    choice(stringResource(R.string.chats_archived_chats), view.showArchived) { onChange(view.copy(showArchived = !view.showArchived)) }
                     choice(stringResource(R.string.chats_empty_groups), view.showEmptyGroups) { onChange(view.copy(showEmptyGroups = !view.showEmptyGroups)) }
                     if (places > 1) {
                         choice(stringResource(R.string.chats_group_computer), view.showComputer) { onChange(view.copy(showComputer = !view.showComputer)) }
@@ -1416,12 +1416,13 @@ private fun ReorderGroupsDialog(groups: List<Pair<String, String>>, onDismiss: (
 }
 
 /**
- * A completed chat: struck through and muted behind a check, dated by when it
- * was completed, as the desktop's Show completed list draws it. Tap reads it;
+ * An archived chat: the archive symbol in the faint ink, then the title (no strike-through:
+ * archived is not "done"), dated by when it was archived, as the desktop's Show archived list
+ * draws it. Tap reads it;
  * long-press offers Restore or Delete.
  */
 @Composable
-private fun CompletedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: () -> Unit) {
+private fun ArchivedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: () -> Unit) {
     val p = Nekko.palette
     Row(
         Modifier
@@ -1431,10 +1432,10 @@ private fun CompletedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: ()
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.chats_completed), tint = p.success, modifier = Modifier.size(14.dp))
+        Icon(Icons.Outlined.Archive, contentDescription = stringResource(R.string.chats_archived), tint = p.inkSoft, modifier = Modifier.size(14.dp))
         Text(
             plainText(s.title).ifEmpty { stringResource(R.string.chats_new_chat) },
-            style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.LineThrough),
+            style = MaterialTheme.typography.bodyMedium,
             color = p.inkFaint,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -1505,13 +1506,13 @@ internal fun savedListNote(
     template: String = "Saved list from %1\$s. It updates when %2\$s answers.",
 ): String = savedNote(template, savedAt, computer, now, zone)
 
-/** "Saved copy from 10:42. It updates when Mac answers.": a chat read from the phone's copy (OF-5). */
+/** "Updated last on 10:42": a chat read from the phone's copy (OF-5). */
 internal fun savedCopyNote(
     savedAt: Long,
     computer: String,
     now: Long = System.currentTimeMillis(),
     zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
-    template: String = "Saved copy from %1\$s. It updates when %2\$s answers.",
+    template: String = "Updated last on %1\$s",
 ): String = savedNote(template, savedAt, computer, now, zone)
 
 private fun savedNote(template: String, savedAt: Long, computer: String, now: Long, zone: java.time.ZoneId): String {
@@ -1551,7 +1552,7 @@ private fun PendingNewChatRow(item: OutboxItem, sending: Boolean, onDelete: () -
 @Composable
 private fun groupTitle(key: String, name: String): String = when (key) {
     ChatGroup.GENERAL -> stringResource(R.string.chats_group_general)
-    ChatSection.COMPLETED -> stringResource(R.string.chats_group_completed)
+    ChatSection.ARCHIVED -> stringResource(R.string.chats_group_archived)
     "all" -> stringResource(R.string.chats_group_all)
     "status:input" -> stringResource(R.string.chats_group_input)
     "status:draft" -> stringResource(R.string.chats_group_draft)

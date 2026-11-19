@@ -5,6 +5,7 @@ import { App } from './App.js';
 import { ensureNekko } from './web-client.js';
 import { CloudLogin, cloudAuthRequired } from './components/CloudLogin.js';
 import { UpdateProvider } from './components/UpdateBanner.js';
+import { TitleTips } from './components/TitleTips.js';
 // The website's two fonts, bundled so the app never fetches them (--font-sans, --font-mono).
 import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
@@ -59,6 +60,7 @@ function startApp(root: ReturnType<typeof createRoot>) {
     <React.StrictMode>
       <UpdateProvider>
         <App />
+        <TitleTips />
       </UpdateProvider>
     </React.StrictMode>,
   );

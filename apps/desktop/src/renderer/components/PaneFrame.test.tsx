@@ -4,7 +4,7 @@ import { PaneFrame, targetAt } from './PaneFrame.js';
 import { SplitCompass } from './SplitCompass.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { confirmDeletion } from './DeleteConfirmation.js';
-import { CloseIcon, TrashIcon } from '../icons.js';
+import { ArchiveIcon, TrashIcon } from '../icons.js';
 import { WINDOW_HOTKEYS } from '../window-shortcuts.js';
 
 const state = vi.hoisted(() => ({
@@ -52,7 +52,7 @@ describe('pane lifecycle controls', () => {
   });
   it('keeps Focus immediately beside Minimize', () => {
     const { elements } = frame('chat', false, 'session-1', vi.fn(), <button aria-label="Focus My chat" />);
-    expect(elements.filter(e => e.type === 'button').map(e => e.props['aria-label'])).toEqual(['Focus My chat', 'Minimize My chat', 'Complete My chat']);
+    expect(elements.filter(e => e.type === 'button').map(e => e.props['aria-label'])).toEqual(['Focus My chat', 'Minimize My chat', 'Archive My chat']);
   });
   it.each([false, true])('only closes a terminal process after confirmation (%s)', async (approved) => {
     vi.mocked(confirmDeletion).mockResolvedValueOnce(approved);
@@ -66,11 +66,11 @@ describe('pane lifecycle controls', () => {
     if (approved) expect(closeTerminal).toHaveBeenCalledWith('terminal-1');
   });
 
-  it('places wall minimize immediately before Complete without archiving or deleting', () => {
+  it('places wall minimize immediately before Archive without archiving or deleting', () => {
     const minimize = vi.fn();
     const { elements } = frame('chat', false, 'session-1', minimize);
     const buttons = elements.filter((e) => e.type === 'button');
-    expect(buttons.map((e) => e.props['aria-label'])).toEqual(['Minimize My chat', 'Complete My chat']);
+    expect(buttons.map((e) => e.props['aria-label'])).toEqual(['Minimize My chat', 'Archive My chat']);
     buttons[0].props.onClick();
     expect(minimize).toHaveBeenCalledOnce();
     expect(state.archiveChat).not.toHaveBeenCalled();
@@ -86,13 +86,14 @@ describe('pane lifecycle controls', () => {
     expect(minimize).toHaveBeenCalledOnce();
     expect(closeTerminal).not.toHaveBeenCalled();
   });
-  it('defaults chats to Complete using existing archive semantics, not Close', () => {
+  it.each([undefined, 'complete'] as const)('defaults chats to Archive, not Close (stored %s)', (stored) => {
+    state.settings = stored ? { chatPaneAction: stored } : null;
     const { button, onClose } = frame();
-    expect(button.props['aria-label']).toBe('Complete My chat');
+    expect(button.props['aria-label']).toBe('Archive My chat');
     // The label follows the platform (Cmd on a Mac, Ctrl elsewhere); window-shortcuts.test.ts covers both.
-    expect(button.props.title).toBe(`Complete this chat (${WINDOW_HOTKEYS.complete})`);
-    // The completion control wears an X now (#533); it still archives, never deletes.
-    expect(React.Children.toArray(button.props.children).some((c) => React.isValidElement(c) && c.type === CloseIcon)).toBe(true);
+    expect(button.props.title).toBe(`Archive this chat (${WINDOW_HOTKEYS.archive})`);
+    // The control wears the archive glyph, not an X: it archives, never deletes (#3021).
+    expect(React.Children.toArray(button.props.children).some((c) => React.isValidElement(c) && c.type === ArchiveIcon)).toBe(true);
     button.props.onClick();
     expect(state.archiveChat).toHaveBeenCalledWith('session-1');
     expect(onClose).not.toHaveBeenCalled();
@@ -116,6 +117,15 @@ describe('pane lifecycle controls', () => {
     expect(event.preventDefault).toHaveBeenCalledOnce();
     expect(event.stopPropagation).toHaveBeenCalledOnce();
     expect(vi.mocked(useState).mock.results[1].value[1]).toHaveBeenCalledWith({ x: 30, y: 40 });
+  });
+
+  it('gives a chat window Archive, Delete and Minimize but no Close that would leave it on the list', () => {
+    const { elements } = frame('chat', true, 'session-1', vi.fn());
+    const items = elements.filter((e) => e.type === ContextAction);
+    const labels = items.map((e) => React.Children.toArray(e.props.children).filter((c) => typeof c === 'string').join(''));
+    expect(labels).toEqual([`Archive (${WINDOW_HOTKEYS.archive})`, `Delete (${WINDOW_HOTKEYS.delete})`, `Minimize (${WINDOW_HOTKEYS.minimize})`]);
+    items[0].props.onClick();
+    expect(state.archiveChat).toHaveBeenCalledWith('session-1');
   });
 
   it.each([['chat', '']] as const)('keeps Close for %s panes with ref %s', (kind, refId) => {

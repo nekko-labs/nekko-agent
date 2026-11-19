@@ -100,7 +100,7 @@ describe('wall push animations', () => {
     vi.stubGlobal('document', { createElement: vi.fn().mockReturnValueOnce(dust).mockImplementation(grain), body: { append } });
     vi.stubGlobal('window', { setTimeout });
     scatterEdgeDust({ left: 100, top: 50, width: 400, height: 600 }, 'right');
-    expect(dust.className).toBe('completion-stardust');
+    expect(dust.className).toBe('archive-stardust');
     expect(dust.style.left).toBe('500px');
     expect(dust.style.top).toBe('350px');
     expect(dust.append.mock.calls.length).toBeGreaterThanOrEqual(10);

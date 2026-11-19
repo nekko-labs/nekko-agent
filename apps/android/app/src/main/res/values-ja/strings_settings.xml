@@ -160,8 +160,8 @@
     <string name="settings_pc_offline_unknown">%1$s はオフラインです。接続されると、チャットモード、チャット操作、削除確認がここに表示されます。</string>
     <string name="settings_chat_mode_new">新しいチャットのモード</string>
     <string name="settings_long_press">チャットを長押ししたとき</string>
-    <string name="settings_complete_it">完了にする</string>
-    <string name="settings_complete_it_detail">%1$s の完了済みに移動します。削除はされません</string>
+    <string name="settings_archive_it">アーカイブする</string>
+    <string name="settings_archive_it_detail">%1$s のアーカイブ済みに移動します。削除はされません</string>
     <string name="settings_delete_it">削除する</string>
     <string name="settings_delete_it_detail">%1$s から完全に削除します</string>
     <string name="settings_confirm_delete">削除前に確認</string>

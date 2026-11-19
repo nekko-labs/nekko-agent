@@ -58,7 +58,7 @@ import org.junit.runner.RunWith
  * Offline mode's drafts: what the message box holds is kept when the chat is left and opened
  * again with a new view model. The fake computer is ChatActionsTest's.
  *
- * Was: the chat's ⋮ (Chat mode, Rename, Pin, Complete) and the chat list's long-press (Pin, Rename),
+ * Was: the chat's ⋮ (Chat mode, Rename, Pin, Archive) and the chat list's long-press (Pin, Rename),
  * over a real [ComputersRepository] whose computer is a fake keeping the chat's title, pin and
  * mode as `session:setOptions` left them. Each step is a whole-screen screenshot under the
  * app's external files (`evidence/`), named by device.

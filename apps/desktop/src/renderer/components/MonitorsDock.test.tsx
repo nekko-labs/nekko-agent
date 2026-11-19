@@ -170,6 +170,11 @@ describe('wall dock presentation', () => {
     expect(html).not.toContain('9999');
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('bg-accent/10');
+    // No paid pictures in the range: no row for them.
+    expect(html).not.toContain('Paid pictures');
+    const pictures = { ...usage, daily: [{ ...usage.daily[0]!, pictures: 2, pictureCost: 0.071 }] };
+    const withPictures = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={now} sessions={[]} providers={[]} usage={pictures} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    expect(withPictures).toContain('data-row="pictures"><dt>Paid pictures</dt><dd>$0.07<small>2 pictures</small>');
   });
   it('uses named icon controls and meters with exact numbers below', () => {
     const html = render();

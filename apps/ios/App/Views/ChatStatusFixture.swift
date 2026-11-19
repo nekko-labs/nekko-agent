@@ -23,7 +23,7 @@ struct ChatStatusFixture: View {
                                prs: [Self.pr(42, .open), Self.pr(43, .merged), Self.pr(44, .closed)])
                     fixtureRow("Done without watches", activity: nil, model: "qwen3-coder:latest", provider: "ollama", tokens: 12_000,
                                prs: [Self.pr(40, .merged), Self.pr(39, .closed)])
-                    fixtureRow("Done", activity: nil, archived: true)
+                    fixtureRow("Archived", activity: nil, archived: true)
                 }
             }
             .listStyle(.plain)

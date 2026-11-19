@@ -94,7 +94,7 @@ Nothing is recorded as a true OS exclusive yet.
 
 | Capability | iPhone / iPad | Android | Gap / follow-up |
 | --- | --- | --- | --- |
-| Two-line reconnect status with fixed-width animated ellipsis | Branch implementation, native verification pending ([spec](ios-streaming-and-reconnect-status.md)) | Same two lines in New chat while the computer is away (2026-11-13, `ReconnectingNotice`; dots still with animations off) | None |
+| Two-line New Chat reconnect status with fixed-width animated ellipsis | `NAME is reconnecting...` plus `Prompts you send wait on this iPhone.`; verified on iPhone 18 Pro / iOS 27.0 simulator ([spec](ios-streaming-and-reconnect-status.md)) | Same existing dots with `Prompts you send wait on this phone.`; verified on Pixel 5 / API 32 emulator | None |
 
 ## Secret box (desktop first, #2594)
 

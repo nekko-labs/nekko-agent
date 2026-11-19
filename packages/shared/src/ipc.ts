@@ -179,6 +179,8 @@ export const IpcChannels = {
   chatProvideSecret: 'chat:provideSecret',
   chatPending: 'chat:pending',
   chatRunning: 'chat:running',
+  /** Working chats by agent-loop phase, for the `npm run dev` status line. */
+  chatActivity: 'chat:activity',
 
   terminalsList: 'terminals:list',
   terminalShells: 'terminal:shells',
@@ -512,8 +514,9 @@ export const IpcChannels = {
   syncRevoke: 'sync:revoke',
   syncNow: 'sync:now',
   syncSetEnabled: 'sync:setEnabled',
-  syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
   syncDeleteAll: 'sync:deleteAll',
+  // The files Library lists on this computer, for Library sync (crates/nekko-cloud, #2748).
+  librarySync: 'library:sync',
   // Nekko Cloud organizations and the shared computer fleet (crates/nekko-cloud).
   orgList: 'org:list',
   orgCreate: 'org:create',
@@ -678,8 +681,13 @@ export interface NekkoApi {
   syncRevoke(deviceId: string): Promise<import('./cloud.js').CloudStatus>;
   syncNow(): Promise<import('./cloud.js').CloudStatus>;
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
-  syncSetIncludeLocalOnly(on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
+  /**
+   * Tell the engine which files Library lists here, so they sync to Nekko Cloud
+   * when Library sync is open to the account (`status.library` is not null).
+   * Merged with what it already knows; a file leaves only when it is gone from disk.
+   */
+  librarySync(files: import('./cloud.js').LibrarySyncFile[]): Promise<import('./cloud.js').CloudStatus>;
   /** Organizations you belong to and invites waiting for you. */
   orgList(): Promise<import('./cloud.js').OrgList>;
   /** Create an organization (needs an unlocked account on Pro or Team); this device creates its key. */
@@ -1042,16 +1050,16 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
   clearSessions(scope: import('./chat.js').ChatClearScope): Promise<number>;
-  /** Compatibility no-op: completed history is retained indefinitely. */
+  /** Compatibility no-op: archived history is retained indefinitely. */
   purgeExpiredArchives(): Promise<number>;
-  /** All local chat JSON and command-log bytes; count is completed chats only. Symlinks are not followed. */
+  /** All local chat JSON and command-log bytes; count is archived chats only. Symlinks are not followed. */
   getHistoryUsage(): Promise<{ bytes: number; count: number }>;
-  /** Delete completed chats in the selected updatedAt range; returns how many were removed. */
+  /** Delete archived chats in the selected updatedAt range; returns how many were removed. */
   clearHistory(range: 'today' | 'last-week' | 'older-2-weeks' | 'older-1-month' | 'older-6-months'): Promise<number>;
   /** A new chat with this one's conversation before `beforeMessageId` (all of it when omitted). */
   forkSession(id: string, beforeMessageId?: string): Promise<Session | null>;

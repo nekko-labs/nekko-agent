@@ -55,6 +55,18 @@ Xcode 27 has no Simulator.app: Apple replaced it with **DeviceHub** (`Xcode.app/
 
 Off by default (`simulatorAutoShutdownMinutes`; the choices are 5, 15, 30, 60 and 240). When set, once a minute the daemon shuts down a device that an agent used, that no agent has touched for that many minutes and that is under 5% CPU. A device no agent used (one you booted yourself) is never shut down by this.
 
+## Quitting shuts them down
+
+**User intent (Philip, 2026-11-19).** When the app shuts down gracefully, make sure the simulators shut down too.
+
+`[implemented 2026-11-19; unit test, and checked on macOS against two real simulators through a stand-alone daemon stopped by closing its stdin: the one an agent used shut down, the other stayed booted]`
+
+- When the daemon shuts down gracefully (quitting the app, `npm run dev`'s q, Enter or Ctrl+C, a closed stdin, SIGTERM or SIGHUP), it shuts down every booted simulator and emulator an agent used, all at once, alongside the rest of its cleanup. The agents that booted them are stopping, so nothing else would.
+- A device no agent used (one you booted yourself) stays running, as with auto shutdown.
+- It waits at most 4 seconds, inside the time the app gives the daemon to stop, and then quits anyway; a device still stopping finishes on its own. Each one shut down, or that could not be, is a line in the daemon's log.
+- A forced stop (the second press in `npm run dev`, a crash, SIGKILL) skips it: the devices stay booted and show in the Hardware monitor on the next start.
+- Measured on an M1 Max, macOS 27.2, debug daemon: quitting took 0.9 to 1.0 s with no agent device booted and 3.9 s with one (`simctl shutdown` itself).
+
 ## Boundaries
 
 - Desktop and Local Web UI only. None of the `simulators:*` channels is in the phone's allowlist; a phone cannot list, view or stop a simulator.
