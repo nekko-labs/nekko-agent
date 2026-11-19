@@ -4508,7 +4508,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .automations-content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 0 64px; }
 .models-navigation { display: flex; flex-direction: column; gap: 8px; }
 .models-navigation .settings-nav-item { min-height: 40px; font-size: var(--text-sm); }
-.models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: 20px 0 64px; }
+/* The scroller reaches 8px past the column on each side, padded back in, so rows
+   that bleed into that margin (the model library's hover rows) fit instead of
+   giving the page a sideways scroll. */
+.models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; margin-inline: -8px; padding: 20px 8px 64px; }
 .models-layout .models-section { max-width: none; }
 /* The biggest heading in its section: titles nested below step down a size. */
 .models-section-heading { display: flex; align-items: center; gap: 8px; font-size: var(--text-2xl); font-weight: 600; margin-bottom: 16px; }
@@ -4587,7 +4590,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   .models-navigation .settings-nav-item { width: 100%; }
   .models-navigation .models-nav-sub { margin: 0; width: 100%; padding-left: 8px; border-radius: var(--radius-lg); }
   .models-navigation .models-nav-sub::before { content: none; }
-  .models-workspace { height: auto; min-height: 0; padding: 0 0 48px; }
+  .models-workspace { height: auto; min-height: 0; padding-block: 0 48px; }
   /* Automations keeps its side menu down to a phone width, one item a row. */
   .automations-rail .models-navigation { display: flex; }
   .automations-layout { gap: 20px; padding-inline: 20px; }
