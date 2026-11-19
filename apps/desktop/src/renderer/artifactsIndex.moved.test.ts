@@ -72,7 +72,7 @@ describe('designs made out of sight', () => {
     const moved = await movedPaths(listDir, [`${tree}/nekko-designs/task-details-design.html`, `${tree}/nekko-designs/gone.html`, '/plain/gone.html']);
     expect([...moved]).toEqual([[`${tree}/nekko-designs/task-details-design.html`.toLowerCase(), `${root}/floop/nekko-designs/task-details-design.html`]]);
     // A worktree that is still there keeps its own copy; one listed empty (the host's answer for a missing folder) has moved.
-    const live = { ...disk, [`${root}/floop/.worktrees/open/nekko-designs`]: ['task-details-design.html'], [`${root}/floop/.worktrees/empty/nekko-designs`]: [] };
+    const live: Record<string, string[]> = { ...disk, [`${root}/floop/.worktrees/open/nekko-designs`]: ['task-details-design.html'], [`${root}/floop/.worktrees/empty/nekko-designs`]: [] };
     const liveList = async (path: string) => { if (!live[path]) throw new Error('ENOENT'); return live[path].map((name) => ({ name })); };
     expect([...(await movedPaths(liveList, [
       `${root}/floop/.worktrees/open/nekko-designs/task-details-design.html`,
