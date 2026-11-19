@@ -9,6 +9,7 @@ import { useStore } from '../store.js';
 import { MiddleTruncate } from './primitives/MiddleTruncate.js';
 import type { HLJSApi } from 'highlight.js';
 import { detectLanguage, HIGHLIGHT_MAX_CHARS, highlightHtml, languageName, loadHighlighter } from '../codeHighlight.js';
+import { SlideToggle } from './library/SlideToggle.js';
 
 /** Fixed editor line height (px) so the comment gutter aligns row-for-row. */
 const LINE_H = 20;
@@ -19,6 +20,29 @@ const COALESCE_MS = 600;
 /** Cap on the undo history, so a long editing session can't grow unbounded. */
 const HISTORY_LIMIT = 200;
 const AUTOSAVE_KEY = 'nekko.editor.autoSave';
+const MD_WIDTH_KEY = 'nekko.md.width';
+
+/** Width of the Markdown reading column. Narrow preserves the original column; Wide is the default. */
+type MdWidth = 'narrow' | 'wide' | 'full';
+
+const MD_WIDTH_OPTIONS: ReadonlyArray<{ id: MdWidth; label: string }> = [
+  { id: 'narrow', label: 'Narrow' },
+  { id: 'wide', label: 'Wide' },
+  { id: 'full', label: 'Full' },
+];
+
+const MD_WIDTH_CLASS: Record<MdWidth, string> = {
+  narrow: 'mx-auto max-w-3xl px-6 py-5',
+  wide: 'mx-auto max-w-5xl px-6 py-5',
+  full: 'w-full px-6 py-5',
+};
+
+function readMdWidthPref(): MdWidth {
+  if (typeof window === 'undefined') return 'wide';
+  const v = window.localStorage.getItem(MD_WIDTH_KEY);
+  if (v === 'narrow' || v === 'wide' || v === 'full') return v;
+  return 'wide';
+}
 
 /** The last save, and what triggered it, for the toolbar's status. */
 export interface SaveNote {
@@ -88,6 +112,7 @@ function HostFilePane({ path, readOnly }: { path: string; readOnly: boolean }) {
   const [hljs, setHljs] = useState<HLJSApi | null>(null);
   const [language, setLanguage] = useState<string | null>(null);
   const [autoSave, setAutoSave] = useState(readAutoSavePref);
+  const [mdWidth, setMdWidth] = useState<MdWidth>(readMdWidthPref);
   const [preview, setPreview] = useState(canPreview); // markdown defaults to rendered
   const [comments, setComments] = useState<LineComment[]>([]);
   const [activeLine, setActiveLine] = useState<number | null>(null);
@@ -203,6 +228,11 @@ function HostFilePane({ path, readOnly }: { path: string; readOnly: boolean }) {
       if (next) save('auto');
       return next;
     });
+  };
+
+  const changeMdWidth = (w: MdWidth) => {
+    setMdWidth(w);
+    try { window.localStorage.setItem(MD_WIDTH_KEY, w); } catch { /* best effort */ }
   };
 
   const syncDepth = () =>
@@ -419,6 +449,15 @@ function HostFilePane({ path, readOnly }: { path: string; readOnly: boolean }) {
               setTimeout(() => URL.revokeObjectURL(url), 1000);
             }} title="Download a copy of this file">Download</button>
           )}
+          {isMd && preview && (
+            <SlideToggle
+              options={MD_WIDTH_OPTIONS}
+              value={mdWidth}
+              onChange={changeMdWidth}
+              label="Markdown column width"
+              className="shrink-0"
+            />
+          )}
           {canPreview && (
             <button className="chip chip-action text-2xs" onClick={() => setPreview((p) => !p)} title={preview ? 'Edit source' : 'Preview artifact'}>
               {preview ? 'Source' : 'Preview'}
@@ -480,7 +519,7 @@ function HostFilePane({ path, readOnly }: { path: string; readOnly: boolean }) {
           ) : isMermaid && preview ? (
             <MermaidDiagram code={content} />
           ) : isMd && preview ? (
-            <div className="mx-auto max-w-3xl px-6 py-5"><Markdown text={content} doc basePath={dir} /></div>
+            <div className={MD_WIDTH_CLASS[mdWidth]}><Markdown text={content} doc basePath={dir} /></div>
           ) : (
             <div className="relative h-full w-full overflow-hidden">
               {highlighted != null && (
