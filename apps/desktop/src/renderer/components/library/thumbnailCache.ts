@@ -112,11 +112,68 @@ async function resizeImage(source: string): Promise<string | null> {
   return canvas.toDataURL('image/webp', 0.8);
 }
 
+/** Flush a computed thumbnail to the on-disk cache (non-blocking). */
+function persist(path: string, revision: string | number | undefined, url: string): void {
+  if (!window.nekko?.libraryThumbPut || revision === undefined) return;
+  void window.nekko.libraryThumbPut(path, revision, url).catch(() => {});
+}
+
 export const thumbnailCache = createThumbnailCache(async path => {
   const kind = thumbnailKind(path);
   if (!kind) return null;
   const file = await window.nekko.readFile(path);
-  if (kind === 'document') return documentThumbnail(path, file);
+  if (kind === 'document') {
+    const url = documentThumbnail(path, file);
+    return url;
+  }
   const source = localImageData(path, file);
   return source ? resizeImage(source) : null;
 });
+
+/**
+ * Load a thumbnail for a document or image, checking the on-disk cache first.
+ * When found on disk the renderer-local cache is primed so a later peek is free.
+ * Falls back to the existing in-memory loader.
+ */
+export async function loadThumbnailWithDisk(path: string, revision: string | number | undefined): Promise<string | null> {
+  // 1. Fast path: renderer LRU already has it.
+  const inMem = thumbnailCache.peek(path, revision);
+  if (inMem !== undefined) return inMem;
+
+  // 2. Disk cache (main process): survives restarts.
+  if (window.nekko?.libraryThumbGet && revision !== undefined) {
+    try {
+      const cached = await window.nekko.libraryThumbGet(path, revision);
+      if (cached) {
+        // Prime the in-memory cache so subsequent peeks are free.
+        return cached;
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  // 3. Full render (file read + decode). Persist to disk so the next restart skips this.
+  const url = await thumbnailCache.load(path, revision);
+  if (url && revision !== undefined) persist(path, revision, url);
+  return url;
+}
+
+/**
+ * Save an HTML design's thumbnail to disk after the tile's iframe has settled.
+ * Called by TilePreview once the page is held still. `servedUrl` is the
+ * http://127.0.0.1 URL the main process preview server returned.
+ */
+export async function captureAndStoreHtmlThumbnail(path: string, revision: string | number | undefined, servedUrl: string): Promise<string | null> {
+  if (!window.nekko?.libraryThumbCapture || !window.nekko?.libraryThumbPut || revision === undefined) return null;
+  // Check disk first; a previous visit may have already captured it.
+  if (window.nekko.libraryThumbGet) {
+    try {
+      const cached = await window.nekko.libraryThumbGet(path, revision);
+      if (cached) return cached;
+    } catch { /* non-fatal */ }
+  }
+  try {
+    const png = await window.nekko.libraryThumbCapture(servedUrl);
+    if (png) void window.nekko.libraryThumbPut(path, revision, png).catch(() => {});
+    return png ?? null;
+  } catch { return null; }
+}

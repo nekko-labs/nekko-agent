@@ -1137,6 +1137,19 @@ export interface NekkoApi {
   serveHtmlPreview?(path: string, options: import('./html-preview.js').HtmlPreviewOptions): Promise<import('./html-preview.js').HtmlPreviewServed>;
   /** Stop serving a page `serveHtmlPreview` returned. */
   releaseHtmlPreview?(id: string): Promise<void>;
+  /**
+   * Read a Library thumbnail from the on-disk cache (main/libraryThumbnails.ts, #3043).
+   * Returns a data URL (`data:image/webp;base64,...`) or null when not cached.
+   */
+  libraryThumbGet?(path: string, revision: string | number): Promise<string | null>;
+  /** Write a Library thumbnail to the on-disk cache. `data` is a data URL. */
+  libraryThumbPut?(path: string, revision: string | number, data: string): Promise<void>;
+  /**
+   * Render a served HTML URL in a hidden off-screen window and return a PNG
+   * data URL (or null when the page did not produce a frame). The URL must be
+   * on `http://127.0.0.1`.
+   */
+  libraryThumbCapture?(url: string): Promise<string | null>;
   /** Write text to a file (in-app editor save). */
   writeFile(path: string, content: string): Promise<void>;
   /** List a directory's immediate entries (file explorer). */
