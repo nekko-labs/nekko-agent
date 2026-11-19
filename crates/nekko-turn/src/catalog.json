@@ -825,7 +825,7 @@
   "media": [
    {
     "name": "generate_image",
-    "description": "Make a picture with a local image model on this computer, from a written description. Nothing leaves the computer and it costs nothing, but it can take from seconds to minutes and only one picture or clip runs at a time on this computer. The picture shows in the chat. Describe the subject, style, composition and any text exactly. Use it for illustrations, icons, mock-ups and placeholder art the user asked for; do not use it for diagrams or charts you can write as code.",
+    "description": "Make a picture with a local image model on this computer, from a written description. Nothing leaves the computer and it costs nothing, but it can take from seconds to minutes and only one picture or clip runs at a time on this computer. The picture shows in the chat. Describe the subject, style, composition and any text exactly. Use it for illustrations, icons, mock-ups and placeholder art the user asked for; do not use it for diagrams or charts you can write as code. For logos, icons, badges and flat illustrations that must scale or be edited as code, ask for format \"svg\": a cloud vector model (Recraft, on the user's OpenRouter, asked with its price) returns a real SVG, made safe, with its code in the result for you to place in a page or change. Do not use svg for photos or realistic scenes; for a simple icon or diagram you can also write the SVG yourself.",
     "parameters": {
      "type": "object",
      "properties": {
@@ -841,13 +841,21 @@
        "type": "string",
        "description": "WIDTHxHEIGHT, each 256 to 2048 in multiples of 64 (e.g. 1024x1024 or 1344x768). Default: the chat's last size, else 1024x1024."
       },
+      "format": {
+       "type": "string",
+       "enum": [
+        "png",
+        "svg"
+       ],
+       "description": "png (default) for pictures; svg for a vector picture (logos, icons, flat illustrations). With svg and no model, the user's cloud vector model is used."
+      },
       "count": {
        "type": "number",
        "description": "How many variations, 1 to 4 (default 1). Each is made in turn."
       },
       "path": {
        "type": "string",
-       "description": "Optional new workspace-relative path ending in .png to also save the picture in the project (the same approval as write_file). Without it the picture stays in the chat only."
+       "description": "Optional new workspace-relative path to also save the picture in the project (the same approval as write_file): .png, or .svg with format svg. Without it the picture stays in the chat only."
       },
       "inspect": {
        "type": "boolean",

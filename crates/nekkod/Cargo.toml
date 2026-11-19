@@ -63,6 +63,9 @@ regress.workspace = true
 nekko-workspace = { path = "../nekko-workspace" }
 # native-tls: `image:fetch` loads https photos. It is the TLS stack reqwest already uses here.
 reqwest = { workspace = true, features = ["native-tls"] }
+# SVG from cloud vector models: parsed to be made safe (svg_safe.rs), drawn as a PNG preview.
+resvg.workspace = true
+roxmltree.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
