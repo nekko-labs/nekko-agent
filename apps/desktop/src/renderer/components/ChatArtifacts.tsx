@@ -3,6 +3,7 @@ import type { FileContent } from '@nekko-agent/shared';
 import { LOCAL_IMAGE_EXT } from '../localImages.js';
 import { LocalImageCard } from './LocalImageCard.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
+import { mainCheckoutPath } from '../artifactPaths.js';
 import { useStore } from '../store.js';
 import { MarkdownSandbox, safeHref } from './Markdown.js';
 import { isolatedDocument } from './ArtifactPreview.js';
@@ -24,8 +25,61 @@ export function htmlThumbnail(file: FileContent): { source: string } | { note: s
   return { source: file.content };
 }
 
-export function ChatArtifacts({ artifacts, sessionId }: { artifacts: ChatArtifact[]; sessionId: string }) {
+/** Where a worktree file lives once its worktree is gone: old path (lower-cased) to the main checkout's. Per app run. */
+const moves = new Map<string, Promise<string | null>>();
+
+/** The main-checkout path for a file that is gone from its removed git worktree, else null. Listings only. */
+export function followMovedFile(path: string, listDir: (path: string) => Promise<Array<{ name: string }>>): Promise<string | null> {
+  const to = mainCheckoutPath(path);
+  if (!to) return Promise.resolve(null);
+  const key = path.toLowerCase();
+  let found = moves.get(key);
+  if (!found) {
+    const has = async (p: string) => {
+      const slash = p.lastIndexOf('/');
+      try {
+        const listed = await listDir(p.slice(0, slash));
+        return Array.isArray(listed) ? listed.some((e) => String(e?.name ?? '').toLowerCase() === p.slice(slash + 1).toLowerCase()) : null;
+      } catch { return false; }
+    };
+    found = (async () => ((await has(path.replaceAll('\\', '/'))) === false && (await has(to)) ? to : null))();
+    moves.set(key, found);
+    // Only a move is remembered: a worktree still there may be removed later in the run.
+    void found.then((to) => { if (!to) moves.delete(key); });
+  }
+  return found;
+}
+
+/** Moves found so far (old path, lower-cased, to new), and the cards waiting to hear of one. */
+const followed = new Map<string, string>();
+const listeners = new Set<() => void>();
+let followedVersion = 0;
+const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
+const version = () => followedVersion;
+
+/** The cards' files, each followed to the main checkout when its worktree was removed after merging. */
+function useFollowMoved(artifacts: ChatArtifact[], sandbox: boolean): ChatArtifact[] {
+  React.useSyncExternalStore(subscribe, version, version);
+  const key = artifacts.filter((a) => !a.live && mainCheckoutPath(a.path)).map((a) => a.path).join('\n');
+  React.useEffect(() => {
+    const listDir = typeof window === 'undefined' ? undefined : window.nekko?.listDir;
+    if (!key || sandbox || !listDir) return;
+    for (const path of key.split('\n')) {
+      void followMovedFile(path, (dir) => listDir(dir)).then((to) => {
+        if (!to || followed.get(path.toLowerCase()) === to) return;
+        followed.set(path.toLowerCase(), to);
+        followedVersion++;
+        for (const listener of listeners) listener();
+      });
+    }
+  }, [key, sandbox]);
+  if (!key || sandbox) return artifacts;
+  return artifacts.map((a) => { const to = followed.get(a.path.toLowerCase()); return to ? { ...a, path: to } : a; });
+}
+
+export function ChatArtifacts({ artifacts: named, sessionId }: { artifacts: ChatArtifact[]; sessionId: string }) {
   const sandbox = React.useContext(MarkdownSandbox);
+  const artifacts = useFollowMoved(named, sandbox);
   if (!artifacts.length) return null;
   return <div className="my-2 grid gap-2" aria-label="Response artifacts">
     {artifacts.map(artifact => artifact.live

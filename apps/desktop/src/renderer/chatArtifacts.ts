@@ -1,4 +1,5 @@
 import { LOCAL_IMAGE_EXT, localImagePath } from './localImages.js';
+import { knownPathFor } from './artifactPaths.js';
 
 /** A preview server on this machine that a reply pointed at. */
 export interface LivePreview {
@@ -82,7 +83,12 @@ const blank = (s: string) => s.replace(/[^\n]/g, ' ');
  * never code examples or other network resources. A page, image or PDF the
  * reply only names, as a code span or a bare path, counts like a link to it.
  */
-export function chatArtifacts(text: string, basePath?: string): ChatArtifact[] {
+export function chatArtifacts(
+  text: string,
+  basePath?: string,
+  /** Absolute paths the chat's tools named (`toolPaths`): where a relative name in the reply really is. */
+  known: readonly string[] = [],
+): ChatArtifact[] {
   const out = new Map<string, ChatArtifact>();
   const source = text.replace(/```[\s\S]*?(?:```|$)/g, blank);
   const prose = source.replace(/`[^`\n]*`/g, blank);
@@ -102,8 +108,10 @@ export function chatArtifacts(text: string, basePath?: string): ChatArtifact[] {
     if (/^[a-z][a-z\d+.-]*:/i.test(href) && !/^[a-z]:[\\/]/i.test(href)) return;
     if (!/\.(?:md|markdown|html?|svg|png|jpe?g|gif|webp|pdf|csv|json|txt|docx?|xlsx?|pptx?)$/i.test(href)) return;
     const absolute = /^(?:[a-z]:[\\/]|\/)/i.test(href);
-    if (!absolute && !basePath) return;
-    const combined = absolute ? href : `${basePath}/${href}`;
+    // A relative name means a file the chat worked on when one ends that way (in another repo, or a worktree), else one in its folder.
+    const worked = absolute ? null : knownPathFor(href, known);
+    if (!absolute && !worked && !basePath) return;
+    const combined = absolute ? href : worked ?? `${basePath}/${href}`;
     const parts: string[] = [];
     for (const part of combined.replaceAll('\\', '/').split('/')) {
       if (part === '..') parts.pop();

@@ -20,7 +20,7 @@ import {
 } from '../components/library/libraryPrefs.js';
 import { ChevronDownIcon, ChevronIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
 import {
-  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns,
+  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, helperCandidates, mergeArtifacts, movedPaths, presentPaths, readProjectDesignFolders, relocate, sessionArtifacts, withFolderDesigns,
   type ArtifactEntry, type ArtifactKind,
 } from '../artifactsIndex.js';
 
@@ -166,7 +166,9 @@ export function ArtifactsView() {
     () => artifactCandidates(sessions.filter((s: SessionSummary) => includeArchived || !s.archivedAt)),
     [sessions, includeArchived],
   );
-  const key = candidates.map((s) => `${s.id}:${s.updatedAt}`).join('|');
+  // A helper agent a chat started (a design agent, say) wrote files that are the chat's.
+  const helpers = useMemo(() => helperCandidates(sessions, candidates), [sessions, candidates]);
+  const key = [...candidates, ...helpers].map((s) => `${s.id}:${s.updatedAt}`).join('|');
   useEffect(() => {
     let live = true;
     setChatsRead(false);
@@ -177,6 +179,16 @@ export function ArtifactsView() {
           const cached = getCachedSession(summary.id);
           const full = cached && cached.updatedAt >= summary.updatedAt ? cached : await loadSession(summary.id).catch(() => null);
           return full ? sessionArtifacts(full, basePathOf(full, workspaces)) : [];
+        }));
+        if (!live) return;
+        lists.push(...batch);
+        setFromChats(mergeArtifacts(lists));
+      }
+      for (let i = 0; i < helpers.length; i += 6) {
+        const batch = await Promise.all(helpers.slice(i, i + 6).map(async (summary) => {
+          const cached = getCachedSession(summary.id);
+          const full = cached && cached.updatedAt >= summary.updatedAt ? cached : await loadSession(summary.id).catch(() => null);
+          return full ? sessionArtifacts(full, basePathOf(full, workspaces), { id: summary.parent.id, title: summary.parent.title }) : [];
         }));
         if (!live) return;
         lists.push(...batch);
@@ -193,8 +205,9 @@ export function ArtifactsView() {
   const folders = workspaces.map((w) => `${w.id}:${w.path}`).join('|');
   useEffect(() => {
     let live = true;
-    Promise.all(workspaces.map(async (w) => folderDesigns(w.name, await readDesignsFolder((path) => window.nekko.listDir(path), w.path))))
-      .then((lists) => { if (live) setFromFolders(lists.flat()); });
+    // Each folder's own designs folder, and those of the repos one level inside it.
+    Promise.all(workspaces.map((w) => readProjectDesignFolders((path) => window.nekko.listDir(path), w)))
+      .then((lists) => { if (live) setFromFolders(lists.flat().flatMap((f) => folderDesigns(f.project, f.files))); });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folders, key]);
@@ -205,21 +218,24 @@ export function ArtifactsView() {
   );
   // Which of those files are still on disk: a chat can name a file it never wrote, or one deleted since.
   // A file shows until its folder has been listed.
-  const [presence, setPresence] = useState<{ checked: Set<string>; present: Set<string> } | null>(null);
+  // A file gone from a removed git worktree is followed to the repo's main checkout.
+  const [presence, setPresence] = useState<{ checked: Set<string>; present: Set<string>; moved: Map<string, string> } | null>(null);
   const paths = merged?.filter((e) => e.source !== 'folder').map((e) => e.path).join('\n') ?? '';
   useEffect(() => {
     if (!paths || !window.nekko?.listDir) return;
     let live = true;
     const list = paths.split('\n');
-    presentPaths((path) => window.nekko.listDir(path), list).then((present) => {
-      if (live) setPresence({ checked: new Set(list.map((p) => p.toLowerCase())), present });
+    const listDir = (path: string) => window.nekko.listDir(path);
+    presentPaths(listDir, list).then(async (present) => {
+      const moved = await movedPaths(listDir, list.filter((p) => !present.has(p.toLowerCase())));
+      if (live) setPresence({ checked: new Set(list.map((p) => p.toLowerCase())), present, moved });
     });
     return () => { live = false; };
   }, [paths]);
   const entries = useMemo(() => {
     if (!merged) return null;
-    const gone = (e: ArtifactEntry) => !!presence && presence.checked.has(e.path.toLowerCase()) && !presence.present.has(e.path.toLowerCase());
-    return groupDesignVersions(merged.filter((e) => !gone(e)));
+    const gone = (e: ArtifactEntry) => !!presence && presence.checked.has(e.path.toLowerCase()) && !presence.present.has(e.path.toLowerCase()) && !presence.moved.has(e.path.toLowerCase());
+    return groupDesignVersions(relocate(merged.filter((e) => !gone(e)), presence?.moved ?? new Map()));
   }, [merged, presence]);
   const indexed = chatsRead && fromFolders !== null;
 
