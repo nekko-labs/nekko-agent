@@ -5,7 +5,8 @@ import { SERVED_PREVIEW_SANDBOX } from '../ArtifactPreview.js';
 import { FilePane } from '../FilePane.js';
 import { SlideToggle, type SlideOption } from './SlideToggle.js';
 import {
-  FRAME, ZOOM, dotSpacing, fitView, frameSize, isAnimating, keyAction, readPreviewHand, readPreviewState, readPreviewTargets, readPreviewWheel, wheelZoom, zoomAt,
+  FRAME, ZOOM, dotSpacing, fitView, frameSize, isAnimating, keyAction, readPreviewHand, readPreviewState, readPreviewTargets, readPreviewWheel, readPreviewZoomKey, wheelZoom, zoomAt,
+  zoomKey, zoomKeyAction,
   type CanvasSize, type CanvasView,
 } from './designCanvasView.js';
 
@@ -31,7 +32,11 @@ const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isCont
  * The page runs where every served page does: an opaque-origin sandbox with
  * no network. The canvas only posts it five words (probe, pause, play, targets,
  * untargets) and believes nothing it says beyond a size, whether it is moving,
- * a capped scroll step, whether Space is down and boxes cut to its own frame.
+ * a capped scroll step, whether Space is down, a zoom key (in, out, fit) and
+ * boxes cut to its own frame.
+ *
+ * Ctrl/Cmd with +, - or 0 zoom and fit the design wherever the keyboard is,
+ * in the app or in the design, and never step the app's text size here.
  *
  * Moving is painted straight onto the frame once per animation frame and only
  * settles into React state when the gesture pauses, so a drag or a trackpad
@@ -94,6 +99,8 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
       if (boxes) { setTargets(boxes); return; }
       const down = readPreviewHand(e.data);
       if (down !== null) { setHand(down); return; }
+      const zoom = readPreviewZoomKey(e.data);
+      if (zoom) { zoomByKey(zoom); return; }
       const wheel = readPreviewWheel(e.data, latest.current.size);
       if (wheel) {
         const v = latest.current.view;
@@ -179,6 +186,12 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
     settling.current = setTimeout(() => setSettled(viewRef.current), SETTLE_MS);
   };
   const zoomBy = (factor: number) => { const c = canvasSize(); move((v) => zoomAt(v, factor, { x: c.width / 2, y: c.height / 2 })); };
+  /** A zoom key, from the app or the design: each step from the view as it is now, not as last rendered. */
+  function zoomByKey(key: 'in' | 'out' | 'fit') {
+    if (key === 'fit') { fitRef.current(); return; }
+    const c = canvasSize();
+    move((v) => zoomKeyAction(key, v, c) as CanvasView);
+  }
 
   // Scroll moves the canvas; a pinch or Ctrl/Cmd+scroll zooms at the pointer. React's own
   // wheel listener is passive, and the page behind must not scroll or zoom.
@@ -210,12 +223,26 @@ export function DesignCanvas({ path, title, versions, onVersion, onSource }: {
       e.preventDefault();
       if (action === 'fit') fitRef.current(); else move(() => action);
     };
+    // Ctrl/Cmd with +, - or 0 zoom the design, not the app's text size (textZoom.ts listens on
+    // window too): taken in the capture phase so they come first, wherever the focus is.
+    const zoomKeys = (e: KeyboardEvent) => {
+      const key = zoomKey(e);
+      if (!key || !viewRef.current || e.defaultPrevented) return;
+      e.preventDefault();
+      zoomByKey(key);
+    };
     const up = (e: KeyboardEvent) => { if (e.code === 'Space') setHand(false); };
     const away = () => setHand(false);
+    window.addEventListener('keydown', zoomKeys, true);
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', away);
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', away); };
+    return () => {
+      window.removeEventListener('keydown', zoomKeys, true);
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', away);
+    };
   }, []);
 
   if (failed) return <FilePane path={path} />;
