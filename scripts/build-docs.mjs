@@ -9,7 +9,7 @@
 //   apps/website/docs/media/        images the pages use
 //   apps/website/llms-full.txt      every page in one file
 //   apps/website/release.json       the latest release, for the download buttons
-//   apps/website/changelog.html     the changelog page, from docs/hub/whats-new.json
+//   apps/website/whatsnew.html      the What's new page, from docs/hub/whats-new.json
 // (Committed, they made every docs PR conflict with every other one in the
 // merge queue.) It also rewrites the generated docs section in llms.txt and the
 // docs URLs in sitemap.xml. Those two are committed: they change only with
@@ -336,7 +336,7 @@ ${rendered.html}
 `;
 }
 
-// The changelog page at /changelog (spec/brand/changelog-page.md). Its data is
+// The What's new page at /whatsnew (spec/brand/whats-new-page.md). Its data is
 // docs/hub/whats-new.json: the highlights of each release line, with the people
 // who shipped them.
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i;
@@ -397,7 +397,7 @@ const monthYear = (date) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en
 
 // `rng` orders each release's "Everyone who shipped" row: a fresh shuffle on every
 // build, so no one is always first. Tests pass their own.
-export function changelogPage(lines, avatars = new Map(), rng = Math.random) {
+export function whatsNewPage(lines, avatars = new Map(), rng = Math.random) {
   const shuffled = (list) => {
     const out = [...list];
     for (let i = out.length - 1; i > 0; i--) {
@@ -408,8 +408,8 @@ export function changelogPage(lines, avatars = new Map(), rng = Math.random) {
   };
   const title = "What's new · Nekko Agent";
   const description = 'The changes worth knowing in each Nekko Agent release, and the people who shipped them.';
-  const canonical = `${ORIGIN}/changelog`;
-  const og = `${ORIGIN}/og/changelog.jpg?v=${OG_VERSION}`;
+  const canonical = `${ORIGIN}/whatsnew`;
+  const og = `${ORIGIN}/og/whatsnew.jpg?v=${OG_VERSION}`;
   const face = (login) => {
     const avatar = avatars.get(login.toLowerCase());
     return (
@@ -552,7 +552,7 @@ ${shuffled(l.contributors)
       <nav class="nav-links" aria-label="Main navigation">
         <a href="/#contributors">About us</a>
         <a href="/docs">Docs</a>
-        <a href="/changelog" aria-current="page">Changelog</a>
+        <a href="/whatsnew" aria-current="page">What's new</a>
       </nav>
     </header>
 
@@ -570,7 +570,7 @@ ${sections}
       <span class="footer-brand"><img class="brand-mark" src="/logo.svg?v=plum-white-2" alt="" width="26" height="20" /> NEKKO AGENT</span>
       <span class="micro">MIT · Made with ❤️ by the <a href="https://nekkolabs.com/#team" target="_blank" rel="noopener">Nekko Labs team</a></span>
       <a href="/docs">Docs</a>
-      <a href="/changelog">Changelog</a>
+      <a href="/whatsnew">What's new</a>
       <a href="/beta">Beta</a>
       <a href="/status">Status</a>
       <a href="/privacy">Privacy</a>
@@ -642,7 +642,7 @@ export function build() {
   files.set('llms-full.txt', full.join('\n').trimEnd() + '\n');
   for (const [name, file] of media) files.set(`docs/media/${name}`, readFileSync(file));
   // With initials here; the deploy adds avatars once the contributor cache exists.
-  files.set('changelog.html', changelogPage(loadWhatsNew()));
+  files.set('whatsnew.html', whatsNewPage(loadWhatsNew()));
 
   const docsList = [
     '## Documentation',
@@ -745,7 +745,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.log(await writeContributors(site));
     // The page again, now with the avatars that refresh just cached.
     const avatars = avatarsFrom(JSON.parse(readFileSync(join(site, 'contributors.json'), 'utf8')));
-    writeFileSync(join(site, 'changelog.html'), changelogPage(loadWhatsNew(), avatars));
-    console.log(`changelog.html: ${avatars.size} cached avatars available`);
+    writeFileSync(join(site, 'whatsnew.html'), whatsNewPage(loadWhatsNew(), avatars));
+    console.log(`whatsnew.html: ${avatars.size} cached avatars available`);
   }
 }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { avatarsFrom, build, changelogPage, loadNav, loadWhatsNew, parseWhatsNew, releaseInfo, slugify } from './build-docs.mjs';
+import { avatarsFrom, build, loadNav, loadWhatsNew, parseWhatsNew, releaseInfo, slugify, whatsNewPage } from './build-docs.mjs';
 
 // Staleness itself is not a test: the pages are built on deploy, and the Docs
 // site workflow commits the regenerated llms.txt and sitemap.xml to the PR, so failing CI on the author's commit would only
@@ -158,7 +158,7 @@ test('task queries find canonical guides, including facts beyond the old 600-cha
   assert.match(files.get('docs/context-memory-safety.md'), /Workspace file reads do not currently/);
 });
 
-// The changelog page (spec/brand/changelog-page.md) and its highlights file.
+// The What's new page (spec/brand/whats-new-page.md) and its highlights file.
 const line = (over = {}) => {
   const l = {
     date: '2026-11-16',
@@ -214,11 +214,11 @@ test('release lines are listed newest first', () => {
   assert.deepEqual(lines.map((l) => l.line), ['1.10', '0.11', '0.10']);
 });
 
-test('the changelog page is built with every highlight, its author and its pull request', () => {
-  const html = build().get('changelog.html');
-  assert.ok(html, 'changelog.html');
+test('the What\'s new page is built with every highlight, its author and its pull request', () => {
+  const html = build().get('whatsnew.html');
+  assert.ok(html, 'whatsnew.html');
   assert.equal((html.match(/<h1>/g) ?? []).length, 1);
-  assert.ok(html.includes('<link rel="canonical" href="https://nekkoagent.com/changelog"'));
+  assert.ok(html.includes('<link rel="canonical" href="https://nekkoagent.com/whatsnew"'));
   for (const l of loadWhatsNew()) {
     assert.ok(html.includes(`<section id="${l.line}"`));
     assert.ok(html.includes(`href="https://github.com/nekko-labs/nekko-agent/releases/tag/${l.tag}"`));
@@ -241,18 +241,18 @@ test('the shipped history runs from 0.7 to today, across three months or more', 
   assert.ok(new Set(lines.map((l) => l.date.slice(0, 7))).size >= 3, 'three months or more');
   // A line's date never runs ahead of a newer line's.
   for (let i = 1; i < lines.length; i++) assert.ok(lines[i].date <= lines[i - 1].date, lines[i].line);
-  const html = build().get('changelog.html');
+  const html = build().get('whatsnew.html');
   assert.doesNotMatch(html, /<nav class="rail"[^>]*data-solo/);
   for (const l of lines) assert.ok(html.includes(`class="rail-link" href="#${l.line}"`), l.line);
 });
 
 test('the release rail lists every release under its year, newest first, and marks the first', () => {
-  const one = changelogPage(parseWhatsNew({ '0.10': line() }));
+  const one = whatsNewPage(parseWhatsNew({ '0.10': line() }));
   assert.match(one, /<nav class="rail" aria-label="Releases" data-solo>/);
   assert.equal((one.match(/class="rail-link"/g) ?? []).length, 1);
 
   const lines = parseWhatsNew({ '0.9': line({ date: '2025-12-02', tag: 'v0.9.1000' }), '0.10': line({ date: '2026-11-16' }), '0.11': line({ date: '2026-12-01', tag: 'v0.11.1000' }) });
-  const html = changelogPage(lines);
+  const html = whatsNewPage(lines);
   const rail = html.slice(html.indexOf('<nav class="rail"'), html.indexOf('</nav>', html.indexOf('<nav class="rail"')));
   assert.doesNotMatch(rail, /data-solo/);
   assert.deepEqual([...rail.matchAll(/class="rail-year">(\d+)</g)].map((m) => m[1]), ['2026', '2025']);
@@ -272,19 +272,19 @@ test('every release names everyone who shipped it, in an order no one is always 
   };
 
   // The order comes from the dice passed in: the same roll gives the same row, another gives another.
-  const first = row(changelogPage(lines, new Map(), () => 0));
-  const last = row(changelogPage(lines, new Map(), () => 0.999));
-  assert.deepEqual(row(changelogPage(lines, new Map(), () => 0)), first);
+  const first = row(whatsNewPage(lines, new Map(), () => 0));
+  const last = row(whatsNewPage(lines, new Map(), () => 0.999));
+  assert.deepEqual(row(whatsNewPage(lines, new Map(), () => 0)), first);
   assert.notDeepEqual(first, last);
   assert.notEqual(first[0], last[0]);
   for (const order of [first, last]) assert.deepEqual([...order].sort(), [...people, 'octo-cat'].sort());
 
-  const html = changelogPage(lines, new Map(), () => 0);
+  const html = whatsNewPage(lines, new Map(), () => 0);
   assert.ok(html.includes('Everyone who shipped 0.10'));
   assert.equal((html.match(/class="everyone-who"/g) ?? []).length, 1);
 
   // The shipped page: every release has its row, and no bot is in one.
-  const shipped = build().get('changelog.html');
+  const shipped = build().get('whatsnew.html');
   for (const l of loadWhatsNew()) {
     assert.ok(shipped.includes(`Everyone who shipped ${l.line}`), l.line);
     for (const login of l.contributors) assert.doesNotMatch(login, /\[bot\]|-bot$/);
@@ -293,12 +293,12 @@ test('every release names everyone who shipped it, in an order no one is always 
 });
 
 test('highlights sit in two columns when there is room', () => {
-  const html = build().get('changelog.html');
+  const html = build().get('whatsnew.html');
   assert.match(html, /@media \(min-width: 900px\) \{[^}]*\.highlights \{[^}]*grid-template-columns: 1fr 1fr;/);
 });
 
 test('each credit leads with the avatars, then says who shipped it', () => {
-  const html = changelogPage(parseWhatsNew({ '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['one', 'two'] }] }) }));
+  const html = whatsNewPage(parseWhatsNew({ '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['one', 'two'] }] }) }));
   const credit = html.slice(html.indexOf('<p class="shipped">'), html.indexOf('</p>', html.indexOf('<p class="shipped">')));
   const faces = [...credit.matchAll(/class="by-avatar"/g)].map((m) => m.index);
   assert.equal(faces.length, 2);
@@ -307,8 +307,8 @@ test('each credit leads with the avatars, then says who shipped it', () => {
   assert.match(html, /\.by-avatar \{[^}]*width: 28px; height: 28px;/);
 });
 
-test('the changelog carries the home page\'s dot wave, from one shared first-party script', () => {
-  const html = build().get('changelog.html');
+test('the What\'s new page carries the home page\'s dot wave, from one shared first-party script', () => {
+  const html = build().get('whatsnew.html');
   assert.match(html, /<canvas id="pixelwave" aria-hidden="true"><\/canvas>/);
   assert.match(html, /<script src="\/pixelwave\.js\?v=\d+" defer><\/script>/);
 
@@ -322,8 +322,8 @@ test('the changelog carries the home page\'s dot wave, from one shared first-par
   assert.doesNotMatch(site('site.js'), /pixelwave/);
 });
 
-test('the changelog speaks in the home page\'s type: heavy title, LED release heading, retro mono dates', () => {
-  const html = build().get('changelog.html');
+test('the What\'s new page speaks in the home page\'s type: heavy title, LED release heading, retro mono dates', () => {
+  const html = build().get('whatsnew.html');
   assert.match(html, /\.legal h1 \{[^}]*font-weight: 800;/);
   assert.match(html, /\.legal h2 \{[^}]*font-family: var\(--led\);/);
   assert.match(html, /\.release-head time \{[^}]*var\(--retro-mono\)/);
@@ -345,28 +345,28 @@ test('avatars come only from the contributor cache, with initials when one is mi
   assert.equal(avatarsFrom(null).size, 0);
 
   const lines = parseWhatsNew({ '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['octo-cat', 'none'] }] }) });
-  const html = changelogPage(lines, avatars);
+  const html = whatsNewPage(lines, avatars);
   // Once in the highlight's credit, once in the release's row of everyone.
   assert.equal((html.match(/<img class="by-img"/g) ?? []).length, 2);
   assert.ok(html.includes('src="/contributors/Octo-Cat-0123456789abcdef.png"'));
   assert.ok(html.includes('>OC<') && html.includes('>NO<'), 'initials stay under the image and stand in when it is missing');
-  assert.doesNotMatch(changelogPage(lines), /<img class="by-img"/);
+  assert.doesNotMatch(whatsNewPage(lines), /<img class="by-img"/);
 });
 
 test('text from the highlights file is escaped on the page', () => {
-  const html = changelogPage(parseWhatsNew({ '0.10': line({ intro: 'a <b> & c', highlights: [{ title: '<script>x</script>', detail: 'd', pr: 1, authors: ['a'] }] }) }));
+  const html = whatsNewPage(parseWhatsNew({ '0.10': line({ intro: 'a <b> & c', highlights: [{ title: '<script>x</script>', detail: 'd', pr: 1, authors: ['a'] }] }) }));
   assert.ok(html.includes('a &lt;b&gt; &amp; c'));
   assert.doesNotMatch(html, /<script>x<\/script>/);
 });
 
-test('every site page links to the changelog, and the sitemap and llms.txt list it', () => {
+test('every site page links to the What\'s new page, and the sitemap and llms.txt list it', () => {
   const read = (file) => readFileSync(new URL(`../apps/website/${file}`, import.meta.url), 'utf8');
   for (const file of ['index.html', 'status.html', 'privacy.html', 'beta.html', 'pricing.html']) {
-    assert.ok((read(file).match(/href="\/changelog"/g) ?? []).length === 2, file);
+    assert.ok((read(file).match(/href="\/whatsnew"/g) ?? []).length === 2, file);
   }
   const files = build();
-  assert.ok(files.get('sitemap.xml').includes('<loc>https://nekkoagent.com/changelog</loc>'));
+  assert.ok(files.get('sitemap.xml').includes('<loc>https://nekkoagent.com/whatsnew</loc>'));
   const llmsLinks = [...files.get('llms.txt').matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]);
-  assert.ok(llmsLinks.some((link) => link === 'https://nekkoagent.com/changelog'), 'llms.txt links the changelog');
-  assert.ok(files.get('docs/whats-new.html').includes('href="/changelog"'));
+  assert.ok(llmsLinks.some((link) => link === 'https://nekkoagent.com/whatsnew'), 'llms.txt links the page');
+  assert.ok(files.get('docs/whats-new.html').includes('href="/whatsnew"'));
 });

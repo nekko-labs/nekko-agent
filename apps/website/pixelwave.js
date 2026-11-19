@@ -1,4 +1,4 @@
-// The site's backdrop, shared by the home page and the changelog: each page
+// The site's backdrop, shared by the home page and the What's new page: each page
 // supplies a <canvas id="pixelwave"> and loads this file.
 // ---- dot-matrix swell background: a fine grid of pixel dots that mostly
 //      sits invisible, with a soft wave of brightness drifting through it.
