@@ -17,7 +17,7 @@ import { localAgentStarts, onLocalAgentWorking } from '../workingAgents.js';
 import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type AgentStatus } from '../components/WorkspaceCard.js';
 import { GroupActivity } from '../components/GroupActivity.js';
 import { ChatFinder } from '../components/ChatFinder.js';
-import { ArchiveIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
+import { ArchiveIcon, CopyIcon, PlusIcon, SearchIcon, SlidersIcon, TerminalIcon } from '../icons.js';
 import { FolderOpenIcon, GfBotsIcon, GfGlobeIcon, GfImageIcon, GfTerminalIcon } from '../gentleface-icons.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
 import { useWallLogs } from '../wallLogs.js';
@@ -257,6 +257,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const anchor = useRef<string | null>(null);
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
   const [archivedMenu, setArchivedMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [copiedChatId, setCopiedChatId] = useState(false);
   // The chat whose card title is a text field, from the pencil or the menu's Rename.
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const renameChat = async (id: string, typed: string | null) => {
@@ -1096,8 +1097,22 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       style={{ gap: 'var(--pane-gap)', minHeight: 0 }}
     >
       {viewMenu && <AgentPanelViewMenu x={viewMenu.x} y={viewMenu.y} view={view} onChange={setView} onClose={closeViewMenu} />}
-      {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-        <div className="select-text break-all px-3 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
+      {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => { setMenu(null); setCopiedChatId(false); }}>
+        {menu.ids.length === 1
+          ? <div
+              role="menuitem"
+              tabIndex={0}
+              data-quiet-row
+              className="flex cursor-pointer items-center justify-between break-all px-3 py-2 font-mono text-2xs text-ink-faint"
+              onClick={() => { void navigator.clipboard?.writeText(menu.ids[0]).then(() => { setCopiedChatId(true); setTimeout(() => setCopiedChatId(false), 1500); }); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void navigator.clipboard?.writeText(menu.ids[0]).then(() => { setCopiedChatId(true); setTimeout(() => setCopiedChatId(false), 1500); }); } }}
+            >
+              <span><span className="select-none">Chat ID: </span>{menu.ids[0]}</span>
+              {copiedChatId
+                ? <span className="ml-2 shrink-0 text-ink" aria-live="polite">Copied</span>
+                : <span className="quiet-row-action ml-2 shrink-0"><CopyIcon className="h-3 w-3" /></span>}
+            </div>
+          : <div className="select-text break-all px-3 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length} sessions selected</div>}
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
           <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction disabled={menu.ids.length !== 1} onClick={() => { setRenamingId(menu.ids[0]); setMenu(null); }}>Rename</ContextAction>
