@@ -3,7 +3,7 @@ import { type CloudStatus, type SyncDevice, cloudError } from '@nekko-agent/shar
 import { Toggle } from '../primitives/Toggle.js';
 import { StatusDot } from '../primitives/index.js';
 import { SettingsSection } from '../SettingsSection.js';
-import { CloudSignIn } from './CloudSignIn.js';
+import { CODE_LIFETIME_MS, CloudSignIn, type PendingCode } from './CloudSignIn.js';
 import { RecoveryKeyDialog } from './RecoveryKeyDialog.js';
 import { DeleteAccountDialog } from './DeleteAccountDialog.js';
 import { SyncVisual } from './SyncVisual.js';
@@ -19,6 +19,13 @@ export function SyncSettings() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [deleting, setDeleting] = useState(false);
+  // An emailed code outlives its window: Sign in reopens it until it's used, cancelled or expired.
+  const [pendingCode, setPendingCode] = useState<PendingCode | null>(null);
+  const openSignIn = () => {
+    if (pendingCode && Date.now() - pendingCode.sentAt > CODE_LIFETIME_MS) setPendingCode(null);
+    setSignIn(true);
+  };
+  useEffect(() => { if (status?.signedIn) setPendingCode(null); }, [status?.signedIn]);
 
   useEffect(() => {
     let live = true;
@@ -62,7 +69,7 @@ export function SyncSettings() {
       {phase === 'signed-out' && (
         <div className="text-center">
           <p className="mx-auto max-w-md text-sm text-ink-soft">Sign in to Nekko Cloud to keep your chats in step across your computers and your iPhone. Everything is encrypted here before it leaves this computer.</p>
-          <button className="btn btn-primary mt-(--q-inline)" onClick={() => setSignIn(true)} data-testid="sync-sign-in">Sign in to Nekko Cloud</button>
+          <button className="btn btn-primary mt-(--q-inline)" onClick={openSignIn} data-testid="sync-sign-in">{pendingCode ? 'Enter your sign-in code' : 'Sign in to Nekko Cloud'}</button>
         </div>
       )}
 
@@ -72,10 +79,7 @@ export function SyncSettings() {
             <div className="truncate font-medium text-ink">{status.account?.email}</div>
             <div className="mt-(--q-tight) text-xs text-ink-faint">{planLabel(status.account?.plan)}</div>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <button className="btn btn-ghost py-1! text-xs!" disabled={!!busy} onClick={() => void act('out', () => window.nekko.cloudSignOut())}><LogOutIcon className="mr-1 h-3.5 w-3.5" />Sign out</button>
-            <button className="btn btn-ghost py-1! text-xs! text-danger-text!" disabled={!!busy} data-cloud-delete-account onClick={() => setDeleting(true)}>Delete account</button>
-          </div>
+          <button className="btn btn-ghost shrink-0 py-1! text-xs!" disabled={!!busy} onClick={() => void act('out', () => window.nekko.cloudSignOut())}><LogOutIcon className="mr-1 h-3.5 w-3.5" />Sign out</button>
         </div>
       )}
       {/* Hidden until the Nekko team switches billing on (#2724). */}
@@ -142,16 +146,39 @@ export function SyncSettings() {
           )}
           <div className="sync-row">
             <p className="text-xs text-ink-faint">Keys on this computer are kept in {status.keysStoredIn}. Key epoch {status.sync.keyEpoch ?? '–'}.</p>
-            <button className="btn btn-ghost shrink-0 py-1! text-xs! text-danger-text!" disabled={!!busy}
-              onClick={() => { if (window.confirm('Delete every synced chat, key and device from Nekko Cloud? Chats on your devices stay. This can\'t be undone.')) void act('delete', () => window.nekko.syncDeleteAll()); }}>
-              Delete everything synced
-            </button>
           </div>
         </>
       )}
 
+      {status?.signedIn && (
+        <div className="sync-row flex-col items-stretch!" data-testid="sync-danger-zone">
+          <div className="quiet-group-label">Danger zone</div>
+          <ul className="-mx-2 mt-(--q-inline)">
+            {['idle', 'syncing', 'paused', 'error'].includes(phase) && (
+              <li className="quiet-row min-h-(--q-row) justify-between gap-3 px-2!" data-quiet-row>
+                <div className="min-w-0 text-sm">
+                  <div className="font-medium text-ink">Delete everything synced</div>
+                  <div className="mt-(--q-tight) text-xs text-ink-faint">Every synced chat, key and device in Nekko Cloud. Chats on your devices stay.</div>
+                </div>
+                <button className="btn btn-ghost shrink-0 py-1! text-xs! text-danger-text!" disabled={!!busy}
+                  onClick={() => { if (window.confirm('Delete every synced chat, key and device from Nekko Cloud? Chats on your devices stay. This can\'t be undone.')) void act('delete', () => window.nekko.syncDeleteAll()); }}>
+                  Delete everything synced
+                </button>
+              </li>
+            )}
+            <li className="quiet-row min-h-(--q-row) justify-between gap-3 px-2!" data-quiet-row>
+              <div className="min-w-0 text-sm">
+                <div className="font-medium text-ink">Delete account</div>
+                <div className="mt-(--q-tight) text-xs text-ink-faint">Your Nekko Cloud account and everything in it. Every device is signed out.</div>
+              </div>
+              <button className="btn btn-ghost shrink-0 py-1! text-xs! text-danger-text!" disabled={!!busy} data-cloud-delete-account onClick={() => setDeleting(true)}>Delete account</button>
+            </li>
+          </ul>
+        </div>
+      )}
+
       {(error || status?.sync.error) && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text">{error || status?.sync.error}</p>}
-      {signIn && <CloudSignIn status={status} onClose={() => setSignIn(false)} />}
+      {signIn && <CloudSignIn status={status} pending={pendingCode} onPending={setPendingCode} onClose={() => setSignIn(false)} />}
       {deleting && <DeleteAccountDialog email={status?.account?.email ?? ''} onClose={() => setDeleting(false)} onDeleted={(s) => { setStatus(s); setDeleting(false); }} />}
       {recovery && <RecoveryKeyDialog recoveryKey={recovery.key} email={status?.account?.email ?? ''} onDone={() => setRecovery(null)} />}
     </SettingsSection>
