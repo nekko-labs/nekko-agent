@@ -40,12 +40,12 @@ A command starts with "Nekko" (or how a recognizer spells it: Neco, Necco, Necko
 | how's it going / status | the focused chat's status (lane, then the current step or "Watching PR") | the status line |
 | open the one about X / switch to X | one clear match opens it; several give up to three to pick by tap or "Nekko, the first one"; none types the phrase as dictation | "Opened" and the chat title |
 | ship it | open PR: merge after a confirm naming it (a stacked PR opens on GitHub); no PR and idle: sends "Go ahead and build it." as its own sentence after any draft; a waiting question (with or without a PR): answers it with the free-text answer "Go ahead and build it." rather than sending, which would queue behind the blocked turn; open PR and a waiting question: offers **Merge owner/repo#123** or **Go ahead** (that answer); still running: "It's still working" | "Merging owner/repo#123" / Sent |
-| complete / finish / archive this session | completes the chat, after a confirm | "Completed" and the chat title |
+| archive / complete / finish this chat or session | archives the chat, after a confirm | "Archived" and the chat title |
 | go to / open a page, switch to desktop or screen n | as before (see above) | "Opened" and the page / Switched to ... |
 | yes / confirm, no / cancel, the first / second / third one | answers a waiting confirm or list | Cancelled (for no) |
 
-- Commands about a chat (erase, clear, send, ship, status, complete) act only on the focused chat; with none focused they toast **Open a chat first**.
-- Only merging a PR and completing a chat ask first: "... Say 'Nekko, yes' or tap Confirm." A confirm or list waits **60 seconds**, then goes away, so a stray "Nekko, yes" later does nothing. While one is waiting, "Nekko, cancel" answers it; otherwise "cancel that" erases.
+- Commands about a chat (erase, clear, send, ship, status, archive) act only on the focused chat; with none focused they toast **Open a chat first**.
+- Only merging a PR and archiving a chat ask first: "... Say 'Nekko, yes' or tap Confirm." A confirm or list waits **60 seconds**, then goes away, so a stray "Nekko, yes" later does nothing. While one is waiting, "Nekko, cancel" answers it; otherwise "cancel that" erases.
 
 **First-open video** `[implemented 2026-10-27; unit-tested; hidden-window verified, frames inspected in light and dark]`
 

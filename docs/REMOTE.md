@@ -30,7 +30,7 @@ The primary Home Screen icon follows iOS icon appearance: the light version keep
 
 ## Reconnecting and reading replies on iPhone and iPad
 
-When a paired computer is unavailable, New chat separates its reconnecting status from the drafting hint. You can write your message and choose Send while waiting; the queued text stays on this device until the computer reconnects. Drafting without choosing Send does not queue a message. Image chats and supporting folders that require confirmation retain their specific reconnect instructions.
+When a paired computer is unavailable, New chat says that prompts you send wait on this iPhone or Android phone. You can write your message and choose Send while waiting; the queued text stays on this device until the computer reconnects. Drafting without choosing Send does not queue or send a message. Image chats and supporting folders that require confirmation retain their specific reconnect instructions.
 
 On iOS 18 and later, an open computer chat follows the measured growth of the reply while you are at the end. Scroll into history to stop following, then tap **Jump to latest** to resume. iOS 17 retains the previous scrolling implementation. The reconnect ellipsis stays still with Reduce Motion enabled.
 
@@ -111,10 +111,13 @@ fresh QR from the phone. You do not need to revoke it first, and your other phon
 iPhone and Android update the existing computer when its identity key is unchanged, even after a
 relay address changes, keeping its nickname and saved data.
 
-**Computer name** in the same settings card starts with your computer's system name. Enter a name
-and click **Save name**, or clear it to use the system name again. The phone learns it when it
-connects or refreshes. You can still use **Rename** on the phone for a nickname just on that phone;
-that nickname is kept when the computer's shared name changes or you pair it again.
+**Computer name** in the same settings card starts with your computer's system name: the name in
+**System Settings → General → About** on a Mac (such as "Philip's MacBook Pro"), the pretty hostname
+on Linux, and the PC's name on Windows. Enter a name and click **Save name**, or clear it to use the
+system name again. The phone learns it when it connects or refreshes. You can still use **Rename**
+on the phone for a nickname just on that phone (on the iPhone it is also in the New chat device
+menu); that nickname is kept when the computer's shared name changes or you pair it again. Clear the
+nickname to go back to the computer's own name.
 
 A full reset or **Sign out all phones** changes the computer's identity key as well as its pairing
 credentials. For safety the phone does not merge different keys just because their names match.
@@ -237,10 +240,16 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > its name. **View → Group by → Computer** puts a heading over each computer's chats, and
 > **View → Show** turns the computer's name and icon off.
 >
+> **Settings on the iPhone** (iPhone): your Nekko Cloud account is the first row, like the Apple Account in iOS Settings; tap it to sign in or open sync. **Computers** come second, each computer a row you tap for its page, with a plus to add one. **Models on This iPhone** lists your providers the same way.
+>
 > **Chats on this iPhone** (iPhone): the phone can run chats itself, with no computer, on a cloud
 > model provider. Add one in **Settings → Models on this iPhone**: the Claude API, OpenAI,
 > OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock, Claude in Microsoft Foundry,
-> Claude on Vertex AI, or any OpenAI-compatible server over https, with your own key. OpenRouter is
+> Claude on Vertex AI, or any OpenAI-compatible server over https, with your own key. Each provider
+> shows its own logo, the same marks the desktop uses. Tap a provider's button to add it; each
+> provider you have is a row that opens its page (on or off, Test, New key, Remove). Choosing the
+> Claude API first shows its options: an API key works, while the Claude subscription is dimmed,
+> because Anthropic doesn't allow it from a phone. OpenRouter is
 > one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude API, OpenAI,
 > Gemini and Ollama Cloud, tap **Open** to reach the key page, copy a key, come back and tap
 > **Paste**; Nekko checks it and connects. The key stays in this iPhone's Keychain
@@ -356,7 +365,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > you or is pinned always shows), then **Show N more**. Tap a group's name to fold it. The
 > **view** button beside New chat arranges the list as the desktop's Agents panel does: **Group
 > by** project, status, date or none; **Sort by** manual, last updated or name; **Show**
-> previews, completed chats and empty groups; and **Reset to defaults**. Grouped by project,
+> previews, archived chats and empty groups; and **Reset to defaults**. Grouped by project,
 > touch and hold a group's name to drag it to a new place, or use **Reorder groups…** in the same
 > menu. The order is kept on the iPhone.
 >
@@ -417,7 +426,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Your computer's settings from the phone** (Android): **Settings → On <computer>** changes three
 > of the computer's own settings: the chat mode for new chats (Always ask, Ask when it matters or No restrictions; switching to
-> No restrictions shows the No restrictions warning first), what a long-press on a chat does (Complete, which moves it to Completed, or
+> No restrictions shows the No restrictions warning first), what a long-press on a chat does (Archive, which moves it to Archived, or
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list offers that action, plus **Pin** (or **Unpin**)
 > and **Rename**; a pinned chat shows a pin beside its time.
@@ -463,7 +472,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Read offline** (iPhone and Android): the phone keeps each computer's chat list
 > and the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
 > newest messages). Opening the app or a chat shows them at once, and while the computer can't be
-> reached they stay readable under **Saved list from 10:42** and **Saved copy from 10:42**. When the
+> reached they stay readable under **Saved list from 10:42** and **Updated last on 10:42**. When the
 > computer answers, the live list and chat replace them in place. A saved chat can't be changed
 > (model, tool policy, rename, complete) until the computer is back, but what you send waits as
 > above. Photos are never kept, only how many a message had. Both are on unless you turn them off
@@ -485,7 +494,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
 >   puts its text in place of the `/`.
-> - **Search:** finds completed chats too, and shows every match in each group.
+> - **Search:** finds archived chats too, and shows every match in each group.
 > - **On Android** the queue's Edit and Remove, the fork (touch and hold a message, then **Edit in a
 >   new chat** or **Fork from here**), saved prompts in `/` and under **+**, and **Search chats** at
 >   the top of the chat list work the same way, and **Settings → Automations** and **Settings → Usage
@@ -549,16 +558,16 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >   days are folded under each place until you tap them.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
-> computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
+> computer, archived ones included, in the same groups as the desktop's agent sidebar: **General**
 > first, then one group per project folder. Groups start folded, as on the iPhone, with a count of
 > their chats; tap a group's name to open it, and again to fold it. The phone remembers each group's
 > choice, also after you leave the list or restart the app (it isn't synced to your computer).
 > Grouped by status, the list uses the iPhone's groups (Needs input, Draft, Building, Verifying,
 > Watching, Done), and a group with a chat running or watching shows the cat with a green dot in
 > its heading. Search shows every match whatever is folded. Each group lists its
-> active chats, then **Show completed (N)**, which opens the chats completed there (struck through,
-> newest first). Tap a completed chat to read it; its message box is replaced by **Restore**, and a
-> long-press on it offers Restore or Delete. Completing or restoring a chat on the computer shows up
+> active chats, then **Show archived (N)**, which opens the chats archived there (led by the archive glyph,
+> newest first). Tap an archived chat to read it; its message box is replaced by **Restore**, and a
+> long-press on it offers Restore or Delete. Archiving or restoring a chat on the computer shows up
 > on the phone the next time the list refreshes: when a reply finishes, when you pull down, or when
 > you come back to the app.
 >
@@ -694,7 +703,7 @@ Your computer decides what a paired phone may ask for, whatever the phone app do
 phone app is not the boundary, your computer is. A phone can use your chats and nothing that
 changes how the computer itself is set up:
 
-- **Allowed:** list, open, start, fork, complete and delete chats; send, queue, edit or remove
+- **Allowed:** list, open, start, fork, archive and delete chats; send, queue, edit or remove
   queued, and stop messages; answer approvals and the agent's questions; pick a model from the
   computer's providers and a folder from its list; voice status and transcription; read a chat's
   pull requests, the computer's automations, its usage and plan limits, and run an automation now;
@@ -714,7 +723,7 @@ changes how the computer itself is set up:
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
-- **Settings a phone may change:** the chat mode for new chats (Always ask, Ask when it matters or No restrictions), what the chat pane's top-right button does (Complete or Delete),
+- **Settings a phone may change:** the chat mode for new chats (Always ask, Ask when it matters or No restrictions), what the chat pane's top-right button does (Archive or Delete),
   whether deleting asks first, and voice on/off and its language. An update that touches any other
   setting is refused as a whole: nothing in it is applied.
 - **Settings a phone can read:** only the theme and accents, the default and starred models, your
@@ -772,7 +781,7 @@ changes how the computer itself is set up:
   needs *Change* but no signature, like stopping a run: it frees memory and the next reply that
   uses the model loads it again. Loading, downloading, deleting models and the Model Server's
   settings stay on the computer.
-- **One chat's options:** a phone can change a chat's model, effort, title, pin and tags, complete it, and
+- **One chat's options:** a phone can change a chat's model, effort, title, pin and tags, archive it, and
   switch it between Always ask, Ask when it matters and No restrictions, always allow an MCP tool in it (**Always allow this
   tool** on an approval, iPhone), but not its tools, isolation or offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
   default for new chats) to a mode with fewer approvals, Always ask to Ask when it matters or anything to No restrictions, or

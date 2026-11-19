@@ -344,6 +344,24 @@ describe('viewer control script', () => {
     key('keydown', body);
     listeners.blur({});
     expect(sent.at(-1)).toEqual({ nekkoPreview: 'hand', down: false });
+
+    // Ctrl/Cmd with +, - or 0 is passed up for the canvas to zoom, even from a field; other keys are not.
+    const chord = (k: string, over: Record<string, unknown> = {}) => {
+      let prevented = false;
+      listeners.keydown({ key: k, code: '', target: { tagName: 'INPUT' }, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, preventDefault: () => { prevented = true; }, ...over });
+      return prevented;
+    };
+    expect(chord('=', { ctrlKey: true })).toBe(true);
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'zoomKey', key: 'in' });
+    expect(chord('-', { metaKey: true })).toBe(true);
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'zoomKey', key: 'out' });
+    expect(chord('0', { ctrlKey: true })).toBe(true);
+    expect(sent.at(-1)).toEqual({ nekkoPreview: 'zoomKey', key: 'fit' });
+    const count = sent.length;
+    expect(chord('=')).toBe(false);
+    expect(chord('a', { ctrlKey: true })).toBe(false);
+    expect(chord('=', { ctrlKey: true, altKey: true })).toBe(false);
+    expect(sent.length).toBe(count);
   });
 });
 

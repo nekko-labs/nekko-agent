@@ -174,6 +174,9 @@ struct Daily {
     local_tokens: f64,
     avoided: Avoided,
     model_ids: Vec<Value>,
+    /// Paid pictures (`kind: "picture"` lines): how many, and what they cost.
+    pictures: f64,
+    picture_cost: f64,
 }
 
 impl Default for Daily {
@@ -187,6 +190,8 @@ impl Default for Daily {
             local_tokens: 0.0,
             avoided: Avoided::default(),
             model_ids: Vec::new(),
+            pictures: 0.0,
+            picture_cost: 0.0,
         }
     }
 }
@@ -251,7 +256,14 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
             let input = nekko_js::to_number(get(&r, "inputTokens"));
             let output = nekko_js::to_number(get(&r, "outputTokens"));
             let total_in = input + or_zero(get(&r, "cacheReadTokens")) + or_zero(get(&r, "cacheWriteTokens"));
-            let exact = estimate_cost(model, tokens)?;
+            // A line with the provider's own charge (`costUsd`, a paid cloud
+            // picture) costs that, not a token estimate.
+            let reported = get(&r, "costUsd").and_then(Value::as_f64).filter(|c| c.is_finite() && *c >= 0.0);
+            let picture = get(&r, "kind").and_then(Value::as_str) == Some("picture");
+            let exact = match reported {
+                Some(c) => Some(c),
+                None => estimate_cost(model, tokens)?,
+            };
             let list_cost = exact.unwrap_or(0.0);
             let cost = if local || subscription { 0.0 } else { list_cost };
             let day = crate::date::iso_date(crate::date::from_value(get(&r, "ts"))).ok_or("Invalid time value")?;
@@ -319,6 +331,10 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
             d.input += total_in;
             d.output += output;
             d.cost += cost;
+            if picture {
+                d.pictures += 1.0;
+                d.picture_cost += cost;
+            }
             if let Some(origin) = get(&r, "origin").and_then(Value::as_str) {
                 let a = d.attribution.get_or_insert_with(Attribution::default);
                 let (read, write) = (or_zero(get(&r, "cacheReadTokens")), or_zero(get(&r, "cacheWriteTokens")));
@@ -373,6 +389,11 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
                     });
                     if let Some(a) = &d.attribution {
                         day["attribution"] = a.value();
+                    }
+                    // Only on a day with paid pictures, so older summaries read the same.
+                    if d.pictures > 0.0 {
+                        day["pictures"] = num(d.pictures);
+                        day["pictureCost"] = num(d.picture_cost);
                     }
                     day
                 })
@@ -467,6 +488,32 @@ pub fn summarize_replies(records: &[Value]) -> Result<Option<Value>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_paid_picture_costs_what_the_provider_charged() {
+        let day = 1_762_732_800_000_u64; // 2025-11-10 UTC
+        let lines = [
+            json!({ "ts": day, "providerId": "p_or", "modelId": "acme/pic", "sessionId": "s", "inputTokens": 0, "outputTokens": 0, "local": false, "kind": "picture", "costUsd": 0.031 }),
+            json!({ "ts": day, "providerId": "p_or", "modelId": "acme/pic", "sessionId": "s", "inputTokens": 0, "outputTokens": 0, "local": false, "kind": "picture", "costUsd": 0.04 }),
+        ]
+        .iter()
+        .map(|l| l.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+        let s = usage_summary(&UsageFiles { settings: None, usage: Some(lines), replies: None }).unwrap();
+        let close = |v: &Value, want: f64| (v.as_f64().unwrap() - want).abs() < 1e-9;
+        assert!(close(&s["totalCost"], 0.071), "{}", s["totalCost"]);
+        assert!(close(&s["bySessionCost"]["s"], 0.071));
+        let d = &s["daily"][0];
+        assert!(close(&d["cost"], 0.071));
+        assert_eq!(d["pictures"], json!(2));
+        assert!(close(&d["pictureCost"], 0.071));
+        // A day with no pictures says nothing about them.
+        let tokens =
+            json!({ "ts": day, "providerId": "a", "modelId": "m", "inputTokens": 5, "outputTokens": 5 }).to_string();
+        let s = usage_summary(&UsageFiles { settings: None, usage: Some(tokens), replies: None }).unwrap();
+        assert!(s["daily"][0].get("pictures").is_none());
+    }
 
     #[test]
     fn days_split_attributed_usage_by_origin_role_and_cache() {

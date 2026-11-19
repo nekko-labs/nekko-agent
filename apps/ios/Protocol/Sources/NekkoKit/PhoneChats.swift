@@ -363,7 +363,7 @@ public final class PhoneChats {
         save()
     }
 
-    public func complete(_ chatId: String) {
+    public func archive(_ chatId: String) {
         guard let i = index(chatId) else { return }
         stop(chatId)
         chats[i].archivedAt = now()

@@ -489,6 +489,9 @@ async fn admit(
     let Some(provider) = provider.filter(|p| nekko_js::truthy(p.get("enabled"))) else {
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
+    // Using an LM Studio model is the one time a closed LM Studio is opened;
+    // the Models page only asks (#2961).
+    ctx.runtimes.open_for_turn(&provider).await;
     // A scheduled task, workflow, goal step, watch or auto-continue on Claude
     // Code needs `unattended_runs` for its auth (claude_policy.rs). Its auth
     // comes from `claude auth status`, read once if nothing has read it yet.

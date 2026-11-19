@@ -16,6 +16,8 @@ pub struct Account {
     pub staff: bool,
     /// Plans and billing are switched on for this account (#2724).
     pub billing: bool,
+    /// Library files sync to Nekko Cloud for this account (the `library-cloud` switch, #2748).
+    pub library_cloud: bool,
 }
 
 impl Account {
@@ -28,8 +30,65 @@ impl Account {
             can_sync: a["canSync"].as_bool().unwrap_or(false),
             staff: a["staff"].as_bool().unwrap_or(false),
             billing: a["features"]["billing"].as_bool().unwrap_or(false),
+            library_cloud: a["features"]["library-cloud"].as_bool().unwrap_or(false),
         }
     }
+}
+
+/// A file Library lists on this computer, as the app reported it (`library:sync`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LibraryFile {
+    pub path: String,
+    pub title: String,
+    /// Library's kind (`doc`, `web`, `design`, `diagram`, `data`, `office`, `image`).
+    pub kind: String,
+    /// The chat it came from (its title), or the project for a designs-folder file.
+    pub chat: String,
+    /// A small thumbnail for the file (base64url PNG or WebP, capped at ~200 KB), as reported
+    /// by the app. Embedded in the sealed record so other computers can show it (#3044).
+    pub thumbnail_data: String,
+}
+
+/// One Library file as this device last pushed it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LibrarySynced {
+    /// The file's modified time and size when pushed, to skip an unchanged file without reading it.
+    pub modified_at: f64,
+    pub size: u64,
+    /// A digest of the record's plaintext.
+    pub digest: String,
+    /// A tombstone was pushed: the file is gone from this computer.
+    pub deleted: bool,
+    /// The key epoch it was pushed under (older ones are pushed again).
+    pub key_id: u32,
+    /// A digest of the last-pushed thumbnail, to push again when it changes (#3044).
+    pub thumbnail_digest: String,
+}
+
+/// A Library file another computer of this account synced, kept here as a read-only copy.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RemoteFile {
+    pub device_id: String,
+    /// That computer's name.
+    pub device: String,
+    /// Its path there.
+    pub path: String,
+    pub title: String,
+    pub kind: String,
+    pub chat: String,
+    pub modified_at: f64,
+    pub size: u64,
+    /// Where the copy is on this computer (`<data>/cloud/library/<object id>/<name>`).
+    pub copy: String,
+    /// A small thumbnail from the sealed record (base64url PNG or WebP), shown before
+    /// the file is opened on this computer (#3044). Empty when the record had none.
+    pub thumbnail_data: String,
+    /// True when only a thumbnail record was pushed (the file was over 8 MB, #3044).
+    /// Such records have no copy on disk; the original path is shown as the entry path.
+    pub thumb_only: bool,
 }
 
 /// One synced chat as this device last pushed or applied it.
@@ -79,8 +138,6 @@ pub struct State {
     pub account: Option<Account>,
     /// Sync is on for this device.
     pub enabled: bool,
-    /// Include "Local only" (offline) chats.
-    pub include_local_only: bool,
     /// The user said they saved the recovery key.
     pub recovery_confirmed: bool,
     pub device_id: Option<String>,
@@ -110,6 +167,12 @@ pub struct State {
     pub fleet: BTreeMap<String, Share>,
     /// Highest descriptor revision opened per `<orgId>/<deviceId>`: a lower one is a rollback.
     pub fleet_seen: BTreeMap<String, u64>,
+    /// The files Library lists here, per path (#2748). Kept until the file is gone from disk.
+    pub library_files: BTreeMap<String, LibraryFile>,
+    /// Per path: what was last pushed of each.
+    pub library: BTreeMap<String, LibrarySynced>,
+    /// Other computers' Library files, per object id.
+    pub library_remote: BTreeMap<String, RemoteFile>,
 }
 
 impl State {
@@ -129,8 +192,8 @@ impl State {
 
     /// Forget everything about sync (another account signed in, or Delete everything synced).
     pub fn reset_sync(&mut self) {
-        let keep = (self.account.clone(), self.device_label.clone(), self.include_local_only);
-        *self = State { account: keep.0, device_label: keep.1, include_local_only: keep.2, ..State::default() };
+        let keep = (self.account.clone(), self.device_label.clone());
+        *self = State { account: keep.0, device_label: keep.1, ..State::default() };
     }
 }
 

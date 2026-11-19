@@ -28,6 +28,10 @@ Automatic delegates choose the target tier, then the nearest smaller available t
 
 Without Fusion, those preferences stay on the chat's provider. A specific saved or agent-requested model on another provider is refused visibly instead of silently substituted. If no eligible automatic pick is available, the child inherits the parent model. **Same model as the chat** and exact picks remain available.
 
+## Pictures and clips
+
+In a Fusion chat, the strategy also picks the model for the pictures and clips the agent makes when nothing names one (the agent, the chat's Photo model, or **Settings → Agents → Pictures** win when they do). **Quality first** takes the strongest model, which may be a paid one on your OpenRouter account; the other strategies stay on this computer when a local model can do the job, and otherwise take the cheapest cloud model. A paid model still asks first with its price. The result says which model Fusion chose and why. Vector pictures (SVG) keep their own choice: Recraft when you have OpenRouter, else a traced local picture. Picture-model strengths are suggested from model names; they are estimates.
+
 ## Scope
 
 These controls are implemented in the shared desktop/local-web renderer. The daemon enforces delegation permission, tier selection and saved-route/resume checks. Native phone clients do not yet edit these settings. Headless messaging keeps its existing same-provider Auto behavior. Claude Code's own subagents use its existing environment mechanism (Small/Medium/Large map to Haiku/Sonnet/Opus; Frontier caps at Opus), but live CLI compliance has not been verified. No model-based classifier or measured-latency routing is claimed.

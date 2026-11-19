@@ -21,6 +21,12 @@
           "title": "Walkthrough",
           "source": "docs/WALKTHROUGH.md",
           "description": "A picture-by-picture tour of the app."
+        },
+        {
+          "slug": "whats-new",
+          "title": "What's new",
+          "source": "docs/hub/whats-new.md",
+          "description": "Where to find the highlights of each Nekko Agent release and the full release notes."
         }
       ]
     },

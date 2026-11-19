@@ -179,6 +179,8 @@ export const IpcChannels = {
   chatProvideSecret: 'chat:provideSecret',
   chatPending: 'chat:pending',
   chatRunning: 'chat:running',
+  /** Working chats by agent-loop phase, for the `npm run dev` status line. */
+  chatActivity: 'chat:activity',
 
   terminalsList: 'terminals:list',
   terminalShells: 'terminal:shells',
@@ -512,8 +514,9 @@ export const IpcChannels = {
   syncRevoke: 'sync:revoke',
   syncNow: 'sync:now',
   syncSetEnabled: 'sync:setEnabled',
-  syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
   syncDeleteAll: 'sync:deleteAll',
+  // The files Library lists on this computer, for Library sync (crates/nekko-cloud, #2748).
+  librarySync: 'library:sync',
   // Nekko Cloud organizations and the shared computer fleet (crates/nekko-cloud).
   orgList: 'org:list',
   orgCreate: 'org:create',
@@ -678,8 +681,13 @@ export interface NekkoApi {
   syncRevoke(deviceId: string): Promise<import('./cloud.js').CloudStatus>;
   syncNow(): Promise<import('./cloud.js').CloudStatus>;
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
-  syncSetIncludeLocalOnly(on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
+  /**
+   * Tell the engine which files Library lists here, so they sync to Nekko Cloud
+   * when Library sync is open to the account (`status.library` is not null).
+   * Merged with what it already knows; a file leaves only when it is gone from disk.
+   */
+  librarySync(files: import('./cloud.js').LibrarySyncFile[]): Promise<import('./cloud.js').CloudStatus>;
   /** Organizations you belong to and invites waiting for you. */
   orgList(): Promise<import('./cloud.js').OrgList>;
   /** Create an organization (needs an unlocked account on Pro or Team); this device creates its key. */
@@ -1042,16 +1050,16 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
   clearSessions(scope: import('./chat.js').ChatClearScope): Promise<number>;
-  /** Compatibility no-op: completed history is retained indefinitely. */
+  /** Compatibility no-op: archived history is retained indefinitely. */
   purgeExpiredArchives(): Promise<number>;
-  /** All local chat JSON and command-log bytes; count is completed chats only. Symlinks are not followed. */
+  /** All local chat JSON and command-log bytes; count is archived chats only. Symlinks are not followed. */
   getHistoryUsage(): Promise<{ bytes: number; count: number }>;
-  /** Delete completed chats in the selected updatedAt range; returns how many were removed. */
+  /** Delete archived chats in the selected updatedAt range; returns how many were removed. */
   clearHistory(range: 'today' | 'last-week' | 'older-2-weeks' | 'older-1-month' | 'older-6-months'): Promise<number>;
   /** A new chat with this one's conversation before `beforeMessageId` (all of it when omitted). */
   forkSession(id: string, beforeMessageId?: string): Promise<Session | null>;
@@ -1129,6 +1137,19 @@ export interface NekkoApi {
   serveHtmlPreview?(path: string, options: import('./html-preview.js').HtmlPreviewOptions): Promise<import('./html-preview.js').HtmlPreviewServed>;
   /** Stop serving a page `serveHtmlPreview` returned. */
   releaseHtmlPreview?(id: string): Promise<void>;
+  /**
+   * Read a Library thumbnail from the on-disk cache (main/libraryThumbnails.ts, #3043).
+   * Returns a data URL (`data:image/webp;base64,...`) or null when not cached.
+   */
+  libraryThumbGet?(path: string, revision: string | number): Promise<string | null>;
+  /** Write a Library thumbnail to the on-disk cache. `data` is a data URL. */
+  libraryThumbPut?(path: string, revision: string | number, data: string): Promise<void>;
+  /**
+   * Render a served HTML URL in a hidden off-screen window and return a PNG
+   * data URL (or null when the page did not produce a frame). The URL must be
+   * on `http://127.0.0.1`.
+   */
+  libraryThumbCapture?(url: string): Promise<string | null>;
   /** Write text to a file (in-app editor save). */
   writeFile(path: string, content: string): Promise<void>;
   /** List a directory's immediate entries (file explorer). */

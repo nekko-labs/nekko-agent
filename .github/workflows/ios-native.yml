@@ -28,6 +28,10 @@ on:
     - cron: '37 18 * * *'
   workflow_dispatch:
     inputs:
+      turn_details_diagnostic:
+        description: 'Owner-Mac diagnostic only: {"app":"<full SHA>","harness":"<full SHA>"}; no batch status'
+        required: false
+        default: ''
       relay_baseline_ref:
         description: 'Focused relay callback regression: full before SHA'
         required: false
@@ -72,11 +76,11 @@ permissions:
 # run of pushes costs one more batch, not one per push. ios-batch.mjs cancels a
 # running batch itself when a new one holds the same heads on a newer main.
 concurrency:
-  group: ios-native-${{ inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
+  group: ios-native-${{ inputs.turn_details_diagnostic && format('turn-details-{0}', github.run_id) || inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ !inputs.batch }}
 jobs:
   relay-regression:
-    if: github.event_name == 'workflow_dispatch' && inputs.relay_baseline_ref != ''
+    if: github.event_name == 'workflow_dispatch' && !inputs.turn_details_diagnostic && inputs.relay_baseline_ref != ''
     # Pure Swift package tests need no iOS simulator or custom Xcode runner.
     runs-on: macos-latest
     timeout-minutes: 20
@@ -94,7 +98,7 @@ jobs:
           name: relay-handshake-regression
           path: .shots/relay-handshake/*.log
   photo-evidence:
-    if: github.event_name == 'workflow_dispatch' && inputs.photos_baseline_ref != ''
+    if: github.event_name == 'workflow_dispatch' && !inputs.turn_details_diagnostic && inputs.photos_baseline_ref != ''
     permissions:
       contents: read
     uses: ./.github/workflows/ios-photo-evidence.yml
@@ -103,14 +107,14 @@ jobs:
       source_ref: ${{ inputs.source_ref || github.sha }}
       ios_runtime: com.apple.CoreSimulator.SimRuntime.iOS-27-0
   streaming-evidence:
-    if: github.event_name == 'workflow_dispatch' && inputs.streaming_baseline_ref != ''
+    if: github.event_name == 'workflow_dispatch' && !inputs.turn_details_diagnostic && inputs.streaming_baseline_ref != ''
     permissions:
       contents: read
     uses: ./.github/workflows/ios-streaming-evidence.yml
     with:
       baseline_ref: ${{ inputs.streaming_baseline_ref }}
   group-evidence:
-    if: github.event_name == 'workflow_dispatch' && inputs.groups_baseline_ref != ''
+    if: github.event_name == 'workflow_dispatch' && !inputs.turn_details_diagnostic && inputs.groups_baseline_ref != ''
     permissions:
       contents: read
     uses: ./.github/workflows/ios-group-evidence.yml
@@ -119,7 +123,7 @@ jobs:
   # The existing registered workflow is the entry point for pre-merge evidence;
   # a new workflow_dispatch file alone is not registered on main yet.
   attention-evidence:
-    if: github.event_name == 'workflow_dispatch' && inputs.baseline_ref != '' && inputs.attention_evidence
+    if: github.event_name == 'workflow_dispatch' && !inputs.turn_details_diagnostic && inputs.baseline_ref != '' && inputs.attention_evidence
     permissions:
       contents: read
     uses: ./.github/workflows/ios-attention-evidence.yml
@@ -127,14 +131,14 @@ jobs:
       baseline_ref: ${{ inputs.baseline_ref }}
       source_ref: ${{ inputs.source_ref || github.sha }}
   automatic-evidence:
-    if: github.event_name == 'workflow_dispatch' && inputs.automatic_baseline_ref != ''
+    if: github.event_name == 'workflow_dispatch' && !inputs.turn_details_diagnostic && inputs.automatic_baseline_ref != ''
     permissions:
       contents: read
     uses: ./.github/workflows/native-machine-evidence.yml
     with:
       baseline_ref: ${{ inputs.automatic_baseline_ref }}
   mode-evidence:
-    if: github.event_name == 'workflow_dispatch' && inputs.baseline_ref != '' && !inputs.attention_evidence
+    if: github.event_name == 'workflow_dispatch' && !inputs.turn_details_diagnostic && inputs.baseline_ref != '' && !inputs.attention_evidence
     permissions:
       contents: read
     uses: ./.github/workflows/native-mode-evidence.yml
@@ -167,10 +171,58 @@ jobs:
           token: ${{ secrets.MAC_RUNNER_STATUS_TOKEN }}
           org: ${{ vars.NEKKO_MAC_RUNNER_ORG }}
           fallback: xcode-27
+  turn-details-diagnostic:
+    needs: pick
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.turn_details_diagnostic != '' }}
+    permissions:
+      contents: read
+    runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
+    timeout-minutes: 45
+    env:
+      DISPATCH_INPUTS: ${{ toJSON(inputs) }}
+      WORKFLOW_EVENT: ${{ github.event_name }}
+      WORKFLOW_REF: ${{ github.ref }}
+    steps:
+      - name: Require approved owner-runner path before checkout
+        run: |
+          test "$RUNNER_ENVIRONMENT" = self-hosted
+          [[ "$WORKFLOW_REF" = refs/heads/main || "$WORKFLOW_REF" = refs/heads/ci/ios-batch ]]
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/ios-turn-details-diagnostic.mjs
+          sparse-checkout-cone-mode: false
+      - name: Validate immutable diagnostic pins and reject mixed dispatches
+        id: pins
+        run: node scripts/ios-turn-details-diagnostic.mjs validate >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.pins.outputs.app }}
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.pins.outputs.harness }}
+          path: harness
+          persist-credentials: false
+          sparse-checkout: apps/ios/UITests/TurnDetailsTests.swift
+          sparse-checkout-cone-mode: false
+      - name: Run complete TurnDetails class with retained failure diagnostics
+        run: node scripts/ios-turn-details-diagnostic.mjs capture
+      - name: Clean up only the diagnostic simulator if capture was interrupted
+        if: always()
+        run: node scripts/ios-turn-details-diagnostic.mjs cleanup
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: native-ios-turn-details-diagnostic
+          path: diagnostic-evidence/**
+          if-no-files-found: error
   protocol-and-build:
     needs: pick
     # !cancelled(): a skipped or failed picker must not skip this job.
-    if: ${{ !inputs.streaming_baseline_ref && !inputs.relay_baseline_ref && !inputs.photos_baseline_ref && !inputs.baseline_ref && !inputs.groups_baseline_ref && !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'deploy:ios') && contains(fromJSON('["deploy:ios","ci:theme"]'), github.event.label.name))) }}
+    if: ${{ !inputs.turn_details_diagnostic && !inputs.streaming_baseline_ref && !inputs.relay_baseline_ref && !inputs.photos_baseline_ref && !inputs.baseline_ref && !inputs.groups_baseline_ref && !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'deploy:ios') && contains(fromJSON('["deploy:ios","ci:theme"]'), github.event.label.name))) }}
     runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
     # Isolate the fixture suites (two legs, #1165) from the themed pairing retries and
     # the remaining live journeys (#2035). Keep every leg's existing time budget.
@@ -458,7 +510,7 @@ jobs:
     # A matrix's needs result covers ALL legs, including failed/cancelled legs.
     # Never post a batch verdict from inside one leg: that could pass partial work.
     needs: protocol-and-build
-    if: always() && inputs.batch
+    if: always() && inputs.batch && !inputs.turn_details_diagnostic
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

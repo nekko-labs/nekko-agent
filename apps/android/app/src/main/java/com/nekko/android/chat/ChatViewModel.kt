@@ -344,12 +344,12 @@ class ChatViewModel(
         }
     }
 
-    /** When this chat was completed on the computer; null while it is active. */
-    val completedAt: StateFlow<Long?> = repo.state.map { s -> s.summaries.firstOrNull { it.id == sessionId }?.archivedAt }
+    /** When this chat was archived on the computer; null while it is active. */
+    val archivedAt: StateFlow<Long?> = repo.state.map { s -> s.summaries.firstOrNull { it.id == sessionId }?.archivedAt }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.summaries.firstOrNull { it.id == sessionId }?.archivedAt)
 
-    /** Bring this completed chat back to the active list. */
+    /** Bring this archived chat back to the active list. */
     suspend fun restore() = repo.restoreChat(sessionId)
 
     /** Whether this chat is pinned on the computer. */
@@ -360,7 +360,7 @@ class ChatViewModel(
     /** Pull up past the newest message (or the mascot's Refresh): read the chat again from the computer. */
     suspend fun refresh() = controller.reload()
 
-    /** The chat's ⋮ → Rename, Pin, Complete and Chat mode: each changes the chat on the computer, then re-reads it. */
+    /** The chat's ⋮ → Rename, Pin, Archive and Chat mode: each changes the chat on the computer, then re-reads it. */
     suspend fun rename(title: String) {
         repo.renameChat(sessionId, title)
         controller.reload()
@@ -368,7 +368,7 @@ class ChatViewModel(
 
     suspend fun setPinned(pinned: Boolean) = repo.setPinned(sessionId, pinned)
 
-    suspend fun complete() = repo.completeChat(sessionId)
+    suspend fun archive() = repo.archiveChat(sessionId)
 
     /** Raising the mode is signed; a step-up refusal is thrown for the sheet, which passes its [stepUp]. */
     suspend fun setRunOption(key: String, value: kotlinx.serialization.json.JsonElement) {
@@ -384,6 +384,20 @@ class ChatViewModel(
         val off = disabled.filter { it != name } + if (on) emptyList() else listOf(name)
         setRunOption("disabledTools", kotlinx.serialization.json.JsonArray(off.map { kotlinx.serialization.json.JsonPrimitive(it) }))
     }
+
+    /**
+     * Take back "Always allow this tool" (decision 0054): the tool's next call in this chat asks
+     * again. Signed with the screen lock, as saving it was (`PHONE_GUARDED_OPTION_KEYS`).
+     */
+    suspend fun revokeAlwaysAllowed(tool: String, allowed: List<String>) =
+        setRunOption("allowedMcpTools", kotlinx.serialization.json.JsonArray(allowed.filter { it != tool }.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+
+    /**
+     * Forget a recipient (decision 0063): the next call that writes to it asks again. Signed: the
+     * computer's gate cannot tell taking one back from adding one.
+     */
+    suspend fun forgetRecipient(recipient: String, known: List<String>) =
+        setRunOption("knownRecipients", kotlinx.serialization.json.JsonArray(known.filter { it != recipient }.map { kotlinx.serialization.json.JsonPrimitive(it) }))
 
     suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
         repo.setChatMode(sessionId, mode, stepUp)

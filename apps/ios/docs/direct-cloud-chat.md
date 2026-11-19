@@ -28,7 +28,7 @@ Provider credentials and model access can incur charges. Mantle/Foundry/Vertex u
 
 - **Stop** keeps the text received so far. **Try again** replaces the last assistant reply and sends the conversation again; it can incur another charge.
 - **+ → Photos** (or Paste image) adds up to four photos to a message, in New chat and in the open chat. A model its provider says can't read photos has no **+**; where the provider doesn't say, a model that can't read them fails with a safe status explanation. Photos are kept with the chat on this device and sent again with each turn, like the text.
-- Model selection affects the next reply. Rename, pin, complete, restore and delete work locally.
+- Model selection affects the next reply. Rename, pin, archive, restore and delete work locally.
 - Completed replies need an explicit stream completion marker. A cut-off connection is an error, not a successful answer; received text is kept. Partial replies interrupted by app termination are marked on reopening.
 - To replace an expired token: Settings → Models on this iPhone → touch and hold the provider → **New key**. Key rotation, disable and remove stop its active replies and invalidate in-flight discovery/tests.
 - **Reload models** retries discovery. A failed Test never succeeds merely because an old model list was cached.

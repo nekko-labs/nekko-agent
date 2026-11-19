@@ -471,7 +471,14 @@ impl Runtimes {
     }
 
     async fn lms_list(&self, base: &str) -> Vec<Value> {
-        let (live, disk) = tokio::join!(self.lms_models(base), self.lms_catalogue(base));
+        // `lms ls` launches LM Studio when it is closed, and the Models page
+        // polls this. Only a server that answered gets the CLI's sizes: with
+        // no live models the list is empty anyway (#2961).
+        let live = self.lms_models(base).await;
+        if live.is_empty() {
+            return Vec::new();
+        }
+        let disk = self.lms_catalogue(base).await;
         live.iter()
             .map(|m| {
                 let d = m.get("id").map(nekko_js::display).and_then(|id| disk.get(&id));
@@ -1060,6 +1067,23 @@ impl Runtimes {
                     .opt("log", state.get("log").cloned())
                     .done()
             }
+        }
+    }
+
+    /// Opens a closed LM Studio on this machine for a turn that uses one of its
+    /// models, the one time Nekko Agent opens it unasked (#2961). Anything else,
+    /// or an LM Studio that already answers, is left alone. A failed start is
+    /// not reported here: the turn's own request says the server is down.
+    pub async fn open_for_turn(&self, provider: &Value) {
+        if provider.get("kind").and_then(Value::as_str) != Some("lmstudio") {
+            return;
+        }
+        let base = provider.get("baseUrl").map(nekko_js::display).unwrap_or_default();
+        if !is_localhost_url(&base) || self.get_json(format!("{}/models", trim_url(&base)), 2500).await.is_some() {
+            return;
+        }
+        if let Some(id) = provider.get("id").and_then(Value::as_str) {
+            let _ = self.start(id).await;
         }
     }
 

@@ -6,7 +6,7 @@ import { issueToken } from "./auth.js";
 import type { Db } from "./db.js";
 import { migrate } from "./migrate.js";
 import { buildServer } from "./server.js";
-import { SYNC_QUOTA } from "./sync.js";
+import { MAX_OBJECT_BYTES, PULL_PAGE_BYTES, SYNC_QUOTA } from "./sync.js";
 import { pgliteDb } from "./test-db.js";
 
 // The shared vectors from crates/nekko-sync: real sealed blobs, so the size
@@ -343,6 +343,27 @@ describe("push and pull", () => {
     const usage = (await call(a, u.token, "GET", "/v1/sync/state")).json().usage.bytes;
     expect(usage).toBe(rows.reduce((n, r) => n + Buffer.from(r.blob).length, 0));
   });
+
+  it("takes a long chat up to 16 MiB and pages big ones by bytes", async () => {
+    const a = app();
+    const u = await user();
+    await setup(a, u.token);
+    const big = (n: number) => randomBytes(n).toString("base64url");
+    const over = await call(a, u.token, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: big(MAX_OBJECT_BYTES + 1) }] });
+    expect(over.statusCode).toBe(400);
+    const ids = [oid(), oid(), oid()];
+    for (const [i, n] of [12 << 20, 5 << 20, 2 << 20].entries()) {
+      const r = await call(a, u.token, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: ids[i], revision: 1, keyId: 1, blob: big(n) }] });
+      expect(r.json().results[0].status).toBe("ok");
+    }
+    // 12 MiB fills a page alone; 5 + 2 MiB fit under the 8 MiB budget together.
+    const first = (await call(a, u.token, "GET", "/v1/sync/pull")).json();
+    expect(first).toMatchObject({ more: true, objects: [{ objectId: ids[0] }] });
+    const second = (await call(a, u.token, "GET", `/v1/sync/pull?since=${first.next}`)).json();
+    expect(second.more).toBe(false);
+    expect(second.objects.map((o: { objectId: string }) => o.objectId)).toEqual([ids[1], ids[2]]);
+    expect(PULL_PAGE_BYTES).toBe(8 << 20);
+  }, 30_000); // ~36 MB through PGlite: 8 s on a CI runner, past the 5 s default
 
   it("answers conflicts and stale key epochs per object", async () => {
     const a = app();

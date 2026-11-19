@@ -9,31 +9,31 @@ export const STARDUST_MS = 900;
 const STARDUST_GRAINS = 14;
 
 /** Rows tagged with this attribute (holding the chat id) get the exit. */
-export const COMPLETION_ROW_ATTR = 'data-completion-row';
+export const ARCHIVE_ROW_ATTR = 'data-archive-row';
 
-export function findCompletionRow(sessionId: string): HTMLElement | null {
-  return document.querySelector<HTMLElement>(`[${COMPLETION_ROW_ATTR}="${CSS.escape(sessionId)}"]`);
+export function findArchiveRow(sessionId: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[${ARCHIVE_ROW_ATTR}="${CSS.escape(sessionId)}"]`);
 }
 
 /**
- * Plays the completion exit on a sidebar row while `complete` runs in parallel,
+ * Plays the archive exit on a sidebar row while `archive` runs in parallel,
  * so the engine work overlaps the animation instead of waiting for it. The row
  * closes to the left, stardust drifts out of where it vanished, and its height
- * collapses so the rows below slide up into its place. If `complete` reports
+ * collapses so the rows below slide up into its place. If `archive` reports
  * failure the row is put back as it was.
  */
-export async function completeWithExit(row: HTMLElement | null, complete: () => Promise<boolean>): Promise<void> {
-  if (!row || row.dataset.completing || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    if (!row?.dataset.completing) await complete();
+export async function archiveWithExit(row: HTMLElement | null, archive: () => Promise<boolean>): Promise<void> {
+  if (!row || row.dataset.archiving || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!row?.dataset.archiving) await archive();
     return;
   }
-  row.dataset.completing = 'true';
+  row.dataset.archiving = 'true';
   row.style.pointerEvents = 'none';
   const rect = row.getBoundingClientRect();
   const computed = getComputedStyle(row);
 
   // Kick the engine work off immediately; the animation plays over it, not before it.
-  const completion = complete();
+  const archiving = archive();
 
   const close = row.animate(
     [
@@ -56,21 +56,21 @@ export async function completeWithExit(row: HTMLElement | null, complete: () => 
 
   let done = false;
   try {
-    done = await completion;
+    done = await archiving;
   } finally {
-    // Completed rows are unmounted by now; a failed one comes back.
+    // Archived rows are unmounted by now; a failed one comes back.
     if (!done) {
       close.cancel();
       collapse.cancel();
       row.style.pointerEvents = '';
-      delete row.dataset.completing;
+      delete row.dataset.archiving;
     }
   }
 }
 
 /**
  * An animation's end, or its scheduled end if the page stops painting (a
- * hidden window gets no frames), so completing a chat never hangs on it.
+ * hidden window gets no frames), so archiving a chat never hangs on it.
  */
 function settled(animation: Animation, ms: number): Promise<unknown> {
   return Promise.race([animation.finished, new Promise((resolve) => window.setTimeout(resolve, ms + 50))]);
@@ -83,7 +83,7 @@ function settled(animation: Animation, ms: number): Promise<unknown> {
  */
 export function scatterStardust(rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>): void {
   const dust = document.createElement('div');
-  dust.className = 'completion-stardust';
+  dust.className = 'archive-stardust';
   dust.setAttribute('aria-hidden', 'true');
   dust.style.left = `${rect.left + 6}px`;
   dust.style.top = `${rect.top + rect.height / 2}px`;

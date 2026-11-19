@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
       await run("document.querySelector('[data-history-clear]').click()"); await sleep(100);
       await run("document.querySelector('[data-history-confirm]').click()"); await sleep(300);
       await check('selected range sent', "window.historyRange === 'older-1-month'");
-      await check('successful result shown', "document.querySelector('[data-history-settings]').textContent.includes('3 completed chats deleted')");
+      await check('successful result shown', "document.querySelector('[data-history-settings]').textContent.includes('3 archived chats deleted')");
       await run("document.querySelector('[data-history-sync]').click()"); await sleep(100);
       await check('sync navigation', "document.querySelector('#settings-phone').getBoundingClientRect().top < 300");
       await run(scroll); await sleep(100);
@@ -61,14 +61,14 @@ app.whenReady().then(async () => {
     win.setContentSize(1200, 900);
     await run(`(async () => { const f = layoutFixture; const s = f.records[0]; s.archivedAt = Date.now() - 70 * 86400000; f.putCachedSession(s); await f.store.getState().refreshSessions(); f.store.setState({ view: 'command' }); })()`);
     await sleep(700);
-    await run("if (!document.querySelector('[data-completed-row]')) [...document.querySelectorAll('button')].find(e => e.textContent.includes('Show completed'))?.click()");
-    for (let i = 0; i < 30 && !(await run("!!document.querySelector('[data-completed-row]')")); i++) await sleep(100);
-    await shot('completed-rows-desktop');
-    await run("document.querySelector('[data-completed-row]').click()");
-    for (let i = 0; i < 30 && !(await run("document.body.textContent.includes('Completed and read-only.')")); i++) await sleep(100);
-    await shot('completed-chat-desktop');
-    await check('completed chat is read-only', "document.body.textContent.includes('Completed and read-only.')");
-    win.setContentSize(390, 844); await sleep(200); await shot('completed-chat-mobile');
+    await run("if (!document.querySelector('[data-archived-row]')) [...document.querySelectorAll('button')].find(e => e.textContent.includes('Show archived'))?.click()");
+    for (let i = 0; i < 30 && !(await run("!!document.querySelector('[data-archived-row]')")); i++) await sleep(100);
+    await shot('archived-rows-desktop');
+    await run("document.querySelector('[data-archived-row]').click()");
+    for (let i = 0; i < 30 && !(await run("document.body.textContent.includes('Archived and read-only.')")); i++) await sleep(100);
+    await shot('archived-chat-desktop');
+    await check('archived chat is read-only', "document.body.textContent.includes('Archived and read-only.')");
+    win.setContentSize(390, 844); await sleep(200); await shot('archived-chat-mobile');
     report.bounds = win.getBounds(); report.visible = win.isVisible();
     if (report.visible) throw Error('fixture became visible');
   } catch (e) { report.errors.push(String(e.stack || e)); }

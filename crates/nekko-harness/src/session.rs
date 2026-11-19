@@ -402,14 +402,18 @@ impl crate::turn::Transport for Session {
 /// A line Claude Code prints between turns that starts no work of its own:
 /// background-task bookkeeping, rate limits, message lifecycle, or anything
 /// that is not JSON.
+///
+/// Of the `system` lines only `init` (a turn begins) and `task_notification`
+/// (background work finished and is about to be read) start work; every other
+/// subtype is bookkeeping. Claude Code adds those over time (`status`,
+/// `commands_changed`, ...), and one it prints late, after a Stop's `result`,
+/// must not open a wake-up turn: that turn waits for a `result` that never
+/// comes, and the chat's next message waits behind it.
 pub fn is_passive(line: &str) -> bool {
     let Ok(v) = serde_json::from_str::<Value>(line.trim()) else { return true };
     match v.get("type").and_then(Value::as_str) {
         Some("command_lifecycle" | "rate_limit_event") => true,
-        Some("system") => matches!(
-            v.get("subtype").and_then(Value::as_str),
-            Some("background_tasks_changed" | "task_started" | "task_updated" | "task_progress")
-        ),
+        Some("system") => !matches!(v.get("subtype").and_then(Value::as_str), Some("init" | "task_notification")),
         _ => false,
     }
 }
@@ -594,6 +598,11 @@ mod tests {
             r#"{"type":"system","subtype":"background_tasks_changed","tasks":[]}"#,
             r#"{"type":"system","subtype":"task_updated","task_id":"b1","patch":{"status":"completed"}}"#,
             r#"{"type":"command_lifecycle","command_uuid":"u","state":"completed"}"#,
+            // Printed about 1.6 s after a freshly launched child's first
+            // `result`, so it arrives between turns when that turn was stopped.
+            r#"{"type":"system","subtype":"commands_changed"}"#,
+            r#"{"type":"system","subtype":"status","status":null}"#,
+            r#"{"type":"system","subtype":"some_future_bookkeeping"}"#,
             "not json",
         ] {
             assert!(is_passive(line), "{line}");

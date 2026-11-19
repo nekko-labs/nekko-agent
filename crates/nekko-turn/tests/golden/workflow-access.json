@@ -4277,7 +4277,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4322,7 +4326,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4355,7 +4363,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4386,7 +4398,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4411,7 +4427,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4450,7 +4470,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4477,7 +4501,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4502,7 +4530,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4531,7 +4563,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4565,7 +4601,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4592,7 +4632,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {
@@ -4621,7 +4665,11 @@
     "decide",
     "report_experiment",
     "report_artifact",
-    "remember"
+    "remember",
+    "generate_image",
+    "edit_image",
+    "media_models",
+    "generate_video"
    ]
   },
   {

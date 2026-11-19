@@ -70,7 +70,7 @@ test('marketing preview serves only static website files and read requests', asy
     assert.doesNotMatch(page.body, new RegExp(`href="[^"]*#${id}"`), `no links to #${id}`);
   }
   const hero = page.body.slice(page.body.indexOf('<section class="hero">'), page.body.indexOf('</section>', page.body.indexOf('<section class="hero">')));
-  assert.match(hero, /<span>MEET NEKKO<\/span>\s*<p class="mascot-cap">Meet Nekko: a small pixel cat keeping you company while your agents get to work\.<\/p>/);
+  assert.match(hero, /<span>MEET NEKKO<\/span>\s*<p class="mascot-cap">Nekko comes from neko, Japanese for cat\. This little one keeps you company while your agents get to work\.<\/p>/);
   assert.doesNotMatch(page.body, /class="[^"]*mf-foot/);
   assert.doesNotMatch(profiles, /cannot (read|reach|access) another profile&rsquo;s (files|folders)/);
   // The benchmark summary keeps the result, its conditions, the measured losses

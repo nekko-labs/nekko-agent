@@ -73,6 +73,23 @@ app.whenReady().then(async () => {
     await sleep(800);
     await check('a dismissed inferred notice stays gone after reopening', `!${notice}`);
 
+    await run('integration.expired()');
+    await sleep(800);
+    await check('an expired subscription sign-in is named as such', `${notice}?.textContent.includes('Sign-in expired') && !${notice}.textContent.includes('Reply failed')`);
+    await check('it offers Sign in again beside Retry', `!!${button('Sign in again')} && !!${button('Retry')}`);
+    await capture('sign-in-expired');
+    await run(`${button('Sign in again')}.click()`);
+    await sleep(600);
+    await check('Sign in again opens the ChatGPT sign-in in the notice', `[...${notice}.querySelectorAll('button')].some((b) => b.textContent.includes('Sign in with ChatGPT'))`);
+    await capture('sign-in-expired-open');
+
+    await run('integration.badKey()');
+    await sleep(800);
+    await check('a refused API key offers Fix in Models', `${notice}?.textContent.includes('Sign-in expired') && !!${button('Fix in Models')}`);
+    await run(`${button('Fix in Models')}.click()`);
+    await sleep(300);
+    await check('Fix in Models opens Models', "integration.view() === 'models'");
+
     await run('integration.running()');
     await sleep(800);
     await check('a run still going is not called interrupted', `!${notice}`);

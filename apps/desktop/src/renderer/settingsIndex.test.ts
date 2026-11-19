@@ -28,7 +28,7 @@ describe('command palette settings search', () => {
     const look = ['sidebar-skills', 'sidebar-connectors', 'background-animation', 'agent-activity-animation', 'mascot', 'tray-farewell', 'text-size'];
     for (const id of look) expect(SETTINGS_INDEX.find((entry) => entry.id === id)?.group).toBe('customize');
     expect(SETTINGS_INDEX.filter((entry) => entry.group === 'general').map((entry) => entry.id).sort()).toEqual(
-      ['auto-complete', 'chat-pane-action', 'close-behavior', 'confirm-deletions', 'desktop-notifications', 'language', 'low-memory', 'tips'],
+      ['auto-archive', 'chat-pane-action', 'close-behavior', 'confirm-deletions', 'desktop-notifications', 'language', 'low-memory', 'tips'],
     );
     expect(SETTINGS_INDEX.find((entry) => entry.id === 'warn-before-yolo')?.group).toBe('safety');
     expect(matchSettingsPages('chat modes').map((page) => page.group)).toEqual(['safety']);

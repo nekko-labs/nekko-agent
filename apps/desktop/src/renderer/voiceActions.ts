@@ -88,7 +88,7 @@ const SAY_YES = "Say 'Nekko, yes' or tap Confirm.";
 const GO_AHEAD = 'Go ahead and build it.';
 const prLabel = (pr: PrInfo) => `${pr.owner}/${pr.repo}#${pr.number}`;
 /** Commands about one chat: they act only on the focused chat, never on a fallback. */
-const CHAT_COMMANDS = new Set<VoiceIntent['kind']>(['erase', 'clear', 'send', 'ship', 'status', 'complete-session']);
+const CHAT_COMMANDS = new Set<VoiceIntent['kind']>(['erase', 'clear', 'send', 'ship', 'status', 'archive-session']);
 const goLabel = (t: Extract<VoiceIntent, { kind: 'go' }>['target']) => 'n' in t ? `${t.kind} ${t.n}` : `the ${t.step > 0 ? 'next' : 'previous'} ${t.kind}`;
 
 /**
@@ -149,8 +149,8 @@ export async function runVoiceIntent(intent: VoiceIntent, target: VoiceTarget | 
       toast(statusLine({ title, running: !!getLiveRun(id), pending: waiting, stalled: session?.stalled, step: describeRun(id), watchingPr: (session?.activeWatchCount ?? 0) > 0 }));
       return pending;
     }
-    case 'complete-session':
-      return { kind: 'confirm', message: `Complete "${title}"? ${SAY_YES}`, run: async () => { if (!current()) return; await store.archiveChat(id); toast(`Completed ${title}`); } };
+    case 'archive-session':
+      return { kind: 'confirm', message: `Archive "${title}"? ${SAY_YES}`, run: async () => { if (!current()) return; await store.archiveChat(id); toast(`Archived ${title}`); } };
     case 'ship': {
       const prs: PrInfo[] = store.prsBySession[id] ?? [];
       const waiting = (await window.nekko.pendingInput().catch(() => ({} as Record<string, PendingInput>)))[id];

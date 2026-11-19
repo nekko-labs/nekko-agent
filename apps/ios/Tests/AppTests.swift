@@ -359,12 +359,13 @@ final class SavedListNoteTests: XCTestCase {
         XCTAssertGreaterThan(old.count, today.count, "an older list also names the day")
     }
 
-    func testASavedChatSaysItIsACopy() {
+    func testASavedChatShowsOnlyItsLastUpdate() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let text = SavedListNote.copy(savedAt: Int64((now.timeIntervalSince1970 - 600) * 1000), computer: "Mac", now: now,
                                       calendar: Calendar(identifier: .gregorian))
-        XCTAssertTrue(text.hasPrefix("Saved copy from "))
-        XCTAssertTrue(text.hasSuffix("It updates when Mac answers."))
+        XCTAssertTrue(text.hasPrefix("Updated last on "))
+        XCTAssertFalse(text.contains("Mac"))
+        XCTAssertFalse(text.contains("Saved copy"))
     }
 }
 
@@ -508,36 +509,34 @@ final class NotificationPrefsTests: XCTestCase {
 @MainActor
 final class ChatStatusIconTests: XCTestCase {
     @MainActor
-    func testArchivedDoneUsesTheSameGrayCheckAsUnarchivedDone() throws {
-        // #2456 replaced the SF Symbol checkmark with CheckGlyph. Both archived
-        // and unarchived done still render identically.
-        func render(_ completed: Bool) throws -> Data {
-            let icon = ChatStatusIcon(activity: nil, completed: completed)
-                .frame(width: 32, height: 32)
-            return try XCTUnwrap(ImageRenderer(content: icon).uiImage?.pngData())
+    func testArchivedLeadsWithTheArchiveBoxAndLiveStatesStillWin() throws {
+        func render(_ view: some View) throws -> Data {
+            try XCTUnwrap(ImageRenderer(content: view.frame(width: 32, height: 32)).uiImage?.pngData())
         }
-        // Our own check glyph since #2456, never the SF Symbol, stroked as ChatStatusIcon strokes it.
-        let grayCheck = CheckGlyph()
+        let check = CheckGlyph()
             .stroke(Palette.make(dark: false, accent: nil).inkFaint,
                     style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
             .frame(width: 18, height: 18)
-            .frame(width: 32, height: 32)
-        let expected = try XCTUnwrap(ImageRenderer(content: grayCheck).uiImage?.pngData())
-        XCTAssertEqual(try render(true), expected)
-        XCTAssertEqual(try render(false), expected)
+        // Unarchived done is still our check glyph, stroked as ChatStatusIcon strokes it.
+        XCTAssertEqual(try render(ChatStatusIcon(activity: nil)), try render(check))
+        // An archived chat is the archive box instead: a different picture, never the check.
+        XCTAssertNotEqual(try render(ChatStatusIcon(activity: nil, archived: true)), try render(check))
+        // A watch armed keeps its sleep glyph, archived or not.
+        XCTAssertEqual(try render(ChatStatusIcon(activity: nil, archived: true, activeWatchCount: 1)),
+                       try render(ChatStatusIcon(activity: nil, activeWatchCount: 1)))
     }
 
     func testStatusLabelsAndPrecedence() {
-        XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, waiting: true).label, "Working")
-        XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, waiting: true).label, "Needs you")
-        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true).label, "Waiting to send")
-        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true).label, "Done")
+        XCTAssertEqual(ChatStatusIcon(activity: .running, archived: true, waiting: true).label, "Working")
+        XCTAssertEqual(ChatStatusIcon(activity: .needsYou, archived: true, waiting: true).label, "Needs you")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, archived: true, waiting: true).label, "Waiting to send")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, archived: true).label, "Archived")
         XCTAssertEqual(ChatStatusIcon(activity: nil).label, "Done")
         XCTAssertEqual(ChatStatusIcon(activity: nil, activeWatchCount: 1).label, "Watching")
-        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, activeWatchCount: 1).label, "Watching")
-        XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, activeWatchCount: 1).label, "Working")
-        XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, activeWatchCount: 1).label, "Needs you")
-        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true, activeWatchCount: 1).label, "Waiting to send")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, archived: true, activeWatchCount: 1).label, "Watching")
+        XCTAssertEqual(ChatStatusIcon(activity: .running, archived: true, activeWatchCount: 1).label, "Working")
+        XCTAssertEqual(ChatStatusIcon(activity: .needsYou, archived: true, activeWatchCount: 1).label, "Needs you")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, archived: true, waiting: true, activeWatchCount: 1).label, "Waiting to send")
     }
 }
 

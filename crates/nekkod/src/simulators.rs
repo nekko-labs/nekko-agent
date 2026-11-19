@@ -505,6 +505,45 @@ async fn auto_shutdown_loop(reg: Arc<Simulators>) {
     }
 }
 
+/// The devices a quitting daemon stops: every booted one an agent used. A
+/// device no agent touched (one a person booted) is left running, as auto
+/// shutdown leaves it.
+fn used_by_agents<'a>(devices: &'a [Device], uses: &HashMap<String, Use>) -> Vec<&'a Device> {
+    devices.iter().filter(|d| uses.contains_key(&d.id)).collect()
+}
+
+/// On a graceful shutdown (main.rs): shut down every booted simulator and
+/// emulator an agent used, all at once, waiting at most `within`. The agents
+/// that booted them stop with the daemon, so nothing would shut them down
+/// later and they would pile up (issue #2814). Returns how many stopped.
+pub async fn shutdown_agent_devices(within: Duration) -> usize {
+    let Some(reg) = registry() else { return 0 };
+    let work = async {
+        let devices = reg.sample(Duration::ZERO).await;
+        let uses = lock(&reg.state).uses.clone();
+        let stops = used_by_agents(&devices, &uses).into_iter().map(|d| async move {
+            match probe::shutdown(d).await {
+                Ok(()) => {
+                    eprintln!("nekkod: shut down simulator {} on quit", d.name);
+                    true
+                }
+                Err(e) => {
+                    eprintln!("nekkod: could not shut down simulator {} on quit: {e}", d.name);
+                    false
+                }
+            }
+        });
+        futures_util::future::join_all(stops).await.into_iter().filter(|ok| *ok).count()
+    };
+    match tokio::time::timeout(within, work).await {
+        Ok(stopped) => stopped,
+        Err(_) => {
+            eprintln!("nekkod: simulators still shutting down after {}s; quitting anyway", within.as_secs());
+            0
+        }
+    }
+}
+
 fn id_arg(args: &[Value]) -> Result<String, String> {
     args.first()
         .and_then(Value::as_str)

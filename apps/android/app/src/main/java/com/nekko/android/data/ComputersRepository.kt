@@ -431,9 +431,11 @@ class ComputersRepository(
         return id
     }
 
+    /** A blank name hands naming back to the computer, which renames it on the next connect. */
     suspend fun rename(id: String, name: String) = lock.withLock {
+        val trimmed = name.trim().take(40)
         val next = _state.value.computers.map { c ->
-            if (c.id == id) c.copy(name = name.trim().take(40).ifEmpty { c.name }, nameIsCustom = true) else c
+            if (c.id == id) c.copy(name = trimmed.ifEmpty { c.name }, nameIsCustom = trimmed.isNotEmpty()) else c
         }
         saveIndex(next)
         _state.update { it.copy(computers = next) }
@@ -1086,8 +1088,8 @@ class ComputersRepository(
         }
     }
 
-    /** Complete a chat (the desktop's archive): it moves under its group's Completed, nothing is deleted. */
-    suspend fun completeChat(sessionId: String) {
+    /** Archive a chat: it moves under its group's Archived, nothing is deleted. */
+    suspend fun archiveChat(sessionId: String) {
         val at = now()
         remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("archivedAt", at) })
         setArchived(sessionId, at)

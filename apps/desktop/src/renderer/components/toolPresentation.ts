@@ -13,6 +13,10 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   fetch_url: 'Read a web page',
   browser: 'Use the browser',
   capture: 'Capture the screen',
+  generate_image: 'Make a picture',
+  edit_image: 'Edit a picture',
+  media_models: 'List picture models',
+  generate_video: 'Make a clip',
   delegation_targets: 'Find available agent models',
   spawn_agent: 'Delegate to an agent',
   ask_user: 'Ask a question',
@@ -23,7 +27,7 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   decide: 'Classify or score content',
   agent_watch: 'Schedule a follow-up',
   set_chat_title: 'Name this chat',
-  complete_session: 'Mark this chat complete',
+  complete_session: 'Archive this chat',
   remember: 'Remember something about you',
 };
 

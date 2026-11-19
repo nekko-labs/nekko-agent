@@ -160,8 +160,8 @@
     <string name="settings_pc_offline_unknown">%1$s ist offline. Chat-Modus, Chat-Aktion und Löschbestätigung erscheinen hier, sobald er verbunden ist.</string>
     <string name="settings_chat_mode_new">Chat-Modus für neue Chats</string>
     <string name="settings_long_press">Langes Drücken auf einen Chat</string>
-    <string name="settings_complete_it">Abschließen</string>
-    <string name="settings_complete_it_detail">Verschiebt ihn auf %1$s nach „Abgeschlossen“; nichts wird gelöscht</string>
+    <string name="settings_archive_it">Archivieren</string>
+    <string name="settings_archive_it_detail">Verschiebt ihn auf %1$s nach „Archiviert“; nichts wird gelöscht</string>
     <string name="settings_delete_it">Löschen</string>
     <string name="settings_delete_it_detail">Entfernt ihn endgültig von %1$s</string>
     <string name="settings_confirm_delete">Vor dem Löschen bestätigen</string>
@@ -250,6 +250,7 @@
     <string name="settings_how_3">Dein Computer wählt sich bei einem Relay ein; er öffnet nie einen Port. Alles ist Ende-zu-Ende-verschlüsselt, mit einem Schlüssel, den nur deine Geräte haben.</string>
     <string name="settings_how_4">Entferne dieses Telefon jederzeit über denselben Bildschirm auf deinem Computer. Es verliert sofort den Zugriff.</string>
     <string name="settings_rename_computer">Computer umbenennen</string>
+    <string name="settings_rename_computer_hint">Nur dieses Telefon sieht diesen Namen. Leer lassen, um den Namen des Computers zu verwenden.</string>
     <string name="settings_forget_title">%1$s entfernen?</string>
     <string name="settings_forget_text">Dieses Telefon löscht den Kopplungsschlüssel. Entferne zur Sicherheit auch das Telefon auf deinem Computer (Einstellungen → Fernzugriff).</string>
     <string name="settings_forget">Entfernen</string>

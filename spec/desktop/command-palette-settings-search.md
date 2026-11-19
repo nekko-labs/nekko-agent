@@ -26,7 +26,7 @@ User intent (Philip, 2026-11-09): "I want the ctrl+k to be able to search anythi
 
 - **Two rows.** The first is the breadcrumb of where it lives, ending in the result's name: *Commands › New agent*, *Settings › Customize › Text size*, *Chats › nekko-agent › Fix the theme picker*, *Messages › Release notes for 0.9*, *Artifacts › Fix the theme picker › Theme tokens*. The second is the text it was found in: a snippet around the match from the message or description, else the result's own description (what a command does, the words a setting also answers to, a file's name and path).
 - **Highlights.** Every matched word (or the synonym that matched) is marked in both rows with the same amber wash Find in chat uses.
-- At the right: a command's shortcut, a setting's own switch or dropdown, "Open" for a Settings group, and a chat's age ("Completed" when it is), plus the number of matching messages on a message result.
+- At the right: a command's shortcut, a setting's own switch or dropdown, "Open" for a Settings group, and a chat's age ("Archived" when it is), plus the number of matching messages on a message result.
 
 ## Acting on a result
 

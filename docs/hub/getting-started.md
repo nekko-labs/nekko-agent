@@ -4,7 +4,7 @@ Nekko Agent is AI help on your computer, for coding and everyday work. It reads,
 
 ## Who we are
 
-Nekko Agent is made by [Nekko Labs](https://nekkolabs.com). We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
+Nekko Agent is made by [Nekko Labs](https://nekkolabs.com), and its name comes from neko, Japanese for cat. We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
 
 We care about three things:
 
@@ -46,7 +46,7 @@ Opening an agent composer puts the caret after any restored draft once a usable 
 
 ## Returning to the latest message
 
-When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in completed chats, without waiting for another reply. The pill disappears when you reach the bottom.
+When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in archived chats, without waiting for another reply. The pill disappears when you reach the bottom.
 
 ## Recovering file edits
 
@@ -241,7 +241,7 @@ A row of icons at the top of the Agents panel picks which kind of window it list
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Animations > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 
-Each group initially shows up to **20 agent rows**. Choose **Show more (N)** below a group to show its full list in one click; other groups stay limited. Completed lists also start at 20 when opened. Hidden cards are not loaded into the panel until needed, while group counts and search still cover all your chats. Opening an agent outside the first 20 brings its row into the last visible slot. Changing the grouping resets these expanded lists.
+Each group initially shows up to **20 agent rows**. Choose **Show more (N)** below a group to show its full list in one click; other groups stay limited. Archived lists also start at 20 when opened. Hidden cards are not loaded into the panel until needed, while group counts and search still cover all your chats. Opening an agent outside the first 20 brings its row into the last visible slot. Changing the grouping resets these expanded lists.
 
 ### Delegated agents in the Agents panel
 
@@ -292,9 +292,9 @@ In the horizontal Agents row, the controls sit in a compact two-column strip bes
 
 ### Stopping agents and their watchers
 
-Completing or closing an agent stops its active work and cancels pending durable
+Archiving or closing an agent stops its active work and cancels pending durable
 watches, including watches owned by delegated descendants. The chat is retained
-when completed. Minimize only hides a window and deliberately lets work continue.
+when archived. Minimize only hides a window and deliberately lets work continue.
 In Dynamic View the board is laid out in zones: places that each hold one agent.
 It starts with two side by side. New agents wait in the Agents list instead of
 opening on the board. Click a zone to make it the active one (it gets a heavier
@@ -303,13 +303,13 @@ agent from the list straight into a zone. Clicking an agent that is already on
 the board just switches to its zone. Each zone has a colour, shown as a small
 square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips. You can also choose **+ > Add agent zone** in the board toolbar to add and select an empty right-hand column without creating an agent or switching views.
 Press a zone's name bar and move the pointer to start dragging it; a click without movement only selects the zone and does not lift it. Hold Shift at a board edge to span the
-whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
+whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or archiving
 an agent leaves its zone in place, dotted, until you fill it.
 The composer's borderless action switches from Send to a Stop icon while the agent runs with an empty draft. Type a follow-up and it becomes Send again, queuing the message without interrupting the agent. Clear the draft to get Stop back. To schedule work, open **+ > Automate**; Automate no longer takes up a separate place on the composer.
 In Dynamic View (including Fixed grid), a window also minimizes automatically
 when its agent finishes a successful reply. Errors and requests for input stay
 visible, and Focused View keeps finished replies open. Select the chat in the
-Agents list to restore a minimized window; this does not mark it Complete.
+Agents list to restore a minimized window; this does not archive it.
 Stop cannot undo tokens already consumed. A later intentional run can arm new
 watches; a failed delegation should explain its failure and continue directly
 when safe, never silently switch provider or model.
@@ -348,7 +348,7 @@ and wake-up details wrap the same way on desktop and the Local Web UI.
 
 ### Resizing the side panels
 
-Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Under its totals, Budget shows where the tokens went for the range: **Sent by you** versus **Background** (watch wake-ups, automations, automatic continues), **Main chats** versus **Subagents**, and **Cache reads** versus **New input**. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
+Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 248px wide and can be narrowed to 220px. Under its totals, Budget shows where the tokens went for the range: **Sent by you** versus **Background** (watch wake-ups, automations, automatic continues), **Main chats** versus **Subagents**, and **Cache reads** versus **New input**. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
 
 ### Customize your experience
 

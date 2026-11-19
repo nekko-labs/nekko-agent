@@ -38,7 +38,7 @@ export function FusionSettingsControl({ settings, update }: { settings: AppSetti
   };
   return <section className="min-w-0" data-fusion-settings>
     <h3 className="text-sm font-medium">Fusion routing</h3>
-    <p className="mb-3 mt-(--q-tight) text-xs text-ink-faint">These preferences apply only when a chat enables Fusion. Auto alone stays on its selected provider, including subagents.</p>
+    <p className="mb-3 mt-(--q-tight) text-xs text-ink-faint">These preferences apply only when a chat enables Fusion, also to the pictures and clips its agent makes when it names no model (a paid one still asks first). Auto alone stays on its selected provider, including subagents.</p>
     <FusionStrategyControl value={fusionStrategy(settings.fusion)} onChange={(strategy) => save({ ...settings.fusion, strategy })} />
     <button type="button" className="quiet-row mt-3 text-xs" aria-expanded={open} onClick={() => setOpen(!open)}>Model capability tiers <span aria-hidden="true">{open ? '▾' : '▸'}</span></button>
     {open && <div className="mt-2 space-y-3" data-model-tier-editor>

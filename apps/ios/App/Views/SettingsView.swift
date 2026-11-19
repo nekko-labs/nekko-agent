@@ -68,6 +68,8 @@ struct ComputersView: View {
             TextField("Name", text: $name)
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let c = renaming { store.rename(c.id, to: name) } }
+        } message: {
+            Text("Only this iPhone sees this name. Leave it empty to use the computer’s own name.")
         }
         .forgetDialog($forgetting)
     }
@@ -110,9 +112,97 @@ struct ComputerConnectionToggle: View {
     }
 }
 
+/// The account row atop Settings: an avatar, who you are on Nekko Cloud, and one line on
+/// sync. A tap opens the account and sync. Signed out, it invites you to sign in.
+struct ProfileRow: View {
+    @Environment(CloudSync.self) private var cloud
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AvatarBadge(size: 56) {
+                if let email = cloud.account?.email, let first = email.first {
+                    Text(String(first).uppercased()).font(.title2.weight(.semibold)).foregroundStyle(palette.accent)
+                } else {
+                    CatMark().frame(width: 28, height: 28).foregroundStyle(palette.inkSoft)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.title3.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                Text(detail).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2)
+            }
+        }
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var title: String {
+        cloud.account?.email ?? String(localized: "Sign in to Nekko Cloud")
+    }
+
+    private var detail: String {
+        guard let account = cloud.account, cloud.signedIn else { return String(localized: "Keep your chats on every device, end-to-end encrypted.") }
+        let plan = account.plan == "team" ? String(localized: "Team") : account.plan == "pro" ? String(localized: "Pro") : String(localized: "Free")
+        let sync: String
+        switch cloud.phase {
+        case .idle: sync = String(localized: "Up to date")
+        case .syncing: sync = String(localized: "Syncing…")
+        case .needsJoin: sync = String(localized: "Add this iPhone")
+        case .awaitingApproval: sync = String(localized: "Waiting for approval")
+        case .needsPlan: sync = String(localized: "Sync isn’t included")
+        case .notSetUp: sync = String(localized: "Turn sync on on your computer")
+        case .error: sync = String(localized: "Needs attention")
+        case .signedOut: sync = ""
+        }
+        return sync.isEmpty ? plan : "\(plan) · \(sync)"
+    }
+}
+
+/// A computer as an avatar row: its icon, a dot for whether it can be reached, its name and
+/// one status line. Used where computers are listed to open.
+struct ComputerAvatarRow: View {
+    let computer: Computer
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let state = store.state(of: computer.id)
+        HStack(spacing: 12) {
+            AvatarBadge {
+                if computer.icon != nil {
+                    ComputerGlyph(icon: computer.icon, size: 22).foregroundStyle(palette.ink)
+                } else {
+                    Image(systemName: "desktopcomputer").font(.system(size: 18)).foregroundStyle(palette.ink)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Circle().fill(dot(state)).frame(width: 10, height: 10)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(computer.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
+                Text("\(stateName(state)) · \(routeName(computer.route))").font(.caption).foregroundStyle(palette.inkFaint).lineLimit(1)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func dot(_ state: RelayState) -> Color {
+        switch state {
+        case .online: return palette.success
+        case .connecting: return palette.running
+        case .offline: return palette.warning
+        case .denied: return palette.danger
+        case .idle: return palette.inkFaint
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
+    @Environment(CloudSync.self) private var cloud
+    @Environment(PhoneChats.self) private var phone
     @Environment(\.palette) private var palette
     @State private var confirmWipe = false
     @State private var error: String?
@@ -123,9 +213,37 @@ struct SettingsView: View {
     @State private var sendingFeedback = false
     @State private var voiceIntro = VoiceIntroGate()
 
+    /// Computers that are the cloud fleet's rows show under Manage computers instead.
+    private var localComputers: [Computer] {
+        let excluded = cloud.fleetExcludedComputerIds(pairedComputerIds: Set(store.computers.map(\.id)))
+        return store.computers.filter { !excluded.contains($0.id) }
+    }
+
     var body: some View {
         @Bindable var prefs = app.prefs
-        Form {
+        List {
+            // Your Nekko Cloud account first, as the Apple Account sits atop iOS Settings.
+            Section {
+                NavigationLink(value: Route.cloud) { ProfileRow() }
+                    .accessibilityIdentifier("settings.cloud")
+            }
+            // Computers second: each an avatar row that opens its page, and a plus.
+            Section {
+                ForEach(localComputers) { c in
+                    NavigationLink(value: Route.computer(c.id)) { ComputerAvatarRow(computer: c) }
+                        .accessibilityIdentifier("settings.computer")
+                }
+                NavigationLink(value: Route.pair) { Label("Add a computer", systemImage: "plus").labelStyle(.quietRow) }
+                    .accessibilityIdentifier("settings.addComputer")
+                if store.computers.count > 1 {
+                    Picker("Open at launch", selection: $prefs.defaultComputer) {
+                        Text("The one used last").tag(String?.none)
+                        ForEach(store.computers) { ComputerLabel(c: $0).tag(Optional($0.id)) }
+                    }
+                }
+                NavigationLink(value: Route.computers) { Label("Manage computers", systemImage: "desktopcomputer").labelStyle(.quietRow) }
+                    .accessibilityIdentifier("settings.computers")
+            } header: { SectionHeader("Computers") }
             Section {
                 ThemePicker(selection: $prefs.theme)
                 NavigationLink(value: Route.customize) { Label("Customize", systemImage: "slider.horizontal.3").labelStyle(.quietRow) }
@@ -264,7 +382,7 @@ struct SettingsView: View {
                     Picker("Chat’s main action", selection: Binding(get: { store.pcSettings.effectiveAction }, set: { a in
                         Task { do { try await store.updatePcSettings(PcSettings.patch(action: a)) } catch { self.error = error.localizedDescription } }
                     })) {
-                        Text("Complete").tag(PcSettings.ChatAction.complete)
+                        Text("Archive").tag(PcSettings.ChatAction.archive)
                         Text("Delete").tag(PcSettings.ChatAction.delete)
                     }
                     Toggle("Ask before deleting", isOn: Binding(get: { store.pcSettings.confirmDelete }, set: { on in
@@ -278,21 +396,20 @@ struct SettingsView: View {
                 .disabled(!store.pcSettings.known || store.conn != .online)
             }
             Section {
-                NavigationLink(value: Route.cloud) { Label("Nekko Cloud sync", systemImage: "lock.icloud").labelStyle(.quietRow) }
-                    .accessibilityIdentifier("settings.cloud")
-                NavigationLink(value: Route.computers) { Label("Paired computers", systemImage: "desktopcomputer").labelStyle(.quietRow) }
                 // Chats that run on this iPhone, on its own cloud providers (decision 0050).
-                NavigationLink(value: Route.phoneModels) { Label("Models on \(ChatPlace.phoneName)", systemImage: "iphone").labelStyle(.quietRow) }
+                ForEach(phone.providers) { p in
+                    NavigationLink(value: Route.phoneProvider(p.id)) { PhoneProviderRow(provider: p) }
+                        .accessibilityIdentifier("settings.phoneProvider")
+                }
+                NavigationLink(value: Route.phoneModels) { Label("Add a provider", systemImage: "plus").labelStyle(.quietRow) }
                     .accessibilityIdentifier("settings.phoneModels")
+            } header: { SectionHeader("Models on \(ChatPlace.phoneName)") }
+            Section {
                 // GitHub, Linear, Jira and the rest, on this iPhone itself (decision 0058).
                 NavigationLink(value: Route.connectors) { Label("Connectors", systemImage: "point.3.connected.trianglepath.dotted").labelStyle(.quietRow) }
                     .accessibilityIdentifier("settings.connectors")
                 NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right").labelStyle(.quietRow) }
-                Picker("Open at launch", selection: $prefs.defaultComputer) {
-                    Text("The one used last").tag(String?.none)
-                    ForEach(store.computers) { ComputerLabel(c: $0).tag(Optional($0.id)) }
-                }
-            } header: { SectionHeader("Computers") }
+            }
             Section {
                 LabeledContent("App", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
                 if let v = store.hostVersion { LabeledContent("Nekko Agent on \(store.active?.name ?? "computer")", value: v) }
@@ -307,6 +424,11 @@ struct SettingsView: View {
                 Button("Forget everything on this iPhone", role: .destructive) { confirmWipe = true }
             }
         }
+        // The quiet design: space instead of cards and rules, groups told apart by their label.
+        .listStyle(.plain)
+        .listRowSeparator(.hidden)
+        .listSectionSeparator(.hidden)
+        .listSectionSpacing(20)
         .appBackground()
         .navigationTitle("Settings")
         .yoloWarning($yoloAsk)

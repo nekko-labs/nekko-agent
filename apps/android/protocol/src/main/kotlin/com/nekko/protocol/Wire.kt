@@ -305,6 +305,8 @@ data class Session(
     val disabledTools: List<String> = emptyList(),
     /** MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in this chat (decision 0054). */
     val allowedMcpTools: List<String> = emptyList(),
+    /** Recipients this chat has written to through an MCP tool (decision 0063): writing to one again does not ask. */
+    val knownRecipients: List<String> = emptyList(),
     /** The agent's plan (`update_plan`), for the plan sheet over the composer (#2115). */
     val agentPlan: List<PlanStep> = emptyList(),
 ) {
@@ -347,6 +349,7 @@ data class Session(
                 executionMode = o.str("executionMode"),
                 disabledTools = o["disabledTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 allowedMcpTools = o["allowedMcpTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
+                knownRecipients = o["knownRecipients"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 agentPlan = PlanStep.list(o["agentPlan"]),
             )
         }
@@ -367,7 +370,7 @@ data class SessionSummary(
     val providerId: String? = null,
     /** The project folder the chat belongs to (`workspace:list` id); null for General. */
     val workspaceId: String? = null,
-    /** When the chat was completed (the desktop's archive); null while it is active. */
+    /** When the chat was archived; null while it is active. */
     val archivedAt: Long? = null,
     /** Manual position from the desktop sidebar's drag order; null when never dragged. */
     val order: Double? = null,
@@ -389,7 +392,7 @@ data class SessionSummary(
     /** When it was made (ms), when the computer says; orders a chat's sub-agents oldest first. */
     val createdAt: Long? = null,
 ) {
-    /** Real, top-level chats, active or completed: what the phone's list shows. */
+    /** Real, top-level chats, active or archived: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
 
     companion object {
@@ -457,8 +460,8 @@ data class ChatGroup(
     val name: String,
     /** Active chats: dragged ones in their manual order first, then most recent. */
     val active: List<SessionSummary>,
-    /** Completed chats, most recently completed first. */
-    val completed: List<SessionSummary>,
+    /** Archived chats, most recently archived first. */
+    val archived: List<SessionSummary>,
 ) {
     companion object {
         const val GENERAL = "__none"
@@ -478,12 +481,12 @@ data class ChatGroup(
                         .thenBy { it.order ?: 0.0 }
                         .thenByDescending { it.updatedAt },
                 )
-                val completed = all.filter { it.archived }.sortedByDescending { it.archivedAt ?: 0L }
-                return ChatGroup(key, name, active, completed)
+                val archived = all.filter { it.archived }.sortedByDescending { it.archivedAt ?: 0L }
+                return ChatGroup(key, name, active, archived)
             }
             val general = group(GENERAL, "General")
             return buildList {
-                if (general.active.isNotEmpty() || general.completed.isNotEmpty()) add(general)
+                if (general.active.isNotEmpty() || general.archived.isNotEmpty()) add(general)
                 folders.forEach { add(group(it.id, it.name)) }
             }
         }
@@ -568,7 +571,7 @@ data class RemoteDefaults(
 data class PcSettings(
     /** Tool policy for new chats: `ask`, `guardrails` or `yolo` (shared/chat.ts ChatMode). */
     val defaultChatMode: ChatMode? = null,
-    /** The chat's main action: complete (archive) or delete. Unset on the computer means complete. */
+    /** The chat's main action: archive (wire "complete") or delete. Unset on the computer means archive. */
     val chatPaneAction: ChatAction? = null,
     /** True when the computer deletes chats without asking first. Unset means it asks. */
     val skipDeleteConfirmation: Boolean? = null,
@@ -594,7 +597,8 @@ data class PcSettings(
     }
 
     enum class ChatAction(val wire: String) {
-        COMPLETE("complete"), DELETE("delete");
+        // The wire value stays "complete": the desktop and older builds read it.
+        ARCHIVE("complete"), DELETE("delete");
 
         companion object {
             fun of(s: String?) = entries.firstOrNull { it.wire == s }
@@ -603,7 +607,7 @@ data class PcSettings(
 
     /** What the computer actually does when a key is unset (shared/settings.ts defaults). */
     val effectiveMode: ChatMode get() = defaultChatMode ?: ChatMode.GUARDRAILS
-    val effectiveAction: ChatAction get() = chatPaneAction ?: ChatAction.COMPLETE
+    val effectiveAction: ChatAction get() = chatPaneAction ?: ChatAction.ARCHIVE
     val confirmDelete: Boolean get() = skipDeleteConfirmation != true
 
     companion object {

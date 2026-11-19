@@ -654,6 +654,13 @@ class ComputersRepositoryTest {
         runCurrent()
         assertEquals("Mac", repo.state.value.active?.name)
         assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"nameIsCustom\":true"))
+        // A blank rename keeps the name until the computer reports one, then follows it again.
+        repo.rename(id, "   ")
+        assertEquals("Mac", repo.state.value.active?.name)
+        repo.refresh()
+        runCurrent()
+        assertEquals("New name", repo.state.value.active?.name)
+        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"nameIsCustom\":false"))
     }
 
     @Test
@@ -1094,7 +1101,7 @@ class ComputersRepositoryTest {
     }
 
     @Test
-    fun `complete archives and keeps the chat as completed, restore brings it back, delete removes it`() = runTest {
+    fun `archive keeps the chat as archived, restore brings it back, delete removes it`() = runTest {
         val remotes = FakeRemotes { c ->
             if (c.channel == Channels.SESSIONS_SUMMARIES) buildJsonArray {
                 add(buildJsonObject { put("id", "s1"); put("title", "One"); put("updatedAt", 5) })
@@ -1105,11 +1112,11 @@ class ComputersRepositoryTest {
         repo.pair(link)
         remotes.last.goOnline()
         runCurrent()
-        // Completed chats come down with the active ones.
+        // Archived chats come down with the active ones.
         assertEquals(listOf("s2", "s1"), repo.state.value.summaries.map { it.id })
         assertTrue(repo.state.value.summaries.first { it.id == "s2" }.archived)
 
-        repo.completeChat("s1")
+        repo.archiveChat("s1")
         val complete = remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }
         assertEquals("\"s1\"", complete.args[0].toString())
         assertEquals("""{"archivedAt":1000}""", complete.args[1].toString())

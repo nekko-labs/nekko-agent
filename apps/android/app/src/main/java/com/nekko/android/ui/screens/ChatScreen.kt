@@ -175,7 +175,7 @@ import com.nekko.android.ui.security.PendingStepUp
 import com.nekko.android.ui.security.StepUpSheet
 import com.nekko.android.ui.settings.modeTitleRes
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.PushPin
@@ -231,7 +231,7 @@ private fun ChatScreenContent(
     val watches by vm.watches.collectAsStateWithLifecycle()
     val subagents by vm.subagents.collectAsStateWithLifecycle()
     val agentContext = AgentContext(watches, subagents.children, subagents.activity, chat.running, chat.modelId)
-    val completedAt by vm.completedAt.collectAsStateWithLifecycle()
+    val archivedAt by vm.archivedAt.collectAsStateWithLifecycle()
     val starCard by vm.starCard.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
@@ -309,7 +309,7 @@ private fun ChatScreenContent(
     val dictationCommands = remember(vm) { com.nekko.android.voice.DictationCommands() }
     val mic = rememberMic(vm.dictation.takeIf { dictationOn }, vm.computers, dictationCommands) {
         vm.voiceEnabled && focused && voiceComputer != null && vm.repo.state.value.activeId == voiceComputer &&
-            vm.repo.state.value.conn == com.nekko.protocol.RelayState.ONLINE && vm.completedAt.value == null && vm.repo.overlays.value[vm.sessionId] == null
+            vm.repo.state.value.conn == com.nekko.protocol.RelayState.ONLINE && vm.archivedAt.value == null && vm.repo.overlays.value[vm.sessionId] == null
     }
     val attach = rememberAttach(vm)
     val prompts by vm.prompts.collectAsStateWithLifecycle()
@@ -430,7 +430,7 @@ private fun ChatScreenContent(
         AuditSheet(auditLoad.trail, auditLoad.error, onRefresh = vm::loadAudit, onDismiss = { showAudit = false })
     }
 
-    // ⋮ → Rename, Pin, Complete, Chat mode: changes on the computer; a refusal is said in a toast.
+    // ⋮ → Rename, Pin, Archive, Chat mode: changes on the computer; a refusal is said in a toast.
     val chatAction: (String, suspend () -> Unit) -> Unit = { failed, action ->
         scope.launch {
             try {
@@ -479,7 +479,8 @@ private fun ChatScreenContent(
         )
     }
     if (showModelEffort) {
-        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onLoadTools = vm::tools, onSetTool = { name, on -> vm.setTool(name, on, chat.disabledTools) }, onDismiss = { showModelEffort = false })
+        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onLoadTools = vm::tools, onSetTool = { name, on -> vm.setTool(name, on, chat.disabledTools) }, onDismiss = { showModelEffort = false },
+            onRevokeTool = { t -> vm.revokeAlwaysAllowed(t, chat.allowedMcpTools) }, onForgetRecipient = { r -> vm.forgetRecipient(r, chat.knownRecipients) })
     }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
     terminals?.let { t ->
@@ -576,13 +577,13 @@ private fun ChatScreenContent(
                                         enabled = online,
                                         modifier = Modifier.testTag("chat.pin"),
                                     )
-                                    if (completedAt == null) {
+                                    if (archivedAt == null) {
                                         DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.chats_complete)) },
-                                            leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) },
-                                            onClick = { showMenu = false; chatAction(res.getString(R.string.chats_complete_this_failed)) { vm.complete() } },
+                                            text = { Text(stringResource(R.string.chats_archive)) },
+                                            leadingIcon = { Icon(Icons.Outlined.Archive, contentDescription = null) },
+                                            onClick = { showMenu = false; chatAction(res.getString(R.string.chats_archive_this_failed)) { vm.archive() } },
                                             enabled = online,
-                                            modifier = Modifier.testTag("chat.complete"),
+                                            modifier = Modifier.testTag("chat.archive"),
                                         )
                                     }
                                 }
@@ -695,7 +696,7 @@ private fun ChatScreenContent(
                                     }
                                     // The GitHub star ask under the 10th and 50th reply, never over a question, an approval, a failure or a saved copy.
                                     val starShows = starCard != ChatViewModel.StarCard.NONE && !chat.running && chat.question == null &&
-                                        chat.approval == null && chat.error == null && chat.savedAt == null && completedAt == null
+                                        chat.approval == null && chat.error == null && chat.savedAt == null && archivedAt == null
                                     AnimatedVisibility(starShows, enter = fadeIn(tween(200)) + expandVertically(tween(200)), exit = fadeOut(tween(150)) + shrinkVertically(tween(150))) {
                                         StarAskCard(
                                             thanked = starCard == ChatViewModel.StarCard.THANKS,
@@ -735,8 +736,8 @@ private fun ChatScreenContent(
                 }
                 vm.shownQuestion(chat.question)?.let { QuestionCard(it, onAnswer = vm::answer) }
                 prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
-                // A completed chat reads like the desktop's: no message box until it is restored.
-                if (completedAt != null && !chat.running) CompletedBar(
+                // An archived chat reads like the desktop's: no message box until it is restored.
+                if (archivedAt != null && !chat.running) ArchivedBar(
                     restoring = restoring,
                     error = restoreError,
                     onRestore = {
@@ -908,9 +909,9 @@ private fun Modifier.messageDropTarget(sessionId: String, onText: (String) -> Un
     )
 }
 
-/** In place of the message box for a completed chat: say so, and offer Restore. */
+/** In place of the message box for an archived chat: say so, and offer Restore. */
 @Composable
-private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Unit, modifier: Modifier = Modifier) {
+private fun ArchivedBar(restoring: Boolean, error: String?, onRestore: () -> Unit, modifier: Modifier = Modifier) {
     val p = Nekko.palette
     Column(
         modifier.fillMaxWidth().background(p.surface).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -918,9 +919,9 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
     ) {
         error?.let { Notice(it, Tone.DANGER) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(Icons.Outlined.Check, contentDescription = null, tint = p.success, modifier = Modifier.size(16.dp))
+            Icon(Icons.Outlined.Archive, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
             Text(
-                stringResource(R.string.chats_completed_bar),
+                stringResource(R.string.chats_archived_bar),
                 style = MaterialTheme.typography.bodyMedium,
                 color = p.inkSoft,
                 modifier = Modifier.weight(1f),

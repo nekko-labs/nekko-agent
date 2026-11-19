@@ -8,10 +8,10 @@ import { useShown } from '../simpleMode.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
-  BranchIcon, CheckIcon, CloseIcon, CompactIcon, PencilIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
+  ArchiveIcon, BranchIcon, CheckIcon, CloseIcon, CompactIcon, PencilIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
   WarningIcon, WorktreeIcon,
 } from '../icons.js';
-import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
+import { ARCHIVE_ROW_ATTR, archiveWithExit } from '../archiveExit.js';
 import { useCompactionStore } from '../compactionStatus.js';
 import { fillTone } from './contextTone.js';
 import { SessionPrChip } from './SessionPrChip.js';
@@ -348,20 +348,19 @@ function WorkspaceCardImpl({
             deleting and then the chat was nowhere to be found. Archived chats
             stay readable until explicitly deleted. A shell has nothing to keep, so it closes. */}
         <button
-          className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink"
-          title={isChat ? 'Complete this chat (kept until you delete it)' : 'Close this agent'}
-          aria-label={isChat ? `Complete ${title}` : `Close ${title}`}
+          className="flex shrink-0 items-center rounded-sm p-0.5 text-ink-faint hover:text-ink"
+          title={isChat ? 'Archive this chat (kept until you delete it)' : 'Close this agent'}
+          aria-label={isChat ? `Archive ${title}` : `Close ${title}`}
           onClick={async (e) => {
             e.stopPropagation();
             if (!session) return void onClose();
-            await completeWithExit(e.currentTarget.closest<HTMLElement>(`[${COMPLETION_ROW_ATTR}]`), async () => {
+            await archiveWithExit(e.currentTarget.closest<HTMLElement>(`[${ARCHIVE_ROW_ATTR}]`), async () => {
               await onClose();
               return useStore.getState().sessions.some((s) => s.id === session.id && s.archivedAt);
             });
           }}
         >
-          <CloseIcon className={isChat ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
-
+          {isChat ? <ArchiveIcon className="h-3.5 w-3.5" /> : <CloseIcon className="h-3 w-3" />}
         </button>
         </span>
       </div>

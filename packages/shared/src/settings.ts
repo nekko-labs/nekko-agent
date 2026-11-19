@@ -210,6 +210,12 @@ export interface AppSettings {
   /** Fusion's ranking policy; permission remains per-chat. */
   fusion?: import('./fusion.js').FusionSettings;
   /**
+   * The local picture model a chat's agent uses (`generate_image`,
+   * `edit_image`) when neither the call nor the chat names one. Absent:
+   * Automatic, the chat's Photo model, else the first ready one.
+   */
+  agentPictureModel?: string;
+  /**
    * Default off. The user has Anthropic's own permission to use the
    * approval-gated features (scheduled runs, Nekko tools, the context note,
    * plan usage) on a Claude plan through Claude Code; nekkod then enables those
@@ -324,6 +330,7 @@ export interface AppSettings {
 
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
+  /** The one-time "where your archived chat went" tip was shown. Old key name, kept so it is not shown again. */
   completionTipSeen?: boolean;
   /** The "Send your first prompt" intro has been shown (or skipped) on the first ever new chat. */
   firstPromptIntroSeen?: boolean;
@@ -360,11 +367,15 @@ export interface AppSettings {
   /** Display name shared with paired devices; blank uses the system hostname. */
   machineName?: string;
   phoneChanges?: boolean;
-  /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
+  /**
+   * Chat pane's top-right action. Undefined or 'complete' means Archive, not Delete.
+   * The stored value keeps its old name so older builds and the phones still read it.
+   */
   chatPaneAction?: 'complete' | 'delete';
   /**
-   * Complete agents untouched for this many days (7, 14, 30, 90), or 0 for
-   * never. Undefined means the default, 30 (`AUTO_COMPLETE_DEFAULT_DAYS`).
+   * Archive agents untouched for this many days (7, 14, 30, 90), or 0 for
+   * never. Undefined means the default, 30 (`AUTO_ARCHIVE_DEFAULT_DAYS`).
+   * The key keeps its old name so saved settings carry over.
    */
   autoCompleteAfterDays?: number;
   /** Path to the shell new terminals launch by default (undefined = auto-detect). */
@@ -643,6 +654,9 @@ export interface UsageSummary {
     modelIds?: string[];
     /** Absent on a day with no attributed records. */
     attribution?: UsageAttribution;
+    /** Paid cloud pictures that day (`kind: "picture"` usage lines), and what they cost; absent on a day with none. */
+    pictures?: number;
+    pictureCost?: number;
   }>;
   /** True if any recorded usage came from a subscription provider. */
   hasSubscriptionUsage?: boolean;

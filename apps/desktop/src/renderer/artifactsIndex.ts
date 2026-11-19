@@ -1,5 +1,8 @@
 import type { Session, SessionSummary } from '@nekko-agent/shared';
 import { chatArtifacts } from './chatArtifacts.js';
+import { mainCheckoutPath, normalizePath, toolArg, toolPaths, WRITE_TOOLS } from './artifactPaths.js';
+
+export { mainCheckoutPath } from './artifactPaths.js';
 
 /**
  * Everything agents have produced, across chats, for Library: the documents a
@@ -42,8 +45,6 @@ export const DESIGNS_FOLDER = 'nekko-designs';
 const DESIGN_DIR = /(?:^|\/)(?:nekko-designs|designs?|mockups?|prototypes?)\//i;
 /** A file whose own name says it is a design: `login-mockup.html`, `pricing_wireframe.png`, `prototype.html`. */
 const DESIGN_NAME = /(?:^|[-_. ])(?:designs?|mock-?ups?|mocks?|prototypes?|wireframes?|concepts?|canvas(?:es)?|artboards?)(?=[-_. ]|$)/i;
-/** Tools that write a whole file, and the argument naming it: Nekko's own, and Claude Code's. */
-const WRITE_TOOLS: Record<string, string> = { write_file: 'path', Write: 'file_path' };
 /** Files that are part of an app being built, or an agent's own notes (`.claude/`), not an output: skip them even when an agent writes one. */
 const NOT_AN_OUTPUT = /(?:^|\/)(?:node_modules|\.git|dist|build|out|target|src|app|apps|packages|lib|public|test|tests|\.shots|\.github|\.claude)\//i;
 const NOT_AN_OUTPUT_NAME = /^(?:package(?:-lock)?\.json|tsconfig.*\.json|readme\.md|changelog\.md|agents\.md|claude\.md|spec\.md|tasks\.md|license(?:\.md)?|\.?.*rc\.json)$/i;
@@ -70,8 +71,13 @@ export interface ArtifactEntry {
   sessionTitle: string;
   /** When the message that produced or linked it was written; 0 when no chat mentioned it. */
   at: number;
-  /** Linked from a reply, written by the agent and never linked, or found in a project's designs folder. */
-  source: 'linked' | 'written' | 'folder';
+  /**
+   * Linked from a reply, written by the agent and never linked, found in a project's designs folder,
+   * or another computer's file through Nekko Cloud (a read-only copy, #2748).
+   */
+  source: 'linked' | 'written' | 'folder' | 'cloud';
+  /** For a `cloud` file: the computer it came from. */
+  device?: string;
   /** A design saved more than once: every version, oldest first. The entry itself is the newest. */
   versions?: DesignVersion[];
 }
@@ -82,15 +88,7 @@ export interface DesignVersion {
   path: string;
 }
 
-function normalize(path: string): string {
-  const parts: string[] = [];
-  const p = path.replaceAll('\\', '/');
-  for (const part of p.split('/')) {
-    if (part === '..') parts.pop();
-    else if (part && part !== '.') parts.push(part);
-  }
-  return `${p.startsWith('/') ? '/' : ''}${parts.join('/')}`;
-}
+const normalize = normalizePath;
 
 function titleFor(path: string): string {
   const parts = path.split('/');
@@ -104,7 +102,12 @@ function titleFor(path: string): string {
  * (only those that look like outputs). The newest mention of a path wins its
  * timestamp; a link's label wins over a written file's derived title.
  */
-export function sessionArtifacts(session: Pick<Session, 'id' | 'title' | 'messages'>, basePath?: string): ArtifactEntry[] {
+export function sessionArtifacts(
+  session: Pick<Session, 'id' | 'title' | 'messages'>,
+  basePath?: string,
+  /** The chat a helper agent's files belong to: its parent, which Library opens. */
+  owner: { id: string; title: string } = session,
+): ArtifactEntry[] {
   const out = new Map<string, ArtifactEntry>();
   const put = (e: ArtifactEntry) => {
     const key = e.path.toLowerCase();
@@ -112,27 +115,33 @@ export function sessionArtifacts(session: Pick<Session, 'id' | 'title' | 'messag
     if (!prev) { out.set(key, e); return; }
     out.set(key, { ...prev, at: Math.max(prev.at, e.at), ...(e.source === 'linked' ? { title: e.title, source: 'linked' as const } : {}) });
   };
+  const known = toolPaths(session.messages);
   for (const m of session.messages) {
     if (m.role !== 'assistant') continue;
-    for (const a of chatArtifacts(m.content, basePath)) {
+    for (const a of chatArtifacts(m.content, basePath, known)) {
       // A localhost preview server is not a file the chat produced.
       if (a.live) continue;
       const kind = artifactKind(a.path);
-      if (kind) put({ path: a.path, title: a.title, filename: a.filename, kind, sessionId: session.id, sessionTitle: session.title, at: m.createdAt, source: 'linked' });
+      if (kind) put({ path: a.path, title: a.title, filename: a.filename, kind, sessionId: owner.id, sessionTitle: owner.title, at: m.createdAt, source: 'linked' });
     }
     for (const call of m.toolCalls ?? []) {
-      const named = Object.hasOwn(WRITE_TOOLS, call.name) ? call.input?.[WRITE_TOOLS[call.name]] : undefined;
+      const arg = toolArg(call.name);
+      const named = arg ? call.input?.[arg] : undefined;
       if (typeof named !== 'string') continue;
       const raw = named.trim();
       if (!raw) continue;
       const absolute = /^(?:[a-z]:[\\/]|\/)/i.test(raw);
       if (!absolute && !basePath) continue;
       const path = normalize(absolute ? raw : `${basePath}/${raw}`);
-      const filename = path.split('/').pop() ?? path;
-      const rel = basePath && path.toLowerCase().startsWith(normalize(basePath).toLowerCase()) ? path.slice(normalize(basePath).length) : path;
-      if (NOT_AN_OUTPUT.test(rel) || NOT_AN_OUTPUT_NAME.test(filename)) continue;
       const kind = artifactKind(path);
-      if (kind) put({ path, title: titleFor(path), filename, kind, sessionId: session.id, sessionTitle: session.title, at: m.createdAt, source: 'written' });
+      // Reading, editing or searching a file makes it this chat's only when it is a design.
+      if (!kind || (!Object.hasOwn(WRITE_TOOLS, call.name) && kind !== 'design')) continue;
+      const filename = path.split('/').pop() ?? path;
+      // A worktree's own folder (`.claude/worktrees/x/`) is not a sign of an app's source: judge the path inside it.
+      const inRepo = mainCheckoutPath(path) ?? path;
+      const rel = basePath && inRepo.toLowerCase().startsWith(normalize(basePath).toLowerCase()) ? inRepo.slice(normalize(basePath).length) : inRepo;
+      if (NOT_AN_OUTPUT.test(rel) || NOT_AN_OUTPUT_NAME.test(filename)) continue;
+      put({ path, title: titleFor(path), filename, kind, sessionId: owner.id, sessionTitle: owner.title, at: m.createdAt, source: 'written' });
     }
   }
   return [...out.values()];
@@ -178,6 +187,29 @@ export async function readDesignsFolder(
   return [...top, ...nested.flat()].filter((e) => !e.dir).slice(0, FOLDER_LIMIT.files);
 }
 
+/** How many folders inside a project are checked for a designs folder of their own. */
+const NESTED_PROJECTS = 80;
+const NOT_A_PROJECT = /^(?:\.|node_modules$|dist$|build$|out$|target$)/i;
+
+/**
+ * The designs folders of a project and of the projects one level inside it: a
+ * chat folder is often a parent of many repos (`code/` holding `code/floop/`),
+ * and each repo keeps its own `nekko-designs/`. Listings only, bounded.
+ */
+export async function readProjectDesignFolders(
+  listDir: (path: string) => Promise<Array<{ name: string; path: string; dir: boolean }>>,
+  project: { name: string; path: string },
+): Promise<Array<{ project: string; files: Array<{ name: string; path: string }> }>> {
+  let inside: Array<{ name: string; path: string; dir: boolean }> = [];
+  try {
+    const listed = await listDir(project.path.replace(/[\\/]+$/, ''));
+    if (Array.isArray(listed)) inside = listed.filter((e) => e.dir && !NOT_A_PROJECT.test(e.name) && e.name.toLowerCase() !== DESIGNS_FOLDER).slice(0, NESTED_PROJECTS);
+  } catch { /* Unreadable: only the project's own folder is tried. */ }
+  const own = { project: project.name, files: await readDesignsFolder(listDir, project.path) };
+  const nested = await Promise.all(inside.map(async (d) => ({ project: d.name, files: await readDesignsFolder(listDir, d.path) })));
+  return [own, ...nested].filter((f) => f.files.length > 0);
+}
+
 /** Folders listed at once when checking which files are still there. */
 const PRESENCE_BATCH = 8;
 
@@ -214,6 +246,53 @@ export async function presentPaths(
     }));
   }
   return present;
+}
+
+/**
+ * Where a file that is gone from its git worktree lives now: the same place in
+ * the repo's main checkout, once its branch merged and the worktree was
+ * removed. Keyed by the old path, lower-cased; only files the main checkout
+ * lists and the worktree no longer does (a worktree folder that is gone or
+ * cannot be listed counts as gone). Paths outside a worktree are skipped.
+ */
+export async function movedPaths(
+  listDir: (path: string) => Promise<Array<{ name: string }>>,
+  paths: readonly string[],
+): Promise<Map<string, string>> {
+  const moves = paths.flatMap((p) => { const to = mainCheckoutPath(p); return to ? [[normalize(p), to] as const] : []; });
+  const folderOf = (p: string) => p.slice(0, p.lastIndexOf('/'));
+  // Each folder listed once; one that cannot be listed lists nothing.
+  const names = new Map<string, Set<string>>();
+  const folders = [...new Set(moves.flatMap(([from, to]) => [folderOf(from), folderOf(to)]))];
+  for (let i = 0; i < folders.length; i += PRESENCE_BATCH) {
+    await Promise.all(folders.slice(i, i + PRESENCE_BATCH).map(async (folder) => {
+      try {
+        const listed = await listDir(folder);
+        if (Array.isArray(listed)) names.set(folder.toLowerCase(), new Set(listed.map((e) => String(e?.name ?? '').toLowerCase())));
+      } catch { /* Not there. */ }
+    }));
+  }
+  const lists = (p: string) => !!names.get(folderOf(p).toLowerCase())?.has(p.slice(p.lastIndexOf('/') + 1).toLowerCase());
+  const out = new Map<string, string>();
+  for (const [from, to] of moves) if (!lists(from) && lists(to)) out.set(from.toLowerCase(), to);
+  return out;
+}
+
+/**
+ * Point moved files at where they live now, keeping one entry per path: a
+ * chat's entry wins over the same file found in a designs folder.
+ */
+export function relocate(entries: readonly ArtifactEntry[], moved: ReadonlyMap<string, string>): ArtifactEntry[] {
+  if (!moved.size) return [...entries];
+  const out = new Map<string, ArtifactEntry>();
+  for (const e of entries) {
+    const to = moved.get(e.path.toLowerCase());
+    const next = to ? { ...e, path: to, filename: to.split('/').pop() ?? e.filename } : e;
+    const key = next.path.toLowerCase();
+    const prev = out.get(key);
+    if (!prev || (prev.source === 'folder' && next.source !== 'folder') || (prev.source !== 'folder' && next.source !== 'folder' && next.at > prev.at)) out.set(key, next);
+  }
+  return [...out.values()];
 }
 
 /** Folder designs join the chat index; a path a chat already produced keeps its chat. */
@@ -273,6 +352,21 @@ export function artifactCandidates(sessions: readonly SessionSummary[], limit = 
     .filter((s) => !s.parentSessionId && !s.incognito && s.chatType !== 'image' && s.exchangeCount > 1)
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, limit);
+}
+
+/**
+ * The helper agents those chats started (a design agent the chat handed a
+ * design to, say): what they wrote is the chat's, so Library lists it under
+ * the chat. Most run one long turn, so no exchange count is asked of them.
+ */
+export function helperCandidates(sessions: readonly SessionSummary[], parents: readonly SessionSummary[]): Array<SessionSummary & { parent: SessionSummary }> {
+  const byId = new Map(parents.map((p) => [p.id, p]));
+  const out: Array<SessionSummary & { parent: SessionSummary }> = [];
+  for (const s of sessions) {
+    const parent = s.parentSessionId ? byId.get(s.parentSessionId) : undefined;
+    if (parent && !s.incognito) out.push({ ...s, parent });
+  }
+  return out;
 }
 
 /** Group, newest first within a group, groups in the fixed kind order. Optional text filter on title, filename, chat. */

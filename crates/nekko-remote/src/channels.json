@@ -271,7 +271,6 @@
  "sync:restore",
  "sync:revoke",
  "sync:setEnabled",
- "sync:setIncludeLocalOnly",
  "sync:turnOn",
  "system:stats",
  "task:create",

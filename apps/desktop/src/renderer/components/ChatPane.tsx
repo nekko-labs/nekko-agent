@@ -11,6 +11,7 @@ import { shouldShowFirstPromptIntro } from '../firstPromptIntroGate.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
+import { toolPaths } from '../artifactPaths.js';
 import { ChatArtifacts } from './ChatArtifacts.js';
 import { MarkdownSession } from './Markdown.js';
 import { MarkdownRefs } from './ReplyRefChips.js';
@@ -82,6 +83,8 @@ import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
 import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure } from './agent-console/interruption.js';
 import { ContinueAtReset } from './agent-console/ContinueAtReset.js';
+import { DockSignIn } from './MonitorsDock.js';
+import { SUBSCRIPTION_KINDS } from './providers/AddProvider.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
@@ -433,10 +436,12 @@ function ChatHeader({
  * only when its own data does.
  */
 const TranscriptRowView = memo(function TranscriptRowView({
-  row, streaming, readOnly, prByUrl, sessionId, basePath, cuts, onEditResend, onCopyToComposer, onSplit, onDelete, onRestart, onImageClick, onImageContextMenu, onEditImage,
+  row, streaming, readOnly, prByUrl, sessionId, basePath, knownPaths, cuts, onEditResend, onCopyToComposer, onSplit, onDelete, onRestart, onImageClick, onImageContextMenu, onEditImage,
 }: {
   row: TranscriptRow;
   basePath?: string;
+  /** The files the chat's tools named, where a relative name in a reply really is. */
+  knownPaths?: readonly string[];
   streaming: boolean;
   /** An archived chat: nothing on a row may change the conversation. */
   readOnly: boolean;
@@ -482,7 +487,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
         chronological
       />
       </MarkdownSession.Provider>
-      {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath).filter(artifact => !artifact.inlineImage)} sessionId={sessionId} />}
+      {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath, knownPaths).filter(artifact => !artifact.inlineImage)} sessionId={sessionId} />}
       {/* A PR card right after the message that first names it. */}
       {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" sessionId={sessionId} />)}
     </>
@@ -2661,6 +2666,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   }, [sessionId]);
   const onDelete = useCallback((id: string) => { void takeBack('delete', id); }, [takeBack]);
   const onRestart = useCallback((id: string) => { void takeBack('restart', id); }, [takeBack]);
+  // Joined so the rows keep one array (and stay memoized) until a new path is named.
+  const knownKey = session ? toolPaths(session.messages).join('\n') : '';
+  const knownPaths = useMemo(() => (knownKey ? knownKey.split('\n') : undefined), [knownKey]);
   const artifactBasePath = session?.workspaceId ? session.gitWorktrees?.[session.workspaceId]?.path ?? settings?.workspaces.find((w) => w.id === session.workspaceId)?.path : undefined;
   // Run on a suggested command (#2595): a local chat the user can write in.
   // Sandbox work never runs on this computer's shell, so it gets no Run.
@@ -2679,6 +2687,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       <TranscriptRowView
         row={row}
         basePath={artifactBasePath}
+        knownPaths={knownPaths}
         streaming={streaming}
         readOnly={readOnly}
         prByUrl={prByUrl}
@@ -2694,7 +2703,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         onEditImage={imageMode ? editPicture : undefined}
       />
     ),
-    [artifactBasePath, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu, imageMode, editPicture],
+    [artifactBasePath, knownPaths, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu, imageMode, editPicture],
   );
   // Width of the text column, for the height estimates of rows not yet measured.
   const columnWidth = Math.max(0, (paneWidth || 800) - 60);
@@ -2703,10 +2712,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const welcomeState = chatWelcomeState({ loaded: !!session, messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
   const wavePreset = useStore((s) => s.resolvedPreset);
   const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(wavePreset) : null;
-  const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
+  // A new Photo chat opens the same way, with its own model row and, until a picture model is ready, the setup in the box.
+  const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && (imageMode || (hasProvider && !welcomeState.modelChoice)) && !!session && !question && !approval;
   // Someone's first ever new chat opens the "Send your first prompt" intro over it, once.
   const [firstPromptIntroClosed, setFirstPromptIntroClosed] = useState(false);
-  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart, settings: s.settings, sessions: s.sessions, setupOpen: s.onboardingOpen }));
+  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart: cleanStart && !imageMode, settings: s.settings, sessions: s.sessions, setupOpen: s.onboardingOpen }));
   const closeFirstPromptIntro = useCallback(() => {
     setFirstPromptIntroClosed(true);
     // If saving fails it simply shows again next time.
@@ -2956,6 +2966,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <p className="mx-auto mt-1 max-w-sm text-sm text-ink-faint">
                     {setupNeeded
                       ? 'Connect an AI account or a local model. We’ll walk you through it — no technical experience needed.'
+                      : imageMode
+                        ? 'Describe the picture you want: what is in it, where, the light and the style.'
                       : needsModel
                         ? 'Choose a model here, or let Auto pick per message.'
                         : 'Ask a question or hand over a task. Use / for skills and prompts, @ to attach files, + for photos, videos and folders. Paste or drop any file.'}
@@ -2965,7 +2977,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <button className="btn btn-primary" onClick={() => useStore.getState().setView('models')}>Set up my first agent →</button>
                 ) : null}
                 {imageMode && session && surface !== 'transcript' && <PhotoModelSetup session={session} onReady={photoReady} onShown={setPhotoSetupShown} />}
-                {surface !== 'transcript' && welcomeState.modelChoice && !(imageMode && photoSetupShown) && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
+                {surface !== 'transcript' && welcomeState.modelChoice && !imageMode && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
                   <div className="flex items-center justify-between gap-2 px-2">
                     <span className="text-xs font-medium text-ink-soft">Choose a model</span>
 
@@ -3055,8 +3067,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 empty:hidden">
+                    {/* Retry only fails again until the sign-in is fixed, so the
+                        fix sits here: the provider's own sign-in when it has one,
+                        otherwise its card in Models (a key or a Claude account). */}
+                    {interruption.signInExpired && activeProvider && !readOnly && (activeProvider.auth === 'subscription' && SUBSCRIPTION_KINDS[activeProvider.kind]
+                      ? <DockSignIn provider={activeProvider} onSignedIn={() => {}} />
+                      : <button className="btn btn-outline shrink-0 px-3 py-0.5 text-2xs" data-notice-fix-sign-in
+                          title={`Fix the ${activeProvider.label} sign-in or key in Models`}
+                          onClick={() => useStore.getState().setView('models')}>
+                          Fix in Models
+                        </button>)}
                     {hasPrompt && (
-                      <button className="btn btn-primary shrink-0 px-3 py-0.5 text-2xs"
+                      <button className={`btn ${interruption.signInExpired ? 'btn-outline' : 'btn-primary'} shrink-0 px-3 py-0.5 text-2xs`}
                         title="Retry using the saved conversation and work" onClick={() => void resumeRun()}>
                         Retry
                       </button>
@@ -3119,7 +3141,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
         <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : cleanStart ? 'px-4' : 'px-1'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
-          {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} />}
+          {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} kind={imageMode ? 'photo' : 'agent'} title={imageMode && photoSetupShown ? 'Let’s get Photo ready.' : undefined} />}
           {firstPromptIntro && <Suspense fallback={null}><FirstPromptIntro onClose={closeFirstPromptIntro} /></Suspense>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : cleanStart ? 'w-[min(90%,calc(100%-8px))]' : 'w-full'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
@@ -3133,7 +3155,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 <button type="button" className="btn btn-ghost h-7 px-2 py-0 text-xs" aria-label="Dismiss" title="Dismiss" onClick={() => { LONG_DISMISSED.add(sessionId); setLongDismissed((n) => n + 1); }}>Not now</button>
               </div>
             )}
-            <div className="composer relative">
+            <div className="composer relative" data-photo-setup-open={(cleanStart && imageMode && photoSetupShown) || undefined}>
+            {cleanStart && imageMode && session && <div data-photo-setup-slot><PhotoModelSetup session={session} onReady={photoReady} onShown={setPhotoSetupShown} /></div>}
             {/* The resize grip is part of the box: a wide invisible hit area on
                 its top border, with a pill that lights up there on hover. */}
             {surface !== 'composer' && !cleanStart && <div
@@ -3223,7 +3246,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             </div>
             </>)}
             {imageMode && session && editOffer && <EditModelOffer session={session} onReady={photoReady} onDismiss={() => setEditOffer(false)} />}
-            {showControls && imageMode && session && (
+            {showControls && imageMode && session && !wallWindow && (
               <div className="flex min-w-0 items-center gap-1 overflow-hidden border-b border-line px-2 py-1">
                 <ImageModeControls key={imageControlsKey} session={session} onChange={setSession} busy={streaming} />
               </div>
@@ -3456,7 +3479,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <MarkdownEditor
                     ref={composerRef}
                     className={`relative ${compact ? 'min-h-[44px]' : 'min-h-[64px]'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-5 pb-2 pt-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
-                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (setupNeeded ? 'Add a model provider in Models first' : 'Message Nekko Agent…  (/ for prompts, @ to attach files)')}
+                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe your picture: who or what, where, the light, the style…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (setupNeeded ? 'Add a model provider in Models first' : 'Message Nekko Agent…  (/ for prompts, @ to attach files)')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}
@@ -3685,6 +3708,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   {(header || wallWindow) && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
                       {wallWindow && !imageMode && modelControls}
+                      {wallWindow && imageMode && session && <ImageModeControls key={imageControlsKey} session={session} onChange={setSession} busy={streaming} />}
                       {wallWindow && !imageMode && expertMode && asksFirst}
                       {!wallWindow && <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" hidePrivacy={!showPrivacy} />}
                     </div>
@@ -3839,7 +3863,7 @@ function ArchivedChatBar({ sessionId, contentWidth }: { sessionId: string; conte
       <div className={`${contentWidth} flex flex-wrap items-center gap-2 rounded-xl px-3 py-2`} style={{ background: 'var(--surface-2)' }}>
         <CheckIcon className="h-4 w-4 shrink-0 text-ink-faint" />
         <p className="min-w-0 flex-1 text-xs text-ink-soft">
-          Completed and read-only.
+          Archived and read-only.
           <span className="text-ink-faint"> Kept until you delete it.</span>
         </p>
         <button

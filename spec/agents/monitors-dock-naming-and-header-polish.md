@@ -45,3 +45,15 @@ Verification: focused tests plus hidden full-App renderer captures test both sid
 ## Movement-gated header pickup
 
 Implemented: a primary-button press on a monitor header only arms pickup. The same pointer must move before native dragstart may lift the card or open a landing preview. Stationary presses, unrelated pointers, release, cancellation and focus loss cannot authorize a later drag. Header buttons do not arm pickup; keyboard reordering is unchanged. No host data or network access is added. Verified with focused regression tests and isolated Windows Electron DOM interactions; physical OS drag initiation and other operating systems remain unverified.
+
+## Quiet buttons and a denser dock (2026-11-19, #3025)
+
+User intent (Philip): nothing in a monitor wears a button box; the header's minimize and close are Gentleface icons that play on hover; the CI runner's Completed row has room above it; every monitor is denser, so more fit in view and the dock needs less width.
+
+- **Quiet buttons** `[implemented; unit-tested; renderer-verified in an isolated fixture]`. The dock's boxed button style covers only its own controls (Configure, the position and Budget range buttons). The monitor header's icons, the show/hide pill and everything inside the Automations monitor (the runner's settings gear, Completed, View CI runners, task actions) keep the app's ghost look. The header icons brighten on hover with no tile behind them.
+- **Gentleface close and minimize** `[implemented; unit-tested]`. Gentleface `x` and `minus`; neither has upstream motion, so each has a local one-shot motion over the licensed artwork (the x turns a quarter, the minus dips). Every settings cog plays Gentleface's `settings-ratchet` once on hover.
+- **Completed spacing** `[implemented; renderer-verified]`: 8px between the running jobs and the Completed row in the panel.
+- **Density** `[implemented; renderer-verified]`. Side docks default to 248px (was 276) with a 220px minimum (was 260); monitors sit 8px apart (was 12) with 12px corners; headers are 4px by 8px with 24px icon buttons; monitor bodies use 8px by 12px padding, 8px gaps and the extra-small type step; hardware meters keep label, bar and reading 4px apart and meters 12px apart. In the synthetic fixture the five default monitors stack 1457px tall at 248px, against 1608px at 276px before. The toolbar stays on one line at the default width.
+
+Not verified: packaged app, native window chrome, real runner and provider data (the fixture is synthetic).
+

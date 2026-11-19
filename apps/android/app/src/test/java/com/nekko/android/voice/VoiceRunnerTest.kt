@@ -26,7 +26,7 @@ class VoiceRunnerTest {
         override fun openSettings() { events += "settings" }
         override fun chats() = availableChats
         override fun status() = "Working"
-        override suspend fun complete() { events += "complete" }
+        override suspend fun archive() { events += "archive" }
         override suspend fun ship() = facts
         override suspend fun merge(pr: VoiceRunner.PullRequest): String? { events += "merge:${pr.id}"; return null }
         override suspend fun answer(questionId: String, text: String) { events += "answer:$questionId:$text" }
@@ -68,10 +68,10 @@ class VoiceRunnerTest {
         val h = Host(); val r = VoiceRunner(backgroundScope, h)
         r.started(); r.hear("Nekko complete this session")
         val pending = r.pending.value!!
-        assertFalse(h.events.contains("complete"))
+        assertFalse(h.events.contains("archive"))
         r.stopped(afterHold = true); r.started()
         r.answer(VoiceIntent.Yes, pending.id); r.answer(VoiceIntent.Yes, pending.id)
-        assertEquals(1, h.events.count { it == "complete" }); assertNull(r.pending.value)
+        assertEquals(1, h.events.count { it == "archive" }); assertNull(r.pending.value)
     }
     @Test fun `expired cancelled replaced and stale button confirmations cannot run`() = runTest {
         val h = Host(); val r = VoiceRunner(backgroundScope, h, { testScheduler.currentTime })
@@ -81,12 +81,12 @@ class VoiceRunnerTest {
         r.answer(VoiceIntent.Yes, old); assertEquals(second, r.pending.value!!.id)
         advanceTimeBy(60_001); runCurrent()
         assertNull(r.pending.value)
-        r.hear("Nekko yes"); assertFalse(h.events.contains("complete"))
+        r.hear("Nekko yes"); assertFalse(h.events.contains("archive"))
     }
     @Test fun `lock invalidates pending commands and normal continuous stop clears pending`() = runTest {
         val h = Host(); val r = VoiceRunner(backgroundScope, h)
         r.hear("Nekko complete this session"); r.abort(); r.hear("Nekko yes")
-        assertFalse(h.events.contains("complete"))
+        assertFalse(h.events.contains("archive"))
         r.hear("Nekko complete this session"); r.stopped()
         assertNull(r.pending.value)
     }
@@ -148,7 +148,7 @@ class VoiceRunnerTest {
         r.hear("fresh words"); assertEquals("first fresh words", h.text)
     }
     @Test fun `transport failures consume confirmation and remain visible`() = runTest {
-        val h = object : Host() { override suspend fun complete() { error("No permission") } }
+        val h = object : Host() { override suspend fun archive() { error("No permission") } }
         val r = VoiceRunner(backgroundScope, h)
         r.hear("Nekko complete this session"); r.hear("Nekko yes")
         assertNull(r.pending.value); assertEquals("No permission", r.notice.value)

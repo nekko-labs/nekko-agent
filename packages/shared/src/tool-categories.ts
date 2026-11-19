@@ -2,7 +2,7 @@
  * What kind of thing each agent tool touches, so the Tools menu can group them
  * and the chat's internet switch can turn off exactly the ones that go online.
  *
- * Blocking the internet keeps every local category (files, shell, desktop and
+ * Blocking the internet keeps every local category (files, shell, desktop, media and
  * the agent's own bookkeeping) and drops `online`: tools whose job is to reach
  * a network service. MCP servers are treated as online because a server can
  * be remote and the app cannot tell. Delegation, watches and `decide` are
@@ -10,13 +10,14 @@
  * tool; a command it runs is not network-sandboxed, which the UI says.
  */
 
-export type ToolCategory = 'files' | 'shell' | 'online' | 'desktop' | 'agent' | 'mcp';
+export type ToolCategory = 'files' | 'shell' | 'online' | 'desktop' | 'media' | 'agent' | 'mcp';
 
 /** Display order and labels for the Tools menu. */
 export const TOOL_CATEGORIES: ReadonlyArray<{ id: ToolCategory; label: string; description: string }> = [
   { id: 'files', label: 'File system', description: 'Read, search and edit files in the chat’s folders.' },
   { id: 'shell', label: 'Shell & processes', description: 'Run commands and background processes on this computer.' },
   { id: 'desktop', label: 'Desktop', description: 'Capture local app windows.' },
+  { id: 'media', label: 'Pictures', description: 'Make and edit pictures with this computer’s image models.' },
   { id: 'online', label: 'Online', description: 'Reach the internet: fetch pages, drive a browser.' },
   { id: 'agent', label: 'Agent', description: 'Plans, questions, sub-agents and watches.' },
   { id: 'mcp', label: 'MCP servers', description: 'Tools from connected MCP servers, which may be remote.' },
@@ -49,6 +50,11 @@ export const TOOL_CATEGORY_OF: Readonly<Record<string, ToolCategory>> = {
   report_experiment: 'agent',
   report_artifact: 'agent',
   remember: 'agent',
+  // Local image models only, so they stay offline (cloud media models will be classified apart).
+  generate_image: 'media',
+  edit_image: 'media',
+  media_models: 'media',
+  generate_video: 'media',
 };
 
 /** Agent tools that can reach a cloud provider, so an offline chat goes without them. */

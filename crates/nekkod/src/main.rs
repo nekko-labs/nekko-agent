@@ -24,9 +24,11 @@ mod boot;
 mod catalog;
 mod chat_client;
 mod chat_secrets;
+mod claude_command_log;
 mod claude_plan;
 mod claude_policy;
 mod cli_install;
+mod cloud_media;
 mod compaction;
 mod computers;
 mod config;
@@ -46,6 +48,7 @@ mod feedback;
 mod fleet;
 mod gcp;
 mod harness;
+mod host_name;
 mod hub;
 mod hypergate;
 mod image_turns;
@@ -58,6 +61,7 @@ mod logs;
 mod machine;
 mod mcp;
 mod mdns;
+mod media_tools;
 mod messaging;
 mod model_feed;
 mod model_server;
@@ -98,6 +102,7 @@ mod spawn;
 mod speeds;
 mod subagent_model;
 mod subagents;
+mod svg_safe;
 mod taint;
 mod telemetry;
 mod tooling;
@@ -183,6 +188,10 @@ const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 const DRAIN: std::time::Duration = std::time::Duration::from_secs(2);
 /// A shutdown that takes longer than this is cut short (children ended, exit 1).
 const SHUTDOWN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(8);
+/// Shutting down agents' simulators gets this long, from the start of cleanup.
+/// Well inside [`SHUTDOWN_DEADLINE`], and inside the 6 s the desktop app gives
+/// the daemon before it sends SIGTERM (engine-process.ts `stop`).
+const SIMULATORS_WITHIN: std::time::Duration = std::time::Duration::from_secs(4);
 /// Children still running at the end get this long after SIGTERM before SIGKILL.
 const SWEEP_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
 
@@ -252,7 +261,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             },
             dir,
             api_url: feedback::cloud_url(),
-            device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
+            device_label: host_name::friendly_host_name().chars().take(40).collect(),
             sessions: sessions.clone(),
             publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
             busy: Arc::new(move |id| busy.get().is_some_and(|t| t.running_sessions().iter().any(|s| s == id))),
@@ -286,10 +295,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         app_version: cfg.app_version.clone().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
         name: {
             let store = settings.store.clone();
-            Arc::new(move || {
-                let host = gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string();
-                small_services::computer_name(&store.get(), &host)
-            })
+            Arc::new(move || small_services::computer_name(&store.get(), &host_name::friendly_host_name()))
         },
         models: {
             let library = library.clone();
@@ -375,7 +381,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 sandboxes.clone(),
                 automation.training.clone(),
             )
-            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
+            .with_media(server.clone()),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),
@@ -561,6 +568,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }
     }
 
+    // Simulators and emulators agents booted go down with the daemon, since
+    // the agents that would have shut them down are stopping. Started first
+    // so it runs alongside the rest of the cleanup, and awaited at the end.
+    let simulators_down = tokio::spawn(simulators::shutdown_agent_devices(SIMULATORS_WITHIN));
+
     // Running turns hold their newest checkpoint for up to two seconds: write them.
     {
         let sessions = sessions.clone();
@@ -581,6 +593,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     terminals.close_all();
     mcp.stop_all();
     processes.kill_all();
+    let _ = simulators_down.await;
     Ok(())
 }
 

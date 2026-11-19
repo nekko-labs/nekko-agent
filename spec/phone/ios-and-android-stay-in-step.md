@@ -50,7 +50,8 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Nekko in the car: voice-first, active work, Results of voice commands ([spec](carplay.md)) | CarPlay app built 2026-11-14 ([#2781](https://github.com/nekko-labs/nekko-agent/issues/2781)): Linux-tested logic, not yet in CarPlay Simulator; waits on Apple's entitlement | Android Auto as a messaging app through notifications (2026-11-17): a finished reply read aloud in the car, with Reply. No Work list, Results, Allow/Deny or Stop: Android Auto has no category for a voice agent | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Built 2026-11-09 ([#2423](https://github.com/nekko-labs/nekko-agent/issues/2423)): inline card, link to the repository only, verified in Native iOS CI, not on a device | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | Both: the native store rating request once on the App Store and Google Play (planned). |
 | Open your own computer from an organization's list with no pairing ([spec](../platform/organizations.md), desktop since #2806) | Separate issue #2804 | Protocol layer only (`FleetLink`, unit-tested); no Cloud sign-in, keyring unlock or org list in the app | [#2835](https://github.com/nekko-labs/nekko-agent/issues/2835) |
-| Take back an always-allowed MCP tool or a known recipient (desktop since #2960, decisions 0054 and 0063) | Built 2026-11-17: Model panel → **Allowed without asking** (`ChatGrantsList`), each removal signed with Face ID or the passcode (`knownRecipients` joins `PHONE_GUARDED_OPTION_KEYS`); NekkoKit-tested, app target CI-built | Not yet: only a new chat takes one back | Android PR follows, on the same gate change. |
+| Paid cloud clip picker with a live total ([spec](../agents/media-tools-for-chat-agents.md), desktop since #2973 step 6) | Plain stepped questions, then a separate approval with the total | Same | [#3038](https://github.com/nekko-labs/nekko-agent/issues/3038) |
+| Take back an always-allowed MCP tool or a known recipient (desktop since #2960, decisions 0054 and 0063) | Built 2026-11-17: Model panel → **Allowed without asking** (`ChatGrantsList`), each removal signed with Face ID or the passcode (`knownRecipients` joins `PHONE_GUARDED_OPTION_KEYS`); NekkoKit-tested, app target CI-built | Built 2026-11-18: Model sheet → **Allowed without asking** (`GrantsSheet`), each removal signed with the screen lock through `setRunOption`; controller JVM-tested | None: both phones have it. |
 
 ## Pending response messages (#2476, #2497)
 
@@ -85,6 +86,9 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
 | CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | Replies read aloud and answered by voice in Android Auto (notifications); no Work list, Results, approvals or Stop | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 | New chat: model ⟶ device on one line, the connect checklist and note, the limit line, picker size and context (iPhone #2921-#2925, 2026-11-17) | Still two rows and the "no tools" note | [#2950](https://github.com/nekko-labs/nekko-agent/issues/2950) |
+| Real brand marks on sign-in and provider headings (iPhone #2930, 2026-11-17) | Android has no Nekko Cloud sign-in yet; provider marks exist on chat rows only | [#2938](https://github.com/nekko-labs/nekko-agent/issues/2938) |
+| Models on This Phone: provider buttons, Anthropic choice with a disabled Claude subscription and a sad Nekko (iPhone #2931, 2026-11-17) | Not started | [#2939](https://github.com/nekko-labs/nekko-agent/issues/2939) |
+| Settings: Nekko Cloud profile on top, Computers second, avatar rows with a plus (iPhone #2929, 2026-11-17) | Not started | [#2940](https://github.com/nekko-labs/nekko-agent/issues/2940) |
 
 Android features the iPhone lacks have not been audited yet.
 
@@ -94,7 +98,7 @@ Nothing is recorded as a true OS exclusive yet.
 
 | Capability | iPhone / iPad | Android | Gap / follow-up |
 | --- | --- | --- | --- |
-| Two-line reconnect status with fixed-width animated ellipsis | Branch implementation, native verification pending ([spec](ios-streaming-and-reconnect-status.md)) | Same two lines in New chat while the computer is away (2026-11-13, `ReconnectingNotice`; dots still with animations off) | None |
+| Two-line New Chat reconnect status with fixed-width animated ellipsis | `NAME is reconnecting...` plus `Prompts you send wait on this iPhone.`; verified on iPhone 18 Pro / iOS 27.0 simulator ([spec](ios-streaming-and-reconnect-status.md)) | Same existing dots with `Prompts you send wait on this phone.`; verified on Pixel 5 / API 32 emulator | None |
 
 ## Secret box (desktop first, #2594)
 

@@ -11,12 +11,12 @@ Promise.all([import('react'), import('react-dom/client'), import('../src/rendere
   await import('@fontsource-variable/geist');
   await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
-  const sessions = ['alpha', 'beta', 'completed'].flatMap((group) => Array.from({ length: 65 }, (_, i) => ({
-    id: `${group}-${i}`, title: `${group === 'completed' ? 'Completed' : group === 'alpha' ? 'Alpha' : 'Beta'} task ${String(i + 1).padStart(2, '0')}`,
+  const sessions = ['alpha', 'beta', 'archived'].flatMap((group) => Array.from({ length: 65 }, (_, i) => ({
+    id: `${group}-${i}`, title: `${group === 'archived' ? 'Archived' : group === 'alpha' ? 'Alpha' : 'Beta'} task ${String(i + 1).padStart(2, '0')}`,
     createdAt: 1700000000000 - i, updatedAt: 1700000000000 - i, mode: 'agent', chatType: 'multimodal',
     workspaceId: group === 'beta' ? 'beta' : 'alpha', messageCount: 2,
-    prUrls: i === 64 && group !== 'completed' ? ['https://github.com/example/fixture/pull/1'] : [],
-    ...(group === 'completed' ? { archivedAt: 1700000000000 - i } : {}),
+    prUrls: i === 64 && group !== 'archived' ? ['https://github.com/example/fixture/pull/1'] : [],
+    ...(group === 'archived' ? { archivedAt: 1700000000000 - i } : {}),
   })));
   const settings = { workspaces: [{ id: 'alpha', name: 'Alpha project', paths: [] }, { id: 'beta', name: 'Beta project', paths: [] }], providers: [], showTips: false, agentActivityAnimation: false, theme: 'dark', themePreset: 'x-plum-dark' };
   const prReads: string[] = [];
@@ -32,7 +32,7 @@ Promise.all([import('react'), import('react-dom/client'), import('../src/rendere
     select = setSelected;
     return <main style={{ height: '100vh', display: 'flex', padding: 12, background: 'var(--paper)', color: 'var(--ink)' }}>
       <AgentSidebar selectedId={selected} onOpenChat={setSelected} onOpenTerminal={setSelected} onCreate={async () => {}} />
-      <div style={{ padding: 24 }}><h1>Agent groups</h1><p>65 agents per project. Completed chats stay folded until opened.</p></div>
+      <div style={{ padding: 24 }}><h1>Agent groups</h1><p>65 agents per project. Archived chats stay folded until opened.</p></div>
     </main>;
   }
   const root = createRoot(document.getElementById('root')!);

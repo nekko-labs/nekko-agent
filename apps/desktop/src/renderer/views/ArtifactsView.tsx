@@ -9,16 +9,18 @@ import { prefersReducedMotion } from '../displays.js';
 import { FilePane } from '../components/FilePane.js';
 import { LibraryArtwork, LibraryIntro, libraryIntroSeen, dismissLibraryIntro } from '../components/LibraryIntro.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
-import { LibraryFileIcon } from '../components/library/LibraryFileIcon.js';
+import { LibraryFileThumbnail } from '../components/library/LibraryFileThumbnail.js';
 import { DesignCanvas } from '../components/library/DesignCanvas.js';
 import { TilePreview } from '../components/library/TilePreview.js';
+import { LibrarySyncGlyph, LibrarySyncSummary, useLibrarySync } from '../components/library/LibrarySync.js';
+import { fileSync, remoteEntries } from '../components/library/librarySyncState.js';
 import {
   LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
   type LibraryLayout,
 } from '../components/library/libraryPrefs.js';
 import { ChevronDownIcon, ChevronIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
 import {
-  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns,
+  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, helperCandidates, mergeArtifacts, movedPaths, presentPaths, readProjectDesignFolders, relocate, sessionArtifacts, withFolderDesigns,
   type ArtifactEntry, type ArtifactKind,
 } from '../artifactsIndex.js';
 
@@ -32,8 +34,8 @@ const when = (at: number) => {
   const d = new Date(at);
   return at <= 0 || Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
-/** Where a file came from: its chat, or for a design found in a project's designs folder, that project. */
-const cameFrom = (e: ArtifactEntry) => (e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
+/** Where a file came from: its chat, the project for a design found in its designs folder, or another computer. */
+const cameFrom = (e: ArtifactEntry) => (e.source === 'cloud' ? `From ${e.device}` : e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
 const fromAndWhen = (e: ArtifactEntry) => [cameFrom(e), when(e.at), e.versions && `${e.versions.length} versions`].filter(Boolean).join(' · ');
 /** A design the canvas can show: an HTML page. Images and the rest open in the file pane. */
 const isHtml = (path: string) => /\.html?$/i.test(path);
@@ -141,17 +143,28 @@ export function ArtifactsView() {
   })));
   const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen());
   const closeIntro = () => { dismissLibraryIntro(); setShowIntro(false); };
+  // The list from the previous visit: shown immediately for a zero-layout-shift
+  // repeat visit, then kept as the floor while new batches arrive (#3043).
+  const [storedIndex] = useState<ArtifactEntry[] | null>(() => {
+    try {
+      const raw = localStorage.getItem('library:index:v1');
+      return raw ? (JSON.parse(raw) as ArtifactEntry[]) : null;
+    } catch { return null; }
+  });
+  // Accumulates the full live scan; starts null and grows batch by batch.
   const [fromChats, setFromChats] = useState<ArtifactEntry[] | null>(null);
   // The designs sitting in each project's designs folder, whoever put them there.
   const [fromFolders, setFromFolders] = useState<ArtifactEntry[] | null>(null);
   // Every candidate chat has been read, so an empty index really means no files yet.
   const [chatsRead, setChatsRead] = useState(false);
+  // Every chat has been read at least once this visit; a later re-read (a chat changed) keeps showing the list.
+  const [readOnce, setReadOnce] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ArtifactEntry | null>(null);
   // Which version of the picked design is open (its newest when null), and whether its file is shown instead of the canvas.
   const [version, setVersion] = useState<string | null>(null);
   const [asFile, setAsFile] = useState(false);
-  const [includeCompleted, setIncludeCompleted] = useState(true);
+  const [includeArchived, setIncludeArchived] = useState(true);
   const [show, setShow] = useState<Show>('all');
   const [layout, setLayout] = useState<LibraryLayout>(loadLibraryLayout);
   const [collapsed, setCollapsed] = useState<Set<ArtifactKind>>(loadCollapsedKinds);
@@ -161,10 +174,12 @@ export function ArtifactsView() {
   // Transcripts are read a few at a time from the newest chat back; cached
   // ones paint at once. Only paths are kept, never file contents.
   const candidates = useMemo(
-    () => artifactCandidates(sessions.filter((s: SessionSummary) => includeCompleted || !s.archivedAt)),
-    [sessions, includeCompleted],
+    () => artifactCandidates(sessions.filter((s: SessionSummary) => includeArchived || !s.archivedAt)),
+    [sessions, includeArchived],
   );
-  const key = candidates.map((s) => `${s.id}:${s.updatedAt}`).join('|');
+  // A helper agent a chat started (a design agent, say) wrote files that are the chat's.
+  const helpers = useMemo(() => helperCandidates(sessions, candidates), [sessions, candidates]);
+  const key = [...candidates, ...helpers].map((s) => `${s.id}:${s.updatedAt}`).join('|');
   useEffect(() => {
     let live = true;
     setChatsRead(false);
@@ -178,53 +193,93 @@ export function ArtifactsView() {
         }));
         if (!live) return;
         lists.push(...batch);
-        setFromChats(mergeArtifacts(lists));
       }
-      if (live && candidates.length === 0) setFromChats([]);
-      if (live) setChatsRead(true);
+      for (let i = 0; i < helpers.length; i += 6) {
+        const batch = await Promise.all(helpers.slice(i, i + 6).map(async (summary) => {
+          const cached = getCachedSession(summary.id);
+          const full = cached && cached.updatedAt >= summary.updatedAt ? cached : await loadSession(summary.id).catch(() => null);
+          return full ? sessionArtifacts(full, basePathOf(full, workspaces), { id: summary.parent.id, title: summary.parent.title }) : [];
+        }));
+        if (!live) return;
+        lists.push(...batch);
+      }
+      // The list changes once, when every chat has been read: the one already shown stays until then, so nothing drops out mid-read.
+      if (live) { setFromChats(mergeArtifacts(lists)); setChatsRead(true); setReadOnce(true); }
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, workspaces]);
 
+  // Persist the most recent full index so the next visit paints at once (#3043).
+  useEffect(() => {
+    if (!chatsRead || fromChats === null) return;
+    try { localStorage.setItem('library:index:v1', JSON.stringify(fromChats)); } catch { /* storage unavailable */ }
+  }, [chatsRead, fromChats]);
+
   // Only the folders' listings are read (names, no contents), again whenever a chat changes.
   const folders = workspaces.map((w) => `${w.id}:${w.path}`).join('|');
   useEffect(() => {
     let live = true;
-    Promise.all(workspaces.map(async (w) => folderDesigns(w.name, await readDesignsFolder((path) => window.nekko.listDir(path), w.path))))
-      .then((lists) => { if (live) setFromFolders(lists.flat()); });
+    // Each folder's own designs folder, and those of the repos one level inside it.
+    Promise.all(workspaces.map((w) => readProjectDesignFolders((path) => window.nekko.listDir(path), w)))
+      .then((lists) => { if (live) setFromFolders(lists.flat().flatMap((f) => folderDesigns(f.project, f.files))); });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folders, key]);
 
+  // What to display: the last complete read of every chat, or before the first one finishes, the index stored last visit.
+  const displayedFromChats = fromChats ?? storedIndex;
+
   const merged = useMemo(
-    () => (fromChats || fromFolders ? withFolderDesigns(fromChats ?? [], fromFolders ?? []) : null),
-    [fromChats, fromFolders],
+    () => (displayedFromChats || fromFolders ? withFolderDesigns(displayedFromChats ?? [], fromFolders ?? []) : null),
+    [displayedFromChats, fromFolders],
   );
   // Which of those files are still on disk: a chat can name a file it never wrote, or one deleted since.
   // A file shows until its folder has been listed.
-  const [presence, setPresence] = useState<{ checked: Set<string>; present: Set<string> } | null>(null);
+  // A file gone from a removed git worktree is followed to the repo's main checkout.
+  const [presence, setPresence] = useState<{ checked: Set<string>; present: Set<string>; moved: Map<string, string> } | null>(null);
   const paths = merged?.filter((e) => e.source !== 'folder').map((e) => e.path).join('\n') ?? '';
   useEffect(() => {
     if (!paths || !window.nekko?.listDir) return;
     let live = true;
     const list = paths.split('\n');
-    presentPaths((path) => window.nekko.listDir(path), list).then((present) => {
-      if (live) setPresence({ checked: new Set(list.map((p) => p.toLowerCase())), present });
+    const listDir = (path: string) => window.nekko.listDir(path);
+    presentPaths(listDir, list).then(async (present) => {
+      const moved = await movedPaths(listDir, list);
+      if (live) setPresence({ checked: new Set(list.map((p) => p.toLowerCase())), present, moved });
     });
     return () => { live = false; };
   }, [paths]);
   const entries = useMemo(() => {
     if (!merged) return null;
-    const gone = (e: ArtifactEntry) => !!presence && presence.checked.has(e.path.toLowerCase()) && !presence.present.has(e.path.toLowerCase());
-    return groupDesignVersions(merged.filter((e) => !gone(e)));
+    const gone = (e: ArtifactEntry) => !!presence && presence.checked.has(e.path.toLowerCase()) && !presence.present.has(e.path.toLowerCase()) && !presence.moved.has(e.path.toLowerCase());
+    return groupDesignVersions(relocate(merged.filter((e) => !gone(e)), presence?.moved ?? new Map()));
   }, [merged, presence]);
   const indexed = chatsRead && fromFolders !== null;
 
+  // Library on Nekko Cloud (#2748): the engine is told this computer's files and backs them up;
+  // other computers' files join the list as read-only copies. Nothing shows unless it is open to the account.
+  // `getRevision` gives each entry the same revision token that LibraryFileThumbnail uses, so the
+  // engine receives the correct cached thumbnail for every file (#3044).
+  // We use e.at (the message timestamp that produced/linked the file) so that sending a new message
+  // in a chat does not invalidate all its files' thumbnails.
+  const getRevision = (e: ArtifactEntry) => e.at;
+  const library = useLibrarySync(entries, getRevision);
+  const remote = useMemo(() => groupDesignVersions(remoteEntries(library?.remote ?? [])), [library?.remote]);
+  // Map of path -> thumbnail data URL for remote files that sent a thumbnail from their computer (#3044).
+  const remoteThumbs = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of (library?.remote ?? [])) {
+      if (r.thumbnailData) m.set(r.path.replaceAll('\\', '/'), r.thumbnailData);
+    }
+    return m;
+  }, [library?.remote]);
+  const everything = useMemo(() => (entries && remote.length ? [...entries, ...remote] : entries), [entries, remote]);
+
   // The kinds that have files lead the slider; the setup answer's kind comes first.
-  const kinds = useMemo(() => orderForProfile(groupArtifacts(entries ?? []), profile), [entries, profile]);
-  const groups = useMemo(() => orderForProfile(groupArtifacts(entries ?? [], query), profile), [entries, query, profile]);
-  const total = entries?.length ?? 0;
+  const kinds = useMemo(() => orderForProfile(groupArtifacts(everything ?? []), profile), [everything, profile]);
+  const groups = useMemo(() => orderForProfile(groupArtifacts(everything ?? [], query), profile), [everything, query, profile]);
+  const total = everything?.length ?? 0;
   // A kind whose last file left (a chat was archived away) falls back to All.
   const current: Show = show === 'all' || kinds.some((g) => g.kind.id === show) ? show : 'all';
   const all = current === 'all';
@@ -277,17 +332,21 @@ export function ArtifactsView() {
   const openPath = selected ? version ?? selected.path : '';
   const onCanvas = !!selected && selected.kind === 'design' && isHtml(openPath);
 
-  const revisions = new Map(sessions.map((s) => [s.id, s.updatedAt]));
   const row = (e: ArtifactEntry) => {
     const active = selected?.path === e.path;
+    // Use the file's own message timestamp as the revision key (#3043).
+    // The chat's updatedAt would invalidate all thumbnails on every new message;
+    // e.at is the timestamp of the message that produced/linked this specific file.
+    const revision = e.at;
     return (
       <div key={e.path} role="listitem" className={`group rounded-lg ${active ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
         <button type="button" data-artifact-row className="flex w-full min-w-0 items-center gap-3 px-2 py-1 text-left" onClick={() => select(e)} title={e.path}>
-          <LibraryFileIcon kind={e.kind} className="h-7 w-7 shrink-0 rounded-md" />
+          <LibraryFileThumbnail kind={e.kind} path={e.path} revision={revision} thumbnailData={e.source === 'cloud' ? remoteThumbs.get(e.path) : undefined} className="h-7 w-7 shrink-0 rounded-md" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
             {!listWide && <span className="block truncate text-2xs text-ink-faint">{fromAndWhen(e)}</span>}
           </span>
+          {sync(e)}
           {listWide && <>
             <span className="hidden w-48 truncate font-mono text-2xs text-ink-faint lg:block">{e.filename}</span>
             <span className="hidden w-56 truncate text-2xs text-ink-faint sm:block">{cameFrom(e)}</span>
@@ -298,12 +357,17 @@ export function ArtifactsView() {
     );
   };
 
+  // A file's cloud: at the end of its row, and in its preview's top-right corner.
+  function sync(e: ArtifactEntry) {
+    const state = fileSync(library, e);
+    return state ? <LibrarySyncGlyph state={state} device={e.device} /> : null;
+  }
   const tile = (e: ArtifactEntry) => {
     const n = idOf(e.path);
     return (
     <div key={e.path} role="listitem" className="library-tile" data-library-tile>
       <button type="button" className="library-tile-main" onClick={() => select(e)} title={e.path}>
-        <TilePreview revision={revisions.get(e.sessionId) ?? e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
+        <TilePreview revision={e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} badge={sync(e)} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
           <span className="library-tile-meta">{fromAndWhen(e)}</span>
@@ -325,9 +389,47 @@ export function ArtifactsView() {
     );
   };
 
+  // The skeleton holds until there is a whole list to show: on a first visit
+  // (nothing stored) until every chat has been read, so the list never grows
+  // batch by batch under the pointer; on a repeat visit the stored index
+  // fills it at once, so it never shows.
+  const loading = storedIndex === null ? !readOnce : displayedFromChats === null;
   // No files at all yet: the illustrated placeholder fills the page in every layout.
   const noFiles = indexed && total === 0;
   const empty = query && entries && shown.length === 0 ? 'Nothing matches.' : null;
+
+  /** Pulsing placeholder rows and tiles shown before the first list is known (#3043). */
+  const listSkeleton = (
+    <div className="px-2 pb-3 pt-1" aria-hidden="true">
+      <div className="mb-2 h-4 w-20 animate-pulse rounded-md bg-surface-2 opacity-60" />
+      {Array.from({ length: 8 }, (_, i) => (
+        <div key={i} className="mb-1 flex items-center gap-3 rounded-lg px-2 py-1">
+          <div className="h-7 w-7 shrink-0 animate-pulse rounded-md bg-surface-2 opacity-60" style={{ animationDelay: `${i * 60}ms` }} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="h-3 w-3/4 animate-pulse rounded-sm bg-surface-2 opacity-60" style={{ animationDelay: `${i * 60 + 20}ms` }} />
+            <div className="h-2.5 w-1/2 animate-pulse rounded-sm bg-surface-2 opacity-50" style={{ animationDelay: `${i * 60 + 40}ms` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const tileSkeleton = (
+    <div className="px-5 pb-8 pt-2" aria-hidden="true">
+      <div className="mb-3 h-4 w-24 animate-pulse rounded-md bg-surface-2 opacity-60" />
+      <div className="library-tiles">
+        {Array.from({ length: 12 }, (_, i) => (
+          <div key={i} className="library-tile">
+            <div className="library-tile-preview animate-pulse bg-surface-2 opacity-60" style={{ animationDelay: `${i * 50}ms` }} />
+            <div className="mt-2 space-y-1 px-1">
+              <div className="h-3 w-4/5 animate-pulse rounded-sm bg-surface-2 opacity-60" style={{ animationDelay: `${i * 50 + 20}ms` }} />
+              <div className="h-2.5 w-3/5 animate-pulse rounded-sm bg-surface-2 opacity-50" style={{ animationDelay: `${i * 50 + 35}ms` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   const placeholder = (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center" data-library-empty>
@@ -339,8 +441,8 @@ export function ArtifactsView() {
       <p className="mt-2 max-w-sm rounded-xl border border-line bg-surface-2 px-3 py-2 text-xs text-ink-soft">
         Try asking an agent: “Create a one-page report and link the file in your reply.”
       </p>
-      {!includeCompleted && (
-        <button type="button" className="btn btn-ghost mt-1 text-xs" onClick={() => setIncludeCompleted(true)}>Include completed chats</button>
+      {!includeArchived && (
+        <button type="button" className="btn btn-ghost mt-1 text-xs" onClick={() => setIncludeArchived(true)}>Include archived chats</button>
       )}
     </div>
   );
@@ -355,7 +457,9 @@ export function ArtifactsView() {
             <SlideToggle label="Show" options={typeOptions} value={current} onChange={pickShow} transitionName="library-show" />
           </div>
         )}
-        <span className="ml-auto shrink-0 text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
+        <span className="ml-auto" />
+        {everything && <LibrarySyncSummary library={library} entries={everything} />}
+        <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : loading ? '' : 'Reading chats…'}</span>
         <button type="button" className="btn btn-ghost shrink-0 px-3 py-1 text-xs" onClick={() => setShowIntro(true)}>Library guide</button>
         {!noFiles && <SlideToggle label="Layout" options={LAYOUT_OPTIONS} value={layout} onChange={pickLayout} iconOnly className="hidden shrink-0 md:inline-flex" transitionName="library-layout" />}
       </header>
@@ -365,17 +469,19 @@ export function ArtifactsView() {
           <div className={`space-y-2 px-3 pb-2 pt-3 ${listWide ? 'md:px-5' : ''}`}>
             <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter Library" value={query} onChange={(e) => setQuery(e.target.value)} />
             <label className="flex items-center gap-2 text-2xs text-ink-faint">
-              <input type="checkbox" checked={includeCompleted} onChange={(e) => setIncludeCompleted(e.target.checked)} /> Include completed chats
+              <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} /> Include archived chats
             </label>
           </div>
           <div className={`min-h-0 flex-1 overflow-y-auto px-2 pb-3 ${listWide ? 'md:px-4' : ''}`} role="list" aria-label="Library files">
-            {empty && <p className="px-3 py-2 text-xs text-ink-faint">{empty}</p>}
-            {shown.map((g) => (
-              <section key={g.kind.id} className="mb-1" data-artifact-kind={g.kind.id} aria-label={g.kind.label}>
-                <GroupHeading group={g} collapsible={all} collapsed={isFolded(g.kind.id)} onToggle={() => toggle(g.kind.id)} />
-                <Fold open={!isFolded(g.kind.id)}>{g.items.map(row)}</Fold>
-              </section>
-            ))}
+            {loading ? listSkeleton : <>
+              {empty && <p className="px-3 py-2 text-xs text-ink-faint">{empty}</p>}
+              {shown.map((g) => (
+                <section key={g.kind.id} className="mb-1" data-artifact-kind={g.kind.id} aria-label={g.kind.label}>
+                  <GroupHeading group={g} collapsible={all} collapsed={isFolded(g.kind.id)} onToggle={() => toggle(g.kind.id)} />
+                  <Fold open={!isFolded(g.kind.id)}>{g.items.map(row)}</Fold>
+                </section>
+              ))}
+            </>}
           </div>
         </aside>
 
@@ -405,9 +511,12 @@ export function ArtifactsView() {
                 {onCanvas && !asFile
                   ? <DesignCanvas path={openPath} title={selected.title} versions={selected.versions} onVersion={setVersion} onSource={() => setAsFile(true)} />
                   // A design changes by a new version beside it, never in place, so it opens view-only.
-                  : <FilePane path={openPath} readOnly={selected.kind === 'design'} />}
+                  // Another computer's file is a copy: it changes there, never here.
+                  : <FilePane path={openPath} readOnly={selected.kind === 'design' || selected.source === 'cloud'} />}
               </div>
             </>
+          ) : loading ? (
+            <div className="min-h-0 flex-1 overflow-y-auto" aria-busy="true">{tileSkeleton}</div>
           ) : browsing ? (
             <div className="library-canvas min-h-0 flex-1 overflow-y-auto px-5 pb-8" data-library-canvas>
               {shown.map((g) => {

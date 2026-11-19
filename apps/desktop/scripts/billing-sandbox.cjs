@@ -11,7 +11,7 @@ app.setPath('userData', path.join(out, 'profile'));
 const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], checks: [], errors: [] };
-const sync = { phase: 'needs-plan', enabled: false, includeLocalOnly: false, recoveryConfirmed: false, keyEpoch: null, lastSyncAt: null, error: null, progress: null, chats: 0, pushed: 0, pulled: 0, skipped: {}, fingerprint: null, joinCode: null, devices: [], usage: null };
+const sync = { phase: 'needs-plan', enabled: false, recoveryConfirmed: false, keyEpoch: null, lastSyncAt: null, error: null, progress: null, chats: 0, pushed: 0, pulled: 0, skipped: {}, fingerprint: null, joinCode: null, devices: [], usage: null };
 const status = (account) => ({ signedIn: true, account: { email: 'philip@nekkolabs.com', canSync: account.plan !== 'free', ...account }, oauthPending: false, keysStoredIn: 'macOS Keychain', orgs: null, sync: { ...sync, phase: account.plan === 'free' ? 'needs-plan' : 'off' } });
 const scenarios = [
   ['billing-off', status({ plan: 'free', staff: false, features: { billing: false } })],

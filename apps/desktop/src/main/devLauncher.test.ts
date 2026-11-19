@@ -71,6 +71,77 @@ describe('development launcher safety', () => {
   });
 });
 
+describe('development launcher status line', () => {
+  const at = 1_000_000;
+  const base = { now: at, startedAt: at - 14_000, frame: 0, columns: 100 };
+  const line = async (s: object) => {
+    // @ts-expect-error plain .mjs without types
+    const { statusLine } = await import('../../scripts/dev-status.mjs');
+    return statusLine({ ...base, ...s }) as string;
+  };
+
+  it('says it is starting until the app first reports in', async () => {
+    expect(await line({})).toContain('Starting Nekko Agent... 14s');
+  });
+
+  it('counts the working chats by phase, and says idle with a sleeping cat when none are', async () => {
+    const busy = await line({ report: { at, activity: { building: 2, verifying: 1, input: 1 } } });
+    expect(busy).toContain('( o.o ) Building 2 · Verifying 1 · 1 waiting on you');
+    expect(busy).toMatch(/q stop · r restart$/);
+    const idle = await line({ report: { at, activity: { building: 0, verifying: 0, input: 0 } } });
+    expect(idle).toContain('( -.- ) Idle');
+    expect(idle).not.toContain('Building');
+  });
+
+  it('warns once the heartbeat stops, instead of spinning on', async () => {
+    const text = await line({ now: at + 12_000, report: { at, activity: { building: 1, verifying: 0 } } });
+    expect(text).toContain('No word from the app for 12s: it may be frozen');
+    expect(text).not.toContain('Building');
+  });
+
+  it('keeps a stop in progress on the line, from the launcher or from the app quitting', async () => {
+    const own = await line({ now: at + 3_000, stoppingSince: at, report: { at: at + 2_500, activity: { building: 1, verifying: 0 } } });
+    expect(own).toContain('Stopping cleanly... 3s');
+    expect(own).toMatch(/q again to force$/);
+    expect(await line({ report: { at, quitting: true, activity: null } })).toContain('Stopping cleanly...');
+  });
+
+  it('names a window that stopped responding and an engine that does not answer', async () => {
+    expect(await line({ report: { at, activity: { building: 1, verifying: 0 }, unresponsive: 1 } })).toContain('a window is not responding');
+    expect(await line({ report: { at, activity: null } })).toContain('The engine is not answering');
+  });
+
+  it('fits the terminal width and has no colour codes unless asked', async () => {
+    const narrow = await line({ columns: 30, report: { at, activity: { building: 12, verifying: 3, input: 2 } } });
+    expect([...narrow].length).toBeLessThanOrEqual(30);
+    expect(narrow).not.toContain('\x1b[');
+    expect(await line({ color: true, report: { at, activity: { building: 1, verifying: 0 } } })).toContain('\x1b[');
+  });
+
+  it('pins the line under a scroll region and gives the terminal back on close', async () => {
+    // @ts-expect-error plain .mjs without types
+    const { pinnedLine } = await import('../../scripts/dev-status.mjs');
+    const dir = mkdtempSync(join(tmpdir(), 'nekko-status-'));
+    const file = join(dir, 'tty');
+    writeFileSync(file, '');
+    const { openSync, closeSync } = await import('node:fs');
+    const fd = openSync(file, 'a');
+    const handlers: (() => void)[] = [];
+    const out = { fd, rows: 40, columns: 100, on: (_e: string, f: () => void) => handlers.push(f), off: () => {} };
+    const pin = pinnedLine(out);
+    pin.draw(' hello');
+    out.rows = 30; handlers[0]();
+    pin.close();
+    closeSync(fd);
+    const written = readFileSync(file, 'utf8');
+    expect(written).toContain('\x1b[1;39r');
+    expect(written).toContain('\x1b7\x1b[40;1H\x1b[2K hello\x1b8');
+    expect(written).toContain('\x1b[1;29r'); // resized: the region follows
+    expect(written).toContain('\x1b[30;1H\x1b[2K hello'); // and the line is drawn again
+    expect(written.endsWith('\x1b7\x1b[r\x1b[30;1H\x1b[2K\x1b8')).toBe(true);
+  });
+});
+
 /**
  * Still source checks: this wiring sits in the script's top-level `if (main)`
  * block and spawns Electron, so it cannot run in a unit test without moving it
@@ -117,6 +188,11 @@ describe('development launcher wiring (source checks until the launcher is refac
   });
   it('tells the app where to report in for the banner', () => {
     expect(source).toContain('env.NEKKO_DEV_READY_FILE = readyFile');
+  });
+  it('tells the app where to write its heartbeat, and closes the pinned line before exiting or restarting', () => {
+    expect(source).toContain('env.NEKKO_DEV_STATUS_FILE = statusFile');
+    expect(source).toContain("process.env.NEKKO_DEV_STATUS !== 'off'");
+    expect(source.indexOf('pinned?.close()')).toBeGreaterThan(source.indexOf('const cleanup = () => {'));
   });
   it('leaves user privacy grants alone', () => {
     expect(source).not.toContain('tccutil');

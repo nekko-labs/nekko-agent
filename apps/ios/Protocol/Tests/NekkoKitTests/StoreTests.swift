@@ -290,9 +290,25 @@ final class StoreTests: XCTestCase {
         reloaded.load()
         reloaded.learnPlatform("darwin", for: id, name: "New name")
         XCTAssertEqual(reloaded.active?.name, "Mac")
+        s.rename(id, to: "   ")
+        XCTAssertEqual(s.active?.name, "Mac", "an empty rename keeps the name until the computer reports one")
+        s.learnPlatform("darwin", for: id, name: "Work Mac")
+        XCTAssertEqual(s.active?.name, "Work Mac", "an empty rename hands naming back to the computer")
         let info = AppInfo.from(["hostname": "system", "computerName": "custom"])
         XCTAssertEqual(info.hostname, "system")
         XCTAssertEqual(info.computerName, "custom")
+    }
+
+    func testAStrippedMacHostnameGivesWayToTheFriendlyName() async throws {
+        let s = makeStore()
+        s.load()
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        s.learnPlatform("darwin", for: id, name: "MacBookPro") // What builds before #2919 reported.
+        XCTAssertEqual(s.active?.name, "MacBookPro")
+        let reloaded = makeStore()
+        reloaded.load()
+        reloaded.learnPlatform("darwin", for: id, name: "Philip’s MacBook Pro")
+        XCTAssertEqual(reloaded.active?.name, "Philip’s MacBook Pro")
     }
 
     func testEventsTrackActivityAppearanceAndRefreshTheList() async throws {
@@ -544,7 +560,7 @@ final class StoreTests: XCTestCase {
         c.replies[Channels.settingsUpdate] = { _ in ["defaultChatMode": "yolo"] }
         c.online()
         await settle()
-        try await s.completeChat("s1")
+        try await s.archiveChat("s1")
         XCTAssertEqual(s.summaries.first?.archived, true)
         XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["s1", ["archivedAt": 1000]])
         try await s.restoreChat("s1")
@@ -796,12 +812,15 @@ final class ChatModelTests: XCTestCase {
     func testBlockedReasons() async throws {
         let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
+        c.status(RelayStatus(.connecting))
+        await settle()
+        XCTAssertEqual(chat.offlineNote, "\(s.active!.name) is reconnecting.\nPrompts you send wait on this iPhone.")
         c.status(RelayStatus(.offline))
         await settle()
         // Offline is not a reason to block: Send puts the prompt in the outbox.
         XCTAssertNil(chat.blocked)
         XCTAssertTrue(chat.sendsLater)
-        XCTAssertEqual(chat.offlineNote, "\(s.active!.name) is offline. What you send waits on this iPhone and goes when it’s back.")
+        XCTAssertEqual(chat.offlineNote, "\(s.active!.name) is offline.\nPrompts you send wait on this iPhone.")
         c.status(RelayStatus(.denied, denied: .revoked))
         await settle()
         XCTAssertEqual(chat.blocked, "This phone is no longer paired.")

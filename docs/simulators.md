@@ -29,6 +29,9 @@ is using it and what it costs, and lets you stop it.
 - **Auto shutdown** (under the list) stops simulators an agent used once no agent has
   touched them for 5, 15 or 30 minutes, 1 hour or 4 hours and they are nearly idle. It
   is off by default, and it never stops a simulator you booted yourself.
+- **Quitting Nekko Agent** shuts down every simulator and emulator an agent used, so
+  none are left running once the agents that booted them have stopped. A simulator you
+  booted yourself stays running. Quitting waits a few seconds at most for this.
 
 ## Turning the panel off
 
