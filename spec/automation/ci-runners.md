@@ -85,8 +85,15 @@ Pins, host/locale context, raw xcresult and layout/screenshot attachments remain
 available on failure; cleanup touches only the created simulator. Raw artifacts
 are not automatically published and may contain fixture data. Runner access rules
 and the default four-shard suite are unchanged. Local behavioral controls cover
-validation, verdict preservation and cleanup; actual original-runner execution,
-font/locale equivalence and matched acceptance of #2990 are still **unverified**.
+validation, verdict preservation and cleanup. The first authorized owner execution
+(run 44448793600) reached macOS 27.2 / Xcode 27.2 build 27B52 and the required runtime,
+but failed on missing XcodeGen before simulator creation or any native test (#3016).
+The diagnostic now provisions XcodeGen using the ordinary suite's `brew install
+xcodegen` convention and checks the executable before package tests/generation;
+bootstrap output and errors remain in the retained-failure boundary. Local negative
+controls cover installation and PATH-check failures without creating a simulator.
+Corrected native execution, exercised simulator cleanup, font/locale equivalence
+and matched acceptance of #2990 are still **unverified**.
 See the [dispatch runbook](../../docs/runbooks/ci-runner-pilot.md#focused-turndetails-diagnostic-opt-in-native-execution-unverified).
 
 ## What it is for `[planned]`

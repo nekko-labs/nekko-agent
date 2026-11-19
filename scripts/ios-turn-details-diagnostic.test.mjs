@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -46,6 +46,8 @@ function fixture(mode) {
     if (cmd === 'xcodebuild' && args.includes('-version')) return 'Xcode 27.2\nBuild version 27B52\n';
     if (args.includes('runtimes')) return JSON.stringify({ runtimes: [{ isAvailable: true, identifier: RUNTIME, buildversion: mode === 'runtime' ? 'wrong' : '24B8117' }] });
     if (args.includes('create')) return '00000000-0000-0000-0000-000000000001\n';
+    if (mode === 'bootstrap-failure' && cmd === 'brew') throw new Error('XcodeGen installation failed');
+    if (mode === 'tool-check-failure' && cmd === 'xcodegen' && args.includes('--version')) throw new Error('XcodeGen unavailable on PATH');
     if (mode === 'build-failure' && args.includes('build-for-testing')) throw new Error('native build failed');
     if (args.includes('test-without-building')) {
       if (mode === 'missing-result') return '';
@@ -66,9 +68,20 @@ function fixture(mode) {
   };
   try {
     if (mode === 'success') capture(pins, run, join(root, 'Applications'));
-    else assert.throws(() => capture(pins, run, join(root, 'Applications')), ({ 'test-failure': /native scroll assertion/, skip: /eight/, runtime: /runtime required/, 'build-failure': /native build failed/, 'missing-result': /summary.json/, 'missing-pixels': /screenshots missing/, 'export-failure': /attachments export failed/ })[mode]);
+    else assert.throws(() => capture(pins, run, join(root, 'Applications')), ({ 'test-failure': /native scroll assertion/, skip: /eight/, runtime: /runtime required/, 'bootstrap-failure': /XcodeGen installation failed/, 'tool-check-failure': /XcodeGen unavailable on PATH/, 'build-failure': /native build failed/, 'missing-result': /summary.json/, 'missing-pixels': /screenshots missing/, 'export-failure': /attachments export failed/ })[mode]);
     assert.equal(readFileSync('source/apps/ios/production.swift', 'utf8'), 'production unchanged');
-    if (mode !== 'runtime') {
+    if (!['runtime', 'bootstrap-failure', 'tool-check-failure'].includes(mode)) {
+      const install = calls.findIndex(c => c.cmd === 'brew' && c.args.join(' ') === 'install xcodegen');
+      const version = calls.findIndex(c => c.cmd === 'xcodegen' && c.args.join(' ') === '--version');
+      const packages = calls.findIndex(c => c.cmd === 'swift');
+      const generate = calls.findIndex(c => c.cmd === 'xcodegen' && c.args.join(' ') === 'generate');
+      const create = calls.findIndex(c => c.args.includes('create'));
+      assert.ok(install >= 0 && install < version && version < packages && packages < generate && generate < create);
+      for (const index of [install, version]) {
+        assert.equal(calls[index].options.cwd, realpathSync(join(root, 'source/apps/ios')));
+        assert.equal(calls[index].options.stdio[0], 'ignore');
+        assert.equal(calls[index].options.stdio[1], calls[index].options.stdio[2]);
+      }
       assert.equal(readFileSync(join('source', TEST_FILE), 'utf8'), 'test-only harness');
       const tests = calls.find(c => c.args.includes('test-without-building'));
       if (mode !== 'build-failure') {
@@ -78,10 +91,17 @@ function fixture(mode) {
       for (const action of ['shutdown', 'delete']) assert.ok(calls.some(c => c.args[0] === 'simctl' && c.args[1] === action));
       if (!['build-failure', 'missing-result'].includes(mode)) assert.ok(calls.some(c => c.args.includes('export')));
       cleanup(run);
-    } else assert.ok(!calls.some(c => c.args.includes('create')));
+    } else {
+      assert.ok(!calls.some(c => c.args.includes('create')));
+      assert.ok(!calls.some(c => c.cmd === 'swift' || c.args.includes('generate')));
+      assert.match(readFileSync('diagnostic-evidence/failure.txt', 'utf8'), /runtime required|XcodeGen/);
+      assert.match(readFileSync('diagnostic-evidence/revisions.txt', 'utf8'), new RegExp(pins.app));
+      assert.ok(readFileSync('diagnostic-evidence/host.txt', 'utf8').includes('Xcode 27.2'));
+      if (mode !== 'runtime') assert.ok(readFileSync('diagnostic-evidence/runtimes.json', 'utf8').includes('24B8117'));
+    }
   } finally { process.chdir(cwd); rmSync(root, { recursive: true, force: true }); }
 }
-for (const mode of ['success', 'test-failure', 'runtime', 'skip', 'build-failure', 'missing-result', 'missing-pixels', 'export-failure']) test(`capture ${mode}: preserve verdict, production and owned-device cleanup`, () => fixture(mode));
+for (const mode of ['success', 'test-failure', 'runtime', 'bootstrap-failure', 'tool-check-failure', 'skip', 'build-failure', 'missing-result', 'missing-pixels', 'export-failure']) test(`capture ${mode}: preserve verdict, production and owned-device cleanup`, () => fixture(mode));
 
 test('workflow isolates diagnostics from normal shards, evidence dispatches and batch statuses', () => {
   const diagnostic = workflow.split('  turn-details-diagnostic:\n')[1].split('  protocol-and-build:\n')[0];
