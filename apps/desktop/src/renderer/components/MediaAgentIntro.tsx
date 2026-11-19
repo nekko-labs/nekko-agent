@@ -7,12 +7,13 @@ const keyFor = (kind: MediaAgentKind) => `nekko.media-intro.${kind}.v1`;
 const seen = (kind: MediaAgentKind) => { try { return localStorage.getItem(keyFor(kind)) === 'seen'; } catch { return false; } };
 export const MEDIA_INTROS = {
   image: {
-    name: 'Photo', title: 'Give your idea a picture.', subtitle: 'A little imagination. A frame of your own.',
+    name: 'Photo', title: 'Turn your words into pictures.', subtitle: 'Your ideas, built by you.',
     benefits: [
-      ['Start with a few words', 'Describe a scene, a mood, or an entirely new world.'],
-      ['Find the right frame', 'Choose an aspect ratio and a local image model.'],
-      ['Keep creating, locally', 'Your computer generates the image and keeps it in this chat.'],
+      ['A picture is worth a thousand words', 'Remember, the better you describe something, the better the result will be.'],
+      ['Designed for your destination', 'Choose the design to match exactly where you’ll use it: YouTube thumbnails, website icons, parody images, backgrounds and more.'],
+      ['Local-first made easy', 'You’ll be surprised how easy it is to build it yourself instead of relying on a paid service.'],
     ],
+    cta: 'Create your first image',
     limit: 'Requires a compatible local image model. Photo currently creates images from text; editing an existing photo is not supported.',
   },
   video: {
@@ -22,6 +23,7 @@ export const MEDIA_INTROS = {
       ['Work with your footage', 'Ask the agent to inspect or edit files using available tools.'],
       ['Refine in conversation', 'Review the result, then tell Nekko what to change.'],
     ],
+    cta: 'Try Video',
     limit: 'Video uses your selected chat model and approved tools. Direct AI video generation is not connected; editing requires suitable tools on your computer.',
   },
 } as const;
@@ -44,7 +46,7 @@ export function MediaAgentIntro({ kind, onClose }: { kind: MediaAgentKind; onClo
     <div className="media-intro-visual"><MediaArtwork kind={kind} /><p className="media-eyebrow">NEKKO / {copy.name.toUpperCase()}</p><h2>{copy.title}</h2><p className="media-subtitle">{copy.subtitle}</p></div>
     <div className="media-intro-content"><ol>{copy.benefits.map(([title, detail], index) => <li key={title}><span className="media-step" aria-hidden="true">0{index + 1}</span><div><h3>{title}</h3><p>{detail}</p></div></li>)}</ol>
       <p className="media-capability">{copy.limit}</p>
-      <button className="btn btn-primary media-intro-cta" onClick={onClose}>Try {copy.name}</button>
+      <button className="btn btn-primary media-intro-cta" onClick={onClose}>{copy.cta}</button>
     </div>
   </Modal>;
 }
