@@ -690,6 +690,17 @@ impl Turns {
     /// The approval prompt: the live policy first (the user can allow the
     /// rest of the turn while it waits), then park and ask.
     async fn request_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value) -> bool {
+        self.ask_approval(shared, call, reason, severity, false).await
+    }
+
+    /// A call that spends the user's money (a paid cloud picture): asked in
+    /// every mode, YOLO included (decided 2026-11-19), and denied outright in
+    /// an unattended run, whatever its tool policy allows.
+    async fn request_spend_approval(&self, shared: &Shared, call: &Value, reason: &str) -> bool {
+        self.ask_approval(shared, call, reason, &json!("high"), true).await
+    }
+
+    async fn ask_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value, spend: bool) -> bool {
         let call_id = str_at(call, "id").unwrap_or_default().to_string();
         // The audit trail keeps what was asked and who answered, never the
         // reason (it quotes addresses and recipients).
@@ -699,11 +710,11 @@ impl Turns {
                 "answer": answer, "by": by,
             }))
         };
-        if shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
+        if !spend && shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
             note("approved", json!({ "via": "workflow policy" }));
             return true;
         }
-        if self.live_mode(shared).await == "yolo" {
+        if !spend && self.live_mode(shared).await == "yolo" {
             note("approved", json!({ "via": "yolo" }));
             return true;
         }
@@ -1299,11 +1310,18 @@ impl Turns {
         // The turn's composition: tools, context from disk, the system prompt.
         // Picture tools only where they can work: a local (not sandbox, not
         // Claude Code) chat on a computer with a picture model ready.
+        // A cloud picture model can serve too: an enabled OpenRouter provider
+        // (no network read here), in a chat that may reach the cloud.
+        let cloud_pictures = !crate::connections::offline(&loaded)
+            && str_at(&loaded, "models") != Some("local")
+            && settings.get("providers").and_then(Value::as_array).is_some_and(|ps| {
+                ps.iter().any(|p| str_at(p, "kind") == Some("openrouter") && p.get("enabled") != Some(&json!(false)))
+            });
         let media = !sandbox
             && !claude_code
             && !js::truthy(opts.get("noTools"))
             && match &self.media {
-                Some(server) => !server.ready_media_models().await.is_empty(),
+                Some(server) => cloud_pictures || !server.ready_media_models().await.is_empty(),
                 None => false,
             };
         let video = !sandbox
@@ -2876,6 +2894,91 @@ struct TurnTools {
     taint: Mutex<crate::taint::Taint>,
 }
 
+/// How much a chat may spend on paid pictures each time the user allows it.
+const PICTURE_ALLOWANCE_USD: f64 = 1.0;
+
+/// A chat's paid cloud pictures (media_tools::CloudSide), through the
+/// daemon's `media:cloud*` channels, which keep the OpenRouter key. The
+/// chat's allowance is `pictureSpend: { allowedUsd, spentUsd }` on the chat.
+struct ChatCloud<'a> {
+    tools: &'a TurnTools,
+    call: &'a Value,
+}
+
+type CloudFut<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
+impl ChatCloud<'_> {
+    fn spending(&self) -> (f64, f64) {
+        let s = lock(&self.tools.session);
+        let num = |k: &str| s.pointer(&format!("/pictureSpend/{k}")).and_then(Value::as_f64).unwrap_or(0.0);
+        (num("allowedUsd"), num("spentUsd"))
+    }
+
+    async fn set_spending(&self, allowed: f64, spent: f64) {
+        if let Some(obj) = lock(&self.tools.session).as_object_mut() {
+            obj.insert("pictureSpend".into(), json!({ "allowedUsd": allowed, "spentUsd": spent }));
+        }
+        persist(&self.tools.store, &self.tools.session, self.tools.incognito).await;
+    }
+}
+
+impl crate::media_tools::CloudSide for ChatCloud<'_> {
+    fn models(&self) -> CloudFut<'_, Vec<Value>> {
+        Box::pin(async move {
+            let Some(d) = self.tools.turns.dispatch.get() else { return Vec::new() };
+            match d("media:cloudModels".into(), vec![]).await {
+                Ok(Value::Array(list)) => list,
+                _ => Vec::new(),
+            }
+        })
+    }
+
+    fn image(&self, request: Value) -> CloudFut<'_, Result<Value, String>> {
+        Box::pin(async move {
+            let d = self.tools.turns.dispatch.get().ok_or("Cloud pictures are not available here.")?;
+            d("media:cloudImage".into(), vec![request]).await
+        })
+    }
+
+    fn spend<'a>(&'a self, price: f64, what: &'a str) -> CloudFut<'a, Result<(), String>> {
+        Box::pin(async move {
+            let (allowed, spent) = self.spending();
+            // Within what the user already allowed in this chat: no question.
+            if spent + price <= allowed + 1e-9 {
+                return Ok(());
+            }
+            let input = self.call.get("input").cloned().unwrap_or(Value::Null);
+            let kinds = crate::dlp::in_input(&input, &self.tools.private_terms().await);
+            let carries = if kinds.is_empty() {
+                String::new()
+            } else {
+                format!(" The prompt carries {}.", crate::dlp::describe(&kinds))
+            };
+            let reason = format!(
+                "{what}{carries} Approve to allow paid pictures in this chat up to ${PICTURE_ALLOWANCE_USD:.2} from now (spent here so far: ${spent:.2}); past that, it asks again."
+            );
+            if !self.tools.turns.request_spend_approval(&self.tools.shared, self.call, &reason).await {
+                return Err("The paid picture was not approved, so nothing was charged.".into());
+            }
+            self.set_spending(spent + PICTURE_ALLOWANCE_USD, spent).await;
+            Ok(())
+        })
+    }
+
+    fn spent<'a>(&'a self, cost: f64, model: &'a str) -> CloudFut<'a, ()> {
+        Box::pin(async move {
+            let (allowed, spent) = self.spending();
+            self.set_spending(allowed, spent + cost).await;
+            let (provider, model_id) = crate::cloud_media::parse_cloud_id(model).unwrap_or(("", model));
+            self.tools.turns.accounts.usage_line(&json!({
+                "ts": nekko_js::now_ms(), "providerId": provider, "modelId": model_id,
+                "sessionId": self.tools.shared.session_id, "inputTokens": 0, "outputTokens": 0,
+                "local": false, "kind": "picture", "costUsd": cost,
+            }));
+        })
+    }
+}
+
 /// Why a call in a tainted chat asks (decision 0054).
 const TAINT_NOTE: &str =
     "This chat has read content from the web or a tool, which can carry instructions to the agent.";
@@ -3188,7 +3291,16 @@ impl TurnTools {
             let session = lock(&self.session).clone();
             let default =
                 self.turns.settings.get().get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
-            return Ok(crate::media_tools::run(server, crate::media_tools::Call { call, session, ctx, default }).await);
+            // Paid cloud pictures: never in an offline or Local only chat.
+            let local_only = crate::connections::offline(&session) || str_at(&session, "models") == Some("local");
+            let side = ChatCloud { tools: self, call };
+            let cloud = (!local_only && self.turns.dispatch.get().is_some())
+                .then_some(&side as &dyn crate::media_tools::CloudSide);
+            return Ok(crate::media_tools::run(
+                server,
+                crate::media_tools::Call { call, session, ctx, default, cloud },
+            )
+            .await);
         }
         if let Some(ctx) = &self.native
             && (name == "browser" || name == "capture")

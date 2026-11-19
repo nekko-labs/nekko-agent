@@ -33,6 +33,21 @@ fn err(id: &str, output: impl Into<String>) -> Value {
     json!({ "toolCallId": id, "output": output.into(), "isError": true })
 }
 
+type BoxFut<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
+/// What a paid cloud picture needs from the turn (turns.rs): the user's
+/// OpenRouter models, one picture, and the chat's spending: a paid call asks
+/// first with its price (in every mode, YOLO included, decided 2026-11-19)
+/// unless the chat's allowance covers it, and records what it cost.
+pub trait CloudSide: Send + Sync {
+    fn models(&self) -> BoxFut<'_, Vec<Value>>;
+    fn image(&self, request: Value) -> BoxFut<'_, Result<Value, String>>;
+    /// May this call spend about `price` dollars? `what` is the approval's text.
+    fn spend<'a>(&'a self, price: f64, what: &'a str) -> BoxFut<'a, Result<(), String>>;
+    /// The call cost `cost` dollars (OpenRouter's own figure, else the price shown).
+    fn spent<'a>(&'a self, cost: f64, model: &'a str) -> BoxFut<'a, ()>;
+}
+
 /// What a tool needs from the turn.
 pub struct Call<'a> {
     pub call: &'a Value,
@@ -42,13 +57,18 @@ pub struct Call<'a> {
     pub ctx: &'a ToolContext,
     /// `settings.agentPictureModel`: the default when the call and the chat name none.
     pub default: Option<String>,
+    /// Cloud pictures, where this chat may use them (not offline or Local only).
+    pub cloud: Option<&'a dyn CloudSide>,
 }
 
 pub async fn run(server: &Server, c: Call<'_>) -> Value {
     let id = c.call.get("id").and_then(Value::as_str).unwrap_or_default();
     let name = c.call.get("name").and_then(Value::as_str).unwrap_or_default();
     let input = c.call.get("input").cloned().unwrap_or(json!({}));
-    let models = server.ready_media_models().await;
+    let mut models = server.ready_media_models().await;
+    if let Some(cloud) = c.cloud {
+        models.extend(cloud.models().await);
+    }
     if name == "media_models" {
         return ok(id, list(&models));
     }
@@ -78,6 +98,7 @@ pub async fn run(server: &Server, c: Call<'_>) -> Value {
         default: c.default.as_deref(),
         last: last_picture(&c.session),
         read: &read,
+        cloud: c.cloud,
     };
     let made = tokio::select! {
         r = make(server, &models, request) => r,
@@ -129,7 +150,7 @@ pub async fn run_bridge(
         let full = inside(roots, p)?;
         read_picture(p, &full.to_string_lossy())
     };
-    let request = Request { name, input, session, default, last: newest_saved(saved), read: &read };
+    let request = Request { name, input, session, default, last: newest_saved(saved), read: &read, cloud: None };
     let Made { images, mut output } = match make(server, &models, request).await {
         Ok(m) => m,
         Err(e) => return fail(e),
@@ -325,6 +346,7 @@ struct Request<'a> {
     last: Option<String>,
     /// A picture to edit, from the chat's folders, as a data URL.
     read: &'a (dyn Fn(&str) -> Result<String, String> + Sync),
+    cloud: Option<&'a dyn CloudSide>,
 }
 
 struct Made {
@@ -348,6 +370,10 @@ async fn make(server: &Server, models: &[Value], r: Request<'_>) -> Result<Made,
         return Err(format!("count is 1 to {MAX_COUNT}."));
     }
     let refs = if edit { pictures(r.input, r.last.as_deref(), r.read)? } else { Vec::new() };
+    if model["source"] == "cloud" {
+        let cloud = r.cloud.ok_or("Cloud pictures are not available in this chat.")?;
+        return paid(cloud, &model, prompt, (width, height), count, refs).await;
+    }
     let defaults = &model["defaults"];
     let params = r.session.get("imageParams").filter(|p| p.get("modelId") == model.get("id"));
     let pick = |k: &str, fallback: f64| {
@@ -400,6 +426,45 @@ async fn make(server: &Server, models: &[Value], r: Request<'_>) -> Result<Made,
     Ok(Made { images, output: format!("{what} with {label} ({width}x{height}) on this computer.") })
 }
 
+/// One picture from a paid cloud model: its price asked for (or covered by
+/// the chat's allowance) first, then made, then its cost recorded.
+async fn paid(
+    cloud: &dyn CloudSide,
+    model: &Value,
+    prompt: &str,
+    size: (u64, u64),
+    count: u64,
+    refs: Vec<String>,
+) -> Result<Made, String> {
+    if count > 1 {
+        return Err("Paid models make one picture per call, so each charge is shown; call again for another.".into());
+    }
+    let name = model["name"].as_str().unwrap_or_default();
+    let price = model["priceUsd"].as_f64().ok_or("This cloud model has no published price per picture.")?;
+    let about = if model["priceExact"] == true { "" } else { "about " };
+    let photos =
+        if refs.is_empty() { "The prompt" } else { "The prompt and the pictures to change leave this computer:" };
+    let what = format!(
+        "Make 1 picture with {name} through OpenRouter for {about}${price:.3}, on your OpenRouter account. {photos} sent to OpenRouter and the model's provider."
+    );
+    cloud.spend(price, &what).await?;
+    let mut request = json!({
+        "id": model["id"], "prompt": prompt, "aspectRatio": crate::cloud_media::aspect_ratio(size.0, size.1),
+    });
+    if !refs.is_empty() {
+        request["images"] = json!(refs);
+    }
+    let made = cloud.image(request).await.map_err(|e| format!("The picture could not be made: {e}"))?;
+    let cost = made["costUsd"].as_f64().unwrap_or(price);
+    cloud.spent(cost, model["id"].as_str().unwrap_or_default()).await;
+    let b64 = made["b64"].as_str().unwrap_or_default().to_string();
+    if b64.is_empty() {
+        return Err("The model finished without a picture.".into());
+    }
+    let verb = if refs.is_empty() { "Made the picture" } else { "Changed the picture" };
+    Ok(Made { images: vec![b64], output: format!("{verb} with {name} through OpenRouter (cost ${cost:.3}).") })
+}
+
 /// `media_models`'s answer.
 fn list(models: &[Value]) -> String {
     if models.is_empty() {
@@ -410,15 +475,22 @@ fn list(models: &[Value]) -> String {
         .iter()
         .map(|m| {
             let can: Vec<&str> = m["capabilities"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+            let place = match m["priceUsd"].as_f64() {
+                Some(p) if m["source"] == "cloud" => {
+                    let about = if m["priceExact"] == true { "" } else { "about " };
+                    format!("cloud through OpenRouter, {about}${p:.3} a picture, asks before paying")
+                }
+                _ => "local, free".to_string(),
+            };
             format!(
-                "- {} ({}): {}, local",
+                "- {} ({}): {}, {place}",
                 m["id"].as_str().unwrap_or_default(),
                 m["name"].as_str().unwrap_or_default(),
                 can.join(", ")
             )
         })
         .collect();
-    format!("Picture models on this computer:\n{}", rows.join("\n"))
+    format!("Picture models this chat can use:\n{}", rows.join("\n"))
 }
 
 fn can(model: &Value, need: &str) -> bool {
@@ -447,11 +519,13 @@ fn choose(
     }
     let own = session.get("imageParams").and_then(|p| p.get("modelId")).and_then(Value::as_str);
     let ready = |id: Option<&str>| id.and_then(|id| models.iter().find(|m| m["id"] == id && can(m, need)));
+    // A paid cloud model is used only when named (the call, the chat or
+    // Settings); the automatic choice stays on this computer.
     ready(own)
         .or_else(|| ready(default))
-        .or_else(|| models.iter().find(|m| can(m, need)))
+        .or_else(|| models.iter().find(|m| can(m, need) && m["source"] != "cloud"))
         .cloned()
-        .ok_or_else(|| format!("No model on this computer {verb}. The user can get one from a Photo chat."))
+        .ok_or_else(|| format!("No model on this computer {verb}. The user can get one from a Photo chat, or name a cloud model from media_models."))
 }
 
 /// `WIDTHxHEIGHT`, else the chat's last size, else 1024x1024.
@@ -576,6 +650,23 @@ mod tests {
     }
 
     #[test]
+    fn a_cloud_model_is_used_only_when_named() {
+        let mut all = models();
+        all.push(json!({ "id": "openrouter:p:g/img", "name": "Nano Banana", "capabilities": ["create", "edit"], "source": "cloud", "priceUsd": 0.04, "priceExact": true }));
+        let none = json!({});
+        assert!(choose(&all[2..], &none, &none, None, "create").unwrap_err().contains("name a cloud model"));
+        assert_eq!(choose(&all, &none, &none, None, "edit").unwrap()["id"], "k", "the local editor, not the paid one");
+        assert_eq!(
+            choose(&all, &json!({ "model": "openrouter:p:g/img" }), &none, None, "create").unwrap()["source"],
+            "cloud"
+        );
+        assert_eq!(choose(&all, &none, &none, Some("openrouter:p:g/img"), "create").unwrap()["source"], "cloud");
+        let text = list(&all);
+        assert!(text.contains("cloud through OpenRouter, $0.040 a picture, asks before paying"), "{text}");
+        assert!(text.contains("- z (Z-Image): create, local, free"), "{text}");
+    }
+
+    #[test]
     fn the_settings_default_comes_after_the_chats_own_model() {
         let none = json!({});
         assert_eq!(choose(&models(), &none, &none, Some("k"), "create").unwrap()["id"], "k");
@@ -610,7 +701,7 @@ mod tests {
     #[test]
     fn the_list_says_what_each_model_can_do() {
         let text = list(&models());
-        assert!(text.contains("- k (FLUX.2 klein 4B): create, edit, local"), "{text}");
+        assert!(text.contains("- k (FLUX.2 klein 4B): create, edit, local, free"), "{text}");
         assert!(list(&[]).starts_with("No picture model"));
     }
 }
