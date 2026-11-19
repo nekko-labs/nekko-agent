@@ -313,7 +313,7 @@ function detailLine(s: CloudStatus) {
   const parts = [`${s.sync.chats} chat${s.sync.chats === 1 ? '' : 's'}`];
   if (s.sync.usage) parts.push(`${bytes(s.sync.usage.bytes)} of ${bytes(s.sync.usage.limit)} encrypted storage`);
   const tooLarge = s.sync.skipped.tooLarge ?? 0;
-  if (tooLarge) parts.push(`${tooLarge} too large to sync`);
+  if (tooLarge) parts.push(`${tooLarge} over 16 MB, not synced`);
   return parts.join(' · ');
 }
 
