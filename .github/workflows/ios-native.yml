@@ -23,7 +23,6 @@ on:
       - 'packages/shared/src/phone-access.ts'
       - 'packages/shared/src/pairing-link.ts'
       - '.github/workflows/ios-native.yml'
-      - 'scripts/ios-turn-details-diagnostic*'
   schedule:
     # 03:37 JST.
     - cron: '37 18 * * *'
@@ -77,7 +76,7 @@ permissions:
 # run of pushes costs one more batch, not one per push. ios-batch.mjs cancels a
 # running batch itself when a new one holds the same heads on a newer main.
 concurrency:
-  group: ios-native-${{ inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
+  group: ios-native-${{ inputs.turn_details_diagnostic && format('turn-details-{0}', github.run_id) || inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ !inputs.batch }}
 jobs:
   relay-regression:
@@ -172,19 +171,6 @@ jobs:
           token: ${{ secrets.MAC_RUNNER_STATUS_TOKEN }}
           org: ${{ vars.NEKKO_MAC_RUNNER_ORG }}
           fallback: xcode-27
-  diagnostic-contracts:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-      - run: node --test scripts/ios-turn-details-diagnostic.test.mjs scripts/ios-suite-shards.test.mjs
   turn-details-diagnostic:
     needs: pick
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.turn_details_diagnostic != '' }}

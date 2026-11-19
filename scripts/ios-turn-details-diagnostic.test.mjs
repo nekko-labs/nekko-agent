@@ -85,8 +85,9 @@ for (const mode of ['success', 'test-failure', 'runtime', 'skip', 'build-failure
 
 test('workflow isolates diagnostics from normal shards, evidence dispatches and batch statuses', () => {
   const diagnostic = workflow.split('  turn-details-diagnostic:\n')[1].split('  protocol-and-build:\n')[0];
-  assert.match(workflow, /group:.*inputs.turn_details_diagnostic && '-turn-details'/);
-  assert.match(workflow, /diagnostic-contracts:[\s\S]*?runs-on: ubuntu-latest[\s\S]*?node --test scripts\/ios-turn-details-diagnostic.test.mjs/);
+  assert.match(workflow, /group:.*inputs.turn_details_diagnostic && format\('turn-details-\{0\}', github.run_id\)/);
+  const contracts = readFileSync(new URL('../.github/workflows/ios-turn-details-contracts.yml', import.meta.url), 'utf8');
+  assert.match(contracts, /diagnostic-contracts:[\s\S]*?runs-on: ubuntu-latest[\s\S]*?node --test scripts\/ios-turn-details-diagnostic.test.mjs/);
   assert.match(diagnostic, /permissions:\n      contents: read/);
   assert.match(diagnostic, /test "\$RUNNER_ENVIRONMENT" = self-hosted/);
   assert.ok(diagnostic.indexOf('Require approved') < diagnostic.indexOf('actions/checkout'));
