@@ -454,6 +454,10 @@ pub fn fake_claude() {
                 json!({ "type": "user", "message": { "role": "user", "content": [{ "type": "text", "text": "[Request interrupted by user]" }] }, "parent_tool_use_id": null }),
             );
             out(result("", "aborted_streaming"));
+            // As Claude Code 2.1 does about 1.6 s after a fresh launch: a
+            // bookkeeping line that lands between turns when the first was stopped.
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            out(json!({ "type": "system", "subtype": "commands_changed", "session_id": session }));
         } else {
             let reply = format!("echo {}: {text}", std::process::id());
             out(assistant("m_e", json!([{ "type": "text", "text": reply }])));
@@ -996,6 +1000,37 @@ async fn stop_interrupts_claude_code_and_keeps_the_partial_reply() {
     let last = s["messages"].as_array().unwrap().last().unwrap().clone();
     assert_eq!(last["interrupted"], true, "{last}");
     assert!(last["content"].as_str().unwrap().starts_with("1\n2"));
+}
+
+/// A bookkeeping line Claude Code prints after a Stop's `result` is not work
+/// of its own: it opens no wake-up turn, so the chat's next message is
+/// answered instead of waiting behind a turn that never ends.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_message_after_a_stop_is_answered() {
+    let rig = rig("stop-next", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccS1", "hang")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    until("the reply to start streaming", Duration::from_secs(30), || async {
+        let streamed = rig.events.lock().unwrap().iter().any(|e| e["sessionId"] == "s_cc" && e["type"] == "text");
+        streamed.then_some(())
+    })
+    .await;
+    let (status, body) = post(rig.d.port, "chat:abort", json!(["s_cc"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "ccS1", "s_cc").await;
+    assert_eq!(end["aborted"], true, "{end}");
+    // Past the late `commands_changed`, so the idle watch has read it.
+    tokio::time::sleep(Duration::from_millis(800)).await;
+
+    let (status, body) =
+        post(rig.d.port, "chat:turn", json!([spec(&rig, "ccS2", "after the stop")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    // `aborted` would still read the first turn's Stop: the reply is the check.
+    let (_, end) = turn_record(&rig, "ccS2", "s_cc").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let replies = assistant_texts(&saved(&rig));
+    assert!(replies.last().is_some_and(|r| r.ends_with(": after the stop")), "{replies:?}");
+    assert!(saved(&rig).get("activeRun").is_none_or(Value::is_null), "no turn is left running");
 }
 
 /// The chats on disk that are not `s_cc`, for what a sub-agent left.
