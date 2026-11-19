@@ -15,7 +15,7 @@
 
 use crate::state::{LibraryFile, RemoteFile};
 use nekko_sync::{b64_decode, b64_encode};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 pub const LIBRARY: &str = "library";
 
@@ -34,6 +34,22 @@ const MAX_TEXT: usize = 300;
 /// under the 16 MiB cap even when added to an 8 MB file.
 const MAX_THUMB: usize = 300_000;
 
+/// A thumbnail as a PNG or WebP base64 data URL within `MAX_THUMB`, or empty. An oversized one is
+/// dropped, never cut short: a truncated image would sync as a broken picture.
+fn bounded_thumb(t: &str) -> String {
+    let ok = t.len() <= MAX_THUMB
+        && ["data:image/png;base64,", "data:image/webp;base64,"].iter().any(|p| {
+            t.strip_prefix(p).is_some_and(|b| {
+                !b.is_empty() && b.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'+' | b'/' | b'='))
+            })
+        });
+    if ok {
+        t.to_string()
+    } else {
+        String::new()
+    }
+}
+
 /// The record's local id: this computer and the file's path on it.
 pub fn local_id(device_id: &str, path: &str) -> String {
     format!("{device_id}\n{path}")
@@ -50,12 +66,7 @@ pub fn folder_key(device_id: &str, path: &str) -> String {
 pub fn files_from_app(v: &Value) -> Vec<LibraryFile> {
     let text =
         |f: &Value, k: &str| f.get(k).and_then(Value::as_str).unwrap_or("").chars().take(MAX_TEXT).collect::<String>();
-    let thumb = |f: &Value| -> String {
-        // Accept only well-formed data URLs; strip down to `MAX_THUMB` characters.
-        let raw = f.get("thumbnailData").and_then(Value::as_str).unwrap_or("");
-        if !raw.starts_with("data:image/") { return String::new(); }
-        raw.chars().take(MAX_THUMB).collect()
-    };
+    let thumb = |f: &Value| bounded_thumb(f.get("thumbnailData").and_then(Value::as_str).unwrap_or(""));
     v.as_array()
         .map(|list| {
             list.iter()
@@ -148,10 +159,7 @@ pub fn parse(bytes: &[u8]) -> Option<LibraryRecord> {
         return None;
     }
     // Validate and bound the thumbnail on receive, same rules as on send.
-    let thumb: String = s(&v, "thumb").map(|t| {
-        if !t.starts_with("data:image/") { return String::new(); }
-        t.chars().take(MAX_THUMB).collect()
-    }).unwrap_or_default();
+    let thumb: String = s(&v, "thumb").map(|t| bounded_thumb(&t)).unwrap_or_default();
 
     // Thumb-only record (#3044): no "data" field; the file was over 8 MB on the other computer.
     // Must have a thumbnail to be useful; without one it is ignored.
@@ -223,7 +231,30 @@ mod tests {
     use super::*;
 
     fn file(path: &str) -> LibraryFile {
-        LibraryFile { path: path.into(), title: "Checkout".into(), kind: "design".into(), chat: "Shop".into(), thumbnail_data: String::new() }
+        LibraryFile {
+            path: path.into(),
+            title: "Checkout".into(),
+            kind: "design".into(),
+            chat: "Shop".into(),
+            thumbnail_data: String::new(),
+        }
+    }
+
+    #[test]
+    fn a_thumbnail_too_big_or_not_a_png_or_webp_is_dropped_not_cut_short() {
+        assert_eq!(bounded_thumb("data:image/png;base64,iVBORw0KGgo="), "data:image/png;base64,iVBORw0KGgo=");
+        assert_eq!(bounded_thumb("data:image/webp;base64,ZGF0YQ=="), "data:image/webp;base64,ZGF0YQ==");
+        let big = format!("data:image/png;base64,{}", "A".repeat(MAX_THUMB));
+        assert_eq!(bounded_thumb(&big), "");
+        for bad in [
+            "data:image/svg+xml;base64,PHN2Zz4=",
+            "data:image/png;base64,",
+            "data:image/png;base64,ab\"><script>",
+            "javascript:alert(1)",
+            "",
+        ] {
+            assert_eq!(bounded_thumb(bad), "", "{bad}");
+        }
     }
 
     #[test]
