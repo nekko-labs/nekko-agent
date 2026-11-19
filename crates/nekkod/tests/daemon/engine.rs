@@ -793,6 +793,130 @@ async fn a_paid_cloud_picture_asks_with_its_price_even_in_yolo() {
     assert_eq!(pictures, 2, "{usage}");
 }
 
+/// A stand-in OpenRouter for clips: Veo 3.1 priced per second, a job that is
+/// done at the first look, and the bodies it was sent.
+async fn fake_openrouter_video(seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>) -> u16 {
+    use axum::routing::{get, post};
+    let models = json!({ "data": [{ "id": "google/veo-3.1", "name": "Veo 3.1", "supported_durations": [4, 6, 8],
+        "supported_resolutions": ["720p", "1080p"], "supported_frame_images": ["first_frame"], "generate_audio": true,
+        "pricing_skus": { "duration_seconds_without_audio": "0.20", "duration_seconds_with_audio": "0.40" } }] });
+    let app = axum::Router::new()
+        .route("/api/v1/videos/models", get(move || async move { axum::Json(models) }))
+        .route(
+            "/api/v1/videos",
+            post(move |axum::Json(body): axum::Json<Value>| {
+                let seen = seen.clone();
+                async move {
+                    seen.lock().unwrap().push(body);
+                    (axum::http::StatusCode::ACCEPTED, axum::Json(json!({ "id": "job1", "status": "pending" })))
+                }
+            }),
+        )
+        .route(
+            "/api/v1/videos/job1",
+            get(|| async { axum::Json(json!({ "id": "job1", "status": "completed", "usage": { "cost": 2.35 } })) }),
+        )
+        .route("/api/v1/videos/job1/content", get(|| async { ([("content-type", "video/mp4")], b"MP4DATA".to_vec()) }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+/// A paid cloud clip: the user picks its length and audio on a priced question
+/// card, confirms the total even in YOLO, and the chat's clip watch gets the
+/// clip, which is kept with its cost recorded.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_paid_cloud_clip_is_chosen_with_prices_then_confirmed() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter_video(seen.clone()).await;
+    let chat = json!({ "id": "s_veo", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("cloud-clip", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model = scripted_model(vec![
+        call_tool(
+            "c_veo",
+            "generate_video",
+            json!({ "prompt": "waves at dusk", "model": "openrouter:p_or:google/veo-3.1" }),
+        ),
+        say_text("started"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_veo", "s_veo", json!({ "text": "A clip of the sea" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(&rig, json!({ "providers": [scripted.clone(), openrouter.clone()] })).await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+
+    // First the choice, every answer priced, the cheapest suggested first.
+    let card = wait_pending(rig.d.port, "s_veo", "question", "c_veo-clip").await;
+    let questions = card["questions"].as_array().unwrap();
+    assert_eq!(questions[0]["options"][0], json!({ "label": "4 seconds", "description": "$0.80 (suggested)" }));
+    assert_eq!(questions[1]["options"][1]["label"], "With audio");
+    let answers =
+        json!([{ "questionId": "q1", "labels": ["6 seconds"] }, { "questionId": "q2", "labels": ["With audio"] }]);
+    let (status, body) = post(rig.d.port, "chat:answer", json!(["s_veo", "c_veo-clip", answers]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    // Then the total, even in YOLO, saying it cannot be stopped.
+    let asked = wait_pending(rig.d.port, "s_veo", "approval", "c_veo").await;
+    let reason = asked["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("Make a 6 s, with audio, 720p clip with Veo 3.1 through OpenRouter for $2.40"), "{reason}");
+    assert!(reason.contains("cannot be stopped"), "{reason}");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_veo", "c_veo", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_veo", "s_veo").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_veo");
+    let started = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_veo")
+        .unwrap()["toolResult"]
+        .clone();
+    assert!(
+        started["output"]
+            .as_str()
+            .unwrap()
+            .starts_with("Started a 6 s, with audio, 720p clip with Veo 3.1 through OpenRouter ($2.40)."),
+        "{started}"
+    );
+    let sent = seen.lock().unwrap().clone();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(
+        (
+            sent[0]["model"].clone(),
+            sent[0]["duration"].clone(),
+            sent[0]["generate_audio"].clone(),
+            sent[0]["resolution"].clone()
+        ),
+        (json!("google/veo-3.1"), json!(6), json!(true), json!("720p"))
+    );
+
+    // The clip arrives: kept beside the chat, its cost recorded, the watch told.
+    let data = rig.data.clone();
+    let news = until("the cloud clip's news", Duration::from_secs(30), || {
+        let path = data.join("agent-watches.json");
+        async move {
+            let all: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
+            let w = all.iter().find(|w| w["kind"] == "clip" && w["sessionId"] == "s_veo")?.clone();
+            w["pending"].as_str().map(str::to_string).or_else(|| (w["status"] != "active").then(|| w.to_string()))
+        }
+    })
+    .await;
+    assert!(news.starts_with("The clip is ready (Veo 3.1, 6 s, with audio, 720p): "), "{news}");
+    let kept: Vec<_> =
+        std::fs::read_dir(rig.data.join("agent-pictures/s_veo")).unwrap().map(|e| e.unwrap().path()).collect();
+    assert_eq!(kept.len(), 1);
+    assert_eq!(std::fs::read(&kept[0]).unwrap(), b"MP4DATA");
+    let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap_or_default();
+    assert!(usage.lines().any(|l| l.contains("\"kind\":\"video\"") && l.contains("\"costUsd\":2.35")), "{usage}");
+}
+
 pub(crate) fn fake_sd() -> std::path::PathBuf {
     let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();

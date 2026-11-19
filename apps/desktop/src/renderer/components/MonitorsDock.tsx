@@ -12,8 +12,8 @@ import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { MonitorComputerSwitch, useMonitors, useResourceSample, useWatchedComputer } from './ResourceMonitor.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
-import { ServerIcon, MoneyIcon, SlidersIcon, CloseIcon, MinimizeIcon, CubeIcon, PanelIcon } from '../icons.js';
-import { GfBarChartHorizontalIcon, GfBoltIcon } from '../gentleface-icons.js';
+import { ServerIcon, MoneyIcon, SlidersIcon, CubeIcon, PanelIcon } from '../icons.js';
+import { GfBarChartHorizontalIcon, GfBoltIcon, GfCloseIcon, GfMinusIcon } from '../gentleface-icons.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import { HoverTip } from './HoverTip.js';
@@ -42,7 +42,8 @@ export interface MonitorsDockProps {
   onOpenModels: () => void;
 }
 
-const DEFAULT_DOCK_WIDTH = 276;
+const DEFAULT_DOCK_WIDTH = 248;
+const MIN_DOCK_WIDTH = 220;
 
 /**
  * The dock's show/hide button: an icon (the agent panel's pill, mirrored), with
@@ -147,7 +148,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
   // A width drag measures its room once and writes --dock-width straight onto
   // the dock; state takes the final width on release.
   const drag = useRef<{ x: number; width: number; room: number; last?: number } | null>(null);
-  const size = (value: number) => { const next = Math.max(260, Math.min(600, value)); setWidth(Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next); };
+  const size = (value: number) => { const next = Math.max(MIN_DOCK_WIDTH, Math.min(600, value)); setWidth(Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next); };
   const [collapsing, setCollapsing] = useState<MonitorKey | null>(null);
   const dockRef = useRef<HTMLElement>(null);
   const focusMonitor = useRef<{ key: MonitorKey; minimized: boolean } | null>(null);
@@ -225,12 +226,12 @@ export function MonitorsDock(props: MonitorsDockProps) {
     <>
     {collapsed}
     <aside data-panel-open={dock.show} inert={!dock.show} aria-hidden={!dock.show} ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
-      {(dock.side === 'left' || dock.side === 'right') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="vertical" aria-valuemin={260} aria-valuemax={600} aria-valuenow={width} title="Drag to resize monitors; double-click to reset"
+      {(dock.side === 'left' || dock.side === 'right') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="vertical" aria-valuemin={MIN_DOCK_WIDTH} aria-valuemax={600} aria-valuenow={width} title="Drag to resize monitors; double-click to reset"
         onPointerDown={(e) => { drag.current = { x: e.clientX, width, room: (e.currentTarget.parentElement?.parentElement?.clientWidth ?? 1000) - 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => {
           const d = drag.current;
           if (!d) return;
-          const next = Math.max(260, Math.min(600, Math.min(d.room, d.width + (e.clientX - d.x) * (dock.side === 'left' ? 1 : -1))));
+          const next = Math.max(MIN_DOCK_WIDTH, Math.min(600, Math.min(d.room, d.width + (e.clientX - d.x) * (dock.side === 'left' ? 1 : -1))));
           d.last = Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next;
           dockRef.current?.style.setProperty('--dock-width', `${d.last}px`);
         }}
@@ -326,9 +327,9 @@ export function MonitorsDock(props: MonitorsDockProps) {
               e.preventDefault(); e.stopPropagation();
               const target = expandedMonitors[expandedMonitors.findIndex(m => m.key === p.key) + (e.key === 'ArrowDown' ? 1 : -1)];
               if (target) reorder(p.key, target.key);
-            }}><span aria-hidden="true" title="Drag to reorder" className="text-ink-faint">⠿</span><span className="monitors-dock__monitor-icon">{React.createElement(MONITOR_ICONS[p.key], { className: 'monitors-dock__icon' })}</span><h2>{p.label}</h2><button type="button" title={`Minimize ${p.label}`} aria-label={`Minimize ${p.label} monitor`} aria-expanded={true} disabled={collapsing !== null} onClick={() => minimize(p.key, true)}><MinimizeIcon className="monitors-dock__icon" /></button><button type="button" title={`Remove ${p.label}`} aria-label={`Remove ${p.label} monitor`} onClick={() => toggleMonitor(p.key, false)}><CloseIcon className="monitors-dock__icon" /></button></header>
+            }}><span aria-hidden="true" title="Drag to reorder" className="text-ink-faint">⠿</span><span className="monitors-dock__monitor-icon">{React.createElement(MONITOR_ICONS[p.key], { className: 'monitors-dock__icon' })}</span><h2>{p.label}</h2><button type="button" title={`Minimize ${p.label}`} aria-label={`Minimize ${p.label} monitor`} aria-expanded={true} disabled={collapsing !== null} onClick={() => minimize(p.key, true)}><GfMinusIcon className="monitors-dock__icon" /></button><button type="button" title={`Remove ${p.label}`} aria-label={`Remove ${p.label} monitor`} onClick={() => toggleMonitor(p.key, false)}><GfCloseIcon className="monitors-dock__icon" /></button></header>
           <ResizableMonitorBody label={p.label}>
-            {p.key === 'automations' && <AutomationsPane tasks={props.tasks} running={props.running} now={props.now} onOpen={props.onOpenChat} />}
+            {p.key === 'automations' && <div className="monitors-dock__app"><AutomationsPane tasks={props.tasks} running={props.running} now={props.now} onOpen={props.onOpenChat} /></div>}
             {p.key === 'utilization' && <Utilization providers={props.providers} usage={props.usage} now={props.now} onOpenModels={props.onOpenModels} />}
             {p.key === 'budget' && <Budget usage={props.usage} sessions={props.sessions} providers={props.providers} now={props.now} />}
             {p.key === 'hardware' && <Hardware providers={props.providers} />}

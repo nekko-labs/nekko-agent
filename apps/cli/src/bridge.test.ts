@@ -161,7 +161,8 @@ describe('the picture tools on the bridge', () => {
     const engine = Object.fromEntries(([...catalog.tools.media, catalog.tools.video] as Array<{ name: string; parameters: { properties: Record<string, unknown>; required: string[] } }>).map((t) => [t.name, t.parameters]));
     for (const tool of [GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL, GENERATE_VIDEO_TOOL]) {
       const own = Object.keys(tool.inputSchema.properties as object);
-      const theirs = Object.keys(engine[tool.name]!.properties).filter((k) => k !== 'path' && k !== 'inspect');
+      // The bridge leaves project paths to Claude Code, and has no cloud clips (their length, audio and resolution).
+      const theirs = Object.keys(engine[tool.name]!.properties).filter((k) => !['path', 'inspect', 'duration', 'audio', 'resolution'].includes(k));
       expect(own).toEqual(theirs);
       expect((tool.inputSchema as { required?: string[] }).required ?? []).toEqual(engine[tool.name]!.required ?? []);
     }

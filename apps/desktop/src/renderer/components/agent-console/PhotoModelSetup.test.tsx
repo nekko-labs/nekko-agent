@@ -123,3 +123,36 @@ describe('the Photo setup screen', () => {
     expect(html).toContain('Cancel');
   });
 });
+
+describe('the Photo setup as numbered steps', () => {
+  const steps = (html: string) => [...html.matchAll(/<li data-state="(\w+)"/g)].map((m) => m[1]);
+
+  it('starts on step 1 of 3 and marks the pick for this computer', () => {
+    const cards = photoCards(task);
+    const html = renderToStaticMarkup(
+      <PhotoSetupSteps recs={recs} cards={cards} choice={cards[0]} recommended="z-image-turbo" phase={{ kind: 'choose' }} engineReady canInstallEngine
+        onChoose={vi.fn()} onSetUp={vi.fn()} onCancel={vi.fn()} onShowAll={vi.fn()} />,
+    );
+    expect(steps(html)).toEqual(['current', 'pending', 'pending']);
+    expect(html).toContain('Describe your picture');
+    expect(html.match(/Recommended/g)).toHaveLength(1);
+    // The fit is said once, for the chosen model.
+    expect(html.match(/Fits your NVIDIA GeForce RTX 4060/g)).toHaveLength(1);
+  });
+
+  it('moves to step 2 while downloading', () => {
+    const p = phase({ jobs: [job({ dest: '/m/z_image_turbo-Q4_K.gguf', group: 'g', receivedBytes: 1, totalBytes: 4 })] });
+    const html = renderToStaticMarkup(
+      <PhotoSetupSteps recs={recs} cards={photoCards(task)} phase={p} engineReady canInstallEngine onChoose={vi.fn()} onSetUp={vi.fn()} onCancel={vi.fn()} onShowAll={vi.fn()} />,
+    );
+    expect(steps(html)).toEqual(['done', 'current', 'pending']);
+  });
+
+  it('leaves the numbered steps out of the edit-model offer', () => {
+    const html = renderToStaticMarkup(
+      <PhotoSetupSteps recs={recs} cards={[klein]} choice={klein} phase={{ kind: 'choose' }} engineReady canInstallEngine capability="edit"
+        onChoose={vi.fn()} onSetUp={vi.fn()} onCancel={vi.fn()} onShowAll={vi.fn()} />,
+    );
+    expect(html).not.toContain('Photo setup');
+  });
+});
