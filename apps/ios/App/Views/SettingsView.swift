@@ -68,6 +68,8 @@ struct ComputersView: View {
             TextField("Name", text: $name)
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let c = renaming { store.rename(c.id, to: name) } }
+        } message: {
+            Text("Only this iPhone sees this name. Leave it empty to use the computer’s own name.")
         }
         .forgetDialog($forgetting)
     }

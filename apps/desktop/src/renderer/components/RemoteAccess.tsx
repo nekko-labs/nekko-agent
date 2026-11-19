@@ -1063,7 +1063,7 @@ export function ComputerName() {
   useEffect(() => { setText(name); }, [name]);
   useEffect(() => {
     let live = true;
-    void window.nekko.getAppInfo().then((info) => { if (live) setHostname(info.hostname ?? ''); }).catch(() => {});
+    void window.nekko.getAppInfo().then((info) => { if (live) setHostname(info.systemName ?? info.hostname ?? ''); }).catch(() => {});
     return () => { live = false; };
   }, []);
   const save = async () => {

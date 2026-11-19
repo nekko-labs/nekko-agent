@@ -685,11 +685,12 @@ public final class ComputersStore {
         return id
     }
 
+    /// An empty name hands naming back to the computer, which renames it on the next connect.
     public func rename(_ id: String, to name: String) {
         let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
-        guard !trimmed.isEmpty, let i = computers.firstIndex(where: { $0.id == id }) else { return }
-        computers[i].name = trimmed
-        computers[i].nameIsCustom = true
+        guard let i = computers.firstIndex(where: { $0.id == id }) else { return }
+        if !trimmed.isEmpty { computers[i].name = trimmed }
+        computers[i].nameIsCustom = !trimmed.isEmpty
         saveIndex()
     }
 

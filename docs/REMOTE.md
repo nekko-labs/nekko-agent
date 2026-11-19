@@ -111,10 +111,13 @@ fresh QR from the phone. You do not need to revoke it first, and your other phon
 iPhone and Android update the existing computer when its identity key is unchanged, even after a
 relay address changes, keeping its nickname and saved data.
 
-**Computer name** in the same settings card starts with your computer's system name. Enter a name
-and click **Save name**, or clear it to use the system name again. The phone learns it when it
-connects or refreshes. You can still use **Rename** on the phone for a nickname just on that phone;
-that nickname is kept when the computer's shared name changes or you pair it again.
+**Computer name** in the same settings card starts with your computer's system name: the name in
+**System Settings → General → About** on a Mac (such as "Philip's MacBook Pro"), the pretty hostname
+on Linux, and the PC's name on Windows. Enter a name and click **Save name**, or clear it to use the
+system name again. The phone learns it when it connects or refreshes. You can still use **Rename**
+on the phone for a nickname just on that phone (on the iPhone it is also in the New chat device
+menu); that nickname is kept when the computer's shared name changes or you pair it again. Clear the
+nickname to go back to the computer's own name.
 
 A full reset or **Sign out all phones** changes the computer's identity key as well as its pairing
 credentials. For safety the phone does not merge different keys just because their names match.

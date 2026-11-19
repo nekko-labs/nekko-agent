@@ -23359,6 +23359,46 @@
         }
       }
     },
+    "Only this iPhone sees this name. Leave it empty to use the computer’s own name.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur dieses iPhone sieht diesen Namen. Leer lassen, um den Namen des Computers zu verwenden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo este iPhone ve este nombre. Déjalo vacío para usar el nombre del propio ordenador."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seul cet iPhone voit ce nom. Laissez vide pour utiliser le nom de l’ordinateur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この名前はこのiPhoneにだけ表示されます。空欄にするとコンピュータ自身の名前を使います。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só este iPhone vê este nome. Deixe vazio para usar o nome do próprio computador."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有这部 iPhone 会看到这个名称。留空则使用电脑自己的名称。"
+          }
+        }
+      }
+    },
     "Open Connectors": {
       "localizations": {
         "de": {
@@ -29053,6 +29093,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "重命名"
+          }
+        }
+      }
+    },
+    "Rename %@…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ umbenennen…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renombrar %@…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renommer %@…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@の名前を変更…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renomear %@…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名 %@…"
           }
         }
       }

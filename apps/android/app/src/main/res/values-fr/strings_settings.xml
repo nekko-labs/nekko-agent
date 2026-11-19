@@ -250,6 +250,7 @@
     <string name="settings_how_3">Votre ordinateur se connecte vers un relais ; il n’ouvre jamais de port. Tout est chiffré de bout en bout avec une clé que seuls vos appareils détiennent.</string>
     <string name="settings_how_4">Retirez ce téléphone à tout moment depuis le même écran sur votre ordinateur. Il perd l’accès immédiatement.</string>
     <string name="settings_rename_computer">Renommer l’ordinateur</string>
+    <string name="settings_rename_computer_hint">Seul ce téléphone voit ce nom. Laissez vide pour utiliser le nom de l’ordinateur.</string>
     <string name="settings_forget_title">Oublier %1$s ?</string>
     <string name="settings_forget_text">Ce téléphone supprime la clé d’association. Par sécurité, retirez aussi le téléphone sur votre ordinateur (Paramètres → Accès à distance).</string>
     <string name="settings_forget">Oublier</string>

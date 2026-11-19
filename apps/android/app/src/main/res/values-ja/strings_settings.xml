@@ -250,6 +250,7 @@
     <string name="settings_how_3">コンピュータは Relay へ外向きに接続し、ポートを開くことはありません。すべてはあなたのデバイスだけが持つキーでエンドツーエンド暗号化されます。</string>
     <string name="settings_how_4">コンピュータの同じ画面からいつでもこの端末を削除できます。すぐにアクセスできなくなります。</string>
     <string name="settings_rename_computer">コンピュータ名を変更</string>
+    <string name="settings_rename_computer_hint">この名前はこのスマートフォンにだけ表示されます。空欄にするとコンピュータ自身の名前を使います。</string>
     <string name="settings_forget_title">%1$s を削除しますか？</string>
     <string name="settings_forget_text">この端末からペアリングキーを削除します。念のため、コンピュータ側でもこの端末を削除してください（設定 → リモートアクセス）。</string>
     <string name="settings_forget">削除</string>
