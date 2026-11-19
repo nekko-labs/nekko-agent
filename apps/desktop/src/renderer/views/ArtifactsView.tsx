@@ -143,13 +143,16 @@ export function ArtifactsView() {
   })));
   const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen());
   const closeIntro = () => { dismissLibraryIntro(); setShowIntro(false); };
-  const [fromChats, setFromChats] = useState<ArtifactEntry[] | null>(() => {
-    // Show the last known list immediately so the library paints at once on repeat visits (#3043).
+  // The list from the previous visit: shown immediately for a zero-layout-shift
+  // repeat visit, then kept as the floor while new batches arrive (#3043).
+  const [storedIndex] = useState<ArtifactEntry[] | null>(() => {
     try {
       const raw = localStorage.getItem('library:index:v1');
       return raw ? (JSON.parse(raw) as ArtifactEntry[]) : null;
     } catch { return null; }
   });
+  // Accumulates the full live scan; starts null and grows batch by batch.
+  const [fromChats, setFromChats] = useState<ArtifactEntry[] | null>(null);
   // The designs sitting in each project's designs folder, whoever put them there.
   const [fromFolders, setFromFolders] = useState<ArtifactEntry[] | null>(null);
   // Every candidate chat has been read, so an empty index really means no files yet.
@@ -224,9 +227,18 @@ export function ArtifactsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folders, key]);
 
+  // What to display this render: once all chats are read the live scan wins;
+  // until then, show the stored index (or its union with the batches so far)
+  // so the list never shrinks below the cache while loading.
+  const displayedFromChats = chatsRead
+    ? fromChats
+    : fromChats === null
+      ? storedIndex
+      : mergeArtifacts([storedIndex ?? [], fromChats]);
+
   const merged = useMemo(
-    () => (fromChats || fromFolders ? withFolderDesigns(fromChats ?? [], fromFolders ?? []) : null),
-    [fromChats, fromFolders],
+    () => (displayedFromChats || fromFolders ? withFolderDesigns(displayedFromChats ?? [], fromFolders ?? []) : null),
+    [displayedFromChats, fromFolders],
   );
   // Which of those files are still on disk: a chat can name a file it never wrote, or one deleted since.
   // A file shows until its folder has been listed.
@@ -313,10 +325,12 @@ export function ArtifactsView() {
   const openPath = selected ? version ?? selected.path : '';
   const onCanvas = !!selected && selected.kind === 'design' && isHtml(openPath);
 
-  const revisions = new Map(sessions.map((s) => [s.id, s.updatedAt]));
   const row = (e: ArtifactEntry) => {
     const active = selected?.path === e.path;
-    const revision = revisions.get(e.sessionId) ?? e.at;
+    // Use the file's own message timestamp as the revision key (#3043).
+    // The chat's updatedAt would invalidate all thumbnails on every new message;
+    // e.at is the timestamp of the message that produced/linked this specific file.
+    const revision = e.at;
     return (
       <div key={e.path} role="listitem" className={`group rounded-lg ${active ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
         <button type="button" data-artifact-row className="flex w-full min-w-0 items-center gap-3 px-2 py-1 text-left" onClick={() => select(e)} title={e.path}>
@@ -346,7 +360,7 @@ export function ArtifactsView() {
     return (
     <div key={e.path} role="listitem" className="library-tile" data-library-tile>
       <button type="button" className="library-tile-main" onClick={() => select(e)} title={e.path}>
-        <TilePreview revision={revisions.get(e.sessionId) ?? e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} badge={sync(e)} />
+        <TilePreview revision={e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} badge={sync(e)} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
           <span className="library-tile-meta">{fromAndWhen(e)}</span>
@@ -368,15 +382,17 @@ export function ArtifactsView() {
     );
   };
 
-  // True while no list at all is known yet (first visit, nothing in localStorage).
-  const loading = fromChats === null;
+  // True while no list at all is known yet: first visit with nothing in
+  // localStorage and no batch read yet. On repeat visits the stored index
+  // fills this immediately, so the skeleton is never shown again.
+  const loading = displayedFromChats === null;
   // No files at all yet: the illustrated placeholder fills the page in every layout.
   const noFiles = indexed && total === 0;
   const empty = query && entries && shown.length === 0 ? 'Nothing matches.' : null;
 
   /** Pulsing placeholder rows and tiles shown before the first list is known (#3043). */
   const listSkeleton = (
-    <div className="px-2 pb-3 pt-1" aria-hidden="true" aria-label="Loading Library">
+    <div className="px-2 pb-3 pt-1" aria-hidden="true">
       <div className="mb-2 h-4 w-20 animate-pulse rounded-md bg-surface-2 opacity-60" />
       {Array.from({ length: 8 }, (_, i) => (
         <div key={i} className="mb-1 flex items-center gap-3 rounded-lg px-2 py-1">

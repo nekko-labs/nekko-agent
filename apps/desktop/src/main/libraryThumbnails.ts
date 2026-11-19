@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, type WebContents } from 'electron';
+import { app, BrowserWindow, ipcMain, session, type WebContents } from 'electron';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,8 +16,12 @@ const CAPTURE_HEIGHT = 900;
 const THUMB_WIDTH = 400;
 /** Milliseconds the hidden window waits before capturing, so the page has time to settle. */
 const SETTLE_MS = 1800;
+/** Hard timeout for a single capture (ms) so a stuck page never blocks the queue. */
+const CAPTURE_TIMEOUT_MS = 15_000;
+/** Maximum concurrent HTML captures (each opens a hidden BrowserWindow). */
+const MAX_CONCURRENT_CAPTURES = 2;
 
-function thumbKey(path: string, revision: string | number): string {
+export function thumbKey(path: string, revision: string | number): string {
   const hash = createHash('sha256').update(path).digest('hex').slice(0, 32);
   const rev = String(revision).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || '0';
   return `${hash}_${rev}.webp`;
@@ -29,14 +33,32 @@ function thumbKey(path: string, revision: string | number): string {
  * Files are stored as small WebP images (or PNG for HTML captures) under
  * `{userData}/library-thumbs/`. On each put, the oldest files are evicted
  * when the store is over `MAX_ENTRIES` or `MAX_DISK_BYTES`.
+ *
+ * The `capture` handler requires a URL that the HTML preview server itself
+ * issued and is still serving (`isPreviewServedUrl`). The hidden window is
+ * hardened: navigation/redirects are blocked, window.open is denied,
+ * permissions are denied, and all non-loopback network requests are blocked.
+ * Concurrent captures are queued at `MAX_CONCURRENT_CAPTURES`.
  */
-export function registerLibraryThumbnails(authorized: (sender: WebContents) => boolean): void {
+export function registerLibraryThumbnails(
+  authorized: (sender: WebContents) => boolean,
+  isPreviewServedUrl: (url: string) => boolean = () => false,
+): void {
   const dir = join(app.getPath('userData'), 'library-thumbs');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
   const check = (sender: WebContents, frame: unknown) => {
     if (!authorized(sender) || frame !== sender.mainFrame) throw new Error('Library thumbnails require the application main frame.');
   };
+
+  // Lock down the shared capture session once at startup.
+  // All windows in this partition share these restrictions.
+  const captureSession = session.fromPartition('nekko-thumb-capture');
+  captureSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  captureSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
+    // Allow only requests back to the same 127.0.0.1 origin (the preview server).
+    callback({ cancel: !details.url.startsWith('http://127.0.0.1:') });
+  });
 
   /** Evict oldest files when the store is over its limits. */
   function evict(): void {
@@ -89,9 +111,11 @@ export function registerLibraryThumbnails(authorized: (sender: WebContents) => b
     } catch { /* non-fatal */ }
   });
 
-  ipcMain.handle(LIBRARY_THUMBNAIL_CHANNELS.capture, async (event, url: unknown): Promise<string | null> => {
-    check(event.sender, event.senderFrame);
-    if (typeof url !== 'string' || !url.startsWith('http://127.0.0.1:')) return null;
+  // Concurrency queue: at most MAX_CONCURRENT_CAPTURES windows open at once.
+  let activeCaptures = 0;
+  const captureQueue: Array<() => void> = [];
+
+  async function doCapture(url: string): Promise<string | null> {
     // One shared partition so Electron doesn't leak one per capture.
     const win = new BrowserWindow({
       show: false,
@@ -108,10 +132,25 @@ export function registerLibraryThumbnails(authorized: (sender: WebContents) => b
       },
     });
     try {
+      // Deny window.open: the page must not spawn new windows.
+      win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      // Block navigation away from the served URL (redirects, link clicks).
+      win.webContents.on('will-navigate', (e) => { e.preventDefault(); });
+      win.webContents.on('will-redirect', (e) => { e.preventDefault(); });
+
+      // Hard timeout: resolve null if the page takes too long.
+      let resolved = false;
+      const timeoutHandle = setTimeout(() => {
+        resolved = true;
+        if (!win.isDestroyed()) win.destroy();
+      }, CAPTURE_TIMEOUT_MS);
+
       await win.loadURL(url);
       // Give the page time to paint (matches TilePreview's SETTLE_MS of 1200 ms plus a margin).
       await new Promise<void>(resolve => setTimeout(resolve, SETTLE_MS));
-      if (win.isDestroyed()) return null;
+      clearTimeout(timeoutHandle);
+      if (resolved || win.isDestroyed()) return null;
+
       const image = await win.capturePage(undefined, { stayHidden: true, stayAwake: false });
       if (image.isEmpty()) return null;
       const thumb = image.resize({ width: THUMB_WIDTH, quality: 'best' });
@@ -120,5 +159,32 @@ export function registerLibraryThumbnails(authorized: (sender: WebContents) => b
     finally {
       if (!win.isDestroyed()) win.destroy();
     }
+  }
+
+  function queueCapture(url: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const run = () => {
+        activeCaptures++;
+        doCapture(url).then(resolve).catch(() => resolve(null)).finally(() => {
+          activeCaptures--;
+          const next = captureQueue.shift();
+          if (next) next();
+        });
+      };
+      if (activeCaptures < MAX_CONCURRENT_CAPTURES) {
+        run();
+      } else {
+        captureQueue.push(run);
+      }
+    });
+  }
+
+  ipcMain.handle(LIBRARY_THUMBNAIL_CHANNELS.capture, async (event, url: unknown): Promise<string | null> => {
+    check(event.sender, event.senderFrame);
+    if (typeof url !== 'string') return null;
+    // Only capture a URL the HTML preview server itself issued and is currently serving.
+    // This prevents the renderer from directing the hidden window at arbitrary URLs.
+    if (!isPreviewServedUrl(url)) return null;
+    return queueCapture(url);
   });
 }

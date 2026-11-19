@@ -36,6 +36,61 @@ function writeThumb(dir: string, path: string, revision: string | number, dataUr
   writeFileSync(join(dir, filename), Buffer.from(b64, 'base64'));
 }
 
+/**
+ * The URL validator logic used by the capture handler: accepts only URLs
+ * issued by the HTML preview server and still being served.
+ */
+function makeUrlValidator(port: number | undefined, activeIds: Set<string>): (url: string) => boolean {
+  return (url: string): boolean => {
+    if (port === undefined) return false;
+    const prefix = `http://127.0.0.1:${port}/`;
+    if (!url.startsWith(prefix)) return false;
+    const id = url.slice(prefix.length).split('/')[0];
+    return id.length > 0 && activeIds.has(id);
+  };
+}
+
+describe('Capture URL validator', () => {
+  it('rejects when no port is known yet (server never served a page)', () => {
+    const v = makeUrlValidator(undefined, new Set(['abc']));
+    expect(v('http://127.0.0.1:12345/abc/index.html')).toBe(false);
+  });
+
+  it('rejects a non-loopback URL', () => {
+    const v = makeUrlValidator(12345, new Set(['abc']));
+    expect(v('http://evil.com/abc/index.html')).toBe(false);
+    expect(v('https://127.0.0.1:12345/abc/index.html')).toBe(false);
+  });
+
+  it('rejects a loopback URL for a different port', () => {
+    const v = makeUrlValidator(12345, new Set(['abc']));
+    expect(v('http://127.0.0.1:9999/abc/index.html')).toBe(false);
+  });
+
+  it('rejects a loopback URL with an ID not in the active set', () => {
+    const v = makeUrlValidator(12345, new Set(['known-id']));
+    expect(v('http://127.0.0.1:12345/unknown-id/index.html')).toBe(false);
+  });
+
+  it('accepts a URL whose ID is in the active set', () => {
+    const v = makeUrlValidator(12345, new Set(['abc123def']));
+    expect(v('http://127.0.0.1:12345/abc123def/index.html')).toBe(true);
+  });
+
+  it('rejects after the page is released from the active set', () => {
+    const ids = new Set(['abc123def']);
+    const v = makeUrlValidator(12345, ids);
+    expect(v('http://127.0.0.1:12345/abc123def/index.html')).toBe(true);
+    ids.delete('abc123def');
+    expect(v('http://127.0.0.1:12345/abc123def/index.html')).toBe(false);
+  });
+
+  it('rejects an empty ID segment', () => {
+    const v = makeUrlValidator(12345, new Set(['']));
+    expect(v('http://127.0.0.1:12345/')).toBe(false);
+  });
+});
+
 describe('Library thumbnail disk cache', () => {
   let dir: string;
   beforeEach(() => {
