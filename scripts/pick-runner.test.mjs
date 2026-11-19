@@ -86,5 +86,5 @@ test('ios_native_calls_the_picker_only_for_trusted_events', () => {
   assert.match(pickBlock(y), /\n    continue-on-error: true\n/);
   assert.match(y, /token: \$\{\{ secrets\.MAC_RUNNER_STATUS_TOKEN \}\}/);
   assert.match(y, /runs-on: \$\{\{ fromJSON\(needs\.pick\.outputs\.runs-on \|\| '"xcode-27"'\) \}\}/);
-  assert.match(y, /needs: pick\n    # .*\n    if: \$\{\{ !inputs\.streaming_baseline_ref && !inputs\.relay_baseline_ref && !inputs\.photos_baseline_ref && !inputs\.baseline_ref && !inputs\.groups_baseline_ref && !cancelled\(\) && /);
+  assert.match(y, /needs: pick\n    # .*\n    if: \$\{\{ !inputs\.turn_details_diagnostic && !inputs\.streaming_baseline_ref && !inputs\.relay_baseline_ref && !inputs\.photos_baseline_ref && !inputs\.baseline_ref && !inputs\.groups_baseline_ref && !cancelled\(\) && /);
 });

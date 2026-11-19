@@ -112,6 +112,44 @@ the public internet through Nekko's NAT (no LAN, no host, no VPN routes), with n
 and no admin access inside. See [decision 0022](../decisions/0022-ci-runners-vm-and-network.md)
 and the [Probe job](#probe-job) below.
 
+## Focused TurnDetails diagnostic (opt-in, native execution unverified)
+
+`ios-native.yml` accepts `turn_details_diagnostic` as a JSON object with **only**
+`app` and `harness`, each a full lowercase 40-character commit SHA. Dispatch on
+`main` after this change lands; use `ci/ios-batch` only when that approved ref
+already contains the workflow change. Do not move the shared batch ref just to
+run a diagnostic. Do not combine this input with a batch or another evidence input.
+
+```sh
+gh workflow run ios-native.yml --ref main \
+  -f 'turn_details_diagnostic={"app":"<40-character app SHA>","harness":"<40-character harness SHA>"}'
+```
+
+This uses the existing picker and runner-group rules, but **fails before source
+checkout on hosted fallback or an unapproved ref**: hosted output is not evidence
+from the original owner-Mac environment. It requires Xcode 27.2 build `27B52` and
+iOS 27.2 runtime build `24B8117`, creates its own headless iPhone 18 Pro simulator,
+and overlays only `apps/ios/UITests/TurnDetailsTests.swift` from the harness.
+Production files/project configuration are never copied from the harness. The
+entire class must run: eight passing tests, zero failures/skips, native screenshots
+and a readable summary are required; no scroll/clipping assertions are relaxed.
+
+The `native-ios-turn-details-diagnostic` artifact retains pins, host OS/locale,
+selected SDK/runtime, simulator locale/accessibility domains, build log, raw
+xcresult, summary and unrounded layout/screenshot attachments, including on test
+failure. Export errors do not replace the native failure; cleanup always targets
+only the recorded owned simulator. Hard job/VM termination can still prevent
+final collection. Review scoped files before publishing: never upload a whole raw
+artifact/log directory containing fixture keys or unrelated diagnostics.
+
+This opt-in job has read-only repository permissions, skips the normal four-shard
+suite, uses a separate concurrency group so it cannot cancel a normal batch,
+and **never posts `Native iOS (batch)` statuses**. Existing scheduled/batch
+suite commands, budgets, and runner access rules are unchanged. Local behavioral
+controls verify input guards, cleanup and failure retention; original-runner
+execution and matched native acceptance remain **unverified until a separately
+authorized run is inspected**. Enabling this path does not accept #2990 or any sweep PR.
+
 ## Runner status token and switch [Philip]
 
 The runner is an org runner, which the repo's runner list does not show, so the picker lists
