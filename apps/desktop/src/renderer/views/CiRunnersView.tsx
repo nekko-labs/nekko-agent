@@ -261,7 +261,7 @@ export function CiRunnersView({ now = nowSecs, panel = false }: { now?: () => nu
     <section ref={section} tabIndex={-1} data-ci-runners className={panel ? 'mb-5 shrink-0' : undefined}>
       <div className="flex flex-wrap items-baseline gap-2 py-1">
         <h2 className="text-sm font-semibold">CI runners</h2>
-        {panel && <button className="btn btn-ghost ml-auto" onClick={() => {
+        {panel && <button className="btn btn-ghost ml-auto px-2 text-xs" onClick={() => {
           useStore.setState({ ciRunnersFocus: true });
           useStore.getState().setView('workflows');
         }}>View CI runners</button>}

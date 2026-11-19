@@ -25,8 +25,8 @@ describe('Gentleface controls', () => {
     expect(renderToStaticMarkup(<GfIcon name="send" />)).toContain('aria-hidden="true"');
   });
 
-  it('animates both compound glyphs without replacing their licensed artwork', () => {
-    for (const name of ['shield-question', 'brain-circuit'] as const) {
+  it('animates the locally moved glyphs without replacing their licensed artwork', () => {
+    for (const name of ['shield-question', 'brain-circuit', 'x', 'minus'] as const) {
       const html = renderToStaticMarkup(<GfIcon name={name} />);
       expect(html).toContain('gf-icon-motion');
       expect(html).toContain('<animateTransform');
@@ -42,6 +42,7 @@ describe('Gentleface controls', () => {
       'components/cloud/SyncSettings.tsx': ['LogOutIcon'],
       'components/RemoteAccess.tsx': ['RouterIcon', 'LogOutIcon'],
       'views/WorkflowsView.tsx': ['WorkflowIcon'],
+      'components/MonitorsDock.tsx': ['GfCloseIcon', 'GfMinusIcon'],
     };
     for (const [file, icons] of Object.entries(controls)) {
       const source = readFileSync(new URL(file, import.meta.url), 'utf8');
@@ -50,7 +51,7 @@ describe('Gentleface controls', () => {
   });
 
   it('embeds only self-contained trusted SVG motion with valid one-shot intervals', () => {
-    expect(Object.keys(GENTLEFACE_MOTION)).toHaveLength(15);
+    expect(Object.keys(GENTLEFACE_MOTION)).toHaveLength(16);
     for (const { svg, frames } of Object.values(GENTLEFACE_MOTION)) {
       expect(svg).toMatch(/^<svg\s/);
       expect(svg).not.toMatch(/<script|<foreignObject|\bon\w+=|(?:href|src)="(?:https?:|data:|javascript:)/i);
