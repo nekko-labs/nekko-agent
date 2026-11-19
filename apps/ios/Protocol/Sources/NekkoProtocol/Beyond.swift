@@ -495,13 +495,13 @@ public struct UsageTotals: Equatable, Sendable {
 
 /// The chat list's Continue card and search, from the summaries the phone already has.
 public enum ChatSearch {
-    /// The chat to continue: the most recently active top-level chat that isn't completed.
+    /// The chat to continue: the most recently active top-level chat that isn't archived.
     public static func continueChat(_ chats: [SessionSummary]) -> SessionSummary? {
         chats.filter { $0.isVisible && !$0.archived }.max { $0.updatedAt < $1.updatedAt }
     }
 
     /// Chats whose title, first prompt or last reply holds every word of `query`,
-    /// ignoring case and accents. Completed chats included, newest first.
+    /// ignoring case and accents. Archived chats included, newest first.
     public static func matches(_ chats: [SessionSummary], _ query: String) -> [SessionSummary] {
         let words = fold(query).split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty else { return chats }

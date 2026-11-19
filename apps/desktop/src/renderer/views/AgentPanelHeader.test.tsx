@@ -67,7 +67,7 @@ describe('Agents panel header', () => {
   });
 
   it('only drags cards into order where that order is what the panel shows', () => {
-    const cards = (html: string) => [...html.matchAll(/<div data-completion-row="[^"]+" draggable="(true|false)"/g)].map((m) => m[1]);
+    const cards = (html: string) => [...html.matchAll(/<div data-archive-row="[^"]+" draggable="(true|false)"/g)].map((m) => m[1]);
     const sessions = [agentSummary('a'), agentSummary('b')];
     const byProject = { ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'project' };
     localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify(byProject));

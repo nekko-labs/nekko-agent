@@ -43,14 +43,14 @@ app.whenReady().then(async () => {
       report.checks.push('Selecting the last hidden agent keeps the 20-row cap and reveals selection');
       await run("groupLimitFixture.select(null)");
     }
-    await run("document.querySelector('[data-agent-group=alpha] [data-completed-toggle]').click()");
+    await run("document.querySelector('[data-agent-group=alpha] [data-archived-toggle]').click()");
     await sleep(300);
-    report.completedInitial = await run("document.querySelectorAll('[data-agent-group=alpha] [data-completed-row]').length");
-    assert.equal(report.completedInitial, limited ? 20 : 50);
+    report.archivedInitial = await run("document.querySelectorAll('[data-agent-group=alpha] [data-archived-row]').length");
+    assert.equal(report.archivedInitial, limited ? 20 : 50);
     if (limited) {
-      await run("document.querySelector('[data-agent-group=alpha] [data-completed-more]').click()"); await sleep(200);
-      assert.equal(await run("document.querySelectorAll('[data-agent-group=alpha] [data-completed-row]').length"), 65);
-      report.checks.push('Completed list starts at 20 and expands fully in one click');
+      await run("document.querySelector('[data-agent-group=alpha] [data-archived-more]').click()"); await sleep(200);
+      assert.equal(await run("document.querySelectorAll('[data-agent-group=alpha] [data-archived-row]').length"), 65);
+      report.checks.push('Archived list starts at 20 and expands fully in one click');
     }
     report.fullSessionReads = await run('groupLimitFixture.reads()');
     assert.equal(report.fullSessionReads, 0);

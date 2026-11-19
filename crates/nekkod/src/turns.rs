@@ -3094,7 +3094,7 @@ impl TurnTools {
         match name {
             "set_chat_title" => return Ok(self.set_title(id, &input).await),
             "remember" => return Ok(self.remember(call, id, &input).await),
-            "complete_session" => return Ok(self.complete(id, &input).await),
+            "complete_session" => return Ok(self.archive(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             turn::secret::REQUEST_SECRET => return Ok(self.request_secret(call).await),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
@@ -3748,18 +3748,18 @@ impl TurnTools {
         }
     }
 
-    async fn complete(&self, id: &str, input: &Value) -> Value {
+    async fn archive(&self, id: &str, input: &Value) -> Value {
         if input.as_object().is_some_and(|o| !o.is_empty()) {
-            return error(id, "complete_session takes no arguments and only completes the current chat.");
+            return error(id, "complete_session takes no arguments and only archives the current chat.");
         }
         let Some(disk) = self.disk().await else {
-            return error(id, "Session not found; completion was not saved.");
+            return error(id, "Session not found; the archive was not saved.");
         };
         let at = disk.get("archivedAt").filter(|v| !v.is_null()).cloned().unwrap_or(json!(nekko_js::now_ms()));
         let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
         let saved = tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "archivedAt": at }))).await.ok();
         let Some(Ok(Some(saved))) = saved else {
-            return error(id, "Session not found; completion was not saved.");
+            return error(id, "Session not found; the archive was not saved.");
         };
         if let Some(obj) = lock(&self.session).as_object_mut() {
             obj.insert("archivedAt".into(), saved.get("archivedAt").cloned().unwrap_or(Value::Null));
@@ -3767,7 +3767,7 @@ impl TurnTools {
         self.meta();
         result(
             id,
-            "This session is marked completed (archived). Messages are retained under the app\u{2019}s archive retention policy. You can restore it from completed chats.",
+            "This chat is archived. It is kept until the user deletes it, and they can restore it from Archived chats.",
         )
     }
 

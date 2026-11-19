@@ -116,7 +116,7 @@ import { CHAT_ASSET_EXT, CHAT_LINK_EXT, LOOPBACK_HOSTS } from './chat-links.js';
  * Channels a paired phone may call. Built from what the phone clients send
  * (apps/android/protocol Wire.kt `Channels`,
  * apps/ios/Protocol Wire.swift `Channels`), plus the ones the next phone
- * releases need: settings (filtered), completing or deleting a chat the way
+ * releases need: settings (filtered), archiving or deleting a chat the way
  * the desktop does (`session:setOptions` with `archivedAt`, `session:delete`)
  * and voice input. `changes:list` is read only, through `phoneChangesView`, and
  * only when the computer's `phoneChanges` setting is on. Beyond the chat
@@ -722,7 +722,7 @@ export const PHONE_PROVIDER_VIEW = ['account.email', 'account.name', 'account.pl
 
 /**
  * Chat options a phone may set with `session:setOptions`: the model, the
- * title and organisation, completing (`archivedAt`), the chat mode and the effort. Not the tools, the execution mode, Git
+ * title and organisation, archiving (`archivedAt`), the chat mode and the effort. Not the tools, the execution mode, Git
  * isolation or offline/incognito.
  */
 export const PHONE_SESSION_OPTION_KEYS = [

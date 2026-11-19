@@ -10,7 +10,7 @@ sealed interface VoiceIntent {
     data class OpenChat(val query: String, val text: String) : VoiceIntent
     data class Pick(val n: Int) : VoiceIntent
     data object NewSession : VoiceIntent
-    data object CompleteSession : VoiceIntent
+    data object ArchiveSession : VoiceIntent
     data object Erase : VoiceIntent
     data object Clear : VoiceIntent
     data object Send : VoiceIntent
@@ -27,7 +27,7 @@ object VoiceCommands {
     private val wakeOnly = rx("""^ne[ck][ck]?o\b[\s,:.!?-]*$""")
     private val trailing = Regex("""[.!?]+$""")
     private val newSession = rx("""^(?:(?:create|start|open)(?: a)? new (?:session|chat|agent)|new (?:agent )?(?:session|chat|agent)|let's (?:make|start|create) a new (?:change|session|chat|task))$""")
-    private val complete = rx("""^(?:complete|finish|archive) (?:this|the current) (?:session|chat|agent)$""")
+    private val archive = rx("""^(?:complete|finish|archive) (?:this|the current) (?:session|chat|agent)$""")
     private val picks = mapOf("first" to 1, "one" to 1, "1" to 1, "second" to 2, "two" to 2, "2" to 2, "third" to 3, "three" to 3, "3" to 3)
     private val numbers = mapOf("one" to 1, "two" to 2, "to" to 2, "too" to 2, "three" to 3, "four" to 4, "for" to 4, "five" to 5, "six" to 6, "seven" to 7, "eight" to 8, "nine" to 9)
     private val views = mapOf("agent board" to "command", "command center" to "command", "agents" to "command", "models" to "models", "model providers" to "models", "model server" to "modelserver", "settings" to "settings", "connectors" to "connectors", "memory" to "memory", "skills" to "skills", "training" to "training", "workflows" to "workflows", "design" to "design", "artifacts" to "artifacts")
@@ -46,7 +46,7 @@ object VoiceCommands {
         val address = wake.find(trimmed) ?: return VoiceIntent.Dictation(trimmed)
         val command = trimmed.substring(address.range.last + 1).lowercase(Locale.ROOT).replace('\u2019', '\'').replace(trailing, "").trim()
         if (newSession.matches(command)) return VoiceIntent.NewSession
-        if (complete.matches(command)) return VoiceIntent.CompleteSession
+        if (archive.matches(command)) return VoiceIntent.ArchiveSession
         simple.firstOrNull { it.first.matches(command) }?.let { return it.second }
         rx("""^(?:the )?(first|second|third|one|two|three|1|2|3)(?: one)?$""").find(command)?.let { return VoiceIntent.Pick(picks.getValue(it.groupValues[1])) }
         rx("""^(?:go to |switch to |move to )?(?:the )?(next|previous|last) (?:desktop|space)$""").find(command)?.let {

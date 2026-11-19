@@ -17,17 +17,17 @@ import { localAgentStarts, onLocalAgentWorking } from '../workingAgents.js';
 import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type AgentStatus } from '../components/WorkspaceCard.js';
 import { GroupActivity } from '../components/GroupActivity.js';
 import { ChatFinder } from '../components/ChatFinder.js';
-import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
+import { ArchiveIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { FolderOpenIcon, GfBotsIcon, GfGlobeIcon, GfImageIcon, GfTerminalIcon } from '../gentleface-icons.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
 import { useWallLogs } from '../wallLogs.js';
 import { SHORTCUTS } from '../shortcuts.js';
-import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../completionExit.js';
+import { ARCHIVE_ROW_ATTR, archiveWithExit, findArchiveRow } from '../archiveExit.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
 import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
-import { completedDate, completedInGroup } from './completedChats.js';
+import { archivedDate, archivedInGroup } from './archivedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
@@ -51,8 +51,8 @@ type DragItem = { kind: 'project' | 'workspace'; id: string; ws: string | undefi
  */
 type Entry = { key: string; w: Workspace | null; s: SessionSummary | null; t: TerminalInfo | null };
 const CHAT_KEY = 'chat:';
-/** Where completed chats gather when the panel is not grouped by project. */
-const COMPLETED_GROUP = '__completed';
+/** Where archived chats gather when the panel is not grouped by project. */
+const ARCHIVED_GROUP = '__archived';
 
 /** What a card sorts by: its chat, or its shell when it is a terminal. */
 function sortable(e: Entry): SortableCard {
@@ -73,8 +73,8 @@ type PanelGroup = {
   /** The computer, when grouped by computer. */
   computer?: ComputerStatus;
   items: Entry[];
-  /** Completed chats folded under the group. */
-  done: SessionSummary[];
+  /** Archived chats folded under the group. */
+  archived: SessionSummary[];
   /** No header: the "None" grouping is one plain list. */
   bare?: boolean;
 };
@@ -256,7 +256,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const [selected, setSelected] = useState<string[]>([]);
   const anchor = useRef<string | null>(null);
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
-  const [doneMenu, setDoneMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [archivedMenu, setArchivedMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   // The chat whose card title is a text field, from the pencil or the menu's Rename.
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const renameChat = async (id: string, typed: string | null) => {
@@ -280,12 +280,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     return true;
   };
   const contextRow = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); const ids = selected.includes(id) ? selected.filter(x => sessions.some(s => s.id === x)) : [id]; setSelected(ids); setMenu({x:e.clientX,y:e.clientY,ids}); };
-  const runAction = async (action: 'complete' | 'delete' | 'stop' | 'continue', ids: string[]) => {
+  const runAction = async (action: 'archive' | 'delete' | 'stop' | 'continue', ids: string[]) => {
     setMenu(null);
     if (action === 'delete' && !await confirmDeletion('Permanently delete ' + ids.length + ' chat(s)? This cannot be undone.')) return;
     await Promise.all(ids.map(async (id) => {
       try {
-        if (action === 'complete') await completeWithExit(findCompletionRow(id), async () => { await archiveChat(id); return useStore.getState().sessions.some((s) => s.id === id && s.archivedAt); });
+        if (action === 'archive') await archiveWithExit(findArchiveRow(id), async () => { await archiveChat(id); return useStore.getState().sessions.some((s) => s.id === id && s.archivedAt); });
         if (action === 'delete') await useStore.getState().deleteChatForever(id, true);
         if (action === 'stop' && statuses.has(id)) await window.nekko.abortChat(id);
         if (action === 'continue' && !statuses.has(id)) { const s = await window.nekko.getSession(id); if (!s?.providerId || !s.modelId || s.autoModel) throw new Error('Choose a specific model before continuing this chat.'); if (!s.messages.some(m => m.role === 'user')) throw new Error('This chat has no prompt to continue.'); await window.nekko.sendChat({sessionId:id,providerId:s.providerId,modelId:s.modelId,text:'',resume:true}); }
@@ -331,16 +331,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     return () => window.clearInterval(timer);
   }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  /** Groups whose completed chats are expanded under their active ones. */
-  const completionTipSessionId = useStore((s) => s.completionTipSessionId);
+  /** Groups whose archived chats are expanded under their active ones. */
+  const archiveTipSessionId = useStore((s) => s.archiveTipSessionId);
   const computers = useStore((s) => s.computers);
   const computersShown = useShown('computers', { computers: computers.length > 0 });
   const computerCatalogs = useStore((s) => s.computerCatalogs);
   const showTips = useStore((s) => s.settings?.showTips !== false);
-  const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState<Set<string>>(new Set());
   /** Expansion is per grouping and list, and lasts while the panel is mounted. */
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [expandedCompleted, setExpandedCompleted] = useState<Set<string>>(new Set());
+  const [expandedArchived, setExpandedArchived] = useState<Set<string>>(new Set());
   const [sidebarW, setSidebarW] = useState(readSidebarWidth);
   const saveSidebarW = (px: number) => {
     const w = clampSidebarWidth(px);
@@ -350,7 +350,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   // What the panel groups by, its order, and what it shows (the sliders menu).
   const [view, setViewState] = useState<AgentPanelView>(readAgentPanelView);
   const setView = (next: AgentPanelView) => {
-    if (next.groupBy !== view.groupBy) { setExpandedGroups(new Set()); setExpandedCompleted(new Set()); }
+    if (next.groupBy !== view.groupBy) { setExpandedGroups(new Set()); setExpandedArchived(new Set()); }
     setViewState(next); saveAgentPanelView(next);
   };
   const [viewMenu, setViewMenu] = useState<{ x: number; y: number } | null>(null);
@@ -362,26 +362,26 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   };
   const reorderable = canReorder(view);
   const [mobileNav, setMobileNav] = useState(false);
-  const completionDestinationRef = useRef<HTMLButtonElement>(null);
-  // Reveal the existing destination without expanding completed chats or taking focus.
+  const archiveDestinationRef = useRef<HTMLButtonElement>(null);
+  // Reveal the existing destination without expanding archived chats or taking focus.
   useEffect(() => {
-    if (!showTips || !completionTipSessionId) return;
-    const completed = sessions.find((s) => s.id === completionTipSessionId && s.archivedAt);
-    if (!completed) return;
-    const group = view.groupBy === 'project' ? chatGroupOf(completed) : COMPLETED_GROUP;
+    if (!showTips || !archiveTipSessionId) return;
+    const chat = sessions.find((s) => s.id === archiveTipSessionId && s.archivedAt);
+    if (!chat) return;
+    const group = view.groupBy === 'project' ? chatGroupOf(chat) : ARCHIVED_GROUP;
     setCollapsed((previous) => {
       if (!previous.has(group)) return previous;
       const next = new Set(previous); next.delete(group); return next;
     });
     if (window.innerWidth < 768) setMobileNav(true);
-  }, [completionTipSessionId, showTips, sessions, view.groupBy]);
+  }, [archiveTipSessionId, showTips, sessions, view.groupBy]);
   useLayoutEffect(() => {
-    if (!showTips || !completionTipSessionId) return;
+    if (!showTips || !archiveTipSessionId) return;
     const frame = requestAnimationFrame(() => {
-      completionDestinationRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+      archiveDestinationRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [completionTipSessionId, showTips, mobileNav, collapsed]);
+  }, [archiveTipSessionId, showTips, mobileNav, collapsed]);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [drag, setDrag] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -516,7 +516,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   /**
    * Every active agent in a bucket: open workspaces and chats that are not
    * open in one alike, in the order their chats or terminals were dragged
-   * into. A chat stays in this list until it is completed; closing its
+   * into. A chat stays in this list until it is archived; closing its
    * windows does not demote it to a second-class list.
    */
   const bucketEntries = (key: string): Entry[] =>
@@ -538,34 +538,34 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
    */
   const utilityKind = (e: Entry) => e.t ? 'terminal' : (e.s?.chatType === 'image' || e.s?.chatType === 'video') ? 'media' : null;
   const shown = (e: Entry) => !utilityKind(e) && (view.showAutomations || !e.s?.taskId);
-  const shownDone = (s: SessionSummary) => view.showAutomations || !s.taskId;
+  const shownArchived = (s: SessionSummary) => view.showAutomations || !s.taskId;
   const order = (items: Entry[]) => (view.sortBy === 'manual' ? items : [...items].sort((a, b) => compareCards(view)(sortable(a), sortable(b))));
   const utilityEntries = buckets.flatMap((b) => bucketEntries(b.key));
   // Terminals and photo and video chats each have their own view in the switcher.
   const utilityGroup = (kind: 'terminal' | 'media', key: string, name: string): PanelGroup[] => {
     const items = order(utilityEntries.filter((e) => utilityKind(e) === kind));
-    return items.length > 0 ? [{ key, name, items, done: [], bare: true }] : [];
+    return items.length > 0 ? [{ key, name, items, archived: [], bare: true }] : [];
   };
   const agentGroups = (): PanelGroup[] => {
     if (view.groupBy === 'project') {
       return buckets.flatMap((b): PanelGroup[] => {
         const items = order(bucketEntries(b.key).filter(shown));
-        const done = completedInGroup(sessions, b.key, chatGroupOf).filter(shownDone);
-        const empty = items.length === 0 && done.length === 0;
+        const archived = archivedInGroup(sessions, b.key, chatGroupOf).filter(shownArchived);
+        const empty = items.length === 0 && archived.length === 0;
         if (empty && (b.key === '__none' || !view.showEmptyGroups)) return [];
-        return [{ key: b.key, name: b.name, ws: b.ws, items, done }];
+        return [{ key: b.key, name: b.name, ws: b.ws, items, archived }];
       });
     }
     const all = order(buckets.flatMap((b) => bucketEntries(b.key)).filter(shown));
-    const done = completedInGroup(sessions, '*', () => '*').filter(shownDone);
-    const completed: PanelGroup[] = done.length > 0 ? [{ key: COMPLETED_GROUP, name: 'Completed', items: [], done }] : [];
-    if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, done: [], bare: true }, ...completed];
+    const archived = archivedInGroup(sessions, '*', () => '*').filter(shownArchived);
+    const archivedGroups: PanelGroup[] = archived.length > 0 ? [{ key: ARCHIVED_GROUP, name: 'Archived', items: [], archived }] : [];
+    if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, archived: [], bare: true }, ...archivedGroups];
     if (view.groupBy === 'computer' && computersShown) {
       const here = (e: Entry) => !computerIdOf(e.s?.id);
       return [
-        { key: 'computer:here', name: thisComputerName(), items: all.filter(here), done: [] },
-        ...computers.map((c): PanelGroup => ({ key: 'computer:' + c.id, name: c.name, computer: c, items: all.filter((e) => computerIdOf(e.s?.id) === c.id), done: [] })),
-        ...completed,
+        { key: 'computer:here', name: thisComputerName(), items: all.filter(here), archived: [] },
+        ...computers.map((c): PanelGroup => ({ key: 'computer:' + c.id, name: c.name, computer: c, items: all.filter((e) => computerIdOf(e.s?.id) === c.id), archived: [] })),
+        ...archivedGroups,
       ];
     }
     const groupOf = view.groupBy === 'status'
@@ -575,9 +575,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     return [
       ...defs.flatMap((d): PanelGroup[] => {
         const items = all.filter((e) => groupOf(e) === d.key);
-        return items.length > 0 || (view.showEmptyGroups && d.key !== DRAFT_GROUP && d.key !== NEEDS_INPUT_GROUP) ? [{ key: d.key, name: d.name, items, done: [] }] : [];
+        return items.length > 0 || (view.showEmptyGroups && d.key !== DRAFT_GROUP && d.key !== NEEDS_INPUT_GROUP) ? [{ key: d.key, name: d.name, items, archived: [] }] : [];
       }),
-      ...completed,
+      ...archivedGroups,
     ];
   };
   const groups: PanelGroup[] = shows === 'terminals' ? utilityGroup('terminal', '__terminals', 'Terminals')
@@ -607,11 +607,11 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const holdsSelection = (e: Entry) =>
     e.s?.id === selectedId || e.t?.id === selectedId || !!(e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId));
   const visibleItems = (g: PanelGroup) => agentGroupRows(g.items, expandedGroups.has(g.key), g.items.findIndex(holdsSelection));
-  /** Completed rows on show: the open chat, else the one the completion tip points at, stays in reach. */
-  const visibleDone = (g: PanelGroup) => {
-    const open = g.done.findIndex((s) => s.id === selectedId);
-    const keep = open >= 0 || !showTips ? open : g.done.findIndex((s) => s.id === completionTipSessionId);
-    return agentGroupRows(g.done, expandedCompleted.has(g.key), keep);
+  /** Archived rows on show: the open chat, else the one the archive tip points at, stays in reach. */
+  const visibleArchived = (g: PanelGroup) => {
+    const open = g.archived.findIndex((s) => s.id === selectedId);
+    const keep = open >= 0 || !showTips ? open : g.archived.findIndex((s) => s.id === archiveTipSessionId);
+    return agentGroupRows(g.archived, expandedArchived.has(g.key), keep);
   };
 
   // Hidden cards do not prefetch PR details. Summaries still supply group counts.
@@ -650,9 +650,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   }, [layoutSig, computersShown]);
 
   const activeRowRef = useRef<HTMLDivElement>(null);
-  const selectedGroup = groups.find((g) => g.items.some(holdsSelection) || g.done.some((s) => s.id === selectedId));
+  const selectedGroup = groups.find((g) => g.items.some(holdsSelection) || g.archived.some((s) => s.id === selectedId));
   const selectedGroupKey = selectedGroup?.key;
-  const selectedCompleted = !!selectedGroup?.done.some((s) => s.id === selectedId);
+  const selectedArchived = !!selectedGroup?.archived.some((s) => s.id === selectedId);
   useEffect(() => {
     setSelected([]);
     if (!selectedGroupKey) return;
@@ -660,12 +660,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       if (!previous.has(selectedGroupKey)) return previous;
       const next = new Set(previous); next.delete(selectedGroupKey); return next;
     });
-    if (selectedCompleted) setShowCompleted((previous) => new Set(previous).add(selectedGroupKey));
-  }, [selectedId, selectedGroupKey, selectedCompleted]);
+    if (selectedArchived) setShowArchived((previous) => new Set(previous).add(selectedGroupKey));
+  }, [selectedId, selectedGroupKey, selectedArchived]);
   useLayoutEffect(() => {
     const frame = requestAnimationFrame(() => activeRowRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }));
     return () => cancelAnimationFrame(frame);
-  }, [selectedId, collapsed, showCompleted, shows]);
+  }, [selectedId, collapsed, showArchived, shows]);
 
   // --- Sidebar drag-and-drop (reorder projects; reorder / re-file workspaces) ---
   const startDrag = (e: React.DragEvent, item: DragItem) => {
@@ -870,16 +870,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           );
         })}
         {groups.map((b) => {
-          const { items, done } = b;
+          const { items, archived } = b;
           const byProject = view.groupBy === 'project' && shows === 'agents';
-          // The Completed group is its own fold: open means its rows show.
-          const completedGroup = b.key === COMPLETED_GROUP;
-          const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
-          const completedOpen = completedGroup || showCompleted.has(b.key);
+          // The Archived group is its own fold: open means its rows show.
+          const archivedGroup = b.key === ARCHIVED_GROUP;
+          const isCollapsed = archivedGroup ? !showArchived.has(b.key) : collapsed.has(b.key);
+          const archivedOpen = archivedGroup || showArchived.has(b.key);
           const activity = view.groupBy === 'status' ? groupActivityOf(b.key, items.map((e) => (e.s ? chatStatus(e.s.id) : undefined))) : null;
-          const tipHere = showTips && done.some((s) => s.id === completionTipSessionId);
+          const tipHere = showTips && archived.some((s) => s.id === archiveTipSessionId);
           const visible = visibleItems(b);
-          const completedRows = visibleDone(b);
+          const archivedRows = visibleArchived(b);
           const bucketActive = dropTarget === 'bucket:' + b.key;
           const groupGap = bucketActive && drag?.kind === 'project' && drag.id !== b.key;
           return (
@@ -907,12 +907,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
                   aria-expanded={!isCollapsed}
                   data-sidebar-group
-                  ref={completedGroup && tipHere ? completionDestinationRef : undefined}
-                  style={completedGroup && tipHere ? { outline: '2px solid var(--accent)', borderRadius: 6 } : undefined}
+                  ref={archivedGroup && tipHere ? archiveDestinationRef : undefined}
+                  style={archivedGroup && tipHere ? { outline: '2px solid var(--accent)', borderRadius: 6 } : undefined}
                   onClick={() => {
-                    if (!completedGroup) return toggleCollapse(b.key);
-                    useStore.setState({ completionTipSessionId: null });
-                    setShowCompleted((c) => { const n = new Set(c); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n; });
+                    if (!archivedGroup) return toggleCollapse(b.key);
+                    useStore.setState({ archiveTipSessionId: null });
+                    setShowArchived((c) => { const n = new Set(c); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n; });
                   }}
                 >
                   <svg
@@ -926,9 +926,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   {activity && <GroupActivity kind={activity} animated={settings?.agentActivityAnimation !== false} />}
                   {activity ? (
                     <span className="group-activity-count ms-auto shrink-0 rounded-full bg-success-soft px-2 text-2xs font-semibold tabular-nums">{items.length}</span>
-                  ) : isCollapsed && (items.length > 0 || completedGroup) && (
+                  ) : isCollapsed && (items.length > 0 || archivedGroup) && (
                     <span className="ms-auto shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
-                      {completedGroup ? done.length : items.length}
+                      {archivedGroup ? archived.length : items.length}
                     </span>
                   )}
                 </button>
@@ -949,7 +949,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   no room in the row layout either, not just squashed to 0fr. */}
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
                 <div className="min-h-0 space-y-1 overflow-hidden pb-1">
-                  {items.length === 0 && !completedGroup && !b.bare && (
+                  {items.length === 0 && !archivedGroup && !b.bare && (
                     <p className="px-4 py-1 text-2xs text-ink-faint"><span aria-hidden="true">–</span><span className="sr-only">No active agents</span></p>
                   )}
                   {visible.map((entry) => {
@@ -959,7 +959,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                       <div
                         key={entry.key}
                         ref={(s?.id === selectedId || entry.t?.id === selectedId) ? activeRowRef : undefined}
-                        {...(s ? { [COMPLETION_ROW_ATTR]: s.id } : {})}
+                        {...(s ? { [ARCHIVE_ROW_ATTR]: s.id } : {})}
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
@@ -1030,45 +1030,45 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                       Show more ({(items.length - visible.length).toLocaleString()})
                     </button>
                   )}
-                  {/* Completed chats stay with their group, folded away under
+                  {/* Archived chats stay with their group, folded away under
                       the active ones until asked for. */}
-                  {done.length > 0 && (
-                    <div className={completedGroup ? '' : 'pt-1'}>
-                      {!completedGroup && <button
+                  {archived.length > 0 && (
+                    <div className={archivedGroup ? '' : 'pt-1'}>
+                      {!archivedGroup && <button
                         className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-2xs text-ink-faint hover:bg-surface-2 hover:text-ink"
-                        style={showTips && done.some((s) => s.id === completionTipSessionId) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
-                        aria-expanded={completedOpen}
-                        ref={showTips && done.some((s) => s.id === completionTipSessionId) ? completionDestinationRef : undefined}
-                        data-completed-toggle
-                        onClick={() => { useStore.setState({ completionTipSessionId: null }); setShowCompleted((c) => { const n = new Set(c); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n; }); }}
+                        style={showTips && archived.some((s) => s.id === archiveTipSessionId) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
+                        aria-expanded={archivedOpen}
+                        ref={showTips && archived.some((s) => s.id === archiveTipSessionId) ? archiveDestinationRef : undefined}
+                        data-archived-toggle
+                        onClick={() => { useStore.setState({ archiveTipSessionId: null }); setShowArchived((c) => { const n = new Set(c); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n; }); }}
                       >
                         <svg
-                          className={`h-2.5 w-2.5 shrink-0 transition-transform duration-200 ${completedOpen ? 'rotate-90' : ''}`}
+                          className={`h-2.5 w-2.5 shrink-0 transition-transform duration-200 ${archivedOpen ? 'rotate-90' : ''}`}
                           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
                         ><path d="M9 6l6 6-6 6" /></svg>
-                        {completedOpen ? 'Hide completed' : `Show completed (${done.length})`}
+                        {archivedOpen ? 'Hide archived' : `Show archived (${archived.length})`}
                       </button>}
                       {tipHere && <div role="status" className="mt-1 rounded-md border border-line p-2 text-2xs text-ink-soft">
-                        {completedGroup ? 'Your completed chat is here. Open Completed to find or restore it.' : 'Your completed chat is here. Open Show completed to find or restore it.'}
-                        <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
+                        {archivedGroup ? 'Your archived chat is here. Open Archived to find or restore it.' : 'Your archived chat is here. Open Show archived to find or restore it.'}
+                        <button className="ml-2 text-accent" onClick={() => useStore.setState({ archiveTipSessionId: null })}>Dismiss</button>
                       </div>}
-                      {completedOpen && !isCollapsed && completedRows.map((s) => (
-                        <div key={s.id} ref={s.id === selectedId ? activeRowRef : undefined}><CompletedRow
+                      {archivedOpen && !isCollapsed && archivedRows.map((s) => (
+                        <div key={s.id} ref={s.id === selectedId ? activeRowRef : undefined}><ArchivedRow
                           session={s}
                           now={now}
                           isActive={selectedId === s.id}
                           onOpen={() => { onOpenChat(s.id); setMobileNav(false); }}
-                          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
+                          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setArchivedMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
                         /></div>
                       ))}
-                      {completedOpen && done.length > completedRows.length && (
+                      {archivedOpen && archived.length > archivedRows.length && (
                         <button
                           type="button"
-                          data-completed-more
+                          data-archived-more
                           className="w-full rounded-md px-2 py-1 text-left text-2xs text-ink-faint hover:bg-surface-2 hover:text-ink"
-                          onClick={() => setExpandedCompleted((previous) => new Set(previous).add(b.key))}
+                          onClick={() => setExpandedArchived((previous) => new Set(previous).add(b.key))}
                         >
-                          Show more ({(done.length - completedRows.length).toLocaleString()})
+                          Show more ({(archived.length - archivedRows.length).toLocaleString()})
                         </button>
                       )}
                     </div>
@@ -1101,31 +1101,31 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
           <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction disabled={menu.ids.length !== 1} onClick={() => { setRenamingId(menu.ids[0]); setMenu(null); }}>Rename</ContextAction>
-          <ContextAction onClick={() => void runAction('complete',menu.ids)}>Mark as completed</ContextAction>
+          <ContextAction onClick={() => void runAction('archive',menu.ids)}>Archive</ContextAction>
           <ContextAction onClick={() => setMenu({...menu, model:true})}>Change model</ContextAction>
           <ContextAction disabled={!menu.ids.some(id => statuses.has(id))} onClick={() => void runAction('stop',menu.ids)}>Stop{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction disabled={menu.ids.every(id => statuses.has(id))} onClick={() => void runAction('continue',menu.ids)}>Continue{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction onClick={() => void runAction('delete',menu.ids)}>Delete permanently</ContextAction>
         </>}
       </ContextMenu>}
-      {/* A completed chat's menu: the reader's two ways out, without opening it.
+      {/* An archived chat's menu: the reader's two ways out, without opening it.
           Delete still asks first, as it does from the reader. */}
-      {doneMenu && <ContextMenu x={doneMenu.x} y={doneMenu.y} onClose={() => setDoneMenu(null)}>
-        <ContextAction onClick={() => { const id = doneMenu.id; setDoneMenu(null); void useStore.getState().restoreChat(id); }}>
+      {archivedMenu && <ContextMenu x={archivedMenu.x} y={archivedMenu.y} onClose={() => setArchivedMenu(null)}>
+        <ContextAction onClick={() => { const id = archivedMenu.id; setArchivedMenu(null); void useStore.getState().restoreChat(id); }}>
           Restore chat
         </ContextAction>
-        <ContextAction onClick={() => { const id = doneMenu.id; setDoneMenu(null); void useStore.getState().deleteChatForever(id); }}>
+        <ContextAction onClick={() => { const id = archivedMenu.id; setArchivedMenu(null); void useStore.getState().deleteChatForever(id); }}>
           <span className="text-(--danger)">Delete forever</span>
         </ContextAction>
       </ContextMenu>}
       {mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
       <div className="md:hidden">
         <button className="btn btn-ghost" aria-label="Open agent list" aria-expanded={mobileNav}
-          style={!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
+          style={!mobileNav && showTips && sessions.some((s) => s.id === archiveTipSessionId && s.archivedAt) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
           onClick={() => setMobileNav(true)}>Agents</button>
-        {!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) && <div role="status" className="mt-1 max-w-40 rounded-md border border-line p-2 text-2xs text-ink-soft">
-          Your completed chat is in the agent list. Open Agents, then Show completed to find or restore it.
-          <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
+        {!mobileNav && showTips && sessions.some((s) => s.id === archiveTipSessionId && s.archivedAt) && <div role="status" className="mt-1 max-w-40 rounded-md border border-line p-2 text-2xs text-ink-soft">
+          Your archived chat is in the agent list. Open Agents, then Show archived to find or restore it.
+          <button className="ml-2 text-accent" onClick={() => useStore.setState({ archiveTipSessionId: null })}>Dismiss</button>
         </div>}
       </div><aside className={`${mobileNav ? 'absolute inset-y-0 left-0 z-30 flex p-[var(--pane-gap)]' : 'hidden'} md:relative md:z-auto md:flex md:p-0`}>{Sidebar}</aside>
       {/* The handle sits inside the gap itself (negative margins) so the list
@@ -1183,11 +1183,11 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
 }
 
 /**
- * A completed chat in its group's "Show completed" list: struck through and
- * muted, led by a check so it can never be mistaken for active work, and dated
- * by when it was completed. Opening it reads it in the middle, read-only.
+ * An archived chat in its group's "Show archived" list: muted and led by the
+ * archive glyph (not a check: archived is not the same as done), dated by when
+ * it was archived. Opening it reads it in the middle, read-only.
  */
-function CompletedRow({
+function ArchivedRow({
   session: s, now, isActive, onOpen, onContextMenu,
 }: {
   session: SessionSummary; now: number; isActive: boolean; onOpen: () => void; onContextMenu?: (e: React.MouseEvent) => void;
@@ -1197,20 +1197,20 @@ function CompletedRow({
     <button
       onClick={onOpen}
       onContextMenu={onContextMenu}
-      data-completed-row={s.id}
+      data-archived-row={s.id}
       className={`flex w-full items-center gap-2 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
-      title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nKept until you delete it`}
+      title={`${s.title}\nArchived ${new Date(at).toLocaleString()}\nKept until you delete it`}
     >
-      <span className="inline-grid shrink-0 place-items-center" style={{ color: 'var(--success)' }} aria-label="Completed" role="img">
-        <CheckIcon className="h-3 w-3" />
+      <span className="inline-grid shrink-0 place-items-center text-ink-faint" aria-label="Archived" role="img">
+        <ArchiveIcon still className="h-3 w-3" />
       </span>
-      <span className={`min-w-0 flex-1 truncate text-xs line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`} dir="auto">{s.title || 'Untitled chat'}</span>
+      <span className={`min-w-0 flex-1 truncate text-xs ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`} dir="auto">{s.title || 'Untitled chat'}</span>
       <time
         className="shrink-0 text-2xs tabular-nums"
         style={{ color: 'var(--ink-faint)' }}
         dateTime={new Date(at).toISOString()}
       >
-        {completedDate(at, now)}
+        {archivedDate(at, now)}
       </time>
     </button>
   );

@@ -4,12 +4,12 @@ import XCTest
 
 final class ChatListLayoutTests: XCTestCase {
     func testGroupDisclosureDefaultsAndSearch() {
-        let project = ChatSection(key: "project", name: "Project", chats: [], activeCount: 0, doneCount: 0)
+        let project = ChatSection(key: "project", name: "Project", chats: [], activeCount: 0, archivedCount: 0)
         XCTAssertFalse(project.isOpen(opened: [], searching: false))
         XCTAssertTrue(project.isOpen(opened: ["project"], searching: false))
         XCTAssertTrue(project.isOpen(opened: [], searching: true))
         for key in [ChatGroup.general, "all"] {
-            let section = ChatSection(key: key, name: key, chats: [], activeCount: 0, doneCount: 0)
+            let section = ChatSection(key: key, name: key, chats: [], activeCount: 0, archivedCount: 0)
             XCTAssertTrue(section.isOpen(opened: [], searching: false))
         }
     }
@@ -19,7 +19,7 @@ final class ChatListLayoutTests: XCTestCase {
         [{"id":"a","title":"A"}, {"id":"b","title":"B","activeWatchCount":2},
          {"id":"c","title":"C","archivedAt":100,"activeWatchCount":4}]
         """)
-        let section = ChatSection(key: "project", name: "Project", chats: list, activeCount: 2, doneCount: 1)
+        let section = ChatSection(key: "project", name: "Project", chats: list, activeCount: 2, archivedCount: 1)
         XCTAssertEqual(section.headerActivity(["a": .running, "b": .needsYou]), .needsYou)
         XCTAssertEqual(section.headerActivity(["a": .running, "c": .needsYou]), .running)
         XCTAssertNil(section.headerActivity(["c": .running]))
@@ -91,15 +91,15 @@ final class ChatListLayoutTests: XCTestCase {
         """)
         let s = ChatSections.make(list, folders: folders, view: projectView, activity: [:], now: now, calendar: utc)
         XCTAssertEqual(s.map(\.name), ["General", "App", "Empty"])
-        XCTAssertEqual(s[1].chats.map(\.id), ["c", "b", "e"], "active in dragged order, then completed")
+        XCTAssertEqual(s[1].chats.map(\.id), ["c", "b", "e"], "active in dragged order, then archived")
         XCTAssertEqual(s[1].activeCount, 2)
-        XCTAssertEqual(s[1].doneCount, 1)
+        XCTAssertEqual(s[1].archivedCount, 1)
     }
 
-    func testHidesCompletedChatsAndEmptyFolders() throws {
+    func testHidesArchivedChatsAndEmptyFolders() throws {
         let list = try chats(#"[{"id":"e","title":"E","updatedAt":8,"workspaceId":"w1","archivedAt":100}]"#)
         var v = projectView
-        v.showCompleted = false
+        v.showArchived = false
         v.showEmptyGroups = false
         XCTAssertEqual(ChatSections.make(list, folders: folders, view: v, activity: [:], now: now).map(\.name), [])
         v.showEmptyGroups = true
@@ -134,7 +134,7 @@ final class ChatListLayoutTests: XCTestCase {
         v.groupBy = .status
         v.showEmptyGroups = false
         let status = ChatSections.make(list, folders: [], view: v, activity: ["c": .needsYou, "a": .running], now: now, calendar: utc)
-        XCTAssertEqual(status.map(\.name), ["Needs input", "Building", "Done", "Completed"])
+        XCTAssertEqual(status.map(\.name), ["Needs input", "Building", "Done", "Archived"])
         XCTAssertEqual(status.map { $0.chats.map(\.id) }, [["c"], ["a"], ["b", "d"], ["e"]])
 
         // A stopped chat with a watch armed is Watching, apart from the Done ones.
@@ -149,10 +149,10 @@ final class ChatListLayoutTests: XCTestCase {
 
         v.groupBy = .date
         let date = ChatSections.make(list, folders: [], view: v, activity: [:], now: now, calendar: utc)
-        XCTAssertEqual(date.map(\.name), ["Today", "Yesterday", "Previous 7 days", "Older", "Completed"])
+        XCTAssertEqual(date.map(\.name), ["Today", "Yesterday", "Previous 7 days", "Older", "Archived"])
 
         v.groupBy = .none
-        XCTAssertEqual(ChatSections.make(list, folders: [], view: v, activity: [:], now: now).map(\.name), ["All chats", "Completed"])
+        XCTAssertEqual(ChatSections.make(list, folders: [], view: v, activity: [:], now: now).map(\.name), ["All chats", "Archived"])
     }
 
     func testShowsUpToEightRecentChatsAndAlwaysTheBusyOnes() throws {
@@ -186,12 +186,12 @@ final class ChatListLayoutTests: XCTestCase {
         let partial = ChatListView.parse(Data(#"{"groupBy":"status","sortBy":"created","showCompleted":false}"#.utf8))
         XCTAssertEqual(partial.groupBy, .status)
         XCTAssertEqual(partial.sortBy, .manual, "an unknown sort falls back")
-        XCTAssertFalse(partial.showCompleted)
+        XCTAssertFalse(partial.showArchived)
         XCTAssertEqual(ChatListView.parse(Data("nope".utf8)), .standard)
         XCTAssertEqual(ChatListView.parse(nil), .standard)
     }
 
-    func testGroupsByComputerWithEachOnesCompletedChats() throws {
+    func testGroupsByComputerWithEachOnesArchivedChats() throws {
         let list = try chats("""
         [{"id":"a1","title":"A1","updatedAt":5},
          {"id":"a2","title":"A2","updatedAt":9},
@@ -210,15 +210,15 @@ final class ChatListLayoutTests: XCTestCase {
         XCTAssertEqual(s.map(\.name), ["Studio", "Laptop", "This iPhone"])
         XCTAssertEqual(s[0].chats.map(\.id), ["a2", "a1", "x"], "a chat no computer holds joins the first")
         XCTAssertEqual(s[1].activeCount, 0)
-        XCTAssertEqual(s[1].doneCount, 1)
+        XCTAssertEqual(s[1].archivedCount, 1)
         XCTAssertEqual(s[2].chats.map(\.id), ["p1"])
         XCTAssertFalse(v.canReorderGroups)
 
         v.showEmptyGroups = false
-        v.showCompleted = false
+        v.showArchived = false
         let hidden = ChatSections.make(list, folders: folders, view: v, activity: [:], sources: sources,
                                        sourceOf: { owner[$0.id] }, now: now, calendar: utc)
-        XCTAssertEqual(hidden.map(\.name), ["Studio", "This iPhone"], "a computer with only completed chats drops out")
+        XCTAssertEqual(hidden.map(\.name), ["Studio", "This iPhone"], "a computer with only archived chats drops out")
     }
 
     func testByComputerWithNoComputerIsOneList() throws {

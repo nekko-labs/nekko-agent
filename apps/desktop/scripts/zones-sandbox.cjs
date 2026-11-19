@@ -101,7 +101,7 @@ app.whenReady().then(async () => {
 
       // Drag an agent row from the panel into the empty zone: the chip flies in and grows.
       await run(`(() => {
-        const row = Array.from(document.querySelectorAll('[data-agent-panel] [data-completion-row]')).find(e => e.textContent.includes('Diagnose failed build'));
+        const row = Array.from(document.querySelectorAll('[data-agent-panel] [data-archive-row]')).find(e => e.textContent.includes('Diagnose failed build'));
         const r = row.getBoundingClientRect();
         window.__dt = new DataTransfer();
         window.__row = row;

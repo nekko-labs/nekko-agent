@@ -151,7 +151,7 @@ export function ArtifactsView() {
   // Which version of the picked design is open (its newest when null), and whether its file is shown instead of the canvas.
   const [version, setVersion] = useState<string | null>(null);
   const [asFile, setAsFile] = useState(false);
-  const [includeCompleted, setIncludeCompleted] = useState(true);
+  const [includeArchived, setIncludeArchived] = useState(true);
   const [show, setShow] = useState<Show>('all');
   const [layout, setLayout] = useState<LibraryLayout>(loadLibraryLayout);
   const [collapsed, setCollapsed] = useState<Set<ArtifactKind>>(loadCollapsedKinds);
@@ -161,8 +161,8 @@ export function ArtifactsView() {
   // Transcripts are read a few at a time from the newest chat back; cached
   // ones paint at once. Only paths are kept, never file contents.
   const candidates = useMemo(
-    () => artifactCandidates(sessions.filter((s: SessionSummary) => includeCompleted || !s.archivedAt)),
-    [sessions, includeCompleted],
+    () => artifactCandidates(sessions.filter((s: SessionSummary) => includeArchived || !s.archivedAt)),
+    [sessions, includeArchived],
   );
   const key = candidates.map((s) => `${s.id}:${s.updatedAt}`).join('|');
   useEffect(() => {
@@ -339,8 +339,8 @@ export function ArtifactsView() {
       <p className="mt-2 max-w-sm rounded-xl border border-line bg-surface-2 px-3 py-2 text-xs text-ink-soft">
         Try asking an agent: “Create a one-page report and link the file in your reply.”
       </p>
-      {!includeCompleted && (
-        <button type="button" className="btn btn-ghost mt-1 text-xs" onClick={() => setIncludeCompleted(true)}>Include completed chats</button>
+      {!includeArchived && (
+        <button type="button" className="btn btn-ghost mt-1 text-xs" onClick={() => setIncludeArchived(true)}>Include archived chats</button>
       )}
     </div>
   );
@@ -365,7 +365,7 @@ export function ArtifactsView() {
           <div className={`space-y-2 px-3 pb-2 pt-3 ${listWide ? 'md:px-5' : ''}`}>
             <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter Library" value={query} onChange={(e) => setQuery(e.target.value)} />
             <label className="flex items-center gap-2 text-2xs text-ink-faint">
-              <input type="checkbox" checked={includeCompleted} onChange={(e) => setIncludeCompleted(e.target.checked)} /> Include completed chats
+              <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} /> Include archived chats
             </label>
           </div>
           <div className={`min-h-0 flex-1 overflow-y-auto px-2 pb-3 ${listWide ? 'md:px-4' : ''}`} role="list" aria-label="Library files">

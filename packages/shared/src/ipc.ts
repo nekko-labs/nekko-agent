@@ -1047,11 +1047,11 @@ export interface NekkoApi {
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
   clearSessions(scope: import('./chat.js').ChatClearScope): Promise<number>;
-  /** Compatibility no-op: completed history is retained indefinitely. */
+  /** Compatibility no-op: archived history is retained indefinitely. */
   purgeExpiredArchives(): Promise<number>;
-  /** All local chat JSON and command-log bytes; count is completed chats only. Symlinks are not followed. */
+  /** All local chat JSON and command-log bytes; count is archived chats only. Symlinks are not followed. */
   getHistoryUsage(): Promise<{ bytes: number; count: number }>;
-  /** Delete completed chats in the selected updatedAt range; returns how many were removed. */
+  /** Delete archived chats in the selected updatedAt range; returns how many were removed. */
   clearHistory(range: 'today' | 'last-week' | 'older-2-weeks' | 'older-1-month' | 'older-6-months'): Promise<number>;
   /** A new chat with this one's conversation before `beforeMessageId` (all of it when omitted). */
   forkSession(id: string, beforeMessageId?: string): Promise<Session | null>;

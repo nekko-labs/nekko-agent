@@ -24,8 +24,8 @@ public struct ChatListView: Codable, Equatable, Sendable {
     public var showUpdated = true
     /// The sub-agents a chat spawned, one row each under it, with the model each runs on.
     public var showSubagents = true
-    /// Completed chats, after their group's active ones (in a Completed group when not by project).
-    public var showCompleted = true
+    /// Archived chats, after their group's active ones (in an Archived group when not by project).
+    public var showArchived = true  // encoded as "showCompleted": persisted in saved views
     /// Keep even groups with no chats visible.
     public var showEmptyGroups = false
     /// With chats from more than one place: each row names where it runs.
@@ -59,7 +59,7 @@ public struct ChatListView: Codable, Equatable, Sendable {
     public var encoded: Data? { try? JSONEncoder().encode(self) }
 
     private enum CodingKeys: String, CodingKey {
-        case groupBy, sortBy, ascending, showCompleted, showEmptyGroups, showComputer, showComputerIcons, showModel, showContext, showPullRequests, showUpdated, showSubagents
+        case groupBy, sortBy, ascending, showArchived = "showCompleted", showEmptyGroups, showComputer, showComputerIcons, showModel, showContext, showPullRequests, showUpdated, showSubagents
     }
 
     /// A saved view keeps every field that is still valid; the rest fall back to the defaults.
@@ -74,7 +74,7 @@ public struct ChatListView: Codable, Equatable, Sendable {
         showPullRequests = (try? c.decodeIfPresent(Bool.self, forKey: .showPullRequests)) ?? d.showPullRequests
         showUpdated = (try? c.decodeIfPresent(Bool.self, forKey: .showUpdated)) ?? d.showUpdated
         showSubagents = (try? c.decodeIfPresent(Bool.self, forKey: .showSubagents)) ?? d.showSubagents
-        showCompleted = (try? c.decodeIfPresent(Bool.self, forKey: .showCompleted)) ?? d.showCompleted
+        showArchived = (try? c.decodeIfPresent(Bool.self, forKey: .showArchived)) ?? d.showArchived
         showEmptyGroups = (try? c.decodeIfPresent(Bool.self, forKey: .showEmptyGroups)) ?? d.showEmptyGroups
         showComputer = (try? c.decodeIfPresent(Bool.self, forKey: .showComputer)) ?? d.showComputer
         showComputerIcons = (try? c.decodeIfPresent(Bool.self, forKey: .showComputerIcons)) ?? d.showComputerIcons
@@ -93,13 +93,14 @@ public struct ChatSource: Equatable, Sendable {
 
 /// One group of the chat list as the view arranges it.
 public struct ChatSection: Equatable, Sendable, Identifiable {
-    public static let completedKey = "__completed"
+    // The value stays "__completed": it is persisted in saved group orders.
+    public static let archivedKey = "__completed"
     public let key: String
     public let name: String
-    /// Active chats in the view's order, then completed ones (most recently completed first).
+    /// Active chats in the view's order, then archived ones (most recently archived first).
     public let chats: [SessionSummary]
     public let activeCount: Int
-    public let doneCount: Int
+    public let archivedCount: Int
     public var id: String { key }
 
     /// Ungrouped chats have no disclosure; search temporarily reveals every match.
@@ -153,23 +154,23 @@ public enum ChatSections {
     ///
     /// By computer, `sources` are the groups in order and `sourceOf` names the
     /// one a chat runs on; a chat it can't place joins the first. Each group
-    /// keeps its own completed chats after its active ones, like a project's.
+    /// keeps its own archived chats after its active ones, like a project's.
     public static func make(_ chats: [SessionSummary], folders: [WorkspaceFolder], view: ChatListView,
                             activity: [String: Activity], groupOrder: [String] = [],
                             sources: [ChatSource] = [], sourceOf: (SessionSummary) -> String? = { _ in nil },
                             now: Int64, calendar: Calendar = .current) -> [ChatSection] {
         let sort = compare(view)
         let done: ([SessionSummary]) -> [SessionSummary] = { list in
-            view.showCompleted ? list.filter(\.archived).sorted { ($0.archivedAt ?? 0) > ($1.archivedAt ?? 0) } : []
+            view.showArchived ? list.filter(\.archived).sorted { ($0.archivedAt ?? 0) > ($1.archivedAt ?? 0) } : []
         }
-        func section(_ key: String, _ name: String, active: [SessionSummary], completed: [SessionSummary]) -> ChatSection {
-            ChatSection(key: key, name: name, chats: active + completed, activeCount: active.count, doneCount: completed.count)
+        func section(_ key: String, _ name: String, active: [SessionSummary], archived: [SessionSummary]) -> ChatSection {
+            ChatSection(key: key, name: name, chats: active + archived, activeCount: active.count, archivedCount: archived.count)
         }
 
         if view.groupBy == .project {
             let groups = ChatGroup.of(chats, folders: folders).compactMap { g -> ChatSection? in
                 let active = view.sortBy == .manual ? g.active : g.active.sorted(by: sort)
-                let s = section(g.key, g.name, active: active, completed: done(g.completed))
+                let s = section(g.key, g.name, active: active, archived: done(g.archived))
                 // General is listed only when it has chats; a folder unless empty ones are hidden.
                 if s.chats.isEmpty && (g.key == ChatGroup.general || !view.showEmptyGroups) { return nil }
                 return s
@@ -183,17 +184,17 @@ public enum ChatSections {
             let bySource = Dictionary(grouping: chats) { s in sourceOf(s).flatMap { known.contains($0) ? $0 : nil } ?? first.id }
             return sources.compactMap { src in
                 let all = bySource[src.id] ?? []
-                let s = section(src.groupKey, src.name, active: all.filter { !$0.archived }.sorted(by: sort), completed: done(all))
+                let s = section(src.groupKey, src.name, active: all.filter { !$0.archived }.sorted(by: sort), archived: done(all))
                 return s.chats.isEmpty && !view.showEmptyGroups ? nil : s
             }
         }
 
         let active = chats.filter { !$0.archived }.sorted(by: sort)
-        let completedAll = done(chats)
-        let completed = completedAll.isEmpty ? [] : [section(ChatSection.completedKey, "Completed", active: [], completed: completedAll)]
+        let archivedAll = done(chats)
+        let archivedSection = archivedAll.isEmpty ? [] : [section(ChatSection.archivedKey, "Archived", active: [], archived: archivedAll)]
         // By computer with no computer to name: one list.
         if view.groupBy == .none || view.groupBy == .computer {
-            return (active.isEmpty ? [] : [section("all", "All chats", active: active, completed: [])]) + completed
+            return (active.isEmpty ? [] : [section("all", "All chats", active: active, archived: [])]) + archivedSection
         }
         let defs = view.groupBy == .status ? statusGroups : dateGroups
         let groupOf: (SessionSummary) -> String = view.groupBy == .status
@@ -202,8 +203,8 @@ public enum ChatSections {
         let grouped = Dictionary(grouping: active, by: groupOf)
         return defs.compactMap { d in
             let items = grouped[d.key] ?? []
-            return items.isEmpty && !view.showEmptyGroups ? nil : section(d.key, d.name, active: items, completed: [])
-        } + completed
+            return items.isEmpty && !view.showEmptyGroups ? nil : section(d.key, d.name, active: items, archived: [])
+        } + archivedSection
     }
 
     /// The chats a group shows before "Show more", and how many that leaves out:

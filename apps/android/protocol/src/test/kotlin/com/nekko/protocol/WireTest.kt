@@ -124,12 +124,12 @@ class WireTest {
         assertEquals(listOf("General", "app", "site"), groups.map { it.name })
         // A chat filed under a folder the computer no longer has falls back to General, like the desktop.
         assertEquals(listOf("g1", "lost"), groups[0].active.map { it.id })
-        assertEquals(listOf("g2"), groups[0].completed.map { it.id })
+        assertEquals(listOf("g2"), groups[0].archived.map { it.id })
         // Dragged order first, then the most recent; completed by when they were completed.
         assertEquals(listOf("p3", "p2", "p1"), groups[1].active.map { it.id })
-        assertEquals(listOf("p5", "p4"), groups[1].completed.map { it.id })
+        assertEquals(listOf("p5", "p4"), groups[1].archived.map { it.id })
         // An empty folder is still listed; an empty General is not.
-        assertTrue(groups[2].active.isEmpty() && groups[2].completed.isEmpty())
+        assertTrue(groups[2].active.isEmpty() && groups[2].archived.isEmpty())
         assertEquals(listOf("w1"), ChatGroup.of(chats.filter { it.workspaceId == "w1" }, folders.take(1)).map { it.key })
     }
 
@@ -236,7 +236,7 @@ class WireTest {
         val empty = PcSettings.from(json("""{"defaultChatMode":"sideways","skipDeleteConfirmation":"yes"}"""))
         assertNull(empty.defaultChatMode)
         assertEquals(PcSettings.ChatMode.GUARDRAILS, empty.effectiveMode)
-        assertEquals(PcSettings.ChatAction.COMPLETE, empty.effectiveAction)
+        assertEquals(PcSettings.ChatAction.ARCHIVE, empty.effectiveAction)
         assertTrue(empty.confirmDelete)
     }
 

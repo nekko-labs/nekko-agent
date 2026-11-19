@@ -21,7 +21,7 @@ final class ChatGroupPrefsTests: XCTestCase {
     func testOpeningAndClosingPersistIndependentlyAcrossRecreation() throws {
         try withDefaults { defaults in
             let prefs = Prefs(defaults: defaults)
-            let keys: Set<String> = ["project-a", "status:building", "date:today", "computer:a", ChatSection.completedKey]
+            let keys: Set<String> = ["project-a", "status:building", "date:today", "computer:a", ChatSection.archivedKey]
             for key in keys { prefs.openedChatGroups.insert(key) }
             XCTAssertEqual(Set(defaults.stringArray(forKey: "openedChatGroups") ?? []), keys)
             let again = Prefs(defaults: defaults)

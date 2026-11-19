@@ -1,4 +1,4 @@
-// Journey: the Agents sidebar. Completed chats, the reader, creating agents and
+// Journey: the Agents sidebar. Archived chats, the reader, creating agents and
 // terminals, context actions, drag to refile, restore and delete.
 // Ported from scripts/agent-sidebar-sandbox.cjs.
 import { expect, scenarioTest } from './harness';
@@ -19,40 +19,40 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     const card = (title: string) => page.locator(`div[role=button][title*="${title}"]`).first();
 
     await scenario.resize(width);
-    // Completed chats folded under their project, project + buttons and drag to
+    // Archived chats folded under their project, project + buttons and drag to
     // refile all belong to Project grouping, no longer the default. The reset
     // remounts on the next render, so the panel reads this view when it mounts.
     await page.evaluate(`integration.reset(); localStorage.setItem('nekko.agentPanelView', JSON.stringify({ groupBy: 'project' }))`);
     await page.evaluate(`(() => {
       document.documentElement.dataset.theme = '${theme}';
-      const completed = integration.records()[0];
-      Object.assign(completed, { archivedAt: Date.now(), id: 'completed', title: 'Completed conversation' });
-      integration.records().push({ ...completed, id: 'active', title: 'Active conversation', archivedAt: undefined });
-      integration.records().push({ ...completed, id: 'project-completed', title: 'Completed project conversation', workspaceId: 'finished-project' });
+      const archived = integration.records()[0];
+      Object.assign(archived, { archivedAt: Date.now(), id: 'archived', title: 'Archived conversation' });
+      integration.records().push({ ...archived, id: 'active', title: 'Active conversation', archivedAt: undefined });
+      integration.records().push({ ...archived, id: 'project-archived', title: 'Archived project conversation', workspaceId: 'finished-project' });
       const s = integration.state();
       s.settings.workspaces.push({ id: 'finished-project', name: 'Finished project', path: '/synthetic/finished' });
       s.refreshSessions();
     })()`);
 
-    await test.step('completed-only project stays reachable', async () => {
+    await test.step('archived-only project stays reachable', async () => {
       await openList();
-      await page.locator('[data-completed-toggle]').evaluateAll((els) => els.forEach((b) => (b as HTMLElement).click()));
-      await expect(page.locator('[data-completed-row=project-completed]')).toBeAttached();
+      await page.locator('[data-archived-toggle]').evaluateAll((els) => els.forEach((b) => (b as HTMLElement).click()));
+      await expect(page.locator('[data-archived-row=project-archived]')).toBeAttached();
       await shot(`agents-${theme}-${width}`);
     });
 
-    await test.step('a completed chat opens read-only', async () => {
+    await test.step('an archived chat opens read-only', async () => {
       // The sticky group heading intercepts pointer events at the top of the
       // list; dispatch directly so the test does not depend on scroll state.
-      await page.locator('[data-completed-row=completed]').evaluate((el) => (el as HTMLElement).click());
+      await page.locator('[data-archived-row=archived]').evaluate((el) => (el as HTMLElement).click());
       await expect(page.getByText('Back to active agents')).toBeVisible();
       await expect(page.locator('[data-wall-composer]')).toHaveCount(0);
-      await shot(`completed-${theme}-${width}`);
+      await shot(`archived-${theme}-${width}`);
       await page.getByRole('button', { name: 'Back to active agents', exact: true }).click();
     });
 
     await test.step('the emptied board keeps its zones', async () => {
-      // The board's only chat became the completed one. With zones (Dynamic view:
+      // The board's only chat became the archived one. With zones (Dynamic view:
       // zones) its zone stays, dotted with the Agent, media and Terminal buttons, so the wall is never
       // empty: no switch to the Focused new-chat screen, no "The wall is empty".
       await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'grid');
@@ -108,7 +108,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     await test.step('card context menu keeps its actions', async () => {
       // The sticky group heading intercepts pointer events at narrow widths; dispatch directly.
       await card('Active conversation').evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
-      await expect(page.getByText('Mark as completed')).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeVisible();
       await expect(page.getByText('Change model')).toBeVisible();
       await page.keyboard.press('Escape');
       await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
@@ -129,48 +129,70 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       await called(`(c) => c.method === 'options' && c.id === 'active' && c.options.order === 0`);
     });
 
-    await test.step('Mark as completed stops and completes the owning chat', async () => {
+    await test.step('Archive stops and archives the owning chat', async () => {
       await card('Active conversation').evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
-      await page.getByRole('menuitem', { name: 'Mark as completed', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
       await called(`(c) => c.method === 'abort' && c.id === 'active'`);
       await called(`(c) => c.method === 'options' && c.id === 'active' && !!c.options.archivedAt`);
       expect(await state<boolean>(`(i) => i.state().sessions.some((s) => s.id === 'active' && s.archivedAt)`)).toBe(true);
       // The confirmation toast sits over the sidebar's lower rows for 5 s; dismiss it
       // as a user would, or a slow runner's next click lands on it (#1131).
-      const toast = page.locator('[data-toast]', { hasText: 'Chat completed.' });
+      const toast = page.locator('[data-toast]', { hasText: 'Chat archived.' });
       await toast.click();
       await expect(toast).toHaveCount(0);
     });
 
-    await test.step('completed rows offer Restore chat and Delete forever', async () => {
+    await test.step('archived rows offer Restore chat and Delete forever', async () => {
       await openList();
-      const expandCompleted = () => page.locator('[data-completed-toggle][aria-expanded=false]').evaluateAll((els) => els.forEach((b) => (b as HTMLElement).click()));
+      const expandArchived = () => page.locator('[data-archived-toggle][aria-expanded=false]').evaluateAll((els) => els.forEach((b) => (b as HTMLElement).click()));
       const rowMenu = async (id: string) => {
-        await expandCompleted();
-        const row = page.locator(`[data-completed-row=${id}]`);
+        await expandArchived();
+        const row = page.locator(`[data-archived-row=${id}]`);
         // The sticky group heading intercepts pointer events at narrow widths;
         // dispatch contextmenu directly (the mascot covered x:40 at #1131).
         await row.evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
       };
-      await rowMenu('project-completed');
-      await shot(`completed-menu-${theme}-${width}`);
+      await rowMenu('project-archived');
+      await shot(`archived-menu-${theme}-${width}`);
       await expect(page.locator('[role=menu] [role=menuitem]')).toHaveText(['Restore chat', 'Delete forever']);
       await page.getByRole('menuitem', { name: 'Restore chat' }).click();
-      await called(`(c) => c.method === 'options' && c.id === 'project-completed' && c.options.archivedAt === null`);
+      await called(`(c) => c.method === 'options' && c.id === 'project-archived' && c.options.archivedAt === null`);
       await expect(page.locator('[role=menu]')).toHaveCount(0);
 
       await openList();
-      await page.locator('[data-completed-row=completed]').evaluate((el) => (el as HTMLElement).click());
+      await page.locator('[data-archived-row=archived]').evaluate((el) => (el as HTMLElement).click());
       await expect(page.getByText('Back to active agents')).toBeVisible();
       await openList();
-      await rowMenu('completed');
+      await rowMenu('archived');
       await page.getByRole('menuitem', { name: 'Delete forever' }).click();
       await expect(page.getByText('Confirm deletion')).toBeVisible();
-      expect(await state<boolean>(`(i) => i.calls.some((c) => c.method === 'cleanup' && c.id === 'completed')`), 'asks before deleting').toBe(false);
-      await shot(`completed-delete-confirm-${theme}-${width}`);
+      expect(await state<boolean>(`(i) => i.calls.some((c) => c.method === 'cleanup' && c.id === 'archived')`), 'asks before deleting').toBe(false);
+      await shot(`archived-delete-confirm-${theme}-${width}`);
       await page.getByRole('button', { name: 'Delete', exact: true }).click();
-      await called(`(c) => c.method === 'cleanup' && c.id === 'completed'`);
+      await called(`(c) => c.method === 'cleanup' && c.id === 'archived'`);
       await expect(page.getByText('Back to active agents')).toHaveCount(0);
+    });
+
+    await test.step('a chat window archives, with no Close that would leave it listed as Done', async () => {
+      // #3021: the window menu's Close stopped the agent and dropped the window
+      // but left the chat in the Agents panel as Done. A chat window offers
+      // Archive (off the list), Delete and Minimize (kept on the list), never Close.
+      // The project chat restored above is active again; show it on the board.
+      await openList();
+      await card('Archived project conversation').evaluate((el) => (el as HTMLElement).click());
+      const label = 'Archive Archived project conversation';
+      const strip = page.locator('[data-pane-title-strip]').filter({ has: page.locator(`button[aria-label="${label}"]`) });
+      await expect(strip).toHaveCount(1);
+      await strip.evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })));
+      await expect(page.locator('[role=menu] [role=menuitem]')).toHaveText([/^Archive/, /^Delete/, /^Minimize/]);
+      await shot(`window-menu-${theme}-${width}`);
+      await page.keyboard.press('Escape');
+      await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+      await expect(page.locator('[role=menu]')).toHaveCount(0);
+      await strip.locator(`button[aria-label="${label}"]`).evaluate((el) => (el as HTMLElement).click());
+      await called(`(c) => c.method === 'options' && c.id === 'project-archived' && !!c.options.archivedAt`);
+      await expect(strip).toHaveCount(0);
+      await expect(page.locator('[data-agent-panel] div[role=button][title*="Archived project conversation"]')).toHaveCount(0);
     });
   });
 }

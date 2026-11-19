@@ -154,7 +154,7 @@ export function CommandPalette() {
       chats.push({
         id: `chat:${s.id}`, kind: 'chat', title, crumbs: folder ? ['Chats', folder] : ['Chats'],
         context: description[0] ?? '', body: description.map((text) => ({ text })),
-        keywords: `${(s.providerId && provider.get(s.providerId)) || ''}${s.archivedAt ? ' completed' : ''}`,
+        keywords: `${(s.providerId && provider.get(s.providerId)) || ''}${s.archivedAt ? ' archived' : ''}`,
         at: s.updatedAt, data: { type: 'chat', session: s },
       });
       const indexed = index.get(s.id);
@@ -360,7 +360,7 @@ function ResultRow({ hit, index, active, listId, terms, now, settings, onHover, 
     return (
       <span className="flex shrink-0 items-center gap-2">
         {row.type === 'message' && hit.bodyCount ? <span className="chat-finder-badge tabular-nums" data-palette-message-count>{hit.bodyCount} message{hit.bodyCount === 1 ? '' : 's'}</span> : null}
-        {row.type !== 'artifact' && row.session.archivedAt ? <span className="text-2xs text-ink-faint">Completed</span> : null}
+        {row.type !== 'artifact' && row.session.archivedAt ? <span className="text-2xs text-ink-faint">Archived</span> : null}
         {doc.at ? <span className="text-2xs tabular-nums text-ink-faint">{finderAge(doc.at, now)}</span> : null}
       </span>
     );

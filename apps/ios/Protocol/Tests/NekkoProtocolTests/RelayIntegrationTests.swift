@@ -219,7 +219,7 @@ final class RelayIntegrationTests: XCTestCase {
         XCTAssertTrue(user.content.count > "the README".count && user.content.hasSuffix("the README"))
         print("itest: /\(skill.name) expanded on the computer to \(user.content.count) chars")
 
-        // 4. Phone-side session options: rename, complete and restore.
+        // 4. Phone-side session options: rename, archive and restore.
         _ = try await c.call(Channels.sessionSetOptions, [.string(s3.id), ["title": "Renamed from iOS", "archivedAt": 1_760_000_000_000]])
         var listed = SessionSummary.visible(try await c.call(Channels.sessionsSummaries)).first { $0.id == s3.id }
         XCTAssertEqual(listed?.title, "Renamed from iOS")

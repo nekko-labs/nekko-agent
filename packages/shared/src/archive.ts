@@ -1,7 +1,7 @@
 /**
  * Archived chats: out of the workspace list, still on disk until restored or
  * explicitly deleted. Compatibility helpers remain for callers that used to
- * show the retired expiry window, but completed history no longer expires.
+ * show the retired expiry window, but archived history no longer expires.
  */
 
 /** Archived chats are retained indefinitely. */
@@ -28,25 +28,25 @@ export function archiveDaysLeft(archivedAt: number, now = Date.now()): number {
 }
 
 /**
- * How long an agent may sit untouched before it is completed for you. Days, or
- * `0` for never. Completing is the same reversible archive the X does.
+ * How long an agent may sit untouched before it is archived for you. Days, or
+ * `0` for never. The same reversible archive the Archive button does.
  */
-export const AUTO_COMPLETE_CHOICES = [
+export const AUTO_ARCHIVE_CHOICES = [
   { days: 7, label: '1 week' },
   { days: 14, label: '2 weeks' },
   { days: 30, label: '1 month' },
   { days: 90, label: '3 months' },
   { days: 0, label: 'Never' },
 ] as const;
-export const AUTO_COMPLETE_DEFAULT_DAYS = 30;
+export const AUTO_ARCHIVE_DEFAULT_DAYS = 30;
 
 /** The configured idle window in days; anything unrecognised falls back to the default. */
-export function autoCompleteDays(setting: unknown): number {
-  return AUTO_COMPLETE_CHOICES.some((c) => c.days === setting) ? (setting as number) : AUTO_COMPLETE_DEFAULT_DAYS;
+export function autoArchiveDays(setting: unknown): number {
+  return AUTO_ARCHIVE_CHOICES.some((c) => c.days === setting) ? (setting as number) : AUTO_ARCHIVE_DEFAULT_DAYS;
 }
 
-/** What auto-completion needs to know about an agent. */
-export interface AutoCompleteCandidate {
+/** What auto-archiving needs to know about an agent. */
+export interface AutoArchiveCandidate {
   id: string;
   updatedAt: number;
   archivedAt?: number | null;
@@ -61,8 +61,8 @@ export interface AutoCompleteCandidate {
  * sub-agent (it goes with its parent), not driven by a task or training run,
  * not running and not waiting for an answer.
  */
-export function agentsToAutoComplete(
-  sessions: AutoCompleteCandidate[],
+export function agentsToAutoArchive(
+  sessions: AutoArchiveCandidate[],
   days: number,
   now: number,
   busy: (id: string) => boolean = () => false,

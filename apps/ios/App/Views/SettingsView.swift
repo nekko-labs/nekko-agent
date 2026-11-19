@@ -264,7 +264,7 @@ struct SettingsView: View {
                     Picker("Chat’s main action", selection: Binding(get: { store.pcSettings.effectiveAction }, set: { a in
                         Task { do { try await store.updatePcSettings(PcSettings.patch(action: a)) } catch { self.error = error.localizedDescription } }
                     })) {
-                        Text("Complete").tag(PcSettings.ChatAction.complete)
+                        Text("Archive").tag(PcSettings.ChatAction.archive)
                         Text("Delete").tag(PcSettings.ChatAction.delete)
                     }
                     Toggle("Ask before deleting", isOn: Binding(get: { store.pcSettings.confirmDelete }, set: { on in

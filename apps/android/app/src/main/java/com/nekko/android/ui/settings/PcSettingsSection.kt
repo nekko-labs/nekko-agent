@@ -149,8 +149,8 @@ fun PcSettingsSection(deps: SettingsDeps) {
             HorizontalDivider(color = p.line, modifier = Modifier.padding(vertical = 4.dp))
             Text(stringResource(R.string.settings_long_press), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
             Column(Modifier.selectableGroup()) {
-                Choice(stringResource(R.string.settings_complete_it), stringResource(R.string.settings_complete_it_detail, active.name), pc.effectiveAction == ChatAction.COMPLETE, enabled) {
-                    if (pc.effectiveAction != ChatAction.COMPLETE) save(PcSettings.patch(action = ChatAction.COMPLETE))
+                Choice(stringResource(R.string.settings_archive_it), stringResource(R.string.settings_archive_it_detail, active.name), pc.effectiveAction == ChatAction.ARCHIVE, enabled) {
+                    if (pc.effectiveAction != ChatAction.ARCHIVE) save(PcSettings.patch(action = ChatAction.ARCHIVE))
                 }
                 Choice(stringResource(R.string.settings_delete_it), stringResource(R.string.settings_delete_it_detail, active.name), pc.effectiveAction == ChatAction.DELETE, enabled) {
                     if (pc.effectiveAction != ChatAction.DELETE) save(PcSettings.patch(action = ChatAction.DELETE))

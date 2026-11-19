@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AboutYouSection } from './AboutYouSettings.js';
 import { allowModeChange } from '../components/YoloWarning.js';
 import { CHAT_MODE_ICON, SettingsIcon } from '../gentleface-icons.js';
-import { CHAT_MODE_LABEL, AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, AUTO_ARCHIVE_CHOICES, AUTO_ARCHIVE_DEFAULT_DAYS, autoArchiveDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
@@ -227,22 +227,23 @@ export function SettingsView() {
                 <SettingRow
                   htmlFor="chat-pane-action"
                   title="Chat pane top-right action"
-                  detail="Complete keeps the chat under Completed until you delete it."
+                  detail="Archive keeps the chat under Archived until you delete it."
                   control={
-                    <select id="chat-pane-action" className="quiet-field w-[180px] py-1" value={settings.chatPaneAction ?? 'complete'} onChange={(e) => update({ chatPaneAction: e.target.value === 'delete' ? 'delete' : 'complete' })}>
-                      <option value="complete">Complete (default)</option>
+                    <select id="chat-pane-action" className="quiet-field w-[180px] py-1" value={settings.chatPaneAction === 'delete' ? 'delete' : 'complete'} onChange={(e) => update({ chatPaneAction: e.target.value === 'delete' ? 'delete' : 'complete' })}>
+                      {/* Stored as 'complete' for older builds and the phones; it means Archive. */}
+                      <option value="complete">Archive (default)</option>
                       <option value="delete">Delete</option>
                     </select>
                   }
                 />
                 <SettingRow
-                  htmlFor="auto-complete-after"
-                  title="Complete idle agents after"
-                  detail="Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show completed."
+                  htmlFor="auto-archive-after"
+                  title="Archive idle agents after"
+                  detail="Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show archived."
                   control={
-                    <select id="auto-complete-after" className="quiet-field w-[180px] py-1" value={autoCompleteDays(settings.autoCompleteAfterDays)} onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}>
-                      {AUTO_COMPLETE_CHOICES.map((c) => (
-                        <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_COMPLETE_DEFAULT_DAYS ? ' (default)' : ''}</option>
+                    <select id="auto-archive-after" className="quiet-field w-[180px] py-1" value={autoArchiveDays(settings.autoCompleteAfterDays)} onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}>
+                      {AUTO_ARCHIVE_CHOICES.map((c) => (
+                        <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_ARCHIVE_DEFAULT_DAYS ? ' (default)' : ''}</option>
                       ))}
                     </select>
                   }
@@ -977,7 +978,7 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
           <span className="quiet-group-label">Chat worktrees</span>
           <button className="btn btn-ghost py-1 text-xs" onClick={refresh}>Refresh</button>
         </div>
-        <p className="text-xs text-ink-faint">Worktrees are kept when a chat is completed or deleted. Removing one frees the folder: Git refuses if it has uncommitted changes, and its branch is deleted only once merged.</p>
+        <p className="text-xs text-ink-faint">Worktrees are kept when a chat is archived or deleted. Removing one frees the folder: Git refuses if it has uncommitted changes, and its branch is deleted only once merged.</p>
         <div className="-mx-3 mt-(--q-inline)">
           {worktrees === null && <p className="px-3 text-xs text-ink-faint">Loading...</p>}
           {worktrees?.length === 0 && <p className="px-3 text-xs text-ink-faint">No chat worktrees.</p>}

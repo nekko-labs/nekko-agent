@@ -3851,7 +3851,7 @@ function ArchivedChatBar({ sessionId, contentWidth }: { sessionId: string; conte
       <div className={`${contentWidth} flex flex-wrap items-center gap-2 rounded-xl px-3 py-2`} style={{ background: 'var(--surface-2)' }}>
         <CheckIcon className="h-4 w-4 shrink-0 text-ink-faint" />
         <p className="min-w-0 flex-1 text-xs text-ink-soft">
-          Completed and read-only.
+          Archived and read-only.
           <span className="text-ink-faint"> Kept until you delete it.</span>
         </p>
         <button

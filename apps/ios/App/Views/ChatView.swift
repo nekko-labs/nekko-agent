@@ -383,7 +383,7 @@ struct ChatView: View {
                         Button { showAudit = true } label: { Label("Audit trail", systemImage: "checkmark.shield") }
                             .accessibilityIdentifier("chat.audit")
                         Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
-                        Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
+                        Button { act { try await store.archiveChat(sessionId) } } label: { Label("Archive", systemImage: "archivebox") }
                     }
                     .disabled(chat.savedAt != nil)
                     Button { Task { await pull.reload { await chat.reload() } } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
@@ -1670,7 +1670,7 @@ struct Composer: View {
                 return r.map { $0.message.isEmpty ? "Git refused it." : $0.message } ?? "Couldn’t merge \(VoiceRunner.label(pr))."
             },
             answer: { q, note in try await chat.answer(q.questions.map { AskAnswer(questionId: $0.id, labels: [], note: note) }) },
-            complete: { try await store.completeChat(chat.sessionId) },
+            archive: { try await store.archiveChat(chat.sessionId) },
             title: { chat.title })
     }
 
