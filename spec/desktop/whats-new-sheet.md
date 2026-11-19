@@ -22,6 +22,7 @@ User intent (Philip, 2026-11-15): build it from the design system, with Gentlefa
 ## Ways to open it
 
 - The title-bar pill after an update says only "What's new" (Matt, 2026-11-18: the longer pill was too wide, and the sheet's header shows the version). It opens the sheet and goes away. Its accessible name and tooltip still say "Updated to v…".
+- A small ✕ in the pill (Gentleface `x`, quieter than the label, named "Dismiss") makes it go away without opening the sheet (Matt, 2026-11-18). It is a second button beside "What's new", reached by Tab. Focus moves to the version pill that takes its place. Either way the pill is gone for that version and does not return on the next launch; the sheet stays reachable the other three ways.
 - Settings › Updates: a "What's new" button beside "Check now".
 - About Nekko Agent: a "What's new" button.
 - The command palette: "What's new", also found as "whats new", "changelog" or "release notes".

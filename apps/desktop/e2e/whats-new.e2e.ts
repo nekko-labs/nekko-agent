@@ -26,6 +26,7 @@ test("what's new", async ({ scenario, shot }) => {
   const pill = page.getByTestId('update-whats-new');
   const fromSettings = page.getByTestId('settings-whats-new');
   const launch = (v: string, from?: string) => page.evaluate(([next, last]) => (window as any).integration.launch(next, last), [v, from] as const);
+  const relaunch = () => page.evaluate(() => (window as any).integration.relaunch());
   const lastOpened = () => page.evaluate(() => (window as any).integration.opened.at(-1));
   const theme = (t: string) => page.evaluate((v) => { document.documentElement.dataset.theme = v; }, t);
   // The sheet's box once it has arrived, to the pixel: layout rounds a locked height to 1/64px.
@@ -48,6 +49,31 @@ test("what's new", async ({ scenario, shot }) => {
   expect((await expected(EMPTY_VERSION)).top, 'the empty version must stay empty').toEqual([]);
   await theme('dark');
   await launch(VERSION, `${line}.1000`);
+
+  await test.step('the pill can be dismissed without opening the sheet, and stays gone', async () => {
+    const dismiss = page.getByTestId('update-dismiss');
+
+    await expect(page.getByRole('group', { name: `Updated to v${VERSION}` })).toBeVisible();
+    await expect(dismiss).toHaveAccessibleName('Dismiss');
+    await shot('r5-pill-dark');
+    await theme('light'); await shot('r5-pill-light'); await theme('dark');
+
+    // Two buttons: Tab goes from one to the other.
+    await pill.focus();
+    await page.keyboard.press('Tab');
+    await expect(dismiss).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(pill).toHaveCount(0);
+    await expect(dismiss).toHaveCount(0);
+    await expect(sheet).toHaveCount(0);
+
+    // Focus lands on the version pill that takes its place.
+    await expect(page.locator('.update-version')).toBeFocused();
+    await relaunch();
+    await expect(page.locator('.update-version')).toBeVisible();
+    await expect(pill).toHaveCount(0);
+    await launch(VERSION, `${line}.1000`);
+  });
 
   await test.step('the pill after an update opens the sheet and goes away', async () => {
     // Only "What's new" shows; the name still says an update was installed.
@@ -197,6 +223,11 @@ test("what's new", async ({ scenario, shot }) => {
 
   await test.step('it fits a 360px window, long list included', async () => {
     await scenario.resize(360, 720);
+    await launch(VERSION, `${line}.1000`);
+    await expect(page.getByTestId('update-dismiss')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await shot('r5-pill-360-dark');
+    await theme('light'); await shot('r5-pill-360-light'); await theme('dark');
     await launch(VERSION);
     await fromSettings.click();
     await expect(sheet).toBeVisible();

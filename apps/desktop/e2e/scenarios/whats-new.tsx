@@ -50,6 +50,8 @@ function Fixture() {
         localStorage.setItem('op_last_version', updatedFrom ?? next);
         setRun((n) => n + 1);
       },
+      /** Relaunch on the same version: nothing but the remount, so storage is as the app left it. */
+      relaunch: () => setRun((n) => n + 1),
       about: () => window.dispatchEvent(new Event('nekko:about')),
       palette: () => useStore.getState().setPaletteOpen(true),
     },

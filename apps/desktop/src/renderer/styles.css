@@ -1251,14 +1251,40 @@
 }
 
 .update-done {
-  cursor: pointer;
+  gap: 4px;
+  padding-right: 4px;
   border-color: color-mix(in srgb, var(--success) 34%, transparent);
   background: color-mix(in srgb, var(--success) 13%, var(--surface));
   color: var(--success);
   font-weight: 600;
 }
 
-.update-done:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
+.update-done button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Quieter than the label beside it until it is pointed at or focused. */
+.update-done-dismiss {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.update-done-dismiss:focus-visible { opacity: 1; }
+
+@media (hover: hover) {
+  .update-done-dismiss:hover { opacity: 1; }
+}
 
 .update-failed {
   border-color: color-mix(in srgb, var(--danger) 34%, transparent);
