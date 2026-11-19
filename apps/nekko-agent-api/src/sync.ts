@@ -17,10 +17,14 @@ export const HISTORY_DAYS = 30;
 
 /** Stored bytes allowed per account. */
 export const SYNC_QUOTA: Record<Plan, number> = { free: 0, pro: 5 * 2 ** 30, team: 20 * 2 ** 30 };
-/** One sealed object at most (a transcript is split into parts well under this). */
-export const MAX_OBJECT_BYTES = 1024 * 1024;
+/** One sealed object at most: a chat of up to 16,000,000 bytes seals to just under this (crates/nekko-cloud records.rs). */
+export const MAX_OBJECT_BYTES = 16 * 1024 * 1024;
+/** Base64 of one object at MAX_OBJECT_BYTES, with room for the JSON around it. */
+const PUSH_BODY_BYTES = 24 * 1024 * 1024;
 const MAX_PUSH = 200;
 const MAX_PULL = 500;
+/** Stored bytes per pull page, so a page of big chats stays small on a 256 MB machine. A page always holds at least one object. */
+export const PULL_PAGE_BYTES = 8 * 1024 * 1024;
 // Exact sizes from crates/nekko-sync: version, ephemeral key, 64-byte keyring, GCM tag. The
 // recovery wrap is sealed to the recovery key's public half the same way.
 const WRAP_BYTES = 1 + 65 + 64 + 16;
@@ -343,7 +347,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
   // what the server has (1 for a new one); otherwise that object is a
   // conflict and the device pulls, merges and retries. Writes go under the
   // current key epoch only, so a rotation takes effect at once.
-  app.post("/v1/sync/push", { bodyLimit: 8 * 1024 * 1024 }, async (req, reply) => {
+  app.post("/v1/sync/push", { bodyLimit: PUSH_BODY_BYTES }, async (req, reply) => {
     const caller = await guard(req, reply, true);
     if (!caller) return;
     const objects = (req.body as Record<string, unknown> | undefined)?.objects;
@@ -443,13 +447,25 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     const since = q.since === undefined ? 0 : Number(q.since);
     const limit = q.limit === undefined ? MAX_PULL : Number(q.limit);
     if (!Number.isSafeInteger(since) || since < 0 || !isPositiveInt(limit, MAX_PULL)) return reply.code(400).send({ error: "bad since or limit" });
-    const { rows } = await db.query<ObjectRow>(
-      `select collection, object_id, revision, key_id, blob, seq from sync_objects
+    // Sizes first, then only the blobs that fit the page's byte budget.
+    const { rows: sizes } = await db.query<{ seq: string; size: number }>(
+      `select seq, octet_length(blob) as size from sync_objects
         where user_id = $1 and seq > $2 order by seq limit $3`,
       [caller.userId, since, limit + 1],
     );
-    const more = rows.length > limit;
-    const page = rows.slice(0, limit).map(wire);
+    let take = 0;
+    for (let used = 0; take < Math.min(limit, sizes.length); take++) {
+      used += Number(sizes[take].size);
+      if (take > 0 && used > PULL_PAGE_BYTES) break;
+    }
+    const more = sizes.length > take;
+    if (!take) return { objects: [], next: since, more };
+    const { rows } = await db.query<ObjectRow>(
+      `select collection, object_id, revision, key_id, blob, seq from sync_objects
+        where user_id = $1 and seq > $2 and seq <= $3 order by seq`,
+      [caller.userId, since, sizes[take - 1].seq],
+    );
+    const page = rows.map(wire);
     return { objects: page, next: page.length ? page[page.length - 1].seq : since, more };
   });
 

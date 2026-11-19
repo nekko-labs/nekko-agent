@@ -100,6 +100,26 @@ pub const EVENT: &str = "cloud:status";
 pub const OAUTH_PROVIDERS: &[&str] = &["github", "google", "apple"];
 
 const PUSH_BATCH: usize = 50;
+/// Plaintext per push request; a chat bigger than this goes alone. Base64 of a full batch, or of
+/// one chat at `records::MAX_CHAT_BYTES`, stays under the 24 MiB push body Nekko Cloud accepts.
+const PUSH_BYTES: usize = 6 << 20;
+
+/// Split queued records (their plaintext sizes, in order) into push requests.
+fn push_batches(sizes: &[usize]) -> Vec<std::ops::Range<usize>> {
+    let mut out = Vec::new();
+    let (mut start, mut bytes) = (0, 0);
+    for (i, &n) in sizes.iter().enumerate() {
+        if i > start && (i - start == PUSH_BATCH || bytes + n > PUSH_BYTES) {
+            out.push(start..i);
+            (start, bytes) = (i, 0);
+        }
+        bytes += n;
+    }
+    if start < sizes.len() {
+        out.push(start..sizes.len());
+    }
+    out
+}
 const PULL_PAGE: u32 = 200;
 const OAUTH_TTL: Duration = Duration::from_secs(10 * 60);
 
@@ -1505,7 +1525,9 @@ impl Cloud {
         let total = queue.len();
         let mut again = false;
         let mut done = 0;
-        for batch in queue.chunks(PUSH_BATCH) {
+        let sizes: Vec<usize> = queue.iter().map(|(_, plain, _)| plain.len()).collect();
+        for range in push_batches(&sizes) {
+            let batch = &queue[range];
             self.set_progress(Some((done, total)));
             let mut objects = Vec::new();
             let mut meta = Vec::new();
@@ -1552,3 +1574,18 @@ impl Cloud {
 }
 
 const REMOVED: &str = "This device was removed from sync on another device.";
+
+#[cfg(test)]
+mod push_batch_tests {
+    use super::*;
+
+    #[test]
+    fn batches_cap_count_and_bytes_and_send_a_big_chat_alone() {
+        assert_eq!(push_batches(&[]), Vec::<std::ops::Range<usize>>::new());
+        assert_eq!(push_batches(&vec![10; 120]), vec![0..50, 50..100, 100..120]);
+        let mb = 1 << 20;
+        assert_eq!(push_batches(&[2 * mb, 3 * mb, 2 * mb, 15 * mb, mb]), vec![0..2, 2..3, 3..4, 4..5]);
+        // Never an empty request, whatever the sizes.
+        assert!(push_batches(&[20 * mb, 20 * mb]).iter().all(|r| !r.is_empty()));
+    }
+}

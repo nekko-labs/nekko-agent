@@ -137,7 +137,7 @@ Where the keys live: on a Mac, the Keychain; on Windows, Credential Manager; on 
 
 ## What syncs
 
-Every chat, except incognito chats (never) and chats in the Local only mode (unless you include them in Settings → Sync). Pictures and attached files are left out of the synced copy (a short note stands in), so a record is mostly text; a chat whose text is over 1 MB isn't synced and Settings says how many. The newest change to a chat wins; a chat a reply is being written in is never overwritten from the cloud. Deleting a chat deletes it on your other devices. The iPhone reads synced chats (they stay readable offline) but doesn't change them.
+Every chat, except incognito chats (never) and chats in the Local only mode (unless you include them in Settings → Sync). Pictures and attached files are left out of the synced copy (a short note stands in), so a record is mostly text; a chat whose text is over 16 MB isn't synced and Settings says how many (long agent sessions run to a few MB, mostly tool output). The newest change to a chat wins; a chat a reply is being written in is never overwritten from the cloud. Deleting a chat deletes it on your other devices. The iPhone reads synced chats (they stay readable offline) but doesn't change them.
 
 ## Locked out?
 
