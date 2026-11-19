@@ -9,7 +9,7 @@ describe('Photo and Video introductions', () => {
     expect(MEDIA_INTROS.image.name).toBe('Photo');
     expect(MEDIA_INTROS.video.name).toBe('Video');
     for (const copy of Object.values(MEDIA_INTROS)) expect(copy.benefits).toHaveLength(3);
-    expect(MEDIA_INTROS.image.limit).toContain('editing an existing photo is not supported');
+    expect(MEDIA_INTROS.image.limit).toBe('Start from scratch or edit existing photos using local models.');
     expect(MEDIA_INTROS.video.limit).toContain('Direct AI video generation is not connected');
   });
   it('uses original inline artwork with no external images or scripts', () => {
