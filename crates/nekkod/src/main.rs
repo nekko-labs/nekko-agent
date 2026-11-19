@@ -27,6 +27,7 @@ mod chat_secrets;
 mod claude_plan;
 mod claude_policy;
 mod cli_install;
+mod cloud_media;
 mod compaction;
 mod computers;
 mod config;

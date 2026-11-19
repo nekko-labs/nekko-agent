@@ -694,6 +694,105 @@ async fn a_chats_agent_starts_a_clip_and_its_watch_gets_the_news() {
     post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
 }
 
+/// A stand-in OpenRouter: one picture model priced per picture, and the
+/// requests it got, so a test sees the key and body that reached it.
+async fn fake_openrouter(seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>) -> u16 {
+    use axum::extract::Path;
+    use axum::http::HeaderMap;
+    use axum::routing::{get, post};
+    let models = json!({ "data": [{ "id": "acme/pic", "name": "Acme Pic",
+        "architecture": { "input_modalities": ["text", "image"], "output_modalities": ["image"] } }] });
+    let endpoints = json!({ "data": { "endpoints": [{ "pricing": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.03 }] }] } });
+    let app = axum::Router::new()
+        .route("/api/v1/images/models", get(move || async move { axum::Json(models) }))
+        .route(
+            "/api/v1/images/models/{*rest}",
+            get(move |Path(rest): Path<String>| {
+                let endpoints = endpoints.clone();
+                async move { if rest == "acme/pic/endpoints" { axum::Json(endpoints) } else { axum::Json(json!({})) } }
+            }),
+        )
+        .route(
+            "/api/v1/images",
+            post(move |headers: HeaderMap, axum::Json(body): axum::Json<Value>| {
+                let seen = seen.clone();
+                async move {
+                    let auth = headers.get("authorization").and_then(|v| v.to_str().ok()).unwrap_or_default().to_string();
+                    seen.lock().unwrap().push(json!({ "auth": auth, "body": body }));
+                    axum::Json(json!({ "data": [{ "b64_json": "UElD", "media_type": "image/png" }], "usage": { "cost": 0.031 } }))
+                }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+/// A paid cloud picture through the user's OpenRouter provider: asked for with
+/// its price even in YOLO, made with the user's key, its cost recorded, and a
+/// second picture within the chat's allowance not asked again.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_paid_cloud_picture_asks_with_its_price_even_in_yolo() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter(seen.clone()).await;
+    let chat = json!({ "id": "s_cloud", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("cloud-picture", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model = scripted_model(vec![
+        call_tool("c_pic1", "generate_image", json!({ "prompt": "a red kite", "model": "openrouter:p_or:acme/pic" })),
+        call_tool("c_pic2", "generate_image", json!({ "prompt": "a blue kite", "model": "openrouter:p_or:acme/pic" })),
+        say_text("made them"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_cloud", "s_cloud", json!({ "text": "Two kites" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(&rig, json!({ "providers": [scripted.clone(), openrouter.clone()] })).await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+
+    // YOLO does not wave a charge through: the first picture asks, with its price.
+    let asked = wait_pending(rig.d.port, "s_cloud", "approval", "c_pic1").await;
+    let reason = asked["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("Make 1 picture with Acme Pic through OpenRouter for $0.030"), "{reason}");
+    assert!(reason.contains("up to $1.00"), "{reason}");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cloud", "c_pic1", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_cloud", "s_cloud").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let saved = saved_session(&rig, "s_cloud");
+    let result = |id: &str| {
+        saved["messages"].as_array().unwrap().iter().find(|m| m["toolResult"]["toolCallId"] == id).unwrap()["toolResult"].clone()
+    };
+    for id in ["c_pic1", "c_pic2"] {
+        let r = result(id);
+        assert!(
+            r["output"]
+                .as_str()
+                .unwrap()
+                .starts_with("Made the picture with Acme Pic through OpenRouter (cost $0.031)."),
+            "{r}"
+        );
+        assert_eq!(r["images"][0], "data:image/png;base64,UElD");
+    }
+    // The second, within the allowance, did not ask; both were charged and counted.
+    assert_eq!(saved["pictureSpend"]["allowedUsd"], 1.0);
+    assert!((saved["pictureSpend"]["spentUsd"].as_f64().unwrap() - 0.062).abs() < 1e-9, "{}", saved["pictureSpend"]);
+    let calls = seen.lock().unwrap().clone();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0]["auth"], "Bearer sk-or-test");
+    assert_eq!((calls[0]["body"]["model"].clone(), calls[0]["body"]["n"].clone()), (json!("acme/pic"), json!(1)));
+    assert_eq!(calls[0]["body"]["aspect_ratio"], "1:1");
+    let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap_or_default();
+    let pictures = usage.lines().filter(|l| l.contains("\"kind\":\"picture\"")).count();
+    assert_eq!(pictures, 2, "{usage}");
+}
+
 pub(crate) fn fake_sd() -> std::path::PathBuf {
     let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
