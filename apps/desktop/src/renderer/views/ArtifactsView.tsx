@@ -157,6 +157,8 @@ export function ArtifactsView() {
   const [fromFolders, setFromFolders] = useState<ArtifactEntry[] | null>(null);
   // Every candidate chat has been read, so an empty index really means no files yet.
   const [chatsRead, setChatsRead] = useState(false);
+  // Every chat has been read at least once this visit; a later re-read (a chat changed) keeps showing the list.
+  const [readOnce, setReadOnce] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ArtifactEntry | null>(null);
   // Which version of the picked design is open (its newest when null), and whether its file is shown instead of the canvas.
@@ -191,7 +193,6 @@ export function ArtifactsView() {
         }));
         if (!live) return;
         lists.push(...batch);
-        setFromChats(mergeArtifacts(lists));
       }
       for (let i = 0; i < helpers.length; i += 6) {
         const batch = await Promise.all(helpers.slice(i, i + 6).map(async (summary) => {
@@ -201,10 +202,9 @@ export function ArtifactsView() {
         }));
         if (!live) return;
         lists.push(...batch);
-        setFromChats(mergeArtifacts(lists));
       }
-      if (live && candidates.length === 0) setFromChats([]);
-      if (live) setChatsRead(true);
+      // The list changes once, when every chat has been read: the one already shown stays until then, so nothing drops out mid-read.
+      if (live) { setFromChats(mergeArtifacts(lists)); setChatsRead(true); setReadOnce(true); }
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,14 +227,8 @@ export function ArtifactsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folders, key]);
 
-  // What to display this render: once all chats are read the live scan wins;
-  // until then, show the stored index (or its union with the batches so far)
-  // so the list never shrinks below the cache while loading.
-  const displayedFromChats = chatsRead
-    ? fromChats
-    : fromChats === null
-      ? storedIndex
-      : mergeArtifacts([storedIndex ?? [], fromChats]);
+  // What to display: the last complete read of every chat, or before the first one finishes, the index stored last visit.
+  const displayedFromChats = fromChats ?? storedIndex;
 
   const merged = useMemo(
     () => (displayedFromChats || fromFolders ? withFolderDesigns(displayedFromChats ?? [], fromFolders ?? []) : null),
@@ -382,10 +376,11 @@ export function ArtifactsView() {
     );
   };
 
-  // True while no list at all is known yet: first visit with nothing in
-  // localStorage and no batch read yet. On repeat visits the stored index
-  // fills this immediately, so the skeleton is never shown again.
-  const loading = displayedFromChats === null;
+  // The skeleton holds until there is a whole list to show: on a first visit
+  // (nothing stored) until every chat has been read, so the list never grows
+  // batch by batch under the pointer; on a repeat visit the stored index
+  // fills it at once, so it never shows.
+  const loading = storedIndex === null ? !readOnce : displayedFromChats === null;
   // No files at all yet: the illustrated placeholder fills the page in every layout.
   const noFiles = indexed && total === 0;
   const empty = query && entries && shown.length === 0 ? 'Nothing matches.' : null;
