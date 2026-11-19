@@ -654,6 +654,9 @@ export interface UsageSummary {
     modelIds?: string[];
     /** Absent on a day with no attributed records. */
     attribution?: UsageAttribution;
+    /** Paid cloud pictures that day (`kind: "picture"` usage lines), and what they cost; absent on a day with none. */
+    pictures?: number;
+    pictureCost?: number;
   }>;
   /** True if any recorded usage came from a subscription provider. */
   hasSubscriptionUsage?: boolean;

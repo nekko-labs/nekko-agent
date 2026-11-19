@@ -60,6 +60,9 @@ export function budgetRange(usage: import('@nekko-agent/shared').UsageSummary | 
     avoidedCosts: daily.every(d => d.avoidedCosts != null) ? avoided : null,
     modelIds: [...new Set(daily.flatMap(d => d.modelIds ?? []))],
     attribution: attributionRange(daily),
+    // Paid cloud pictures: already in `spend`; counted apart so the panel can say so.
+    pictures: daily.reduce((sum, d) => sum + (d.pictures ?? 0), 0),
+    pictureCost: daily.reduce((sum, d) => sum + (d.pictureCost ?? 0), 0),
   };
 }
 
