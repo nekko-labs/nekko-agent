@@ -1,13 +1,13 @@
 # X posts
 
-Square (1080x1080, 30 fps) videos for X, in the brand dark palette (`spec/brand/colour-palette.md`: page `#0B0C14` with `#854F6C` glows, panels `#14151F`, lines `#252735`, main buttons `#190019`), drawn with
+Videos for X (30 fps), in the brand dark palette (`spec/brand/colour-palette.md`: page `#0B0C14` with `#854F6C` glows, panels `#14151F`, lines `#252735`, main buttons `#190019`), drawn with
 the same sources as `video/instagram-reel` (`spec/brand/colour-palette.md`,
 `docs/design-system.md`). Illustrations in the app's design, not screen
 recordings. No sound.
 
 | Composition | Length | Shows |
 | --- | --- | --- |
-| `GtaIdleGpu` | 18 s | Three slow beats: "Playing GTA VI?" with Nekko cheering under it, holding a banner that says "VI" in our own type and colours; "Put your PC to work." with the PC finishing three tasks on Qwen3 8B, then "So you can focus on the mission."; Nekko holding a generic pixel controller (grips in his paws) with "3 tasks done", the Nekko Agent wordmark and nekkoagent.com. No Rockstar artwork, logo, type or colours: the game is named in text only |
+| `GtaIdleGpu` | 11 s, 1080x1920 | Hook "Playing GTA VI on console? Your PC's doing nothing." with Nekko cheering under a white pixel "VI"; "Put your PC to work." with a task card ticking three tasks from 3.0 s; "Free. Local. No subscription." and "So you can focus on the mission."; Nekko with a controller, "3 tasks done", the wordmark and nekkoagent.com. No text under 78 px (4% of the height), no blank frames |
 
     npm install
     npm run render

@@ -1,21 +1,24 @@
-// "Playing GTA VI?", a square post for X (1:1, 18 s). Three slow beats, one
-// idea each: the question, the offer (your PC works through tasks on local AI)
-// and Nekko Agent, with Nekko holding a controller.
+// "Playing GTA VI on console?", a vertical post (9:16, 1080x1920, 30 fps, 11 s).
+//   0.0-2.5  Hook: the question and "Your PC's doing nothing.", Nekko cheering
+//            under a pixel "VI" (plain white blocks, nothing of the game's logo).
+//   2.5-6.5  "Put your PC to work." and the task card; three tasks tick from 3.0 s.
+//   6.5-8.0  "Free. Local. No subscription." and "So you can focus on the mission."
+//   8.0-11   Nekko with a controller, the wordmark and nekkoagent.com, held.
+// Rules from the brief: no frame without content, no text under 4% of the
+// frame height (77 px), no em dashes on screen.
 //
 // Brand dark palette (spec/brand/colour-palette.md, docs/design-system.md):
 // page #0B0C14 with #854F6C glows, the dot wave (#C084B5 to #854F6C), panels
-// #14151F / #1D1F2C, lines #252735, Inter Tight with Space Mono labels, and
-// Nekko in his fixed dark-mode colours. The controller is a generic pixel pad
-// in panel colours, not any console maker's. No Rockstar artwork, logo, type or
-// colours: the game is only named in text.
+// #14151F / #1D1F2C, lines #252735, Inter Tight and Space Mono, and Nekko in
+// his fixed dark-mode colours. The controller is a generic pixel pad.
 import React from 'react';
 import {
   AbsoluteFill, Easing, continueRender, delayRender, interpolate,
   staticFile, useCurrentFrame,
 } from 'remotion';
 
-const FRAMES = 540; // 18 s at 30 fps
-const W = 1080, H = 1080;
+const FRAMES = 330; // 11 s at 30 fps
+const W = 1080, H = 1920;
 
 const C = {
   page: '#0b0c14', panel: '#14151f', panel2: '#1d1f2c', line: '#252735',
@@ -23,8 +26,8 @@ const C = {
   plum: '#c99bb3', plum2: '#854f6c', rose: '#e6d0dc', ok: '#4ec98a', main: '#190019',
   nekkoFace: '#16161c', nekkoLine: '#f3e8ee', nekkoEyes: '#ffffff', nekkoMouth: '#854f6c',
 };
-// The dark page with secondary (#854F6C) glows, as in docs/brand/nekko-banner.html, scaled to 1080 px.
-const PAGE_BG = 'radial-gradient(55% 880px at 8% 0%, rgba(133, 79, 108, 0.26), transparent 70%), radial-gradient(45% 880px at 80% 50%, rgba(133, 79, 108, 0.16), transparent 70%), radial-gradient(60% 710px at 20% 100%, rgba(133, 79, 108, 0.18), transparent 70%), #0b0c14';
+// The dark page with secondary (#854F6C) glows, as in docs/brand/nekko-banner.html, scaled to 1080x1920.
+const PAGE_BG = 'radial-gradient(70% 1400px at 8% 0%, rgba(133, 79, 108, 0.26), transparent 70%), radial-gradient(55% 1200px at 85% 50%, rgba(133, 79, 108, 0.16), transparent 70%), radial-gradient(70% 1100px at 20% 100%, rgba(133, 79, 108, 0.18), transparent 70%), #0b0c14';
 const SANS = "'Inter Tight', system-ui, sans-serif";
 const MONO = "'Space Mono', ui-monospace, monospace";
 
@@ -65,14 +68,15 @@ function PixelWave({ f }: { f: number }) {
   return <canvas ref={ref} width={W} height={H} style={{ position: 'absolute', inset: 0 }} />;
 }
 
-// ---- Nekko with a controller ----
-// His head and paws as on the website peek (32-unit grid), holding a generic
-// pixel pad. Only his outline, eyes and mouth colours are used for him.
+const Grad = ({ children }: { children: React.ReactNode }) => (
+  <span style={{ background: `linear-gradient(110deg, ${C.plum2} 0%, ${C.rose} 100%)`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{children}</span>
+);
+
+// ---- Nekko ----
 const HEAD = 'M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z';
 const EYES = {
   open: 'M11 15H13V18H11Z M20 15H22V18H20Z',
   closed: 'M10 17H14V18H10Z M19 17H23V18H19Z',
-  happy: 'M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z',
   focus: 'M11 16H13V18H11Z M20 16H22V18H20Z',
 } as const;
 // Pad, held the right way up: shoulder buttons on top, grips at the bottom in
@@ -110,23 +114,29 @@ function GamerNekko({ f, size }: { f: number; size: number }) {
 
 // Nekko cheering: both paws up, holding a banner that just says "VI" in our
 // own type and colours (nothing of the game's logo or lettering).
+
+// "VI" in plain white pixel blocks, the same grid as Nekko (7x8 V, 2x8 I).
+const VI_BLOCKS: [number, number, number][] = [ // [x, y, width]
+  [0, 0, 2], [5, 0, 2], [0, 1, 2], [5, 1, 2], [0, 2, 2], [5, 2, 2], [0, 3, 2], [5, 3, 2],
+  [1, 4, 2], [4, 4, 2], [1, 5, 2], [4, 5, 2], [2, 6, 3], [3, 7, 1],
+  ...Array.from({ length: 8 }, (_, y) => [9, y, 2] as [number, number, number]),
+];
 function CheerNekko({ f }: { f: number }) {
-  const bounce = Math.abs(Math.sin(f / 7)) * -14;           // little cheering hops
-  const sway = Math.sin(f / 7) * 3;                          // banner rocks with him
-  const lift = (side: number) => Math.max(0, Math.sin(f / 7 + side * Math.PI)) * -8;
-  const S = 8;                                               // px per Nekko unit
+  const S = 13;                                           // px per unit
+  const beat = Math.sin(f / 6);
+  const bounce = Math.abs(beat) * -16;
+  const paw = (side: number) => Math.max(0, Math.sin(f / 6 + (side > 0 ? Math.PI : 0))) * -22;
   return (
-    <div style={{ position: 'relative', width: 380, height: 470, transform: `translateY(${bounce}px)` }}>
-      <div style={{ position: 'absolute', left: 30, top: 34, width: 320, height: 150, transform: `rotate(${sway}deg)`, transformOrigin: '50% 100%' }}>
-        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${C.main}, #3a1438)`, border: `6px solid ${C.plum2}`, borderRadius: 18, display: 'grid', placeItems: 'center', boxShadow: '0 24px 50px rgba(0,0,0,.5)' }}>
-          <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: 116, letterSpacing: -2, lineHeight: 1, color: C.ink }}>VI</span>
-        </div>
-        {/* paws gripping the bottom corners */}
-        {[-1, 1].map((side) => (
-          <div key={side} style={{ position: 'absolute', top: 118 + lift(side), left: side < 0 ? -22 : 286, width: 7 * S, height: 7 * S, background: C.nekkoFace, border: `${S}px solid ${C.nekkoLine}`, boxSizing: 'border-box' }} />
-        ))}
-      </div>
-      <svg width={32 * S} height={22 * S} viewBox="0 5 32 22" shapeRendering="crispEdges" style={{ position: 'absolute', left: 190 - 16 * S, top: 196 }}>
+    <div style={{ position: 'relative', width: 32 * S + 160, height: 640, transform: `translateY(${bounce}px)` }}>
+      <svg width={11 * S * 1.6} height={8 * S * 1.6} viewBox="0 0 11 8" shapeRendering="crispEdges"
+        style={{ position: 'absolute', left: (32 * S + 160 - 11 * S * 1.6) / 2, top: 0, transform: `rotate(${beat * 3}deg)` }}>
+        {VI_BLOCKS.map(([x, y, w], i) => <rect key={i} x={x} y={y} width={w} height={1} fill={C.ink} />)}
+      </svg>
+      {/* both paws up, cheering */}
+      {[-1, 1].map((side) => (
+        <div key={side} style={{ position: 'absolute', top: 250 + paw(side), left: side < 0 ? 30 : 32 * S + 160 - 30 - 6 * S, width: 6 * S, height: 6 * S, background: C.nekkoFace, border: `${S}px solid ${C.nekkoLine}`, boxSizing: 'border-box' }} />
+      ))}
+      <svg width={32 * S} height={22 * S} viewBox="0 5 32 22" shapeRendering="crispEdges" style={{ position: 'absolute', left: 80, top: 230 }}>
         <path d={HEAD} fill={C.nekkoFace} stroke={C.nekkoLine} strokeWidth={1} />
         <path d={f % 60 > 55 ? EYES.closed : EYES.open} fill={C.nekkoEyes} />
         <path d="M14 20H18V21H14Z M15 21H17V22H15Z" fill={C.nekkoMouth} />
@@ -135,42 +145,39 @@ function CheerNekko({ f }: { f: number }) {
   );
 }
 
-const Grad = ({ children }: { children: React.ReactNode }) => (
-  <span style={{ background: `linear-gradient(110deg, ${C.plum2} 0%, ${C.rose} 100%)`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{children}</span>
-);
-
-/** Settle in (short drift, fade, blur clearing), dissolve out. Slow on purpose. */
-function Soft({ f, at, out = 1e9, children, style }: { f: number; at: number; out?: number; children: React.ReactNode; style?: React.CSSProperties }) {
-  const inP = p(f, at, at + 28);
-  const outP = interpolate(f, [out, out + 18], [0, 1], { ...clamp, easing: Easing.bezier(0.4, 0, 1, 1) });
-  if (inP <= 0 || outP >= 1) return null;
-  return <div style={{ ...style, opacity: inP * (1 - outP), filter: `blur(${(1 - inP) * 10 + outP * 10}px)`, transform: `translateY(${(1 - inP) * 20}px)` }}>{children}</div>;
-}
-
-const CENTER: React.CSSProperties = { position: 'absolute', left: 0, right: 0, textAlign: 'center' };
-
-const Check = ({ size = 34 }: { size?: number }) => (
+const Check = ({ size = 72 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke={C.ok} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 );
-const Dot = ({ color, size = 14 }: { color: string; size?: number }) => <span style={{ width: size, height: size, borderRadius: size, background: color, display: 'inline-block', flexShrink: 0 }} />;
+const Dot = ({ color, size = 22 }: { color: string; size?: number }) => <span style={{ width: size, height: size, borderRadius: size, background: color, display: 'inline-block', flexShrink: 0 }} />;
 
-// The PC's work while you play: one row finishes about every 1.5 s.
-const TASKS = ['Answer 12 support emails', 'Fix the checkout bug', 'Draft the launch post'];
-const TASK_AT = [176, 222, 268];
+// Opacity for a scene: fade in over [a, a+d], out over [b, b+d]. d = 6 is the
+// 0.2 s crossfade; scenes overlap so no frame is ever empty.
+const win = (f: number, a: number, b: number, d = 6) =>
+  (a <= 0 ? 1 : interpolate(f, [a, a + d], [0, 1], clamp)) * interpolate(f, [b, b + d], [1, 0], clamp);
+/** A quick settle for text arriving inside a scene. */
+const arrive = (f: number, at: number) => ({ opacity: p(f, at, at + 8), transform: `translateY(${(1 - p(f, at, at + 10)) * 24}px)` });
+
+const TXT = 78;                          // the floor: 4% of 1920
+const HEAD_SIZE = 104;
+const CENTER: React.CSSProperties = { position: 'absolute', left: 60, right: 60, textAlign: 'center' };
+
+// Placeholders until the final tasks are confirmed.
+const TASKS = ['Sort 50 support emails', "Summarise this week's meeting notes", 'Draft the launch post'];
+const TASK_AT = [90, 108, 126];          // 3.0 s, 3.6 s, 4.2 s; all ticked by 4.6 s
+
 function WorkCard({ f }: { f: number }) {
   return (
-    <div style={{ width: 760, margin: '0 auto', background: C.panel, border: `2px solid ${C.line}`, borderRadius: 28, boxShadow: '0 30px 70px rgba(0,0,0,.5)', padding: '36px 44px', boxSizing: 'border-box', textAlign: 'left' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <span style={{ fontFamily: SANS, fontWeight: 650, fontSize: 32, color: C.ink }}>Your PC</span>
-        <span style={{ fontFamily: MONO, fontSize: 22, color: C.faint }}>Qwen3 8B · local</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, fontFamily: SANS, fontSize: 26, color: C.soft }}><Dot color={C.ok} />Working</span>
+    <div style={{ width: 918, margin: '0 auto', background: C.panel, border: `3px solid ${C.line}`, borderRadius: 40, boxShadow: '0 40px 90px rgba(0,0,0,.5)', padding: '44px 52px 30px', boxSizing: 'border-box', textAlign: 'left' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 22, fontFamily: SANS, fontSize: TXT, fontWeight: 700, color: C.ink, letterSpacing: -1.5 }}>
+        Your PC
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16, fontWeight: 500, color: C.soft }}><Dot color={C.ok} />Working</span>
       </div>
-      <div style={{ marginTop: 22 }}>
+      <div style={{ marginTop: 14 }}>
         {TASKS.map((t, i) => {
-          const done = p(f, TASK_AT[i], TASK_AT[i] + 12);
+          const done = p(f, TASK_AT[i], TASK_AT[i] + 8);
           return (
-            <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '14px 0', fontFamily: SANS, fontSize: 34, color: done > 0.5 ? C.ink : C.soft }}>
-              <span style={{ position: 'relative', width: 34, height: 34, display: 'grid', placeItems: 'center' }}>
+            <div key={t} style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '18px 0', fontFamily: SANS, fontSize: TXT, lineHeight: 1.08, letterSpacing: -1.5, color: done > 0.5 ? C.ink : C.soft }}>
+              <span style={{ position: 'relative', width: 72, height: 84, flexShrink: 0, display: 'grid', placeItems: 'center' }}>
                 <span style={{ position: 'absolute', opacity: 1 - done }}><Dot color={C.plum} /></span>
                 <span style={{ position: 'absolute', opacity: done, transform: `scale(${0.6 + done * 0.4})` }}><Check /></span>
               </span>{t}
@@ -178,55 +185,59 @@ function WorkCard({ f }: { f: number }) {
           );
         })}
       </div>
-      <div style={{ fontFamily: MONO, fontSize: 22, color: C.faint, marginTop: 14 }}>No tokens · no subscription · $0.00</div>
     </div>
   );
 }
 
-// ─── Timeline (frames at 30 fps) ───────────────────────────────────────────
-//   0.0–3.7  Playing GTA VI?
-//   4.0–11   Put your PC to work. The PC finishes three tasks, slowly.
-//            So you can focus on the mission.
-//  11.3–18   Nekko with a controller, "3 tasks done" above him, Nekko Agent
 export function GtaIdleGpu() {
   const f = useCurrentFrame();
+  const s1 = win(f, 0, 72), s2 = win(f, 72, 237), s3 = win(f, 237, 1e9);
   return (
     <AbsoluteFill style={{ background: PAGE_BG, overflow: 'hidden', fontFamily: SANS }}>
       <PixelWave f={f} />
 
-      {/* 1 — the question, Nekko cheering under it */}
-      <Soft f={f} at={-8} out={100} style={{ ...CENTER, top: 130 }}>
-        <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 132, lineHeight: 1, letterSpacing: -5, color: C.ink }}>
-          Playing<br /><Grad>GTA VI?</Grad>
-        </div>
-      </Soft>
-      <Soft f={f} at={10} out={100} style={{ ...CENTER, top: 470, display: 'flex', justifyContent: 'center' }}>
-        <CheerNekko f={f} />
-      </Soft>
+      {/* 1 Hook, 0.0 to 2.5 s: everything on screen from the first frame */}
+      {s1 > 0 && (
+        <AbsoluteFill style={{ opacity: s1 }}>
+          <div style={{ ...CENTER, top: 230, fontFamily: SANS, fontWeight: 800, fontSize: HEAD_SIZE, lineHeight: 1.04, letterSpacing: -4 }}>
+            <div style={{ color: C.ink }}>Playing GTA VI on console?</div>
+            <div style={{ marginTop: 36 }}><Grad>Your PC's doing nothing.</Grad></div>
+          </div>
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 1000, display: 'flex', justifyContent: 'center' }}><CheerNekko f={f} /></div>
+        </AbsoluteFill>
+      )}
 
-      {/* 2 — the PC works */}
-      <Soft f={f} at={120} out={322} style={{ ...CENTER, top: 130 }}>
-        <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 92, letterSpacing: -3.5, color: C.ink }}>Put your PC to work.</div>
-      </Soft>
-      <Soft f={f} at={140} out={322} style={{ ...CENTER, top: 300 }}><WorkCard f={f} /></Soft>
-      <Soft f={f} at={290} out={322} style={{ ...CENTER, top: 790 }}>
-        <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 60, letterSpacing: -2 }}><Grad>So you can focus on the mission.</Grad></div>
-      </Soft>
+      {/* 2 and 3, 2.5 to 8.0 s: headline and card arrive together, the value line follows below */}
+      {s2 > 0 && (
+        <AbsoluteFill style={{ opacity: s2 }}>
+          <div style={{ ...CENTER, top: 150, fontFamily: SANS, fontWeight: 800, fontSize: HEAD_SIZE, lineHeight: 1.04, letterSpacing: -4, color: C.ink }}>Put your PC to work.</div>
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 420 }}><WorkCard f={f} /></div>
+          <div style={{ ...CENTER, top: 1290, fontFamily: SANS, fontWeight: 800, fontSize: HEAD_SIZE, lineHeight: 1.04, letterSpacing: -4, ...arrive(f, 195) }}>
+            <Grad>Free. Local. No subscription.</Grad>
+          </div>
+          <div style={{ ...CENTER, top: 1560, fontFamily: SANS, fontWeight: 700, fontSize: 88, lineHeight: 1.06, letterSpacing: -3, color: C.ink, ...arrive(f, 213) }}>
+            So you can focus on the mission.
+          </div>
+        </AbsoluteFill>
+      )}
 
-      {/* 3 — Nekko Agent */}
-      <Soft f={f} at={340} style={{ ...CENTER, top: 150, display: 'flex', justifyContent: 'center' }}>
-        <GamerNekko f={f} size={420} />
-      </Soft>
-      <Soft f={f} at={400} style={{ position: 'absolute', left: 780, top: 300 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.panel, border: `2px solid ${C.line}`, borderRadius: 999, padding: '12px 22px', fontFamily: SANS, fontSize: 26, color: C.ink }}><Check size={26} />3 tasks done</div>
-      </Soft>
-      <Soft f={f} at={364} style={{ ...CENTER, top: 690, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22 }}>
-        <AppMark size={88} />
-        <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: 84, letterSpacing: -3, color: C.ink }}>Nekko Agent</span>
-      </Soft>
-      <Soft f={f} at={384} style={{ ...CENTER, top: 822 }}>
-        <div style={{ fontFamily: MONO, fontSize: 36, color: C.soft }}>Free local AI · nekkoagent.com</div>
-      </Soft>
+      {/* 4 End card, 8.0 to 11 s */}
+      {s3 > 0 && (
+        <AbsoluteFill style={{ opacity: s3 }}>
+          <div style={{ ...CENTER, top: 200, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, background: C.panel, border: `3px solid ${C.line}`, borderRadius: 999, padding: '18px 44px', fontFamily: SANS, fontSize: TXT, fontWeight: 650, letterSpacing: -1.5, color: C.ink }}><Check size={70} />3 tasks done</div>
+          </div>
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 440, display: 'flex', justifyContent: 'center' }}><GamerNekko f={f} size={560} /></div>
+          <div style={{ ...CENTER, top: 1180, ...arrive(f, 249) }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 28 }}>
+              <AppMark size={124} />
+              <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: HEAD_SIZE, letterSpacing: -4, color: C.ink }}>Nekko Agent</span>
+            </div>
+            <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: TXT, letterSpacing: -1.5, color: C.soft, marginTop: 56 }}>Free local AI</div>
+            <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 80, color: C.ink, marginTop: 18 }}>nekkoagent.com</div>
+          </div>
+        </AbsoluteFill>
+      )}
     </AbsoluteFill>
   );
 }
