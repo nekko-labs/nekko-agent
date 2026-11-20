@@ -165,21 +165,45 @@ fn edit_problem(o: &serde_json::Map<String, Value>, phone: bool) -> Option<Strin
     None
 }
 
+/// The tools whose pictures a phone may open from a tool result: the ones
+/// that make a picture (`generate_image`, `edit_image`). Any other tool's
+/// images (a screenshot of the computer, say) stay on the computer.
+const PICTURE_TOOLS: [&str; 2] = ["generate_image", "edit_image"];
+
+/// The pictures of a tool result, only when the call that asked for them is a
+/// picture tool of this same chat.
+fn tool_pictures<'a>(messages: &'a [Value], m: &'a Value) -> Option<&'a Vec<Value>> {
+    let result = m.get("toolResult")?;
+    let call_id = result.get("toolCallId")?.as_str()?;
+    let made_by_picture_tool = messages.iter().any(|a| {
+        a.get("role").and_then(Value::as_str) == Some("assistant")
+            && a.get("toolCalls").and_then(Value::as_array).is_some_and(|calls| {
+                calls.iter().any(|c| {
+                    c.get("id").and_then(Value::as_str) == Some(call_id)
+                        && c.get("name").and_then(Value::as_str).is_some_and(|n| PICTURE_TOOLS.contains(&n))
+                })
+            })
+    });
+    if made_by_picture_tool { result.get("images")?.as_array() } else { None }
+}
+
 /// Retrieve only raster data attached to this exact transcript message. No I/O,
-/// URL fetching, path resolution or tool-result images. Generated replies use
-/// `images` (variants::image_reply), not `attachedPaths` or a file attachment.
+/// URL fetching or path resolution. Generated replies use `images`
+/// (variants::image_reply), not `attachedPaths` or a file attachment. A tool
+/// result's `images` are served only for a picture tool's result (#2973).
 pub fn photo(session: &Value, message_id: &str, index: usize) -> Value {
-    let Some(m) = session
-        .get("messages")
-        .and_then(Value::as_array)
-        .and_then(|ms| ms.iter().find(|m| m.get("id").and_then(Value::as_str) == Some(message_id)))
-    else {
+    let Some(messages) = session.get("messages").and_then(Value::as_array) else {
         return Value::Null;
     };
-    if !matches!(m.get("role").and_then(Value::as_str), Some("user" | "assistant")) {
+    let Some(m) = messages.iter().find(|m| m.get("id").and_then(Value::as_str) == Some(message_id)) else {
         return Value::Null;
-    }
-    let Some(s) = m.get("images").and_then(Value::as_array).and_then(|a| a.get(index)).and_then(Value::as_str) else {
+    };
+    let images = match m.get("role").and_then(Value::as_str) {
+        Some("user" | "assistant") => m.get("images").and_then(Value::as_array),
+        Some("tool") => tool_pictures(messages, m),
+        _ => None,
+    };
+    let Some(s) = images.and_then(|a| a.get(index)).and_then(Value::as_str) else {
         return Value::Null;
     };
     if ["data:image/png;base64,", "data:image/jpeg;base64,", "data:image/gif;base64,", "data:image/webp;base64,"]

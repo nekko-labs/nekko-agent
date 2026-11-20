@@ -1849,12 +1849,14 @@ mod tests {
             json!([
                 { "id": "w1", "kind": "pr", "url": "https://github.com/o/r/pull/5", "status": "active", "deadlineAt": 10, "nextPollAt": 5,
                   "pending": false, "failures": 1, "lastError": long, "prompt": "secret continuation", "sessionId": "s1" },
+                { "id": "w2", "kind": "clip", "status": "active", "deadlineAt": 10, "pending": false, "clipStage": "step:3/20", "prompt": "secret" },
                 "junk",
                 null
             ]),
         );
         let want = json!([{ "id": "w1", "kind": "pr", "url": "https://github.com/o/r/pull/5", "status": "active", "deadlineAt": 10, "nextPollAt": 5,
-                            "pending": false, "failures": 1, "lastError": "x".repeat(600) }]);
+                            "pending": false, "failures": 1, "lastError": "x".repeat(600) },
+                           { "id": "w2", "kind": "clip", "status": "active", "deadlineAt": 10, "pending": false, "clipStage": "step:3/20" }]);
         assert_eq!(got, want);
         assert_eq!(redact("session:watches", Value::Null), json!([]));
     }

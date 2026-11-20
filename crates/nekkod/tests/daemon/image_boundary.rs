@@ -91,11 +91,19 @@ async fn image_boundary_host_photo_returns_only_this_messages_inline_raster_atta
         {"id": "assistant", "role": "assistant", "images": [png], "generated": {"modelId": "image/sd"}},
         {"id": "user", "role": "user", "images": [png]},
         {"id": "tool", "role": "tool", "images": [png]},
+        {"id": "calls", "role": "assistant", "toolCalls": [
+            {"id": "c_pic", "name": "generate_image", "input": {}},
+            {"id": "c_edit", "name": "edit_image", "input": {}},
+            {"id": "c_shot", "name": "computer_screenshot", "input": {}}]},
+        {"id": "pic", "role": "tool", "toolResult": {"toolCallId": "c_pic", "output": "ok", "images": [png, "data:image/svg+xml;base64,PHN2Zz4="]}},
+        {"id": "edit", "role": "tool", "toolResult": {"toolCallId": "c_edit", "output": "ok", "images": [png]}},
+        {"id": "shot", "role": "tool", "toolResult": {"toolCallId": "c_shot", "output": "ok", "images": [png]}},
+        {"id": "orphan", "role": "tool", "toolResult": {"toolCallId": "c_none", "output": "ok", "images": [png]}},
         {"id": "unsafe", "role": "assistant", "images": ["/private/photo.png", "https://example.com/photo.png", "data:image/svg+xml;base64,PHN2Zz4=", {"path": "/private/photo.png"}], "attachedPaths": ["/private/photo.png"]}
     ]});
     std::fs::write(root.path().join("sessions/s_img.json"), chat.to_string()).unwrap();
     let d = start_with(root.path());
-    for message in ["assistant", "user"] {
+    for message in ["assistant", "user", "pic", "edit"] {
         let (_, photo) = post(d.port, "session:photo", json!(["s_img", message, 0]), Some(TOKEN)).await;
         assert_eq!(photo, png);
     }
@@ -104,6 +112,11 @@ async fn image_boundary_host_photo_returns_only_this_messages_inline_raster_atta
         json!(["s_img", "missing", 0]),
         json!(["s_img", "assistant", 1]),
         json!(["s_img", "tool", 0]),
+        // A picture tool's SVG, another tool's screenshot and a result with no call stay on the computer.
+        json!(["s_img", "pic", 1]),
+        json!(["s_img", "pic", 2]),
+        json!(["s_img", "shot", 0]),
+        json!(["s_img", "orphan", 0]),
         json!(["s_img", "unsafe", 0]),
         json!(["s_img", "unsafe", 1]),
         json!(["s_img", "unsafe", 2]),
