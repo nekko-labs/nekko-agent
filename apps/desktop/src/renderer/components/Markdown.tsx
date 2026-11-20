@@ -256,10 +256,14 @@ function stripHtml(line: string): string {
     const alt = /\balt\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1] ?? '';
     return src ? `![${alt}](${src})` : '';
   });
-  return withImages
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<\/?[a-zA-Z][^>]*>/g, '')
-    .trimEnd();
+  // Repeat until nothing matches: one pass can leave a new tag behind (`<<b>script>`
+  // loses `<b>` and is `<script>` again), so the tag stripping runs to a fixed point.
+  let text = withImages.replace(/<br\s*\/?>/gi, ' ');
+  for (let previous = ''; previous !== text; ) {
+    previous = text;
+    text = text.replace(/<\/?[a-zA-Z][^>]*>/g, '');
+  }
+  return text.trimEnd();
 }
 
 /** Split a markdown table row into trimmed cells (drops the outer pipes). */

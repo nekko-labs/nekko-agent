@@ -285,6 +285,13 @@ describe('Markdown (document mode)', () => {
     expect(out).toContain('Nekko');
   });
 
+  it('does not rebuild a tag out of the text around a stripped one', () => {
+    // One pass over `<<b>script>` strips `<b>` and leaves `<script>` behind.
+    const out = doc('<<b>script>alert(1)</b>');
+    expect(out).not.toContain('&lt;script');
+    expect(out).toContain('alert(1)');
+  });
+
   it('turns an HTML img into the same chip as markdown image syntax', () => {
     const out = doc('<img src="docs/shot.png" alt="A screenshot" />');
     expect(out).toContain('A screenshot');
