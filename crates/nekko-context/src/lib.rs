@@ -7,6 +7,8 @@
 //!   gets its provenance records and token counts.
 //! - `gather`: what feeds them from disk, from packages/host: guideline files
 //!   in the workspace roots, attached files, and memory notes.
+//! - `frame`: the memory notes a chat's system prompt keeps, taken once so
+//!   the prompt's prefix stays byte-stable, and what changed since.
 //! - `rules`: rule folders and subfolder guides beyond the root files, with
 //!   an index for the ones that load on demand (`Session.guidance`).
 //!
@@ -19,12 +21,14 @@
 //! to outputs the TS functions wrote.
 
 pub mod assemble;
+pub mod frame;
 pub mod gather;
 pub mod nodepath;
 pub mod prompt;
 pub mod rules;
 
 pub use assemble::{AssembleInput, Bundle, Item, assemble, render_block};
+pub use frame::{MemoryFrame, memory_frame, render_memory_changes};
 pub use gather::{Guideline, MemoryScope, collect_attached, collect_guidelines, list_memory, parse_memory};
 pub use prompt::{DESIGN_RULES, PromptContext, PromptProfile, Workspace, build_system_prompt, intro};
 pub use rules::{Guidance, ProjectGuidance, collect_rules, project_guidance};

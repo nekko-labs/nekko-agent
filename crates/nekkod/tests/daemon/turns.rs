@@ -339,11 +339,16 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     let events = rig.events.lock().unwrap().clone();
     assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "error"), "{events:?}");
     assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "done"), "{events:?}");
-    // The daemon's own index snippets and the guidelines reached the model.
+    // The daemon's own index snippets and the guidelines reached the model:
+    // the guidelines in the system prompt, the snippets found for this
+    // message's text on the message itself, so the prompt's prefix stays cached.
     let requests = model.requests.lock().unwrap().clone();
     let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
     assert!(system.contains("Always run the tests."), "{system}");
-    assert!(system.contains("1: export const secret = 'pineapple';"), "{system}");
+    assert!(!system.contains("export const secret"), "{system}");
+    let asked = requests[0]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_string();
+    assert!(asked.contains("1: export const secret = 'pineapple';"), "{asked}");
+    assert!(asked.ends_with("Explain the pineapple"), "{asked}");
 }
 
 /// A model reply of `n` text chunks (`word0 word1 ...`), then a stop.
@@ -1404,4 +1409,101 @@ async fn privacy_shield_sends_placeholders_and_keeps_real_values_on_this_compute
         .map(|f| f["value"].as_str().unwrap())
         .collect();
     assert_eq!(values, ["jane.doe@example.com", "bob@example.com"]);
+}
+
+/// Each `chat:turn`'s request as the scripted model got it, title calls left out.
+fn turn_requests(model: &ScriptedModel) -> Vec<Value> {
+    let titling = |r: &Value| {
+        r["messages"].as_array().is_some_and(|m| {
+            m.iter().any(|m| m["content"].as_str().is_some_and(|c| c.starts_with("Name this chat for a sidebar list")))
+        })
+    };
+    model.requests.lock().unwrap().iter().filter(|r| !titling(r)).cloned().collect()
+}
+
+fn memory_note(rig: &TurnRig, id: &str, title: &str, body: &str, at: u64) {
+    let dir = rig.data.join("memory");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(format!("{id}.md")),
+        format!("---\nid: {id}\nscope: global\ntitle: {title}\ncreatedAt: {at}\nupdatedAt: {at}\n---\n{body}\n"),
+    )
+    .unwrap();
+}
+
+/// The KV-cache contract: a turn's request starts with the previous turn's
+/// request, byte for byte, so a local model reuses what it already computed.
+/// What changes from turn to turn (connector snippets, attachments, memory
+/// saved mid-chat) rides on that turn's own message, and is sent the same way
+/// on every later turn.
+#[tokio::test(flavor = "multi_thread")]
+async fn each_request_starts_with_the_one_before_so_the_prompt_cache_holds() {
+    let session = json!({
+        "id": "s_kv", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("kv-prefix", session);
+    memory_note(&rig, "m_name", "Name", "The user is called Ada.", 1);
+    let model = scripted_model(vec![say_text("one"), say_text("two"), say_text("three")]).await;
+    let note = rig.workspace.join("notes.txt");
+    std::fs::write(&note, "turn one attachment\n").unwrap();
+
+    let turn = |id: &str, text: &str, snippet: Option<&str>, attached: Option<&std::path::Path>| {
+        let mut opts = json!({ "text": text });
+        if let Some(p) = attached {
+            opts["attachedPaths"] = json!([p.to_string_lossy()]);
+        }
+        let mut spec = turn_spec(&rig, &model, id, "s_kv", opts);
+        if let Some(body) = snippet {
+            spec["facts"]["connectorSnippets"] = json!([{ "label": "Inbox", "origin": "gmail", "body": body }]);
+        }
+        spec
+    };
+    let run = |spec: Value, id: &'static str| {
+        let port = rig.d.port;
+        let rig = &rig;
+        async move {
+            let (status, body) = post(port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+            assert_eq!(status, 200, "{body}");
+            let (_, end) = turn_record(rig, id, "s_kv").await;
+            assert_eq!(end["stop"], "complete", "{end}");
+        }
+    };
+
+    run(turn("t1", "first", Some("SNIPPET-ONE"), Some(&note)), "t1").await;
+    // Saved between turns, as the `remember` tool would.
+    memory_note(&rig, "m_editor", "Editor", "The user edits in Zed.", 2);
+    run(turn("t2", "second", Some("SNIPPET-TWO"), None), "t2").await;
+    run(turn("t3", "third", None, None), "t3").await;
+
+    let reqs = turn_requests(&model);
+    assert_eq!(reqs.len(), 3, "{reqs:?}");
+    let msgs = |r: &Value| r["messages"].as_array().unwrap().clone();
+    let (m1, m2, m3) = (msgs(&reqs[0]), msgs(&reqs[1]), msgs(&reqs[2]));
+    assert_eq!(m2[..m1.len()], m1[..], "turn 2 re-sends turn 1's request unchanged");
+    assert_eq!(m3[..m2.len()], m2[..], "turn 3 re-sends turn 2's request unchanged");
+    assert_eq!(reqs[0]["tools"], reqs[2]["tools"]);
+
+    let system = m1[0]["content"].as_str().unwrap();
+    assert_eq!(m1[0]["role"], "system");
+    assert!(system.contains("The user is called Ada."), "the frame's memory is in the system prompt");
+    assert!(system.contains("Always run the tests."), "guidelines stay in the system prompt");
+    for per_turn in ["SNIPPET-ONE", "SNIPPET-TWO", "turn one attachment", "Zed"] {
+        assert!(!system.contains(per_turn), "{per_turn} is not in the system prompt");
+    }
+    let content = |m: &Value| m["content"].as_str().unwrap_or_default().to_string();
+    let first = content(m1.last().unwrap());
+    assert!(first.starts_with("Additional context provided with this message:"), "{first}");
+    assert!(first.contains("SNIPPET-ONE") && first.contains("turn one attachment") && first.ends_with("first"));
+    let second = content(m2.last().unwrap());
+    assert!(second.contains("SNIPPET-TWO") && second.contains("# Memory saved or changed: Editor"), "{second}");
+    assert!(!second.contains("SNIPPET-ONE") && !second.contains("turn one attachment"), "{second}");
+    assert_eq!(content(m3.last().unwrap()), "third", "nothing new, nothing announced twice");
+
+    // The transcript keeps each message's context, so the next turn sends it again.
+    let saved = saved_session(&rig, "s_kv");
+    let users: Vec<&Value> = saved["messages"].as_array().unwrap().iter().filter(|m| m["role"] == "user").collect();
+    assert_eq!(users[0]["content"], "first", "the user's own text is unchanged");
+    assert!(users[0]["turnContext"].as_str().unwrap().contains("SNIPPET-ONE"));
+    assert!(users[2].get("turnContext").is_none());
+    assert_eq!(saved["memoryFrame"]["notes"].as_array().unwrap().len(), 1);
 }

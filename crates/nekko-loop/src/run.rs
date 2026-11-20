@@ -18,7 +18,8 @@ use crate::fit::{
     reported_window,
 };
 use crate::history::{
-    as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history, without_images,
+    as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history, with_turn_context,
+    without_images,
 };
 use crate::progress::{LOOP_WRAP_UP_PROMPT, LoopDetector, loop_note, loop_nudge};
 use crate::resume::{INTERRUPTED_NOTE, RESUME_PROMPT, repair_interrupted_history};
@@ -441,6 +442,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         let mut messages: Vec<Value> = window_history(sent, self.opts.max_history_turns)
             .iter()
             .map(as_seen_by_chat_model)
+            .map(|m| with_turn_context(&m))
             .map(|m| if blind { without_images(&m) } else { m })
             .collect();
         messages.extend(extra);

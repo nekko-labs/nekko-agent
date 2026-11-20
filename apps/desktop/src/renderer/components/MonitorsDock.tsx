@@ -15,7 +15,7 @@ import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
 import { ServerIcon, MoneyIcon, SlidersIcon, CubeIcon, PanelIcon, StarIcon } from '../icons.js';
 import { ENGINE_PROVIDER_ID, loadLocalModel, localModelShortcuts, noteLocalModelsUsed, readRecentLocalModels } from './engine/localModelShortcuts.js';
 import { nextFavoriteModels } from './agent-console/modelPickerInteractions.js';
-import { GfBarChartHorizontalIcon, GfBoltIcon, GfCloseIcon, GfMinusIcon } from '../gentleface-icons.js';
+import { GfBarChartHorizontalIcon, GfBeachIcon, GfBoltIcon, GfCloseIcon, GfMinusIcon, GfPlayCircleIcon, SettingsIcon } from '../gentleface-icons.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import { HoverTip } from './HoverTip.js';
@@ -768,20 +768,26 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
   };
   const kind = (m: LocalModel | undefined) => m?.modality && m.modality !== 'chat' ? MODALITY_LABELS[m.modality] : null;
   const shortcuts: { starred: LocalModel[]; recent: LocalModel[] } = computer || !installed ? { starred: [], recent: [] } : localModelShortcuts({ models, resident: resident.map((r) => r.id), favorites, seen: readRecentLocalModels(), chats: chats ?? [] });
+  // A cog with a tooltip: the row's name already says whose settings they are.
+  const settingsButton = (id: string, name: string, modality: LocalModel['modality'] | undefined) =>
+    <button type="button" className="monitors-dock__icon-action" data-local-model-settings={id} aria-label={`Open ${name} settings`} title={modality === 'image' ? 'Picture settings' : 'Settings: GPU offload, context and memory'} onClick={() => store().openLocalModelSettings(id)}><SettingsIcon className="monitors-dock__icon" /></button>;
   const shortcutRow = (m: LocalModel) => <div className="monitors-dock__local-model" key={m.id} data-local-model-shortcut={m.id}>
     <div className="monitors-dock__metric-row">
       {star(m.id, m.name)}
       <strong className="monitors-dock__provider-name" title={m.name}>{m.name}</strong>
-      <button type="button" className="monitors-dock__text-button" data-local-model-settings={m.id} aria-label={`Open ${m.name} settings`} title={m.modality === 'image' ? `Open ${m.name}'s picture settings` : `Open ${m.name}'s GPU offload, context and memory settings`} onClick={() => store().openLocalModelSettings(m.id)}>Settings</button>
-      <button type="button" className="monitors-dock__text-button" data-local-model-load={m.id} aria-label={`Load ${m.name}`} disabled={busy === m.id} onClick={() => void load(m)}>{busy === m.id ? 'Loading…' : 'Load'}</button>
+      {settingsButton(m.id, m.name, m.modality)}
+      {busy === m.id
+        ? <span className="monitors-dock__busy" role="status">Loading…</span>
+        : <button type="button" className="monitors-dock__icon-action" data-local-model-load={m.id} aria-label={`Load ${m.name}`} title="Load" onClick={() => void load(m)}><GfPlayCircleIcon className="monitors-dock__icon" /></button>}
     </div>
     <p className="monitors-dock__note">{[kind(m), m.parameterSize, m.quantization, formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</p>
   </div>;
   if (!read) return <div className="monitors-dock__metrics monitors-dock__local-models"><p className="monitors-dock__note">{computer ? 'Reading that computer\'s engine…' : 'Reading the local engine…'}</p></div>;
   return <div className="monitors-dock__metrics monitors-dock__local-models">
+    {installed && <p className="monitors-dock__local-group-label">Running</p>}
     {!installed ? <p>No local engine installed.</p>
-      : !status?.running ? <p>The model server is stopped.</p>
-      : resident.length === 0 ? <p>No local model is loaded.</p>
+      : !status?.running ? <p className="monitors-dock__note">The model server is stopped.</p>
+      : resident.length === 0 ? <p className="monitors-dock__local-idle" data-local-models-idle data-icon-hover><GfBeachIcon className="monitors-dock__icon" />No models are currently loaded.</p>
       : resident.map((r) => {
         const split = r.loadedOn === 'gpu+cpu' || r.loadedOn === 'cpu';
         const model = library.get(r.id);
@@ -792,7 +798,7 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
           <div className="monitors-dock__metric-row">
             {!computer && model && star(r.id, name)}
             <strong className="monitors-dock__provider-name" title={name}>{name}</strong>
-            {!computer && <button type="button" className="monitors-dock__text-button" data-local-model-settings={r.id} title={model?.modality === 'image' ? `Open ${name}'s picture settings` : `Open ${name}'s GPU offload, context and memory settings`} aria-label={`Open ${name} settings`} onClick={() => store().openLocalModelSettings(r.id)}>Settings</button>}
+            {!computer && settingsButton(r.id, name, model?.modality)}
             <button type="button" className="monitors-dock__text-button" data-local-model-unload={r.id} aria-label={`Unload ${name}`} disabled={busy === r.id || busy === '*'} onClick={() => computer ? change('model:unload', [ENGINE_PROVIDER_ID, r.id]) : void unload(r.id)}>{busy === r.id ? 'Unloading…' : 'Unload'}</button>
           </div>
           <p className="monitors-dock__note">

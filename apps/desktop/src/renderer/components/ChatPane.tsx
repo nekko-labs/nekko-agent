@@ -36,6 +36,7 @@ import type { AutoProviderPick, BootedSimulator, ProviderPool } from '@nekko-age
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
+import { useModelCatalogVersion } from '../modelCatalog.js';
 import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { anchorLiveRun, beginResumedRun, clearLiveRun, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
@@ -1031,13 +1032,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Models for this pane's provider (independent of other panes). A chat that
   // has never had a model picked is left unset on purpose: the nudge below the
   // transcript asks for a choice rather than guessing one.
+  // Listed again when the catalog may have changed (a download landed, a
+  // provider changed), so an open chat sees a new model without reopening.
+  const catalog = useModelCatalogVersion();
+  const listedProvider = useRef<string | null>(null);
   useEffect(() => {
-    if (!providerId) { setModels([]); setModelsLoaded(false); setUnavailableModel(null); return; }
-    setModelsLoaded(false);
+    if (!providerId) { listedProvider.current = null; setModels([]); setModelsLoaded(false); setUnavailableModel(null); return; }
+    // Only a new provider starts from "not loaded"; a refresh keeps the list it has meanwhile.
+    const refresh = listedProvider.current === providerId;
+    if (!refresh) setModelsLoaded(false);
+    listedProvider.current = providerId;
     let live = true;
     const cancel = afterPaint(() => {
       const settle = (listed: ModelInfo[] | null) => {
         if (!live) return;
+        // A refresh that failed or came back empty is no news: keep the list and the model.
+        if (refresh && !listed?.length) return;
         setModels(listed ?? []);
         const pick = pickedModel.current;
         const picked = pick?.sessionId === sessionId && pick.providerId === providerId ? pick.modelId : null;
@@ -1051,7 +1061,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       window.nekko.listModels(providerId).then(settle).catch(() => settle(null));
     });
     return () => { live = false; cancel(); };
-  }, [providerId]);
+  }, [providerId, catalog]);
 
   // Per-chat cost at the model's published API prices. Subscription chats are
   // priced too (listCost), so the composer can say what the chat is worth in
@@ -3145,7 +3155,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
         <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : cleanStart ? 'px-4' : 'px-1'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
-          {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} kind={imageMode ? 'photo' : 'agent'} title={imageMode && photoSetupShown ? 'Let’s get Photo ready.' : undefined} />}
+          {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} kind={imageMode ? 'photo' : 'agent'} title={imageMode && photoSetupShown ? 'Let’s get photo mode set up.' : undefined} />}
           {firstPromptIntro && <Suspense fallback={null}><FirstPromptIntro onClose={closeFirstPromptIntro} /></Suspense>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : cleanStart ? 'w-[min(90%,calc(100%-8px))]' : 'w-full'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (

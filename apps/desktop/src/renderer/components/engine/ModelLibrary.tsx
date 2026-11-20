@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
-import type { GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
+import type { EngineMemory, GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
 import { MODALITY_LABELS, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
+import { notifyModelsChanged } from '../../modelCatalog.js';
 import { TrashIcon, WarningIcon } from '../../icons.js';
 import { StatusDot } from '../primitives/index.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
@@ -63,9 +64,12 @@ export function ModelLibrary({
   autoloadIds,
   running,
   resident,
+  memory,
 }: {
   providerId: string;
   models: Array<LocalModel & { loaded: boolean; gpuFit?: GpuFit }>;
+  /** The GPU's size, so a model the busy GPU cannot hold now is not called too big. */
+  memory?: EngineMemory;
   /** The engine's resident list, for where each loaded model actually sits. */
   resident?: ResidentModel[];
   /** False until the engine binary exists: the list is real, running it is not. */
@@ -126,6 +130,8 @@ export function ModelLibrary({
     const res = await window.nekko.engineDeleteModel(model.id);
     pushToast(res.ok ? 'success' : 'error', res.message);
     onChanged();
+    // Open chats drop it from their pickers.
+    if (res.ok) notifyModelsChanged();
   };
 
   const fetchCompanions = async (model: LocalModel) => {
@@ -225,6 +231,7 @@ export function ModelLibrary({
       setImportPath('');
       setImporting(false);
       onChanged();
+      notifyModelsChanged();
     }
   };
 
@@ -285,8 +292,8 @@ export function ModelLibrary({
 
       {models.length === 0 ? (
         <p className="mt-(--q-inline) text-xs text-ink-faint">
-          Nothing here yet. Download one of the picks for this machine above or a model from the list, open{' '}
-          <strong>Folders</strong> to point at a folder another app already fills, or add a GGUF you have.
+          Nothing here yet. Get one under <strong>Find new models</strong>, open <strong>Folders</strong> to point at a
+          folder another app already fills, or add a GGUF you have.
         </p>
       ) : visible.length === 0 ? (
         <p className="mt-3 text-xs text-ink-faint">
@@ -335,7 +342,7 @@ export function ModelLibrary({
             <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
             <p className="truncate text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
               {[
-                gpuGuidance(m.sizeBytes, undefined, m),
+                gpuGuidance(m.sizeBytes, memory, m),
                 m.quantization,
                 m.parameterSize,
                 formatBytes(m.sizeBytes),
@@ -366,7 +373,7 @@ export function ModelLibrary({
               <span
                 className="mr-1 inline-flex items-center gap-1.5 text-2xs text-warning-text"
                 title={m.gpuFit === 'partial'
-                  ? 'Under its saved settings, part of it runs on the CPU rather than fully in VRAM. Open Settings to change that.'
+                  ? 'Beside what holds the GPU right now, and under its saved settings, part of it would run on the CPU rather than fully in VRAM. Unload other models, or open Settings to give it less context.'
                   : 'The planner says it will not fit on this machine, even partly offloaded to the CPU.'}
               >
                 <StatusDot tone="warning" size={6} />

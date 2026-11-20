@@ -24,19 +24,31 @@ A sliding segmented control (the Library's `SlideToggle`, icon-only) sits under 
 | **Agents** (default) | bots | The agent cards, grouped and sorted by the view options, as before. Terminals and photo/video chats no longer appear here as groups at the top. |
 | **Terminals** | terminal | Every open terminal, one card each. |
 | **Photos and videos** | image | Photo and video chats. |
-| **Browsers** | globe | The pages served on this computer, then **New browser**, then (under **Beside an agent**) one row per active agent. See [Browsers and Files without an agent](#browsers-and-files-without-an-agent). |
-| **Files** | folder-open | The folders connected on this computer, then (under **Beside an agent**) one row per active agent. Picking an agent row shows the agent and slides its **Files** drawer out. |
+| **Files** | folder-open | A file browser: the files open in the agent windows, then the connected folders as trees. See [The Files view: a file browser](#the-files-view-a-file-browser). |
 
 - The highlight slides to the picked segment (240 ms, off under reduced motion). Arrow keys, Home and End move the choice; the group is one tab stop.
-- In Browsers and Files, the agent whose drawer of that kind is out is tinted and marked current. Picking it again leaves the drawer open.
 - The sliders button (group, sort, show) appears only on the Agents segment, the one list it arranges.
-- An empty view says so: "No terminals open", "No photo or video chats", "No pages served on this computer", "No folders connected". The **Beside an agent** heading and its rows appear only when there are agents.
-- The pick is a per-window preference in `localStorage` (`nekko.agentPanelShows`), like the panel's width and view; anything unrecognised falls back to Agents.
-- The switcher itself makes no host calls; the Browsers view reads `servers:list` (below).
+- An empty view says so: "No terminals open", "No photo or video chats", "No folders connected".
+- The pick is a per-window preference in `localStorage` (`nekko.agentPanelShows`), like the panel's width and view; anything unrecognised falls back to Agents, including a saved Browsers pick from before that segment was removed.
+- The switcher itself makes no host calls.
 
-Not verified: packaged desktop app, the Local Web UI in a real browser, and very long agent lists in the Browsers and Files views.
+Not verified: packaged desktop app, the Local Web UI in a real browser.
 
-## Browsers and Files without an agent
+## The Files view: a file browser
+
+User intent (Philip, 2026-11-20): "Remove the browser tab entirely. For folders, remove the beside an agent. Instead, this should just be a general file browser and show the files that are open in the agent windows. When browsing files, you should be able to open them and see them in an agent window. They should also be editable."
+
+`[implemented 2026-11-20; unit-tested (rows, open list, active mark, folder matching, wall persistence) and checked in the hidden real-renderer fixture (file-browser-sandbox.cjs: tree unfolds in place, a file opens as an editable window and is listed as open and current); packaged app and Local Web UI not checked]`
+
+- The **Browsers** segment is gone. The **Beside an agent** rows are gone from Files too: the panel no longer lists agents outside the Agents segment. An agent's own Browser and Files drawers (its window's buttons) are unchanged.
+- **Open** (shown only when a file is open): one row per file open in the agent windows, on the wall or beside an agent, named by the file and tagged with the connected folder it sits in (the deepest one). The file whose window is the active zone is tinted and marked current. Picking a row shows its window.
+- **Folders**: every folder connected on this computer, cloned repositories showing `owner/name` at the right. Picking a folder unfolds its tree in place (closed until picked, so no folder is read up front); folders inside unfold the same way, 200 rows at a time.
+- Picking a file opens it in a **file window** on the wall: into the active zone, like a chat or terminal, or shows the one already open. It is the app's file editor (edit, undo, save with Ctrl/Cmd+S, auto-save when on); Markdown, HTML and Mermaid open rendered with a **Source** toggle as elsewhere. File windows are kept across restarts (the wall's saved tree now accepts `file`).
+- Folders on other computers are not listed: their files cannot be browsed from this one yet.
+
+## Browsers and Files without an agent (2026-11-15, superseded)
+
+The Browsers segment described here was removed on 2026-11-20 and the Files rows below replaced by the file browser above. Browser and Files windows saved on a wall from before still open. The `servers:list` probe stays in the daemon, unused by the panel.
 
 User intent (Philip, 2026-11-15): "the website tab and folders tab should be able to be opened without a connected agent. Web should be served and the folders should be based on currently connected folders and repositories." Issue #2824.
 

@@ -25,7 +25,6 @@ import { needsProviderSetup } from '../components/providers/providerSetup.js';
 import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.js';
 
 import { allPanes, type PaneKind } from '../layout.js';
-import { useWallLogs } from '../wallLogs.js';
 import {
   addZone,
   applySnap,
@@ -176,6 +175,14 @@ export function CommandCenterView() {
   }), []);
   // Tell main how full this wall is, for "prioritize empty windows".
   const paneCount = useMemo(() => allPanes(wall.root).length, [wall.root]);
+  // The Files view lists the files open in the agent windows: on the wall, and
+  // beside an agent. Compared shallowly so an unrelated workspace change keeps the same list.
+  const besideFiles = useStore(useShallow((s) => s.workspaces.flatMap((w) => allPanes(w.root).filter((p) => p.kind === 'file').map((p) => p.refId))));
+  const openFiles = useMemo(() => [...new Set([
+    ...allPanes(wall.root).filter((p) => p.kind === 'file').map((p) => p.refId),
+    ...besideFiles,
+  ])], [wall.root, besideFiles]);
+  const activeFile = useMemo(() => allPanes(wall.root).find((p) => p.id === wall.activeZone && p.kind === 'file')?.refId ?? null, [wall.root, wall.activeZone]);
   // An untouched new chat does not count, so a fresh screen still reads as empty for placement.
   const usedPaneCount = useMemo(() => allPanes(wall.root).filter((p) => p.kind !== 'chat' || sessions.some((s) => s.id === p.refId && s.messageCount > 0)).length, [wall.root, sessions]);
   useEffect(() => { displaysBridge?.report(usedPaneCount); }, [usedPaneCount]);
@@ -524,19 +531,12 @@ export function CommandCenterView() {
           void addFromToolbar('chat', id);
         }
       }} onOpenTerminal={(id) => { setArchivedId(null); void addFromToolbar('terminal', id); }}
-        onOpenCompanion={(id, kind) => {
+        onOpenFile={(path) => {
           setArchivedId(null);
-          // Show the agent, then slide its Browser or Files drawer out (never
-          // closing it: picking the open one again leaves it open).
-          void addFromToolbar('chat', id).then(() => {
-            const drawer = useWallLogs.getState();
-            if (drawer.sessionId !== id || drawer.kind !== kind || drawer.closing) drawer.toggle(id, kind);
-          }).catch(reportAddFailure);
+          void addFromToolbar('file', path).catch(reportAddFailure);
         }}
-        onOpenWindow={(kind, refId) => {
-          setArchivedId(null);
-          void addFromToolbar(kind, refId).catch(reportAddFailure);
-        }}
+        openFiles={openFiles}
+        activeFile={activeFile}
         zoneTints={agentTints}
         onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} /></div>}
       <div className="wall-column">

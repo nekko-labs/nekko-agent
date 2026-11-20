@@ -25,8 +25,10 @@ data class AgentWatch(
     val pending: Boolean = false,
     val failures: Int = 0,
     val lastError: String? = null,
+    /** A clip's stage: `waiting`, `loading`, `generating`, `step:3/20`; absent until it reports one. */
+    val clipStage: String? = null,
 ) {
-    enum class Kind { TIMER, PR }
+    enum class Kind { TIMER, PR, CLIP }
     enum class Status { ACTIVE, DONE, CANCELLED, ERROR }
 
     companion object {
@@ -41,6 +43,7 @@ data class AgentWatch(
                 pending = w.bool("pending"),
                 failures = (w.long("failures") ?: 0).toInt(),
                 lastError = w.str("lastError"),
+                clipStage = w.str("clipStage"),
             )
         }.orEmpty()
 
@@ -93,7 +96,7 @@ object AgentRows {
         val raw = when (kind) {
             AgentWatch.Kind.TIMER -> input.num("delay_seconds") ?: 300.0
             AgentWatch.Kind.PR -> input.num("timeout_seconds") ?: 3600.0
-            null -> null
+            AgentWatch.Kind.CLIP, null -> null
         }
         var id = if (!failed && output != null) ARMED.find(output)?.groupValues?.get(1) else null
         if (id == null && action == WatchCall.Action.CANCEL) id = input.str("id")
@@ -136,6 +139,7 @@ object AgentRows {
                 "Watching $pr · wakes on any PR change" + if (limit.isEmpty()) "" else " or after $limit"
             }
             AgentWatch.Kind.TIMER -> "Timer watch · wakes after " + limit.ifEmpty { "its delay" }
+            AgentWatch.Kind.CLIP -> "Making a clip"
             null -> "Agent watch"
         }
     }
@@ -167,9 +171,39 @@ object AgentRows {
         val ticking: Boolean,
     )
 
+    /** What a clip says it is doing (`clipStage` of agentWatches.ts). */
+    fun clipStage(stage: String?): String {
+        if (stage == null) return "starting"
+        if (stage == "waiting") return "waiting for another picture or clip"
+        if (stage == "loading") return "loading the video model"
+        STEP.matchEntire(stage)?.let { return "step ${it.groupValues[1]} of ${it.groupValues[2]}" }
+        return "starting"
+    }
+
+    private val STEP = Regex("""^step:(\d+)/(\d+)$""")
+
+    /** The chip's name for a watch (`watchName`). */
+    fun watchName(view: AgentWatch): String = when (view.kind) {
+        AgentWatch.Kind.CLIP -> "Making a clip"
+        AgentWatch.Kind.PR -> "PR watcher"
+        AgentWatch.Kind.TIMER -> "Timer watcher"
+    }
+
+    /** The stage line beside an active clip, null once it has finished its work or when it is not a clip (`watchProgress`). */
+    fun clipProgress(view: AgentWatch): String? =
+        if (view.kind == AgentWatch.Kind.CLIP && view.status == AgentWatch.Status.ACTIVE && !view.pending) clipStage(view.clipStage) else null
+
     /** The chip an armed watch wears: time left, overdue, due, triggered, cancelled, failed. */
     fun watchClock(w: WatchCall, view: AgentWatch?, now: Long, time: (Long) -> String = ::time): Clock? {
         view ?: return null
+        // A clip has no clock to show: it wakes the chat when it ends, which takes minutes.
+        if (view.kind == AgentWatch.Kind.CLIP && view.status == AgentWatch.Status.ACTIVE) {
+            return if (view.pending) {
+                Clock("finished · waiting for the chat", Tone.NORMAL, "The clip ended; the chat continues as soon as it is free.", true)
+            } else {
+                Clock("in progress", Tone.NORMAL, "Made on this computer; the chat wakes when the clip is ready. Cancel, or the chat’s Stop, stops it.", true)
+            }
+        }
         when (view.status) {
             AgentWatch.Status.DONE -> return Clock("triggered", Tone.QUIET, "This watch fired and woke the chat.", false)
             AgentWatch.Status.CANCELLED -> return Clock("cancelled", Tone.QUIET, view.lastError?.let { "Cancelled: $it" } ?: "This watch was cancelled.", false)

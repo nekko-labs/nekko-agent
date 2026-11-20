@@ -7,31 +7,31 @@ area: desktop
 
 User intent: find the QR code that links a phone without hunting through one long Settings page, and see Settings split into clear sections.
 
-- Settings has a section list on the left: **Profile**, **Help out the Nekko Team**, **Nekko Cloud**, **General**, **Phone pairing**, **Computers** (when available), **Customize**, **Agents**, **Safety**, **Connections**, **Tools**, **System**. Clicking one jumps to that section with a fast scroll (about 200ms, ease-out; instant when the system asks for reduced motion), and the clicked item stays highlighted through the jump; the item for the section at the top of the page stays highlighted as you scroll. In a narrow window the list becomes a wrapping row above the page.
-- The page is grouped to match, each group under its name at page-title size, with one hairline between groups (see [Quiet Settings](#quiet-settings-and-where-each-setting-lives-2563) for the order inside each):
+- Settings has a section list on the left: **Profile**, **Help out the Nekko Team**, **Nekko Cloud**; then, under the label **Nekko Agent**, **General**, **Appearance**, **Agents**, **Tools**; then, under **Privacy and devices**, **Safety**, **Connections**, **Phone and computers**, **System**. Clicking one shows that group as its own page, from its top, and marks it in the rail ([one page per area](#one-page-per-area-under-a-labelled-rail-3102)). In a narrow window the list becomes a wrapping row above the page.
+- Each page is one group under its name at page-title size (see [Quiet Settings](#quiet-settings-and-where-each-setting-lives-2563) for the order inside each):
   - Profile: About you (what Nekko calls you, the update email, what you mostly do, and the About you note sent with each chat).
   - Help out the Nekko Team: Help improve Nekko Agent (usage reports), Support by starring the project on GitHub.
   - Nekko Cloud: Account (sign in, plan, sign out). Once signed in: Sync, Fleet management (the organization, Share this computer, its computers and members), then the Danger zone (Delete everything synced, Delete account).
   - General: Notifications, Chats, Desktop behavior, Language and help, Dictation, Chat history.
-  - Phone pairing: Remote access.
-  - Computers: Connected computers and pairing.
-  - Customize: Appearance, Fonts and text ([Style](style-fonts-and-text-size.md)), Animations, Agents wall, View settings, Simple mode visibility, Customization (system prompt and server prompt wrapper), Fun.
-  - Agents: Agent loop, Spec-driven development, Agent orchestration, Delegation routes, Hooks, Automations, Claude plan features.
+  - Appearance: Theme, Fonts and text ([Style](style-fonts-and-text-size.md)), Animations, Agents wall, View settings, Simple mode visibility, Fun.
+  - Agents: Agent loop, Customization (system prompt and server prompt wrapper), System prompt size, Spec-driven development, Agent orchestration, Delegation routes, Hooks, Automations, Claude plan features.
   - Safety: Chat modes, Sandbox, Guardrails, Security.
   - Connections: every connection with its log, then All connections off at the bottom in danger red ([Connections](../platform/connections-switch-and-activity-log.md)).
   - Tools: Git management, Project management, Pull requests, Terminal, MCP servers.
+  - Phone and computers: Remote access, then Connected computers and pairing (only Remote access, titled Phone pairing, in Simple until a computer is connected).
   - System: Nekko Agent service, Updates, Developer, Experimental, Backup & restore, Data & privacy.
-- Phone pairing follows General, so the QR stays one click from opening Settings.
 - In Remote access, **Paired devices** and **+ Pair a device** come first once remote access is on, and the pairing QR opens directly under the button, above the device list. Relay details, the local relay, network visibility, phone changes and phone access follow. Before remote access is on, the card offers two ways to connect, Tailscale or Nekko Cloud (see [remote control](../phone/driving-your-home-model-from-your-phone-remote-control.md)).
 - The card keeps the name "Remote access", so every "Settings → Remote access" instruction in the apps and docs still points to it.
-- Search within Settings stays in the rail and searches the whole page; the section list is not searched.
+- Search within Settings stays in the rail and searches every page; the section list is not searched.
 - Privacy and safety: layout only. No setting, pairing secret or relay behavior changes.
 
 Status: implemented. The animated jump `[2026-10-23]` was checked in the same hidden renderer at 1280 and 640 wide: clicking System passes through intermediate scroll positions and lands on the section in about 195ms, with System highlighted. Checked in a hidden renderer of the full app with a stub bridge (dark theme, 1280×900 and 640×900): clicking Phone pairing highlights it and brings the card into view, Pair a device shows the QR fully on screen, no horizontal overflow. Not yet checked: light theme, the installed app, and the Local Web UI.
 
 ## Optional sidebar shortcuts (issue #1178)
 
-Implemented. Skills and Connectors are rows at the very top of the Settings rail, before the section navigation, and wrap in a narrow window. Both sidebar shortcuts are hidden by default, including for existing settings with no saved preference. Customize > View settings independently opts each shortcut into the left rail. Hiding a shortcut does not disable its view or change access through Settings, the command palette or chat skill menus. Preferences persist through the existing settings API as `sidebarViews`; no credentials, permissions or remote calls are added.
+Implemented. Skills and Connectors are rows at the very top of the Settings rail, before the section navigation, and wrap in a narrow window. **Server** follows them (2026-11-20): unlike the two shortcuts it jumps to a section of the Settings page itself, the Agent server, which leads the page (see [Server, model browser and desktop tray](../models/server-model-browser-and-desktop-tray.md)).
+
+**Wheel over the side menu (2026-11-20).** `[implemented, unit-tested and checked in a hidden Electron fixture]` On Settings, Models and Automations a mouse wheel turned over the side menu or the gutters scrolls the page's content, as it does over the content itself; a menu long enough to scroll still scrolls itself first and hands over at its end. Pinch zoom is left alone. Both sidebar shortcuts are hidden by default, including for existing settings with no saved preference. Customize > View settings independently opts each shortcut into the left rail. Hiding a shortcut does not disable its view or change access through Settings, the command palette or chat skill menus. Preferences persist through the existing settings API as `sidebarViews`; no credentials, permissions or remote calls are added.
 
 Acceptance: both chips navigate to their views, each toggle saves independently, and both desktop and narrow layouts keep them legible. Verified with focused navigation tests and hidden, network-blocked Electron fixture interaction checks and matching screenshots. Packaged apps and native phone clients are not verified.
 
@@ -111,8 +111,24 @@ User intent: Profile is the top item (your info, About you), Help out the Nekko 
 - **Phone pairing** keeps only Remote access.
 - **Connections**: the per-connection switches and logs come first; **All connections off** is the last row, its title always in danger red. It still greys every row above when on.
 - Search: "profile", "about you", "nekko cloud", "fleet" and "sign in" find the new groups; Phone pairing no longer matches "sync".
-- Planned, not built: per-kind sync switches (chats, Library) under Sync. The engine pulls every kind through one cursor, so switching one kind off and back on needs engine work; it lands separately.
+- `[updated 2026-11-20, #3089]` Sync lists **What syncs**: Chats and (with Library sync) Library, a switch each, greyed while Sync this computer is off. How a kind turned off and back on catches up is in [end-to-end encrypted sync](../chat/end-to-end-encrypted-sync-for-pro-and-team.md).
 
 Privacy and safety: layout and copy only. No setting value, default, save path, permission, encryption or network behavior changes.
 
 Status: implemented, not yet landed. Checked with the settings tests, desktop typecheck and a hidden renderer capture (see the PR). Not yet checked: the installed app and the Local Web UI.
+
+## One page per area under a labelled rail (#3102)
+
+User intent: approach A of the Settings redesign. Settings reads as a set of short pages, each found under a labelled part of the rail, instead of one long page you jump around in.
+
+- The rail keeps Profile, Help out the Nekko Team and Nekko Cloud at the top with no label, then two group labels (12/500, ink-soft): **Nekko Agent** (General, Appearance, Agents, Tools) and **Privacy and devices** (Safety, Connections, Phone and computers, System). Server stays in the rail's top block with Customize, Skills and Connectors.
+- One group is on screen at a time. Clicking a rail item shows its page from the top; the item is marked with the plum wash and plum title (`aria-current="page"`). The scroll spy and the animated jump are gone. Settings opens on the page you last had open in this window, Profile the first time.
+- **Customize is now Appearance.** Its first section, the theme picker and background animation, is titled **Theme**. The system prompt sections (Customization and System prompt size) move to **Agents**, since they shape how agents answer. The group id stays `customize`, so links into it still work.
+- **Phone pairing and Computers are one page, Phone and computers**: Remote access, then Computers. In Simple with no computer connected it is titled Phone pairing and holds only Remote access, as before. The old `settings-computers` anchor is kept on the Computers part.
+- Every group stays mounted and only the others are hidden, so ids and anchors keep working. Links into Settings (command palette pages, Customize menu, the Wall view menu, Chat history's storage notice) open the page that holds their target and scroll to it.
+- Search still reaches everything: while the search box is open every page is shown, as one list, and stepping through matches scrolls as before. Closing it shows the page of the last match, scrolled to that match.
+- Command palette pages: Appearance (matches "customize" too), Agents (now matches "system prompt"), Phone and computers (matches "phone pairing", "qr", "computers").
+
+Privacy and safety: layout only. No setting value, default, save path, permission or network behavior changes.
+
+Status: implemented, not yet landed. Checked with the settings tests, desktop typecheck and a hidden Electron capture with a stub bridge (dark theme, 1280x900): 11 checks pass on the branch, 9 fail on main as expected (rail labels and order, Profile alone on open, Nekko Cloud alone from its top and marked, system prompt under Agents, Phone and computers holding both, Phone pairing in Simple, search showing every page and landing on the match's page). Not yet checked: light theme, a narrow window, the installed app and the Local Web UI.

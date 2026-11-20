@@ -22,6 +22,33 @@ pub fn window_history(history: &[Value], turns: Option<f64>) -> &[Value] {
     &history[users[users.len() - turns as usize]..]
 }
 
+/// The heading of the context that rides on a user message.
+pub const TURN_CONTEXT_HEADING: &str = "Additional context provided with this message:";
+
+/// A user message as the model is sent it: the context saved with it
+/// (`turnContext`, what changes from turn to turn, kept out of the system
+/// prompt so its prefix stays cached) goes first, under a heading. The same
+/// saved text is sent on every later turn, so the transcript's bytes never move.
+pub fn with_turn_context(m: &Value) -> Value {
+    let Some(context) = m.get("turnContext").and_then(Value::as_str).filter(|c| !c.trim().is_empty()) else {
+        return m.clone();
+    };
+    if m.get("role").and_then(Value::as_str) != Some("user") {
+        return m.clone();
+    }
+    let mut out = m.clone();
+    let Some(o) = out.as_object_mut() else { return out };
+    o.remove("turnContext");
+    let text = o.get("content").and_then(Value::as_str).unwrap_or_default();
+    let joined = if text.is_empty() {
+        format!("{TURN_CONTEXT_HEADING}\n\n{context}")
+    } else {
+        format!("{TURN_CONTEXT_HEADING}\n\n{context}\n\n---\n\n{text}")
+    };
+    o.insert("content".into(), Value::String(joined));
+    out
+}
+
 /// A picture-only reply from an image chat, as one line a chat model can read.
 pub fn as_seen_by_chat_model(m: &Value) -> Value {
     let generated = m.get("generated").filter(|g| js::truthy(Some(g)));
@@ -126,4 +153,28 @@ pub fn from_latest_compaction(history: &[Value]) -> Vec<Value> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod turn_context_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn saved_context_goes_before_the_user_text_and_nowhere_else() {
+        let m = json!({ "id": "m1", "role": "user", "content": "fix it", "turnContext": "# File: a.rs\nfn a() {}" });
+        let sent = with_turn_context(&m);
+        assert_eq!(
+            sent["content"],
+            "Additional context provided with this message:\n\n# File: a.rs\nfn a() {}\n\n---\n\nfix it"
+        );
+        assert!(sent.get("turnContext").is_none());
+        assert_eq!(with_turn_context(&sent), sent, "applied once, it is stable");
+        let plain = json!({ "role": "user", "content": "hi" });
+        assert_eq!(with_turn_context(&plain), plain);
+        let assistant = json!({ "role": "assistant", "content": "ok", "turnContext": "x" });
+        assert_eq!(with_turn_context(&assistant), assistant);
+        let picture = json!({ "role": "user", "images": ["a.png"], "turnContext": "ctx" });
+        assert_eq!(with_turn_context(&picture)["content"], "Additional context provided with this message:\n\nctx");
+    }
 }

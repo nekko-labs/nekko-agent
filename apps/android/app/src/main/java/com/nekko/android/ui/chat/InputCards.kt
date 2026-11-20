@@ -196,6 +196,8 @@ fun ApprovalCard(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Unit) {
+    // A paid cloud clip's choice is one card with a total (#3038); any other question is stepped as before.
+    request.clip?.let { clip -> ClipPickerCard(request, clip, onAnswer); return }
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
@@ -309,7 +311,7 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
 }
 
 @Composable
-private fun InputCardFrame(edge: androidx.compose.ui.graphics.Color, content: @Composable () -> Unit) {
+internal fun InputCardFrame(edge: androidx.compose.ui.graphics.Color, content: @Composable () -> Unit) {
     val p = Nekko.palette
     Column(
         Modifier

@@ -107,10 +107,11 @@ app.whenReady().then(async () => {
     await check('sheet is tucked behind the composer', `(() => { const w = document.querySelector('[data-grid-cell="chat:a"]'); const p = w?.querySelector('.plan-sheet-dock'), c = w?.querySelector('.composer'); if (!p || !c) return false; const a = p.getBoundingClientRect(), b = c.getBoundingClientRect(); return a.bottom > b.top && a.bottom <= b.top + 12 && a.width < b.width; })()`);
     await run(`document.querySelector('[data-grid-cell="chat:a"] .plan-sheet-fold, [data-grid-cell="chat:a"] .plan-sheet-toggle')?.click()`);
     await sleep(400);
-    await check('reopened plan keeps finished details closed and working details open', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-sheet]'); return !!s && !s.hasAttribute('data-folded') && s.querySelector('[data-plan-step-id="step_1"] .plan-sheet-step-toggle')?.getAttribute('aria-expanded') === 'false' && s.querySelector('[data-plan-step-id="step_2"] .plan-sheet-step-toggle')?.getAttribute('aria-expanded') === 'true'; })()`);
-    await run(`document.querySelector('[data-grid-cell="chat:a"] [data-plan-step-id="step_1"] .plan-sheet-step-toggle').click()`);
+    await check('reopened plan keeps every row compact', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-sheet]'); return !!s && !s.hasAttribute('data-folded') && [...s.querySelectorAll('[data-plan-more]')].every(e => e.hidden); })()`);
+    await run(`document.querySelector('[data-grid-cell="chat:a"] [data-plan-step-id="step_1"] [data-plan-overflow]').click()`);
     await sleep(400);
-    await check('the completed step opens its own details on click', `document.querySelector('[data-grid-cell="chat:a"] [data-plan-step-id="step_1"] .plan-sheet-step-toggle')?.getAttribute('aria-expanded') === 'true'`);
+    await check('the completed step opens its own details on click', `document.querySelector('[data-grid-cell="chat:a"] [data-plan-step-id="step_1"] [data-plan-overflow]')?.getAttribute('aria-expanded') === 'true'`);
+    await run(`document.querySelector('[data-grid-cell="chat:a"] [data-plan-step-id="step_1"] [data-plan-overflow]').click()`);
     await shot('wall-plan-open');
     await check('open plan puts each sub-agent under its step', `document.querySelectorAll('[data-plan-step-id="step_1"] [data-plan-chip="subagent"]').length === 1 && document.querySelectorAll('[data-plan-step-id="step_2"] [data-plan-chip="subagent"]').length === 2`);
     await check('open plan puts the task on the first step', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="project"]')`);

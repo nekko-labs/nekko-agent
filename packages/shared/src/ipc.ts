@@ -515,6 +515,7 @@ export const IpcChannels = {
   syncRevoke: 'sync:revoke',
   syncNow: 'sync:now',
   syncSetEnabled: 'sync:setEnabled',
+  syncSetKind: 'sync:setKind',
   syncDeleteAll: 'sync:deleteAll',
   // The files Library lists on this computer, for Library sync (crates/nekko-cloud, #2748).
   librarySync: 'library:sync',
@@ -682,6 +683,8 @@ export interface NekkoApi {
   syncRevoke(deviceId: string): Promise<import('./cloud.js').CloudStatus>;
   syncNow(): Promise<import('./cloud.js').CloudStatus>;
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
+  /** Turn one kind of record (Chats, Library) on or off for this computer's sync (#3089). */
+  syncSetKind(kind: import('./cloud.js').SyncKind, on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
   /**
    * Tell the engine which files Library lists here, so they sync to Nekko Cloud

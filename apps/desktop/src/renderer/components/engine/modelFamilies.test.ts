@@ -28,6 +28,13 @@ describe('GPU guidance', () => {
   it('keeps missing hardware unknown', () => expect(gpuGuidance(10)).toBe('GPU fit unknown'));
   it('shows measured reduced context and partial offload honestly', () => {
     expect(gpuGuidance(10, undefined, local('m', { gpuFit: 'full', maxContext: 32000, preset: { contextTokens: 4096 } }))).toBe('Fits on GPU, but limited context size');
-    expect(gpuGuidance(10, undefined, local('m', { gpuFit: 'partial' }))).toBe('Too big');
+    expect(gpuGuidance(10, undefined, local('m', { gpuFit: 'partial' }))).toBe('Not enough free GPU memory');
+  });
+  it('does not call a model too big when only the busy GPU is short', () => {
+    const vram = { kind: 'vram' as const, budgetBytes: 31.8e9 };
+    expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'partial' }))).toBe('Fits on a free GPU');
+    expect(gpuGuidance(30e9, vram, local('m', { gpuFit: 'partial' }))).toBe('Too big');
+    expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'partial', layers: 64, preset: { gpuLayers: 40 } }))).toBe('Part on CPU by its settings');
+    expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'wont' }))).toBe('Too big');
   });
 });

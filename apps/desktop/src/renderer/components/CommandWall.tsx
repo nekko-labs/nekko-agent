@@ -161,7 +161,7 @@ import { CREATE_OPTIONS } from './CreateMenu.js';
 import type { AgentWindowSelection } from './AgentWindowPicker.js';
 import { AgentLogsDrawer } from './AgentLogsDrawer.js';
 import { layoutWithLogsDrawer, overlayLogsDrawer, useWallLogs } from '../wallLogs.js';
-import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, FolderIcon, GlobeIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
+import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, FileIcon, FolderIcon, GlobeIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
 import { COMPANION_DEFAULT, clampCompanion, readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
@@ -798,6 +798,7 @@ export function CommandWall({
     if (pane.kind === 'terminal') { const t = terminalById.get(pane.refId); return t ? terminalPresentation(t).title : 'Terminal'; }
     if (pane.kind === 'zone') return pane.zone ?? 'Zone';
     if (pane.kind === 'files') return folderLabel(pane.refId);
+    if (pane.kind === 'file') return folderLabel(pane.refId);
     if (pane.kind === 'browser') return browserLabel(pane.refId);
     return pane.kind === 'automations' ? 'Automations' : 'Insights';
   };
@@ -807,6 +808,7 @@ export function CommandWall({
     if (kind === 'automations') return <BoltIcon className={cls} />;
     if (kind === 'insights') return <LayoutIcon className={cls} />;
     if (kind === 'files') return <FolderIcon className={cls} />;
+    if (kind === 'file') return <FileIcon className={cls} />;
     if (kind === 'browser') return <GlobeIcon className={cls} />;
     return <ChatIcon className={cls} />;
   };
@@ -946,7 +948,7 @@ export function CommandWall({
           ringColor={flashing ? 'color-mix(in srgb, var(--accent) 60%, var(--line))' : undefined}
           stripStyle={needsYou ? { background: 'color-mix(in srgb, var(--warning) 10%, transparent)' } : undefined}
           addable={WALL_ADDABLE}
-          closeTitle={pane.kind === 'chat' ? 'Stop agent and watchers, then remove from the wall (chat is kept)' : 'Remove from the wall'}
+          closeTitle={pane.kind === 'chat' ? 'Close this agent (stops it; the chat stays in the Agents panel, not archived)' : 'Remove from the wall'}
           // Focus shows one window, so there is nowhere to move it to.
           locked={!tiled}
           onPickUp={pickable ? (e) => pickUp(e, pane, title) : undefined}
@@ -969,6 +971,7 @@ export function CommandWall({
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : pane.kind === 'files' ? <ExplorerPane key={pane.refId} paneId={pane.id} root={pane.refId} named />
             : pane.kind === 'browser' ? <BrowserPane key={pane.refId} url={pane.refId} />
+            : pane.kind === 'file' ? <FilePane key={pane.refId} path={pane.refId} />
             : null}
            </div>
             {pane.kind === 'chat' && showCompanions && companions.length > 0 && <CompanionResizer sessionId={pane.refId} />}

@@ -46,22 +46,14 @@ app.whenReady().then(async () => {
       const segs = [...panel.querySelectorAll('[data-agent-panel-shows] [role="radio"]')].map((b) => ({ label: b.getAttribute('aria-label'), on: b.getAttribute('aria-checked') === 'true', w: Math.round(b.getBoundingClientRect().width) }));
       return { segs, belowHeader: shows.top >= head.bottom - 1, panelWidth: Math.round(panel.getBoundingClientRect().width), switcherWidth: Math.round(shows.width), rowButton: !!document.querySelector('[aria-label="Show agents in a row"], [aria-label="Show agents in a column"]') };
     })()`);
-    check('five segments, Agents picked', JSON.stringify(facts.segs.map((s) => [s.label, s.on])) === JSON.stringify([['Agents', true], ['Terminals', false], ['Photos and videos', false], ['Browsers', false], ['Files', false]]), facts);
+    check('four segments, Agents picked', JSON.stringify(facts.segs.map((s) => [s.label, s.on])) === JSON.stringify([['Agents', true], ['Terminals', false], ['Photos and videos', false], ['Files', false]]), facts);
     check('switcher sits under the header and spans the panel', facts.belowHeader && facts.switcherWidth >= facts.panelWidth - 40, facts);
     check('segments share the width evenly', Math.max(...facts.segs.map((s) => s.w)) - Math.min(...facts.segs.map((s) => s.w)) <= 1, facts);
     check('no column/row button', !facts.rowButton, facts);
 
-    await frames('slide-to-browsers', pick('Browsers'));
+    await frames('slide-to-files', pick('Files'));
     await sleep(400);
-    const rows = await run(`[...document.querySelectorAll('[data-companion-row]')].map((b) => b.dataset.companionRow)`);
-    check('Browsers lists the agents', rows.includes('alpha') && rows.includes('beta'), { rows });
-    await shot('panel-browsers');
-    await run(`document.querySelector('[data-companion-row="alpha"]').click()`);
-    await sleep(900);
-    const opened = await run(`({ current: document.querySelector('[data-companion-row="alpha"]').getAttribute('aria-current') })`);
-    check('picking an agent opens its Browser drawer and marks the row', opened.current === 'true', opened);
-    await shot('panel-browsers-open');
-
+    check('Files lists no agents', await run(`!document.querySelector('[data-companion-row]')`), {});
     await run(pick('Files')); await sleep(500);
     await shot('panel-files');
     await run(pick('Terminals')); await sleep(500);

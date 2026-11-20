@@ -80,6 +80,18 @@ Boundaries: the design runs where every served page does, in a frame with an opa
 
 Verified in the hidden, isolated full-App Electron journey against the real preview server (`design-canvas-sandbox.cjs`, 24 checks, including the animation's and the frame loop's actual state inside the sandboxed frame) and focused unit tests. Not done or not checked: frame-by-frame stepping or a timeline; jumping to a named frame; the phone apps; the Design board, which still shows each version file as a card; packaged builds, Windows, the Local Web UI in other browsers, light theme, touch gestures on a real trackpad or screen.
 
+## Open a design from its chat, in the chat or full screen in Library (2026-11-20, #3098)
+
+Requested 2026-11-20: a design file in a chat should offer opening it in the chat, or in Library full screen.
+
+Implemented, not yet released:
+
+- **Two buttons on a design's card.** A reply's card for a design (an HTML page or image that Library files under Designs, by its folder or its name) has **Open in chat**, the file pane beside the originating chat as **Open** was, and **Open in Library**. Other pages keep **Open ↗**. (The card's **Interactive** button was removed on 2026-11-20, #3104: the page runs in the card itself; see [chat artifact cards](../chat/chat-artifact-cards-and-session-local-documents.md).) Both are off in Sandbox, like the card's other actions.
+- **Open in Library** goes to Library with that file open full screen: Library's header (kind and layout sliders) and its list are put away, and the file has the whole page, an HTML design on its canvas. The file opens at once from its path, even before Library has read its chats or when Library does not list it; once the list has it, it becomes that entry, with its chat and its other versions in the version slider, and the version the chat named stays the one shown. The first-visit guide does not cover it; it waits for a visit of its own.
+- **Full screen** and **Show list.** Any file open in Library has a toggle in its header on wide windows (narrow windows already give the file the whole width): **Show list** brings the list and sliders back beside the file, **Full screen** puts them away. Picking another file or **Back to Library** (or Escape) leaves full screen for the usual page.
+
+Verified in the hidden, isolated full-App Electron journey `design-open-in-library-sandbox.cjs` against the real preview server (13 checks: both designs' cards offer the two buttons, Open in Library lands on the canvas with the list and sliders hidden and no guide over it, it becomes the listed design with `v1 v2`, Show list and Full screen, Back to Library, an older version opens as itself with `v1* v2`, the narrow window, and Open in chat opening the file pane), with the chat captured on unchanged `main` for comparison, and focused unit tests. Not checked: an image design's card in the full-App journey (its button is unit-tested), packaged builds, Windows paths in a running app, light theme, the Local Web UI in other browsers, and the phone apps, which have no Library.
+
 ## Smoother canvas, keyboard, and what can be clicked (2026-11-14, #2756)
 
 Requested 2026-11-14: better design canvas controls, smoother and faster panning, highlight the interactive areas.

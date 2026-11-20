@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { navOrder, moveNav, sidebarViewVisible } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
+import { useModelCatalogVersion } from './modelCatalog.js';
 import { startLiveRuns } from './liveRuns.js';
 import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
@@ -158,12 +159,15 @@ export function App() {
     return () => window.clearInterval(t);
   }, [sweepReady, autoArchiveSetting]);
 
-  // A background catalog check (Settings → Updates) can land a new provider
-  // model list mid-session: re-list so pickers show it immediately.
-  useEffect(
-    () => window.nekko.onModelsUpdated((e) => void useStore.getState().reloadModels(e.providerId)),
-    [],
-  );
+  // A background catalog check (Settings → Updates), a finished download or a
+  // provider change can land a new model list mid-session: re-list so pickers
+  // show it immediately (modelCatalog.ts).
+  const modelCatalog = useModelCatalogVersion();
+  useEffect(() => {
+    if (!modelCatalog) return;
+    const { activeProviderId, reloadModels } = useStore.getState();
+    if (activeProviderId) void reloadModels(activeProviderId).catch(() => {});
+  }, [modelCatalog]);
 
   useEffect(() => {
     // Restore the saved provider/model before catalog loading chooses a fallback.

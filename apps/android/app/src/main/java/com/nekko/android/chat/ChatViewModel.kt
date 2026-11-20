@@ -32,6 +32,7 @@ import com.nekko.android.voice.DictationController
 import com.nekko.android.voice.MicHardware
 import com.nekko.protocol.AskAnswer
 import com.nekko.protocol.Channels
+import com.nekko.protocol.Transcript
 import com.nekko.protocol.Effort
 import com.nekko.protocol.PullRequest
 import com.nekko.protocol.PhoneChanges
@@ -312,12 +313,21 @@ class ChatViewModel(
 
     private fun calls(tool: String) = ui.value.blocks.any { it is Block.Tool && it.name == tool }
 
+    /** A picture tool may have started a clip (a watch of kind clip), so its chip is read like a watch row's. */
+    private fun makesPictures() = ui.value.blocks.any { it is Block.Tool && Transcript.makesPictures(it.name) }
+
+    /** Cancel one clip (its chip's **Cancel clip**); the computer ends just that watch. Throws so the chip can say why. */
+    suspend fun cancelClip(watchId: String) {
+        repo.callRaising(Channels.SESSION_CANCEL_WATCH, listOf(JsonPrimitive(sessionId), JsonPrimitive(watchId)))
+        refreshAgentState()
+    }
+
     /**
      * Re-read what the agent-work rows show beyond the transcript: the watches,
      * and the child chats when the transcript delegates. Failures keep the last state.
      */
     suspend fun refreshAgentState() {
-        if (calls(AgentRows.WATCH_TOOL)) {
+        if (calls(AgentRows.WATCH_TOOL) || makesPictures()) {
             runCatching { AgentWatch.list(repo.caller.call(Channels.SESSION_WATCHES, JsonPrimitive(sessionId))) }
                 .onSuccess { _watches.value = it }
         }
@@ -330,7 +340,7 @@ class ChatViewModel(
     init {
         // Re-read when the transcript first holds a watch or a delegation, and after each turn.
         viewModelScope.launch {
-            ui.map { u -> Triple(u.blocks.any { it is Block.Tool && it.name == AgentRows.WATCH_TOOL },
+            ui.map { u -> Triple(u.blocks.any { it is Block.Tool && (it.name == AgentRows.WATCH_TOOL || Transcript.makesPictures(it.name)) },
                 u.blocks.any { it is Block.Tool && it.name == AgentRows.SUBAGENT_TOOL }, u.running) }
                 .distinctUntilChanged()
                 .collect { (watch, agent, _) -> if (watch || agent) refreshAgentState() }

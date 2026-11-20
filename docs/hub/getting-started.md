@@ -72,7 +72,7 @@ Open **Custom colors** to adjust the accent and secondary color with the wheel o
 
 ## Following tool activity
 
-The agent's plan sits on top of the message box as a card. Each step shows its title, one line of detail, and chips for what that step produced: the PRs the agent opened (with their CI status) and the files or previews it linked. Finished steps shrink to their title; hover the card to see their details. **Change plan** tells the agent what to do differently.
+The agent's plan sits just above the message box. Each step shows its task title without a subtext line. Related task, sub-agent, PR, CI, file and preview chips sit to the right of the title when they fit. A **+N** chip counts the remaining chips; click it, or focus it and press Enter or Space, to expand only that row. Click the count again to fold it back. The leading status mark keeps reported check details in its tooltip and opens safe evidence links when available. The Plan header folds the whole plan to the current task. To change the plan, tell the agent in chat.
 
 Chat tool calls use icons for what the agent is doing: reading files, searching, editing, running checks, Git, web access or planning. Shell execution, including Python, uses the same terminal artwork as the current-work indicator. Transcript icons stay still; expand a tool row to read its output. Unknown tools keep the generic tool icon.
 
@@ -237,7 +237,7 @@ The group heading stays at the top of the list while you scroll its agents, then
 
 ### Switching what the Agents panel lists
 
-A row of icons at the top of the Agents panel picks which kind of window it lists: **Agents**, **Terminals**, **Photos and videos**, **Browsers** and **Files**. Click an icon, or use the arrow keys once it has focus; hover an icon for its name. Agents shows the agent cards described above. Terminals and Photos and videos show just those. Browsers lists the web pages running on your computer, such as a dev server you started, named by their page title and the folder they run from; pick one to open it in a browser window on the wall, or pick **New browser** to type an address. Files lists your connected folders and repositories; pick one to browse it in a window of its own. Neither needs an agent. Below them, under **Beside an agent**, pick an agent to show it with its Browser or Files drawer open beside it. The panel remembers your choice.
+A row of icons at the top of the Agents panel picks which kind of window it lists: **Agents**, **Terminals**, **Photos and videos** and **Files**. Click an icon, or use the arrow keys once it has focus; hover an icon for its name. Agents shows the agent cards described above. Terminals and Photos and videos show just those. Files is a file browser: under **Open** are the files already open in your agent windows, and under **Folders** your connected folders and repositories, which unfold in place. Pick a file to open it in a window on the wall, where you can edit and save it (Ctrl/Cmd+S). The panel remembers your choice.
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Animations > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 

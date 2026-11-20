@@ -4,9 +4,11 @@ import { useDownloadAction } from './useDownloadAction.js';
 import { DownloadProgress } from './DownloadProgress.js';
 
 /** Shared acquisition state also locks this build when queued from recommendations. */
-export function ModelDownloadButton({ modelId, quant, prepare, onResult }: {
+export function ModelDownloadButton({ modelId, quant, prepare, onResult, variant = 'primary' }: {
   modelId: string; quant: string; prepare?: () => Promise<boolean>;
   onResult: (res: { ok: boolean; message: string }) => void;
+  /** `quiet` for a row among many (a quant table), where one primary per view is the rule. */
+  variant?: 'primary' | 'quiet';
 }) {
   const download = useDownloadAction({ model: modelId, quant });
   const [preparing, setPreparing] = useState(false);
@@ -22,7 +24,7 @@ export function ModelDownloadButton({ modelId, quant, prepare, onResult }: {
     } finally { locked.current = false; setPreparing(false); }
   };
   return <div className="shrink-0">
-    <button className="rounded-full px-3 py-1 text-2xs text-white disabled:opacity-60" style={{ background: 'var(--accent)' }} disabled={preparing || download.active} onClick={() => void start()}>
+    <button className={`btn ${variant === 'primary' ? 'btn-primary' : 'btn-ghost text-accent'} py-1 text-xs disabled:opacity-60`} disabled={preparing || download.active} onClick={() => void start()}>
       <DownloadIcon className="mr-1 inline h-3 w-3" />{preparing || download.active ? 'Downloading…' : 'Download'}
     </button>
     {(preparing || download.active) && <DownloadProgress group={download.group} />}

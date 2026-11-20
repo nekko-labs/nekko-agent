@@ -12,8 +12,8 @@
 // Draft and `hold` are handled by auto-merge.yml, which disarms auto-merge on
 // either (there is no merge queue to eject from since 2026-11-06).
 //
-// Native iOS runs in batches (scripts/ios-batch.mjs): for a `deploy:ios` PR that
-// touches iOS, a green `Native iOS (batch)` status on its head counts as much
+// Native iOS runs in batches (scripts/ios-batch.mjs): for any PR that touches
+// iOS, with or without `deploy:ios` (#3094), a green `Native iOS (batch)` status on its head counts as much
 // as a green Native iOS run on it, and with neither yet, `gate` waits for one.
 //
 // Usage (from ci.yml's gate job, with GH_TOKEN and GITHUB_REPOSITORY set):
@@ -76,15 +76,23 @@ export function labelRuns(runs, { batch = null, iosRequired = false } = {}) {
 }
 
 
-/** The head's newest `Native iOS (batch)` status, and whether the PR needs Native iOS at all. */
-function iosContext(repo, pr, sha, labels) {
-  if (!labels.includes(IOS_LABEL)) return {};
+/** The head's newest `Native iOS (batch)` status, and whether the PR needs Native iOS at all: any iOS change does, label or not (#3094). */
+function iosContext(repo, pr, sha) {
   const statuses = JSON.parse(gh(['api', `repos/${repo}/commits/${sha}/status`])).statuses ?? [];
   const files = gh(['api', '--paginate', `repos/${repo}/pulls/${pr}/files`, '--jq', '.[].filename']).split('\n').filter(Boolean);
   return { batch: statuses.find(s => s.context === BATCH_CONTEXT) ?? null, iosRequired: touchesIos(files) };
 }
 
 const labelsOf = pr => (pr.labels?.nodes ?? pr.labels ?? []).map(l => (typeof l === 'string' ? l : l.name));
+
+/**
+ * The runs `gate` weighs. Without a deploy label the other platform runs are opt-in,
+ * but the PR's own Native iOS run still counts: it is what decides a PR the batch
+ * leaves out for changing a workflow (#2030, #3094).
+ */
+export function gateRuns(runs, labelled) {
+  return labelled ? runs : runs.filter(run => run.path?.split('@')[0] === IOS_WORKFLOW);
+}
 
 export function needsLabelRuns(pr) {
   return labelsOf(pr).some(label => DEPLOY_LABELS.includes(label));
@@ -104,9 +112,9 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function waitForPr(repo, pr, sha, { timeoutMin, pollSec }) {
   const until = Date.now() + timeoutMin * 60_000;
-  const labels = labelsOf(JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`])));
+  const labelled = needsLabelRuns(JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`])));
   for (;;) {
-    const state = labelRuns(runsFor(repo, sha), iosContext(repo, pr, sha, labels));
+    const state = labelRuns(gateRuns(runsFor(repo, sha), labelled), iosContext(repo, pr, sha));
     if (state.failed.length) {
       console.error(`Deploy-label runs failed on ${sha}:\n${state.failed.map(describe).join('\n')}`);
       return 1;

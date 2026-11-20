@@ -73,12 +73,32 @@ export interface RecommendedOption {
   /** Budget left after loading it. */
   headroomBytes: number;
   contextTokens: number;
+  /** The model's own longest context, when the feed records one. */
+  maxContextTokens?: number | null;
+  /** The longest context (up to the model's own) that still fits the budget beside these weights. */
+  fitContextTokens?: number;
+  /** Every quant of this model on this machine, best first: what each one needs here. */
+  quants?: RecommendedQuant[];
   placement: RecommendationPlacement;
   fit: RecommendationFit;
   /** Decode tokens/s at the start of a conversation; absent where unknown or not what the task waits on. */
   speed: { tokensPerSecond: number; basis: SpeedBasis; /** Replies a `measuredHere` figure is the median of. */ samples?: number } | null;
   /** Slower than the task's minimum. */
   tooSlow: boolean;
+}
+
+/** One quant of a recommended model, as `RecommendedOption.quants` lists it. */
+export interface RecommendedQuant {
+  quant: string;
+  /** The label `engineDownloadModel(repo, label)` takes. */
+  downloadLabel: string;
+  /** Every file to download for this quant. */
+  files: string[];
+  downloadBytes: number;
+  /** Weights + KV cache at the task's context + compute buffers. */
+  memoryBytes: number;
+  fitContextTokens: number;
+  fit: RecommendationFit;
 }
 
 export interface TaskRecommendation {

@@ -405,12 +405,13 @@ jobs:
             echo 'A required job failed or was cancelled.' >&2
             exit 1
           fi
+      # Every PR: an iOS change needs Native iOS with or without `deploy:ios` (#3094).
       - uses: actions/checkout@v7
-        if: contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
+        if: github.event_name == 'pull_request'
         with:
           sparse-checkout: scripts
-      - name: The platform runs the deploy labels turned on passed
-        if: github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
+      - name: The platform runs the deploy labels turned on, and Native iOS for an iOS change, passed
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}

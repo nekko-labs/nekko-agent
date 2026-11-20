@@ -41,6 +41,10 @@ sealed interface Block {
         val output: String? = null,
         /** The call's arguments, for grouping calls by purpose (ToolPurpose.kt). */
         val input: JsonObject = JsonObject(emptyMap()),
+        /** The tool message holding the result, for `session:photo` (a picture tool's pictures live there). */
+        val resultMessageId: String? = null,
+        /** How many images the result carried: read back one by one (`session:photo`) for [Transcript.makesPictures] tools. */
+        val pictures: Int = 0,
     ) : Block
 }
 
@@ -57,6 +61,12 @@ data class LiveTurn(
 
 object Transcript {
     /** Saved messages → blocks. Tool results attach to the call that asked for them. */
+    /**
+     * The tools whose result pictures a phone may open (`session:photo` answers only these two: a
+     * screenshot or any other tool's image stays on the computer). Vector (SVG) pictures stay there too.
+     */
+    fun makesPictures(tool: String): Boolean = tool == "generate_image" || tool == "edit_image"
+
     fun fromMessages(messages: List<ChatMessage>): List<Block> {
         val out = ArrayList<Block>()
         val toolIndex = HashMap<String, Int>()
@@ -81,7 +91,10 @@ object Transcript {
                     val r = m.toolResult ?: continue
                     val i = toolIndex[r.toolCallId] ?: continue
                     val b = out[i] as Block.Tool
-                    out[i] = b.copy(status = if (r.isError) ToolStatus.ERROR else ToolStatus.OK, output = if (QuestionReplies.body(b.name, r.output) != null) r.output else clip(r.output, full = r.outputChars, images = r.omittedImages))
+                    out[i] = b.copy(status = if (r.isError) ToolStatus.ERROR else ToolStatus.OK, output = if (QuestionReplies.body(b.name, r.output) != null) r.output else clip(r.output, full = r.outputChars, images = if (makesPictures(b.name)) 0 else r.omittedImages),
+                        resultMessageId = m.id,
+                        pictures = if (makesPictures(b.name)) r.omittedImages else 0,
+                    )
                 }
             }
         }

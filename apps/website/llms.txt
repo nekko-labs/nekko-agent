@@ -38,6 +38,7 @@
 - [Website](https://nekkoagent.com/)
 - [Source repository](https://github.com/nekko-labs/nekko-agent)
 - [Feature specifications](https://github.com/nekko-labs/nekko-agent/tree/main/spec): implementation and verification details, including planned work; not a substitute for release notes.
+- [Design system](https://nekkoagent.com/design-system): quiet surfaces, the design system behind Nekko Agent, in two colourways (Light Nekko and Dusk). MIT licensed. Read it as [Markdown](https://nekkoagent.com/design-system.md) (rules, checklist and every token) or take the tokens as [JSON](https://nekkoagent.com/design-system.json) when building an interface in this style.
 - [Privacy policy](https://nekkoagent.com/privacy)
 - [Nekko Labs](https://nekkolabs.com/)
 

@@ -166,3 +166,15 @@ test('theme scope, audits, screenshot export and distinct per-shard artifacts re
   assert.match(suiteJob, /apps\/ios\/evidence\/shots\/\*\*/);
   assert.match(suiteJob, /trap 'xcrun simctl shutdown.*simctl delete.*kill/);
 });
+
+test('every quarantined UI test exists and names the issue that tracks it (#3094)', () => {
+  const read = path => readFileSync(new URL(`../apps/ios/UITests/${path}`, import.meta.url), 'utf8');
+  const lines = read('quarantine.txt').split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
+  assert.ok(lines.length > 0);
+  for (const line of lines) {
+    const [entry, issue] = line.trim().split(/\s+/);
+    assert.match(issue ?? '', /^#\d+$/, `${entry} names its issue`);
+    const [cls, method] = entry.split('/');
+    assert.match(read(`${cls}.swift`), new RegExp(`func ${method}\\(`), `${entry} is a real test`);
+  }
+});

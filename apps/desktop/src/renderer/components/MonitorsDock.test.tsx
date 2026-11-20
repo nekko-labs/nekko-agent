@@ -254,12 +254,16 @@ describe('Local models monitor', () => {
     expect(html).toContain('data-local-model-settings="ghost"');
   });
   it('says plainly when nothing is loaded, the server is stopped, or there is no engine', () => {
-    expect(renderToStaticMarkup(<LocalModels initial={{ status: status(), models }} />)).toContain('No local model is loaded.');
+    const idle = renderToStaticMarkup(<LocalModels initial={{ status: status(), models }} />);
+    expect(idle).toContain('>Running</p>');
+    expect(idle).toContain('No models are currently loaded.');
+    expect(idle).toContain('data-gf-icon="beach"');
     expect(renderToStaticMarkup(<LocalModels initial={{ status: status({ running: false }), models }} />)).toContain('The model server is stopped.');
     const none = renderToStaticMarkup(<LocalModels initial={{ status: status({ install: { available: [] } }), models }} />);
     expect(none).toContain('No local engine installed.');
     expect(none).toContain('Set up a local model');
     expect(none).not.toContain('data-local-model-settings');
+    expect(none).not.toContain('>Running</p>');
   });
   it('offers Unload on every loaded model, picture models included, and Unload all for more than one', () => {
     const pictures = [...models, { id: 'flux', name: 'FLUX.1 schnell', path: '/m/flux.gguf', sizeBytes: 7 * GB, modality: 'image' }] as any;
@@ -267,11 +271,22 @@ describe('Local models monitor', () => {
     expect(one).toContain('data-local-model-unload="flux"');
     expect(one).toContain('aria-label="Unload FLUX.1 schnell"');
     expect(one).toContain('image gen');
-    expect(one).toContain("Open FLUX.1 schnell&#x27;s picture settings");
+    expect(one).toContain('title="Picture settings"');
     expect(one).not.toContain('Unload all');
     const two = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'flux' }, { id: 'qwen' }] }), models: pictures }} />);
     expect(two).toContain('data-local-model-unload="qwen"');
     expect(two).toContain('data-local-models-unload-all');
+  });
+  it('draws Settings and Load as Gentleface icons named by their tooltip', () => {
+    storeState.value = { settings: { favoriteModels: ['nekko-engine::gemma'] } };
+    try {
+      const html = renderToStaticMarkup(<LocalModels initial={{ status: status(), models }} />);
+      const row = html.slice(html.indexOf('data-local-model-shortcut="gemma"'));
+      expect(row).toMatch(/data-local-model-settings="gemma"[^>]*title="Settings: GPU offload, context and memory"[^>]*><span data-gf-icon="settings"/);
+      expect(row).toMatch(/data-local-model-load="gemma"[^>]*title="Load"[^>]*><span data-gf-icon="play-circle"/);
+      expect(row).not.toContain('>Load</button>');
+      expect(row).not.toContain('>Settings</button>');
+    } finally { storeState.value = { settings: {} }; }
   });
   it('lists starred then recent models that are not loaded, each with Settings and Load', () => {
     const more = [...models, { id: 'phi', name: 'Phi 4', path: '/m/phi.gguf', sizeBytes: 2 * GB }] as any;

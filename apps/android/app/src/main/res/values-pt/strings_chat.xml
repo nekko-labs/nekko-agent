@@ -289,20 +289,15 @@
     <string name="chat_star_never">Não perguntar de novo</string>
     <string name="chat_star_thanks">Obrigado! O Nekko fica feliz por você estar aqui.</string>
     <string name="chat_star_thanks_detail">O GitHub abriu no seu navegador. Lá a estrela está a um toque.</string>
-    <!-- The full-screen photo viewer (#2111). -->
     <string name="photo_n_of_m">%1$d de %2$d</string>
     <string name="photo_actions">Ações da foto</string>
-    <!-- Save to Photos on Android 9, when storage access was refused. -->
     <string name="chat_save_needs_storage">Permita o acesso ao armazenamento para salvar em Fotos.</string>
-    <!-- Folded by default in the transcript (#2453). -->
     <string name="chat_progress_note">Nota de progresso</string>
     <string name="chat_conversation_summary">Resumo da conversa</string>
-    <!-- Videos from the message box (#2777). -->
     <string name="chat_clip_sending">Enviando… %1$d%%</string>
     <string name="chat_clip_attached">Anexado ao chat</string>
     <string name="chat_clip_failed">Não foi possível enviar este vídeo</string>
     <string name="chat_remove_clip">Remover %1$s</string>
-    <!-- The agent's plan sheet over the composer (#2115). -->
     <string name="plan_sheet">Plano do agente</string>
     <string name="plan_open_label">Plano, %1$d de %2$d concluídas. Recolhe o plano</string>
     <string name="plan_title">Plano</string>
@@ -330,7 +325,6 @@
     <string name="plan_subagent">Subagente</string>
     <string name="plan_subagents">Subagentes</string>
     <string name="plan_subagents_label">Subagentes: %1$d rodando, %2$d concluídos</string>
-    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
     <string name="response_waiting">Pendente · envia quando conectar</string>
     <string name="response_sending">Enviando…</string>
     <string name="response_sent">Enviado</string>
@@ -342,11 +336,22 @@
     <string name="response_cancel">Cancelar</string>
     <string name="response_allow">Permitir %1$s</string>
     <string name="response_deny">Negar %1$s</string>
-    <!-- Edit under a picture an image chat made (#2230). -->
     <string name="chat_edit_picture">Editar</string>
-    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
     <string name="car_you">Você</string>
     <string name="car_reply">Responder</string>
     <string name="car_mark_read">Marcar como lida</string>
     <string name="car_not_sent">Não enviado: este chat não está no computador ao qual o telefone está conectado.</string>
+    <string name="chat_clip_cancel">Cancelar</string>
+    <string name="chat_clip_starting">Iniciando…</string>
+    <string name="chat_clip_title">Criar um clipe com %1$s</string>
+    <string name="chat_clip_via">via %1$s · pago com sua conta %2$s</string>
+    <string name="chat_clip_total">Total</string>
+    <string name="chat_clip_not_priced">Sem preço</string>
+    <string name="chat_clip_warning_prompt">Depois de iniciado, não pode ser interrompido e é cobrado mesmo que você pare o chat. O prompt sai deste computador para %1$s e para o provedor do modelo.</string>
+    <string name="chat_clip_warning_picture">Depois de iniciado, não pode ser interrompido e é cobrado mesmo que você pare o chat. O prompt e a primeira imagem saem deste computador para %1$s e para o provedor do modelo.</string>
+    <string name="chat_clip_make">Criar clipe</string>
+    <string name="chat_clip_make_price">Criar clipe · %1$s</string>
+    <string name="chat_clip_cancel_watch">Cancelar clipe</string>
+    <string name="chat_clip_cancelling">Cancelando…</string>
+    <string name="chat_clip_cancel_failed">Não foi possível cancelar o clipe: %1$s</string>
 </resources>

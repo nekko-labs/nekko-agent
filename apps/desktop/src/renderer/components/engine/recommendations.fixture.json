@@ -37,7 +37,33 @@
       "tokensPerSecond": 23.0,
       "basis": "estimated"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.8-27B-Q8_0.gguf"
+       ],
+       "downloadBytes": 29047086048.0,
+       "memoryBytes": 31001631712.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "UD-Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.8-27B-UD-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 16464440224.0,
+       "memoryBytes": 18418985888.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -66,7 +92,35 @@
       "tokensPerSecond": 117.0,
       "basis": "estimated"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3-Coder-Next-Q8_0-00001-of-00003.gguf",
+        "Qwen3-Coder-Next-Q8_0-00002-of-00003.gguf",
+        "Qwen3-Coder-Next-Q8_0-00003-of-00003.gguf"
+       ],
+       "downloadBytes": 84812058080.0,
+       "memoryBytes": 86288453088.0,
+       "fitContextTokens": 262144.0,
+       "fit": "tight"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3-Coder-Next-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 48487031968.0,
+       "memoryBytes": 49963426976.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -95,7 +149,33 @@
       "tokensPerSecond": 184.0,
       "basis": "estimated"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-2B-Q8_0.gguf"
+       ],
+       "downloadBytes": 2012012800.0,
+       "memoryBytes": 2431443200.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-2B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 1280835840.0,
+       "memoryBytes": 1700266240.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -121,7 +201,22 @@
      "placement": "unified",
      "fit": "fits",
      "speed": null,
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 32768.0,
+     "fitContextTokens": 32768.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3-Embedding-0.6B-Q8_0.gguf"
+       ],
+       "downloadBytes": 639150592.0,
+       "memoryBytes": 1171827200.0,
+       "fitContextTokens": 32768.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -151,7 +246,35 @@
       "tokensPerSecond": 69.0,
       "basis": "estimated"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "gemma-4-26B-A4B-it-Q8_0.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 28052920512.0,
+       "memoryBytes": 30103935168.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "UD-Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "gemma-4-26B-A4B-it-UD-Q4_K_M.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 18140600512.0,
+       "memoryBytes": 20191615168.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -197,7 +320,33 @@
       "tokensPerSecond": 28.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 38912.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-9B-Q8_0.gguf"
+       ],
+       "downloadBytes": 9527502048.0,
+       "memoryBytes": 10601243872.0,
+       "fitContextTokens": 0.0,
+       "fit": "tooBig"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-9B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 5680522464.0,
+       "memoryBytes": 6754264288.0,
+       "fitContextTokens": 38912.0,
+       "fit": "tight"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -226,7 +375,33 @@
       "tokensPerSecond": 52.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 129024.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-4B-Q8_0.gguf"
+       ],
+       "downloadBytes": 4482403488.0,
+       "memoryBytes": 6093016224.0,
+       "fitContextTokens": 75776.0,
+       "fit": "tight"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-4B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 2740937888.0,
+       "memoryBytes": 4351550624.0,
+       "fitContextTokens": 129024.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -255,7 +430,33 @@
       "tokensPerSecond": 71.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-2B-Q8_0.gguf"
+       ],
+       "downloadBytes": 2012012800.0,
+       "memoryBytes": 2431443200.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-2B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 1280835840.0,
+       "memoryBytes": 1700266240.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -281,7 +482,22 @@
      "placement": "gpu",
      "fit": "fits",
      "speed": null,
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 32768.0,
+     "fitContextTokens": 32768.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3-Embedding-0.6B-Q8_0.gguf"
+       ],
+       "downloadBytes": 639150592.0,
+       "memoryBytes": 1171827200.0,
+       "fitContextTokens": 32768.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -311,7 +527,35 @@
       "tokensPerSecond": 52.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 108544.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-4B-Q8_0.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 5154827104.0,
+       "memoryBytes": 6228568928.0,
+       "fitContextTokens": 55296.0,
+       "fit": "tight"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-4B-Q4_K_M.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 3413361504.0,
+       "memoryBytes": 4487103328.0,
+       "fitContextTokens": 108544.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -357,7 +601,33 @@
       "tokensPerSecond": 20.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-2B-Q8_0.gguf"
+       ],
+       "downloadBytes": 2012012800.0,
+       "memoryBytes": 2683101440.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-2B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 1280835840.0,
+       "memoryBytes": 1951924480.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -386,7 +656,33 @@
       "tokensPerSecond": 10.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": true
+     "tooSlow": true,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-4B-Q8_0.gguf"
+       ],
+       "downloadBytes": 4482403488.0,
+       "memoryBytes": 6093016224.0,
+       "fitContextTokens": 239616.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-4B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 2740937888.0,
+       "memoryBytes": 4351550624.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": true,
     "options": []
@@ -415,7 +711,22 @@
       "tokensPerSecond": 32.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": true
+     "tooSlow": true,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-0.8B-Q8_0.gguf"
+       ],
+       "downloadBytes": 833592096.0,
+       "memoryBytes": 1265605408.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": true,
     "options": []
@@ -441,7 +752,22 @@
      "placement": "cpu",
      "fit": "fits",
      "speed": null,
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 32768.0,
+     "fitContextTokens": 32768.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3-Embedding-0.6B-Q8_0.gguf"
+       ],
+       "downloadBytes": 639150592.0,
+       "memoryBytes": 1171827200.0,
+       "fitContextTokens": 32768.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -471,7 +797,35 @@
       "tokensPerSecond": 10.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": true
+     "tooSlow": true,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-4B-Q8_0.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 5154827104.0,
+       "memoryBytes": 6228568928.0,
+       "fitContextTokens": 219136.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-4B-Q4_K_M.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 3413361504.0,
+       "memoryBytes": 4487103328.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": true,
     "options": []
@@ -514,7 +868,33 @@
      "placement": "gpu",
      "fit": "tight",
      "speed": null,
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 38912.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-9B-Q8_0.gguf"
+       ],
+       "downloadBytes": 9527502048.0,
+       "memoryBytes": 10601243872.0,
+       "fitContextTokens": 0.0,
+       "fit": "tooBig"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-9B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 5680522464.0,
+       "memoryBytes": 6754264288.0,
+       "fitContextTokens": 38912.0,
+       "fit": "tight"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -540,7 +920,33 @@
      "placement": "gpu",
      "fit": "fits",
      "speed": null,
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 129024.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-4B-Q8_0.gguf"
+       ],
+       "downloadBytes": 4482403488.0,
+       "memoryBytes": 6093016224.0,
+       "fitContextTokens": 75776.0,
+       "fit": "tight"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-4B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 2740937888.0,
+       "memoryBytes": 4351550624.0,
+       "fitContextTokens": 129024.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -566,7 +972,33 @@
      "placement": "gpu",
      "fit": "fits",
      "speed": null,
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-2B-Q8_0.gguf"
+       ],
+       "downloadBytes": 2012012800.0,
+       "memoryBytes": 2431443200.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-2B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 1280835840.0,
+       "memoryBytes": 1700266240.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -592,7 +1024,22 @@
      "placement": "gpu",
      "fit": "fits",
      "speed": null,
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 32768.0,
+     "fitContextTokens": 32768.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3-Embedding-0.6B-Q8_0.gguf"
+       ],
+       "downloadBytes": 639150592.0,
+       "memoryBytes": 1171827200.0,
+       "fitContextTokens": 32768.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -619,7 +1066,35 @@
      "placement": "gpu",
      "fit": "fits",
      "speed": null,
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 108544.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-4B-Q8_0.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 5154827104.0,
+       "memoryBytes": 6228568928.0,
+       "fitContextTokens": 55296.0,
+       "fit": "tight"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-4B-Q4_K_M.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 3413361504.0,
+       "memoryBytes": 4487103328.0,
+       "fitContextTokens": 108544.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -665,7 +1140,33 @@
       "tokensPerSecond": 52.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "gemma-4-12b-it-Q8_0.gguf"
+       ],
+       "downloadBytes": 12669647680.0,
+       "memoryBytes": 15521774400.0,
+       "fitContextTokens": 51200.0,
+       "fit": "tooBig"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "gemma-4-12b-it-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 7121861440.0,
+       "memoryBytes": 9973988160.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -694,7 +1195,33 @@
       "tokensPerSecond": 44.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 184320.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-9B-Q8_0.gguf"
+       ],
+       "downloadBytes": 9527502048.0,
+       "memoryBytes": 11138114784.0,
+       "fitContextTokens": 184320.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-9B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 5680522464.0,
+       "memoryBytes": 7291135200.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -723,7 +1250,33 @@
       "tokensPerSecond": 186.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 262144.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-2B-Q8_0.gguf"
+       ],
+       "downloadBytes": 2012012800.0,
+       "memoryBytes": 2431443200.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-2B-Q4_K_M.gguf"
+       ],
+       "downloadBytes": 1280835840.0,
+       "memoryBytes": 1700266240.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -749,7 +1302,22 @@
      "placement": "gpu",
      "fit": "fits",
      "speed": null,
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 32768.0,
+     "fitContextTokens": 32768.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3-Embedding-0.6B-Q8_0.gguf"
+       ],
+       "downloadBytes": 639150592.0,
+       "memoryBytes": 1171827200.0,
+       "fitContextTokens": 32768.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []
@@ -779,7 +1347,35 @@
       "tokensPerSecond": 44.0,
       "basis": "estimatedBorrowed"
      },
-     "tooSlow": false
+     "tooSlow": false,
+     "maxContextTokens": 262144.0,
+     "fitContextTokens": 155648.0,
+     "quants": [
+      {
+       "quant": "Q8_0",
+       "downloadLabel": "Q8_0",
+       "files": [
+        "Qwen3.5-9B-Q8_0.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 10445668128.0,
+       "memoryBytes": 11519409952.0,
+       "fitContextTokens": 155648.0,
+       "fit": "fits"
+      },
+      {
+       "quant": "Q4_K_M",
+       "downloadLabel": "Q4_K_M",
+       "files": [
+        "Qwen3.5-9B-Q4_K_M.gguf",
+        "mmproj-F16.gguf"
+       ],
+       "downloadBytes": 6598688544.0,
+       "memoryBytes": 7672430368.0,
+       "fitContextTokens": 262144.0,
+       "fit": "fits"
+      }
+     ]
     },
     "belowTargetSpeed": false,
     "options": []

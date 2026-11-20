@@ -389,7 +389,7 @@ describe('wall preferences and panel migration', () => {
   const a = { id: 'pane_a', kind: 'chat', refId: 'a' };
   const b = { id: 'pane_b', kind: 'terminal', refId: 'b' };
   it('exports the dock descriptors and fresh defaults without tree panels', () => {
-    expect(WALL_KINDS).toEqual(['chat', 'terminal', 'browser', 'files']);
+    expect(WALL_KINDS).toEqual(['chat', 'terminal', 'browser', 'files', 'file']);
     expect(MONITORS.map(p => p.key)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
     expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true, simpleShow: false,
       monitorOrder: MONITORS.map(p => p.key),

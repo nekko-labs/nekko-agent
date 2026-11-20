@@ -39,12 +39,12 @@ import {
 export type WallFilter = 'all' | 'chat' | 'terminal';
 
 /**
- * What the wall tree holds: chats and shells, and a Browser or Files window
- * opened from the Agents panel without an agent (#2824). Dashboard monitors
+ * What the wall tree holds: chats and shells, a file opened from the Agents
+ * panel's Files view, and a Browser or Files window saved from before (#2824). Dashboard monitors
  * live in the Monitors dock.
  */
-export type WallKind = 'chat' | 'terminal' | 'browser' | 'files';
-export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal', 'browser', 'files'];
+export type WallKind = 'chat' | 'terminal' | 'browser' | 'files' | 'file';
+export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal', 'browser', 'files', 'file'];
 
 export type { WallLayout, WallLayoutMode, MonitorsDock, MonitorsSide, MonitorKey } from '@nekko-agent/shared';
 export { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK };

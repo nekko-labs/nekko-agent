@@ -403,6 +403,13 @@ interface UiState {
    * with `keepLayout` added to the current layout (a chat just created).
    */
   focusChatOnWall: (sessionId: string, opts?: { keepLayout?: boolean }) => void;
+  /**
+   * A file a chat asked Library to open full screen (a design card's "Open in
+   * Library"), with the chat it came from. Consumed once by Library.
+   */
+  libraryRequest: { path: string; sessionId?: string } | null;
+  /** Go to Library with this file open full screen. */
+  openInLibrary: (path: string, sessionId?: string) => void;
   /** Bring a chat just created into focus: its Chat tab, or its window on the wall. */
   showNewChat: (sessionId: string) => void;
   /**
@@ -672,6 +679,8 @@ export const useStore = create<UiState>((set, get) => ({
   findSeed: null,
 
   focusChatOnWall: (sessionId, opts) => set({ focusRequest: { sessionId, keepLayout: opts?.keepLayout }, view: 'command' }),
+  libraryRequest: null,
+  openInLibrary: (path, sessionId) => set({ libraryRequest: { path, sessionId }, view: 'artifacts' }),
   showNewChat: (sessionId) => {
     // The wall is where chats live: a new chat must be the selected window
     // there, not one auto-added behind the current one.
@@ -894,6 +903,8 @@ export const useStore = create<UiState>((set, get) => ({
   reloadModels: async (providerId) => {
     if (get().activeProviderId !== providerId) return;
     const models = await window.nekko.listModels(providerId);
+    // An empty list reads as a failed listing: keep what is shown rather than unset the model.
+    if (!models.length || get().activeProviderId !== providerId) return;
     set({ models });
     // Same rule as selectProvider: a model the refreshed catalog dropped is
     // unset rather than left pointing at an id that will 400.
