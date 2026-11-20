@@ -9,7 +9,7 @@ const baseline = process.env.NEKKO_BREADCRUMB_BASELINE === '1';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { baseline, captures: [], checks: [], errors: [], geometry: {} };
 const baselineReport = process.env.NEKKO_BREADCRUMB_COMPARE ? JSON.parse(fs.readFileSync(process.env.NEKKO_BREADCRUMB_COMPARE, 'utf8')) : null;
-const js = value => JSON.stringify(value).replace(/</g, '\u003c').replace(/>/g, '\u003e').replace(/&/g, '\u0026');
+const js = value => JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
@@ -56,12 +56,10 @@ app.whenReady().then(async () => {
         if (!baseline && view === 'settings') {
           await check('breadcrumb lives in Settings rail', '!!document.querySelector(".settings-rail [data-agents-breadcrumb]")');
           const stateBefore = await run('JSON.stringify({ active:layoutFixture.store.getState().activeSessionId, layout:layoutFixture.store.getState().wallLayout })');
-          if (view === 'settings') {
-            await run('document.querySelector("[data-back-to-agents]").focus()');
-            await check('keyboard focus on return control', 'document.activeElement.matches("[data-back-to-agents]")');
-            await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
-            await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
-          } else await run('document.querySelector("[data-back-to-agents]").click()');
+          await run('document.querySelector("[data-back-to-agents]").focus()');
+          await check('keyboard focus on return control', 'document.activeElement.matches("[data-back-to-agents]")');
+          await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+          await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
           await sleep(150);
           const stateAfter = await run('JSON.stringify({ active:layoutFixture.store.getState().activeSessionId, layout:layoutFixture.store.getState().wallLayout })');
           report.checks.push({ name: view + '-' + width + ': preserves active chat and wall layout', ok: stateBefore === stateAfter });
