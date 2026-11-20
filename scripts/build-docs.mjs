@@ -342,6 +342,11 @@ ${rendered.html}
 // who shipped them.
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i;
 const text = (v) => typeof v === 'string' && v.trim() !== '';
+// A highlight's optional `kind`, and how the page labels it.
+const KINDS = { improvement: 'Improvement', performance: 'Performance', fix: 'Fix' };
+// The home page's pixel Nekko (apps/website/index.html, .pixel-nekko) with its
+// happy eyes, held still: it sits on the headliners card's top edge.
+const HEADLINERS_NEKKO = `<svg class="headliners-nekko" viewBox="0 0 32 32" width="60" height="60" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" style="fill: var(--mascot-face); stroke: var(--mascot-line)" stroke-width="2" /><path d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" style="fill: var(--mascot-eyes)" /><path d="M15 20H17V21H15Z" style="fill: var(--lavender)" /></svg>`;
 
 // Validate the highlights file and list its release lines newest first. Links
 // are built from the login, PR number and tag, so each is checked here.
@@ -363,6 +368,8 @@ export function parseWhatsNew(data) {
       if (!Number.isInteger(h.pr) || h.pr < 1) fail(`${h.title}: no pull request number`);
       if (!Array.isArray(h.authors) || !h.authors.length) fail(`${h.title}: no author`);
       for (const login of h.authors) if (!LOGIN.test(login ?? '')) fail(`${h.title}: not a GitHub login: ${login}`);
+      if ('major' in h && typeof h.major !== 'boolean') fail(`${h.title}: major is true or false`);
+      if ('kind' in h && !Object.hasOwn(KINDS, h.kind)) fail(`${h.title}: kind is one of ${Object.keys(KINDS).join(', ')}`);
     }
     // Everyone who merged a pull request in this line; the highlights' authors are among them.
     if (!Array.isArray(entry.contributors) || !entry.contributors.length) fail('contributors are missing');
@@ -438,35 +445,59 @@ ${lines
   )
   .join('\n')}
       </nav>`;
+  const pr = (n) => `<a href="${GITHUB}/pull/${n}" rel="noopener">#${n}</a>`;
+  const highlight = (h, cls = '') => `          <li${cls}>
+            <h3>${escapeHtml(h.title)}</h3>
+            <p>${escapeHtml(h.detail)}</p>
+            <p class="shipped"><span class="by-faces">${h.authors.map(face).join('')}</span><span>Shipped by ${h.authors.map(person).join(', ')} <span aria-hidden="true">·</span> ${pr(h.pr)}</span></p>
+          </li>`;
+  const everyone = (l) => `        <p class="everyone-who">Everyone who shipped ${l.line}</p>
+        <ul class="everyone">
+${shuffled(l.contributors)
+  .map((login) => `          <li><a class="by" href="https://github.com/${login}" rel="noopener">${face(login)}${escapeHtml(login)}</a></li>`)
+  .join('\n')}
+        </ul>`;
+  // A release with major highlights: its people first, the headliners in the
+  // sticker card under the pixel Nekko, then the rest as one-liners.
+  const headlined = (l, majors) => {
+    const rest = l.highlights.filter((h) => !h.major);
+    return `${everyone(l)}
+        <div class="headliners">
+          <p class="headliners-tab">${HEADLINERS_NEKKO}<span class="headliners-pill"><svg viewBox="0 0 8 8" width="10" height="10" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 0H5V3H8V5H5V8H3V5H0V3H3Z" /></svg>Headliners</span></p>
+          <ul class="headliner-list">
+${majors.map((h, i) => highlight(h, i === 0 ? ' class="headliner-lead"' : '')).join('\n')}
+          </ul>
+        </div>${
+          rest.length
+            ? `
+        <p class="more-in">More in ${l.line}</p>
+        <ul class="more">
+${rest
+  .map((h) => `          <li>${h.kind ? `<span class="more-kind">${KINDS[h.kind]}</span>` : ''}<span><span class="more-title">${escapeHtml(h.title)}</span> <span aria-hidden="true">·</span> ${pr(h.pr)}</span></li>`)
+  .join('\n')}
+        </ul>`
+            : ''
+        }`;
+  };
+  // A release with none renders as it did before headliners.
+  const plain = (l) => `        <ul class="highlights">
+${l.highlights.map((h) => highlight(h)).join('\n')}
+        </ul>
+${everyone(l)}`;
   const sections = lines
-    .map(
-      (l) => `
+    .map((l) => {
+      const majors = l.highlights.filter((h) => h.major);
+      return `
       <section id="${l.line}" aria-labelledby="release-${l.line}">
         <header class="release-head">
           <h2 id="release-${l.line}">${l.line}</h2>
           <time datetime="${l.date}">${monthYear(l.date)}</time>
         </header>
         <p class="release-intro">${escapeHtml(l.intro)}</p>
-        <ul class="highlights">
-${l.highlights
-  .map(
-    (h) => `          <li>
-            <h3>${escapeHtml(h.title)}</h3>
-            <p>${escapeHtml(h.detail)}</p>
-            <p class="shipped"><span class="by-faces">${h.authors.map(face).join('')}</span><span>Shipped by ${h.authors.map(person).join(', ')} <span aria-hidden="true">·</span> <a href="${GITHUB}/pull/${h.pr}" rel="noopener">#${h.pr}</a></span></p>
-          </li>`,
-  )
-  .join('\n')}
-        </ul>
-        <p class="everyone-who">Everyone who shipped ${l.line}</p>
-        <ul class="everyone">
-${shuffled(l.contributors)
-  .map((login) => `          <li><a class="by" href="https://github.com/${login}" rel="noopener">${face(login)}${escapeHtml(login)}</a></li>`)
-  .join('\n')}
-        </ul>
+${majors.length ? headlined(l, majors) : plain(l)}
         <p class="release-all"><a href="${GITHUB}/releases/tag/${l.tag}" rel="noopener">See every change in ${l.line} on GitHub ↗</a></p>
-      </section>`,
-    )
+      </section>`;
+    })
     .join('\n');
   return `<!doctype html>
 <html lang="en" data-theme="white">
@@ -543,6 +574,23 @@ ${shuffled(l.contributors)
         .rail ul { display: flex; flex-wrap: wrap; gap: 0 20px; }
         .rail[data-solo] { display: none; }
       }
+      /* A release's headliners: the site's sticker card, with the pixel Nekko and a pill on its top edge. Still: no motion. */
+      .headliners { position: relative; margin: 72px 0 0; padding: 44px 34px 32px; background: var(--bg-2); border: 2px solid var(--sticker); border-radius: 16px; box-shadow: 5px 5px 0 var(--lavender); }
+      .legal .headliners-tab { position: absolute; top: -42px; left: 26px; display: flex; align-items: flex-end; gap: 8px; margin: 0; }
+      .headliners-nekko { flex: none; overflow: visible; }
+      .headliners-pill { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 3px 14px 3px 10px; border-radius: 999px; background: var(--ink); color: var(--bg); font: 700 19px/1.2 var(--led); letter-spacing: 0.06em; text-transform: uppercase; }
+      .headliners-pill svg { flex: none; fill: currentColor; }
+      .headliner-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 28px; }
+      .headliner-list p { margin: 0; }
+      .headliner-list .shipped { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; }
+      .legal .headliner-lead h3 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+      @media (min-width: 900px) { .headliner-list { grid-template-columns: 1fr 1fr; gap: 28px 32px; } .headliner-lead { grid-column: 1 / -1; } }
+      @media (max-width: 560px) { .headliners { padding: 36px 20px 24px; } .legal .headliners-tab { left: 16px; } }
+      .more-in { margin: 44px 0 0; font: 12px var(--retro-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+      .more { list-style: none; padding: 16px 0 0; margin: 14px 0 0; border-top: 1px solid var(--line); display: grid; gap: 10px; font-size: 15px; }
+      .legal .more li { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: baseline; gap: 0 12px; color: var(--ink); }
+      .more li > span:only-child { grid-column: 2; }
+      .more-kind { font: 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
     </style>
   </head>
   <body>

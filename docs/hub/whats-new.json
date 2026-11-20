@@ -1,16 +1,27 @@
 {
-  "$comment": "The highlights of each release line (MAJOR.MINOR), read by the What's new page at nekkoagent.com/whatsnew (scripts/build-docs.mjs). date and tag are the line's newest release; authors are the GitHub logins of the pull request's author; contributors are the logins of everyone who merged a pull request in the line (from its GitHub release notes, bots left out).",
+  "$comment": "The highlights of each release line (MAJOR.MINOR), read by the What's new page at nekkoagent.com/whatsnew (scripts/build-docs.mjs). date and tag are the line's newest release; authors are the GitHub logins of the pull request's author; contributors are the logins of everyone who merged a pull request in the line (from its GitHub release notes, bots left out). Optional per highlight: \"major\": true puts it among the line's headliners, and the rest show as one-liners; \"kind\" (improvement, performance or fix) tags a one-liner. A line with no major highlight keeps the plain list.",
   "0.10": {
     "date": "2026-11-16",
     "tag": "v0.10.1004",
     "intro": "Billing and provider setup move into quieter screens, and Ctrl/Cmd+K searches everything.",
     "contributors": ["ermish", "Ghezz9", "TravisJPN", "austinermish", "matthewkurtti", "BobbyRobBob"],
     "highlights": [
-      { "title": "Plan & billing in Settings", "detail": "See your plan and switch teams.", "pr": 2732, "icon": "settings", "authors": ["ermish"] },
-      { "title": "Guided Google Gemini setup", "detail": "Connect Gemini step by step.", "pr": 2726, "icon": "brain-circuit", "authors": ["ermish"] },
-      { "title": "Fusion routing strategies", "detail": "Route by model capability tier.", "pr": 2737, "icon": "router", "authors": ["ermish"] },
-      { "title": "Search everything with Ctrl/Cmd+K", "detail": "Find commands, chats and settings.", "pr": 2389, "icon": "search", "authors": ["ermish"] },
-      { "title": "Winter theme", "detail": "A snowy look with hidden extras.", "pr": 2412, "icon": "palette", "authors": ["ermish"] }
+      { "title": "Search everything with Ctrl/Cmd+K", "detail": "Find commands, chats and settings.", "pr": 2389, "icon": "search", "authors": ["ermish"], "major": true },
+      { "title": "Plan & billing in Settings", "detail": "See your plan and switch teams.", "pr": 2732, "icon": "settings", "authors": ["ermish"], "major": true },
+      { "title": "Guided Google Gemini setup", "detail": "Connect Gemini step by step.", "pr": 2726, "icon": "brain-circuit", "authors": ["ermish"], "major": true },
+      { "title": "Fusion routing strategies", "detail": "Route by model capability tier.", "pr": 2737, "icon": "router", "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Winter theme", "detail": "A snowy look with hidden extras.", "pr": 2412, "icon": "palette", "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Nekko Agent in CarPlay", "detail": "Voice-first, with your active work.", "pr": 2783, "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Chats continue when a usage limit resets", "detail": "No need to come back and say go on.", "pr": 2813, "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Choose the subagent model", "detail": "Auto picks a lighter one.", "pr": 2490, "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Attach files to Claude Agent chats", "detail": "Send a file on its own, too.", "pr": 2552, "authors": ["austinermish"], "kind": "improvement" },
+      { "title": "One chat list across every computer on Android", "detail": "And this phone's chats with them.", "pr": 2654, "authors": ["Ghezz9"], "kind": "improvement" },
+      { "title": "Tailscale guide after pairing on iPhone", "detail": "Reach your computer away from home.", "pr": 2720, "authors": ["TravisJPN"], "kind": "improvement" },
+      { "title": "nekkod's memory stays bounded", "detail": "Less background load, too.", "pr": 2368, "authors": ["ermish"], "kind": "performance" },
+      { "title": "Long replies checkpoint instead of resending", "detail": "A large output is sent once.", "pr": 2493, "authors": ["ermish"], "kind": "performance" },
+      { "title": "ChatGPT chats no longer hang on Thinking", "detail": "Replies arrive as they should.", "pr": 2367, "authors": ["ermish"], "kind": "fix" },
+      { "title": "A notification opens its chat on a cold start", "detail": "Even when the app was closed.", "pr": 2324, "authors": ["BobbyRobBob"], "kind": "fix" },
+      { "title": "The macOS app launches again", "detail": "After a keychain entitlement stopped it.", "pr": 2705, "authors": ["matthewkurtti"], "kind": "fix" }
     ]
   },
   "0.9": {

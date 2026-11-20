@@ -209,6 +209,15 @@ test('the highlights file is refused when an entry is incomplete or unsafe', () 
   for (const data of bad) assert.throws(() => parseWhatsNew(data), JSON.stringify(data));
 });
 
+test('a highlight may be marked major and tagged with a kind, and nothing else', () => {
+  const h = (over) => ({ title: 't', detail: 'd', pr: 1, authors: ['a'], ...over });
+  const ok = [{ major: true }, { major: false }, { kind: 'improvement' }, { kind: 'performance' }, { kind: 'fix' }, { major: false, kind: 'fix' }];
+  for (const over of ok) assert.equal(parseWhatsNew({ '0.10': line({ highlights: [h(over)] }) }).length, 1, JSON.stringify(over));
+
+  const bad = [{ major: 'yes' }, { major: 1 }, { major: null }, { kind: 'feature' }, { kind: '' }, { kind: 3 }, { kind: 'Fix' }];
+  for (const over of bad) assert.throws(() => parseWhatsNew({ '0.10': line({ highlights: [h(over)] }) }), JSON.stringify(over));
+});
+
 test('release lines are listed newest first', () => {
   const lines = parseWhatsNew({ '0.10': line(), '1.10': line({ tag: 'v1.10.1000' }), '0.11': line({ tag: 'v0.11.1000' }) });
   assert.deepEqual(lines.map((l) => l.line), ['1.10', '0.11', '0.10']);
@@ -295,6 +304,93 @@ test('every release names everyone who shipped it, in an order no one is always 
 test('highlights sit in two columns when there is room', () => {
   const html = build().get('whatsnew.html');
   assert.match(html, /@media \(min-width: 900px\) \{[^}]*\.highlights \{[^}]*grid-template-columns: 1fr 1fr;/);
+});
+
+test('a release with no major highlight renders as it did before headliners', () => {
+  const lines = parseWhatsNew({
+    '0.9': line({
+      date: '2026-11-08',
+      tag: 'v0.9.5',
+      contributors: ['octo-cat', 'ada'],
+      highlights: [
+        { title: 'A thing', detail: 'What it does.', pr: 12, authors: ['octo-cat'] },
+        { title: 'B', detail: 'D.', pr: 13, authors: ['ada'], major: false, kind: 'fix' },
+      ],
+    }),
+  });
+  const html = whatsNewPage(lines, new Map(), () => 0);
+  const from = html.indexOf('      <section id="0.9"');
+  // Captured from the page before headliners existed: a major-free line keeps every byte.
+  assert.equal(
+    html.slice(from, html.indexOf('</section>', from) + 10),
+    '      <section id="0.9" aria-labelledby="release-0.9">\n        <header class="release-head">\n          <h2 id="release-0.9">0.9</h2>\n          <time datetime="2026-11-08">November 2026</time>\n        </header>\n        <p class="release-intro">One sentence.</p>\n        <ul class="highlights">\n          <li>\n            <h3>A thing</h3>\n            <p>What it does.</p>\n            <p class="shipped"><span class="by-faces"><span class="by-avatar" aria-hidden="true">OC</span></span><span>Shipped by <a class="by" href="https://github.com/octo-cat" rel="noopener">octo-cat</a> <span aria-hidden="true">·</span> <a href="https://github.com/nekko-labs/nekko-agent/pull/12" rel="noopener">#12</a></span></p>\n          </li>\n          <li>\n            <h3>B</h3>\n            <p>D.</p>\n            <p class="shipped"><span class="by-faces"><span class="by-avatar" aria-hidden="true">AD</span></span><span>Shipped by <a class="by" href="https://github.com/ada" rel="noopener">ada</a> <span aria-hidden="true">·</span> <a href="https://github.com/nekko-labs/nekko-agent/pull/13" rel="noopener">#13</a></span></p>\n          </li>\n        </ul>\n        <p class="everyone-who">Everyone who shipped 0.9</p>\n        <ul class="everyone">\n          <li><a class="by" href="https://github.com/ada" rel="noopener"><span class="by-avatar" aria-hidden="true">AD</span>ada</a></li>\n          <li><a class="by" href="https://github.com/octo-cat" rel="noopener"><span class="by-avatar" aria-hidden="true">OC</span>octo-cat</a></li>\n        </ul>\n        <p class="release-all"><a href="https://github.com/nekko-labs/nekko-agent/releases/tag/v0.9.5" rel="noopener">See every change in 0.9 on GitHub ↗</a></p>\n      </section>',
+  );
+  assert.doesNotMatch(html, /class="headliners"|More in 0\.9/);
+});
+
+test('a release with major highlights puts its people first, then the headliners, then the rest as one-liners', () => {
+  const lines = parseWhatsNew({
+    '0.10': line({
+      contributors: ['ada', 'bob'],
+      highlights: [
+        { title: 'Small one', detail: 'd', pr: 1, authors: ['ada'], kind: 'improvement' },
+        { title: 'Big one', detail: 'Big detail.', pr: 2, authors: ['bob'], major: true },
+        { title: 'Faster', detail: 'd', pr: 3, authors: ['ada'], kind: 'performance' },
+        { title: 'Second big', detail: 'd', pr: 4, authors: ['ada'], major: true },
+        { title: 'Untagged', detail: 'd', pr: 5, authors: ['bob'] },
+      ],
+    }),
+  });
+  const html = whatsNewPage(lines, new Map(), () => 0);
+  const section = html.slice(html.indexOf('<section id="0.10"'), html.indexOf('</section>'));
+  const at = (s) => {
+    const i = section.indexOf(s);
+    assert.ok(i >= 0, s);
+    return i;
+  };
+
+  // Intro, everyone who shipped, the headliners card, "More in", the GitHub link.
+  const order = ['class="release-intro"', 'class="everyone-who"', 'class="headliners"', 'More in 0.10', 'class="release-all"'].map(at);
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.doesNotMatch(section, /<ul class="highlights">/);
+
+  // The card: the pixel Nekko and the HEADLINERS pill, then the major highlights in file order, the first one leading.
+  const card = section.slice(at('class="headliners"'), at('More in 0.10'));
+  assert.match(card, /<svg class="headliners-nekko"[^>]*aria-hidden="true"/);
+  assert.match(card, /<span class="headliners-pill">.*>Headliners<\/span>/);
+  assert.deepEqual([...card.matchAll(/<h3>([^<]+)<\/h3>/g)].map((m) => m[1]), ['Big one', 'Second big']);
+  assert.ok(card.indexOf('class="headliner-lead"') < card.indexOf('Big one'));
+  assert.ok(card.includes('Big detail.'));
+  assert.ok(card.includes('href="https://github.com/bob"') && card.includes('/pull/2"'));
+
+  // The rest, in file order: tag (when it has one), title, pull request link.
+  const more = section.slice(at('More in 0.10'), at('class="release-all"'));
+  assert.deepEqual([...more.matchAll(/<span class="more-title">([^<]+)<\/span>/g)].map((m) => m[1]), ['Small one', 'Faster', 'Untagged']);
+  assert.deepEqual([...more.matchAll(/<span class="more-kind">([^<]+)<\/span>/g)].map((m) => m[1]), ['Improvement', 'Performance']);
+  for (const pr of [1, 3, 5]) assert.ok(more.includes(`href="https://github.com/nekko-labs/nekko-agent/pull/${pr}"`), `#${pr}`);
+  assert.doesNotMatch(more, /Big one|Second big/);
+
+  // All major: no "More in" list.
+  const allMajor = whatsNewPage(parseWhatsNew({ '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['a'], major: true }] }) }));
+  assert.match(allMajor, /class="headliners"/);
+  assert.doesNotMatch(allMajor, /More in 0\.10/);
+});
+
+test('the headliners card is the site\'s sticker, in tokens, and holds still', () => {
+  const html = build().get('whatsnew.html');
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  const rule = (sel) => css.match(new RegExp(`${sel.replace(/[.*]/g, '\\$&')} \\{([^}]*)\\}`))?.[1] ?? '';
+  assert.match(rule('.headliners'), /border: 2px solid var\(--sticker\);/);
+  assert.match(rule('.headliners'), /box-shadow: 5px 5px 0 var\(--lavender\);/);
+  const added = css.slice(css.indexOf('.headliners'));
+  assert.doesNotMatch(added, /#[0-9a-f]{3,8}\b/i, 'tokens only');
+  assert.doesNotMatch(added, /animation|transition/, 'no motion');
+  // The shipped 0.10 has headliners and one-liners; the older lines have neither.
+  for (const l of loadWhatsNew()) {
+    const majors = l.highlights.filter((h) => h.major).length;
+    if (l.line === '0.10') assert.ok(majors >= 1 && majors < l.highlights.length, '0.10');
+    else assert.equal(majors, 0, l.line);
+  }
 });
 
 test('each credit leads with the avatars, then says who shipped it', () => {
