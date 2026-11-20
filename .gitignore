@@ -38,6 +38,8 @@ target/
 apps/desktop/resources/bin/
 # Rebuilt from the maintained pin by scripts/build-agent-browser.mjs
 apps/desktop/resources/agent-browser/
+# Its upstream checkout and build tree, and other local scratch
+.scratch/
 
 # Speed-contract harness output (scripts/perf)
 perf-results/
