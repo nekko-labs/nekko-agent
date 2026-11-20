@@ -1,6 +1,7 @@
 import { terminalPresentation } from './terminalActivity.js';
 import { computerIdOf } from '@nekko-agent/shared';
 import { ComputerChip } from './ComputerChip.js';
+import { syncedComputer } from '../syncedComputers.js';
 import { terminalExcerpt } from './terminalExcerpt.js';
 import { HOME, applyWallDrop, heldSize, sameTarget, wallDropTargetAt, type Rect, type WallDropTarget } from '../wallDrag.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -818,6 +819,8 @@ export function CommandWall({
     const terminal = pane.kind === 'terminal' ? terminalById.get(pane.refId) : undefined;
     const project = projects.find((p) => p.id === (session?.workspaceId ?? terminal?.workspaceId));
     const computer = computers.find((c) => c.id === computerIdOf(session?.id));
+    // Another computer's chat synced here names that computer too (#3143).
+    const synced = !computer && session?.home ? syncedComputer(session.home, computers) : null;
     let status: { label: string; tone: string; live?: boolean } | null = null;
     let needsYou = false;
     let agentStatus: AgentStatus | undefined;
@@ -941,6 +944,7 @@ export function CommandWall({
               {/* The project only when there is more than one to tell apart:
                   on a one-project wall it is the same word on every strip. */}
               {computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} />}
+              {synced && <ComputerChip computer={synced} />}
               {project && projects.length > 1 && !density && <span className="chip hidden shrink-0 text-2xs sm:inline">{project.name}</span>}
             </>
           }

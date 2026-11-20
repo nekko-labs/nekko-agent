@@ -521,8 +521,9 @@ export function ChatControls({
         {/* Privacy Shield: what a cloud model may read. */}
         {session.chatType !== 'image' && !hidePrivacy && <PrivacyShieldMenu session={session} draft={draft} onChange={onChange} />}
 
-        {/* Sync: only while this computer syncs, and never for an incognito chat (which can't). */}
-        {syncOn && !incognito && <button
+        {/* Sync: only while this computer syncs, never for an incognito chat (which can't), and never on
+            another computer's chat, which only its own computer syncs (#3143). */}
+        {syncOn && !incognito && !session.home && <button
           className="ctl-toggle whitespace-nowrap"
           data-sync-toggle
           onClick={() => patch({ syncOff: synced })}

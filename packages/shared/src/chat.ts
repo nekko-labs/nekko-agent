@@ -442,6 +442,12 @@ export interface Session {
   incognito?: boolean;
   /** Keep this chat out of Nekko Cloud sync (it stays on this computer). Unset or false: it syncs. */
   syncOff?: boolean;
+  /**
+   * The computer this chat belongs to, when it is another computer's chat synced here through
+   * Nekko Cloud (#3143, decision 0112): a read-only copy, carried on only there or as a fork.
+   * Unset on this computer's own chats.
+   */
+  home?: import('./computers.js').ChatHome;
   /** Privacy Shield: what this chat hides from a cloud model (see privacy.ts). */
   privacy?: import('./privacy.js').SessionPrivacy;
   /** Pinned to the top of the chat list. */

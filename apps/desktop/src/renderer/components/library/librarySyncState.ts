@@ -49,6 +49,37 @@ export function remoteEntries(remote: readonly LibraryRemoteFile[]): ArtifactEnt
   });
 }
 
+/** The computer a file belongs to: another computer's name, or null for this one (#3144). */
+export function fileComputer(e: ArtifactEntry): string | null {
+  return e.source === 'cloud' ? e.device?.trim() || 'Another computer' : null;
+}
+
+/** One computer's files, when Library groups by computer. */
+export interface ComputerGroup {
+  /** `computer:here`, or `computer:<name>`. */
+  id: string;
+  label: string;
+  items: ArtifactEntry[];
+}
+
+/**
+ * Files by the computer they belong to (#3144): this computer first, then the others in the
+ * order their files first come, each keeping the files' own order (kind by kind, newest first).
+ */
+export function groupByComputer(entries: readonly ArtifactEntry[], here: string): ComputerGroup[] {
+  const groups = new Map<string, ComputerGroup>();
+  const local: ComputerGroup = { id: 'computer:here', label: here, items: [] };
+  for (const e of entries) {
+    const name = fileComputer(e);
+    if (name === null) { local.items.push(e); continue; }
+    const id = `computer:${name.toLocaleLowerCase()}`;
+    const g = groups.get(id) ?? { id, label: name, items: [] };
+    g.items.push(e);
+    groups.set(id, g);
+  }
+  return [...(local.items.length ? [local] : []), ...groups.values()];
+}
+
 /** Busiest first: one file of a design syncing makes the design's cloud say so. */
 const ORDER: readonly TileSync[] = ['syncing', 'pending', 'noRoom', 'unreadable', 'tooLarge', 'off', 'synced', 'remote'];
 
