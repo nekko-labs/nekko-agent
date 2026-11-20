@@ -143,6 +143,11 @@ impl Env for Surroundings {
         let machine = self.machine.clone();
         Box::pin(async move { machine.gpu_stats_fresh().await.map(|s| s.to_value()) })
     }
+    fn ram_headroom(&self) -> BoxFuture<Option<f64>> {
+        Box::pin(async {
+            tokio::task::spawn_blocking(|| nekko_machine::memory::headroom() as f64).await.ok().filter(|b| *b > 0.0)
+        })
+    }
     fn flags(&self, bin: String) -> BoxFuture<Arc<HashSet<String>>> {
         // Read once per binary: the engine is installed once and kept. A build
         // we cannot ask knows none of the newer flags.

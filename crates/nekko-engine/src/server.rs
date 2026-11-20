@@ -57,6 +57,11 @@ pub trait Env: Send + Sync {
     fn list_models(&self) -> BoxFuture<Vec<Value>>;
     /// A fresh GPU reading (`GpuStats`), or `None` without a probe.
     fn gpu(&self) -> BoxFuture<Option<Value>>;
+    /// System memory left to allocate (bytes), for overload protection; `None`
+    /// where it cannot be read.
+    fn ram_headroom(&self) -> BoxFuture<Option<f64>> {
+        Box::pin(async { None })
+    }
     /// The flags a `llama-server` binary accepts.
     fn flags(&self, bin: String) -> BoxFuture<Arc<HashSet<String>>>;
     fn work_dir(&self) -> Option<String>;
@@ -168,6 +173,62 @@ struct Loading {
     phase: &'static str,
     started_at: f64,
     progress: Option<f64>,
+    /// Graphics memory while this load fills it, when a GPU probe answers.
+    vram: Option<VramFill>,
+}
+
+/// The graphics memory a load is filling, in bytes: the card's total, what
+/// was free when the load began, what is free now, and what the load is
+/// expected to take. Enough for the Models page to draw it filling and to say
+/// when it will not fit.
+#[derive(Clone, Copy, Debug)]
+struct VramFill {
+    total: f64,
+    before: f64,
+    free: f64,
+    need: f64,
+}
+
+/// Overload protection's default floor: a load stops before less than this
+/// is left free, so the machine stays usable (`overloadReserveMB`).
+const OVERLOAD_RESERVE_MB: f64 = 500.0;
+/// What a load must have taken before a shortage is put down to it: memory
+/// that was already short when it began is someone else's doing.
+const OVERLOAD_BLAME_BYTES: f64 = 128.0 * 1024.0 * 1024.0;
+
+/// Whether a load has pushed free memory under the reserve: less than
+/// `reserve` free now, and at least `OVERLOAD_BLAME_BYTES` less than when
+/// the load began. Unknown readings never stop a load.
+pub fn overloaded(reserve: f64, before: Option<f64>, now: Option<f64>) -> bool {
+    match (before, now) {
+        (Some(before), Some(now)) => now < reserve && before - now >= OVERLOAD_BLAME_BYTES,
+        _ => false,
+    }
+}
+
+/// Which memory ran short, for the sentence that says so.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Overload {
+    Graphics,
+    System,
+}
+
+/// The sentence a load stopped by overload protection ends with.
+pub fn overload_message(name: &str, what: Overload, reserve: f64) -> String {
+    let memory = match what {
+        Overload::Graphics => "graphics memory",
+        Overload::System => "system memory",
+    };
+    format!(
+        "Stopped loading {name} to keep {} of {memory} free. Try a shorter context or fewer GPU layers, or turn off overload protection in the model server settings.",
+        mb(reserve)
+    )
+}
+
+/// "500 MB", "1.5 GB".
+fn mb(bytes: f64) -> String {
+    let mb = bytes / 1024.0 / 1024.0;
+    if mb >= 1024.0 { format!("{:.1} GB", mb / 1024.0) } else { format!("{mb:.0} MB") }
 }
 
 #[derive(Default)]
@@ -443,6 +504,17 @@ impl ModelServer {
         nekko_js::to_number(self.env.settings().get(key))
     }
 
+    /// Overload protection's reserve in bytes, or `None` when it is off. On
+    /// unless `overloadGuard` is false; the reserve is `overloadReserveMB`.
+    fn overload_reserve(&self) -> Option<f64> {
+        let settings = self.env.settings();
+        if settings.get("overloadGuard") == Some(&Value::Bool(false)) {
+            return None;
+        }
+        let mb = settings.get("overloadReserveMB").and_then(Value::as_f64).filter(|m| *m > 0.0);
+        Some(mb.unwrap_or(OVERLOAD_RESERVE_MB) * 1024.0 * 1024.0)
+    }
+
     /// The daemon's listen configuration from the settings, or the sentence
     /// explaining why it must not listen: a LAN bind without a key would put
     /// every route on the network for anyone to call (`serveConfig`).
@@ -650,7 +722,7 @@ impl ModelServer {
         upsert(
             &mut self.state.lock().unwrap().loading,
             id,
-            Loading { phase: "queued", started_at: now, progress: None },
+            Loading { phase: "queued", started_at: now, progress: None, vram: None },
         );
         let turn = self.load_chain.lock().await;
         let res = self.do_load(id, params).await;
@@ -764,8 +836,9 @@ impl ModelServer {
                 });
                 (full, pinned, idle.first().map(|(k, c)| (k.clone(), c.vram_bytes.unwrap_or(c.size_bytes))))
             };
+            // Overload protection keeps its reserve free, so room is made for it too.
             let short = match (need, free) {
-                (Some(need), Some(free)) => free + freed < need,
+                (Some(need), Some(free)) => free + freed < need + self.overload_reserve().unwrap_or(0.0),
                 _ => false,
             };
             if !full && !short {
@@ -869,19 +942,27 @@ impl ModelServer {
             }
         };
 
-        let before = self.free_vram().await;
+        let vram_before = self.vram().await;
+        let before = vram_before.map(|(free, _)| free);
         let gpu_share = if image {
             if params.get("diffusion").is_some_and(|d| nekko_js::truthy(d.get("offloadToCpu"))) { 0.0 } else { 1.0 }
         } else {
             gpu_share(&model, &params, gpu_capable)
         };
         let size = model.get("sizeBytes").and_then(Value::as_f64).unwrap_or(0.0);
-        if let Some(before) = before
-            && gpu_share > 0.0
-            && size > 0.0
+        // Progress (and the graphics memory it fills) only when the load has a
+        // GPU share and a size to measure against.
+        let measured_load = vram_before.filter(|_| gpu_share > 0.0 && size > 0.0);
+        if let Some((free, total)) = measured_load
+            && let Some(l) = get_mut(&mut self.state.lock().unwrap().loading, id)
         {
-            self.sample_progress(id.to_string(), before, size * gpu_share);
+            l.vram = Some(VramFill { total, before: free, free, need: need.unwrap_or(size * gpu_share) });
         }
+        let reserve = self.overload_reserve();
+        let ram_before = match reserve {
+            Some(_) => self.env.ram_headroom().await,
+            None => None,
+        };
 
         let spec = json!({
             "modelId": id,
@@ -896,7 +977,25 @@ impl ModelServer {
         }
         spec.insert("budgetSecs".into(), json!(LOAD_BUDGET_SECS));
         let spawned_at = self.env.now();
-        let outcome = self.daemon.spawn(Value::Object(spec)).await;
+        // The load races its watch: progress and graphics memory every tick,
+        // and overload protection, which drops the spawn (killing the half
+        // loaded server and releasing its memory) before the machine runs out.
+        let watch = self.watch_load(
+            id.to_string(),
+            measured_load.map(|(free, _)| (free, size * gpu_share)),
+            reserve.map(|r| (r, before, ram_before)),
+        );
+        let outcome = tokio::select! {
+            outcome = self.daemon.spawn(Value::Object(spec)) => outcome,
+            what = watch => {
+                let reserve = reserve.unwrap_or(OVERLOAD_RESERVE_MB * 1024.0 * 1024.0);
+                let name = model.get("name").and_then(Value::as_str).unwrap_or(id);
+                let message = overload_message(name, what, reserve);
+                self.say(format!("Overload protection stopped loading {id}."));
+                self.set_error(id, &message);
+                return reply(false, message);
+            }
+        };
         let ready_at = self.env.now();
         if outcome.get("status").and_then(Value::as_str) != Some("ready") {
             let log: Vec<String> = outcome
@@ -959,32 +1058,58 @@ impl ModelServer {
 
     /// Free VRAM in bytes, when a GPU probe answers (`freeVramBytes`).
     async fn free_vram(&self) -> Option<f64> {
-        let gpu = self.env.gpu().await?;
-        let devices = gpu.get("devices").and_then(Value::as_array).map_or(0, Vec::len);
-        (devices > 0).then(|| nekko_js::to_number(gpu.get("freeMB")) * 1024.0 * 1024.0)
+        self.vram().await.map(|(free, _)| free)
     }
 
-    /// Progress while a model lands: the free-VRAM drop against its share of the file.
-    fn sample_progress(&self, id: String, before: f64, expected: f64) {
-        if !self.timers {
-            return;
+    /// Free and total VRAM in bytes, when a GPU probe answers.
+    async fn vram(&self) -> Option<(f64, f64)> {
+        let gpu = self.env.gpu().await?;
+        let devices = gpu.get("devices").and_then(Value::as_array).map_or(0, Vec::len);
+        let mb = |k: &str| nekko_js::to_number(gpu.get(k)) * 1024.0 * 1024.0;
+        (devices > 0).then(|| (mb("freeMB"), mb("totalMB")))
+    }
+
+    /// Watch a load while it runs, one tick at a time; never resolves unless
+    /// overload protection trips, so it is raced against the spawn.
+    ///
+    /// `progress` is the free VRAM when it began and its expected share of the
+    /// file: each tick records the drop against it as progress (capped under
+    /// full until health agrees it is done) and the free figure for the page.
+    /// `guard` is the reserve and the free VRAM and system memory when it
+    /// began: a tick that finds the load has pushed either under the reserve
+    /// answers which ran short.
+    async fn watch_load(
+        &self,
+        id: String,
+        progress: Option<(f64, f64)>,
+        guard: Option<(f64, Option<f64>, Option<f64>)>,
+    ) -> Overload {
+        // Tests drive loads without a clock; the timers are their switch, as for the sweep.
+        if !self.timers || (progress.is_none() && guard.is_none()) {
+            return std::future::pending().await;
         }
-        let me = self.me.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(LOAD_PROGRESS).await;
-                let Some(me) = me.upgrade() else { return };
-                if get(&me.state.lock().unwrap().loading, &id).is_none() {
-                    return;
-                }
-                if let Some(free) = me.free_vram().await
-                    && let Some(entry) = get_mut(&mut me.state.lock().unwrap().loading, &id)
-                {
-                    // Capped under full until health agrees it is done.
+        loop {
+            tokio::time::sleep(LOAD_PROGRESS).await;
+            let free = self.free_vram().await;
+            if let Some(free) = free
+                && let Some(entry) = get_mut(&mut self.state.lock().unwrap().loading, &id)
+            {
+                if let Some((before, expected)) = progress {
                     entry.progress = Some(((before - free) / expected).clamp(0.0, 0.95));
                 }
+                if let Some(v) = entry.vram.as_mut() {
+                    v.free = free;
+                }
             }
-        });
+            if let Some((reserve, vram_before, ram_before)) = guard {
+                if overloaded(reserve, vram_before, free) {
+                    return Overload::Graphics;
+                }
+                if ram_before.is_some() && overloaded(reserve, ram_before, self.env.ram_headroom().await) {
+                    return Overload::System;
+                }
+            }
+        }
     }
 
     /// Stop one model's server (`unload`). A model kept resident goes only when asked.
@@ -1218,6 +1343,12 @@ impl ModelServer {
                 if let Some(p) = l.progress {
                     o.insert("progress".into(), num(p));
                 }
+                if let Some(v) = l.vram {
+                    o.insert(
+                        "vram".into(),
+                        json!({ "totalBytes": num(v.total), "beforeBytes": num(v.before), "freeBytes": num(v.free), "needBytes": num(v.need) }),
+                    );
+                }
                 Value::Object(o)
             })
             .collect();
@@ -1250,6 +1381,33 @@ mod tests {
             serve_config(&s),
             Ok(json!({ "port": 11600, "host": "0.0.0.0", "apiKey": "k", "corsOrigins": ["http://a.test", "*"] }))
         );
+    }
+
+    const MIB: f64 = 1024.0 * 1024.0;
+
+    #[test]
+    fn overload_trips_when_the_load_pushes_free_memory_under_the_reserve() {
+        let reserve = 500.0 * MIB;
+        // Filled from 8 GiB free to 400 MiB: the load did it.
+        assert!(overloaded(reserve, Some(8192.0 * MIB), Some(400.0 * MIB)));
+        // Still above the reserve.
+        assert!(!overloaded(reserve, Some(8192.0 * MIB), Some(600.0 * MIB)));
+        // Already short before the load, and it has taken almost nothing yet.
+        assert!(!overloaded(reserve, Some(450.0 * MIB), Some(420.0 * MIB)));
+        // Already short, and the load keeps taking: it is stopped.
+        assert!(overloaded(reserve, Some(450.0 * MIB), Some(300.0 * MIB)));
+        // A reading that is not there never stops a load.
+        assert!(!overloaded(reserve, None, Some(0.0)));
+        assert!(!overloaded(reserve, Some(8192.0 * MIB), None));
+    }
+
+    #[test]
+    fn overload_message_names_the_memory_and_the_reserve() {
+        assert_eq!(
+            overload_message("Qwen3 8B", Overload::Graphics, 500.0 * MIB),
+            "Stopped loading Qwen3 8B to keep 500 MB of graphics memory free. Try a shorter context or fewer GPU layers, or turn off overload protection in the model server settings."
+        );
+        assert!(overload_message("M", Overload::System, 1536.0 * MIB).contains("1.5 GB of system memory"));
     }
 
     #[test]

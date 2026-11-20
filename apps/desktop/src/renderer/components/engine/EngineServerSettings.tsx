@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { withBind } from './lanKey.js';
 import { SettingsAutosave } from './settingsAutosave.js';
 import type { EngineInstall, EngineSettings } from '@nekko-agent/shared';
-import { ENGINE_BACKEND_LABELS, ENGINE_PORT_DEFAULT, engineBaseUrl } from '@nekko-agent/shared';
+import { ENGINE_BACKEND_LABELS, ENGINE_PORT_DEFAULT, OVERLOAD_RESERVE_MB_DEFAULT, engineBaseUrl } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { Toggle } from '../primitives/index.js';
 
@@ -33,6 +33,9 @@ export function EngineServerSettings({
   const [autosave] = useState(() => new SettingsAutosave(settings, patch => window.nekko.engineSettingsSave(patch), () => changed.current()));
   const { draft, status: saveStatus, error } = useSyncExternalStore(autosave.subscribe, autosave.getSnapshot);
   const setDraft = (next: EngineSettings) => autosave.edit(next);
+  // On unless turned off; the reserve defaults to 500 MB.
+  const guardOn = draft.overloadGuard !== false;
+  const reserveMB = draft.overloadReserveMB ?? OVERLOAD_RESERVE_MB_DEFAULT;
   useEffect(() => { autosave.reconcile(settings); }, [autosave, settings]);
   useEffect(() => () => autosave.dispose(), [autosave]);
 
@@ -142,6 +145,28 @@ export function EngineServerSettings({
         <Field label="Load on demand" hint="A request for a model that is not loaded loads it, the way LM Studio does.">
           <Toggle value={draft.jitLoad} onChange={(v) => setDraft({ ...draft, jitLoad: v })} label="Load on demand" />
         </Field>
+
+        <Field
+          label="Overload protection"
+          hint={`Stops a load before it leaves less than ${reserveMB} MB of graphics or system memory free, and releases what it took, so the computer does not freeze.`}
+        >
+          <Toggle value={guardOn} onChange={(v) => setDraft({ ...draft, overloadGuard: v })} label="Overload protection" />
+        </Field>
+
+        {guardOn && (
+          <Field label="Keep free" hint="Megabytes overload protection keeps free in graphics and system memory.">
+            <input
+              type="number"
+              className="input w-24 py-1 text-xs"
+              min={128}
+              max={16_384}
+              step={128}
+              value={reserveMB}
+              aria-label="Megabytes to keep free"
+              onChange={(e) => setDraft({ ...draft, overloadReserveMB: Number(e.target.value) })}
+            />
+          </Field>
+        )}
       </div>
 
       <p className="text-2xs text-ink-faint">

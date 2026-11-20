@@ -185,7 +185,18 @@ export interface EngineSettings {
    * someone stops using should be switchable off without being retyped later.
    */
   modelFolders?: ModelFolder[];
+  /**
+   * Overload protection: a load that pushes free graphics memory or system
+   * memory under `overloadReserveMB` is stopped and its memory released, so
+   * the machine does not freeze. On unless turned off.
+   */
+  overloadGuard?: boolean;
+  /** How much overload protection keeps free, in MB. 500 when unset. */
+  overloadReserveMB?: number;
 }
+
+/** Overload protection's reserve when the settings name none. */
+export const OVERLOAD_RESERVE_MB_DEFAULT = 500;
 
 export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   port: ENGINE_PORT_DEFAULT,
@@ -215,6 +226,20 @@ export interface LoadingModel {
   phase: 'queued' | 'loading';
   startedAt: number;
   progress?: number;
+  /** The graphics memory it is filling, when a GPU probe answers and part of it goes there. */
+  vram?: LoadingVram;
+}
+
+/**
+ * Graphics memory during a load, in bytes: the card's total, what was free
+ * when the load began, what is free now, and what the load is expected to
+ * take (the planner's estimate: weights, cache and overhead on the GPU).
+ */
+export interface LoadingVram {
+  totalBytes: number;
+  beforeBytes: number;
+  freeBytes: number;
+  needBytes: number;
 }
 
 /** Everything the engine card needs in one read. */
