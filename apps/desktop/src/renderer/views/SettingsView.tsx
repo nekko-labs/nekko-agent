@@ -45,6 +45,7 @@ import { StyleSection } from './StyleSection.js';
 import { openCustomize } from '../components/CustomizeExperience.js';
 import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
 import { useExpertMode, useShown } from '../simpleMode.js';
+import { forwardWheelToContent } from '../railWheel.js';
 import { ChoiceList, SettingRow, SettingsLabel, SettingsSection } from '../components/SettingsSection.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
@@ -190,7 +191,7 @@ export function SettingsView() {
   if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
-    <div className="settings-panel">
+    <div className="settings-panel" onWheel={(e) => forwardWheelToContent(e, scrollRef.current)}>
       <aside className="settings-rail">
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
         <div aria-label="Skills and connectors" className="settings-shortcuts">

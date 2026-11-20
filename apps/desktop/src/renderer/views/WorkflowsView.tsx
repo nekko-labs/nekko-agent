@@ -1,5 +1,5 @@
 import { GfServerIcon, WorkflowIcon } from '../gentleface-icons.js';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   SkillDef,
   Workflow,
@@ -39,6 +39,7 @@ import { STATUS } from '../tokens.js';
 import { hasAppChrome } from '../chrome.js';
 import { CiRunnersView, watchRunnerPresence, type RunnerPresence } from './CiRunnersView.js';
 import { useShown } from '../simpleMode.js';
+import { forwardWheelToContent } from '../railWheel.js';
 
 /**
  * The Automations tab's Scheduled tasks section (code name: workflows): automation modelled on GitHub Actions, where a step can be
@@ -103,6 +104,7 @@ export function WorkflowsView() {
   const paused = useStore((s) => s.settings?.automationsPaused === true);
   const ciRunnersFocus = useStore((s) => s.ciRunnersFocus);
   // The sub-navigation's page: the task list, or this Mac's CI runners.
+  const contentRef = useRef<HTMLDivElement>(null);
   const [section, setSection] = useState<'tasks' | 'ci'>(ciRunnersFocus ? 'ci' : 'tasks');
   const [runners, setRunners] = useState<RunnerPresence>('none');
   const workflowFocus = useStore((s) => s.workflowFocus);
@@ -213,7 +215,7 @@ export function WorkflowsView() {
   const ciShown = ciRelevant || section === 'ci';
   const page = ciShown ? section : 'tasks';
   return (
-    <div className="automations-layout">
+    <div className="automations-layout" onWheel={(e) => forwardWheelToContent(e, contentRef.current)}>
       {/* Automations' sections, then the scheduled tasks list's filters */}
       <aside className="automations-rail">
         {!hasAppChrome && <h1 className="view-title">Automations</h1>}
@@ -319,7 +321,7 @@ export function WorkflowsView() {
       </aside>
 
       {/* List */}
-      <div className="automations-content">
+      <div ref={contentRef} className="automations-content">
         {page === 'ci' ? <div className="mx-auto max-w-5xl"><CiRunnersView /></div> : !loaded ? <p className="p-4 text-sm text-ink-soft" role="status">{loadFailed ? 'Could not load scheduled tasks. Reopen this tab to try again.' : 'Loading scheduled tasks…'}</p> : workflows.length === 0 ? (<>
           <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
         </>) : <div className="mx-auto max-w-5xl">
