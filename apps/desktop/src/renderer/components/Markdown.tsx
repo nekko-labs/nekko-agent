@@ -149,7 +149,7 @@ export function markdownSegments(text: string): MarkdownSegment[] {
     for (let j = 0; j <= lines.length; j++) {
       const blank = j === lines.length || !lines[j].trim();
       if (!blank && start < 0) start = j;
-      if (blank && start >= 0) {
+      if (blank && start >= 0 && !continuesList(lines, start, j)) {
         out.push({ kind: 'text', key: `b${i}-${start}`, src: lines.slice(start, j).join('\n') });
         start = -1;
       }
@@ -214,7 +214,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
 const MemoCodeBlock = React.memo(CodeBlock);
 
 const BULLET_RE = /^(\s*)[-*+]\s+(.*)$/;
-const ORDERED_RE = /^(\s*)\d+[.)]\s+(.*)$/;
+const ORDERED_RE = /^(\s*)(\d+)[.)]\s+(.*)$/;
 const HEADING_RE = /^(#{1,6})\s+(.*?)\s*#*$/;
 const QUOTE_RE = /^\s*>\s?(.*)$/;
 const RULE_RE = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
@@ -267,19 +267,34 @@ interface ListItem {
   indent: number;
   text: string;
   ordered: boolean;
+  /** The number the item was written with; a numbered list starts there. */
+  number?: number;
 }
 
 function listItem(line: string): ListItem | null {
   const bullet = BULLET_RE.exec(line);
   if (bullet) return { indent: bullet[1].length, text: bullet[2], ordered: false };
   const ordered = ORDERED_RE.exec(line);
-  if (ordered) return { indent: ordered[1].length, text: ordered[2], ordered: true };
+  if (ordered) return { indent: ordered[1].length, text: ordered[3], ordered: true, number: Number(ordered[2]) };
   return null;
 }
 
 /** True for any line that starts a block of its own, so a paragraph run stops. */
 function startsBlock(line: string): boolean {
   return !line.trim() || !!listItem(line) || HEADING_RE.test(line) || QUOTE_RE.test(line) || RULE_RE.test(line);
+}
+
+/**
+ * True when the blank lines at `blank` only separate items of a list that
+ * started earlier in the segment `start..blank`: a loose list (items with blank
+ * lines between them) is still one list, so the chat split must not cut it.
+ */
+function continuesList(lines: string[], start: number, blank: number): boolean {
+  let next = blank;
+  while (next < lines.length && !lines[next].trim()) next += 1;
+  if (next >= lines.length || !listItem(lines[next])) return false;
+  for (let k = start; k < blank; k++) if (listItem(lines[k])) return true;
+  return false;
 }
 
 /**
@@ -320,7 +335,7 @@ function renderList(items: ListItem[], key: string, ctx: Ctx, depth = 0): React.
   }
   const className = ctx.doc ? 'my-2 ml-5 space-y-1' : 'ml-4 space-y-0.5';
   return items[0].ordered
-    ? <ol key={key} className={className} style={{ listStyleType: depth % 2 ? 'lower-alpha' : 'decimal', paddingLeft: '0.35rem' }}>{nodes}</ol>
+    ? <ol key={key} start={items[0].number} className={className} style={{ listStyleType: depth % 2 ? 'lower-alpha' : 'decimal', paddingLeft: '0.35rem' }}>{nodes}</ol>
     : <ul key={key} className={className} style={{ listStyleType: depth % 2 ? 'circle' : 'disc', paddingLeft: '0.35rem' }}>{nodes}</ul>;
 }
 
@@ -439,6 +454,11 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
         if (!it || (it.indent <= first.indent && it.ordered !== first.ordered)) break;
         items.push(it);
         j += 1;
+        // Blank lines between items keep a loose list one list (CommonMark).
+        let next = j;
+        while (next < lines.length && !lines[next].trim()) next += 1;
+        if (next >= lines.length || !listItem(lines[next])) break;
+        j = next;
       }
       out.push(renderList(items, `${key}-l${i}`, ctx));
       i = j;

@@ -166,6 +166,36 @@ describe('Markdown', () => {
     expect(out).toContain('<ol');
   });
 
+  it('keeps a numbered list one list when its items are separated by blank lines', () => {
+    const out = html('1. first\n\n2. second\n\n3. third');
+    expect(out.match(/<ol/g)).toHaveLength(1);
+    expect(out.match(/<li dir="auto">/g)).toHaveLength(3);
+  });
+
+  it('keeps bold lead-in items in one list under a bold header', () => {
+    const out = html('**Improvements, in priority order**\n\n1. **One.** text\n\n2. **Two.** text\n\n3. **Three.** text');
+    expect(out.match(/<ol/g)).toHaveLength(1);
+    expect(out.match(/<li dir="auto">/g)).toHaveLength(3);
+  });
+
+  it('starts a numbered list at the number it was written with', () => {
+    expect(html('3. third\n4. fourth')).toContain('start="3"');
+  });
+
+  it('keeps a bulleted list one list across blank lines', () => {
+    expect(html('- a\n\n- b').match(/<ul/g)).toHaveLength(1);
+  });
+
+  it('still starts a new list at a bullet after a numbered item and a blank line', () => {
+    const out = html('1. a\n\n- b');
+    expect(out).toContain('<ol');
+    expect(out).toContain('<ul');
+  });
+
+  it('ends a numbered list at a paragraph after a blank line', () => {
+    expect(html('1. a\n\nplain text')).toMatch(/<\/ol><p[^>]*>plain text/);
+  });
+
   it('renders numbered lists, headings, quotes and rules', () => {
     expect(html('1. first\n2. second')).toContain('<ol');
     expect(html('## Heading')).toContain('Heading');
@@ -294,6 +324,11 @@ const FIXTURES = [
   'one\ntwo',
   '- bullet\n1. number',
   '1. first\n2. second',
+  '1. first\n\n2. second\n\n3. third',
+  '**Lead-in**\n\n1. **One.** a\n\n2. **Two.** b',
+  '3. third\n4. fourth',
+  '- a\n\n- b\n\n  - nested after a blank\n\n- c',
+  '1. a\n\n- b',
   '## Heading',
   '> quoted',
   '---',
