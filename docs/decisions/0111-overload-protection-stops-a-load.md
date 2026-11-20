@@ -23,4 +23,4 @@ Option 3, on by default with a 500 MB reserve (`overloadGuard`, `overloadReserve
 
 - A load that used to squeeze into the last few hundred MB now stops. The message names the fix (a shorter context, fewer GPU layers) and the switch.
 - Protection covers loads only. A model already loaded that later meets a memory shortage is the desktop's low-memory card's job.
-- The phones' model server settings do not show the switch yet.
+- The phones switch it from the agent details' Model Server section, like the other settings there (only while the computer lets devices choose, each change behind Face ID or the screen lock). How much it keeps free is set on the computer only.

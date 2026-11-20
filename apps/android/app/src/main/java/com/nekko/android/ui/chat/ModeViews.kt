@@ -1044,6 +1044,17 @@ private fun ModelServerControls(
         Text("Load when a chat asks", style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
         Switch(enabled = enabled, checked = settings.jitLoad ?: true, onCheckedChange = { on -> run { server.set(buildJsonObject { put("jitLoad", on) }) } })
     }
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("monitor.overloadGuard"), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Overload protection", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+            Text(
+                "Stops a load before it leaves less than ${settings.overloadReserveMB ?: ModelServerSettings.OVERLOAD_RESERVE_DEFAULT_MB} MB of memory free.",
+                style = MaterialTheme.typography.bodySmall,
+                color = p.inkSoft,
+            )
+        }
+        Switch(enabled = enabled, checked = settings.overloadGuard ?: true, onCheckedChange = { on -> run { server.set(buildJsonObject { put("overloadGuard", on) }) } })
+    }
     Footnote(if (settings.devicesChoose) "Each change asks for your screen lock." else "$computer’s Model Server keeps its own model settings. Change them there, or turn on Connected devices choose model settings.")
 }
 

@@ -28,14 +28,21 @@ public struct ModelServerSettings: Equatable, Sendable {
     public let jitLoad: Bool?
     /// Off, the Model Server's own saved settings decide and devices can't change them.
     public let devicesChoose: Bool
+    /// Overload protection: stop a load before it leaves less than the reserve free. On unless turned off.
+    public var overloadGuard: Bool? = nil
+    /// How much overload protection keeps free, in MB; set on the computer, read here for the label.
+    public var overloadReserveMB: Int? = nil
 
     /// The idle times offered, in seconds: 5 minutes, 15 minutes, an hour, never.
     public static let idleChoices = [300, 900, 3600, 0]
+    /// The reserve when the computer names none (`OVERLOAD_RESERVE_MB_DEFAULT`).
+    public static let overloadReserveDefaultMB = 500
 
     public static func from(_ v: JSONValue?) -> ModelServerSettings? {
         guard let v, v.object != nil else { return nil }
         return ModelServerSettings(maxLoaded: v.long("maxLoaded").map(Int.init), idleTtlSeconds: v.long("idleTtlSeconds").map(Int.init),
-                                   jitLoad: v["jitLoad"]?.bool, devicesChoose: v["clientModelSettings"]?.bool ?? true)
+                                   jitLoad: v["jitLoad"]?.bool, devicesChoose: v["clientModelSettings"]?.bool ?? true,
+                                   overloadGuard: v["overloadGuard"]?.bool, overloadReserveMB: v.long("overloadReserveMB").map(Int.init))
     }
 }
 

@@ -575,7 +575,8 @@
   "autoload",
   "idleTtlSeconds",
   "jitLoad",
-  "maxLoaded"
+  "maxLoaded",
+  "overloadGuard"
  ],
  "modelServerView": [
   "autoStart",
@@ -583,8 +584,10 @@
   "idleTtlSeconds",
   "jitLoad",
   "maxLoaded",
+  "overloadGuard",
   "clientModelSettings",
-  "shareWithComputers"
+  "shareWithComputers",
+  "overloadReserveMB"
  ],
  "activityView": [
   "chatActive",
