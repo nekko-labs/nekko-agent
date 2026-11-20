@@ -258,13 +258,12 @@ export function dateGroupOf(at: number, now: number): string {
  * needed (#2824), then the agents, whose Browser or Files drawer a row opens.
  * Remembered per window, like the view.
  */
-export type AgentPanelShows = 'agents' | 'terminals' | 'media' | 'browsers' | 'files';
+export type AgentPanelShows = 'agents' | 'terminals' | 'media' | 'files';
 
 export const AGENT_PANEL_SHOWS: ReadonlyArray<{ id: AgentPanelShows; label: string }> = [
   { id: 'agents', label: 'Agents' },
   { id: 'terminals', label: 'Terminals' },
   { id: 'media', label: 'Photos and videos' },
-  { id: 'browsers', label: 'Browsers' },
   { id: 'files', label: 'Files' },
 ];
 

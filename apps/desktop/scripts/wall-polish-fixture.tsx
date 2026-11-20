@@ -53,13 +53,11 @@ const bridge: any = {
   // opts.expired: the Claude subscription's sign-in has expired.
   getLimitsProblem: async (key: string) => (expiredFixture && key === 'claude' ? { kind: 'auth_expired', at: Date.now() } : null),
   getLimits: async () => null,
-  // The Browsers view's served pages and a Files window's listing (#2824).
-  serversList: async () => ({ servers: [
-    { url: 'http://localhost:5173/', port: 5173, title: 'Shop admin', process: 'node', cwd: 'C:/fixture/shop/web' },
-    { url: 'http://localhost:4000/', port: 4000, title: 'Docs preview', process: 'node', cwd: 'C:/fixture/docs' },
-    { url: 'http://localhost:8000/', port: 8000, process: 'python', cwd: 'C:/temp' },
-  ] }),
+  // A folder's listing, for the Files view's trees and a Files window.
   listDir: async (dir: string) => ['src', 'public', 'package.json', 'README.md', 'vite.config.ts'].map((name) => ({ name, path: `${dir}/${name}`, dir: !name.includes('.') })),
+  // A file opened from the Files view (the sidebar file browser).
+  readFile: async (file: string) => ({ path: file, content: file.endsWith('.md') ? '# Shop\n\nThe storefront and its admin.\n\n## Run it\n\n    npm install\n    npm run dev\n' : '{\n  "name": "shop",\n  "private": true\n}\n', binary: false, truncated: false, size: 96 }),
+  listComments: async () => [],
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if (key in target) return target[key]; if (key.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 
