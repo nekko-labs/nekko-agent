@@ -65,7 +65,7 @@ function Row({ c, st, on, disabled, onChange, now }: {
   now: number;
 }) {
   const [open, setOpen] = useState(false);
-  // The shared SettingRow, like All connections off above it, so every switch
+  // The shared SettingRow, like All connections off below them, so every switch
   // sits centred on its row's text (#2397).
   return (
     <div data-connection={c.id}>
@@ -87,8 +87,8 @@ function Row({ c, st, on, disabled, onChange, now }: {
 }
 
 /**
- * Settings > Connections (#1034): All connections off, a switch per
- * connection, and each one's recent activity. The engine enforces both
+ * Settings > Connections (#1034): a switch per connection with its recent
+ * activity, then All connections off at the bottom. The engine enforces both
  * switches (crates/nekko-net); this only saves `settings.connections`.
  */
 export function ConnectionsSettings({ settings, update }: {
@@ -119,12 +119,6 @@ export function ConnectionsSettings({ settings, update }: {
           Nekko Agent sends no usage or crash reports unless you turn them on under System. The log keeps when each connection was used and where it went, never what was sent.
         </p>
       </details>
-      <SettingRow
-        className="mt-(--q-inline)"
-        title={<span className={allOff ? 'text-warning-text' : ''}>All connections off</span>}
-        detail="Nothing reaches or leaves this computer over the network. Every chat runs Offline, so only local models on this computer answer."
-        control={<Toggle label="All connections off" value={allOff} onChange={(v) => update({ connections: { ...conn, allOff: v } })} />}
-      />
       {CONNECTION_GROUPS.map((g) => (
         <div key={g.id} className="mt-(--q-group)">
           <h3 className="quiet-group-label">{g.label}</h3>
@@ -146,6 +140,14 @@ export function ConnectionsSettings({ settings, update }: {
         <button className="btn btn-ghost py-1 text-xs" onClick={() => void clear()}>Clear connection logs</button>
         <span className="text-2xs text-ink-faint">Kept in logs/connections.log, at most about 6 MB.</span>
       </div>
+      {/* The one switch that cuts everything: last, in danger words, below the switches it overrides. */}
+      <SettingRow
+        className="mt-(--q-group)"
+        data-all-connections-off
+        title={<span className="text-danger-text">All connections off</span>}
+        detail="Nothing reaches or leaves this computer over the network. Every chat runs Offline, so only local models on this computer answer."
+        control={<Toggle label="All connections off" value={allOff} onChange={(v) => update({ connections: { ...conn, allOff: v } })} />}
+      />
     </SettingsSection>
   );
 }

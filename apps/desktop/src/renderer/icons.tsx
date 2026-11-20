@@ -137,6 +137,7 @@ export const ControlPanelIcon = (p: P) => <S {...p}><rect x="3" y="3" width="18"
 
 /* Mode panel glyphs: one per setting and per option, so the panel scans by shape. */
 export const CloudIcon = (p: P) => (<S {...p}><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.6 9.1 4.7 4.7 0 0 0 7 18.5z" /></S>);
+export const UserIcon = (p: P) => (<S {...p}><circle cx="12" cy="8" r="4" /><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0" /></S>);
 export const PhoneIcon = (p: P) => (<S {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2" /><path d="M11 18.5h2" /></S>);
 export const ComputerIcon = (p: P) => (<S {...p}><rect x="3.5" y="4.5" width="17" height="12" rx="2" /><path d="M9 20.5h6M12 16.5v4" /></S>);
 /** The ready burst's check, on a 16 box because its path is drawn on by dash length. */

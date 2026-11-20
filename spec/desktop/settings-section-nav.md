@@ -7,19 +7,21 @@ area: desktop
 
 User intent: find the QR code that links a phone without hunting through one long Settings page, and see Settings split into clear sections.
 
-- Settings has a section list on the left: **Help out the Nekko Team**, **General**, **Phone pairing**, **Computers** (when available), **Customize**, **Agents**, **Safety**, **Connections**, **Tools**, **System**. Clicking one jumps to that section with a fast scroll (about 200ms, ease-out; instant when the system asks for reduced motion), and the clicked item stays highlighted through the jump; the item for the section at the top of the page stays highlighted as you scroll. In a narrow window the list becomes a wrapping row above the page.
+- Settings has a section list on the left: **Profile**, **Help out the Nekko Team**, **Nekko Cloud**, **General**, **Phone pairing**, **Computers** (when available), **Customize**, **Agents**, **Safety**, **Connections**, **Tools**, **System**. Clicking one jumps to that section with a fast scroll (about 200ms, ease-out; instant when the system asks for reduced motion), and the clicked item stays highlighted through the jump; the item for the section at the top of the page stays highlighted as you scroll. In a narrow window the list becomes a wrapping row above the page.
 - The page is grouped to match, each group under its name at page-title size, with one hairline between groups (see [Quiet Settings](#quiet-settings-and-where-each-setting-lives-2563) for the order inside each):
+  - Profile: About you (what Nekko calls you, the update email, what you mostly do, and the About you note sent with each chat).
   - Help out the Nekko Team: Help improve Nekko Agent (usage reports), Support by starring the project on GitHub.
+  - Nekko Cloud: Account (sign in, plan, sign out). Once signed in: Sync, Fleet management (the organization, Share this computer, its computers and members), then the Danger zone (Delete everything synced, Delete account).
   - General: Notifications, Chats, Desktop behavior, Language and help, Dictation, Chat history.
-  - Phone pairing: Remote access, then Sync, then Organization (only when signed in to Nekko Cloud).
+  - Phone pairing: Remote access.
   - Computers: Connected computers and pairing.
-  - Customize: About you, Appearance, Fonts and text ([Style](style-fonts-and-text-size.md)), Animations, Agents wall, View settings, Simple mode visibility, Customization (standing instructions), Fun.
+  - Customize: Appearance, Fonts and text ([Style](style-fonts-and-text-size.md)), Animations, Agents wall, View settings, Simple mode visibility, Customization (system prompt and server prompt wrapper), Fun.
   - Agents: Agent loop, Spec-driven development, Agent orchestration, Delegation routes, Hooks, Automations, Claude plan features.
   - Safety: Chat modes, Sandbox, Guardrails, Security.
-  - Connections: All connections off and every connection with its log ([Connections](../platform/connections-switch-and-activity-log.md)).
+  - Connections: every connection with its log, then All connections off at the bottom in danger red ([Connections](../platform/connections-switch-and-activity-log.md)).
   - Tools: Git management, Project management, Pull requests, Terminal, MCP servers.
   - System: Nekko Agent service, Updates, Developer, Experimental, Backup & restore, Data & privacy.
-- Phone pairing follows General (third after Help out the Nekko Team), so the QR remains one click from opening Settings.
+- Phone pairing follows General, so the QR stays one click from opening Settings.
 - In Remote access, **Paired devices** and **+ Pair a device** come first once remote access is on, and the pairing QR opens directly under the button, above the device list. Relay details, the local relay, network visibility, phone changes and phone access follow. Before remote access is on, the card offers two ways to connect, Tailscale or Nekko Cloud (see [remote control](../phone/driving-your-home-model-from-your-phone-remote-control.md)).
 - The card keeps the name "Remote access", so every "Settings → Remote access" instruction in the apps and docs still points to it.
 - Search within Settings stays in the rail and searches the whole page; the section list is not searched.
@@ -98,3 +100,19 @@ Status: implemented, not yet landed. Checked with the settings, search and palet
 ## Organization section (issue #2588)
 
 Implemented in the desktop renderer; it needs the engine's `org:*` and `fleet:*` channels, so it shows "Organizations are not available in this version of Nekko Agent yet" until a build has them. Where: Settings > Phone pairing > Organization, under Sync. Signed out, the section is not shown. Signed in but not unlocked on this computer, it says to unlock with the recovery key or by approval, in Sync. With no organization it offers to create one and lists invitations to accept. With one it shows your role, the members (owners and admins can invite by email and remove members), the **Share this computer with <Org>** switch (off by default; it lists this computer and its local models for members, uploads no chats and lets nobody run anything yet), and the Computers list: name, OS icon, a This computer tag, an online dot or Last seen, and local models collapsed after three. There is no Connect or Run action. It refreshes on the Nekko Cloud status event and re-reads the Computers list every 15 seconds while the section is on screen. Unverified: the live engine and cloud (the channels are stubbed in the captures), the packaged app and the Local Web UI.
+
+## Profile first, Nekko Cloud as its own group (#3076)
+
+User intent: Profile is the top item (your info, About you), Help out the Nekko Team second, Nekko Cloud account details third. Signing in to Nekko Cloud brings in the options that need an account. All connections off moves to the bottom of Connections, in red.
+
+- **Profile** is the first group. Its About you section holds what Nekko calls you, the update email, What you mostly do (the setup wizard's card, now editable) and More about you (the `aboutUser` note, moved out of Customize > Customization, which keeps the system prompt and the server prompt wrapper). Values, save paths and what is sent to models are unchanged.
+- **Help out the Nekko Team** is second.
+- **Nekko Cloud** is third. Signed out it shows only Account: the sync picture, one line on what an account is for, and Sign in to Nekko Cloud. Signed in, Account shows the email, plan and Sign out (plus Plans and billing and the team switches when those are on), then **Sync** (unchanged: status, devices, recovery key), **Fleet management** (the former Organization section, retitled: Share this computer, the organization's computers and its members) and the **Danger zone** (Delete everything synced, Delete account) last. Chat history's storage notice opens this group.
+- **Phone pairing** keeps only Remote access.
+- **Connections**: the per-connection switches and logs come first; **All connections off** is the last row, its title always in danger red. It still greys every row above when on.
+- Search: "profile", "about you", "nekko cloud", "fleet" and "sign in" find the new groups; Phone pairing no longer matches "sync".
+- Planned, not built: per-kind sync switches (chats, Library) under Sync. The engine pulls every kind through one cursor, so switching one kind off and back on needs engine work; it lands separately.
+
+Privacy and safety: layout and copy only. No setting value, default, save path, permission, encryption or network behavior changes.
+
+Status: implemented, not yet landed. Checked with the settings tests, desktop typecheck and a hidden renderer capture (see the PR). Not yet checked: the installed app and the Local Web UI.

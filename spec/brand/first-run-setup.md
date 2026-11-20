@@ -35,6 +35,6 @@ Verification: focused mode/store/markup/contrast tests, desktop typecheck and pr
 
 ## Answers stay editable
 
-Settings → General → **About you** edits the name and the email (a changed address joins the update list the same way; clearing it removes it from this computer). **Replay setup** reopens the whole wizard. While setup is open, the Agents board's "Agents now live in zones" intro waits until it closes instead of covering it, and the board reloads its Monitors panel choice when setup closes.
+Settings → Profile → **About you** edits the name and the email (a changed address joins the update list the same way; clearing it removes it from this computer). **Replay setup** reopens the whole wizard. While setup is open, the Agents board's "Agents now live in zones" intro waits until it closes instead of covering it, and the board reloads its Monitors panel choice when setup closes.
 
 Verification (2026-11-07): renderer tests for the answers, the step order and the Minimal choices; nekkod tests for the signup body and route; Nekko Cloud tests for the app-list confirmation email; the real wizard walked step by step in a hidden, network-blocked Electron capture (`onboarding-evidence-sandbox.cjs`), which checked the bad-email stop, the saved answers, the Monitors write and the single theme row. The welcome motion was recorded in headless Chromium. Not verified: a real send to the hosted Nekko Cloud, and Windows/Linux packaged builds.
