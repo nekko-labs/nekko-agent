@@ -855,6 +855,8 @@ fn cut_input(input: &Value, n: usize) -> (Value, bool) {
 fn phone_message(m: &Value, n: usize) -> Value {
     let Value::Object(m) = m else { return m.clone() };
     let mut out = m.clone();
+    // The context saved with a user message is for the model; the phone never shows it.
+    out.remove("turnContext");
     if let Some(Value::Object(r)) = m.get("toolResult") {
         let mut r = r.clone();
         if let Some(Value::Array(images)) = r.get("images") {

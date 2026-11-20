@@ -1373,8 +1373,8 @@ impl Turns {
             facts.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default()
         };
         let data_dir = Some(self.data_dir.clone());
-        let block = if sandbox {
-            nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput::default()))
+        let parts = if sandbox {
+            ContextParts::default()
         } else {
             let (loaded, opts, facts, workspaces) = (loaded.clone(), opts.clone(), facts.clone(), workspaces.clone());
             tokio::task::spawn_blocking(move || context_block(&loaded, &opts, &facts, &workspaces, data_dir.as_deref()))
@@ -1401,7 +1401,7 @@ impl Turns {
             "sandbox": sandbox,
             "executionMode": execution_mode,
             "worktreeNotices": notices,
-            "contextBlock": block,
+            "contextBlock": &parts.stable,
             "platform": facts.get("platform").cloned().unwrap_or(json!(std::env::consts::OS)),
             "workMode": loaded.get("workMode").cloned().unwrap_or(Value::Null),
             "promptProfile": facts.pointer("/promptProfile/profile").cloned().unwrap_or(Value::Null),
@@ -1414,9 +1414,11 @@ impl Turns {
         // The user's input, saved before the reply starts. A wake-up has none.
         let wake = spec.get("wake") == Some(&Value::Bool(true));
         let mut session_value = loaded;
+        let messages_before = session_value.get("messages").and_then(Value::as_array).map_or(0, Vec::len);
         if !wake {
             turn::apply_turn_input(&mut session_value, opts, nekko_js::now_ms());
         }
+        keep_turn_context(&mut session_value, messages_before, parts);
         let session = Arc::new(Mutex::new(session_value));
         let queued = spec.get("queued").filter(|q| !q.is_null()).cloned();
         if let Some(q) = queued {
@@ -2438,29 +2440,57 @@ fn is_checkpoint(e: &Value) -> bool {
     matches!(str_at(e, "type"), Some("step" | "steered" | "tool_result" | "done" | "error"))
 }
 
-/// The context block a turn sends: attached files, project guidance (at the
-/// chat's `guidance` level) and memory (at its `memory` scope) from disk, the host's connector and index snippets, and the chat's
-/// include and pin choices.
+/// A turn's context, split so the system prompt's prefix stays byte-stable.
+#[derive(Default)]
+struct ContextParts {
+    /// For the system prompt: project guidance, the chat's attached files and
+    /// its memory frame. Changes only when the user changes one of them.
+    stable: String,
+    /// For this turn's user message (`turnContext`): what this turn alone
+    /// brought (its own attachments and the guides they pull in, connector and
+    /// index snippets found for its text) and memory saved since the frame.
+    tail: String,
+    /// The chat's `memoryFrame` once this turn's tail is saved (`Null`: none).
+    frame: Value,
+    /// The frame is new: store it even on a turn that saves no message.
+    fresh_frame: bool,
+}
+
+/// The context a turn sends: attached files, project guidance (at the chat's
+/// `guidance` level) and memory (at its `memory` scope) from disk, the host's
+/// connector and index snippets, and the chat's include and pin choices.
+/// What is fixed for the chat goes to the system prompt; what this turn alone
+/// brought rides on its message, so a local model's KV cache stays valid.
 fn context_block(
     session: &Value,
     opts: &Value,
     facts: &Value,
     workspaces: &[Value],
     data_dir: Option<&std::path::Path>,
-) -> String {
+) -> ContextParts {
     let strings = |v: Option<&Value>| -> Vec<String> {
         v.and_then(Value::as_array)
             .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
             .unwrap_or_default()
     };
-    let mut attached = strings(session.get("attachedPaths"));
-    attached.extend(strings(opts.get("attachedPaths")));
+    let chat_attached = strings(session.get("attachedPaths"));
+    let turn_attached: Vec<String> =
+        strings(opts.get("attachedPaths")).into_iter().filter(|p| !chat_attached.contains(p)).collect();
+    let mut all_attached = chat_attached.clone();
+    all_attached.extend(turn_attached.iter().cloned());
     let paths: Vec<String> = workspaces.iter().filter_map(|w| str_at(w, "path").map(str::to_string)).collect();
-    let guidance = nekko_context::project_guidance(
-        &paths,
-        &attached,
-        nekko_context::Guidance::from_value(session.get("guidance")),
-    );
+    let level = || nekko_context::Guidance::from_value(session.get("guidance"));
+    let guidance = nekko_context::project_guidance(&paths, &chat_attached, level());
+    // Guides only this turn's attachments pull in go with them, to the tail.
+    let (turn_guidelines, turn_indexes) = if turn_attached.is_empty() {
+        (Vec::new(), Vec::new())
+    } else {
+        let all = nekko_context::project_guidance(&paths, &all_attached, level());
+        (
+            all.guidelines.into_iter().filter(|g| !guidance.guidelines.contains(g)).collect(),
+            all.indexes.into_iter().filter(|i| !guidance.indexes.contains(i)).collect(),
+        )
+    };
     let scope = nekko_context::MemoryScope::of_session(session);
     let mut memory = Vec::new();
     if let Some(dir) = data_dir.filter(|_| scope.project()) {
@@ -2476,6 +2506,7 @@ fn context_block(
             }
         }
     }
+    let frame = nekko_context::memory_frame(session.get("memoryFrame"), scope, &memory);
     let triple = |v: &Value, a: &str, b: &str, c: &str| -> (String, String, String) {
         let s = |k: &str| v.get(k).map(js::display).unwrap_or_default();
         (s(a), s(b), s(c))
@@ -2491,18 +2522,61 @@ fn context_block(
         .map(|a| a.iter().map(|s| triple(s, "relPath", "path", "body")).collect())
         .unwrap_or_default();
     let prefs = session.get("contextPrefs");
-    let bundle = nekko_context::assemble(nekko_context::AssembleInput {
-        attached: nekko_context::collect_attached(&attached),
+    let excluded: HashSet<String> = strings(prefs.and_then(|p| p.get("excluded"))).into_iter().collect();
+    let pinned: HashSet<String> = strings(prefs.and_then(|p| p.get("pinned"))).into_iter().collect();
+    let stable = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
+        attached: nekko_context::collect_attached(&chat_attached),
         guidelines: guidance.guidelines,
         rule_indexes: guidance.indexes,
-        memory,
+        memory: frame.notes.clone(),
+        excluded: excluded.clone(),
+        pinned: pinned.clone(),
+        ..Default::default()
+    }));
+    let turn = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
+        attached: nekko_context::collect_attached(&turn_attached),
+        guidelines: turn_guidelines,
+        rule_indexes: turn_indexes,
         connector_snippets: connector,
         index_snippets: index,
-        excluded: strings(prefs.and_then(|p| p.get("excluded"))).into_iter().collect(),
-        pinned: strings(prefs.and_then(|p| p.get("pinned"))).into_iter().collect(),
+        excluded: excluded.clone(),
+        pinned,
         ..Default::default()
-    });
-    nekko_context::render_block(&bundle)
+    }));
+    let memory_changes = nekko_context::render_memory_changes(&frame, &excluded);
+    let tail =
+        [turn, memory_changes].into_iter().filter(|t| !t.trim().is_empty()).collect::<Vec<_>>().join("\n\n---\n\n");
+    ContextParts { stable, tail, frame: frame.value, fresh_frame: frame.fresh }
+}
+
+/// After the turn's input is applied: a new user message keeps this turn's
+/// context (`turnContext`), sent with it on every later turn, and the chat
+/// keeps the memory frame that context was measured against. A turn that
+/// saved no message (a wake-up, a resume, a regenerate) keeps what the last
+/// message already carries and announces nothing, so nothing is said twice.
+fn keep_turn_context(session: &mut Value, messages_before: usize, parts: ContextParts) {
+    let Some(s) = session.as_object_mut() else { return };
+    let messages = s.get_mut("messages").and_then(Value::as_array_mut);
+    let new_message = messages
+        .filter(|m| m.len() > messages_before)
+        .and_then(|m| m.last_mut())
+        .filter(|m| str_at(m, "role") == Some("user"));
+    let saved = match new_message {
+        Some(m) => {
+            if !parts.tail.trim().is_empty()
+                && let Some(o) = m.as_object_mut()
+            {
+                o.insert("turnContext".into(), json!(parts.tail));
+            }
+            true
+        }
+        None => false,
+    };
+    if parts.frame.is_null() {
+        s.remove("memoryFrame");
+    } else if saved || parts.fresh_frame {
+        s.insert("memoryFrame".into(), parts.frame);
+    }
 }
 
 /// A chat's fields but its transcript, for a reader that never looks at it.
