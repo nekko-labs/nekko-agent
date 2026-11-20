@@ -14,6 +14,9 @@ describe('modelModality', () => {
     expect(modelModality({ architecture: 'sd3' })).toBe('image');
     expect(modelModality({ architecture: 'flux' })).toBe('image');
     expect(modelModality({ architecture: 'sdxl' })).toBe('image');
+    // GGUF writes these with an underscore (QuantStack's Qwen Image is `qwen_image`).
+    expect(modelModality({ architecture: 'qwen_image' })).toBe('image');
+    expect(modelModality({ architecture: 'z_image' })).toBe('image');
   });
 
   it('reads speech architectures as audio', () => {

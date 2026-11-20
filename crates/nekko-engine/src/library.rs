@@ -60,7 +60,7 @@ pub fn model_modality(
     if !arch.is_empty() {
         if test(
             regex!(
-                r"^(sd\d?|sdxl|sd-?turbo|stable-?diffusion.*|flux.*|wuerstchen|pixart.*|ltxv.*|hidream.*|chroma.*|qwen-?image.*|z-?image.*|ovis-?image.*|wan\d.*|hunyuan.*(image|video).*|cogvideo.*)"
+                r"^(sd\d?|sdxl|sd[-_]?turbo|stable[-_]?diffusion.*|flux.*|wuerstchen|pixart.*|ltxv.*|hidream.*|chroma.*|qwen[-_]?image.*|z[-_]?image.*|ovis[-_]?image.*|wan\d.*|hunyuan.*(image|video).*|cogvideo.*)"
             ),
             arch,
         ) {
