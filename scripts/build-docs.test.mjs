@@ -379,7 +379,10 @@ test('a release with major highlights puts its people first, then the headliners
 test('the headliners card is the site\'s sticker, in tokens, and holds still', () => {
   const html = build().get('whatsnew.html');
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
-  const rule = (sel) => css.match(new RegExp(`${sel.replace(/[.*]/g, '\\$&')} \\{([^}]*)\\}`))?.[1] ?? '';
+  const rule = (sel) => {
+    const at = css.indexOf(`${sel} {`);
+    return at === -1 ? '' : css.slice(at, css.indexOf('}', at));
+  };
   assert.match(rule('.headliners'), /border: 2px solid var\(--sticker\);/);
   assert.match(rule('.headliners'), /box-shadow: 5px 5px 0 var\(--lavender\);/);
   const added = css.slice(css.indexOf('.headliners'));
