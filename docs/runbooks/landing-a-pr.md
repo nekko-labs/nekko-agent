@@ -106,8 +106,13 @@ Installers, Dev identity, CodeQL's Swift pass, Decision models' CoreML job, nekk
 darwin build) and fails if any of them fails, so the PR does not merge until they are
 green. macOS runners queue, so that can take an hour or more. Adding the label re-runs CI.
 
+Native iOS is the exception: `gate` waits for it on every PR that touches iOS, with or
+without `deploy:ios`, so no iOS change reaches main untested ([decision
+0109](../decisions/0109-every-ios-change-runs-native-ios.md)). It also runs on `main` after
+each merge that touches iOS, one run at a time; a red one comments on the PR that merged.
+
 Native iOS runs in batches, not on every push: about a minute after a push, one run
-on `ci/ios-batch` takes every open, ready `deploy:ios` PR that touches iOS and merges
+on `ci/ios-batch` takes every open, ready PR that touches iOS and merges
 cleanly onto main (the largest set that also merges with each other), and reports to
 each PR's head as the `Native iOS (batch)` status, which `gate` accepts
 (`scripts/ios-batch.mjs`). A PR that conflicts with main gets a red status saying so;
