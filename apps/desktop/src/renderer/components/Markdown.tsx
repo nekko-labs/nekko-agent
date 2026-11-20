@@ -37,8 +37,9 @@ import { endsOnUnlabelledQuestion, topicLine, type Topic } from '../replyTopics.
  *
  * Chat text is rendered block by block (see `markdownSegments`): each finished
  * top-level block is memoized by its source, so a reply that is still
- * streaming re-parses only the block being written instead of the whole reply
- * on every frame. The output is the same as parsing the text in one go.
+ * streaming re-parses only the block being written (a loose list counts as one
+ * block) instead of the whole reply on every frame. The output is the same as
+ * parsing the text in one go.
  */
 /** True inside a Sandbox chat, where host file and image previews are unavailable. */
 export const MarkdownSession = React.createContext<string | undefined>(undefined);
@@ -133,9 +134,12 @@ export type MarkdownSegment =
  * Code fences split first, exactly as the whole-text renderer splits them. The
  * text between fences then splits at blank lines: every block kind the parser
  * knows ends at a blank line and nothing carries across one, so rendering the
- * pieces one by one produces the same nodes as rendering the run whole. A
- * segment's key is where it starts, which stays put as text is appended, so a
- * streaming reply keeps every finished segment and re-parses only the last.
+ * pieces one by one produces the same nodes as rendering the run whole. The
+ * exception is a list: blank lines between its items do not end it, so a loose
+ * list stays one segment. A segment's key is where it starts, and text appended
+ * later can only grow a segment: a list absorbs the items after its blank lines,
+ * so a streamed item can extend an earlier list. A streaming reply therefore
+ * re-parses the last segment, plus any list that gains an item.
  */
 export function markdownSegments(text: string): MarkdownSegment[] {
   const out: MarkdownSegment[] = [];
@@ -292,9 +296,19 @@ function startsBlock(line: string): boolean {
 function continuesList(lines: string[], start: number, blank: number): boolean {
   let next = blank;
   while (next < lines.length && !lines[next].trim()) next += 1;
-  if (next >= lines.length || !listItem(lines[next])) return false;
-  for (let k = start; k < blank; k++) if (listItem(lines[k])) return true;
+  if (next >= lines.length || !listLine(lines[next])) return false;
+  for (let k = start; k < blank; k++) if (listLine(lines[k])) return true;
   return false;
+}
+
+/**
+ * A list item line, including a topic label whose words after it are one
+ * (`**Next steps:** 1. merge`): renderBlocks reads those words as the line.
+ * Merging too much is harmless; the merged text renders as the whole parse does.
+ */
+function listLine(line: string): ListItem | null {
+  const rest = topicLine(line)?.rest;
+  return listItem(line) ?? (rest ? listItem(rest) : null);
 }
 
 /**
@@ -335,7 +349,7 @@ function renderList(items: ListItem[], key: string, ctx: Ctx, depth = 0): React.
   }
   const className = ctx.doc ? 'my-2 ml-5 space-y-1' : 'ml-4 space-y-0.5';
   return items[0].ordered
-    ? <ol key={key} start={items[0].number} className={className} style={{ listStyleType: depth % 2 ? 'lower-alpha' : 'decimal', paddingLeft: '0.35rem' }}>{nodes}</ol>
+    ? <ol key={key} start={items[0].number === 1 ? undefined : items[0].number} className={className} style={{ listStyleType: depth % 2 ? 'lower-alpha' : 'decimal', paddingLeft: '0.35rem' }}>{nodes}</ol>
     : <ul key={key} className={className} style={{ listStyleType: depth % 2 ? 'circle' : 'disc', paddingLeft: '0.35rem' }}>{nodes}</ul>;
 }
 

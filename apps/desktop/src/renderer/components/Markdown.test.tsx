@@ -366,7 +366,12 @@ const REPLY = [
   'Text glued to the fence, then a rule:',
   '---',
   '1. one',
+  '',
   '2. two',
+  '',
+  '  - nested after a blank',
+  '',
+  '3. three',
   '',
   '```',
   'an unlabelled fence',
@@ -396,13 +401,26 @@ describe('Markdown block split', () => {
     expect(out).not.toContain('<li');
   });
 
-  it('leaves finished blocks untouched as a reply grows', () => {
-    // A segment is final once another begins after it: its key and source must
-    // come out the same in every longer prefix, which is what lets React skip it.
+  it('keeps a loose list under a topic label one list, as the whole-text parse does', () => {
+    const text = '**Next steps:** 1. merge\n\n2. deploy';
+    const chat = renderToStaticMarkup(<Markdown text={text} topics />);
+    const wholeText = renderToStaticMarkup(
+      <div className="space-y-1 text-sm leading-[1.6]">{renderWhole(text, { doc: false, topics: true, evidence: [] })}</div>,
+    );
+    expect(chat).toBe(wholeText);
+    expect(chat.match(/<ol/g)).toHaveLength(1);
+  });
+
+  it('grows an earlier segment only by appending to it as a reply grows', () => {
+    // A segment keeps its key, and its source only grows: a list absorbs the items
+    // that follow its blank lines, so a streamed "2. " can extend an earlier list.
+    const body = (s: ReturnType<typeof markdownSegments>[number]) => (s.kind === 'text' ? s.src : s.code);
     for (let n = 1; n < REPLY.length; n += 3) {
       const before = markdownSegments(REPLY.slice(0, n));
       const after = markdownSegments(REPLY.slice(0, n + 3));
-      for (const seg of before.slice(0, -1)) expect(after).toContainEqual(seg);
+      for (const seg of before.slice(0, -1)) {
+        expect(after.some(s => s.key === seg.key && body(s).startsWith(body(seg)))).toBe(true);
+      }
     }
   });
 });
