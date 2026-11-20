@@ -15,7 +15,6 @@ import { ModelFolders } from './ModelFolders.js';
 import { DiffusionInstallCard } from './DiffusionInstallCard.js';
 import { MlxInstallCard } from './MlxInstallCard.js';
 import { DecisionModels } from './DecisionModels.js';
-import { LocalServerSection } from '../server/LocalServerSection.js';
 import { ServerPowerSwitch } from '../server/ServerPowerSwitch.js';
 import { ServiceLoadState } from '../ServiceLoadState.js';
 import { ErrorBoundary } from '../ErrorBoundary.js';
@@ -166,11 +165,8 @@ export function EngineSection({
   return (
     <section className="min-w-0 space-y-8">
       {error && <ServiceLoadState label="model server" error={error} retry={refresh} />}
-      {/* The two servers sit side by side, each as four rows of this grid
-          (header, description, status, the rest), so a two-line description
-          on one does not push its status row below the other's. */}
-      <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-2">
-      <div className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
+      {/* The agent server moved to Settings > Server: this page is about models. */}
+      <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--accent)' }} />
         <h2 className="text-base font-semibold">Model server</h2>
@@ -295,8 +291,6 @@ export function EngineSection({
           </details>
         )}
       </div>
-      </div>
-      <ErrorBoundary label="Local API"><LocalServerSection /></ErrorBoundary>
       </div>
       <div data-models-section="library" className="min-w-0">
         <h2 className="text-base font-semibold">Models</h2>
