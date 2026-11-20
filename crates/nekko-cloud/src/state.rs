@@ -105,6 +105,13 @@ pub struct Synced {
     /// rotation, records under an older epoch are ignored, so anything older is
     /// pushed again under the new one.
     pub key_id: u32,
+    /// The record named the computer the chat belongs to (#3143). Chats synced before records
+    /// carried one are pushed once more, so the other computers learn where they came from.
+    pub homed: bool,
+    /// The chat belongs to another computer: this one keeps a read-only copy and never pushes
+    /// it or a tombstone for it. With `deleted`, the copy was removed here (or there) and a
+    /// newer one is not taken.
+    pub foreign: bool,
 }
 
 /// An organization key this device holds (the keyring itself is in the vault).

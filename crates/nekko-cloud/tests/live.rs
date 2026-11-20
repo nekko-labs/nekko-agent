@@ -141,11 +141,35 @@ async fn three_devices_sync_end_to_end() {
     assert_eq!(b.store.get("s_1_aaa").unwrap()["messages"][0]["content"], "the hotel code is 4471");
     assert!(b.store.get("s_2_bbb").is_none(), "incognito never syncs");
 
-    // B edits it; A picks the edit up, newest wins.
-    b.store.put_synced(&chat("s_1_aaa", "Trip to Kyoto", "booked the ryokan", 20.0)).unwrap();
+    // Each chat belongs to the computer it started on (#3143): B's copy names Desk, A's own file names nobody.
+    assert_eq!(b.store.get("s_1_aaa").unwrap()["home"]["device"], "Desk");
+    assert!(a.store.get("s_1_aaa").unwrap().get("home").is_none());
+
+    // B never writes A's chat, even when its copy changes here.
+    let mut tampered = b.store.get("s_1_aaa").unwrap();
+    tampered["messages"][0]["content"] = json!("changed on B");
+    tampered["updatedAt"] = json!(15.0);
+    tampered["pinned"] = json!(true);
+    b.store.put_synced(&tampered).unwrap();
     call(&b, "sync:now", json!([])).await.unwrap();
     call(&a, "sync:now", json!([])).await.unwrap();
-    assert_eq!(a.store.get("s_1_aaa").unwrap()["messages"][0]["content"], "booked the ryokan");
+    assert_eq!(a.store.get("s_1_aaa").unwrap()["messages"][0]["content"], "the hotel code is 4471");
+
+    // A carries on; B takes A's copy and keeps how B arranged it (pinned).
+    a.store.put_synced(&chat("s_1_aaa", "Trip to Kyoto", "booked the ryokan", 20.0)).unwrap();
+    call(&a, "sync:now", json!([])).await.unwrap();
+    call(&b, "sync:now", json!([])).await.unwrap();
+    let copy = b.store.get("s_1_aaa").unwrap();
+    assert_eq!(copy["messages"][0]["content"], "booked the ryokan");
+    assert_eq!(copy["pinned"], true);
+    assert_eq!(copy["home"]["device"], "Desk");
+
+    // B's own chat shows on A as B's.
+    b.store.put_synced(&chat("s_4_ddd", "Laptop notes", "started on B", 21.0)).unwrap();
+    call(&b, "sync:now", json!([])).await.unwrap();
+    call(&a, "sync:now", json!([])).await.unwrap();
+    assert_eq!(a.store.get("s_4_ddd").unwrap()["home"]["device"], "Laptop");
+    assert!(b.store.get("s_4_ddd").unwrap().get("home").is_none());
 
     // C asks to join and shows a code; A approves it by typing that code.
     sign_in(&c, &email).await;
@@ -187,6 +211,15 @@ async fn three_devices_sync_end_to_end() {
     assert_eq!(c.cloud.status()["sync"]["keyEpoch"], 2);
     assert_eq!(c.store.get("s_3_ccc").unwrap()["messages"][0]["content"], "B must not read this");
 
+    // C removes its copy of A's chat: only C forgets it, and A's next change doesn't bring it back.
+    c.store.delete("s_3_ccc").unwrap();
+    call(&c, "sync:now", json!([])).await.unwrap();
+    a.store.put_synced(&chat("s_3_ccc", "After revoke", "still on A", 31.0)).unwrap();
+    call(&a, "sync:now", json!([])).await.unwrap();
+    call(&c, "sync:now", json!([])).await.unwrap();
+    assert!(c.store.get("s_3_ccc").is_none());
+    assert_eq!(a.store.get("s_3_ccc").unwrap()["messages"][0]["content"], "still on A");
+
     // A deletes a chat; C's copy goes too.
     a.store.delete("s_1_aaa").unwrap();
     call(&a, "sync:now", json!([])).await.unwrap();
@@ -198,6 +231,8 @@ async fn three_devices_sync_end_to_end() {
     sign_in(&d, &email).await;
     call(&d, "sync:restore", json!([recovery])).await.unwrap();
     assert_eq!(d.store.get("s_3_ccc").unwrap()["title"], "After revoke");
+    // A removed computer's chat was carried into the new key epoch, still naming it (#3143).
+    assert_eq!(d.store.get("s_4_ddd").unwrap()["home"]["device"], "Laptop");
 
     // Delete everything synced.
     call(&a, "sync:deleteAll", json!([])).await.unwrap();
