@@ -6,7 +6,7 @@ split-from: SPEC.md (2026-10-22)
 
 # First-run setup (planned onboarding wizard)
 
-The first launch opens a calm, full-screen setup wizard over the app; every step can be skipped (a per-step **Skip**, plus **Skip setup**), and it never auto-shows again once dismissed (Settings can replay it). It opens with **Welcome** and four questions about the person, then the setup steps:
+The first launch opens a calm, full-screen setup wizard over the app; every step can be skipped (a per-step **Skip**, plus **Skip setup**), and it never auto-shows again once dismissed (Settings can replay it). It opens itself only when setup was never finished and no provider is saved; the built-in engine's own entry (`nekko-engine`, which nekkod saves at every launch) does not count, so a fresh install always gets it. Before 2026-11-20 that entry did count, and fresh installs skipped setup entirely. It opens with **Welcome** and four questions about the person, then the setup steps:
 
 - **Welcome.** Nekko hops in, waves and says "Hi!" between pixel sparkles: "Hi, I'm Nekko." The drawing is the newest pixel cat (the peeking cat's face, no mouth) in the theme's own surface and ink. Reduced motion shows the last frame. The button reads **Let's go**.
 - **What should I call you?** One field. Saved as `userName`; the chat welcome becomes "What should we work on, <name>?" and the Done step says "Nice to meet you, <name>!". Enter moves on.

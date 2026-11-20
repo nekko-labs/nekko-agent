@@ -3749,7 +3749,6 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .screens-picker { -webkit-app-region: no-drag; position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max-content; min-width: 260px; max-width: 360px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
 .screens-picker__title { margin: 0 0 8px; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
 .screens-picker__note { margin: 4px 0 0; font-size: var(--text-2xs); color: var(--ink-faint); }
-.screens-picker__divider { margin: 8px -12px; border: 0; border-top: 1px solid var(--line); }
 .screens-row { display: flex; align-items: flex-end; gap: 8px; }
 .screens-tile { position: relative; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--ink-faint); transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease; }
 .screens-tile[aria-checked='true'] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
@@ -5037,14 +5036,12 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 .screens-embedded { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
 .screens-embedded .screens-picker__title { color: var(--ink); font-weight: 600; }
 .screens-embedded .screens-picker__note { color: var(--ink-soft); line-height: 1.45; margin-top: 8px; }
-.screens-embedded .screens-picker__divider { margin: 14px 0; }
 .screens-embedded .screens-row { overflow-x: auto; padding: 2px 2px 6px; }
 .screens-embedded .screens-tile { flex-shrink: 0; }
 .screens-embedded .screens-options { gap: 4px; }
 .screens-embedded .screens-option { border: 1px solid transparent; padding: 9px; }
 .screens-embedded .screens-option:has(input:checked) { background: var(--surface-2); border-color: var(--line); }
 .screens-embedded .screens-option > span > span { color: var(--ink-soft); line-height: 1.45; }
-.screens-embedded .screens-placement-note { margin: -3px 0 8px; }
 .screens-single { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: var(--surface-2); }
 .screens-single > svg { width: 26px; height: 26px; color: var(--ink-soft); flex-shrink: 0; }
 .screens-single > span:not(.screens-single__status) { display: grid; gap: 2px; }

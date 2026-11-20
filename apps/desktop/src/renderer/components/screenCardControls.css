@@ -4,10 +4,9 @@
 .screens-reveal[data-expanded='true'] { grid-template-rows: 1fr; opacity: 1; visibility: visible; }
 .screens-reveal__content { min-height: 0; overflow: hidden; }
 .screens-reveal[data-expanded='true'] .screens-reveal__content { padding-top: 10px; }
-.view-experience { margin: 16px 0 12px; padding: 14px 0 0; border: 0; border-top: 1px solid var(--line); min-width: 0; }
-.view-experience legend { float: left; width: 100%; margin-bottom: 8px; color: var(--ink); font-size: var(--text-xs); font-weight: 600; }
-.view-experience .screens-option { clear: both; }
+.view-experience { margin: 16px 0 12px; border-top: 1px solid var(--line); min-width: 0; }
 .view-customize { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 1px solid var(--accent); border-radius: 8px; padding: 10px 12px; background: linear-gradient(110deg, var(--accent-soft), color-mix(in srgb, var(--accent) 15%, var(--surface-2))); color: var(--ink); font-size: var(--text-xs); font-weight: 600; cursor: pointer; }
 .view-customize:hover { background: var(--accent-soft); }
 .view-customize:focus-visible, .screens-enable input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .screens-reveal { transition: none; } }
+.view-experience__example { margin: 4px 0 0; font-size: var(--text-2xs); color: var(--ink-soft); }
