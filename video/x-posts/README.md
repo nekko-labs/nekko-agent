@@ -1,6 +1,6 @@
 # X posts
 
-Square (1080x1080, 30 fps) videos for X, in the website's Dark look, drawn with
+Square (1080x1080, 30 fps) videos for X, in the brand dark palette (`spec/brand/colour-palette.md`: page `#0B0C14` with `#854F6C` glows, panels `#14151F`, lines `#252735`, main buttons `#190019`), drawn with
 the same sources as `video/instagram-reel` (`spec/brand/colour-palette.md`,
 `docs/design-system.md`). Illustrations in the app's design, not screen
 recordings. No sound.

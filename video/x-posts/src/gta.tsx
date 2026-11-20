@@ -4,7 +4,8 @@
 //
 // Illustrated in the website's Dark look, the same sources as
 // video/instagram-reel (spec/brand/colour-palette.md, docs/design-system.md):
-// page #0C0C11 with plum glows, the pixel-dot wave, panels #16161C / #26262F,
+// page #0B0C14 with #854F6C glows, the dot wave (#C084B5 to #854F6C), panels
+// #14151F / #1D1F2C, lines #252735,
 // Inter Tight with Space Mono labels, and Nekko in his fixed dark-mode colours.
 // No Rockstar artwork, logo, type or colours: the game is only named in text.
 import React from 'react';
@@ -17,13 +18,13 @@ const FRAMES = 600; // 20 s at 30 fps
 const W = 1080, H = 1080;
 
 const C = {
-  page: '#0c0c11', panel: '#16161c', panel2: '#1e1e26', line: '#26262f',
-  ink: '#ffffff', soft: '#a3a1b0', faint: '#87899b',
-  plum: '#c99bb3', plum2: '#854f6c', rose: '#e6d0dc', ok: '#4cc38a', warn: '#e5a54b',
+  page: '#0b0c14', panel: '#14151f', panel2: '#1d1f2c', line: '#252735',
+  ink: '#ffffff', soft: '#a3a4b6', faint: '#87899b',
+  plum: '#c99bb3', plum2: '#854f6c', rose: '#e6d0dc', ok: '#4ec98a', main: '#190019',
   nekkoFace: '#16161c', nekkoLine: '#f3e8ee', nekkoEyes: '#ffffff', nekkoMouth: '#854f6c',
 };
-// The website's Dark page, glows scaled to a 1080 px square (CSS px x 1.5).
-const PAGE_BG = 'radial-gradient(60% 1350px at 12% 0%, rgba(25, 0, 25, 0.9), transparent 70%), radial-gradient(60% 1200px at 20% 100%, rgba(25, 0, 25, 0.7), transparent 70%), #0c0c11';
+// The dark page with secondary (#854F6C) glows, as in docs/brand/nekko-banner.html, scaled to 1080 px.
+const PAGE_BG = 'radial-gradient(55% 880px at 8% 0%, rgba(133, 79, 108, 0.26), transparent 70%), radial-gradient(45% 880px at 80% 50%, rgba(133, 79, 108, 0.16), transparent 70%), radial-gradient(60% 710px at 20% 100%, rgba(133, 79, 108, 0.18), transparent 70%), #0b0c14';
 const SANS = "'Inter Tight', system-ui, sans-serif";
 const MONO = "'Space Mono', ui-monospace, monospace";
 
@@ -260,7 +261,7 @@ function Phone({ f }: { f: number }) {
         <div style={{ fontFamily: SANS, fontSize: 28, color: C.soft, marginTop: 10 }}>4 steps · 48 tests passed · $0.00</div>
         <div style={{ display: 'flex', gap: 16, marginTop: 26, fontFamily: SANS, fontSize: 30, fontWeight: 650 }}>
           <span style={{ flex: 1, textAlign: 'center', padding: '16px 0', borderRadius: 16, border: `2px solid ${C.line}`, color: C.soft, opacity: approved ? 0.4 : 1 }}>Later</span>
-          <span style={{ flex: 1, textAlign: 'center', padding: '16px 0', borderRadius: 16, background: approved ? C.ok : C.plum, color: '#120a12', transform: `scale(${pressed ? 0.95 : 1})` }}>{approved ? 'Done' : 'Approve'}</span>
+          <span style={{ flex: 1, textAlign: 'center', padding: '16px 0', borderRadius: 16, background: C.main, border: `2px solid ${C.plum2}`, color: C.ink, transform: `scale(${pressed ? 0.95 : 1})` }}>{approved ? 'Done' : 'Approve'}</span>
         </div>
       </Panel>
       <Peek f={f} x={440} edge={edge} eyes={approved ? 'happy' : 'open'} hop={hop} sparkle={approved && f < s + 70} />
