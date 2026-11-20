@@ -10,6 +10,7 @@ import type { AgentEvent, ComputerStatus, SessionSummary, TerminalInfo, Workspac
 import { AUTO_MODEL_ID, computerIdOf } from '@nekko-agent/shared';
 import { SidebarFileBrowser } from './SidebarFileBrowser.js';
 import { ComputerGlyph, thisComputerName } from '../components/ComputerChip.js';
+import { connectedTwin, syncedComputer, syncedHomes, withoutShadowedCopies } from '../syncedComputers.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
@@ -195,7 +196,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const [shows, setShowsState] = useState<AgentPanelShows>(readAgentPanelShows);
   const setShows = (next: AgentPanelShows) => { setShowsState(next); saveAgentPanelShows(next); };
   const {
-    sessions, terminals, workspaces, settings,
+    sessions: listedSessions, terminals, workspaces, settings,
     refreshSessions, refreshTerminals,
     reorderWorkspaces, layoutChats, layoutTerminals,
     archiveWorkspace, archiveChat,
@@ -214,6 +215,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       archiveChat: s.archiveChat,
     })),
   );
+  // A chat a connected computer shows live and Nekko Cloud also synced here is listed once, live (#3143).
+  const sessions = withoutShadowedCopies(listedSessions);
   const newChat = (projectId?: string) => onCreate('chat', projectId ?? activeProjectId());
   const activeProjectId = () => useStore.getState().activeProjectId ?? undefined;
   const newTerminal = (projectId?: string) => onCreate('terminal', projectId);
@@ -344,7 +347,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   /** Groups whose archived chats are expanded under their active ones. */
   const archiveTipSessionId = useStore((s) => s.archiveTipSessionId);
   const computers = useStore((s) => s.computers);
-  const computersShown = useShown('computers', { computers: computers.length > 0 });
+  const homes = syncedHomes(sessions);
+  const computersShown = useShown('computers', { computers: computers.length > 0 || homes.length > 0 });
   const computerCatalogs = useStore((s) => s.computerCatalogs);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showArchived, setShowArchived] = useState<Set<string>>(new Set());
@@ -571,10 +575,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     const archivedGroups: PanelGroup[] = archived.length > 0 ? [{ key: ARCHIVED_GROUP, name: 'Archived', items: [], archived }] : [];
     if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, archived: [], bare: true }, ...archivedGroups];
     if (view.groupBy === 'computer' && computersShown) {
-      const here = (e: Entry) => !computerIdOf(e.s?.id);
+      const here = (e: Entry) => !computerIdOf(e.s?.id) && !e.s?.home;
+      // A synced chat joins the connected computer of the same name, or its own group (#3143).
+      const twinOf = (e: Entry) => (e.s?.home ? connectedTwin(e.s.home, computers) : null);
+      const onlySynced = homes.filter((h) => !connectedTwin(h, computers));
       return [
         { key: 'computer:here', name: thisComputerName(), items: all.filter(here), archived: [] },
-        ...computers.map((c): PanelGroup => ({ key: 'computer:' + c.id, name: c.name, computer: c, items: all.filter((e) => computerIdOf(e.s?.id) === c.id), archived: [] })),
+        ...computers.map((c): PanelGroup => ({ key: 'computer:' + c.id, name: c.name, computer: c, items: all.filter((e) => computerIdOf(e.s?.id) === c.id || twinOf(e)?.id === c.id), archived: [] })),
+        ...onlySynced.map((h): PanelGroup => ({ key: 'computer:cloud:' + h.deviceId, name: syncedComputer(h, computers).name, items: all.filter((e) => e.s?.home?.deviceId === h.deviceId && !twinOf(e)), archived: [] }))
+          // A synced computer has a group while it has active chats here (its archived ones are under Archived).
+          .filter((g) => g.items.length > 0 || view.showEmptyGroups),
         ...archivedGroups,
       ];
     }

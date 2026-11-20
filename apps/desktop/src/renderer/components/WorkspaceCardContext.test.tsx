@@ -149,6 +149,19 @@ describe('workspace card model line and attention', () => {
     }
   });
 
+  it('names the computer a synced chat belongs to, and this one on the rest, once another computer has a chat here (#3143)', () => {
+    const copy = { ...session, id: 's2', modelId: 'claude-opus-5-5', home: { deviceId: 'dev-laptop', device: 'Laptop' } } as SessionSummary;
+    const before = (state as { sessions?: SessionSummary[] }).sessions;
+    (state as { sessions?: SessionSummary[] }).sessions = [session as SessionSummary, copy];
+    try {
+      expect(render({ session: copy })).toMatch(/data-computer-chip="cloud:dev-laptop"[^>]*>Laptop</);
+      expect(render()).toMatch(/data-computer-chip="here"[^>]*>This (Mac|PC|computer)</);
+      expect(render({ session: copy, showComputer: false })).not.toContain('data-computer-chip');
+    } finally {
+      (state as { sessions?: SessionSummary[] }).sessions = before;
+    }
+  });
+
   it('marks only the selected chat for its background, independently of status', () => {
     for (const patch of [{}, { status: 'input' as const }, { status: 'error' as const }, { isActive: true }]) {
       const html = render(patch);

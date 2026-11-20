@@ -13,14 +13,16 @@ import { LibraryFileThumbnail } from '../components/library/LibraryFileThumbnail
 import { DesignCanvas } from '../components/library/DesignCanvas.js';
 import { TilePreview } from '../components/library/TilePreview.js';
 import { LibrarySyncGlyph, LibrarySyncSummary, useLibrarySync } from '../components/library/LibrarySync.js';
-import { fileSync, remoteEntries } from '../components/library/librarySyncState.js';
+import { fileComputer, fileSync, groupByComputer, remoteEntries } from '../components/library/librarySyncState.js';
 import {
-  LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
-  type LibraryLayout,
+  LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryGroupBy, loadLibraryLayout, loadLibraryShowComputer, orderForProfile,
+  saveCollapsedKinds, saveLibraryGroupBy, saveLibraryLayout, saveLibraryShowComputer,
+  type LibraryGroupBy, type LibraryLayout,
 } from '../components/library/libraryPrefs.js';
+import { thisComputerName } from '../components/ComputerChip.js';
 import { ChevronDownIcon, ChevronIcon, ExternalIcon, FocusLayoutIcon, PanelLeftIcon } from '../icons.js';
 import {
-  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, helperCandidates, libraryEntryFor, mergeArtifacts, movedPaths, presentPaths, readProjectDesignFolders, relocate, sessionArtifacts, withFolderDesigns,
+  artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, helperCandidates, libraryEntryFor, mergeArtifacts, movedPaths, presentPaths, readProjectDesignFolders, relocate, sessionArtifacts, withFolderDesigns,
   type ArtifactEntry, type ArtifactKind,
 } from '../artifactsIndex.js';
 
@@ -34,14 +36,24 @@ const when = (at: number) => {
   const d = new Date(at);
   return at <= 0 || Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
-/** Where a file came from: its chat, the project for a design found in its designs folder, or another computer. */
-const cameFrom = (e: ArtifactEntry) => (e.source === 'cloud' ? `From ${e.device}` : e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
-const fromAndWhen = (e: ArtifactEntry) => [cameFrom(e), when(e.at), e.versions && `${e.versions.length} versions`].filter(Boolean).join(' · ');
+/**
+ * Where a file came from: its chat, the project for a design found in its designs folder, or
+ * another computer. With its computer named already (on the line, or as the group's heading),
+ * another computer's file names the chat it came from there instead.
+ */
+const cameFrom = (e: ArtifactEntry, computerNamed = false) => (e.source === 'cloud'
+  ? computerNamed ? e.sessionTitle || 'Synced file' : `From ${e.device}`
+  : e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
+/** The file's computer, when files from more than one are listed and the line names it (#3144). */
+const computerName = (e: ArtifactEntry) => fileComputer(e) ?? thisComputerName();
+const fromAndWhen = (e: ArtifactEntry, computer: boolean, computerNamed: boolean) =>
+  [computer && computerName(e), cameFrom(e, computerNamed), when(e.at), e.versions && `${e.versions.length} versions`].filter(Boolean).join(' · ');
 /** A design the canvas can show: an HTML page. Images and the rest open in the file pane. */
 const isHtml = (path: string) => /\.html?$/i.test(path);
 const extOf = (filename: string) => (filename.includes('.') ? filename.split('.').pop() ?? '' : '');
 
-type Group = { kind: (typeof ARTIFACT_KINDS)[number]; items: ArtifactEntry[] };
+/** A group on screen: one kind, or one computer's files when Library groups by computer (#3144). */
+type ViewGroup = { id: string; label: string; items: ArtifactEntry[]; kind?: ArtifactKind };
 type Show = 'all' | ArtifactKind;
 
 /**
@@ -89,6 +101,10 @@ const LAYOUT_ICONS: Record<LibraryLayout, React.ReactNode> = {
   large: <g fill="currentColor">{[2, 8.6].flatMap((y) => [2, 8.6].map((x) => <rect key={`${x}-${y}`} x={x} y={y} width="5.4" height="5.4" rx="1.2" />))}</g>,
   cards: <><rect x="2" y="2.5" width="12" height="11" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M2 9h12M4.5 11.2h5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></>,
 };
+const GROUP_BY_OPTIONS: ReadonlyArray<SlideOption<LibraryGroupBy>> = [
+  { id: 'kind', label: 'Group by kind', content: 'Kind' },
+  { id: 'computer', label: 'Group by computer', content: 'Computer' },
+];
 const LAYOUT_OPTIONS: ReadonlyArray<SlideOption<LibraryLayout>> = LIBRARY_LAYOUTS.map((l) => ({
   id: l.id,
   label: l.label,
@@ -97,7 +113,7 @@ const LAYOUT_OPTIONS: ReadonlyArray<SlideOption<LibraryLayout>> = LIBRARY_LAYOUT
 
 /** A group's heading: folds the group under All, names the kind and its count otherwise. */
 function GroupHeading({ group, collapsible, collapsed, onToggle, more, large = false, mover }: {
-  group: Group;
+  group: ViewGroup;
   collapsible: boolean;
   collapsed: boolean;
   onToggle: () => void;
@@ -108,7 +124,7 @@ function GroupHeading({ group, collapsible, collapsed, onToggle, more, large = f
 }) {
   const inner = <>
     {collapsible && <ChevronDownIcon className="library-chevron h-3.5 w-3.5 text-ink-faint" />}
-    <span>{group.kind.label}</span>
+    <span>{group.label}</span>
     <span className="rounded-full bg-surface-2 px-2 text-2xs font-normal tabular-nums text-ink-faint">{group.items.length}</span>
   </>;
   const cls = `flex min-w-0 items-center gap-2 font-semibold text-ink ${large ? 'text-sm' : 'text-xs'}`;
@@ -172,7 +188,9 @@ export function ArtifactsView() {
   const [includeArchived, setIncludeArchived] = useState(true);
   const [show, setShow] = useState<Show>('all');
   const [layout, setLayout] = useState<LibraryLayout>(loadLibraryLayout);
-  const [collapsed, setCollapsed] = useState<Set<ArtifactKind>>(loadCollapsedKinds);
+  const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsedKinds);
+  const [groupBy, setGroupBy] = useState<LibraryGroupBy>(loadLibraryGroupBy);
+  const [showComputer, setShowComputer] = useState(loadLibraryShowComputer);
 
   useEffect(() => { void refreshSessions(); }, [refreshSessions]);
 
@@ -288,8 +306,19 @@ export function ArtifactsView() {
   // A kind whose last file left (a chat was archived away) falls back to All.
   const current: Show = show === 'all' || kinds.some((g) => g.kind.id === show) ? show : 'all';
   const all = current === 'all';
-  const shown = all ? groups : groups.filter((g) => g.kind.id === current);
-  const isFolded = (kind: ArtifactKind) => all && collapsed.has(kind);
+  const ofKind = all ? groups : groups.filter((g) => g.kind.id === current);
+  // Files from another computer (#3144): each file can name its computer, and Library can group by computer.
+  const manyComputers = remote.length > 0;
+  const byComputer = manyComputers && groupBy === 'computer';
+  const lineNamesComputer = manyComputers && showComputer && !byComputer;
+  const computerNamed = lineNamesComputer || byComputer;
+  const shown: ViewGroup[] = byComputer
+    ? groupByComputer(ofKind.flatMap((g) => g.items), thisComputerName())
+    : ofKind.map((g) => ({ id: g.kind.id, label: g.kind.label, items: g.items, kind: g.kind.id }));
+  // Computer groups fold under one kind too: there is no "See all" to stand in for them.
+  const foldable = all || byComputer;
+  const isFolded = (id: string) => foldable && collapsed.has(id);
+  const meta = (e: ArtifactEntry) => fromAndWhen(e, lineNamesComputer, computerNamed);
   const listWide = layout === 'list' && !selected;
   const browsing = !selected && layout !== 'list' && shown.length > 0;
 
@@ -309,9 +338,9 @@ export function ArtifactsView() {
   // Moving between the preview layouts leaves the list alone; anything touching List, or the kind shown, changes it.
   const pickLayout = (next: LibraryLayout) => { if (next !== layout) transition(() => { setLayout(next); saveLibraryLayout(next); }, next === 'list' || layout === 'list'); };
   const pickShow = (next: Show) => { if (next !== current) transition(() => setShow(next), true); };
-  const toggle = (kind: ArtifactKind) => setCollapsed((prev) => {
+  const toggle = (id: string) => setCollapsed((prev) => {
     const next = new Set(prev);
-    if (!next.delete(kind)) next.add(kind);
+    if (!next.delete(id)) next.add(id);
     saveCollapsedKinds(next);
     return next;
   });
@@ -380,12 +409,13 @@ export function ArtifactsView() {
           <LibraryFileThumbnail kind={e.kind} path={e.path} revision={revision} thumbnailData={e.source === 'cloud' ? remoteThumbs.get(e.path) : undefined} className="h-7 w-7 shrink-0 rounded-md" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
-            {!listWide && <span className="block truncate text-2xs text-ink-faint">{fromAndWhen(e)}</span>}
+            {!listWide && <span className="block truncate text-2xs text-ink-faint">{meta(e)}</span>}
           </span>
           {sync(e)}
           {listWide && <>
             <span className="hidden w-48 truncate font-mono text-2xs text-ink-faint lg:block">{e.filename}</span>
-            <span className="hidden w-56 truncate text-2xs text-ink-faint sm:block">{cameFrom(e)}</span>
+            {lineNamesComputer && <span className="hidden w-32 truncate text-2xs text-ink-faint sm:block" data-library-computer>{computerName(e)}</span>}
+            <span className="hidden w-56 truncate text-2xs text-ink-faint sm:block">{cameFrom(e, computerNamed)}</span>
             <span className="w-16 shrink-0 text-right text-2xs tabular-nums text-ink-faint">{when(e.at)}</span>
           </>}
         </button>
@@ -406,7 +436,7 @@ export function ArtifactsView() {
         <TilePreview revision={e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} badge={sync(e)} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
-          <span className="library-tile-meta">{fromAndWhen(e)}</span>
+          <span className="library-tile-meta">{meta(e)}</span>
         </span>
       </button>
       {layout === 'cards' && (
@@ -504,17 +534,28 @@ export function ArtifactsView() {
         <aside className={`library-list ${full ? 'hidden' : selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col ${listWide ? '' : 'md:w-[340px] md:border-r md:border-line'}`}>
           <div className={`space-y-2 px-3 pb-2 pt-3 ${listWide ? 'md:px-5' : ''}`}>
             <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter Library" value={query} onChange={(e) => setQuery(e.target.value)} />
-            <label className="flex items-center gap-2 text-2xs text-ink-faint">
-              <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} /> Include archived chats
-            </label>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <label className="flex items-center gap-2 text-2xs text-ink-faint">
+                <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} /> Include archived chats
+              </label>
+              {/* Only once Library holds another computer's files (#3144). */}
+              {manyComputers && <>
+                <label className="flex items-center gap-2 text-2xs text-ink-faint" data-library-show-computer>
+                  <input type="checkbox" checked={showComputer && !byComputer} disabled={byComputer}
+                    onChange={(e) => { setShowComputer(e.target.checked); saveLibraryShowComputer(e.target.checked); }} /> Show computer
+                </label>
+                <SlideToggle label="Group by" options={GROUP_BY_OPTIONS} value={groupBy} className="library-group-by ms-auto"
+                  onChange={(next) => transition(() => { setGroupBy(next); saveLibraryGroupBy(next); }, true)} />
+              </>}
+            </div>
           </div>
           <div className={`min-h-0 flex-1 overflow-y-auto px-2 pb-3 ${listWide ? 'md:px-4' : ''}`} role="list" aria-label="Library files">
             {loading ? listSkeleton : <>
               {empty && <p className="px-3 py-2 text-xs text-ink-faint">{empty}</p>}
               {shown.map((g) => (
-                <section key={g.kind.id} className="mb-1" data-artifact-kind={g.kind.id} aria-label={g.kind.label}>
-                  <GroupHeading group={g} collapsible={all} collapsed={isFolded(g.kind.id)} onToggle={() => toggle(g.kind.id)} />
-                  <Fold open={!isFolded(g.kind.id)}>{g.items.map(row)}</Fold>
+                <section key={g.id} className="mb-1" data-artifact-kind={g.kind} data-library-computer-group={g.kind ? undefined : g.id} aria-label={g.label}>
+                  <GroupHeading group={g} collapsible={foldable} collapsed={isFolded(g.id)} onToggle={() => toggle(g.id)} />
+                  <Fold open={!isFolded(g.id)}>{g.items.map(row)}</Fold>
                 </section>
               ))}
             </>}
@@ -561,15 +602,18 @@ export function ArtifactsView() {
           ) : browsing ? (
             <div className="library-canvas min-h-0 flex-1 overflow-y-auto px-5 pb-8" data-library-canvas>
               {shown.map((g) => {
-                const limit = all ? PREVIEW_LIMIT[layout as keyof typeof PREVIEW_LIMIT] : Infinity;
-                const more = all && g.items.length > limit
-                  ? <button type="button" className="ml-auto shrink-0 rounded-md px-1 text-2xs font-medium text-accent hover:underline" onClick={() => pickShow(g.kind.id)}>See all {g.items.length}</button>
+                // A kind's previews stop at a limit under All, with "See all" opening that kind; a computer's show every file.
+                const kind = g.kind;
+                const limit = all && kind ? PREVIEW_LIMIT[layout as keyof typeof PREVIEW_LIMIT] : Infinity;
+                const more = kind && all && g.items.length > limit
+                  ? <button type="button" className="ml-auto shrink-0 rounded-md px-1 text-2xs font-medium text-accent hover:underline" onClick={() => pickShow(kind)}>See all {g.items.length}</button>
                   : undefined;
+                const key = g.id.replace(/[^a-z0-9-]/gi, '-');
                 return (
-                  <section key={g.kind.id} data-library-group={g.kind.id} aria-label={g.kind.label}>
-                    <GroupHeading group={g} collapsible={all} collapsed={isFolded(g.kind.id)} onToggle={() => toggle(g.kind.id)} more={more} large mover={`library-head-${g.kind.id}`} />
-                    <Fold open={!isFolded(g.kind.id)}>
-                      <div className="library-tiles" role="list" aria-label={`${g.kind.label} previews`}>{g.items.slice(0, limit).map(tile)}</div>
+                  <section key={g.id} data-library-group={g.kind ?? g.id} aria-label={g.label}>
+                    <GroupHeading group={g} collapsible={foldable} collapsed={isFolded(g.id)} onToggle={() => toggle(g.id)} more={more} large mover={`library-head-${key}`} />
+                    <Fold open={!isFolded(g.id)}>
+                      <div className="library-tiles" role="list" aria-label={`${g.label} previews`}>{g.items.slice(0, limit).map(tile)}</div>
                     </Fold>
                   </section>
                 );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LibrarySyncStatus } from '@nekko-agent/shared';
 import type { ArtifactEntry } from '../../artifactsIndex.js';
-import { fileSync, remoteEntries, syncFilesOf, syncKey, syncLabel, syncSummary } from './librarySyncState.js';
+import { fileComputer, fileSync, groupByComputer, remoteEntries, syncFilesOf, syncKey, syncLabel, syncSummary } from './librarySyncState.js';
 
 const entry = (path: string, over: Partial<ArtifactEntry> = {}): ArtifactEntry => ({
   path, title: path.split('/').pop()!, filename: path.split('/').pop()!, kind: 'doc', sessionId: 's1', sessionTitle: 'Quarterly', at: 1, source: 'written', ...over,
@@ -59,5 +59,30 @@ describe('Library sync', () => {
     expect(syncSummary(status({ '/p/a.md': 'synced' }), [a, b])?.word).toBe('1 file waiting to back up');
     expect(syncSummary(status({ '/p/a.md': 'noRoom', '/p/b.md': 'synced' }), [a, b])).toMatchObject({ tone: 'warning', word: 'Nekko Cloud storage full' });
     expect(syncSummary(status({ '/p/a.md': 'tooLarge', '/p/b.md': 'synced' }), [a, b])).toMatchObject({ tone: 'warning', word: '1 file not backed up' });
+  });
+});
+
+describe('Library by computer (#3144)', () => {
+  const desk = entry('/p/a.md');
+  const page = entry('/p/b.html', { kind: 'web' });
+  const fromLaptop = entry('C:/cloud/library/k/c.md', { source: 'cloud', device: 'Laptop', sessionId: '' });
+  const fromStudio = entry('C:/cloud/library/k/d.md', { source: 'cloud', device: 'Studio', sessionId: '' });
+  const laptopAgain = entry('C:/cloud/library/k/e.md', { source: 'cloud', device: 'laptop', sessionId: '' });
+
+  it('names the computer a file belongs to, or none for this one', () => {
+    expect(fileComputer(desk)).toBeNull();
+    expect(fileComputer(fromLaptop)).toBe('Laptop');
+    expect(fileComputer(entry('/x', { source: 'cloud', device: ' ' }))).toBe('Another computer');
+  });
+
+  it('groups files by computer, this one first, keeping their order', () => {
+    const groups = groupByComputer([fromStudio, desk, fromLaptop, page, laptopAgain], 'This PC');
+    expect(groups.map((g) => [g.id, g.label, g.items.map((e) => e.path)])).toEqual([
+      ['computer:here', 'This PC', ['/p/a.md', '/p/b.html']],
+      ['computer:studio', 'Studio', ['C:/cloud/library/k/d.md']],
+      ['computer:laptop', 'Laptop', ['C:/cloud/library/k/c.md', 'C:/cloud/library/k/e.md']],
+    ]);
+    // No local files: no empty group for this computer.
+    expect(groupByComputer([fromLaptop], 'This PC').map((g) => g.id)).toEqual(['computer:laptop']);
   });
 });

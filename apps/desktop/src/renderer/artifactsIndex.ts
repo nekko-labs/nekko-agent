@@ -349,7 +349,8 @@ export function groupDesignVersions(entries: readonly ArtifactEntry[]): Artifact
 /** Chats worth scanning: top-level, real conversations, newest first. */
 export function artifactCandidates(sessions: readonly SessionSummary[], limit = 60): SessionSummary[] {
   return sessions
-    .filter((s) => !s.parentSessionId && !s.incognito && s.chatType !== 'image' && s.exchangeCount > 1)
+    // Another computer's chat synced here (#3143): its files are on that computer, and reach Library through Library sync.
+    .filter((s) => !s.parentSessionId && !s.incognito && !s.home && s.chatType !== 'image' && s.exchangeCount > 1)
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, limit);
 }

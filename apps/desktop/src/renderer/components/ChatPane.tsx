@@ -4,6 +4,7 @@ import { useClaudePlan } from '../providerAccounts.js';
 import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
 import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { computerBlock, useComputerOf } from './ComputerChip.js';
+import { syncedBlock } from '../syncedComputers.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
 import { ChatBackgroundWork, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
@@ -656,7 +657,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // the host copy is fetched regardless and replaces it (stale-while-revalidate).
   const [session, setSession] = useState<Session | null>(() => getCachedSession(sessionId) ?? null);
   // A Claude Code sub-agent's chat is a copy to watch: Claude Code holds the real one.
-  const remoteBlock = session?.claudeCodeSubagent ? 'This subagent runs inside its parent chat. Send your message there.' : computerBlock(computer);
+  // Another computer's chat synced here through Nekko Cloud is a read-only copy (#3143): it carries on there, or here as a fork.
+  const syncedHome = !computer && session?.home?.deviceId ? session.home : null;
+  const remoteBlock = session?.claudeCodeSubagent ? 'This subagent runs inside its parent chat. Send your message there.'
+    : computerBlock(computer) ?? (syncedHome ? syncedBlock(syncedHome) : null);
+  const [continuing, setContinuing] = useState(false);
+  /** Fork the copy into a chat of this computer, with the whole transcript, and open it where this one was. */
+  const continueHere = async () => {
+    if (continuing) return;
+    setContinuing(true);
+    const fork = await window.nekko.forkSession(sessionId).catch(() => null);
+    setContinuing(false);
+    if (!fork) { useStore.getState().pushToast('error', 'Could not copy this chat to this computer.'); return; }
+    await refreshSessions();
+    if (commandCenter) useStore.getState().focusChatOnWall(fork.id, { keepLayout: true });
+    else useStore.getState().openChatPane(fork.id);
+  };
   const [liveConnectivity, setLiveConnectivity] = useState<import('@nekko-agent/shared').ConnectivityNotice[]>(() => rememberedConnectivityNotices(sessionId));
   useEffect(() => { setLiveConnectivity(rememberedConnectivityNotices(sessionId)); }, [sessionId]);
   const claudeBackground = useClaudeBackgroundTasks(sessionId);
@@ -3024,7 +3040,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 />
                 {!streaming && <ChatBackgroundWork tasks={claudeBackground} subAgents={subagentChildren} />}
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
-                {remoteBlock && <div role="status" data-computer-block className="mx-auto mb-1 w-full max-w-3xl rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>{remoteBlock}</div>}
+                {remoteBlock && <div role="status" data-computer-block={syncedHome ? 'synced' : ''} className="mx-auto mb-1 flex w-full max-w-3xl items-center gap-3 rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>
+                  <span className="min-w-0 flex-1">{remoteBlock}</span>
+                  {syncedHome && <button type="button" data-continue-here disabled={continuing} className="shrink-0 font-medium text-accent hover:underline disabled:opacity-50"
+                    title="Copy this chat to this computer and carry it on here" onClick={() => { void continueHere(); }}>Continue here</button>}
+                </div>}
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" actions={questionActions} />
                 </div>}
