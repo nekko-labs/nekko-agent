@@ -187,7 +187,7 @@ export function phoneWorkflowsView(snapshot: unknown): Obj[] {
  * a field of the view (the desktop channel never returns it either; the
  * transcript holds it in the arming call). `lastError` is cut to `textChars`.
  */
-export const PHONE_WATCH_VIEW = ['id', 'kind', 'url', 'status', 'deadlineAt', 'nextPollAt', 'pending', 'failures', 'lastError'] as const;
+export const PHONE_WATCH_VIEW = ['id', 'kind', 'url', 'status', 'deadlineAt', 'nextPollAt', 'pending', 'failures', 'lastError', 'clipStage'] as const;
 
 /**
  * `machine:summary` for a phone (2026-10-24): the computer's version and

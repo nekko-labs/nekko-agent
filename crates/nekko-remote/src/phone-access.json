@@ -442,7 +442,8 @@
   "nextPollAt",
   "pending",
   "failures",
-  "lastError"
+  "lastError",
+  "clipStage"
  ],
  "machineView": [
   "version",
