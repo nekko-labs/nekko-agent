@@ -185,10 +185,10 @@ function Nekko({ x, top, lift = 0, shift = 0, look, squint = 0, laugh = false, p
 /** Nekko's eyes on a point in the demo, the way GreetingNekko bounds his glance. */
 const gaze = (face: { x: number; y: number }, x: number, y: number) => greetingGaze((x - face.x) * 80 / NEKKO.w, (y - face.y) * 80 / NEKKO.w);
 
-/** CleanStartGreeting's heading: text-xl, 600, -0.01em, in its 300 x 60 box above the composer. */
+/** CleanStartGreeting's heading: text-xl, 600, -0.01em, in a 300 x 60 box centred on the visible cat (ear tips at art row 4 down to the composer edge at row 25). */
 function Greeting({ top, show = 1 }: { top: number; show?: number }) {
   if (show < 0.01) return null;
-  return <div style={{ position: 'absolute', left: HEAD_X, top: top - 16 - 60, width: 300, height: 60, display: 'flex', alignItems: 'center', fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em', color: theme.colors.ink, whiteSpace: 'nowrap', opacity: show }}>{GREETING_QUESTIONS[0]}</div>;
+  return <div style={{ position: 'absolute', left: HEAD_X, top: top - 10.5 * U - 30, width: 300, height: 60, display: 'flex', alignItems: 'center', fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em', color: theme.colors.ink, whiteSpace: 'nowrap', opacity: show }}>{GREETING_QUESTIONS[0]}</div>;
 }
 
 /** The app's stroke icons (icons.tsx) take their size from a class; here a box sizes them. */
