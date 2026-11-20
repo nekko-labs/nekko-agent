@@ -12,6 +12,8 @@
   const store = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 
   const glyph = (s) => `<span class="glyph${s === 'working' ? ' status-rocket' : ''}${['error', 'idle', 'done'].includes(s) ? ' small' : ''}" data-status="${s}" role="img" aria-label="${WORDS[s]}"><svg viewBox="0 0 24 24" aria-hidden="true">${marks.glyphs[s] || ''}</svg></span>`;
+  // Build-baked markup becomes nodes through the parser, never through innerHTML/outerHTML.
+  const parse = (markup) => new DOMParser().parseFromString(`<body>${markup}`, 'text/html').body.firstElementChild;
   const head = $('.wall-mascot svg')?.outerHTML || '';
   const mascot = (s) => {
     const b = marks.badges[s] || { tint: '--neutral', path: '' };
@@ -72,17 +74,21 @@
     const title = $('[data-chat-title]', win);
     const log = $('[data-chat-log]', win);
     let selected = 0;
-    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const icon = (n) => `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">${marks.icons[n] || ''}</svg>`;
-    const paintRow = (i) => { $('.glyph', rows[i]).outerHTML = glyph(AGENTS[i].status); };
+    const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids); return e; };
+    const paintRow = (i) => { $('.glyph', rows[i]).replaceWith(parse(glyph(AGENTS[i].status))); };
     const paintChat = (fade) => {
       const a = AGENTS[selected];
       const swap = () => {
-        $('.wall-mascot', chatHead).outerHTML = mascot(a.status);
+        $('.wall-mascot', chatHead).replaceWith(parse(mascot(a.status)));
         title.textContent = a.title;
         word.textContent = WORDS[a.status];
         const [you, agent, [ic, tool, diff]] = a.log;
-        log.innerHTML = `<p class="msg-you">${esc(you)}</p><p class="msg-agent">${esc(agent)}</p><p class="msg-tool">${icon(ic)}<span>${esc(tool)}</span><span class="msg-diff">${esc(diff)}</span></p>`;
+        log.replaceChildren(
+          el('p', 'msg-you', you),
+          el('p', 'msg-agent', agent),
+          el('p', 'msg-tool', parse(icon(ic)), el('span', '', tool), el('span', 'msg-diff', diff)),
+        );
         word.style.opacity = log.style.opacity = '';
       };
       if (!fade) return swap();
@@ -104,7 +110,7 @@
       AGENTS[i].status = s;
       paintRow(i);
       if (i === selected) {
-        $('.wall-mascot', chatHead).outerHTML = mascot(s);
+        $('.wall-mascot', chatHead).replaceWith(parse(mascot(s)));
         word.textContent = WORDS[s];
       }
     };
