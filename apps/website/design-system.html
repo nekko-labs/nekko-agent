@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Design system · Nekko Agent</title>
+    <meta name="description" content="Quiet surfaces: how Nekko Agent looks and moves. The live tokens, type, colour, status glyphs, motion and components every screen is built from, in Light Nekko and Dusk." />
+    <link rel="canonical" href="https://nekkoagent.com/design-system" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/design-system" />
+    <meta property="og:title" content="Design system · Nekko Agent" />
+    <meta property="og:description" content="Quiet surfaces: how Nekko Agent looks and moves, with live tokens, components and motion." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=plum-3" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=plum-3" />
+    <!-- The saved theme, or the system's, before first paint, so the page never flashes the wrong one -->
+    <script>(function(){var d=document.documentElement,t=null,r=false;try{t=localStorage.getItem('nekko-ds-theme');}catch(e){}if(t!=='light'&&t!=='dusk')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dusk':'light';d.dataset.dsTheme=t;if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)d.dataset.reduce='';})();</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
+    <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/ds/tokens.css" />
+    <link rel="stylesheet" href="/design-system.css?v=1" />
+    <script defer src="/ds/marks.js"></script>
+    <script defer src="/design-system.js?v=1"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="top">
+      <a class="brand" href="/" aria-label="Nekko Agent home">
+        <svg class="nekko" viewBox="0 0 32 32" width="24" height="24" shape-rendering="crispEdges" aria-hidden="true"><use href="#nekko-head" /></svg>
+        <span>Nekko Agent</span>
+        <span class="brand-sub">Design system</span>
+      </a>
+      <div class="tabs" role="tablist" aria-label="Theme" data-tabs="theme">
+        <button class="tab" role="tab" data-value="light" type="button">Light Nekko</button>
+        <button class="tab" role="tab" data-value="dusk" type="button">Dusk</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="toc" aria-label="On this page">
+        <a href="#principles">Principles</a>
+        <a href="#separating">Separating things</a>
+        <a href="#spacing">Spacing</a>
+        <a href="#type">Type</a>
+        <a href="#colour">Colour</a>
+        <a href="#status">Agent status</a>
+        <a href="#icons">Icons</a>
+        <a href="#motion">Motion</a>
+        <a href="#components">Rows and controls</a>
+        <a href="#copy">Copy</a>
+        <a href="#checklist">Checklist</a>
+      </nav>
+
+      <main id="main">
+        <section class="intro" aria-labelledby="title">
+          <h1 id="title">Quiet surfaces</h1>
+          <p class="lede">How Nekko Agent looks and moves. Everything on this page is live: the colours, sizes and timings are read from the app's own stylesheet, so what you see is what ships.</p>
+          <div class="settings">
+            <div class="row static">
+              <div class="row-text"><span class="row-title">Input</span><span class="row-detail">Buttons are 28 tall for a pointer and 44 under a finger.</span></div>
+              <div class="tabs" role="tablist" aria-label="Input" data-tabs="input">
+                <button class="tab" role="tab" data-value="pointer" type="button">Pointer</button>
+                <button class="tab" role="tab" data-value="finger" type="button">Finger</button>
+              </div>
+            </div>
+            <label class="row static">
+              <span class="row-text"><span class="row-title">Slow motion</span><span class="row-detail">Every timing at five times, to see the curve.</span></span>
+              <button class="switch" role="switch" aria-checked="false" type="button" data-switch="slowmo" aria-label="Slow motion"></button>
+            </label>
+            <label class="row static">
+              <span class="row-text"><span class="row-title">Reduce motion</span><span class="row-detail">Only the fades stay.</span></span>
+              <button class="switch" role="switch" aria-checked="false" type="button" data-switch="reduce" aria-label="Reduce motion"></button>
+            </label>
+          </div>
+        </section>
+
+        <section id="principles" aria-labelledby="h-principles">
+          <h2 id="h-principles">Principles</h2>
+          <ol class="principles">
+            <li><span class="row-title">Space before lines.</span><span class="row-detail">Gaps and type separate things. A border is the last resort.</span></li>
+            <li><span class="row-title">Say it once.</span><span class="row-detail">One short line of help, at most. Detail waits behind a tap, a disclosure or a tooltip.</span></li>
+            <li><span class="row-title">Only what matters now.</span><span class="row-detail">What does not apply is gone, not greyed out.</span></li>
+            <li><span class="row-title">Colour means something.</span><span class="row-detail">Plum for intent, state colours for state, Petrol for information. Neutrals do the structure.</span></li>
+            <li><span class="row-title">Every action moves.</span><span class="row-detail">Each change animates, briefly and quietly. Nothing bounces.</span></li>
+            <li><span class="row-title">One surface per layer.</span><span class="row-detail">No card in a card. A popover is the only thing that floats.</span></li>
+          </ol>
+        </section>
+
+        <section id="separating" aria-labelledby="h-separating">
+          <div class="section-head">
+            <h2 id="h-separating">Separating things</h2>
+            <div class="tabs" role="tablist" aria-label="Example" data-tabs="separating">
+              <button class="tab" role="tab" data-value="boxed" type="button">Boxes</button>
+              <button class="tab" role="tab" data-value="quiet" type="button">Quiet</button>
+            </div>
+          </div>
+          <p class="note">Reach for these in order and stop at the first that works: whitespace, size and weight, an ink tier, and last, one hairline.</p>
+          <div class="compare" data-compare="quiet">
+            <div class="compare-pane" data-pane="boxed" aria-label="The same settings, built from boxes">
+              <div class="x-card">
+                <div class="x-card-title">MODELS</div>
+                <div class="x-card x-inner"><span>Default model</span><span class="x-pill">Qwen3 Coder</span></div>
+                <div class="x-card x-inner"><span>Load on start</span><span class="x-pill x-on">ON</span></div>
+              </div>
+              <div class="x-card">
+                <div class="x-card-title">PRIVACY</div>
+                <div class="x-card x-inner"><span>Privacy Shield</span><span class="x-pill x-on">ON</span></div>
+              </div>
+            </div>
+            <div class="compare-pane" data-pane="quiet" aria-label="The same settings, quiet">
+              <div class="group">
+                <div class="group-label">Models</div>
+                <div class="row"><span class="row-text"><span class="row-title">Default model</span></span><span class="meta">Qwen3 Coder</span></div>
+                <label class="row"><span class="row-text"><span class="row-title">Load on start</span><span class="row-detail">Ready before your first message.</span></span><button class="switch" role="switch" aria-checked="true" type="button" aria-label="Load on start"></button></label>
+              </div>
+              <div class="group">
+                <div class="group-label">Privacy</div>
+                <label class="row"><span class="row-text"><span class="row-title">Privacy Shield</span></span><button class="switch" role="switch" aria-checked="true" type="button" aria-label="Privacy Shield"></button></label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="spacing" aria-labelledby="h-spacing">
+          <h2 id="h-spacing">Spacing: 8 and 20</h2>
+          <p class="note">8px steps inside components, 20px steps for layout. 4px only for things that belong together.</p>
+          <div class="list" data-spacing></div>
+          <p class="note">Rows are 40 tall on a page and 32 in a popover or menu; fields 32; popovers 400 wide; the content column about 720.</p>
+        </section>
+
+        <section id="type" aria-labelledby="h-type">
+          <h2 id="h-type">Type</h2>
+          <p class="note">Geist for the interface, Geist Mono for code, paths and numbers in tables. One size per job, sentence case, never tracked caps, never a third line on a row.</p>
+          <input class="field sample" type="text" value="Model library" aria-label="Sample text" data-sample spellcheck="false" />
+          <div class="list" data-type></div>
+        </section>
+
+        <section id="colour" aria-labelledby="h-colour">
+          <h2 id="h-colour">Colour</h2>
+          <p class="note">A component reads a token, never a hex value. Select a colour to copy its token.</p>
+          <div data-colours></div>
+        </section>
+
+        <section id="status" aria-labelledby="h-status">
+          <h2 id="h-status">Agent status</h2>
+          <p class="note">Agents show their status with our glyphs, never a generic dot. In a list it is the glyph; on a window it is Nekko with a badge.</p>
+          <div class="group">
+            <div class="row demo-agent" data-agent>
+              <span class="glyph" data-agent-glyph></span>
+              <span class="row-text"><span class="row-title">Fix the flaky upload test</span><span class="row-detail swap" data-agent-word></span></span>
+              <span class="wall-mascot" data-agent-mascot></span>
+            </div>
+          </div>
+          <div class="tabs wrap" role="tablist" aria-label="Status" data-tabs="status">
+            <button class="tab" role="tab" data-value="working" type="button">Working</button>
+            <button class="tab" role="tab" data-value="input" type="button">Needs you</button>
+            <button class="tab" role="tab" data-value="error" type="button">Error</button>
+            <button class="tab" role="tab" data-value="idle" type="button">Watching</button>
+            <button class="tab" role="tab" data-value="done" type="button">Done</button>
+          </div>
+          <div class="group">
+            <div class="group-label">Everything else is a dot and a word</div>
+            <div class="row"><span class="dot" style="--dot: var(--success)"></span><span class="row-text"><span class="row-title">GitHub</span></span><span class="meta">Connected</span></div>
+            <div class="row"><span class="dot" style="--dot: var(--warning)"></span><span class="row-text"><span class="row-title">OpenRouter key</span></span><span class="meta" style="color: var(--warning-text)">Expires in 3 days</span></div>
+            <div class="row"><span class="dot" style="--dot: var(--neutral)"></span><span class="row-text"><span class="row-title">Studio Mac</span></span><span class="meta">Offline</span></div>
+          </div>
+        </section>
+
+        <section id="icons" aria-labelledby="h-icons">
+          <h2 id="h-icons">Icons</h2>
+          <p class="note">Control icons are Gentleface, line at 16px: ink-soft at rest, ink on hover, accent only when the control is on. In the app each plays its own motion once on hover, focus or press, then rests.</p>
+          <div class="icons" data-icons></div>
+        </section>
+
+        <section id="motion" aria-labelledby="h-motion">
+          <h2 id="h-motion">Motion</h2>
+          <p class="note">Every action answers with motion: short, decelerating, never bouncing. One curve, 8px of travel at most, exits about 25% faster than entrances. Try each one.</p>
+          <div class="list motion">
+            <div class="row static">
+              <span class="row-text"><span class="row-title">Hover, press</span><span class="row-detail">Wash fades in, press scales to 0.97 · 120ms</span></span>
+              <button class="btn" type="button">Press me</button>
+            </div>
+            <div class="row static">
+              <span class="row-text"><span class="row-title">Toggle</span><span class="row-detail">The knob slides, the fill fades · 200ms</span></span>
+              <button class="switch" role="switch" aria-checked="false" type="button" aria-label="Example switch"></button>
+            </div>
+            <div class="row static">
+              <span class="row-text"><span class="row-title">Tab</span><span class="row-detail">The pill slides · 200ms</span></span>
+              <div class="tabs" role="tablist" aria-label="Example tabs" data-tabs="example">
+                <button class="tab" role="tab" data-value="chat" type="button">Chat</button>
+                <button class="tab" role="tab" data-value="code" type="button">Code</button>
+                <button class="tab" role="tab" data-value="cowork" type="button">Cowork</button>
+              </div>
+            </div>
+            <div class="row static column">
+              <div class="row-line">
+                <span class="row-text"><span class="row-title">Expand</span><span class="row-detail">Height opens, content fades in · 200ms</span></span>
+                <button class="btn" type="button" aria-expanded="false" data-expand>Show details</button>
+              </div>
+              <div class="expand" data-expanded="false"><div><p class="note">Detail waits behind a tap, then opens in place, without pushing anything else around more than it must.</p></div></div>
+            </div>
+            <div class="row static column">
+              <div class="row-line">
+                <span class="row-text"><span class="row-title">Add and remove a row</span><span class="row-detail">Fades, then the gap closes · 160ms, with Undo</span></span>
+                <button class="btn" type="button" data-add-row>Add a folder</button>
+              </div>
+              <div class="removable" data-rows></div>
+            </div>
+            <div class="row static">
+              <span class="row-text"><span class="row-title">Popover, menu</span><span class="row-detail">Fades in, rises 4px, scales from 0.98 · 200ms in, 150ms out</span></span>
+              <div class="anchor">
+                <button class="btn" type="button" aria-haspopup="menu" aria-expanded="false" data-menu-button>Effort</button>
+                <div class="popover menu" role="menu" data-menu hidden>
+                  <button class="row menu-item" role="menuitemradio" aria-checked="false" type="button"><span class="row-text"><span class="row-title">Low</span><span class="row-detail">Quick answers</span></span></button>
+                  <button class="row menu-item" role="menuitemradio" aria-checked="true" type="button"><span class="row-text"><span class="row-title">Medium</span><span class="row-detail">The default</span></span></button>
+                  <button class="row menu-item" role="menuitemradio" aria-checked="false" type="button"><span class="row-text"><span class="row-title">High</span><span class="row-detail">Thinks longer</span></span></button>
+                </div>
+              </div>
+            </div>
+            <div class="row static">
+              <span class="row-text"><span class="row-title">Tooltip</span><span class="row-detail">Fades in, moves 4px out · none when sliding between tips</span></span>
+              <div class="icon-row">
+                <button class="icon-btn" type="button" data-tip="Attach a file" data-icon="image"></button>
+                <button class="icon-btn" type="button" data-tip="Add a folder" data-icon="folder-open"></button>
+                <button class="icon-btn" type="button" data-tip="Search chats" data-icon="search"></button>
+              </div>
+            </div>
+            <div class="row static">
+              <span class="row-text"><span class="row-title">Meter</span><span class="row-detail">Width eases to the new value · 260ms</span></span>
+              <button class="meter" type="button" data-meter aria-label="Context used, select to change"><span></span></button>
+            </div>
+            <div class="row static">
+              <span class="row-text"><span class="row-title">Toast</span><span class="row-detail">Rises 8px and fades in, out after 4s · 200ms</span></span>
+              <button class="btn" type="button" data-toast-demo>Save</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="components" aria-labelledby="h-components">
+          <h2 id="h-components">Rows and controls</h2>
+          <p class="note">A row has no border and no resting background: a leading glyph, a title, one line of detail, metadata on the right, and actions that stay faint until hover.</p>
+          <div class="group">
+            <div class="group-label">Workspaces</div>
+            <div class="row" data-quiet-row>
+              <span class="lead" data-icon="folder-open"></span>
+              <span class="row-text"><span class="row-title">nekko-agent</span><span class="row-detail mono">~/code/nekko-agent</span></span>
+              <span class="meta mono">12,480 files</span>
+              <button class="row-action btn" type="button">Reindex</button>
+            </div>
+            <div class="row" data-quiet-row>
+              <span class="lead" data-icon="folder-open"></span>
+              <span class="row-text"><span class="row-title">notes</span><span class="row-detail mono">~/Documents/notes</span></span>
+              <span class="meta mono">318 files</span>
+              <button class="row-action btn" type="button">Reindex</button>
+            </div>
+            <div class="row" aria-disabled="true">
+              <span class="lead" data-icon="cloud"></span>
+              <span class="row-text"><span class="row-title faint">Shared drive</span><span class="row-detail">Sign in to Google Drive to index it.</span></span>
+            </div>
+          </div>
+          <div class="group">
+            <div class="group-label">Buttons</div>
+            <div class="buttons">
+              <button class="btn btn-primary" type="button">Download model</button>
+              <button class="btn" type="button">Cancel</button>
+              <button class="btn danger" type="button">Remove workspace</button>
+              <button class="btn btn-primary" type="button" disabled>Install</button>
+            </div>
+            <p class="note">One primary per view. Secondary is a neutral wash, not an outline. Destructive is words in danger until the confirmation.</p>
+          </div>
+          <div class="group">
+            <div class="group-label">Fields</div>
+            <input class="field" type="text" placeholder="Search models" aria-label="Search models" />
+          </div>
+          <div class="group">
+            <div class="group-label">Empty list</div>
+            <p class="empty">No automations yet. Add one from a chat with Automate.</p>
+          </div>
+        </section>
+
+        <section id="copy" aria-labelledby="h-copy">
+          <h2 id="h-copy">Copy</h2>
+          <ol class="principles">
+            <li><span class="row-title">One line per group, at most.</span><span class="row-detail">Caveats go in a tooltip or the docs.</span></li>
+            <li><span class="row-title">Name things by what people know them as.</span><span class="row-detail">"Acme · Team", not an internal id.</span></li>
+            <li><span class="row-title">Never put a secret, key or token on screen.</span></li>
+          </ol>
+        </section>
+
+        <section id="checklist" aria-labelledby="h-checklist">
+          <div class="section-head">
+            <h2 id="h-checklist">Checklist for a screen</h2>
+            <button class="btn" type="button" data-copy-checklist>Copy as Markdown</button>
+          </div>
+          <p class="note" data-checklist-count>Check a screen against it before it ships.</p>
+          <div class="list" data-checklist></div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="foot">
+      <span>The source of truth is <a href="https://github.com/nekko-labs/nekko-agent/blob/main/docs/design-system.md">docs/design-system.md</a>, with the tokens in <a href="https://github.com/nekko-labs/nekko-agent/blob/main/apps/desktop/src/renderer/styles.css">styles.css</a>. Why: decisions <a href="https://github.com/nekko-labs/nekko-agent/blob/main/docs/decisions/0071-quiet-surfaces.md">0071</a> and <a href="https://github.com/nekko-labs/nekko-agent/blob/main/docs/decisions/0075-quiet-design-system.md">0075</a>.</span>
+      <span><a href="/">Nekko Agent</a> · <a href="/docs">Docs</a> · <a href="/whatsnew">What's new</a> · <a href="/docs/credits">Credits</a> · <a href="/privacy">Privacy</a></span>
+    </footer>
+
+    <div class="tip" role="tooltip" id="tip" hidden></div>
+    <div class="toast" role="status" aria-live="polite" hidden><span data-toast-text></span><button class="btn" type="button" data-toast-undo hidden>Undo</button></div>
+
+    <!-- Nekko's head, the app icon's pixel cat (spec/brand/colour-palette.md): fixed brand colours in every theme. -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g id="nekko-head">
+          <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#16161c" stroke="#f3e8ee" stroke-width="2" />
+          <path d="M11 15H13V18H11Z M20 15H22V18H20Z" fill="#ffffff" />
+          <path d="M15 20H17V21H15Z" fill="#854f6c" />
+        </g>
+      </defs>
+    </svg>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </body>
+</html>

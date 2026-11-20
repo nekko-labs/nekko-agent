@@ -2,6 +2,8 @@
 
 How Nekko Agent looks and moves, and the rules every screen follows. Every UI change reads this first. The tokens live in `apps/desktop/src/renderer/styles.css` (listed in [TASKS.md](../TASKS.md#design-system--uiux)); this page is how a screen is put together from them. Why: [decision 0071](decisions/0071-quiet-surfaces.md) and [decision 0075](decisions/0075-quiet-design-system.md).
 
+The interactive version, to share and to try the components and motion in both themes, is [nekkoagent.com/design-system](https://nekkoagent.com/design-system) (`apps/website/design-system.html`). It reads the tokens, icons and status glyphs from the app's source at deploy time (`scripts/build-design-system.mjs`), so it follows this page's values on its own; a change to a rule or a table here goes into the page in the same PR.
+
 ## Principles
 
 1. **Space before lines.** Gaps and type separate things. A border is the last resort.
