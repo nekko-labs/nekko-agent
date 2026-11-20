@@ -72,7 +72,7 @@ Open **Custom colors** to adjust the accent and secondary color with the wheel o
 
 ## Following tool activity
 
-The agent's plan sits on top of the message box as a card. Each step shows its title, one line of detail, and chips for what that step produced: the PRs the agent opened (with their CI status) and the files or previews it linked. Finished steps shrink to their title; hover the card to see their details. **Change plan** tells the agent what to do differently.
+The agent's plan sits just above the message box. Each step shows its task title without a subtext line. Related task, sub-agent, PR, CI, file and preview chips sit to the right of the title when they fit. A **+N** chip counts the remaining chips; click it, or focus it and press Enter or Space, to expand only that row. Click the count again to fold it back. The leading status mark keeps reported check details in its tooltip and opens safe evidence links when available. The Plan header folds the whole plan to the current task. To change the plan, tell the agent in chat.
 
 Chat tool calls use icons for what the agent is doing: reading files, searching, editing, running checks, Git, web access or planning. Shell execution, including Python, uses the same terminal artwork as the current-work indicator. Transcript icons stay still; expand a tool row to read its output. Unknown tools keep the generic tool icon.
 
