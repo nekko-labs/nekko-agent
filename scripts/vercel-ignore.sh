@@ -23,6 +23,7 @@ git diff --quiet "$base" HEAD -- \
   scripts/build-docs.mjs \
   scripts/build-contributors.mjs \
   scripts/build-design-system.mjs \
+  scripts/design-system \
   apps/desktop/src/renderer/styles.css \
   apps/desktop/src/renderer/gentleface-icons.tsx \
   apps/desktop/src/renderer/icons.tsx \
