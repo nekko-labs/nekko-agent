@@ -1,7 +1,7 @@
 // Journey: finding out what changed in this version. The "What's new" sheet,
 // opened by hand from the title-bar pill after an update, Settings > Updates,
 // About and the command palette; its highlights, "Show more" (the list scrolls,
-// the sheet keeps its size), the link to the full release notes, and a version
+// the sheet keeps its size), the link to the website's What's new page, and a version
 // with no highlights.
 import { expect, scenarioTest } from './harness';
 
@@ -115,10 +115,10 @@ test("what's new", async ({ scenario, shot }) => {
     await theme('light'); await shot('sheet-expanded-light'); await theme('dark');
   });
 
-  await test.step("See every change opens this version's release page", async () => {
+  await test.step("See every change opens this line's section of the website's What's new page", async () => {
     await everyChange.click();
     expect(await lastOpened()).toBe(release);
-    expect(release).toContain(`/releases/tag/v${VERSION}`);
+    expect(release).toBe(`https://nekkoagent.com/whatsnew#${line}`);
   });
 
   await test.step('Escape closes it', async () => {

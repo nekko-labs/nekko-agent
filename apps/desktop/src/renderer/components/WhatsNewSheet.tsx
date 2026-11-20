@@ -3,7 +3,7 @@ import { NekkoAvatar } from './Mascot.js';
 import { useUpdater } from './UpdateBanner.js';
 import { Group, Modal, Row } from './primitives/index.js';
 import { GfCloseIcon, GfIcon, isGfIconName } from '../gentleface-icons.js';
-import { highlightsFor, prUrl, releaseUrl, splitHighlights, type Highlight } from '../whatsNew.js';
+import { highlightsFor, prUrl, splitHighlights, whatsNewUrl, type Highlight } from '../whatsNew.js';
 
 /** Every row has a glyph: the highlight's own, or this when it names none we bundle. */
 const FALLBACK_ICON = 'sparkles';
@@ -89,7 +89,7 @@ function Sheet({ version, data, onClose }: { version: string; data?: unknown; on
               Show more
             </button>
           )}
-          <button type="button" className="ml-auto text-xs text-accent hover:underline" onClick={() => void window.nekko.openPath(releaseUrl(version))} data-whats-new-all>
+          <button type="button" className="ml-auto text-xs text-accent hover:underline" onClick={() => void window.nekko.openPath(whatsNewUrl(version))} data-whats-new-all>
             See every change ↗
           </button>
         </footer>
@@ -100,8 +100,8 @@ function Sheet({ version, data, onClose }: { version: string; data?: unknown; on
 
 /**
  * The "What's new" sheet: the few changes in this version worth knowing,
- * from the highlights bundled with the build, and a link to the full release
- * notes. A modal over whatever view is showing, opened with `openWhatsNew()`.
+ * from the highlights bundled with the build, and a link to the website's
+ * What's new page. A modal over whatever view is showing, opened with `openWhatsNew()`.
  * `data` replaces the bundled highlights (tests).
  */
 export function WhatsNewSheet({ data }: { data?: unknown } = {}) {

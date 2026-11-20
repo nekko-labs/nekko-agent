@@ -6,8 +6,8 @@ import { UpdatesSection } from '../../src/renderer/views/SettingsView';
 import { AboutNekko } from '../../src/renderer/components/AboutNekko';
 import { CommandPalette } from '../../src/renderer/components/CommandPalette';
 import { WhatsNewSheet } from '../../src/renderer/components/WhatsNewSheet';
-import bundled from '../../src/renderer/whatsNew.json';
-import { highlightsFor, prUrl, releaseUrl, splitHighlights } from '../../src/renderer/whatsNew';
+import bundled from '../../../../docs/hub/whats-new.json';
+import { highlightsFor, prUrl, splitHighlights, whatsNewUrl } from '../../src/renderer/whatsNew';
 import '../../src/renderer/styles.css';
 
 // Synthetic records only. This fixture never connects to a host, daemon or the network:
@@ -37,11 +37,11 @@ function Fixture() {
     integration: {
       opened,
       /** What the build bundles, so the journey follows the data instead of repeating it. */
-      lines: Object.fromEntries(Object.entries(bundled as Record<string, unknown[]>).map(([line, list]) => [line, list.length])),
-      expected: (v: string) => ({ ...splitHighlights(highlightsFor(v, data)), release: releaseUrl(v) }),
+      lines: Object.fromEntries(Object.entries(bundled).filter(([line]) => !line.startsWith('$')).map(([line, entry]) => [line, (entry as { highlights: unknown[] }).highlights.length])),
+      expected: (v: string) => ({ ...splitHighlights(highlightsFor(v, data)), release: whatsNewUrl(v) }),
       /** A release with many changes: line 0.97 gets `count` synthetic highlights. Shows on the next launch. */
       long: (count: number) => {
-        data = { '0.97': Array.from({ length: count }, (_, i) => ({ title: `Synthetic change ${i + 1}`, detail: `What change ${i + 1} does for you.`, pr: 9000 + i, icon: 'sparkles' })) };
+        data = { '0.97': { highlights: Array.from({ length: count }, (_, i) => ({ title: `Synthetic change ${i + 1}`, detail: `What change ${i + 1} does for you.`, pr: 9000 + i, icon: 'sparkles' })) } };
       },
       prUrl,
       /** Relaunch on `next`; `updatedFrom` is the version the last launch ran, which shows the pill. */

@@ -15,8 +15,8 @@ User intent (Philip, 2026-11-15): build it from the design system, with Gentlefa
 - **Header**, left-aligned: the app icon, "What's new", then the running version as meta. A close button (✕, Gentleface `x`) at the top right; the ✕ makes a quarter turn once on hover, focus or press, and stays still under reduced motion. There is no "Got it" button.
 - **Highlights**: up to 3 rows for the running version's line (MAJOR.MINOR). Each row is a title, one line of detail (cut with an ellipsis when it does not fit, so about 30 characters) and its PR number as right-hand meta; the row opens that PR on GitHub. Every row leads with a Gentleface icon that fits what the change is about.
 - **Show more** adds the rest to the list. The sheet keeps the size it had: the list scrolls inside it, and the header, ✕ and footer stay put (Matt, 2026-11-18: some versions will have many changes). The new rows fade in, focus moves to the first of them and it scrolls into view. Every row is reachable by Tab, which scrolls the list. It is not shown when a line has 3 or fewer.
-- **Footer**: "See every change ↗" opens the GitHub release page for the running version (`releases/tag/v0.10.1004`). Every version the updater installs is a GitHub release with its own page. A development build (`0.10.1004-dev.…`) shows its line's highlights and opens `releases/latest`. A nightly build is not a release and has no page.
-- A line with no highlights shows the header and "See every change ↗" only.
+- **Footer**: "See every change ↗" opens the running line's section of the website's What's new page (`nekkoagent.com/whatsnew#0.10`, Philip, 2026-11-19). A development build (`0.10.1004-dev.…`) shows its line's highlights and opens its line's section too.
+- A line with no highlights shows the header and the footer only.
 - Escape, ✕ and a click outside close it. Focus moves into the sheet on open and back to what opened it on close.
 
 ## Ways to open it
@@ -30,13 +30,13 @@ User intent (Philip, 2026-11-15): build it from the design system, with Gentlefa
 
 ## Where highlights come from
 
-- A JSON file bundled in the build, `apps/desktop/src/renderer/whatsNew.json`, keyed by MAJOR.MINOR. The sheet makes no network call.
+- `docs/hub/whats-new.json`, the file the website's What's new page is built from ([whats-new-page.md](../brand/whats-new-page.md)). The build bundles it, so the sheet makes no network call. Keyed by MAJOR.MINOR; the sheet reads each line's `highlights` and, from each, `title`, `detail`, `pr` and `icon`.
 
   ```json
-  { "0.10": [{ "title": "…", "detail": "…", "pr": 2732, "icon": "settings" }] }
+  { "0.10": { "date": "…", "tag": "…", "intro": "…", "contributors": ["…"], "highlights": [{ "title": "…", "detail": "…", "pr": 2732, "icon": "settings", "authors": ["…"] }] } }
   ```
 
-  `title`, `detail`, `pr` and `icon` are required. `icon` is a bundled Gentleface name chosen to match the change; a missing or unknown one shows `sparkles`.
+  It ignores `$comment` and every field it does not use, including any added later. The site build rejects a malformed highlight; the sheet drops one and never fails on the file. `icon` is a bundled Gentleface name chosen to match the change; a missing or unknown one shows `sparkles` (the 0.7 to 0.9 highlights have none).
 - Which icon: the one for what the change is about. No close match: the nearest row below; nothing near: `sparkles`. A topic with no row gets one, and its icon is bundled with it (`gentleface-icons.tsx`, credited in `ASSETS.md`).
 
   | The change is about | Icon |
@@ -63,7 +63,7 @@ User intent (Philip, 2026-11-15): build it from the design system, with Gentlefa
   | The model server | `server` |
   | Anything else | `sparkles` |
 - The list holds as many highlights as were written for the line; the sheet shows the first 3 and puts the rest behind "Show more". There is no upper limit yet.
-- Until the pipeline below exists, the file is written by hand.
+- The file is written by hand for each release line.
 
 ## Privacy and security
 
@@ -75,6 +75,6 @@ User intent (Philip, 2026-11-15): build it from the design system, with Gentlefa
 | Part | Status |
 | --- | --- |
 | The sheet and the four ways to open it by hand | Implemented |
+| Highlights from `docs/hub/whats-new.json`, shared with the website; "See every change ↗" opens the website page | Implemented |
 | Opens once on the first launch after a MAJOR.MINOR bump; "Show after updates" switch in the footer and in Settings › Updates; waits until no agent is running; never shows a version twice | Planned (#2810) |
-| Highlights written at release time by the release workflow (an AI summary of the merged PRs, proofread before it ships) | Planned (#2810) |
 | A larger layout for major releases | Undecided |
