@@ -948,7 +948,7 @@ export function CommandWall({
           ringColor={flashing ? 'color-mix(in srgb, var(--accent) 60%, var(--line))' : undefined}
           stripStyle={needsYou ? { background: 'color-mix(in srgb, var(--warning) 10%, transparent)' } : undefined}
           addable={WALL_ADDABLE}
-          closeTitle={pane.kind === 'chat' ? 'Stop agent and watchers, then remove from the wall (chat is kept)' : 'Remove from the wall'}
+          closeTitle={pane.kind === 'chat' ? 'Close this agent (stops it; the chat stays in the Agents panel, not archived)' : 'Remove from the wall'}
           // Focus shows one window, so there is nowhere to move it to.
           locked={!tiled}
           onPickUp={pickable ? (e) => pickUp(e, pane, title) : undefined}

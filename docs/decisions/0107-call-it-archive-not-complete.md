@@ -3,6 +3,8 @@ status: accepted
 date: 2026-11-19
 ---
 
+> Amended by [decision 0110](0110-chat-windows-close-without-archiving.md): chat windows have a Close again, beside Archive.
+
 # 0107. Call it Archive, not Complete
 
 ## Context
