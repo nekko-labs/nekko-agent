@@ -43,7 +43,7 @@ const p = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], { 
 const typed = (f: number, a: number, b: number, s: string) => s.slice(0, Math.round(interpolate(f, [a, b], [0, s.length], clamp)));
 
 // Scenes: [start, end] in frames. Each fades in over 14 frames and out over 12.
-const SC = { out: [0, 90], console: [84, 186], wake: [180, 306], play: [300, 456], phone: [450, 522], end: [516, 600] } as const;
+const SC = { out: [0, 90], console: [84, 186], wake: [180, 306], play: [300, 432], phone: [426, 540], end: [534, 600] } as const;
 type Span = readonly [number, number];
 const vis = (f: number, [a, b]: Span) => p(f, a, a + 14) * (1 - p(f, b - 12, b));
 const enter = (f: number, a: number, span: Span) => {
@@ -229,7 +229,7 @@ function Play({ f }: { f: number }) {
         </div>
         <div style={{ marginTop: 26 }}>
           {STEPS.map((t, i) => {
-            const at = s + 58 + i * 20;
+            const at = s + 52 + i * 16;
             const done = f >= at + 14;
             return f >= at ? (
               <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 14, fontFamily: SANS, fontSize: 28, color: done ? C.ink : C.soft, padding: '11px 0', opacity: p(f, at, at + 8) }}>
@@ -244,27 +244,45 @@ function Play({ f }: { f: number }) {
   );
 }
 
-// ─── 5 Phone ping between missions ─────────────────────────────────────────
+// ─── 5 Approve from the couch ──────────────────────────────────────────────
+// The phone is drawn as a plain rounded device in brand colours (no OS chrome).
 function Phone({ f }: { f: number }) {
   const span = SC.phone, s = span[0];
-  const pressed = f >= s + 38 && f < s + 44;
-  const approved = f >= s + 42;
-  const edge = 470;
-  const hop = approved && f < s + 63 ? [-1, -2, -1][Math.floor((f - s - 42) / 7)] ?? 0 : 0;
+  const buzz = f >= s + 18 && f < s + 30 ? Math.sin((f - s) * 2.4) * 4 : 0;
+  const pressed = f >= s + 58 && f < s + 64;
+  const approved = f >= s + 62;
+  const hop = approved && f < s + 83 ? [-1, -2, -1][Math.floor((f - s - 62) / 7)] ?? 0 : 0;
+  const PX = 600, PY = 200, PW = 380, PH = 760;
   return (
     <AbsoluteFill style={{ opacity: vis(f, span) }}>
-      <Headline f={f} span={span} kicker="Between missions" size={76} top={110}>Check in. <Grad>Back to it.</Grad></Headline>
-      <Panel x={200} y={edge} w={680} style={{ padding: '36px 40px', ...enter(f, s + 8, span) }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontFamily: SANS, fontSize: 30, fontWeight: 650, color: approved ? C.ok : C.ink }}>
-          {approved ? <Check size={30} /> : <Dot color={C.plum} />}{approved ? 'Shipped' : 'Ready for review'}
-        </div>
-        <div style={{ fontFamily: SANS, fontSize: 28, color: C.soft, marginTop: 10 }}>4 steps · 48 tests passed · $0.00</div>
-        <div style={{ display: 'flex', gap: 16, marginTop: 26, fontFamily: SANS, fontSize: 30, fontWeight: 650 }}>
-          <span style={{ flex: 1, textAlign: 'center', padding: '16px 0', borderRadius: 16, border: `2px solid ${C.line}`, color: C.soft, opacity: approved ? 0.4 : 1 }}>Later</span>
-          <span style={{ flex: 1, textAlign: 'center', padding: '16px 0', borderRadius: 16, background: C.main, border: `2px solid ${C.plum2}`, color: C.ink, transform: `scale(${pressed ? 0.95 : 1})` }}>{approved ? 'Done' : 'Approve'}</span>
-        </div>
-      </Panel>
-      <Peek f={f} x={440} edge={edge} eyes={approved ? 'happy' : 'open'} hop={hop} sparkle={approved && f < s + 70} />
+      <div style={{ position: 'absolute', left: 96, top: 260, width: 470 }}>
+        <div style={{ fontFamily: MONO, fontSize: 24, letterSpacing: 2, color: C.plum, textTransform: 'uppercase', ...enter(f, s + 4, span) }}>From your phone</div>
+        <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 84, lineHeight: 1.02, letterSpacing: -3.5, color: C.ink, marginTop: 16, ...enter(f, s + 10, span) }}>Approve<br />from the<br /><Grad>couch.</Grad></div>
+        <div style={{ fontFamily: SANS, fontSize: 30, lineHeight: 1.35, color: C.soft, marginTop: 28, ...enter(f, s + 20, span) }}>Risky steps wait for your OK. Tap it between missions.</div>
+      </div>
+      <div style={{ position: 'absolute', left: PX, top: PY, width: PW, height: PH, borderRadius: 60, background: C.page, border: `6px solid ${C.line}`, boxSizing: 'border-box', boxShadow: '0 30px 70px rgba(0,0,0,.55)', padding: '70px 22px 0', transform: `translateX(${buzz}px)`, ...enter(f, s + 8, span) }}>
+        <div style={{ position: 'absolute', left: PW / 2 - 50, top: 18, width: 88, height: 26, borderRadius: 13, background: C.panel2 }} />
+        <div style={{ fontFamily: SANS, fontWeight: 300, fontSize: 84, letterSpacing: -2, color: C.ink, textAlign: 'center' }}>11:42</div>
+        <div style={{ fontFamily: SANS, fontSize: 22, color: C.soft, textAlign: 'center', marginTop: 2, marginBottom: 34 }}>Friday</div>
+        {f >= s + 18 && (
+          <div style={{ background: C.panel, border: `2px solid ${C.line}`, borderRadius: 26, padding: '22px 22px 20px', opacity: p(f, s + 18, s + 26), transform: `translateY(${(1 - p(f, s + 18, s + 28)) * -20}px)` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <AppMark size={30} />
+              <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 650, color: C.ink }}>Nekko Agent</span>
+              <span style={{ marginLeft: 'auto', fontFamily: SANS, fontSize: 18, color: C.faint }}>now</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: SANS, fontSize: 24, fontWeight: 650, color: approved ? C.ok : C.ink, marginTop: 16 }}>
+              {approved ? <Check size={24} /> : <Dot color={C.plum} size={12} />}{approved ? 'Approved. Pushing.' : 'Needs your OK'}
+            </div>
+            <div style={{ fontFamily: MONO, fontSize: 19, color: C.soft, marginTop: 10 }}>git push origin main</div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 18, fontFamily: SANS, fontSize: 22, fontWeight: 650 }}>
+              <span style={{ flex: 1, textAlign: 'center', padding: '12px 0', borderRadius: 14, border: `2px solid ${C.line}`, color: C.soft, opacity: approved ? 0.4 : 1 }}>Deny</span>
+              <span style={{ flex: 1, textAlign: 'center', padding: '12px 0', borderRadius: 14, background: C.main, border: `2px solid ${C.plum2}`, color: C.ink, transform: `scale(${pressed ? 0.94 : 1})` }}>{approved ? 'Done' : 'Approve'}</span>
+            </div>
+          </div>
+        )}
+      </div>
+      <Peek f={f} x={PX + PW / 2 - 96 + buzz} edge={PY} eyes={approved ? 'happy' : eyesAt(f, false)} hop={hop} sparkle={approved && f < s + 90} />
     </AbsoluteFill>
   );
 }

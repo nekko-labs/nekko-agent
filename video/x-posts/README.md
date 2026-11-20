@@ -7,7 +7,7 @@ recordings. No sound.
 
 | Composition | Length | Shows |
 | --- | --- | --- |
-| `GtaIdleGpu` | 20 s | GTA VI is console-only, so the gaming PC sits idle; Nekko Agent loads Qwen3 8B on it and works through a task while you play, then you approve from your phone. No Rockstar artwork, logo, type or colours: the game is named in text only |
+| `GtaIdleGpu` | 20 s | GTA VI is console-only, so the gaming PC sits idle; Nekko Agent loads Qwen3 8B on it and works through a task while you play, then you approve a push from your phone without leaving the couch. No Rockstar artwork, logo, type or colours: the game is named in text only |
 
     npm install
     npm run render
