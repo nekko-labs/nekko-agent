@@ -1,11 +1,12 @@
-// "Playing GTA VI on console?", a vertical post (9:16, 1080x1920, 30 fps, 11 s).
+// "Playing GTA VI on console?", a square post for X (1:1, 1080x1080, 30 fps, 12 s).
 //   0.0-2.5  Hook: the question and "Your PC's doing nothing.", Nekko cheering
-//            under a pixel "VI" (plain white blocks, nothing of the game's logo).
+//            with a banner: white pixel "VI" in a plum outline (nothing of the
+//            game's logo, colours or lettering).
 //   2.5-6.5  "Put your PC to work." and the task card; three tasks tick from 3.0 s.
-//   6.5-8.0  "Free. Local. No subscription." and "So you can focus on the mission."
-//   8.0-11   Nekko with a controller, the wordmark and nekkoagent.com, held.
+//   6.5-9.0  "Free. Local. No subscription." and "So you can focus on the mission."
+//   9.0-12   Nekko with a controller, the wordmark and nekkoagent.com, held.
 // Rules from the brief: no frame without content, no text under 4% of the
-// frame height (77 px), no em dashes on screen.
+// frame height (43 px), no em dashes on screen.
 //
 // Brand dark palette (spec/brand/colour-palette.md, docs/design-system.md):
 // page #0B0C14 with #854F6C glows, the dot wave (#C084B5 to #854F6C), panels
@@ -17,8 +18,8 @@ import {
   staticFile, useCurrentFrame,
 } from 'remotion';
 
-const FRAMES = 330; // 11 s at 30 fps
-const W = 1080, H = 1920;
+const FRAMES = 360; // 12 s at 30 fps
+const W = 1080, H = 1080;
 
 const C = {
   page: '#0b0c14', panel: '#14151f', panel2: '#1d1f2c', line: '#252735',
@@ -26,8 +27,8 @@ const C = {
   plum: '#c99bb3', plum2: '#854f6c', rose: '#e6d0dc', ok: '#4ec98a', main: '#190019',
   nekkoFace: '#16161c', nekkoLine: '#f3e8ee', nekkoEyes: '#ffffff', nekkoMouth: '#854f6c',
 };
-// The dark page with secondary (#854F6C) glows, as in docs/brand/nekko-banner.html, scaled to 1080x1920.
-const PAGE_BG = 'radial-gradient(70% 1400px at 8% 0%, rgba(133, 79, 108, 0.26), transparent 70%), radial-gradient(55% 1200px at 85% 50%, rgba(133, 79, 108, 0.16), transparent 70%), radial-gradient(70% 1100px at 20% 100%, rgba(133, 79, 108, 0.18), transparent 70%), #0b0c14';
+// The dark page with secondary (#854F6C) glows, as in docs/brand/nekko-banner.html, scaled to 1080 px.
+const PAGE_BG = 'radial-gradient(55% 880px at 8% 0%, rgba(133, 79, 108, 0.26), transparent 70%), radial-gradient(45% 880px at 80% 50%, rgba(133, 79, 108, 0.16), transparent 70%), radial-gradient(60% 710px at 20% 100%, rgba(133, 79, 108, 0.18), transparent 70%), #0b0c14';
 const SANS = "'Inter Tight', system-ui, sans-serif";
 const MONO = "'Space Mono', ui-monospace, monospace";
 
@@ -122,21 +123,26 @@ const VI_BLOCKS: [number, number, number][] = [ // [x, y, width]
   ...Array.from({ length: 8 }, (_, y) => [9, y, 2] as [number, number, number]),
 ];
 function CheerNekko({ f }: { f: number }) {
-  const S = 13;                                           // px per unit
+  const S = 12;                                           // px per Nekko unit
   const beat = Math.sin(f / 6);
-  const bounce = Math.abs(beat) * -16;
-  const paw = (side: number) => Math.max(0, Math.sin(f / 6 + (side > 0 ? Math.PI : 0))) * -22;
+  const bounce = Math.abs(beat) * -12;
+  const lift = (side: number) => Math.max(0, Math.sin(f / 6 + (side > 0 ? Math.PI : 0))) * -10;
+  const BW = 400, BH = 180, V = 12;                       // banner, px per VI block
   return (
-    <div style={{ position: 'relative', width: 32 * S + 160, height: 640, transform: `translateY(${bounce}px)` }}>
-      <svg width={11 * S * 1.6} height={8 * S * 1.6} viewBox="0 0 11 8" shapeRendering="crispEdges"
-        style={{ position: 'absolute', left: (32 * S + 160 - 11 * S * 1.6) / 2, top: 0, transform: `rotate(${beat * 3}deg)` }}>
-        {VI_BLOCKS.map(([x, y, w], i) => <rect key={i} x={x} y={y} width={w} height={1} fill={C.ink} />)}
-      </svg>
-      {/* both paws up, cheering */}
-      {[-1, 1].map((side) => (
-        <div key={side} style={{ position: 'absolute', top: 250 + paw(side), left: side < 0 ? 30 : 32 * S + 160 - 30 - 6 * S, width: 6 * S, height: 6 * S, background: C.nekkoFace, border: `${S}px solid ${C.nekkoLine}`, boxSizing: 'border-box' }} />
-      ))}
-      <svg width={32 * S} height={22 * S} viewBox="0 5 32 22" shapeRendering="crispEdges" style={{ position: 'absolute', left: 80, top: 230 }}>
+    <div style={{ position: 'relative', width: BW + 80, height: BH + 10 + 22 * S, transform: `translateY(${bounce}px)` }}>
+      <div style={{ position: 'absolute', left: 40, top: 0, width: BW, height: BH, transform: `rotate(${beat * 3}deg)`, transformOrigin: '50% 100%' }}>
+        {/* banner: dark fill, plum outline, white pixel VI */}
+        <div style={{ position: 'absolute', inset: 0, background: C.panel, border: `6px solid ${C.plum2}`, borderRadius: 18, boxSizing: 'border-box', display: 'grid', placeItems: 'center', boxShadow: '0 24px 50px rgba(0,0,0,.5)' }}>
+          <svg width={11 * V} height={8 * V} viewBox="0 0 11 8" shapeRendering="crispEdges">
+            {VI_BLOCKS.map(([x, y, w], i) => <rect key={i} x={x} y={y} width={w} height={1} fill={C.ink} />)}
+          </svg>
+        </div>
+        {/* paws gripping the bottom corners */}
+        {[-1, 1].map((side) => (
+          <div key={side} style={{ position: 'absolute', top: BH - 34 + lift(side), left: side < 0 ? -26 : BW - 7 * S + 26, width: 7 * S, height: 7 * S, background: C.nekkoFace, border: `${S}px solid ${C.nekkoLine}`, boxSizing: 'border-box' }} />
+        ))}
+      </div>
+      <svg width={32 * S} height={22 * S} viewBox="0 5 32 22" shapeRendering="crispEdges" style={{ position: 'absolute', left: (BW + 80 - 32 * S) / 2, top: BH + 10 }}>
         <path d={HEAD} fill={C.nekkoFace} stroke={C.nekkoLine} strokeWidth={1} />
         <path d={f % 60 > 55 ? EYES.closed : EYES.open} fill={C.nekkoEyes} />
         <path d="M14 20H18V21H14Z M15 21H17V22H15Z" fill={C.nekkoMouth} />
@@ -145,10 +151,10 @@ function CheerNekko({ f }: { f: number }) {
   );
 }
 
-const Check = ({ size = 72 }: { size?: number }) => (
+const Check = ({ size = 44 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke={C.ok} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 );
-const Dot = ({ color, size = 22 }: { color: string; size?: number }) => <span style={{ width: size, height: size, borderRadius: size, background: color, display: 'inline-block', flexShrink: 0 }} />;
+const Dot = ({ color, size = 14 }: { color: string; size?: number }) => <span style={{ width: size, height: size, borderRadius: size, background: color, display: 'inline-block', flexShrink: 0 }} />;
 
 // Opacity for a scene: fade in over [a, a+d], out over [b, b+d]. d = 6 is the
 // 0.2 s crossfade; scenes overlap so no frame is ever empty.
@@ -157,9 +163,9 @@ const win = (f: number, a: number, b: number, d = 6) =>
 /** A quick settle for text arriving inside a scene. */
 const arrive = (f: number, at: number) => ({ opacity: p(f, at, at + 8), transform: `translateY(${(1 - p(f, at, at + 10)) * 24}px)` });
 
-const TXT = 78;                          // the floor: 4% of 1920
-const HEAD_SIZE = 104;
-const CENTER: React.CSSProperties = { position: 'absolute', left: 60, right: 60, textAlign: 'center' };
+const TXT = 46;                          // above the floor: 4% of 1080 is 43
+const HEAD_SIZE = 76;
+const CENTER: React.CSSProperties = { position: 'absolute', left: 50, right: 50, textAlign: 'center' };
 
 // Placeholders until the final tasks are confirmed.
 const TASKS = ['Sort 50 support emails', "Summarise this week's meeting notes", 'Draft the launch post'];
@@ -167,17 +173,17 @@ const TASK_AT = [90, 108, 126];          // 3.0 s, 3.6 s, 4.2 s; all ticked by 4
 
 function WorkCard({ f }: { f: number }) {
   return (
-    <div style={{ width: 918, margin: '0 auto', background: C.panel, border: `3px solid ${C.line}`, borderRadius: 40, boxShadow: '0 40px 90px rgba(0,0,0,.5)', padding: '44px 52px 30px', boxSizing: 'border-box', textAlign: 'left' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 22, fontFamily: SANS, fontSize: TXT, fontWeight: 700, color: C.ink, letterSpacing: -1.5 }}>
+    <div style={{ width: 918, margin: '0 auto', background: C.panel, border: `3px solid ${C.line}`, borderRadius: 30, boxShadow: '0 30px 70px rgba(0,0,0,.5)', padding: '30px 40px 18px', boxSizing: 'border-box', textAlign: 'left' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 22, fontFamily: SANS, fontSize: TXT, fontWeight: 700, color: C.ink, letterSpacing: -1 }}>
         Your PC
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16, fontWeight: 500, color: C.soft }}><Dot color={C.ok} />Working</span>
       </div>
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 6 }}>
         {TASKS.map((t, i) => {
           const done = p(f, TASK_AT[i], TASK_AT[i] + 8);
           return (
-            <div key={t} style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '18px 0', fontFamily: SANS, fontSize: TXT, lineHeight: 1.08, letterSpacing: -1.5, color: done > 0.5 ? C.ink : C.soft }}>
-              <span style={{ position: 'relative', width: 72, height: 84, flexShrink: 0, display: 'grid', placeItems: 'center' }}>
+            <div key={t} style={{ display: 'flex', alignItems: 'flex-start', gap: 20, padding: '11px 0', fontFamily: SANS, fontSize: TXT, lineHeight: 1.1, letterSpacing: -1, color: done > 0.5 ? C.ink : C.soft }}>
+              <span style={{ position: 'relative', width: 44, height: 50, flexShrink: 0, display: 'grid', placeItems: 'center' }}>
                 <span style={{ position: 'absolute', opacity: 1 - done }}><Dot color={C.plum} /></span>
                 <span style={{ position: 'absolute', opacity: done, transform: `scale(${0.6 + done * 0.4})` }}><Check /></span>
               </span>{t}
@@ -192,7 +198,8 @@ function WorkCard({ f }: { f: number }) {
 export function GtaIdleGpu() {
   const f = useCurrentFrame();
   // The incoming scene is fully in before the outgoing one fades, so a crossfade never dims to near-empty.
-  const s1 = win(f, 0, 78), s2 = win(f, 72, 243), s3 = win(f, 237, 1e9);
+  const s1 = win(f, 0, 78), s2 = win(f, 72, 273), s3 = win(f, 267, 1e9);
+  const H1: React.CSSProperties = { fontFamily: SANS, fontWeight: 800, fontSize: HEAD_SIZE, lineHeight: 1.04, letterSpacing: -3 };
   return (
     <AbsoluteFill style={{ background: PAGE_BG, overflow: 'hidden', fontFamily: SANS }}>
       <PixelWave f={f} />
@@ -200,42 +207,38 @@ export function GtaIdleGpu() {
       {/* 1 Hook, 0.0 to 2.5 s: everything on screen from the first frame */}
       {s1 > 0 && (
         <AbsoluteFill style={{ opacity: s1 }}>
-          <div style={{ ...CENTER, top: 230, fontFamily: SANS, fontWeight: 800, fontSize: HEAD_SIZE, lineHeight: 1.04, letterSpacing: -4 }}>
+          <div style={{ ...CENTER, top: 80, ...H1 }}>
             <div style={{ color: C.ink }}>Playing GTA VI on console?</div>
-            <div style={{ marginTop: 36 }}><Grad>Your PC's doing nothing.</Grad></div>
+            <div style={{ marginTop: 22 }}><Grad>Your PC's doing nothing.</Grad></div>
           </div>
-          <div style={{ position: 'absolute', left: 0, right: 0, top: 1000, display: 'flex', justifyContent: 'center' }}><CheerNekko f={f} /></div>
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 330, display: 'flex', justifyContent: 'center' }}><CheerNekko f={f} /></div>
         </AbsoluteFill>
       )}
 
-      {/* 2 and 3, 2.5 to 8.0 s: headline and card arrive together, the value line follows below */}
+      {/* 2 and 3, 2.5 to 9.0 s: headline and card arrive together, the value line follows below */}
       {s2 > 0 && (
         <AbsoluteFill style={{ opacity: s2 }}>
-          <div style={{ ...CENTER, top: 150, fontFamily: SANS, fontWeight: 800, fontSize: HEAD_SIZE, lineHeight: 1.04, letterSpacing: -4, color: C.ink }}>Put your PC to work.</div>
-          <div style={{ position: 'absolute', left: 0, right: 0, top: 420 }}><WorkCard f={f} /></div>
-          <div style={{ ...CENTER, top: 1290, fontFamily: SANS, fontWeight: 800, fontSize: HEAD_SIZE, lineHeight: 1.04, letterSpacing: -4, ...arrive(f, 195) }}>
-            <Grad>Free. Local. No subscription.</Grad>
-          </div>
-          <div style={{ ...CENTER, top: 1560, fontFamily: SANS, fontWeight: 700, fontSize: 88, lineHeight: 1.06, letterSpacing: -3, color: C.ink, ...arrive(f, 213) }}>
-            So you can focus on the mission.
-          </div>
+          <div style={{ ...CENTER, top: 120, ...H1, color: C.ink }}>Put your PC to work.</div>
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 236 }}><WorkCard f={f} /></div>
+          <div style={{ ...CENTER, top: 660, ...H1, ...arrive(f, 195) }}><Grad>Free. Local. No subscription.</Grad></div>
+          <div style={{ ...CENTER, top: 790, ...H1, fontWeight: 700, fontSize: 64, letterSpacing: -2.5, color: C.ink, ...arrive(f, 213) }}>So you can focus on the mission.</div>
         </AbsoluteFill>
       )}
 
-      {/* 4 End card, 8.0 to 11 s */}
+      {/* 4 End card, 9.0 to 12 s */}
       {s3 > 0 && (
         <AbsoluteFill style={{ opacity: s3 }}>
-          <div style={{ ...CENTER, top: 200, display: 'flex', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, background: C.panel, border: `3px solid ${C.line}`, borderRadius: 999, padding: '18px 44px', fontFamily: SANS, fontSize: TXT, fontWeight: 650, letterSpacing: -1.5, color: C.ink }}><Check size={70} />3 tasks done</div>
+          <div style={{ ...CENTER, top: 56, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: C.panel, border: `2px solid ${C.line}`, borderRadius: 999, padding: '12px 32px', fontFamily: SANS, fontSize: TXT, fontWeight: 650, letterSpacing: -1, color: C.ink }}><Check size={42} />3 tasks done</div>
           </div>
-          <div style={{ position: 'absolute', left: 0, right: 0, top: 440, display: 'flex', justifyContent: 'center' }}><GamerNekko f={f} size={560} /></div>
-          <div style={{ ...CENTER, top: 1180, ...arrive(f, 249) }}>
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 28 }}>
-              <AppMark size={124} />
-              <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: HEAD_SIZE, letterSpacing: -4, color: C.ink }}>Nekko Agent</span>
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 170, display: 'flex', justifyContent: 'center' }}><GamerNekko f={f} size={380} /></div>
+          <div style={{ ...CENTER, top: 640, ...arrive(f, 279) }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22 }}>
+              <AppMark size={92} />
+              <span style={{ ...H1, color: C.ink }}>Nekko Agent</span>
             </div>
-            <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: TXT, letterSpacing: -1.5, color: C.soft, marginTop: 56 }}>Free local AI</div>
-            <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 80, color: C.ink, marginTop: 18 }}>nekkoagent.com</div>
+            <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: TXT, letterSpacing: -1, color: C.soft, marginTop: 34 }}>Free local AI</div>
+            <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 56, color: C.ink, marginTop: 10 }}>nekkoagent.com</div>
           </div>
         </AbsoluteFill>
       )}

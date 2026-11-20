@@ -7,7 +7,7 @@ recordings. No sound.
 
 | Composition | Length | Shows |
 | --- | --- | --- |
-| `GtaIdleGpu` | 11 s, 1080x1920 | Hook "Playing GTA VI on console? Your PC's doing nothing." with Nekko cheering under a white pixel "VI"; "Put your PC to work." with a task card ticking three tasks from 3.0 s; "Free. Local. No subscription." and "So you can focus on the mission."; Nekko with a controller, "3 tasks done", the wordmark and nekkoagent.com. No text under 78 px (4% of the height), no blank frames |
+| `GtaIdleGpu` | 12 s, 1080x1080 | Hook "Playing GTA VI on console? Your PC's doing nothing." with Nekko cheering under a banner (white pixel "VI", plum outline); "Put your PC to work." with a task card ticking three tasks from 3.0 s; "Free. Local. No subscription." and "So you can focus on the mission." held to 9 s; Nekko with a controller, "3 tasks done", the wordmark and nekkoagent.com. No text under 43 px (4% of the height), no blank frames |
 
     npm install
     npm run render
