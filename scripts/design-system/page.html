@@ -1,0 +1,253 @@
+<!doctype html>
+<!--
+  nekkoagent.com/design-system, built by scripts/build-design-system.mjs from
+  scripts/design-system/page.html and the app's own source. Edit the template, not this page.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quiet surfaces: the Nekko Agent design system</title>
+    <meta name="description" content="Quiet surfaces is the design system behind Nekko Agent: six rules, two colourways (Light Nekko and Dusk), our status glyphs and one quiet motion curve. Free and MIT licensed, with every token as Markdown and JSON for your agent." />
+    <link rel="canonical" href="https://nekkoagent.com/design-system" />
+    <link rel="alternate" type="text/markdown" href="/design-system.md" title="The design system as Markdown, for agents" />
+    <link rel="alternate" type="application/json" href="/design-system.json" title="The tokens, principles and checklist as JSON" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/design-system" />
+    <meta property="og:title" content="Quiet surfaces: the Nekko Agent design system" />
+    <meta property="og:description" content="Six rules, two colourways, one cat. The design system behind Nekko Agent, free to take home." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=plum-3" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=plum-3" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "CreativeWork",
+        "name": "Quiet surfaces: the Nekko Agent design system",
+        "url": "https://nekkoagent.com/design-system",
+        "description": "The design system behind Nekko Agent: six rules, two colourways (Light Nekko and Dusk), status glyphs, one motion curve and a screen checklist.",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "encoding": [
+          { "@type": "MediaObject", "encodingFormat": "text/markdown", "contentUrl": "https://nekkoagent.com/design-system.md" },
+          { "@type": "MediaObject", "encodingFormat": "application/json", "contentUrl": "https://nekkoagent.com/design-system.json" }
+        ],
+        "isPartOf": { "@type": "SoftwareApplication", "name": "Nekko Agent", "url": "https://nekkoagent.com/" },
+        "publisher": { "@type": "Organization", "name": "NekkoLabs", "url": "https://nekkolabs.com" }
+      }
+    </script>
+    <!-- The saved colourway, or the system's, before first paint. -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('nekko-ds-theme');}catch(e){}if(t!=='light'&&t!=='dusk')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dusk':'light';d.dataset.dsTheme=t;d.classList.add('js');})();</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
+    <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/ds/tokens.css" />
+    <link rel="stylesheet" href="/design-system.css?v=2" />
+    <script defer src="/design-system.js?v=2"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="bar">
+      <a class="brand" href="/" aria-label="Nekko Agent home">{{head:24}}<span>Nekko Agent</span></a>
+      <nav class="bar-links" aria-label="On this page">
+        <a href="#rules">Rules</a>
+        <a href="#spec">Spec sheet</a>
+        <a href="#colourways">Colourways</a>
+        <a href="#take">Take it home</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <!-- The counter: the real window on show, its name, and the one action. -->
+      <section class="hero" aria-labelledby="title">
+        <div class="win" data-ui data-win aria-label="A working Nekko Agent window, built from the design system" role="group">
+          <div class="win-bar">
+            <span class="win-name">{{head:16}} Agents</span>
+            <span class="win-tabs" role="tablist" aria-label="Layout">
+              <button class="tab" role="tab" aria-selected="true" type="button">Focused</button>
+              <button class="tab" role="tab" aria-selected="false" type="button">Dynamic</button>
+            </span>
+          </div>
+          <div class="win-body">
+            <nav class="win-list" aria-label="Agents">
+              <div class="win-label">Today</div>
+              <button class="wrow" type="button" aria-pressed="true" data-agent="0">{{glyph:working}}<span class="wrow-text"><span class="wrow-title">Fix the flaky upload test</span><span class="wrow-detail">Qwen3 Coder · This MacBook</span></span></button>
+              <button class="wrow" type="button" aria-pressed="false" data-agent="1">{{glyph:input}}<span class="wrow-text"><span class="wrow-title">Review the migration plan</span><span class="wrow-detail">Opus 5.5 · Claude</span></span></button>
+              <button class="wrow" type="button" aria-pressed="false" data-agent="2">{{glyph:done}}<span class="wrow-text"><span class="wrow-title">Write tests for checkout</span><span class="wrow-detail">Qwen3 14B · Mac mini</span></span></button>
+              <button class="wrow" type="button" aria-pressed="false" data-agent="3">{{glyph:idle}}<span class="wrow-text"><span class="wrow-title">Watch the nightly build</span><span class="wrow-detail">Qwen3 4B · Mac mini</span></span></button>
+            </nav>
+            <div class="win-chat">
+              <div class="chat-head">{{mascot:working}}<span class="chat-title" data-chat-title>Fix the flaky upload test</span><span class="chat-word" data-chat-word>{{word:working}}</span></div>
+              <div class="chat-log" data-chat-log aria-live="polite">
+                <p class="msg-you">The upload test fails about one run in five. Find out why.</p>
+                <p class="msg-agent">It races the progress callback. I am waiting for the last chunk before asserting.</p>
+                <p class="msg-tool">{{icon:terminal}}<span>Edited upload.test.ts</span><span class="msg-diff">+12 −3</span></p>
+              </div>
+              <div class="composer">
+                <span class="composer-field">Message Nekko Agent…</span>
+                <div class="composer-bar">
+                  <span class="anchor">
+                    <button class="cbtn" type="button" aria-haspopup="menu" aria-expanded="false" data-menu-button>Qwen3 Coder</button>
+                    <span class="menu" role="menu" data-menu hidden>
+                      <button class="mitem" role="menuitemradio" aria-checked="true" type="button">Qwen3 Coder<span>This MacBook</span></button>
+                      <button class="mitem" role="menuitemradio" aria-checked="false" type="button">Opus 5.5<span>Claude</span></button>
+                      <button class="mitem" role="menuitemradio" aria-checked="false" type="button">GPT-5<span>ChatGPT</span></button>
+                    </span>
+                  </span>
+                  <label class="cswitch"><span>Asks first</span><button class="switch" role="switch" aria-checked="true" type="button" aria-label="Asks first"></button></label>
+                  <button class="cicon" type="button" aria-label="Send">{{icon:send}}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h1 class="wordmark" id="title">Quiet surfaces</h1>
+        <p class="statement">The design system behind Nekko Agent. Six rules, two colourways, one cat.</p>
+        <div class="buy">
+          <div class="colourway" role="radiogroup" aria-label="Colourway">
+            <button class="swatch-btn" role="radio" aria-checked="false" type="button" data-theme-pick="light" aria-label="Light Nekko"><span class="ds-light"></span></button>
+            <button class="swatch-btn" role="radio" aria-checked="false" type="button" data-theme-pick="dusk" aria-label="Dusk"><span class="ds-dusk"></span></button>
+            <span class="colourway-name" data-theme-name>Two colourways</span>
+          </div>
+          <a class="btn btn-primary buy-btn" href="#take">Take it home · Free</a>
+          <span class="buy-spec">MIT licence</span>
+        </div>
+      </section>
+
+      <!-- The board: the system at work, eight agents in rows. -->
+      <section class="board-wrap" id="board" aria-labelledby="h-board">
+        <h2 class="large" id="h-board">Eight agents, one glance</h2>
+        <p class="body-text board-intro">No cards, no pills. A row is a glyph, a title and its facts, and the one you open takes a plum wash.</p>
+        <div class="board" data-ui data-board>
+          <button class="brow" type="button" aria-expanded="false">{{glyph:working}}<span class="b-title">Refactor the billing module</span><span class="b-fact">Qwen3 32B</span><span class="b-fact">Studio PC</span><span class="b-fact num">12 min</span><span class="b-word" data-s="working">{{word:working}}</span><span class="b-more">Splitting invoices out of the payments service. Two of six files moved; the tests still pass.</span></button>
+          <button class="brow" type="button" aria-expanded="false">{{glyph:done}}<span class="b-title">Write tests for checkout</span><span class="b-fact">Qwen3 14B</span><span class="b-fact">Mac mini</span><span class="b-fact num">4 min</span><span class="b-word" data-s="done">{{word:done}}</span><span class="b-more">Added 18 cases for coupons, tax and empty carts. Every one passes.</span></button>
+          <button class="brow" type="button" aria-expanded="false">{{glyph:input}}<span class="b-title">Review the migration plan</span><span class="b-fact">Opus 5.5</span><span class="b-fact">Claude</span><span class="b-fact num">2 min</span><span class="b-word" data-s="input">{{word:input}}</span><span class="b-more">Asking before it drops the old sessions table. It waits for you, in orange, louder than a warning.</span></button>
+          <button class="brow" type="button" aria-expanded="true">{{glyph:working}}<span class="b-title">Fix the flaky upload test</span><span class="b-fact">Qwen3 Coder</span><span class="b-fact">This MacBook</span><span class="b-fact num">7 min</span><span class="b-word" data-s="working">{{word:working}}</span><span class="b-more">Found the race: the assertion ran before the last chunk. Working shows as our green rocket, never a spinner.</span></button>
+          <button class="brow" type="button" aria-expanded="false">{{glyph:done}}<span class="b-title">Summarise the design review</span><span class="b-fact">GPT-5</span><span class="b-fact">ChatGPT</span><span class="b-fact num">1 min</span><span class="b-word" data-s="done">{{word:done}}</span><span class="b-more">Five decisions and two open questions, in plain words.</span></button>
+          <button class="brow" type="button" aria-expanded="false">{{glyph:idle}}<span class="b-title">Watch the nightly build</span><span class="b-fact">Qwen3 4B</span><span class="b-fact">Mac mini</span><span class="b-fact num">since 02:00</span><span class="b-word" data-s="idle">{{word:idle}}</span><span class="b-more">Asleep until the build changes. Watching is a quiet Zz in faint ink.</span></button>
+          <button class="brow" type="button" aria-expanded="false">{{glyph:error}}<span class="b-title">Rename the Relay variables</span><span class="b-fact">Qwen3 32B</span><span class="b-fact">Studio PC</span><span class="b-fact num">3 min</span><span class="b-word" data-s="error">{{word:error}}</span><span class="b-more">The deploy key expired. The word is in the danger text colour, so it still passes 4.5:1.</span></button>
+          <button class="brow" type="button" aria-expanded="false">{{glyph:working}}<span class="b-title">Translate the release notes</span><span class="b-fact">Opus 5.5</span><span class="b-fact">Claude</span><span class="b-fact num">6 min</span><span class="b-word" data-s="working">{{word:working}}</span><span class="b-more">Japanese done, German halfway.</span></button>
+        </div>
+      </section>
+
+      <!-- Six rules: a light statement cell beside the rules on Dusk. -->
+      <section class="rules" id="rules" aria-labelledby="h-rules">
+        <div class="rules-cell ds-light">
+          <h2 class="large zigzag" id="h-rules"><span>Six rules.</span> <span>No boxes.</span></h2>
+          <div class="rules-foot">
+            <p class="body-text">Every screen in Nekko Agent follows the same six rules. A survey in November found 353 bordered boxes in the app. These rules are how they left.</p>
+            <a class="btn" href="https://github.com/nekko-labs/nekko-agent/blob/main/docs/decisions/0075-quiet-design-system.md">Read why</a>
+          </div>
+        </div>
+        <ol class="rules-list ds-dusk">
+<!-- ds:principles -->
+        </ol>
+      </section>
+
+      <!-- Motion: four lines that do what they say. -->
+      <section class="motion" id="motion" aria-labelledby="h-motion" data-motion>
+        <div class="stair">
+          <div class="step" data-move="fade"><h2 class="large" id="h-motion">First, it fades in.</h2><p class="body-text soft">Menus and popovers arrive over {{light:dur-med}} on one curve, {{light:ease-out}}.</p></div>
+          <div class="step" data-move="rise"><p class="large">Then it rises a little.</p><p class="body-text soft">Four pixels for a popover, eight at the very most. Travel is a hint, not a ride.</p></div>
+          <div class="step" data-move="press"><p class="large">It never bounces.</p><p class="body-text soft">No springs, no overshoot, no blur. A press scales to 0.97 in {{light:dur-fast}} and comes straight back.</p></div>
+          <div class="step accent" data-move="leave"><p class="large">And it leaves in 150.</p><p class="body-text soft">Exits run about a quarter faster than entrances. Reduce Motion keeps only the fades.</p></div>
+        </div>
+        <div class="motion-controls">
+          <button class="btn" type="button" data-replay>Play it again</button>
+          <label class="inline-switch"><span>Slow motion</span><button class="switch" role="switch" aria-checked="false" type="button" aria-label="Slow motion" data-slow></button></label>
+        </div>
+      </section>
+
+      <!-- The spec sheet: every value, both colourways, one type size. -->
+      <section class="spec" id="spec" aria-labelledby="h-spec">
+        <div class="spec-head">
+          <h2 class="large" id="h-spec">The spec sheet</h2>
+          <p class="body-text">Every value in both colourways, read from the app's stylesheet when this page was built. Agents can take it as <a href="/design-system.json">JSON</a> or <a href="/design-system.md">Markdown</a>.</p>
+        </div>
+        <table class="spec-table">
+          <caption class="sr-only">Design tokens in Light Nekko and Dusk</caption>
+          <thead><tr><th scope="col">Token</th><th scope="col">Use</th><th scope="col">Light Nekko</th><th scope="col">Dusk</th></tr></thead>
+<!-- ds:spec -->
+        </table>
+      </section>
+
+      <!-- Two colourways, priced like plans. -->
+      <section class="colourways" id="colourways" aria-label="Colourways">
+        <article class="plan ds-dusk" data-plan="dusk">
+          <h2 class="large">Dusk</h2>
+          <p class="body-text plan-for">For late nights. Halfway between ink black and a blue midnight.</p>
+          <figure class="plan-shot">
+            <video muted loop playsinline preload="none" poster="/media/demo-control-poster.webp" width="1600" height="900" aria-label="Nekko Agent in Dusk">
+              <source src="/media/demo-control.webm" type="video/webm" />
+              <source src="/media/demo-control.mp4" type="video/mp4" />
+            </video>
+          </figure>
+          <p class="body-text plan-in">Page {{dusk:paper}}, ink {{dusk:ink}}, plum {{dusk:accent}} for intent and Petrol {{dusk:info}} for information. State colours run brighter so they read on the dark.</p>
+          <div class="plan-foot"><p class="price">Free<span>forever</span></p><button class="btn btn-primary" type="button" data-theme-pick="dusk">Wear Dusk</button></div>
+        </article>
+        <article class="plan ds-light" data-plan="light">
+          <h2 class="large">Light Nekko</h2>
+          <p class="body-text plan-for">The everyday colourway, with a plum that means business.</p>
+          <figure class="plan-shot">
+            <video muted loop playsinline preload="none" poster="/media/demo-control-light-poster.webp" width="1600" height="900" aria-label="Nekko Agent in Light Nekko">
+              <source src="/media/demo-control-light.webm" type="video/webm" />
+              <source src="/media/demo-control-light.mp4" type="video/mp4" />
+            </video>
+          </figure>
+          <p class="body-text plan-in">Page {{light:paper}}, ink {{light:ink}} in three tiers, plum {{light:accent}} for intent and Petrol {{light:info}} for information. Every state colour has a darker word colour that passes 4.5:1.</p>
+          <div class="plan-foot"><p class="price">Free<span>forever</span></p><button class="btn btn-primary" type="button" data-theme-pick="light">Wear Light Nekko</button></div>
+        </article>
+      </section>
+
+      <!-- Questions, filed like index cards. -->
+      <section class="faq" id="questions" aria-labelledby="h-faq">
+        <h2 class="large" id="h-faq">Questions, filed</h2>
+        <div class="cards" data-cards>
+          <div class="card c1 open"><button class="card-tab" type="button" aria-expanded="true" aria-controls="a1" id="q1"><span class="tab-word">Licence</span><span class="card-q">Can I use it in my own app?</span></button><div class="card-a" id="a1" role="region" aria-labelledby="q1"><p>Yes. Nekko Agent is MIT licensed, tokens included. Take the values, the rules and the checklist. The cat stays with us.</p></div></div>
+          <div class="card c2"><button class="card-tab" type="button" aria-expanded="false" aria-controls="a2" id="q2"><span class="tab-word">Cards</span><span class="card-q">Why are there no cards?</span></button><div class="card-a" id="a2" role="region" aria-labelledby="q2"><p>Boxes inside boxes are noise. Space and type do the grouping, a border is the last resort, and there is never a card in a card.</p></div></div>
+          <div class="card c3"><button class="card-tab" type="button" aria-expanded="false" aria-controls="a3" id="q3"><span class="tab-word">Plum</span><span class="card-q">Why plum and not blue?</span></button><div class="card-a" id="a3" role="region" aria-labelledby="q3"><p>Plum is Nekko's own colour and it means intent: the one primary button, focus, what is selected. Petrol sits across the wheel for information, so the two never compete. We tried a plum dark called Night; the primary button vanished into it.</p></div></div>
+          <div class="card c1"><button class="card-tab" type="button" aria-expanded="false" aria-controls="a4" id="q4"><span class="tab-word">Phones</span><span class="card-q">Does it work under a finger?</span></button><div class="card-a" id="a4" role="region" aria-labelledby="q4"><p>Buttons are 28 tall for a pointer and grow to 44 under a finger. The iPhone and Android apps keep their platform's symbols and share the colourways, the mascot and the words.</p></div></div>
+          <div class="card c2"><button class="card-tab" type="button" aria-expanded="false" aria-controls="a5" id="q5"><span class="tab-word">Agents</span><span class="card-q">How do agents use it?</span></button><div class="card-a" id="a5" role="region" aria-labelledby="q5"><p>Every agent working on Nekko Agent reads the design system before touching a screen. This page is also served as <a href="/design-system.md">Markdown</a> and <a href="/design-system.json">JSON</a>, so yours can read it too.</p></div></div>
+          <div class="card c3"><button class="card-tab" type="button" aria-expanded="false" aria-controls="a6" id="q6"><span class="tab-word">Checklist</span><span class="card-q">How do I check a screen?</span></button><div class="card-a" id="a6" role="region" aria-labelledby="q6"><ul class="checklist">
+<!-- ds:checklist -->
+          </ul></div></div>
+        </div>
+      </section>
+
+      <!-- The one action: the whole band copies a prompt for your agent. -->
+      <section class="take-wrap" id="take" aria-labelledby="h-take">
+        <h2 class="sr-only" id="h-take">Take it home</h2>
+        <a class="take" href="/design-system.md" data-copy-prompt>
+          <span class="take-line">Copy a prompt that teaches your agent this design system. Paste it into any chat.</span>
+          <svg class="take-arrow" viewBox="0 0 48 48" aria-hidden="true"><path d="M14 34 34 14M18 14h16v16" /></svg>
+          <span class="take-word">Copy</span>
+        </a>
+      </section>
+    </main>
+
+    <footer class="foot ds-invert">
+      <div class="foot-top">
+        <div class="foot-invite">
+          <p class="large">Build something quiet.</p>
+          <a class="btn btn-primary" href="/download">Download Nekko Agent</a>
+        </div>
+        <ul class="foot-links">
+          <li><a href="/design-system.md">Markdown version</a></li>
+          <li><a href="/design-system.json">Tokens as JSON</a></li>
+          <li><a href="https://github.com/nekko-labs/nekko-agent/blob/main/docs/design-system.md">Source on GitHub</a></li>
+          <li><a href="/docs">Docs</a></li>
+        </ul>
+      </div>
+      <div class="foot-legal"><span>Geist (OFL) · Gentleface icons (MIT) · Screens from Nekko Agent</span><span>MIT · <a href="https://nekkolabs.com">Nekko Labs</a> · <a href="/privacy">Privacy</a></span></div>
+      <p class="foot-mark" aria-hidden="true">nekko agent</p>
+    </footer>
+
+    <div class="toast" role="status" aria-live="polite" hidden></div>
+<!-- ds:marks -->
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </body>
+</html>
