@@ -190,7 +190,11 @@ pub(crate) fn run_with_env(
 
 /// `git(cwd, args)`: trimmed stdout, or the error `execFileSync` throws.
 pub fn git(cwd: &str, args: &[&str]) -> Result<String, GitError> {
-    match run("git", args, cwd, None, GIT_TIMEOUT) {
+    git_env(cwd, args, &[])
+}
+
+fn git_env(cwd: &str, args: &[&str], env: &[(String, String)]) -> Result<String, GitError> {
+    match run_with_env("git", args, cwd, None, GIT_TIMEOUT, env) {
         Ok((0, out, _)) => Ok(nekko_js::trim(&String::from_utf8_lossy(&out)).to_string()),
         Ok((_, _, err)) => {
             let stderr = String::from_utf8_lossy(&err).into_owned();
@@ -755,24 +759,141 @@ pub struct Owner {
     pub running: bool,
 }
 
-/// `listChatWorktrees`: every chat worktree in the configured projects'
-/// repositories, found through Git, so deleted chats' checkouts show too.
+/// A linked worktree found through Git, before its status is read.
+struct Candidate {
+    root: String,
+    source_root: String,
+    project_name: String,
+    branch: Option<String>,
+    /// `Some(reason)` when Git has it locked (`git worktree lock`); the reason may be empty.
+    locked: Option<String>,
+    chat: Option<Owner>,
+    /// Made by a chat: under `<git-common-dir>/nekko-worktrees/`, or a chat's
+    /// own record names it. Only these are ever removed automatically.
+    made_by_chat: bool,
+}
+
+/// At most this many worktrees are read at once: each read is two Git
+/// processes, and a repository can have dozens of worktrees.
+const LIST_THREADS: usize = 8;
+
+/// Git status for a listing never takes the index lock, so it cannot collide
+/// with an agent committing in that worktree at the same moment.
+fn git_no_locks(cwd: &str, args: &[&str]) -> Result<String, GitError> {
+    git_env(cwd, args, &[("GIT_OPTIONAL_LOCKS".into(), "0".into())])
+}
+
+/// `(dirtyCount, unmergedCount)` of one worktree.
+fn worktree_counts(c: &Candidate) -> (usize, f64) {
+    let dirty = git_no_locks(&c.root, &["status", "--porcelain"])
+        .map(|o| o.split('\n').filter(|l| !l.is_empty()).count())
+        .unwrap_or(0);
+    let unmerged = c
+        .branch
+        .as_ref()
+        .and_then(|br| git_no_locks(&c.source_root, &["rev-list", "--count", &format!("HEAD..{br}")]).ok())
+        .map(|n| nekko_js::string_to_number(&n))
+        .filter(|n| nekko_js::truthy_number(*n))
+        .unwrap_or(0.0);
+    (dirty, unmerged)
+}
+
+/// `f` over every item, on up to `threads` threads, results in input order.
+fn parallel_map<T: Sync, R: Send + Default + Clone>(items: &[T], threads: usize, f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let threads = threads.clamp(1, items.len().max(1));
+    if threads == 1 {
+        return items.iter().map(&f).collect();
+    }
+    let next = AtomicUsize::new(0);
+    let results = std::sync::Mutex::new(vec![R::default(); items.len()]);
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            scope.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, Ordering::Relaxed);
+                    let Some(item) = items.get(i) else { break };
+                    let r = f(item);
+                    if let Ok(mut out) = results.lock() {
+                        out[i] = r;
+                    }
+                }
+            });
+        }
+    });
+    results.into_inner().unwrap_or_default()
+}
+
+/// `listChatWorktrees`: every linked worktree (never the main checkout) of
+/// the configured projects' repositories, found through Git, so deleted
+/// chats' checkouts show too, and so do worktrees made outside Nekko (by an
+/// agent running `git worktree add`, or another tool). `madeByChat` tells
+/// them apart: only those are ever removed automatically.
 pub fn list(settings: &Value, lookup: &dyn Fn(&str) -> Option<Owner>) -> Vec<Value> {
-    let mut repos: Vec<(String, String)> = Vec::new();
+    list_with(settings, lookup, &|_| true, LIST_THREADS)
+}
+
+fn list_with(
+    settings: &Value,
+    lookup: &dyn Fn(&str) -> Option<Owner>,
+    keep: &dyn Fn(&Candidate) -> bool,
+    threads: usize,
+) -> Vec<Value> {
+    let candidates: Vec<Candidate> = candidates(settings, lookup).into_iter().filter(|c| keep(c)).collect();
+    let counts = parallel_map(&candidates, threads, worktree_counts);
+    candidates
+        .iter()
+        .zip(counts)
+        .map(|(c, (dirty, unmerged))| {
+            let mut entry = Map::new();
+            entry.insert("root".into(), json!(c.root));
+            entry.insert("sourceRoot".into(), json!(c.source_root));
+            if !c.project_name.is_empty() {
+                entry.insert("projectName".into(), json!(c.project_name));
+            }
+            if let Some(br) = &c.branch {
+                entry.insert("branch".into(), json!(br));
+            }
+            let session_id = c.chat.as_ref().map(|o| o.id.clone()).unwrap_or_else(|| {
+                Path::new(&c.root).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+            });
+            entry.insert("sessionId".into(), json!(session_id));
+            if let Some(o) = &c.chat {
+                entry.insert("sessionTitle".into(), json!(o.title));
+            }
+            entry.insert("running".into(), json!(c.chat.as_ref().is_some_and(|o| o.running)));
+            entry.insert("madeByChat".into(), json!(c.made_by_chat));
+            if let Some(reason) = &c.locked {
+                entry.insert("locked".into(), json!(true));
+                if !reason.is_empty() {
+                    entry.insert("lockedReason".into(), json!(reason));
+                }
+            }
+            entry.insert("dirtyCount".into(), json!(dirty));
+            entry.insert("unmergedCount".into(), nekko_oauth::num(unmerged));
+            Value::Object(entry)
+        })
+        .collect()
+}
+
+/// The linked worktrees of each configured project's repository, once each.
+fn candidates(settings: &Value, lookup: &dyn Fn(&str) -> Option<Owner>) -> Vec<Candidate> {
+    // (key, git common dir, the first configured project's name)
+    let mut repos: Vec<(String, String, String)> = Vec::new();
     for folder in workspaces_of(settings) {
         let path = s(&folder, "path");
         if let Ok(c) = git(path, &["rev-parse", "--git-common-dir"]) {
             let common = p_resolve(&[path, &c]);
             let key = norm(&common);
-            match repos.iter_mut().find(|(k, _)| *k == key) {
+            match repos.iter_mut().find(|(k, _, _)| *k == key) {
                 Some(slot) => slot.1 = common,
-                None => repos.push((key, common)),
+                None => repos.push((key, common, s(&folder, "name").to_string())),
             }
         }
     }
     let sep = if cfg!(windows) { "\\" } else { "/" };
     let mut out = Vec::new();
-    for (_, common) in repos {
+    for (_, common, project_name) in repos {
         let home = p_join(&[&common, "nekko-worktrees"]);
         let Ok(listing) = git(&common, &["worktree", "list", "--porcelain"]) else { continue };
         let blocks: Vec<Map<String, Value>> = split_blocks(&listing)
@@ -791,42 +912,33 @@ pub fn list(settings: &Value, lookup: &dyn Fn(&str) -> Option<Owner>) -> Vec<Val
             .collect();
         let source_root =
             p_resolve(&[blocks.first().and_then(|b| b.get("worktree")).and_then(Value::as_str).unwrap_or("")]);
-        for b in &blocks {
-            let root = p_resolve(&[b.get("worktree").and_then(Value::as_str).unwrap_or("")]);
-            if !norm(&root).starts_with(&format!("{}{sep}", norm(&home))) || !exists(&root) {
+        // The first block is the main checkout: never listed, never removed.
+        for b in blocks.iter().skip(1) {
+            let Some(path) = b.get("worktree").and_then(Value::as_str).filter(|p| !p.is_empty()) else { continue };
+            let root = p_resolve(&[path]);
+            // A bare entry has no files to list; a prunable one is already gone.
+            if b.contains_key("bare") || !exists(&root) {
                 continue;
             }
             let branch = b
                 .get("branch")
                 .and_then(Value::as_str)
                 .map(|br| br.strip_prefix("refs/heads/").unwrap_or(br).to_string());
+            // `locked` alone, or `locked <reason>`: the parse above keeps the
+            // whole line as the value when there is no reason.
+            let locked =
+                b.get("locked").and_then(Value::as_str).map(|v| if v == "locked" { "" } else { v }.to_string());
             let chat = lookup(&root);
-            let session_id = chat.as_ref().map(|c| c.id.clone()).unwrap_or_else(|| {
-                Path::new(&root).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+            let made_by_chat = norm(&root).starts_with(&format!("{}{sep}", norm(&home))) || chat.is_some();
+            out.push(Candidate {
+                root,
+                source_root: source_root.clone(),
+                project_name: project_name.clone(),
+                branch,
+                locked,
+                chat,
+                made_by_chat,
             });
-            let dirty = git(&root, &["status", "--porcelain"])
-                .map(|o| o.split('\n').filter(|l| !l.is_empty()).count())
-                .unwrap_or(0);
-            let unmerged = branch
-                .as_ref()
-                .and_then(|br| git(&source_root, &["rev-list", "--count", &format!("HEAD..{br}")]).ok())
-                .map(|n| nekko_js::string_to_number(&n))
-                .filter(|n| nekko_js::truthy_number(*n))
-                .unwrap_or(0.0);
-            let mut entry = Map::new();
-            entry.insert("root".into(), json!(root));
-            entry.insert("sourceRoot".into(), json!(source_root));
-            if let Some(br) = &branch {
-                entry.insert("branch".into(), json!(br));
-            }
-            entry.insert("sessionId".into(), json!(session_id));
-            if let Some(c) = &chat {
-                entry.insert("sessionTitle".into(), json!(c.title));
-            }
-            entry.insert("running".into(), json!(chat.as_ref().is_some_and(|c| c.running)));
-            entry.insert("dirtyCount".into(), json!(dirty));
-            entry.insert("unmergedCount".into(), nekko_oauth::num(unmerged));
-            out.push(Value::Object(entry));
         }
     }
     out
@@ -840,10 +952,30 @@ fn split_blocks(s: &str) -> Vec<String> {
 /// `removeChatWorktree`: Git refuses a dirty worktree and the branch goes
 /// only when merged, so no work is lost.
 pub fn remove(settings: &Value, root: &str, lookup: &dyn Fn(&str) -> Option<Owner>) -> Result<Value, String> {
-    let entry = list(settings, lookup)
+    remove_with(settings, root, lookup, false)
+}
+
+/// `remove`, and with `chat_only` it refuses a worktree made outside Nekko:
+/// the automatic sweep goes through here so it can never take one.
+fn remove_with(
+    settings: &Value,
+    root: &str,
+    lookup: &dyn Fn(&str) -> Option<Owner>,
+    chat_only: bool,
+) -> Result<Value, String> {
+    let target = norm(root);
+    // Only the one worktree's status is read, not every worktree's.
+    let entry = list_with(settings, lookup, &|c| norm(&c.root) == target, 1)
         .into_iter()
-        .find(|w| norm(s(w, "root")) == norm(root))
-        .ok_or("That folder is not a chat worktree of a configured project.")?;
+        .next()
+        .ok_or("That folder is not a worktree of a configured project.")?;
+    if chat_only && entry["madeByChat"] != json!(true) {
+        return Err("This worktree was made outside Nekko; it is only removed by hand.".into());
+    }
+    if entry["locked"] == json!(true) {
+        let reason = entry.get("lockedReason").and_then(Value::as_str).map(|r| format!(" ({r})")).unwrap_or_default();
+        return Err(format!("This worktree is locked{reason}. Unlock it with git worktree unlock first."));
+    }
     if entry["running"] == json!(true) {
         return Err("This chat is running. Stop it before removing its worktree.".into());
     }
@@ -883,13 +1015,28 @@ fn owner_in(sessions: &[Value], running: &[String], root: &str) -> Option<Owner>
     Some(Owner { running: running.contains(&id), title: self::s(session, "title").to_string(), id })
 }
 
+/// The listed worktrees the merged-PR sweep may consider: made by a chat
+/// (never one made outside Nekko), on a branch, not locked, not running, clean.
+fn sweep_candidates(entries: Vec<Value>) -> Vec<Value> {
+    entries
+        .into_iter()
+        .filter(|w| {
+            w["madeByChat"] == true
+                && !s(w, "branch").is_empty()
+                && w["locked"] != true
+                && w["running"] != true
+                && w["dirtyCount"].as_u64().unwrap_or(0) == 0
+        })
+        .collect()
+}
+
 /// `removeMergedChatWorktrees`: remove the chat worktrees whose branch's PR
 /// has merged. Squash merges leave the branch "unmerged" to Git, so the PR
 /// (from GitHub) says the work landed, and the branch is force-deleted. The
 /// PR only counts when its head commit is the local branch tip; anything
-/// dirty, a running chat, an unmerged PR or a failed lookup is left alone.
-/// Never fails: one stuck worktree does not stop the others. `(root, branch)`
-/// of each one removed.
+/// dirty, locked, a running chat, an unmerged PR or a failed lookup is left
+/// alone, and so is every worktree made outside Nekko. Never fails: one
+/// stuck worktree does not stop the others. `(root, branch)` of each one removed.
 pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
     let settings = crate::settings::current(ctx).await;
     if settings.pointer("/gitManagement/removeMerged") == Some(&Value::Bool(false)) {
@@ -904,13 +1051,14 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
     };
     let running = crate::routes::running_chats(ctx);
     let (s, st) = (settings.clone(), store.clone());
-    let entries = tokio::task::spawn_blocking(move || list(&s, &owners(st, running))).await.unwrap_or_default();
+    // Only chat-made worktrees have their status read at all.
+    let entries =
+        tokio::task::spawn_blocking(move || list_with(&s, &owners(st, running), &|c| c.made_by_chat, LIST_THREADS))
+            .await
+            .unwrap_or_default();
     let mut removed = Vec::new();
-    for w in entries {
+    for w in sweep_candidates(entries) {
         let (root, branch) = (self::s(&w, "root").to_string(), self::s(&w, "branch").to_string());
-        if branch.is_empty() || w["running"] == true || w["dirtyCount"].as_u64().unwrap_or(0) > 0 {
-            continue;
-        }
         let Some((state, head)) = ctx.workspace.prs().branch_pr_head(&root, &branch).await else { continue };
         if state != "merged" {
             continue;
@@ -929,7 +1077,7 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
                 (Ok(dirty), Ok(tip)) if dirty.trim().is_empty() && tip.trim().eq_ignore_ascii_case(&head) => {}
                 _ => return false,
             }
-            if remove(&s, &r, &lookup).is_err() {
+            if remove_with(&s, &r, &lookup, true).is_err() {
                 return false;
             }
             let _ = git(&source, &["branch", "-D", &b]);
@@ -1212,7 +1360,85 @@ mod tests {
         assert!(s(&a["gitWorktrees"]["repo"], "notice").contains("restored from its branch"));
         repo.git(&["merge", "-q", "--ff-only", &branch]);
         assert_eq!(remove(&settings, &wt, &owner).unwrap(), json!({ "branchDeleted": true }));
-        assert!(remove(&settings, &repo.root, &owner).unwrap_err().contains("not a chat worktree"));
+        assert!(remove(&settings, &repo.root, &owner).unwrap_err().contains("not a worktree"));
+    }
+
+    #[test]
+    fn worktrees_made_outside_nekko_are_listed_but_never_swept() {
+        let repo = Repo::new("outside");
+        let settings = repo.settings();
+        let mut chat = session("s_out");
+        prepare(&mut chat, &settings).unwrap();
+        let chat_root = s(&chat["gitWorktrees"]["repo"], "root").to_string();
+        // An agent's own `git worktree add`, a locked one, and one a chat's record names.
+        let outside = p_join(&[&repo.root, ".worktrees", "by-hand"]);
+        repo.git(&["worktree", "add", "-q", "-b", "by-hand", &outside]);
+        let locked = p_join(&[&repo.root, ".worktrees", "locked-one"]);
+        repo.git(&["worktree", "add", "-q", "-b", "locked-one", &locked]);
+        repo.git(&["worktree", "lock", "--reason", "agent busy", &locked]);
+        let recorded = p_join(&[&repo.root, ".claude", "worktrees", "recorded"]);
+        repo.git(&["worktree", "add", "-q", "-b", "recorded", &recorded]);
+        let owner = |r: &str| {
+            (norm(r) == norm(&recorded)).then(|| Owner { id: "s_rec".into(), title: "Recorded".into(), running: false })
+        };
+
+        let listed = list(&settings, &owner);
+        let find = |root: &str| listed.iter().find(|w| norm(s(w, "root")) == norm(root)).cloned().unwrap();
+        assert_eq!(listed.len(), 4, "every linked worktree, never the main checkout: {listed:?}");
+        assert!(listed.iter().all(|w| norm(s(w, "root")) != norm(&repo.root)));
+        assert!(listed.iter().all(|w| w["projectName"] == "Repo"));
+        assert_eq!(find(&chat_root)["madeByChat"], true);
+        assert_eq!(find(&recorded)["madeByChat"], true);
+        assert_eq!(find(&recorded)["sessionTitle"], "Recorded");
+        let by_hand = find(&outside);
+        assert_eq!((by_hand["madeByChat"].clone(), by_hand["branch"].clone()), (json!(false), json!("by-hand")));
+        assert!(by_hand.get("locked").is_none());
+        let l = find(&locked);
+        assert_eq!(
+            (l["locked"].clone(), l["lockedReason"].clone(), l["madeByChat"].clone()),
+            (json!(true), json!("agent busy"), json!(false))
+        );
+
+        // The sweep only ever considers chat-made worktrees, and its remove refuses the rest.
+        let swept: Vec<String> = sweep_candidates(listed.clone()).iter().map(|w| norm(s(w, "root"))).collect();
+        assert_eq!(swept.len(), 2);
+        assert!(swept.contains(&norm(&chat_root)) && swept.contains(&norm(&recorded)));
+        assert!(remove_with(&settings, &outside, &owner, true).unwrap_err().contains("outside Nekko"));
+        assert!(Path::new(&outside).exists());
+        assert!(remove_with(&settings, &locked, &owner, true).unwrap_err().contains("outside Nekko"));
+
+        // By hand: a locked one is refused, an unlocked clean one goes, its merged branch with it.
+        assert!(remove(&settings, &locked, &owner).unwrap_err().contains("locked (agent busy)"));
+        assert!(Path::new(&locked).exists());
+        assert_eq!(remove(&settings, &outside, &owner).unwrap(), json!({ "branchDeleted": true }));
+        assert!(!Path::new(&outside).exists());
+        repo.git(&["worktree", "unlock", &locked]);
+    }
+
+    #[test]
+    fn parallel_reads_keep_the_listing_order() {
+        let items: Vec<usize> = (0..50).collect();
+        for threads in [1, 3, 8, 64] {
+            assert_eq!(parallel_map(&items, threads, |n| n * 2), items.iter().map(|n| n * 2).collect::<Vec<_>>());
+        }
+        assert!(parallel_map(&Vec::<usize>::new(), 8, |n| *n).is_empty());
+    }
+
+    /// Times the listing over real repositories, read-only (`git worktree
+    /// list`, `status` without the index lock, `rev-list`). Run with
+    /// `NEKKO_WT_PERF_REPOS="C:/a;C:/b" cargo test -p nekkod list_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn list_timing_on_real_repositories() {
+        let Ok(repos) = std::env::var("NEKKO_WT_PERF_REPOS") else { return };
+        let workspaces: Vec<Value> =
+            repos.split(';').filter(|p| !p.is_empty()).map(|p| json!({ "id": p, "name": p, "path": p })).collect();
+        let settings = json!({ "workspaces": workspaces });
+        for threads in [1, LIST_THREADS, 1, LIST_THREADS] {
+            let started = Instant::now();
+            let n = list_with(&settings, &|_| None, &|_| true, threads).len();
+            println!("threads={threads} worktrees={n} took={:?}", started.elapsed());
+        }
     }
 
     #[tokio::test]

@@ -103,7 +103,18 @@ export interface ChatWorktreeInfo {
   root: string;
   /** The repository's main checkout, which owns the worktree. */
   sourceRoot: string;
+  /** The configured project the repository was found through, for grouping. */
+  projectName?: string;
   branch?: string;
+  /**
+   * Made by a chat (under the repository's `nekko-worktrees` folder, or named by a chat's record).
+   * False for worktrees made outside Nekko, such as an agent's own `git worktree add`; only chat-made
+   * ones are ever removed automatically. Undefined from an older host, which listed only chat-made ones.
+   */
+  madeByChat?: boolean;
+  /** Git has it locked (`git worktree lock`); removal is refused until it is unlocked. */
+  locked?: boolean;
+  lockedReason?: string;
   /** The chat that owns it, read from the chat's own record of its checkout (older folders were named after the chat's id). */
   sessionId: string;
   /** Undefined when the chat has been deleted. */
