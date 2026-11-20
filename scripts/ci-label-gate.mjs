@@ -12,8 +12,8 @@
 // Draft and `hold` are handled by auto-merge.yml, which disarms auto-merge on
 // either (there is no merge queue to eject from since 2026-11-06).
 //
-// Native iOS runs in batches (scripts/ios-batch.mjs): for a `deploy:ios` PR that
-// touches iOS, a green `Native iOS (batch)` status on its head counts as much
+// Native iOS runs in batches (scripts/ios-batch.mjs): for any PR that touches
+// iOS, with or without `deploy:ios` (#3094), a green `Native iOS (batch)` status on its head counts as much
 // as a green Native iOS run on it, and with neither yet, `gate` waits for one.
 //
 // Usage (from ci.yml's gate job, with GH_TOKEN and GITHUB_REPOSITORY set):
@@ -76,9 +76,8 @@ export function labelRuns(runs, { batch = null, iosRequired = false } = {}) {
 }
 
 
-/** The head's newest `Native iOS (batch)` status, and whether the PR needs Native iOS at all. */
-function iosContext(repo, pr, sha, labels) {
-  if (!labels.includes(IOS_LABEL)) return {};
+/** The head's newest `Native iOS (batch)` status, and whether the PR needs Native iOS at all: any iOS change does, label or not (#3094). */
+function iosContext(repo, pr, sha) {
   const statuses = JSON.parse(gh(['api', `repos/${repo}/commits/${sha}/status`])).statuses ?? [];
   const files = gh(['api', '--paginate', `repos/${repo}/pulls/${pr}/files`, '--jq', '.[].filename']).split('\n').filter(Boolean);
   return { batch: statuses.find(s => s.context === BATCH_CONTEXT) ?? null, iosRequired: touchesIos(files) };
@@ -104,9 +103,10 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function waitForPr(repo, pr, sha, { timeoutMin, pollSec }) {
   const until = Date.now() + timeoutMin * 60_000;
-  const labels = labelsOf(JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`])));
+  // Without a deploy label only the iOS requirement applies; other platform runs are opt-in.
+  const labelled = needsLabelRuns(JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`])));
   for (;;) {
-    const state = labelRuns(runsFor(repo, sha), iosContext(repo, pr, sha, labels));
+    const state = labelRuns(labelled ? runsFor(repo, sha) : [], iosContext(repo, pr, sha));
     if (state.failed.length) {
       console.error(`Deploy-label runs failed on ${sha}:\n${state.failed.map(describe).join('\n')}`);
       return 1;

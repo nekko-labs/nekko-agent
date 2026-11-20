@@ -6,18 +6,19 @@ const pr = (number, { labels = ['deploy:ios'], files = ['apps/ios/App/AppModel.s
   ({ number, headRefOid: String(number).padStart(40, 'a'), isDraft: false, isCrossRepository: false, baseRefName: 'main',
     labels: labels.map(name => ({ name })), files: files.map(path => ({ path })), ...rest });
 
-test('a batch takes ready deploy:ios iOS PRs into main, oldest first', () => {
+test('a batch takes ready iOS PRs into main, oldest first, with or without deploy:ios', () => {
   const prs = [
     pr(1012), pr(980),
-    pr(1001, { labels: [] }), // no deploy:ios
+    pr(1001, { labels: [] }), // no deploy:ios: an iOS change still needs Native iOS (#3094)
     pr(1002, { labels: ['deploy:ios', 'hold'] }),
+    pr(1008, { labels: ['hold'] }),
     pr(1003, { isDraft: true }),
     pr(1004, { isCrossRepository: true }), // a fork: no write token to report on
     pr(1005, { baseRefName: 'ci/ios-faster' }), // a stacked layer
     pr(1006, { files: ['docs/guide.md'] }), // nothing Native iOS tests
     pr(1007, { files: ['crates/nekkod/src/remote.rs'] }),
   ];
-  assert.deepEqual(batchCandidates(prs).map(p => p.number), [980, 1007, 1012]);
+  assert.deepEqual(batchCandidates(prs).map(p => p.number), [980, 1001, 1007, 1012]);
 });
 
 test('a PR whose change onto main edits a workflow sits out of the batch (#2030)', () => {

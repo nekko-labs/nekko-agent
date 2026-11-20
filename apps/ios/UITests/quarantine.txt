@@ -1,0 +1,10 @@
+# Known-intermittent UI tests in the fixtures shards. A PR, a batch and a merge to main
+# skip them, so they don't block changes that never touched them; the nightly run still
+# runs them. One per line: Class/testMethod, then the open issue that tracks the fix.
+# Take a line out in the PR that fixes its test. A real regression is fixed, never listed here.
+AttentionNotificationsUITests/testUnknownNeverWritesPartialAndReconnectReplacesPending #3093
+FirstRunTests/testTheFirstRunInLightAndDark #3061
+NewChatChoicesTests/testAutomaticStartWaitsForProbe #3060
+PendingResponsesUITests/testPendingApprovalEvidence #2965
+PermissionChecklistUITests/testMicrophoneDenialAndSettingsRecovery #3062
+PermissionChecklistUITests/testSettingsEntryReusesChecklistWithoutOnboardingCTA #3061

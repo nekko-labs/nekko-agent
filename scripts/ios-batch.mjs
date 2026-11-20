@@ -1,4 +1,4 @@
-// Native iOS in batches: one simulator run covers every open `deploy:ios` iOS PR
+// Native iOS in batches: one simulator run covers every open iOS PR (label or not, #3094)
 // that merges cleanly onto main, instead of one 30-minute run per PR per push
 // (60 runs on 18 branches in one day, 2026-10-24).
 //
@@ -63,11 +63,11 @@ export function workflowHold(pr, runs) {
 
 const labelsOf = pr => (pr.labels ?? []).map(l => (typeof l === 'string' ? l : l.name));
 
-/** The PRs a batch may take, oldest first: ready, same-repo, into main, `deploy:ios`, not `hold`, touching iOS. */
+/** The PRs a batch may take, oldest first: ready, same-repo, into main, not `hold`, touching iOS (with or without `deploy:ios`, #3094). */
 export function batchCandidates(prs) {
   return prs
     .filter(pr => !pr.isDraft && !pr.isCrossRepository && pr.baseRefName === 'main')
-    .filter(pr => labelsOf(pr).includes('deploy:ios') && !labelsOf(pr).includes('hold'))
+    .filter(pr => !labelsOf(pr).includes('hold'))
     .filter(pr => touchesIos((pr.files ?? []).map(f => f.path ?? f)))
     .sort((a, b) => a.number - b.number);
 }
