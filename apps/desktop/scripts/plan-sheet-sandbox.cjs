@@ -112,6 +112,9 @@ app.whenReady().then(async () => {
     await sleep(200);
     await check('hovering the sheet opens no step', `!(${opened('step_1')})`);
     await shot('plan-hover');
+    // Narrow the real viewport so even short CI labels need overflow.
+    win.setContentSize(600, 900);
+    await sleep(400);
     // Per-row overflow disclosure replaces the old title/details button.
     await run(`document.querySelector('[data-plan-step-id="step_3"] [data-plan-overflow]')?.click()`);
     await sleep(300);

@@ -33,12 +33,16 @@ export function PlanRow({ title, chips }: { title: React.ReactNode; chips: React
       const probe = row.querySelector<HTMLElement>('[data-plan-count-probe]')!;
       setFit(fittingPlanChips(widths, lane.clientWidth, probe.getBoundingClientRect().width));
     };
-    const observer = new ResizeObserver(measure);
+    // Commit resize-driven visibility on the next frame, outside observer delivery.
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; measure(); });
+    });
     observer.observe(lane);
     for (const item of items) observer.observe(item);
     observer.observe(row.querySelector('[data-plan-count-probe]')!);
     measure();
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [chips, count]);
   return <div ref={ref} className="plan-row-content">
     <div className="plan-row-line" data-has-chips={count > 0 || undefined}>
