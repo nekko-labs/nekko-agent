@@ -108,6 +108,33 @@ function GamerNekko({ f, size }: { f: number; size: number }) {
   );
 }
 
+// Nekko cheering: both paws up, holding a banner that just says "VI" in our
+// own type and colours (nothing of the game's logo or lettering).
+function CheerNekko({ f }: { f: number }) {
+  const bounce = Math.abs(Math.sin(f / 7)) * -14;           // little cheering hops
+  const sway = Math.sin(f / 7) * 3;                          // banner rocks with him
+  const lift = (side: number) => Math.max(0, Math.sin(f / 7 + side * Math.PI)) * -8;
+  const S = 8;                                               // px per Nekko unit
+  return (
+    <div style={{ position: 'relative', width: 380, height: 470, transform: `translateY(${bounce}px)` }}>
+      <div style={{ position: 'absolute', left: 30, top: 34, width: 320, height: 150, transform: `rotate(${sway}deg)`, transformOrigin: '50% 100%' }}>
+        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${C.main}, #3a1438)`, border: `6px solid ${C.plum2}`, borderRadius: 18, display: 'grid', placeItems: 'center', boxShadow: '0 24px 50px rgba(0,0,0,.5)' }}>
+          <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: 116, letterSpacing: -2, lineHeight: 1, color: C.ink }}>VI</span>
+        </div>
+        {/* paws gripping the bottom corners */}
+        {[-1, 1].map((side) => (
+          <div key={side} style={{ position: 'absolute', top: 118 + lift(side), left: side < 0 ? -22 : 286, width: 7 * S, height: 7 * S, background: C.nekkoFace, border: `${S}px solid ${C.nekkoLine}`, boxSizing: 'border-box' }} />
+        ))}
+      </div>
+      <svg width={32 * S} height={22 * S} viewBox="0 5 32 22" shapeRendering="crispEdges" style={{ position: 'absolute', left: 190 - 16 * S, top: 196 }}>
+        <path d={HEAD} fill={C.nekkoFace} stroke={C.nekkoLine} strokeWidth={1} />
+        <path d={f % 60 > 55 ? EYES.closed : EYES.open} fill={C.nekkoEyes} />
+        <path d="M14 20H18V21H14Z M15 21H17V22H15Z" fill={C.nekkoMouth} />
+      </svg>
+    </div>
+  );
+}
+
 const Grad = ({ children }: { children: React.ReactNode }) => (
   <span style={{ background: `linear-gradient(110deg, ${C.plum2} 0%, ${C.rose} 100%)`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{children}</span>
 );
@@ -167,11 +194,14 @@ export function GtaIdleGpu() {
     <AbsoluteFill style={{ background: PAGE_BG, overflow: 'hidden', fontFamily: SANS }}>
       <PixelWave f={f} />
 
-      {/* 1 — the question */}
-      <Soft f={f} at={-8} out={100} style={{ ...CENTER, top: 400 }}>
-        <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 150, lineHeight: 1, letterSpacing: -6, color: C.ink }}>
+      {/* 1 — the question, Nekko cheering under it */}
+      <Soft f={f} at={-8} out={100} style={{ ...CENTER, top: 130 }}>
+        <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 132, lineHeight: 1, letterSpacing: -5, color: C.ink }}>
           Playing<br /><Grad>GTA VI?</Grad>
         </div>
+      </Soft>
+      <Soft f={f} at={10} out={100} style={{ ...CENTER, top: 470, display: 'flex', justifyContent: 'center' }}>
+        <CheerNekko f={f} />
       </Soft>
 
       {/* 2 — the PC works */}
