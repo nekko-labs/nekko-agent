@@ -522,11 +522,11 @@ object Purpose {
 
     /**
      * A transcript block's part in grouping: a call waiting for approval stays
-     * on its own, a thought with no reply text sits between calls, and a reply
+     * on its own, so does a call whose pictures show under it, a thought with no reply text sits between calls, and a reply
      * or a prompt ends a group.
      */
     fun role(block: Block): PurposeRole = when (block) {
-        is Block.Tool -> PurposeRole.Call(PurposeCall(block.name, block.input, block.status == ToolStatus.ERROR), standalone = block.status == ToolStatus.WAITING)
+        is Block.Tool -> PurposeRole.Call(PurposeCall(block.name, block.input, block.status == ToolStatus.ERROR), standalone = block.status == ToolStatus.WAITING || block.pictures > 0)
         is Block.Assistant -> if (block.text.isBlank()) PurposeRole.Between else PurposeRole.Breaker
         is Block.User -> PurposeRole.Breaker
     }

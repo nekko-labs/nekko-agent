@@ -289,20 +289,15 @@
     <string name="chat_star_never">今後表示しない</string>
     <string name="chat_star_thanks">ありがとう！ Nekko はあなたが来てくれてうれしいです。</string>
     <string name="chat_star_thanks_detail">ブラウザで GitHub を開きました。スターはそこでワンタップです。</string>
-    <!-- The full-screen photo viewer (#2111). -->
     <string name="photo_n_of_m">%1$d / %2$d</string>
     <string name="photo_actions">写真の操作</string>
-    <!-- Save to Photos on Android 9, when storage access was refused. -->
     <string name="chat_save_needs_storage">写真に保存するには、ストレージへのアクセスを許可してください。</string>
-    <!-- Folded by default in the transcript (#2453). -->
     <string name="chat_progress_note">進捗メモ</string>
     <string name="chat_conversation_summary">会話の要約</string>
-    <!-- Videos from the message box (#2777). -->
     <string name="chat_clip_sending">送信中… %1$d%%</string>
     <string name="chat_clip_attached">チャットに添付済み</string>
     <string name="chat_clip_failed">この動画を送信できませんでした</string>
     <string name="chat_remove_clip">%1$s を削除</string>
-    <!-- The agent's plan sheet over the composer (#2115). -->
     <string name="plan_sheet">エージェントの計画</string>
     <string name="plan_open_label">計画、%2$d 件中 %1$d 件完了。計画を折りたたむ</string>
     <string name="plan_title">計画</string>
@@ -330,7 +325,6 @@
     <string name="plan_subagent">サブエージェント</string>
     <string name="plan_subagents">サブエージェント</string>
     <string name="plan_subagents_label">サブエージェント：実行中 %1$d、完了 %2$d</string>
-    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
     <string name="response_waiting">保留中 · 接続したら送信</string>
     <string name="response_sending">送信中…</string>
     <string name="response_sent">送信済み</string>
@@ -342,11 +336,22 @@
     <string name="response_cancel">キャンセル</string>
     <string name="response_allow">%1$s を許可</string>
     <string name="response_deny">%1$s を拒否</string>
-    <!-- Edit under a picture an image chat made (#2230). -->
     <string name="chat_edit_picture">編集</string>
-    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
     <string name="car_you">あなた</string>
     <string name="car_reply">返信</string>
     <string name="car_mark_read">既読にする</string>
     <string name="car_not_sent">送信されませんでした：このチャットは電話が接続しているコンピュータにありません。</string>
+    <string name="chat_clip_cancel">キャンセル</string>
+    <string name="chat_clip_starting">開始中…</string>
+    <string name="chat_clip_title">%1$s でクリップを作成</string>
+    <string name="chat_clip_via">%1$s 経由 · %2$s アカウントで支払い</string>
+    <string name="chat_clip_total">合計</string>
+    <string name="chat_clip_not_priced">料金未設定</string>
+    <string name="chat_clip_warning_prompt">開始後は停止できず、チャットを止めても料金が発生します。プロンプトはこのコンピュータから %1$s とモデルの提供元に送信されます。</string>
+    <string name="chat_clip_warning_picture">開始後は停止できず、チャットを止めても料金が発生します。プロンプトと最初の画像はこのコンピュータから %1$s とモデルの提供元に送信されます。</string>
+    <string name="chat_clip_make">クリップを作成</string>
+    <string name="chat_clip_make_price">クリップを作成 · %1$s</string>
+    <string name="chat_clip_cancel_watch">クリップをキャンセル</string>
+    <string name="chat_clip_cancelling">キャンセル中…</string>
+    <string name="chat_clip_cancel_failed">クリップをキャンセルできませんでした: %1$s</string>
 </resources>

@@ -289,20 +289,15 @@
     <string name="chat_star_never">Ne plus demander</string>
     <string name="chat_star_thanks">Merci ! Nekko est ravi que vous soyez là.</string>
     <string name="chat_star_thanks_detail">GitHub s’est ouvert dans votre navigateur. L’étoile y est à un geste.</string>
-    <!-- The full-screen photo viewer (#2111). -->
     <string name="photo_n_of_m">%1$d sur %2$d</string>
     <string name="photo_actions">Actions sur la photo</string>
-    <!-- Save to Photos on Android 9, when storage access was refused. -->
     <string name="chat_save_needs_storage">Autorisez l’accès au stockage pour l’enregistrer dans Photos.</string>
-    <!-- Folded by default in the transcript (#2453). -->
     <string name="chat_progress_note">Note de progression</string>
     <string name="chat_conversation_summary">Résumé de la conversation</string>
-    <!-- Videos from the message box (#2777). -->
     <string name="chat_clip_sending">Envoi… %1$d %%</string>
     <string name="chat_clip_attached">Joint à la discussion</string>
     <string name="chat_clip_failed">Impossible d’envoyer cette vidéo</string>
     <string name="chat_remove_clip">Retirer %1$s</string>
-    <!-- The agent's plan sheet over the composer (#2115). -->
     <string name="plan_sheet">Plan de l’agent</string>
     <string name="plan_open_label">Plan, %1$d sur %2$d faites. Replie le plan</string>
     <string name="plan_title">Plan</string>
@@ -330,7 +325,6 @@
     <string name="plan_subagent">Sous-agent</string>
     <string name="plan_subagents">Sous-agents</string>
     <string name="plan_subagents_label">Sous-agents : %1$d en cours, %2$d terminés</string>
-    <!-- Answers and approvals kept as messages until the computer takes them (#2497). -->
     <string name="response_waiting">En attente · envoyé à la connexion</string>
     <string name="response_sending">Envoi…</string>
     <string name="response_sent">Envoyé</string>
@@ -342,11 +336,22 @@
     <string name="response_cancel">Annuler</string>
     <string name="response_allow">Autoriser %1$s</string>
     <string name="response_deny">Refuser %1$s</string>
-    <!-- Edit under a picture an image chat made (#2230). -->
     <string name="chat_edit_picture">Modifier</string>
-    <!-- Android Auto: a finished reply read aloud, with Reply (#2782). -->
     <string name="car_you">Vous</string>
     <string name="car_reply">Répondre</string>
     <string name="car_mark_read">Marquer comme lu</string>
     <string name="car_not_sent">Non envoyé : cette discussion n’est pas sur l’ordinateur auquel le téléphone est connecté.</string>
+    <string name="chat_clip_cancel">Annuler</string>
+    <string name="chat_clip_starting">Démarrage…</string>
+    <string name="chat_clip_title">Créer un clip avec %1$s</string>
+    <string name="chat_clip_via">via %1$s · payé depuis votre compte %2$s</string>
+    <string name="chat_clip_total">Total</string>
+    <string name="chat_clip_not_priced">Sans tarif</string>
+    <string name="chat_clip_warning_prompt">Une fois lancé, il ne peut plus être arrêté et il est facturé même si vous arrêtez la discussion. La consigne quitte cet ordinateur pour %1$s et le fournisseur du modèle.</string>
+    <string name="chat_clip_warning_picture">Une fois lancé, il ne peut plus être arrêté et il est facturé même si vous arrêtez la discussion. La consigne et la première image quittent cet ordinateur pour %1$s et le fournisseur du modèle.</string>
+    <string name="chat_clip_make">Créer le clip</string>
+    <string name="chat_clip_make_price">Créer le clip · %1$s</string>
+    <string name="chat_clip_cancel_watch">Annuler le clip</string>
+    <string name="chat_clip_cancelling">Annulation…</string>
+    <string name="chat_clip_cancel_failed">Impossible d’annuler le clip : %1$s</string>
 </resources>

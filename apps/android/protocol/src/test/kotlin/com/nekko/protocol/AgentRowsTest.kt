@@ -153,4 +153,46 @@ class AgentRowsTest {
         assertEquals(s["COMPLETED"], AgentRows.subagentStatus("done", false, Activity.RUNNING, parentRunning = true))
         assertEquals(s["FAILED"], AgentRows.subagentStatus("boom", true, null, parentRunning = true))
     }
+
+    // ---- Clips (#2973): a watch with kind "clip" and a stage ----
+
+    private fun clip(pending: Boolean = false, stage: String? = null, status: AgentWatch.Status = AgentWatch.Status.ACTIVE) =
+        AgentWatch("w1", AgentWatch.Kind.CLIP, null, status, 10, pending, 0, null, stage)
+
+    @Test fun `decodes a clip watch with its stage and keeps unknown kinds out`() {
+        val raw = Json.parseToJsonElement(
+            """[{"id":"w2","kind":"clip","status":"active","deadlineAt":10,"pending":false,"clipStage":"step:3/20"},{"id":"w3","kind":"clip","status":"active","deadlineAt":10,"pending":false},{"id":"bad","kind":"cron","status":"active","deadlineAt":1}]""",
+        )
+        val list = AgentWatch.list(raw)
+        assertEquals(listOf(AgentWatch.Kind.CLIP, AgentWatch.Kind.CLIP), list.map { it.kind })
+        assertEquals("step:3/20", list[0].clipStage)
+        assertNull(list[1].clipStage)
+    }
+
+    @Test fun `a clip is named and says its stage in the desktop's words`() {
+        assertEquals("Making a clip", AgentRows.watchName(clip()))
+        assertEquals("starting", AgentRows.clipStage(null))
+        assertEquals("starting", AgentRows.clipStage("generating"))
+        assertEquals("waiting for another picture or clip", AgentRows.clipStage("waiting"))
+        assertEquals("loading the video model", AgentRows.clipStage("loading"))
+        assertEquals("step 3 of 20", AgentRows.clipStage("step:3/20"))
+        assertEquals("starting", AgentRows.clipStage("step:x/20"))
+        assertEquals("step 3 of 20", AgentRows.clipProgress(clip(stage = "step:3/20")))
+        assertNull(AgentRows.clipProgress(clip(pending = true, stage = "step:3/20")))
+        assertNull(AgentRows.clipProgress(clip(status = AgentWatch.Status.DONE)))
+        assertNull(AgentRows.clipProgress(AgentWatch("w", AgentWatch.Kind.TIMER, null, AgentWatch.Status.ACTIVE, 10)))
+    }
+
+    @Test fun `a clip has no countdown and is never a timed wake-up`() {
+        val call = AgentRows.WatchCall(AgentRows.WatchCall.Action.CREATE, AgentWatch.Kind.CLIP, null, null, "", null)
+        val now = 10_000_000L
+        val running = AgentRows.watchClock(call, clip(), now)!!
+        assertEquals("in progress", running.text)
+        assertTrue(running.ticking)
+        // Long past its "deadline", still no "overdue" or "left".
+        assertEquals("in progress", AgentRows.watchClock(call, clip(), now + 3_600_000)!!.text)
+        assertEquals("finished · waiting for the chat", AgentRows.watchClock(call, clip(pending = true), now)!!.text)
+        assertEquals("triggered", AgentRows.watchClock(call, clip(status = AgentWatch.Status.DONE), now)!!.text)
+        assertEquals("cancelled", AgentRows.watchClock(call, clip(status = AgentWatch.Status.CANCELLED), now)!!.text)
+    }
 }

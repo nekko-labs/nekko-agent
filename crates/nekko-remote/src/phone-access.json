@@ -118,6 +118,7 @@
   "providers:setEnabled",
   "remote:stop",
   "security:challenge",
+  "session:cancelWatch",
   "session:create",
   "session:delete",
   "session:fork",
@@ -308,6 +309,7 @@
   "engine:unloadAll",
   "model:load",
   "model:unload",
+  "session:cancelWatch",
   "session:create",
   "session:delete",
   "session:fork",
@@ -442,7 +444,8 @@
   "nextPollAt",
   "pending",
   "failures",
-  "lastError"
+  "lastError",
+  "clipStage"
  ],
  "machineView": [
   "version",
