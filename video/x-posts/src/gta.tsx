@@ -191,7 +191,8 @@ function WorkCard({ f }: { f: number }) {
 
 export function GtaIdleGpu() {
   const f = useCurrentFrame();
-  const s1 = win(f, 0, 72), s2 = win(f, 72, 237), s3 = win(f, 237, 1e9);
+  // The incoming scene is fully in before the outgoing one fades, so a crossfade never dims to near-empty.
+  const s1 = win(f, 0, 78), s2 = win(f, 72, 243), s3 = win(f, 237, 1e9);
   return (
     <AbsoluteFill style={{ background: PAGE_BG, overflow: 'hidden', fontFamily: SANS }}>
       <PixelWave f={f} />
