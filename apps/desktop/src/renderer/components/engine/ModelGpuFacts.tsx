@@ -4,8 +4,9 @@ import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 
 /**
  * What one model on disk needs on this machine's GPU, and what is left for
- * context: its weights, what each thousand tokens of context costs, and the
- * longest context that fits beside whatever else is loaded right now.
+ * context: what loading it takes, what each thousand tokens of context costs,
+ * and the longest context that fits on a free GPU and beside whatever else
+ * holds it right now. When the two differ, a line names who holds the rest.
  *
  * One plan answers all of it. It is asked for at the model's full context with
  * every layer on the GPU, so its KV figure is the per-token cost times that
@@ -31,7 +32,39 @@ export function ownGpuBytes(resident: ResidentModel | undefined): number {
   return resident.vramBytes ?? (resident.loadedOn === 'gpu' ? (resident.sizeBytes ?? 0) : 0);
 }
 
-export function ModelGpuFacts({ providerId, model, resident }: { providerId: string; model: LocalModel; resident?: ResidentModel }) {
+/**
+ * What Windows, the browser and the other apps keep on a GPU nobody is loading
+ * models on. The planner reserves the same 2 GB of system RAM for the OS
+ * (`OS_RESERVE_BYTES` in capacity.rs).
+ */
+export const DESKTOP_RESERVE_BYTES = 2 * 1024 ** 3;
+
+/** "All 256k", "196k of 256k" or "None": a context figure read against the model's longest. */
+export function contextText(fits: number, maxCtx: number): string {
+  if (fits >= maxCtx) return `All ${formatTokens(maxCtx)}`;
+  if (fits <= 0) return 'None';
+  return `${formatTokens(fits)} of ${formatTokens(maxCtx)}`;
+}
+
+/**
+ * Who holds the GPU memory this model cannot have right now, in a sentence,
+ * or null when nothing worth naming does (it fits now as well as it ever will).
+ */
+export function busyNote(usedBytes: number, others: string[], fitsNow: number, fitsFree: number): string | null {
+  if (fitsNow >= fitsFree || usedBytes <= DESKTOP_RESERVE_BYTES) return null;
+  const used = formatBytes(usedBytes);
+  if (!others.length) return `Other apps hold ${used} of the GPU right now. Close them to give this model the room.`;
+  const names = others.length === 1 ? others[0] : `${others.slice(0, -1).join(', ')} and ${others[others.length - 1]}`;
+  return `${names} and other apps hold ${used} of the GPU right now. Unload ${others.length === 1 ? 'it' : 'them'} to give this model the room.`;
+}
+
+export function ModelGpuFacts({ providerId, model, resident, others = [] }: {
+  providerId: string;
+  model: LocalModel;
+  resident?: ResidentModel;
+  /** The names of the other models in memory now, which hold part of the GPU. */
+  others?: string[];
+}) {
   const [plan, setPlan] = useState<FitPlan | null>(null);
   const maxCtx = model.maxContext ?? 0;
   useEffect(() => {
@@ -48,26 +81,31 @@ export function ModelGpuFacts({ providerId, model, resident }: { providerId: str
   // No GPU, no geometry, or an answer the planner itself would not give: say nothing.
   if (!plan || plan.verdict === 'unknown' || !plan.deviceName || !maxCtx) return null;
   const free = plan.deviceFreeBytes + ownGpuBytes(resident);
-  const fits = contextThatFits(plan, free, maxCtx);
-  if (fits === null) return null;
+  const fitsNow = contextThatFits(plan, free, maxCtx);
+  const fitsFree = contextThatFits(plan, Math.max(0, plan.deviceTotalBytes - DESKTOP_RESERVE_BYTES), maxCtx);
+  if (fitsNow === null || fitsFree === null) return null;
   const perThousand = (plan.kvCacheBytes / maxCtx) * 1024;
-  const facts: Array<[string, string, string?]> = [
-    ['Weights', formatBytes(plan.weightsBytes)],
-    ['Context per 1k tokens', formatBytes(perThousand), 'The KV cache this model keeps for every thousand tokens of conversation, at its default precision'],
-    ['Context that fits now', fits >= maxCtx ? `All ${formatTokens(maxCtx)}` : `${formatTokens(fits)} of ${formatTokens(maxCtx)}`, 'Beside the other models loaded right now, with every layer on the GPU'],
-    ['Free on the GPU', `${formatBytes(free)} of ${formatBytes(plan.deviceTotalBytes)}`],
+  const takes = plan.weightsBytes + plan.overheadBytes;
+  const note = busyNote(plan.deviceTotalBytes - free, others, fitsNow, fitsFree);
+  const facts: Array<{ label: string; value: string; title?: string; warn?: boolean }> = [
+    { label: 'Takes', value: `${formatBytes(takes)} + context`, title: `${formatBytes(plan.weightsBytes)} of weights and ${formatBytes(plan.overheadBytes)} of buffers, before any context` },
+    { label: 'Context per 1k tokens', value: formatBytes(perThousand), title: 'The KV cache this model keeps for every thousand tokens of conversation, at its default precision' },
+    { label: 'Context on a free GPU', value: contextText(fitsFree, maxCtx), title: 'What is left for context once it is loaded, with nothing else on the GPU but the desktop', warn: fitsFree === 0 },
+    { label: 'Context that fits now', value: contextText(fitsNow, maxCtx), title: 'What is left for context once it is loaded beside what holds the GPU right now, with every layer on the GPU', warn: fitsNow === 0 },
+    { label: 'Free on the GPU', value: `${formatBytes(free)} of ${formatBytes(plan.deviceTotalBytes)}` },
   ];
   return (
     <div className="mt-(--q-group)" data-model-gpu-facts>
       <h4 className="quiet-group-label">On {plan.deviceName}</h4>
       <dl className="mt-(--q-heading) flex flex-wrap gap-x-8 gap-y-2">
-        {facts.map(([label, value, title]) => (
+        {facts.map(({ label, value, title, warn }) => (
           <div key={label} title={title}>
             <dt className="text-xs text-ink-faint">{label}</dt>
-            <dd className={`mt-(--q-tight) text-sm font-medium tabular-nums ${label === 'Context that fits now' && fits === 0 ? 'text-warning-text' : ''}`}>{value}</dd>
+            <dd className={`mt-(--q-tight) text-sm font-medium tabular-nums ${warn ? 'text-warning-text' : ''}`}>{value}</dd>
           </div>
         ))}
       </dl>
+      {note && <p className="mt-(--q-inline) text-xs text-ink-soft" data-gpu-busy-note>{note}</p>}
     </div>
   );
 }

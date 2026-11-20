@@ -36,7 +36,16 @@ export function groupModelFamilies(local: LibraryModel[], catalog: CatalogModel[
 
 export function gpuGuidance(sizeBytes: number | undefined, memory?: EngineMemory, model?: LibraryModel): string {
   if (model?.gpuFit === 'cpu' || memory?.kind === 'ram') return 'CPU only';
-  if (model?.gpuFit === 'wont' || model?.gpuFit === 'partial') return 'Too big';
+  if (model?.gpuFit === 'wont') return 'Too big';
+  if (model?.gpuFit === 'partial') {
+    // The planner measures against what is free now, so "partial" also means
+    // a GPU that other models or apps are holding: that is not "too big".
+    const layers = model.layers ?? 0;
+    const capped = model.preset?.gpuLayers != null && layers > 0 && model.preset.gpuLayers < layers;
+    if (capped) return 'Part on CPU by its settings';
+    if (!sizeBytes || !memory?.budgetBytes) return 'Not enough free GPU memory';
+    return sizeBytes * 1.2 <= memory.budgetBytes ? 'Fits on a free GPU' : 'Too big';
+  }
   if (model?.gpuFit === 'full') {
     return model.maxContext && model.preset?.contextTokens && model.preset.contextTokens < model.maxContext
       ? 'Fits on GPU, but limited context size' : 'Fits on GPU';

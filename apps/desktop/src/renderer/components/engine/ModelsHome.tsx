@@ -5,7 +5,7 @@ import { ModelDetail } from './ModelDetail.js';
 import { RecommendedModels, imageFitText } from './RecommendedModels.js';
 import { CheckIcon, WarningIcon } from '../../icons.js';
 import { StatusDot } from '../primitives/index.js';
-import { familyKind, groupModelFamilies, gpuGuidance, setUpPictureModels, shelveCatalog, type FamilyKind, type LibraryModel, type ModelFamily } from './modelFamilies.js';
+import { familyKind, groupModelFamilies, gpuGuidance, modelFamilyName, setUpPictureModels, shelveCatalog, type FamilyKind, type LibraryModel, type ModelFamily } from './modelFamilies.js';
 import { VoiceSettings } from '../VoiceSettings.js';
 import { pictureModelBlurb, pictureTimeText } from './pictureModelText.js';
 import { useStore } from '../../store.js';
@@ -85,7 +85,7 @@ export function familyLine(f: ModelFamily, mode: ModelsMode, memory: EngineMemor
   if (mode === 'installed' && smallest) {
     const loaded = f.local.some(m => m.loaded);
     const size = f.local.length > 1 ? `${f.local.length} variants, ${sizeRangeText(f.local.map(m => m.sizeBytes))}` : formatBytes(smallest.sizeBytes);
-    const fit = loaded ? 'in memory' : gpuGuidance(smallest.sizeBytes, undefined, smallest);
+    const fit = loaded ? 'in memory' : gpuGuidance(smallest.sizeBytes, memory, smallest);
     return { text: [params, size, fit].filter(Boolean).join(' · '), tone: !loaded && (smallest.gpuFit === 'partial' || smallest.gpuFit === 'wont') ? 'warning' : 'faint', title: 'Planner result for the smallest downloaded variant' };
   }
   const sizes = f.catalog.flatMap(m => m.quants.map(q => q.sizeBytes ?? 0)).filter(Boolean);
@@ -100,7 +100,12 @@ export function familyLine(f: ModelFamily, mode: ModelsMode, memory: EngineMemor
   };
 }
 
-const LINE_TONE = { danger: 'text-danger-text', warning: 'text-warning-text', faint: 'text-ink-faint' } as const;
+/** The names of the models in memory other than `selfId`, as the library reads them. */
+export function residentNames(resident: ResidentModel[], models: LibraryModel[], selfId: string): string[] {
+  return resident.filter(r => r.id !== selfId).map(r => modelFamilyName(models.find(m => m.id === r.id)?.name ?? r.id));
+}
+
+const LINE_TONE ={ danger: 'text-danger-text', warning: 'text-warning-text', faint: 'text-ink-faint' } as const;
 
 export function ModelsHome({
   providerId,
@@ -271,8 +276,8 @@ export function ModelsHome({
           </p>
           {selected.local.length > 0 && <>
             <h4 className="mt-(--q-group) quiet-group-label">Variants on this machine</h4>
-            <div className="mt-(--q-heading)"><ModelLibrary providerId={providerId} models={selected.local} resident={resident} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} running={running} /></div>
-            {firstVariant && <ModelGpuFacts key={firstVariant.id} providerId={providerId} model={firstVariant} resident={residentById.get(firstVariant.id)} />}
+            <div className="mt-(--q-heading)"><ModelLibrary providerId={providerId} models={selected.local} resident={resident} memory={memory} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} running={running} /></div>
+            {firstVariant && <ModelGpuFacts key={firstVariant.id} providerId={providerId} model={firstVariant} resident={residentById.get(firstVariant.id)} others={residentNames(resident, models, firstVariant.id)} />}
           </>}
           {repositories.length > 0 && <div className="mt-(--q-group)"><label className="block text-xs text-ink-faint" htmlFor="model-source">{selected.local.length ? 'Other builds from' : 'Variant provider / repository'}</label><select id="model-source" className="quiet-field mt-(--q-tight) w-full text-xs" value={selectedRepo} onChange={e => setRepoId(e.target.value)}>{repositories.map(id => <option key={id} value={id}>{id}</option>)}</select></div>}
           {selectedRepo && <ModelDetail key={selectedRepo} modelId={selectedRepo} installed={selected.local.filter(m => m.sourceRepo === selectedRepo || m.id.includes(selectedRepo.replace('/', '_')))} memory={memory} onBack={() => setSelectedKey(null)} onQueued={onChanged} embedded />}

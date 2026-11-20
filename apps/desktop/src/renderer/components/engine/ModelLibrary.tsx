@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
-import type { GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
+import type { EngineMemory, GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
 import { MODALITY_LABELS, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { TrashIcon, WarningIcon } from '../../icons.js';
@@ -63,9 +63,12 @@ export function ModelLibrary({
   autoloadIds,
   running,
   resident,
+  memory,
 }: {
   providerId: string;
   models: Array<LocalModel & { loaded: boolean; gpuFit?: GpuFit }>;
+  /** The GPU's size, so a model the busy GPU cannot hold now is not called too big. */
+  memory?: EngineMemory;
   /** The engine's resident list, for where each loaded model actually sits. */
   resident?: ResidentModel[];
   /** False until the engine binary exists: the list is real, running it is not. */
@@ -335,7 +338,7 @@ export function ModelLibrary({
             <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
             <p className="truncate text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
               {[
-                gpuGuidance(m.sizeBytes, undefined, m),
+                gpuGuidance(m.sizeBytes, memory, m),
                 m.quantization,
                 m.parameterSize,
                 formatBytes(m.sizeBytes),
@@ -366,7 +369,7 @@ export function ModelLibrary({
               <span
                 className="mr-1 inline-flex items-center gap-1.5 text-2xs text-warning-text"
                 title={m.gpuFit === 'partial'
-                  ? 'Under its saved settings, part of it runs on the CPU rather than fully in VRAM. Open Settings to change that.'
+                  ? 'Beside what holds the GPU right now, and under its saved settings, part of it would run on the CPU rather than fully in VRAM. Unload other models, or open Settings to give it less context.'
                   : 'The planner says it will not fit on this machine, even partly offloaded to the CPU.'}
               >
                 <StatusDot tone="warning" size={6} />
