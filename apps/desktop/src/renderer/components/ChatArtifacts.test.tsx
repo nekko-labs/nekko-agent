@@ -10,7 +10,7 @@ import { sessionArtifacts } from '../artifactsIndex.js';
 // Sandbox flag, so the cards render as plain functions with no DOM.
 const hooks = vi.hoisted(() => ({
   states: [] as unknown[], index: 0, set: vi.fn(), effects: [] as Array<() => void | (() => void)>,
-  sandbox: false, el: { clientWidth: 640 } as unknown, open: vi.fn(),
+  sandbox: false, el: { clientWidth: 640 } as unknown, open: vi.fn(), library: vi.fn(),
 }));
 vi.mock('react', async importOriginal => {
   const original = await importOriginal<typeof import('react')>();
@@ -22,7 +22,7 @@ vi.mock('react', async importOriginal => {
   };
   return { ...original, ...mocked, default: { ...original, ...mocked } };
 });
-vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openFilePane: hooks.open }) } }));
+vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openFilePane: hooks.open, openInLibrary: hooks.library }) } }));
 afterEach(() => { hooks.states = []; hooks.index = 0; hooks.effects = []; hooks.sandbox = false; hooks.el = { clientWidth: 640 }; vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 const page = { path: 'C:/demo/pricing/index.html', title: 'Pricing page', filename: 'index.html' };
@@ -109,6 +109,30 @@ describe('HTML rendering card', () => {
     buttons.find(b => text(b.props.children) === 'Interactive')!.props.onClick();
     await Promise.resolve();
     expect(open).toHaveBeenCalledWith('<p>x</p>');
+  });
+
+  it('offers a design both ways: in the chat, or full screen in Library', () => {
+    vi.stubGlobal('window', { nekko: {} });
+    const design = { path: 'C:/demo/nekko-designs/checkout-design.html', title: 'Checkout design', filename: 'checkout-design.html' };
+    hooks.states = [true, { path: design.path, source: '<p>x</p>' }]; hooks.index = 0;
+    const buttons = elements(HtmlRenderingCard({ artifact: design, sessionId: 's' })).filter(e => e.type === 'button');
+    expect(buttons.map(b => text(b.props.children))).toEqual(['Open in chat', 'Open in Library']);
+    buttons[0].props.onClick();
+    expect(hooks.open).toHaveBeenCalledWith(design.path, 's');
+    expect(hooks.library).not.toHaveBeenCalled();
+    buttons[1].props.onClick();
+    expect(hooks.library).toHaveBeenCalledWith(design.path, 's');
+    // A page that is not a design keeps its single Open.
+    hooks.states = [true, { path: page.path, source: '<p>x</p>' }]; hooks.index = 0;
+    expect(elements(HtmlRenderingCard({ artifact: page, sessionId: 's' })).filter(e => e.type === 'button').map(b => text(b.props.children))).toEqual(['Open ↗']);
+  });
+
+  it('does not open a design in Library from Sandbox', () => {
+    hooks.sandbox = true;
+    vi.stubGlobal('window', { nekko: {} });
+    const design = { path: 'C:/demo/nekko-designs/checkout-design.html', title: 'Checkout design', filename: 'checkout-design.html' };
+    const out = render(<HtmlRenderingCard artifact={design} sessionId="s" />);
+    expect(out).toMatch(/disabled=""[^>]*data-open-in-library/);
   });
 
   it('hides Interactive without the desktop bridge and disables it until the page loads', () => {

@@ -390,3 +390,29 @@ export function mergeArtifacts(lists: ReadonlyArray<readonly ArtifactEntry[]>): 
   }
   return [...out.values()];
 }
+
+/**
+ * The Library entry a chat's "Open in Library" means: the listed entry that is
+ * this file, or that has it as one of its versions (then `version` names it),
+ * else an entry made from the path alone (`listed` false), so a file Library
+ * has not read yet still opens at once.
+ */
+export function libraryEntryFor(
+  entries: readonly ArtifactEntry[] | null,
+  path: string,
+  origin?: { id: string; title: string },
+): { entry: ArtifactEntry; version: string | null; listed: boolean } {
+  const p = normalize(path);
+  const want = p.toLowerCase();
+  for (const e of entries ?? []) {
+    if (e.path.toLowerCase() === want) return { entry: e, version: null, listed: true };
+    const v = e.versions?.find((x) => x.path.toLowerCase() === want);
+    if (v) return { entry: e, version: v.path, listed: true };
+  }
+  const filename = p.split('/').pop() ?? p;
+  return {
+    entry: { path: p, title: titleFor(p), filename, kind: artifactKind(p) ?? 'doc', sessionId: origin?.id ?? '', sessionTitle: origin?.title ?? '', at: 0, source: 'linked' },
+    version: null,
+    listed: false,
+  };
+}

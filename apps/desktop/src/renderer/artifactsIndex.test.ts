@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage, SessionSummary } from '@nekko-agent/shared';
-import { artifactCandidates, artifactKind, designVersion, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
+import { artifactCandidates, artifactKind, designVersion, folderDesigns, groupArtifacts, groupDesignVersions, libraryEntryFor, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
 
 const msg = (id: string, content: string, createdAt: number, extra: Partial<ChatMessage> = {}): ChatMessage => ({ id, role: 'assistant', content, createdAt, ...extra });
 const write = (path: string) => ({ id: path, name: 'write_file', input: { path, content: 'x' } });
@@ -205,5 +205,25 @@ describe('presentPaths', () => {
     const present = await presentPaths(async () => { throw new Error('refused'); }, ['/locked/a.html', '/locked/b.png']);
     expect([...present].sort()).toEqual(['/locked/a.html', '/locked/b.png']);
     expect([...await presentPaths(async () => null as unknown as [], ['/odd/a.html'])]).toEqual(['/odd/a.html']);
+  });
+});
+
+describe('Open in Library', () => {
+  const design = { path: 'C:/p/nekko-designs/checkout-design-v2.html', title: 'Checkout design', filename: 'checkout-design-v2.html', kind: 'design' as const, sessionId: 's', sessionTitle: 'Checkout', at: 5, source: 'written' as const,
+    versions: [{ version: 1, path: 'C:/p/nekko-designs/checkout-design.html' }, { version: 2, path: 'C:/p/nekko-designs/checkout-design-v2.html' }] };
+
+  it('finds the listed design, by any slash and case', () => {
+    expect(libraryEntryFor([design], 'C:\\p\\nekko-designs\\Checkout-Design-v2.html')).toEqual({ entry: design, version: null, listed: true });
+  });
+
+  it('opens an older version the chat named on its design, with that version picked', () => {
+    expect(libraryEntryFor([design], 'C:/p/nekko-designs/checkout-design.html')).toEqual({ entry: design, version: 'C:/p/nekko-designs/checkout-design.html', listed: true });
+  });
+
+  it('opens a design Library has not listed yet from its path, under the chat it came from', () => {
+    const found = libraryEntryFor(null, 'C:\\p\\nekko-designs\\login-mockup.html', { id: 'c', title: 'Login' });
+    expect(found.listed).toBe(false);
+    expect(found.version).toBeNull();
+    expect(found.entry).toMatchObject({ path: 'C:/p/nekko-designs/login-mockup.html', title: 'Login mockup', filename: 'login-mockup.html', kind: 'design', sessionId: 'c', sessionTitle: 'Login' });
   });
 });
