@@ -95,8 +95,6 @@ final class PermissionChecklistUITests: XCTestCase {
         attach(app, "permissions-microphone-denied")
         microphone.tap()
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
-        // Querying Settings while it is still launching fails with kAXErrorServerNotFound (#3062).
-        XCTAssertTrue(settings.wait(for: .runningForeground, timeout: 10))
         let toggle = settings.switches["Microphone"]
         // iOS owns the deep-link destination. If it opens Settings home,
         // exercise the same public Apps → Nekko Agent recovery path a user has.
@@ -130,9 +128,9 @@ final class PermissionChecklistUITests: XCTestCase {
         wait(for: [enabled], timeout: 5)
         // iOS may terminate the app when permissions change in Settings.
         // Re-launch if it is no longer running so the permission recovery completes.
-        // The termination can land just after a state check, and activate() then
-        // fails on a Not Running app (#3062), so let it settle first.
-        _ = app.wait(for: .notRunning, timeout: 3)
+        // On CI iOS ends the app for the grant, up to 4s after the toggle; checking
+        // earlier sends activate() to a dying app (#3062). Returns at once once ended.
+        _ = app.wait(for: .notRunning, timeout: 10)
         if app.state == .notRunning {
             app.launch()
         } else {
