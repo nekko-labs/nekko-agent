@@ -113,7 +113,7 @@ User intent: Profile is the top item (your info, About you), Help out the Nekko 
 - **Phone pairing** keeps only Remote access.
 - **Connections**: the per-connection switches and logs come first; **All connections off** is the last row, its title always in danger red. It still greys every row above when on.
 - Search: "profile", "about you", "nekko cloud", "fleet" and "sign in" find the new groups; Phone pairing no longer matches "sync".
-- Planned, not built: per-kind sync switches (chats, Library) under Sync. The engine pulls every kind through one cursor, so switching one kind off and back on needs engine work; it lands separately.
+- `[updated 2026-11-20, #3089]` Sync lists **What syncs**: Chats and (with Library sync) Library, a switch each, greyed while Sync this computer is off. How a kind turned off and back on catches up is in [end-to-end encrypted sync](../chat/end-to-end-encrypted-sync-for-pro-and-team.md).
 
 Privacy and safety: layout and copy only. No setting value, default, save path, permission, encryption or network behavior changes.
 

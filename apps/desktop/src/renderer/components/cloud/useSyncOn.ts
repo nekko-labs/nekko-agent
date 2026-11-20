@@ -3,8 +3,9 @@ import type { CloudStatus } from '@nekko-agent/shared';
 
 const SYNCING = new Set(['idle', 'syncing', 'error']);
 
-/** True while sync is set up and switched on for this computer. */
-export const syncOn = (s: CloudStatus | null | undefined) => !!s?.signedIn && s.sync.enabled && SYNCING.has(s.sync.phase);
+/** True while sync is set up and switched on for this computer, with Chats among what syncs (#3089). */
+export const syncOn = (s: CloudStatus | null | undefined) =>
+  !!s?.signedIn && s.sync.enabled && SYNCING.has(s.sync.phase) && s.sync.kinds?.chats !== false;
 
 /** Whether this computer syncs chats, kept live (a chat's Sync switch only means something then). */
 export function useSyncOn(): boolean {

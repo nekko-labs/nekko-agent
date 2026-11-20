@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { type CloudStatus, type SyncDevice, cloudError } from '@nekko-agent/shared';
+import { type CloudStatus, type SyncDevice, type SyncKind, cloudError } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/Toggle.js';
 import { StatusDot } from '../primitives/index.js';
-import { SettingsSection } from '../SettingsSection.js';
+import { SettingRow, SettingsSection } from '../SettingsSection.js';
 import { CODE_LIFETIME_MS, CloudSignIn, type PendingCode } from './CloudSignIn.js';
 import { RecoveryKeyDialog } from './RecoveryKeyDialog.js';
 import { DeleteAccountDialog } from './DeleteAccountDialog.js';
@@ -165,9 +165,7 @@ export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
                   <Toggle label="Sync this computer" value={status.sync.enabled} onChange={(on) => void act('enable', () => window.nekko.syncSetEnabled(on))} />
                 </div>
               </div>
-              <div className="sync-row">
-                <p className="text-xs text-ink-faint">Every chat syncs except incognito ones. To keep a chat on this computer, turn off <strong className="font-medium text-ink-soft">Sync</strong> beside the message box in that chat.</p>
-              </div>
+              <SyncKinds status={status} busy={!!busy} act={act} />
               <Devices devices={status.sync.devices} pending={pending} busy={!!busy} act={act} />
               {others === 0 && (
                 <p className="mt-(--q-inline) text-xs text-info-text">
@@ -235,6 +233,33 @@ function JoinOptions({ busy, act }: { busy: boolean; act: (label: string, work: 
           <button className="btn btn-ghost mt-(--q-inline) w-full py-1! text-xs!" disabled={busy} onClick={() => void act('join', () => window.nekko.syncRequestJoin())} data-testid="sync-request-join">Ask to join</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What syncs on this computer, kind by kind (#3089). Library shows only when the
+ * account has Library sync. A kind turned off keeps its records on this computer
+ * both ways; back on, it brings in what changed elsewhere meanwhile.
+ */
+export function SyncKinds({ status, busy, act }: { status: CloudStatus; busy: boolean; act: (label: string, work: () => Promise<unknown>) => Promise<void> }) {
+  const kinds: Record<SyncKind, boolean> = status.sync.kinds ?? { chats: true, library: true };
+  const paused = !status.sync.enabled;
+  const row = (kind: SyncKind, title: string, on: React.ReactNode, off: string) => (
+    <SettingRow title={title} disabled={paused} data-sync-kind={kind}
+      detail={paused ? 'Paused while Sync this computer is off.' : kinds[kind] ? on : off}
+      control={<Toggle label={`Sync ${title}`} value={kinds[kind]} disabled={paused || busy}
+        onChange={(v) => void act(`kind-${kind}`, () => window.nekko.syncSetKind(kind, v))} />} />
+  );
+  return (
+    <div className="sync-row flex-col items-stretch!" data-testid="sync-kinds">
+      <div className="quiet-group-label">What syncs</div>
+      {row('chats', 'Chats',
+        <>Every chat except incognito ones. To keep one chat here, turn off <strong className="font-medium text-ink-soft">Sync</strong> beside the message box in that chat.</>,
+        'Chats stay on this computer. Turn this back on to catch up.')}
+      {status.account?.features?.libraryCloud && row('library', 'Library',
+        'Files Library lists here, and read-only copies of your other computers’ files.',
+        'Library files stay on this computer. Turn this back on to catch up.')}
     </div>
   );
 }

@@ -29,6 +29,9 @@ export interface SyncDevice {
   thisDevice: boolean;
 }
 
+/** A kind of record Settings > Nekko Cloud > Sync can turn off on one computer (#3089). */
+export type SyncKind = 'chats' | 'library';
+
 export interface CloudStatus {
   signedIn: boolean;
   account: {
@@ -47,6 +50,8 @@ export interface CloudStatus {
   sync: {
     phase: SyncPhase;
     enabled: boolean;
+    /** What syncs on this computer, kind by kind; every kind is on unless turned off (#3089). Absent from older engines. */
+    kinds?: Record<SyncKind, boolean>;
     recoveryConfirmed: boolean;
     keyEpoch: number | null;
     lastSyncAt: number | null;

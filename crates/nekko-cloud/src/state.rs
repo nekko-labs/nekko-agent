@@ -173,7 +173,20 @@ pub struct State {
     pub library: BTreeMap<String, LibrarySynced>,
     /// Other computers' Library files, per object id.
     pub library_remote: BTreeMap<String, RemoteFile>,
+    /// The kinds of record turned off here (`chats`, `library`), each with the pull
+    /// cursor it was turned off at. Absent means on, so an older state file syncs
+    /// everything. While a kind is off nothing of it is pushed, and pulled records
+    /// of it are passed over without being applied or remembered; turning it back
+    /// on moves the cursor back to where it was turned off, so they are pulled again.
+    pub kinds_off: BTreeMap<String, u64>,
+    /// Counts the times a kind came back on (and moved the cursor back), so a
+    /// pull under way doesn't move the cursor past what it passed over. Not saved.
+    #[serde(skip)]
+    pub rewinds: u64,
 }
+
+/// The kinds of record Settings can turn off one by one.
+pub const KINDS: &[&str] = &["chats", "library"];
 
 impl State {
     pub fn path(dir: &Path) -> PathBuf {
@@ -191,9 +204,44 @@ impl State {
     }
 
     /// Forget everything about sync (another account signed in, or Delete everything synced).
+    /// Which kinds are off is a choice of this computer's, so it stays, from the start.
     pub fn reset_sync(&mut self) {
+        let kinds_off = self.kinds_off.keys().map(|k| (k.clone(), 0)).collect();
         let keep = (self.account.clone(), self.device_label.clone());
-        *self = State { account: keep.0, device_label: keep.1, ..State::default() };
+        *self =
+            State { account: keep.0, device_label: keep.1, kinds_off, rewinds: self.rewinds + 1, ..State::default() };
+    }
+
+    /// This kind of record syncs (see `kinds_off`).
+    pub fn kind_on(&self, kind: &str) -> bool {
+        !self.kinds_off.contains_key(kind)
+    }
+
+    /// Turn one kind of record on or off. Off remembers the cursor; back on moves
+    /// the cursor back to it, so what arrived meanwhile is pulled and applied.
+    /// False for a kind Settings doesn't know.
+    pub fn set_kind(&mut self, kind: &str, on: bool) -> bool {
+        if !KINDS.contains(&kind) {
+            return false;
+        }
+        if on {
+            if let Some(at) = self.kinds_off.remove(kind) {
+                self.cursor = self.cursor.min(at);
+                self.rewinds += 1;
+            }
+        } else {
+            self.kinds_off.entry(kind.to_string()).or_insert(self.cursor);
+        }
+        true
+    }
+
+    /// A pulled record of this collection is passed over: its kind is off here.
+    pub fn skips_collection(&self, collection: &str) -> bool {
+        match collection {
+            crate::records::CHAT => !self.kind_on("chats"),
+            crate::library::LIBRARY => !self.kind_on("library"),
+            _ => false,
+        }
     }
 }
 
@@ -223,5 +271,67 @@ mod tests {
         // Another account, Delete everything synced: sharing and org keys are gone.
         s.reset_sync();
         assert!(s.sharing.is_empty() && s.org_keys.is_empty() && s.fleet.is_empty() && s.fleet_seen.is_empty());
+    }
+
+    #[test]
+    fn every_kind_syncs_in_a_state_file_from_before_the_switches() {
+        let old = br#"{"enabled":true,"keyId":2,"cursor":9}"#;
+        let s: State = serde_json::from_slice(old).unwrap();
+        assert!(KINDS.iter().all(|k| s.kind_on(k)));
+        assert!(!s.skips_collection(crate::records::CHAT) && !s.skips_collection(crate::library::LIBRARY));
+    }
+
+    #[test]
+    fn a_kind_turned_off_passes_its_records_over_and_back_on_pulls_them_again() {
+        let mut s = State { cursor: 40, ..State::default() };
+        assert!(s.set_kind("chats", false));
+        assert!(s.skips_collection(crate::records::CHAT));
+        assert!(!s.skips_collection(crate::library::LIBRARY) && !s.skips_collection(crate::records::ACCOUNT));
+        // The pull moves on while Chats is off; turning it off again keeps the first cursor.
+        s.cursor = 95;
+        assert!(s.set_kind("chats", false));
+        assert_eq!(s.kinds_off.get("chats"), Some(&40));
+        // Back on: the cursor goes back to where Chats went off, and a pull under way notices.
+        let before = s.rewinds;
+        assert!(s.set_kind("chats", true));
+        assert_eq!(s.cursor, 40);
+        assert!(s.rewinds > before);
+        assert!(s.kind_on("chats") && !s.skips_collection(crate::records::CHAT));
+        // On again when already on moves nothing.
+        s.cursor = 60;
+        let rewinds = s.rewinds;
+        assert!(s.set_kind("chats", true));
+        assert_eq!((s.cursor, s.rewinds), (60, rewinds));
+    }
+
+    #[test]
+    fn two_kinds_off_go_back_to_the_earlier_cursor_of_each() {
+        let mut s = State { cursor: 10, ..State::default() };
+        s.set_kind("library", false);
+        s.cursor = 30;
+        s.set_kind("chats", false);
+        s.cursor = 50;
+        s.set_kind("chats", true);
+        assert_eq!(s.cursor, 30);
+        s.cursor = 50;
+        s.set_kind("library", true);
+        assert_eq!(s.cursor, 10);
+    }
+
+    #[test]
+    fn an_unknown_kind_is_refused_and_the_choice_survives_a_reset_and_a_reload() {
+        let mut s = State { cursor: 7, ..State::default() };
+        assert!(!s.set_kind("photos", false));
+        assert!(s.kinds_off.is_empty());
+        s.set_kind("library", false);
+        let back: State = serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
+        assert!(!back.kind_on("library") && back.kind_on("chats"));
+        // Delete everything synced starts over from the beginning: Library stays off,
+        // and turning it on again pulls from the start.
+        s.reset_sync();
+        assert_eq!(s.kinds_off.get("library"), Some(&0));
+        s.cursor = 12;
+        s.set_kind("library", true);
+        assert_eq!(s.cursor, 0);
     }
 }
