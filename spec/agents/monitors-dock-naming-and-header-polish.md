@@ -37,6 +37,15 @@ User intent (Philip): "I was running an image model and it didn't show the optio
 
 Not verified: packaged app and a real engine (the fixture uses synthetic engine status and a stand-in bridge).
 
+## Local models monitor: icon actions and a Running header (2026-11-20)
+
+User intent (Philip): "In the local models, change the settings and load to be icons with tooltips on hover. Use the animated icons from Gentleface. Also add a header for 'running' and the subtext for 'no models are currently loaded' with an icon for relaxed/vacation."
+
+- **Settings and Load are icons** `[implemented; unit-tested]`. Every row's **Settings** is the Gentleface cog (its `settings-ratchet` motion) and every Starred or Recent row's **Load** is `play-circle` (its `play-circle-start` motion), both played once on hover and named by a tooltip (`Settings: GPU offload, context and memory`, `Picture settings` for a picture model, `Load`). Their accessible names still carry the model's name. While a model loads, its Load icon gives way to a quiet `Loading…`. **Unload** and **Unload all** stay text.
+- **Running header** `[implemented; unit-tested]`. With an engine installed, the loaded models sit under a **Running** label, the same style as Starred and Recent. When none is loaded it reads *No models are currently loaded.* beside the Gentleface `beach` (its `beach-breeze` motion plays on hover); when the server is stopped it says so under the same header. No header without an engine.
+
+Not verified: packaged app and a real engine.
+
 ## Task systems, Agent Monitor Tasks and focus-mode clean start (2026-10-16)
 
 - **Implemented: source priority.** The system prompt (`crates/nekko-context/src/prompt.rs`) tells the agent to use workspace folders first, then connected connectors, and only then CLI tools, unless the task is to run something.

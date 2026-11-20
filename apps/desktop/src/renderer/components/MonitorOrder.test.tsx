@@ -34,9 +34,11 @@ describe('dock reorder headers', () => {
     const css = stylesheet('components/monitorsDock.css');
     // The catch-all once outranked the header's quieter rule (#3025), so it leaves these out itself, inside :where() so it
     // still loses to the dock's narrower rules (Budget's range buttons, text buttons).
-    const boxed = cssValue('.monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button))');
+    const boxed = cssValue('.monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button, .monitors-dock__icon-action))');
     expect(cssRule(css, boxed)).toMatchObject({ border: '1px solid var(--line)' });
     expect(cssRule(css, '.monitors-dock__monitor-header button')).toMatchObject({ border: '0', background: 'transparent' });
+    // Local models' Settings and Load icons are quiet too.
+    expect(cssRule(css, '.monitors-dock button.monitors-dock__icon-action')).toMatchObject({ border: '0', background: 'transparent' });
   });
   it('shows no landing zone until a panel is lifted, and styles the zone and the lifted panel', () => {
     const html = render('right');
