@@ -20,12 +20,13 @@ const stats: TurnStats = {
 describe('reply stats in the transcript', () => {
   it('names the model and effort and keeps the numbers', () => {
     expect(turnStatsParts(stats, { model: () => 'GPT Sol', provider: () => 'ChatGPT' })).toEqual([
-      'GPT Sol · ChatGPT', 'High effort', '14k in', '640 out', '80 tok/s', '21s',
+      'GPT Sol · ChatGPT', 'High effort', '14k in', '88% cached', '640 out', '80 tok/s', '21s',
     ]);
     const html = renderToStaticMarkup(<TurnStatsLine stats={stats} />);
     expect(html).toContain('data-turn-stats');
     expect(html).toContain('gpt-6.1-sol');
     expect(html).toContain('12,000 cache read');
+    expect(html).toContain('Prompt cache: 88% of the input reused, not computed again');
     expect(html).not.toContain('Reply stats');
   });
 
