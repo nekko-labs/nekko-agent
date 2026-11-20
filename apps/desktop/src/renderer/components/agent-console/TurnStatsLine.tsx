@@ -23,12 +23,27 @@ export function turnStatsParts(stats: TurnStats, names: TurnStatsNames = {}): st
   const parts = [provider ? `${model} · ${provider}` : model];
   if (stats.effort) parts.push(`${EFFORT_LABEL[stats.effort] ?? stats.effort} effort`);
   parts.push(`${fmtTok(stats.inputTokens + (stats.cacheReadTokens ?? 0) + (stats.cacheWriteTokens ?? 0))} in`);
+  const cached = cachedShare(stats);
+  if (cached !== null) parts.push(`${cached}% cached`);
   parts.push(`${fmtTok(stats.outputTokens)} out`);
   if (tps > 0) parts.push(`${formatRate(tps)} tok/s`);
   parts.push(`${Math.max(1, Math.round(stats.wallMs / 1000))}s`);
   const saved = codeModeSaved(stats);
   if (saved) parts.push(saved);
   return parts;
+}
+
+/**
+ * How much of the reply's input the model took from its prompt cache rather
+ * than computing again, as a whole percent: with a local model, the share of
+ * the prompt it did not have to prefill. Null when the provider reported no
+ * cache reads, so a provider without counters never shows a made-up 0%.
+ */
+export function cachedShare(stats: TurnStats): number | null {
+  const read = stats.cacheReadTokens ?? 0;
+  if (read <= 0) return null;
+  const total = stats.inputTokens + read + (stats.cacheWriteTokens ?? 0);
+  return Math.min(100, Math.floor((read / total) * 100));
 }
 
 /** "≈12k saved by code mode", when a code-mode reply came out ahead. */
@@ -57,6 +72,7 @@ export function turnStatsTitle(stats: TurnStats): string {
     `Model: ${stats.modelId} (${stats.providerId})`,
     stats.effort ? `Effort: ${stats.effort}` : null,
     `Input: ${stats.inputTokens.toLocaleString()} new${cache ? ` + ${(stats.cacheReadTokens ?? 0).toLocaleString()} cache read + ${(stats.cacheWriteTokens ?? 0).toLocaleString()} cache write` : ''}`,
+    cachedShare(stats) !== null ? `Prompt cache: ${cachedShare(stats)}% of the input reused, not computed again` : null,
     `Output: ${stats.outputTokens.toLocaleString()}`,
     `${stats.calls} model call${stats.calls === 1 ? '' : 's'}${stats.steps ? `, ${stats.steps} tool step${stats.steps === 1 ? '' : 's'}` : ''}`,
     codeModeTitle(stats),
