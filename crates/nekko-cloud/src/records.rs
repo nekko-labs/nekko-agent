@@ -70,12 +70,34 @@ pub fn excluded(chat: &Value) -> Option<Skip> {
     None
 }
 
-/// The plaintext of a chat's record, or why it is skipped.
-pub fn chat_plaintext(chat: &Value) -> Result<Vec<u8>, Skip> {
+/// The computer a chat belongs to: the one it was started on (#3143). A chat's record names it as
+/// `home: { deviceId, device }`. On that computer the chat file carries no `home` (it is simply
+/// this computer's); a copy pulled from another computer keeps it, which is how the app knows the
+/// chat is read-only here and where it came from.
+pub const HOME: &str = "home";
+
+/// The id of the computer a chat (or a chat file) names as its home, if any.
+pub fn home_of(chat: &Value) -> Option<&str> {
+    chat.get(HOME)?.get("deviceId")?.as_str().filter(|id| !id.is_empty())
+}
+
+/// The fields a copy of another computer's chat keeps from this computer when a newer copy
+/// arrives: how it is arranged here, which is this computer's business.
+pub const KEPT_HERE: [&str; 3] = ["pinned", "order", "archivedAt"];
+
+/// The plaintext of a chat's record, or why it is skipped. One of this computer's chats is stamped
+/// with this computer as its home; another computer's copy (re-sealed under a newer key epoch)
+/// keeps the home it names.
+pub fn chat_plaintext(chat: &Value, device_id: &str, device: &str) -> Result<Vec<u8>, Skip> {
     if let Some(skip) = excluded(chat) {
         return Err(skip);
     }
     let mut c = chat.clone();
+    if home_of(&c).is_none()
+        && let Some(o) = c.as_object_mut()
+    {
+        o.insert(HOME.into(), json!({ "deviceId": device_id, "device": device }));
+    }
     strip_inline_data(&mut c);
     let bytes = serde_json::to_vec(&json!({ "v": 1, "chat": c })).unwrap_or_default();
     if bytes.len() > MAX_CHAT_BYTES {
@@ -183,26 +205,36 @@ mod tests {
     fn pictures_are_left_out_and_text_kept() {
         let big = format!("data:image/png;base64,{}", "A".repeat(5000));
         let chat = json!({ "id": "s_1", "messages": [{ "content": "hi", "images": [big] }], "updatedAt": 5 });
-        let plain = chat_plaintext(&chat).unwrap();
+        let plain = chat_plaintext(&chat, "dev-a", "Desk").unwrap();
         let ChatRecord::Chat(back) = parse_chat(&plain).unwrap() else { panic!() };
         assert_eq!(back["messages"][0]["content"], "hi");
         assert_eq!(back["messages"][0]["images"][0], IMAGE_NOTE);
         assert_eq!(updated_at(&back), 5.0);
+        // Stamped with the computer it belongs to (#3143).
+        assert_eq!(home_of(&back), Some("dev-a"));
+        assert_eq!(back[HOME]["device"], "Desk");
+        assert_eq!(home_of(&chat), None);
+        // Another computer's copy keeps its home.
+        let copy = json!({ "id": "s_2", "home": { "deviceId": "dev-b", "device": "Laptop" }, "messages": [] });
+        let ChatRecord::Chat(back) = parse_chat(&chat_plaintext(&copy, "dev-a", "Desk").unwrap()).unwrap() else {
+            panic!()
+        };
+        assert_eq!(back[HOME]["device"], "Laptop");
     }
 
     #[test]
     fn incognito_and_sync_off_chats_never_sync_and_local_only_mode_does() {
-        assert_eq!(chat_plaintext(&json!({ "id": "a", "incognito": true })), Err(Skip::Incognito));
-        assert_eq!(chat_plaintext(&json!({ "id": "a", "syncOff": true })), Err(Skip::SyncOff));
-        assert!(chat_plaintext(&json!({ "id": "a", "syncOff": false })).is_ok());
+        assert_eq!(chat_plaintext(&json!({ "id": "a", "incognito": true }), "dev-a", "Desk"), Err(Skip::Incognito));
+        assert_eq!(chat_plaintext(&json!({ "id": "a", "syncOff": true }), "dev-a", "Desk"), Err(Skip::SyncOff));
+        assert!(chat_plaintext(&json!({ "id": "a", "syncOff": false }), "dev-a", "Desk").is_ok());
         assert!(
-            chat_plaintext(&json!({ "id": "a", "offline": true })).is_ok(),
+            chat_plaintext(&json!({ "id": "a", "offline": true }), "dev-a", "Desk").is_ok(),
             "the Local only mode is where models run, not whether it syncs"
         );
         let huge = json!({ "id": "a", "messages": [{ "content": "x".repeat(MAX_CHAT_BYTES) }] });
-        assert_eq!(chat_plaintext(&huge), Err(Skip::TooLarge));
+        assert_eq!(chat_plaintext(&huge, "dev-a", "Desk"), Err(Skip::TooLarge));
         let big = json!({ "id": "a", "messages": [{ "content": "x".repeat(4_500_000) }] });
-        assert!(chat_plaintext(&big).is_ok(), "a long agent session syncs");
+        assert!(chat_plaintext(&big, "dev-a", "Desk").is_ok(), "a long agent session syncs");
     }
 
     #[test]

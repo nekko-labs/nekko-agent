@@ -1561,26 +1561,65 @@ impl Cloud {
                 let local = self.sessions.get(&id);
                 let busy = (self.busy)(&id);
                 match rec {
-                    ChatRecord::Chat(chat) => {
+                    ChatRecord::Chat(mut chat) => {
                         let theirs = records::updated_at(&chat);
-                        let newer = local.as_ref().is_none_or(|l| theirs > records::updated_at(l));
-                        let same = local.as_ref().is_some_and(|l| theirs == records::updated_at(l));
-                        if newer && !busy && self.sessions.put_synced(&chat).is_ok() {
+                        let me = lock(&self.state).device_id.clone().unwrap_or_default();
+                        // Whose chat it is (#3143): another computer's, this one's, or not said
+                        // (a record from before records named their computer).
+                        let named = records::home_of(&chat).is_some();
+                        let foreign = records::home_of(&chat).is_some_and(|h| h != me);
+                        let take = if foreign {
+                            // A copy removed here stays removed.
+                            let removed = lock(&self.state).chats.get(&id).is_some_and(|k| k.foreign && k.deleted);
+                            // Its computer's copy wins, unless this computer carried on a chat
+                            // nobody had claimed yet: then this one claims it with its newer copy.
+                            !removed
+                                && local
+                                    .as_ref()
+                                    .is_none_or(|l| records::home_of(l).is_some() || theirs >= records::updated_at(l))
+                        } else {
+                            local.as_ref().is_none_or(|l| theirs > records::updated_at(l))
+                        };
+                        let same = !foreign && local.as_ref().is_some_and(|l| theirs == records::updated_at(l));
+                        if foreign {
+                            // How the copy is arranged here is this computer's.
+                            if let (Some(l), Some(o)) = (&local, chat.as_object_mut()) {
+                                for key in records::KEPT_HERE {
+                                    match l.get(key) {
+                                        Some(v) => o.insert(key.into(), v.clone()),
+                                        None => o.remove(key),
+                                    };
+                                }
+                            }
+                        } else if let Some(o) = chat.as_object_mut() {
+                            // This computer's own chat: the file says nothing about a home.
+                            o.remove(records::HOME);
+                        }
+                        if take && !busy && self.sessions.put_synced(&chat).is_ok() {
                             lock(&self.live).pulled += 1;
                         }
-                        let synced =
-                            Synced { updated_at: theirs, digest: records::digest(&plain), deleted: false, key_id: kid };
+                        let synced = Synced {
+                            updated_at: theirs,
+                            digest: records::digest(&plain),
+                            deleted: false,
+                            key_id: kid,
+                            homed: named,
+                            foreign,
+                        };
                         self.edit(|s| {
                             s.revisions.insert(oid.into(), rev);
                             // Only when we took it (or already had it); otherwise our newer copy still needs pushing.
-                            if (newer && !busy) || same {
+                            if (take && !busy) || same {
                                 s.chats.insert(id.clone(), synced);
                             }
                         })?;
                     }
                     ChatRecord::Deleted { at } => {
+                        let foreign = local.as_ref().is_some_and(|l| {
+                            records::home_of(l).is_some_and(|h| Some(h) != lock(&self.state).device_id.as_deref())
+                        });
                         if let Some(l) = &local
-                            && records::updated_at(l) <= at
+                            && (foreign || records::updated_at(l) <= at)
                             && !busy
                         {
                             let _ = self.sessions.delete(&id);
@@ -1589,7 +1628,14 @@ impl Cloud {
                             s.revisions.insert(oid.into(), rev);
                             s.chats.insert(
                                 id.clone(),
-                                Synced { updated_at: at, digest: String::new(), deleted: true, key_id: kid },
+                                Synced {
+                                    updated_at: at,
+                                    digest: String::new(),
+                                    deleted: true,
+                                    key_id: kid,
+                                    homed: true,
+                                    foreign,
+                                },
                             );
                         })?;
                     }
@@ -1686,23 +1732,35 @@ impl Cloud {
         let st = lock(&self.state).clone();
         let mut queue: Vec<(String, Vec<u8>, Synced)> = Vec::new();
         let mut skipped: BTreeMap<&'static str, usize> = BTreeMap::new();
+        let me = st.device_id.clone().ok_or("This device isn't registered for sync.")?;
         let summaries = self.sessions.summaries();
         let here: BTreeSet<String> = summaries.iter().filter_map(|s| s["id"].as_str().map(String::from)).collect();
         for s in &summaries {
             let Some(id) = s["id"].as_str() else { continue };
             let updated = s["updatedAt"].as_f64().unwrap_or(0.0);
+            // Another computer's chat: only that computer changes it (#3143). This computer pushes
+            // its copy, as it is and still naming that computer, only to carry it into a newer key
+            // epoch, so a chat of a removed computer stays readable to the computers left.
+            let foreign = records::home_of(s).is_some_and(|h| h != me);
+            if foreign && st.chats.get(id).is_none_or(|k| k.deleted || !k.foreign || k.key_id == key_id) {
+                continue;
+            }
             let known = st.chats.get(id).filter(|k| k.key_id == key_id);
-            if known.is_some_and(|k| !k.deleted && k.updated_at == updated) {
+            if known.is_some_and(|k| !k.deleted && k.homed && k.updated_at == updated) {
                 continue;
             }
             let Some(chat) = self.sessions.get(id) else { continue };
-            match records::chat_plaintext(&chat) {
+            match records::chat_plaintext(&chat, &me, &st.device_label) {
                 Ok(plain) => {
                     let digest = records::digest(&plain);
                     if known.is_some_and(|k| k.digest == digest) {
                         continue;
                     }
-                    queue.push((id.to_string(), plain, Synced { updated_at: updated, digest, deleted: false, key_id }));
+                    queue.push((
+                        id.to_string(),
+                        plain,
+                        Synced { updated_at: updated, digest, deleted: false, key_id, homed: true, foreign },
+                    ));
                 }
                 Err(skip) => {
                     *skipped
@@ -1715,16 +1773,38 @@ impl Cloud {
                 }
             }
         }
-        // Chats deleted here since they were synced.
+        // Chats deleted here since they were synced. Another computer's copy removed here is only
+        // forgotten here: its computer still has it, and a newer copy isn't taken again.
+        let mut removed_copies = Vec::new();
         for (id, k) in &st.chats {
             if !k.deleted && !here.contains(id) {
+                if k.foreign {
+                    removed_copies.push(id.clone());
+                    continue;
+                }
                 let at = nekko_js::now_ms_f64();
                 queue.push((
                     id.clone(),
                     records::tombstone(at),
-                    Synced { updated_at: at, digest: String::new(), deleted: true, key_id },
+                    Synced {
+                        updated_at: at,
+                        digest: String::new(),
+                        deleted: true,
+                        key_id,
+                        homed: true,
+                        foreign: false,
+                    },
                 ));
             }
+        }
+        if !removed_copies.is_empty() {
+            self.edit(|s| {
+                for id in &removed_copies {
+                    if let Some(k) = s.chats.get_mut(id) {
+                        k.deleted = true;
+                    }
+                }
+            })?;
         }
         lock(&self.live).skipped = skipped;
         let total = queue.len();
