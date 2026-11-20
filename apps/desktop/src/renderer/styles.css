@@ -3270,15 +3270,27 @@
   .plan-sheet-chip:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
 }
 .plan-sheet-steps { max-height: 40vh; overflow-y: auto; }
-/* Dense flat rows, no card or phase column per step. Each step with details
- * opens on its own title; nothing opens on hover. */
+/* Dense flat title rows. Only overflow chiplets open their own row. */
 .plan-sheet-steps { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
 .plan-sheet-step { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 8px; padding: 1px 4px; }
-.plan-sheet-step-toggle { width: 100%; text-align: left; border-radius: 6px; outline: none; }
-.plan-sheet-step-toggle:focus-visible { box-shadow: 0 0 0 1px var(--accent); }
-.plan-sheet-step-caret { flex-shrink: 0; color: var(--ink-faint); transition: transform 120ms ease; }
-.plan-sheet-step[data-open] .plan-sheet-step-caret { transform: rotate(90deg); }
-.plan-sheet-steps .plan-sheet-more { padding: 1px 0 2px; }
+.plan-row-content { min-width: 0; }
+.plan-row-line { display: flex; min-width: 0; align-items: center; gap: 8px; min-height: 20px; }
+.plan-row-title { min-width: 0; }
+.plan-row-line[data-has-chips] > .plan-row-title { max-width: 70%; }
+.plan-row-inline { position: relative; display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; }
+.plan-row-item { display: inline-flex; flex: 0 0 auto; width: max-content; }
+.plan-row-item[data-overflowed], .plan-row-count-probe { position: fixed; top: 0; left: 0; visibility: hidden; pointer-events: none; }
+.plan-row-count { flex-shrink: 0; font-variant-numeric: tabular-nums; transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.plan-row-count:active { transform: scale(.97); }
+.plan-row-count:focus-visible { outline: 1px solid var(--ring); outline-offset: 2px; }
+.plan-row-more:not([hidden]) { animation: plan-row-reveal var(--dur-med) var(--ease-out); }
+.plan-row-more .plan-sheet-chips { flex-wrap: wrap; overflow: visible; padding: 4px 0; }
+.plan-row-more .plan-sheet-chip { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.plan-row-count-probe { font-variant-numeric: tabular-nums; }
+.plan-row-content .plan-sheet-pr { position: relative; }
+.plan-row-content .plan-sheet-pr-actions { position: fixed; z-index: 50; right: auto; bottom: auto; max-width: calc(100vw - 16px); flex-wrap: wrap; padding: 4px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-float); }
+@keyframes plan-row-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .plan-row-more:not([hidden]) { animation: none; } .plan-row-count { transition: none; } }
 .plan-sheet-chips { display: flex; gap: 8px; overflow: hidden; padding: 4px 0 1px; }
 .plan-sheet-steps .plan-sheet-chips { flex-wrap: wrap; }
 .plan-sheet-chip { display: inline-flex; flex-shrink: 0; max-width: 100%; align-items: center; gap: 4px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 0 8px; font-size: var(--text-2xs); line-height: 18px; color: var(--ink-soft); white-space: nowrap; }

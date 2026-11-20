@@ -113,22 +113,22 @@ describe('step disclosure', () => {
   const plain = (id: string, status: string, note?: string) => ({ id, title: id, status, note, createdAt: now, updatedAt: now }) as PlanStep;
   const own = (patch: object) => ({ prs: [], artifacts: [], projects: [], subagents: [], ...patch });
   const tag = (html: string, id: string) => html.match(new RegExp(`<li[^>]*data-plan-step-id="${id}"[^>]*>[^]*?</li>`))![0];
-  it('opens unfinished steps and the last finished step with results, and nothing on hover', () => {
+  it('shows title-only rows, keeps chips inline, and starts overflow collapsed', () => {
     linked.links = new Map([
       ['shipped', own({ prs: ['https://github.com/o/r/pull/1'] })],
       ['report', own({ artifacts: [{ path: '/tmp/report.pdf', filename: 'report.pdf' }] })],
     ]);
-    const html = render([plain('shipped', 'done', 'first PR'), plain('noted', 'done', 'a note'), plain('report', 'done', 'wrote it'), plain('now', 'active', 'working'), plain('later', 'pending')]);
-    const open = (id: string) => /aria-expanded="true"/.test(tag(html, id)) && !/data-plan-more="" hidden=""/.test(tag(html, id));
-    expect(open('shipped')).toBe(false);
-    expect(open('noted')).toBe(false);
-    expect(open('report')).toBe(true);
-    expect(open('now')).toBe(true);
-    // A step with nothing to show is a plain row, not a button.
-    expect(tag(html, 'later')).not.toContain('aria-expanded');
-    // Each step is its own button; the sheet no longer opens steps from tabindex or hover.
-    expect(html.match(/class="plan-sheet-line plan-sheet-step-toggle" aria-expanded/g)).toHaveLength(4);
-    expect(html).not.toContain('tabindex');
+    const html = render([plain('shipped', 'done', 'first PR'), plain('noted', 'done', 'a private note'), plain('report', 'done', 'wrote it'), plain('now', 'active', 'the removed progress note'), plain('later', 'pending')]);
+    for (const note of ['first PR', 'a private note', 'wrote it', 'the removed progress note']) expect(html).not.toContain(note);
+    for (const id of ['shipped', 'report']) {
+      expect(tag(html, id)).toContain('class="plan-row-inline"');
+      expect(tag(html, id)).toContain('data-plan-overflow="true"');
+      expect(tag(html, id)).toContain('aria-expanded="false"');
+      expect(tag(html, id)).toContain('data-plan-more="true" hidden=""');
+      expect(tag(html, id)).toContain('data-overflowed="true" aria-hidden="true" inert=""');
+    }
+    for (const id of ['noted', 'now', 'later']) expect(tag(html, id)).not.toContain('data-plan-overflow');
+    expect(html).not.toContain('plan-sheet-step-toggle');
   });
   it('keeps results under their related check instead of merging checks together', () => {
     linked.links = new Map([

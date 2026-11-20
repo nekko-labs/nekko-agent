@@ -53,6 +53,7 @@ app.whenReady().then(async () => {
     // (html[data-app-inactive]); keep it active so the sheet's motion is real.
     await run(`(() => { const h = document.documentElement; const off = () => h.removeAttribute('data-app-inactive'); off(); new MutationObserver(off).observe(h, { attributes: true, attributeFilter: ['data-app-inactive'] }); })()`);
     await run(SEED);
+    await run(`(() => { const f=layoutFixture, prs=f.store.getState().prsBySession.a; f.bridge.listSessionPrs=async()=>prs; f.bridge.getPrInfo=async()=>prs[0]; })()`);
     await run(`layoutFixture.store.getState().refreshSessions()`);
     if (process.env.NEKKO_PLAN_LAYOUT !== 'grid') await run(`layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } })`);
     await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark',themePreset:'x-blueberry-dark'}}); layoutFixture.store.getState().applyTheme()`);
@@ -94,10 +95,10 @@ app.whenReady().then(async () => {
     await check('right column has no agent plan', `!document.querySelector('[aria-label="Plan and sub-agents"]')?.textContent.includes('Agent plan')`);
     const opened = id => `(document.querySelector('[data-plan-step-id="${id}"] [data-plan-more]')?.getBoundingClientRect().height ?? 0) > 10`;
     await check('finished step 1 starts closed', `!(${opened('step_1')})`);
-    await check('step 2, the last with a PR, starts open', opened('step_2'));
-    await check('the active step starts open', opened('step_3'));
+    await check('PR step starts compact', `!(${opened('step_2')})`);
+    await check('active step starts compact', `!(${opened('step_3')})`);
     await check('no card border on a step', `[...document.querySelectorAll('.plan-sheet-step')].every(e => getComputedStyle(e).borderTopWidth === '0px')`);
-    await check('details align with their flat step title', `(() => { const row = document.querySelector('[data-plan-step-id="step_3"]'); return Math.abs(row.querySelector('.plan-sheet-more > p').getBoundingClientRect().left - row.querySelector('.plan-sheet-line > span').getBoundingClientRect().left) < 1; })()`);
+    await check('no subtext in plan rows', `!document.querySelector('.plan-sheet-more > p')`);
     await check('phase labels are absent', `!document.querySelector('[data-plan-kind]')`);
     await check('PR chip on step 2', `!!document.querySelector('[data-plan-step-id="step_2"] [data-plan-chip="pr"]')`);
     await check('verification panel is gone', `!document.querySelector('[data-verification-checklist]')`);
@@ -111,15 +112,18 @@ app.whenReady().then(async () => {
     await sleep(200);
     await check('hovering the sheet opens no step', `!(${opened('step_1')})`);
     await shot('plan-hover');
-    const toggle = await run(`(() => { const r = document.querySelector('[data-plan-step-id="step_1"] .plan-sheet-step-toggle')?.getBoundingClientRect(); return r ? { x: Math.round(r.x + 60), y: Math.round(r.y + r.height / 2) } : { x: 1, y: 1 }; })()`);
-    for (const type of ['mouseDown', 'mouseUp']) win.webContents.sendInputEvent({ type, ...toggle, button: 'left', clickCount: 1 });
+    // Narrow the real viewport so even short CI labels need overflow.
+    win.setContentSize(600, 900);
+    await sleep(400);
+    // Per-row overflow disclosure replaces the old title/details button.
+    await run(`document.querySelector('[data-plan-step-id="step_3"] [data-plan-overflow]')?.click()`);
     await sleep(300);
-    await check('clicking step 1 opens it', `${opened('step_1')} && document.querySelector('[data-plan-step-id="step_1"] .plan-sheet-step-toggle').getAttribute('aria-expanded') === 'true'`);
+    await check('clicking count opens only that row', `${opened('step_3')} && !(${opened('step_1')})`);
     await shot('plan-step-opened');
-    await run(`document.querySelector('[data-plan-step-id="step_2"] .plan-sheet-step-toggle').focus()`);
+    await run(`document.querySelector('[data-plan-step-id="step_3"] [data-plan-overflow]').focus()`);
     for (const type of ['keyDown', 'char', 'keyUp']) win.webContents.sendInputEvent({ type, keyCode: type === 'char' ? '\r' : 'Enter' });
     await sleep(300);
-    await check('Enter on step 2 closes it', `!(${opened('step_2')})`);
+    await check('Enter closes the row', `!(${opened('step_3')})`);
     win.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 });
     for (let i = 8; i < 14; i++) { fs.writeFileSync(path.join(out, 'motion', String(i).padStart(3, '0') + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG()); await sleep(30); }
     if (!process.env.NEKKO_TEST_SOURCE) {
