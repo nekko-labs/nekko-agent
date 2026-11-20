@@ -67,6 +67,64 @@ export function whatsNewUrl(version: string): string {
   return line ? `${PAGE_URL}#${line}` : PAGE_URL;
 }
 
+const parts = (line: string) => line.split('.').map(Number) as [number, number];
+
+/** The newer of two MAJOR.MINOR lines: what "seen" settles on, so a move back never lowers it. */
+export function newerLine(a: string | null, b: string): string {
+  if (!a) return b;
+
+  const [x, y] = [parts(a), parts(b)];
+
+  return x[0] > y[0] || (x[0] === y[0] && x[1] > y[1]) ? a : b;
+}
+
+/** The line this install has already seen: the last one shown, else the last version's (an install from before this existed), else none (a first install). */
+export function seenLine(shown: string | null, lastVersion: string | null): string | null {
+  return shown ?? (lastVersion ? lineOf(lastVersion) : null);
+}
+
+export interface AutoOpenInput {
+  /** The running version. */
+  version: string;
+  /** `seenLine`: null on a first install. */
+  seen: string | null;
+  edition: 'desktop' | 'web';
+  /** "Show after updates". */
+  enabled: boolean;
+  /** The running line has highlights. */
+  hasHighlights: boolean;
+  /** An agent is running or waiting for an answer, or another dialog is open. */
+  busy: boolean;
+}
+
+/**
+ * Whether the sheet opens by itself at launch: `open`, `wait` (it would, once
+ * nothing is busy) or `no`. Only a release or nightly on a newer line than the
+ * one seen opens it; a development build or the Local Web UI never does.
+ */
+export function autoOpen({ version, seen, edition, enabled, hasHighlights, busy }: AutoOpenInput): 'open' | 'wait' | 'no' {
+  const line = lineOf(version);
+  if (edition !== 'desktop' || !line || !/^\d+\.\d+\.\d+$/.test(version)) return 'no';
+  if (!seen || newerLine(seen, line) === seen) return 'no';
+  if (!enabled || !hasHighlights) return 'no';
+
+  return busy ? 'wait' : 'open';
+}
+
+const LS_SHOWN = 'nekko_whats_new_line';
+
+/** The line the sheet was last shown for on this install, or settled on without showing. */
+export function shownLine(): string | null {
+  try { return localStorage.getItem(LS_SHOWN); } catch { return null; }
+}
+
+/** Remember `line` as shown; a move to an older line never lowers it. */
+export function markShown(line: string | null): void {
+  if (!line) return;
+
+  try { localStorage.setItem(LS_SHOWN, newerLine(shownLine(), line)); } catch { /* storage is off: it may open again */ }
+}
+
 /** Open the sheet from anywhere: the update pill, Settings, About, the palette. */
 export const openWhatsNew = () => window.dispatchEvent(new Event('nekko:whats-new'));
 

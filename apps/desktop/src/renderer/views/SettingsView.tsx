@@ -1309,6 +1309,7 @@ export function UpdatesSection({ settings, update }: { settings: AppSettings; up
           </span>
         </div>
       )}
+      <SettingRow title="Show what's new after updates" detail="Once for each new release line, such as 0.11." control={<Toggle aria-label="Show what's new after updates" on={checks.whatsNew} onChange={(v) => void setCheck('whatsNew', v)} />} />
       <SettingsLabel>In the background</SettingsLabel>
       <SettingRow title="Provider model lists" detail="Re-read each provider's catalog so new models appear without an app release." control={<Toggle aria-label="Provider model lists" on={checks.modelLists} onChange={(v) => void setCheck('modelLists', v)} />} />
       <SettingRow title="Skills catalog" detail="Refresh the skills marketplace shelf." control={<Toggle aria-label="Skills catalog" on={checks.skills} onChange={(v) => void setCheck('skills', v)} />} />

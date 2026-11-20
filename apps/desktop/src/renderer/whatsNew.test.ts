@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { isGfIconName } from './gentleface-icons.js';
-import { highlightsFor, lineOf, prUrl, splitHighlights, TOP_HIGHLIGHTS, whatsNewUrl, type Highlight } from './whatsNew.js';
+import { autoOpen, highlightsFor, lineOf, newerLine, prUrl, seenLine, splitHighlights, TOP_HIGHLIGHTS, whatsNewUrl, type AutoOpenInput, type Highlight } from './whatsNew.js';
 
 const h = (pr: number, over: Partial<Highlight> = {}): Highlight => ({ title: `Change ${pr}`, detail: 'One line.', pr, ...over });
 
@@ -142,5 +142,74 @@ describe("the spec's topic table", () => {
     expect(icons.length).toBeGreaterThan(10);
     expect(icons).toContain('search');
     for (const name of icons) expect(isGfIconName(name), name).toBe(true);
+  });
+});
+
+describe('opening by itself after an update', () => {
+  // A desktop launch on a newer line, switch on, the line has highlights, nothing busy.
+  const base: AutoOpenInput = { version: '0.11.1000', seen: '0.10', edition: 'desktop', enabled: true, hasHighlights: true, busy: false };
+  const decide = (over: Partial<AutoOpenInput> = {}) => autoOpen({ ...base, ...over });
+
+  it('opens on the first launch on a newer line', () => {
+    expect(decide()).toBe('open');
+    expect(decide({ version: '0.11.1003' })).toBe('open');
+    expect(decide({ version: '1.10.1000', seen: '0.99' })).toBe('open');
+    expect(decide({ version: '0.10.1000', seen: '0.9' })).toBe('open');
+  });
+
+  it('waits while an agent is running or another dialog is open', () => {
+    expect(decide({ busy: true })).toBe('wait');
+  });
+
+  it('does not open within the same line: a nightly or a patch', () => {
+    expect(decide({ version: '0.10.1005', seen: '0.10' })).toBe('no');
+  });
+
+  it('does not open on a first install', () => {
+    expect(decide({ seen: null })).toBe('no');
+  });
+
+  it('does not open with the switch off, even when busy', () => {
+    expect(decide({ enabled: false })).toBe('no');
+    expect(decide({ enabled: false, busy: true })).toBe('no');
+  });
+
+  it('does not open again for a line already shown', () => {
+    expect(decide({ seen: '0.11' })).toBe('no');
+  });
+
+  it('does not open on a move to an older line', () => {
+    expect(decide({ version: '0.10.1000', seen: '0.11' })).toBe('no');
+  });
+
+  it('does not open for a line with no highlights', () => {
+    expect(decide({ hasHighlights: false })).toBe('no');
+  });
+
+  it('does not open on a development build or in the Local Web UI', () => {
+    expect(decide({ version: '0.11.1000-dev.3+gabc1234' })).toBe('no');
+    expect(decide({ version: 'dev' })).toBe('no');
+    expect(decide({ edition: 'web' })).toBe('no');
+  });
+});
+
+describe('the line already seen', () => {
+  it('is the line last shown when there is one', () => {
+    expect(seenLine('0.11', '0.10.1004')).toBe('0.11');
+  });
+
+  it("is the last version's line on an install from before this existed", () => {
+    expect(seenLine(null, '0.10.1004')).toBe('0.10');
+  });
+
+  it('is nothing on a first install', () => {
+    expect(seenLine(null, null)).toBeNull();
+  });
+
+  it('settles on the newer of two lines, so a move back never lowers it', () => {
+    expect(newerLine('0.10', '0.11')).toBe('0.11');
+    expect(newerLine('0.11', '0.10')).toBe('0.11');
+    expect(newerLine('0.9', '0.10')).toBe('0.10');
+    expect(newerLine(null, '0.10')).toBe('0.10');
   });
 });

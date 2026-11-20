@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AppInfo, UpdateInfo } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
-import { openWhatsNew } from '../whatsNew.js';
+import { lineOf, markShown, openWhatsNew } from '../whatsNew.js';
 import { GfCloseIcon } from '../gentleface-icons.js';
 
 const LS_LAST_VERSION = 'op_last_version';
@@ -23,6 +23,8 @@ type RetryAction = 'check' | 'download' | 'download-install' | 'install';
 
 export interface UpdaterState {
   app: AppInfo | null;
+  /** The version the last launch ran, read before this launch replaced it; null on a first install. */
+  previousVersion: string | null;
   info: UpdateInfo | null;
   stage: UpdateStage;
   error: string | null;
@@ -68,6 +70,7 @@ export function deriveUpdateStage({
 export function UpdateProvider({ children }: { children: ReactNode }) {
   const settings = useStore((s) => s.settings);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [previousVersion, setPreviousVersion] = useState<string | null>(null);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [justUpdated, setJustUpdated] = useState<string | null>(null);
   const [skippedVersion, setSkippedVersion] = useState<string | null>(null);
@@ -81,9 +84,10 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     let off: (() => void) | undefined;
     window.nekko.getAppInfo().then((ai) => {
       if (!live) return;
-      setAppInfo(ai);
       // "Updated to version X", current version differs from the last one we saw.
       const last = localStorage.getItem(LS_LAST_VERSION);
+      setPreviousVersion(last);
+      setAppInfo(ai);
       if (last && last !== ai.version) setJustUpdated(ai.version);
       localStorage.setItem(LS_LAST_VERSION, ai.version);
       setSkippedVersion(localStorage.getItem(LS_SKIPPED_VERSION));
@@ -188,6 +192,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<UpdaterState>(() => ({
     app: appInfo,
+    previousVersion,
     info: update,
     stage,
     error,
@@ -198,7 +203,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     skip,
     retry,
     dismissResult: () => setJustUpdated(null),
-  }), [appInfo, update, stage, error, check, downloadOnly, downloadAndInstall, install, skip, retry]);
+  }), [appInfo, previousVersion, update, stage, error, check, downloadOnly, downloadAndInstall, install, skip, retry]);
 
   return <UpdaterContext.Provider value={value}>{children}</UpdaterContext.Provider>;
 }
@@ -306,7 +311,7 @@ export function UpdateControl() {
       <UpdatedPill
         version={version}
         onOpen={() => { openWhatsNew(); updater.dismissResult(); }}
-        onDismiss={() => { focusVersion.current = true; updater.dismissResult(); }}
+        onDismiss={() => { focusVersion.current = true; markShown(lineOf(version)); updater.dismissResult(); }}
       />,
     );
   }

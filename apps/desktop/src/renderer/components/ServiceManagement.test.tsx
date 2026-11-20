@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ServiceManagementView, phoneManagementPatch } from './ServiceManagement.js';
 import type { UpdaterState } from './UpdateBanner.js';
 
-const updater: UpdaterState = { app: null, info: null, stage: 'idle', error: null, check: vi.fn(), downloadOnly: vi.fn(), downloadAndInstall: vi.fn(), install: vi.fn(), skip: vi.fn(), retry: vi.fn(), dismissResult: vi.fn() };
+const updater: UpdaterState = { app: null, previousVersion: null, info: null, stage: 'idle', error: null, check: vi.fn(), downloadOnly: vi.fn(), downloadAndInstall: vi.fn(), install: vi.fn(), skip: vi.fn(), retry: vi.fn(), dismissResult: vi.fn() };
 const props = { status: { agentRunning: true, modelRunning: false, modelAvailable: false }, version: '1.2.3', confirming: false, confirmInstall: false,
   busy: false, error: '', notice: '', updater, manageFromPhone: false, onManageFromPhone: vi.fn(), onAsk: vi.fn(), onCancel: vi.fn(), onRestart: vi.fn(), onAskInstall: vi.fn(), onCancelInstall: vi.fn(), onInstall: vi.fn() };
 
