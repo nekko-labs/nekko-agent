@@ -45,6 +45,6 @@ describe('Photo clean-start greeting', () => {
     for (const g of PHOTO_GREETINGS) expect(g.length).toBeLessThanOrEqual(longest);
   });
   it('shows a given title instead of a greeting', () => {
-    expect(renderToStaticMarkup(<CleanStartGreeting kind="photo" title="Let’s get Photo ready." />)).toContain('<h2>Let’s get Photo ready.</h2>');
+    expect(renderToStaticMarkup(<CleanStartGreeting kind="photo" title="Let’s get photo mode set up." />)).toContain('<h2>Let’s get photo mode set up.</h2>');
   });
 });
