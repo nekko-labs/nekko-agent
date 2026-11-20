@@ -85,6 +85,15 @@ function iosContext(repo, pr, sha) {
 
 const labelsOf = pr => (pr.labels?.nodes ?? pr.labels ?? []).map(l => (typeof l === 'string' ? l : l.name));
 
+/**
+ * The runs `gate` weighs. Without a deploy label the other platform runs are opt-in,
+ * but the PR's own Native iOS run still counts: it is what decides a PR the batch
+ * leaves out for changing a workflow (#2030, #3094).
+ */
+export function gateRuns(runs, labelled) {
+  return labelled ? runs : runs.filter(run => run.path?.split('@')[0] === IOS_WORKFLOW);
+}
+
 export function needsLabelRuns(pr) {
   return labelsOf(pr).some(label => DEPLOY_LABELS.includes(label));
 }
@@ -103,10 +112,9 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function waitForPr(repo, pr, sha, { timeoutMin, pollSec }) {
   const until = Date.now() + timeoutMin * 60_000;
-  // Without a deploy label only the iOS requirement applies; other platform runs are opt-in.
   const labelled = needsLabelRuns(JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`])));
   for (;;) {
-    const state = labelRuns(labelled ? runsFor(repo, sha) : [], iosContext(repo, pr, sha));
+    const state = labelRuns(gateRuns(runsFor(repo, sha), labelled), iosContext(repo, pr, sha));
     if (state.failed.length) {
       console.error(`Deploy-label runs failed on ${sha}:\n${state.failed.map(describe).join('\n')}`);
       return 1;
