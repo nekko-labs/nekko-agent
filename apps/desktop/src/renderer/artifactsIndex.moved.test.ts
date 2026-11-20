@@ -27,7 +27,8 @@ describe('designs made out of sight', () => {
     ] }, root);
     expect(out.map((e) => [e.filename, e.kind, e.source])).toEqual([
       ['task-details-design.html', 'design', 'written'],
-      ['task-details-design.png', 'design', 'written'],
+      // The design's picture stays listed, under Images (#3145).
+      ['task-details-design.png', 'image', 'written'],
     ]);
   });
 
