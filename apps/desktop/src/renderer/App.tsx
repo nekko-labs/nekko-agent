@@ -12,7 +12,6 @@ import { SHORTCUTS } from './shortcuts.js';
 import { loadStartup } from './startupLoad.js';
 import { hasAppChrome } from './chrome.js';
 import { TitleBar } from './components/TitleBar.js';
-import { AgentsBreadcrumb } from './components/AgentsBreadcrumb.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
 import { RailBackdrop } from './components/RailBackdrop.js';
@@ -354,7 +353,6 @@ export function App() {
               <span className="font-medium">Get started:</span> connect your first model in Models →
             </button>
           )}
-          <AgentsBreadcrumb />
           {/* Keyed on the wizard too: setup writes wall prefs (the Monitors panel) the open view loaded before it. */}
           <ErrorBoundary key={`${view === 'modelserver' ? 'models' : view}${onboardingOpen ? ':setup' : ''}`} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}

@@ -1,22 +1,22 @@
 ---
-title: Agents back breadcrumb
+title: Settings breadcrumb back to Agents
 area: desktop
 ---
 
-# Agents back breadcrumb (#3122)
+# Settings breadcrumb back to Agents (#3122)
 
-User intent: return from any other page directly to the Agents view without finding the navigation rail.
+User intent: return from Settings directly to Agents. This is a navigation addition, not a Settings layout redesign.
 
 ## Behavior and acceptance
 
-- The shared desktop and Local Web UI shell shows a quiet **← Agents / Page** breadcrumb above every non-Agents destination: Library, Skills, Training, Automations, Design, Models (including the Model Server alias), Connectors, Memory and Settings.
-- **Agents** is a keyboard-accessible native button that selects the existing Agents destination, not browser history. It leaves the selected chat and wall preferences unchanged. It is absent on Agents itself and does not change first-run setup navigation.
-- The final crumb names the current destination using existing navigation translations, with Models for the Model Server alias. It is marked as the current page. Existing Back to Settings, Back to Library and other local navigation remain available.
-- The breadcrumb stays outside page scrollers, uses existing theme tokens and quiet button feedback, fits desktop/narrow/folded and unfolded web widths, and truncates a long destination instead of pushing the return button off-screen. Touch uses the existing 44px button target.
-- Privacy/security: local view selection only. No API calls, credentials, permissions, settings writes, chat mutations or external side effects are added.
+- Show a quiet **← Agents / Settings** breadcrumb in the existing Settings navigation rail only. Do not add a shell-wide row or breadcrumbs to other destinations.
+- Preserve the Settings content column, widths, padding, section arrangement and scrolling. Content geometry must match the unchanged baseline at desktop, narrow/folded and unfolded web widths.
+- Agents is a translated native button that selects the existing Agents destination, not browser history. Keyboard activation works and preserves the selected chat and wall preferences. Settings is marked as the current page.
+- Existing Settings section navigation, search and page-specific Back controls remain unchanged. Use existing theme tokens and button feedback, including touch targets.
+- Privacy/security: local view selection only. No API calls, credentials, permissions, settings writes, chat mutations or external side effects.
 
 ## Status
 
-Implemented in the shared renderer. All 18 focused component/navigation tests, desktop typecheck, desktop/web builds and hidden full-App return-navigation/layout assertions pass at 1440, 390 and 840 CSS-pixel widths. Matched before/after screenshots are captured; actual pixel review is pending and remains a release blocker. Native iOS/Android navigation is unchanged; this is the desktop/shared-web page shell, not a native phone feature. Installed builds and live Local Web UI hosting are unverified.
+Implemented in the shared desktop/Local Web UI renderer. All 18 focused tests, desktop typecheck and 48 hidden full-App assertions pass, including exact baseline content geometry at 1440, 390 and 840 CSS pixels and real Enter activation. A raw RGBA comparison of the Settings content region finds zero changed pixels at all three widths. This proves content preservation, not visual approval of the new rail control. Earlier all-page evidence is superseded. Matched Settings captures are available, but the image tool does not expose viewable pixels in this session. Actual visual review remains a release blocker. Native iOS/Android navigation is unchanged. Installed builds and live Local Web UI hosting are unverified.
 
-Design: [Agents back breadcrumb](../../nekko-designs/agents-back-breadcrumb-design.html).
+Design: [Settings breadcrumb v2](../../nekko-designs/agents-back-breadcrumb-design-v2.html).

@@ -34,6 +34,7 @@ import { ServiceLoadState } from '../components/ServiceLoadState.js';
 import { ServiceManagement } from '../components/ServiceManagement.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
+import { AgentsBreadcrumb } from '../components/AgentsBreadcrumb.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { AnimationsSection, DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
@@ -218,6 +219,7 @@ export function SettingsView() {
   return (
     <div className="settings-panel" onWheel={(e) => forwardWheelToContent(e, scrollRef.current)}>
       <aside className="settings-rail">
+        <AgentsBreadcrumb />
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
         <div aria-label="Skills and connectors" className="settings-shortcuts">
           <button className="settings-nav-item" onClick={openCustomize}>Customize</button>
