@@ -1187,6 +1187,11 @@ struct ModelServerControls: View {
             .accessibilityIdentifier("monitor.idleTtl")
             Toggle("Load when a chat asks", isOn: Binding(get: { server.jitLoad ?? true }, set: { on in run { try await set(["jitLoad": .bool(on)]) } }))
                 .accessibilityIdentifier("monitor.jitLoad")
+            Toggle(isOn: Binding(get: { server.overloadGuard ?? true }, set: { on in run { try await set(["overloadGuard": .bool(on)]) } })) {
+                Text("Overload protection")
+                Text("Stops a load before it leaves less than \(server.overloadReserveMB ?? ModelServerSettings.overloadReserveDefaultMB) MB of memory free.")
+            }
+            .accessibilityIdentifier("monitor.overloadGuard")
         }
         .disabled(busy || !server.devicesChoose)
     }

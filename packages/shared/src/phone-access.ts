@@ -785,9 +785,11 @@ export const PHONE_OPTION_VALUES = {
  * has *Connected devices choose model settings* on. `port`, `bind`, `apiKey`,
  * `corsOrigins` and the model folders stay on the machine: they open it to its
  * network or read its disk. So do the two settings below, which decide this.
+ * Overload protection can be switched from a device; how much it keeps free
+ * (`overloadReserveMB`) is read there, for the label, and set on the machine.
  */
-export const PHONE_ENGINE_KEYS = ['autoStart', 'autoload', 'idleTtlSeconds', 'jitLoad', 'maxLoaded'] as const;
-export const PHONE_MODEL_SERVER_VIEW = [...PHONE_ENGINE_KEYS, 'clientModelSettings', 'shareWithComputers'] as const;
+export const PHONE_ENGINE_KEYS = ['autoStart', 'autoload', 'idleTtlSeconds', 'jitLoad', 'maxLoaded', 'overloadGuard'] as const;
+export const PHONE_MODEL_SERVER_VIEW = [...PHONE_ENGINE_KEYS, 'clientModelSettings', 'shareWithComputers', 'overloadReserveMB'] as const;
 /** Refused with `server-locked` while the Model Server sets its own. */
 export const PHONE_MODEL_SETTING_CHANNELS = ['engine:saveModelPreset', 'engine:settings', 'engine:unloadAll', 'model:load'] as const;
 /** A preset's keys that name files on the machine, which stay there. */

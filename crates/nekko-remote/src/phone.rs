@@ -2614,6 +2614,8 @@ mod tests {
             let (_, _, phone) = with_device(PHONE);
             let save = |o: Value| ask(&phone, "engine:settings", json!([o]));
             assert!(save(json!({ "maxLoaded": 3, "idleTtlSeconds": 60 })).is_ok());
+            // Overload protection switches from a device; how much it keeps free is the machine's.
+            assert!(save(json!({ "overloadGuard": false })).is_ok());
             let preset = |p: Value| ask(&phone, "engine:saveModelPreset", json!(["m1", p]));
             assert!(preset(json!({ "contextTokens": 8192 })).is_ok());
             assert!(
@@ -2631,6 +2633,7 @@ mod tests {
                 "modelFolders",
                 "shareWithComputers",
                 "clientModelSettings",
+                "overloadReserveMB",
             ] {
                 let mut o = json!({});
                 o[key] = json!("x");
@@ -2638,9 +2641,12 @@ mod tests {
             }
             let view = redact(
                 "engine:settings",
-                json!({ "maxLoaded": 2, "apiKey": "secret", "bind": "lan", "clientModelSettings": true }),
+                json!({ "maxLoaded": 2, "apiKey": "secret", "bind": "lan", "clientModelSettings": true, "overloadGuard": false, "overloadReserveMB": 1024 }),
             );
-            assert_eq!(view, json!({ "maxLoaded": 2, "clientModelSettings": true }));
+            assert_eq!(
+                view,
+                json!({ "maxLoaded": 2, "clientModelSettings": true, "overloadGuard": false, "overloadReserveMB": 1024 })
+            );
         }
 
         #[test]
