@@ -7,7 +7,7 @@ recordings. No sound.
 
 | Composition | Length | Shows |
 | --- | --- | --- |
-| `GtaIdleGpu` | 20 s | GTA VI is console-only, so the gaming PC sits idle. One card carries the story and changes shape between beats (idle PC, Qwen3 8B loading, the agent working while you play, the phone approval from the couch, the end card) with Nekko riding its top edge; headlines rise in and leave upward. No Rockstar artwork, logo, type or colours: the game is named in text only |
+| `GtaIdleGpu` | 20 s | GTA VI is console-only, so the gaming PC sits idle. One card carries the story and changes shape between beats (idle PC, Qwen3 8B loading, the agent working while you play, the phone approval from the couch, the end card) with Nekko riding its top edge; headlines settle in line by line and dissolve out together. No Rockstar artwork, logo, type or colours: the game is named in text only |
 
     npm install
     npm run render

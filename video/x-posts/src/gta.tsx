@@ -150,19 +150,19 @@ const track = (f: number, vals: number[]) => interpolate(f, CARD_KEYS, vals, { .
 const win = (f: number, a: number, b: number, d = 12) => p(f, a, a + d) * (1 - p(f, b, b + d));
 
 // ─── Masked text: each line rises into place, then leaves upward ───────────
+// Lines settle in one after another (a short drift, a fade and a blur that
+// clears); on the way out the whole headline dissolves together, no wipe.
 function Rise({ f, at, out = 1e9, i = 0, children, style }: { f: number; at: number; out?: number; i?: number; children: React.ReactNode; style?: React.CSSProperties }) {
-  const inP = p(f, at + i * 4, at + i * 4 + 20);
-  const outP = p(f, out + i * 3, out + i * 3 + 16);
+  const inP = p(f, at + i * 3, at + i * 3 + 22);
+  const outP = interpolate(f, [out, out + 12], [0, 1], { ...clamp, easing: Easing.bezier(0.4, 0, 1, 1) });
   return (
-    <div style={{ overflow: 'hidden', paddingBottom: '0.12em', marginBottom: '-0.12em', ...style }}>
-      <div style={{ transform: `translateY(${(1 - inP) * 110 - outP * 110}%)` }}>{children}</div>
-    </div>
+    <div style={{ ...style, opacity: inP * (1 - outP), filter: `blur(${(1 - inP) * 8 + outP * 10}px)`, transform: `translateY(${(1 - inP) * 18}px)` }}>{children}</div>
   );
 }
 function Headline({ f, at, out = 1e9, kicker, lines, left = 96, top = 120, size = 92, width = 900, align = 'left', sub }: {
   f: number; at: number; out?: number; kicker: string; lines: React.ReactNode[]; left?: number; top?: number; size?: number; width?: number; align?: 'left' | 'center'; sub?: string;
 }) {
-  if (f < at || f > out + 40) return null;
+  if (f < at || f > out + 14) return null;
   return (
     <div style={{ position: 'absolute', left, top, width, textAlign: align }}>
       <Rise f={f} at={at} out={out} style={{ fontFamily: MONO, fontSize: 24, letterSpacing: 2, color: C.plum, textTransform: 'uppercase' }}>{kicker}</Rise>
