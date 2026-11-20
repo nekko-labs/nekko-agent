@@ -2,11 +2,11 @@
 // GTA VI launched on PS5 and Xbox only, so a player's PC sits idle while they
 // play. Nekko Agent puts that GPU to work on a local model: no tokens, no bill.
 //
-// Illustrated in the website's Dark look, the same sources as
-// video/instagram-reel (spec/brand/colour-palette.md, docs/design-system.md):
-// page #0B0C14 with #854F6C glows, the dot wave (#C084B5 to #854F6C), panels
-// #14151F / #1D1F2C, lines #252735,
-// Inter Tight with Space Mono labels, and Nekko in his fixed dark-mode colours.
+// Illustrated in the brand dark palette (spec/brand/colour-palette.md,
+// docs/design-system.md): page #0B0C14 with #854F6C glows, the dot wave
+// (#C084B5 to #854F6C), panels #14151F / #1D1F2C, lines #252735, Inter Tight
+// with Space Mono labels, and Nekko in his fixed dark-mode colours. One card
+// carries the story and changes shape between beats, with Nekko riding it.
 // No Rockstar artwork, logo, type or colours: the game is only named in text.
 import React from 'react';
 import {
@@ -41,15 +41,6 @@ const ease = Easing.bezier(0.22, 1, 0.36, 1);
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
 const p = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], { ...clamp, easing: ease });
 const typed = (f: number, a: number, b: number, s: string) => s.slice(0, Math.round(interpolate(f, [a, b], [0, s.length], clamp)));
-
-// Scenes: [start, end] in frames. Each fades in over 14 frames and out over 12.
-const SC = { out: [0, 90], console: [84, 186], wake: [180, 306], play: [300, 432], phone: [426, 540], end: [534, 600] } as const;
-type Span = readonly [number, number];
-const vis = (f: number, [a, b]: Span) => p(f, a, a + 14) * (1 - p(f, b - 12, b));
-const enter = (f: number, a: number, span: Span) => {
-  const v = p(f, a, a + 16) * (1 - p(f, span[1] - 12, span[1]));
-  return { opacity: v, transform: `translateY(${(1 - p(f, a, a + 16)) * 10}px)` };
-};
 
 // ---- the website's pixel wave ----
 function PixelWave({ f }: { f: number }) {
@@ -120,17 +111,71 @@ const Check = ({ size = 32, color = C.ok }: { size?: number; color?: string }) =
 );
 const Dot = ({ color, size = 14 }: { color: string; size?: number }) => <span style={{ width: size, height: size, borderRadius: size, background: color, display: 'inline-block', flexShrink: 0 }} />;
 
-function Headline({ f, span, kicker, top = 120, size = 92, children }: { f: number; span: Span; kicker: string; top?: number; size?: number; children: React.ReactNode }) {
+// ─── 6 End card ────────────────────────────────────────────────────────────
+function AppMark({ size }: { size: number }) {
   return (
-    <div style={{ position: 'absolute', left: 96, top, width: 900 }}>
-      <div style={{ fontFamily: MONO, fontSize: 24, letterSpacing: 2, color: C.plum, textTransform: 'uppercase', ...enter(f, span[0] + 4, span) }}>{kicker}</div>
-      <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: size, lineHeight: 1.02, letterSpacing: -3.5, color: C.ink, marginTop: 16, ...enter(f, span[0] + 10, span) }}>{children}</div>
+    <svg width={size} height={size} viewBox="0 0 512 512">
+      <defs><linearGradient id="tile" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#190019" /><stop offset="1" stopColor="#3A1438" /></linearGradient></defs>
+      <rect width="512" height="512" rx="114" fill="url(#tile)" stroke="#854f6c" strokeWidth="10" />
+      <g transform="translate(13.46 73.87) scale(20.2117)" fill="#FFFFFF" fillRule="evenodd">
+        <path d="M4.059,10.357C4.034,10.285 4.015,10.212 4.003,10.138L3.007,4.165L2.649,2.016L9.117,5.897C11.039,5.29 12.961,5.29 14.883,5.897L21.351,2.016L20.005,10.088C19.987,10.199 19.959,10.308 19.921,10.415L19.921,10.416C18.733,13.756 15.551,16.006 12,16.006C8.428,16.006 5.23,13.729 4.059,10.357L4.059,10.357ZM5.009,10.027C6.04,12.996 8.856,15 12,15C15.126,15 17.927,13.019 18.973,10.079C18.991,10.028 19.004,9.976 19.013,9.923L20,4L15,7C13,6.267 11,6.267 9,7L4,4L4.995,9.972C4.999,9.991 5.003,10.009 5.009,10.027Z" />
+      </g>
+    </svg>
+  );
+}
+
+// ─── Timeline ──────────────────────────────────────────────────────────────
+// One card stays on screen from 2.4 s to the end and changes shape between
+// beats (PC → agent → phone → end card); Nekko rides its top edge. Headlines
+// rise into a mask and leave upward, so nothing simply blinks in or out.
+//
+//   0.0  GTA VI is out.            headline only
+//   2.4  card rises: the idle PC   Nekko asleep on it
+//   6.1  GPU is unemployed         same card, the model loads in place
+//   9.9  card slides right → agent panel, the TV panel slides in from the left
+//  14.0  card becomes the phone,   the TV panel leaves
+//  17.5  phone becomes the end card
+const CARD_KEYS = [72, 102, 296, 322, 420, 448, 526, 554];
+const CARD = {
+  x: [80, 80, 80, 444, 444, 600, 600, 80],
+  y: [1320, 600, 600, 360, 360, 200, 200, 560],
+  w: [920, 920, 920, 556, 556, 380, 380, 920],
+  h: [220, 220, 220, 600, 600, 760, 760, 300],
+  r: [28, 28, 28, 28, 28, 60, 60, 28],
+  b: [2, 2, 2, 2, 2, 6, 6, 2],
+  nekko: [0.78, 0.78, 0.78, 0.5, 0.5, 0.5, 0.5, 0.5],
+};
+const track = (f: number, vals: number[]) => interpolate(f, CARD_KEYS, vals, { ...clamp, easing: Easing.bezier(0.65, 0, 0.35, 1) });
+/** Fade a layer in over [a, a+d] and out over [b, b+d]. */
+const win = (f: number, a: number, b: number, d = 12) => p(f, a, a + d) * (1 - p(f, b, b + d));
+
+// ─── Masked text: each line rises into place, then leaves upward ───────────
+function Rise({ f, at, out = 1e9, i = 0, children, style }: { f: number; at: number; out?: number; i?: number; children: React.ReactNode; style?: React.CSSProperties }) {
+  const inP = p(f, at + i * 4, at + i * 4 + 20);
+  const outP = p(f, out + i * 3, out + i * 3 + 16);
+  return (
+    <div style={{ overflow: 'hidden', paddingBottom: '0.12em', marginBottom: '-0.12em', ...style }}>
+      <div style={{ transform: `translateY(${(1 - inP) * 110 - outP * 110}%)` }}>{children}</div>
+    </div>
+  );
+}
+function Headline({ f, at, out = 1e9, kicker, lines, left = 96, top = 120, size = 92, width = 900, align = 'left', sub }: {
+  f: number; at: number; out?: number; kicker: string; lines: React.ReactNode[]; left?: number; top?: number; size?: number; width?: number; align?: 'left' | 'center'; sub?: string;
+}) {
+  if (f < at || f > out + 40) return null;
+  return (
+    <div style={{ position: 'absolute', left, top, width, textAlign: align }}>
+      <Rise f={f} at={at} out={out} style={{ fontFamily: MONO, fontSize: 24, letterSpacing: 2, color: C.plum, textTransform: 'uppercase' }}>{kicker}</Rise>
+      <div style={{ marginTop: 16, fontFamily: SANS, fontWeight: 800, fontSize: size, lineHeight: 1.02, letterSpacing: size * -0.038, color: C.ink }}>
+        {lines.map((l, i) => <Rise key={i} f={f} at={at + 4} out={out} i={i + 1}>{l}</Rise>)}
+      </div>
+      {sub && <Rise f={f} at={at + 12} out={out} i={lines.length + 1} style={{ fontFamily: SANS, fontSize: 30, lineHeight: 1.35, color: C.soft, marginTop: 26 }}>{sub}</Rise>}
     </div>
   );
 }
 
-// GPU meter: the one number this video is about.
-function GpuMeter({ f, value, label }: { f: number; value: number; label: string }) {
+// GPU meter
+function GpuMeter({ value, label }: { value: number; label: string }) {
   const on = value > 5;
   return (
     <div>
@@ -148,186 +193,168 @@ function GpuMeter({ f, value, label }: { f: number; value: number; label: string
   );
 }
 
-// ─── 1 GTA VI is out ───────────────────────────────────────────────────────
-function Out({ f }: { f: number }) {
-  const span = SC.out;
-  return (
-    <AbsoluteFill style={{ opacity: vis(f, span), justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-      <div style={{ fontFamily: MONO, fontSize: 26, letterSpacing: 3, color: C.plum, textTransform: 'uppercase', ...enter(f, 6, span) }}>Launch week</div>
-      <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 150, lineHeight: 1, letterSpacing: -6, color: C.ink, marginTop: 24, ...enter(f, 14, span) }}>GTA VI<br /><Grad>is out.</Grad></div>
-    </AbsoluteFill>
-  );
-}
+// ─── Card faces ────────────────────────────────────────────────────────────
+const FACE: React.CSSProperties = { position: 'absolute', inset: 0, boxSizing: 'border-box' };
 
-// ─── 2 It's on your console; the PC is idle ────────────────────────────────
-function Console({ f }: { f: number }) {
-  const span = SC.console, s = span[0];
-  const edge = 600;
+function PcFace({ f }: { f: number }) {
+  const load = interpolate(f, [222, 262], [0, 92], { ...clamp, easing: ease }) + (f > 262 ? Math.sin(f / 5) * 2 : 0);
+  const model = p(f, 206, 222);
   return (
-    <AbsoluteFill style={{ opacity: vis(f, span) }}>
-      <Headline f={f} span={span} kicker="PS5 and Xbox only">It's on your console.<br /><span style={{ color: C.faint }}>Not your PC.</span></Headline>
-      <Panel y={edge} style={{ padding: '48px 52px 44px', ...enter(f, s + 22, span) }}>
-        <div style={{ fontFamily: SANS, fontSize: 32, fontWeight: 650, color: C.soft, marginBottom: 26 }}>Your gaming PC</div>
-        <GpuMeter f={f} value={0} label="Idle" />
-      </Panel>
-      <Peek f={f} x={720} edge={edge} eyes="closed" />
-    </AbsoluteFill>
-  );
-}
-
-// ─── 3 Your GPU is unemployed → Nekko puts it to work ──────────────────────
-function Wake({ f }: { f: number }) {
-  const span = SC.wake, s = span[0];
-  const edge = 520;
-  const load = interpolate(f, [s + 50, s + 86], [0, 92], { ...clamp, easing: ease }) + (f > s + 86 ? Math.sin(f / 5) * 2 : 0);
-  const loaded = f >= s + 86;
-  return (
-    <AbsoluteFill style={{ opacity: vis(f, span) }}>
-      <Headline f={f} span={span} kicker="Meanwhile">Your GPU is<br /><Grad>unemployed.</Grad></Headline>
-      <Panel y={edge} style={{ padding: '48px 52px 44px', ...enter(f, s + 18, span) }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 26 }}>
-          <span style={{ fontFamily: SANS, fontSize: 32, fontWeight: 650, color: C.ink }}>{f >= s + 40 ? 'Qwen3 8B' : 'Your gaming PC'}</span>
-          {f >= s + 40 && <span style={{ fontFamily: MONO, fontSize: 22, color: C.faint, opacity: p(f, s + 40, s + 50) }}>Built-in engine · on this PC</span>}
-        </div>
-        <GpuMeter f={f} value={Math.max(0, load)} label={loaded ? 'Working' : f >= s + 50 ? 'Loading' : 'Idle'} />
-      </Panel>
-      <div style={{ position: 'absolute', left: 96, top: 900, display: 'flex', gap: 14, fontFamily: SANS, fontSize: 28, color: C.soft, ...enter(f, s + 92, span) }}>
-        {['No tokens', 'No subscription', 'Stays on your PC'].map((t) => (
-          <span key={t} style={{ padding: '10px 22px', borderRadius: 999, border: `2px solid ${C.line}` }}>{t}</span>
-        ))}
+    <div style={{ ...FACE, padding: '46px 52px', opacity: win(f, 0, 300) }}>
+      <div style={{ position: 'relative', height: 40, marginBottom: 22 }}>
+        <span style={{ position: 'absolute', fontFamily: SANS, fontSize: 32, fontWeight: 650, color: C.soft, opacity: 1 - model, transform: `translateY(${-model * 12}px)` }}>Your gaming PC</span>
+        <span style={{ position: 'absolute', display: 'flex', alignItems: 'baseline', gap: 16, opacity: model, transform: `translateY(${(1 - model) * 12}px)` }}>
+          <span style={{ fontFamily: SANS, fontSize: 32, fontWeight: 650, color: C.ink }}>Qwen3 8B</span>
+          <span style={{ fontFamily: MONO, fontSize: 22, color: C.faint }}>Built-in engine · on this PC</span>
+        </span>
       </div>
-      <Peek f={f} x={720} edge={edge} eyes={f < s + 40 ? 'closed' : eyesAt(f, loaded)} />
-    </AbsoluteFill>
+      <GpuMeter value={Math.max(0, load)} label={f >= 262 ? 'Working' : f >= 222 ? 'Loading' : 'Idle'} />
+    </div>
   );
 }
 
-// ─── 4 You play, it works ──────────────────────────────────────────────────
 const STEPS = ['Read 14 files in /site', 'Fixed 3 broken links', 'Wrote the changelog', 'Ran the tests: 48 passed'];
-function Play({ f }: { f: number }) {
-  const span = SC.play, s = span[0];
-  const mins = 12 + Math.floor((f - s) / 4); // game clock runs fast
-  const clock = `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
-  const edge = 360;
+function AgentFace({ f }: { f: number }) {
   return (
-    <AbsoluteFill style={{ opacity: vis(f, span) }}>
-      <Headline f={f} span={span} kicker="Tonight" size={76} top={90}>You play. <Grad>It works.</Grad></Headline>
-      {/* left: the console session, drawn as plain text, no game art */}
-      <Panel x={80} y={edge} w={340} style={{ padding: '40px 36px', height: 600, display: 'flex', flexDirection: 'column', ...enter(f, s + 14, span) }}>
-        <div style={{ fontFamily: MONO, fontSize: 22, color: C.faint }}>On the TV</div>
-        <div style={{ fontFamily: SANS, fontWeight: 750, fontSize: 46, lineHeight: 1.1, color: C.ink, marginTop: 14 }}>GTA VI</div>
-        <div style={{ fontFamily: SANS, fontSize: 28, color: C.soft, marginTop: 8 }}>Story mode</div>
-        <div style={{ marginTop: 'auto' }}>
-          <div style={{ fontFamily: MONO, fontSize: 22, color: C.faint }}>Playing for</div>
-          <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 84, letterSpacing: -3, color: C.ink, fontVariantNumeric: 'tabular-nums' }}>{clock}</div>
-        </div>
-      </Panel>
-      {/* right: Nekko Agent on the PC */}
-      <Panel x={444} y={edge} w={556} style={{ padding: '40px 40px', height: 600, ...enter(f, s + 20, span) }}>
-        <div style={{ fontFamily: MONO, fontSize: 22, color: C.faint }}>On the PC · Qwen3 8B</div>
-        <div style={{ marginLeft: 'auto', marginTop: 20, width: 'fit-content', background: C.panel2, borderRadius: 20, padding: '14px 22px', fontFamily: SANS, fontSize: 28, color: C.ink }}>
-          {typed(f, s + 26, s + 50, 'Tidy the site and ship the changelog')}
-        </div>
-        <div style={{ marginTop: 26 }}>
-          {STEPS.map((t, i) => {
-            const at = s + 52 + i * 16;
-            const done = f >= at + 14;
-            return f >= at ? (
-              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 14, fontFamily: SANS, fontSize: 28, color: done ? C.ink : C.soft, padding: '11px 0', opacity: p(f, at, at + 8) }}>
-                {done ? <Check size={30} /> : <Dot color={C.plum} />}{t}
-              </div>
-            ) : null;
-          })}
-        </div>
-      </Panel>
-      <Peek f={f} x={622} edge={edge} eyes={eyesAt(f, f >= s + 140)} />
-    </AbsoluteFill>
+    <div style={{ ...FACE, padding: '40px', opacity: win(f, 304, 420) }}>
+      <div style={{ fontFamily: MONO, fontSize: 22, color: C.faint }}>On the PC · Qwen3 8B</div>
+      <div style={{ marginLeft: 'auto', marginTop: 20, width: 'fit-content', background: C.panel2, borderRadius: 20, padding: '14px 22px', fontFamily: SANS, fontSize: 28, color: C.ink, opacity: p(f, 328, 338) }}>
+        {typed(f, 330, 352, 'Tidy the site and ship the changelog')}
+      </div>
+      <div style={{ marginTop: 26 }}>
+        {STEPS.map((t, i) => {
+          const at = 358 + i * 13, done = p(f, at + 9, at + 15);
+          return (
+            <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 14, fontFamily: SANS, fontSize: 28, color: done > 0.5 ? C.ink : C.soft, padding: '11px 0', opacity: p(f, at, at + 12), transform: `translateY(${(1 - p(f, at, at + 14)) * 14}px)` }}>
+              <span style={{ position: 'relative', width: 30, height: 30, display: 'grid', placeItems: 'center' }}>
+                <span style={{ position: 'absolute', opacity: 1 - done }}><Dot color={C.plum} /></span>
+                <span style={{ position: 'absolute', opacity: done, transform: `scale(${0.6 + done * 0.4})` }}><Check size={30} /></span>
+              </span>{t}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-// ─── 5 Approve from the couch ──────────────────────────────────────────────
-// The phone is drawn as a plain rounded device in brand colours (no OS chrome).
-function Phone({ f }: { f: number }) {
-  const span = SC.phone, s = span[0];
-  const buzz = f >= s + 18 && f < s + 30 ? Math.sin((f - s) * 2.4) * 4 : 0;
-  const pressed = f >= s + 58 && f < s + 64;
-  const approved = f >= s + 62;
-  const hop = approved && f < s + 83 ? [-1, -2, -1][Math.floor((f - s - 62) / 7)] ?? 0 : 0;
-  const PX = 600, PY = 200, PW = 380, PH = 760;
+function PhoneFace({ f, w }: { f: number; w: number }) {
+  const n = 452;
+  const pressed = f >= n + 28 && f < n + 34;
+  const ok = p(f, n + 32, n + 40);
   return (
-    <AbsoluteFill style={{ opacity: vis(f, span) }}>
-      <div style={{ position: 'absolute', left: 96, top: 260, width: 470 }}>
-        <div style={{ fontFamily: MONO, fontSize: 24, letterSpacing: 2, color: C.plum, textTransform: 'uppercase', ...enter(f, s + 4, span) }}>From your phone</div>
-        <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 84, lineHeight: 1.02, letterSpacing: -3.5, color: C.ink, marginTop: 16, ...enter(f, s + 10, span) }}>Approve<br />from the<br /><Grad>couch.</Grad></div>
-        <div style={{ fontFamily: SANS, fontSize: 30, lineHeight: 1.35, color: C.soft, marginTop: 28, ...enter(f, s + 20, span) }}>Risky steps wait for your OK. Tap it between missions.</div>
+    <div style={{ ...FACE, padding: '70px 22px 0', opacity: win(f, 428, 526) }}>
+      <div style={{ position: 'absolute', left: w / 2 - 47, top: 16, width: 88, height: 26, borderRadius: 13, background: C.panel2 }} />
+      <div style={{ fontFamily: SANS, fontWeight: 300, fontSize: 84, letterSpacing: -2, color: C.ink, textAlign: 'center' }}>11:42</div>
+      <div style={{ fontFamily: SANS, fontSize: 22, color: C.soft, textAlign: 'center', marginTop: 2, marginBottom: 34 }}>Friday</div>
+      <div style={{ background: C.panel, border: `2px solid ${C.line}`, borderRadius: 26, padding: '22px 22px 20px', opacity: p(f, n, n + 10), transform: `translateY(${(1 - p(f, n, n + 16)) * -24}px) scale(${0.96 + p(f, n, n + 16) * 0.04})` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <AppMark size={30} />
+          <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 650, color: C.ink }}>Nekko Agent</span>
+          <span style={{ marginLeft: 'auto', fontFamily: SANS, fontSize: 18, color: C.faint }}>now</span>
+        </div>
+        <div style={{ position: 'relative', height: 30, marginTop: 16, fontFamily: SANS, fontSize: 24, fontWeight: 650 }}>
+          <span style={{ position: 'absolute', display: 'flex', alignItems: 'center', gap: 10, color: C.ink, opacity: 1 - ok }}><Dot color={C.plum} size={12} />Needs your OK</span>
+          <span style={{ position: 'absolute', display: 'flex', alignItems: 'center', gap: 10, color: C.ok, opacity: ok }}><Check size={24} />Approved. Pushing.</span>
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 19, color: C.soft, marginTop: 10 }}>git push origin main</div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 18, fontFamily: SANS, fontSize: 22, fontWeight: 650 }}>
+          <span style={{ flex: 1, textAlign: 'center', padding: '12px 0', borderRadius: 14, border: `2px solid ${C.line}`, color: C.soft, opacity: 1 - ok * 0.6 }}>Deny</span>
+          <span style={{ flex: 1, textAlign: 'center', padding: '12px 0', borderRadius: 14, background: C.main, border: `2px solid ${C.plum2}`, color: C.ink, transform: `scale(${pressed ? 0.94 : 1})` }}>{ok > 0.5 ? 'Done' : 'Approve'}</span>
+        </div>
       </div>
-      <div style={{ position: 'absolute', left: PX, top: PY, width: PW, height: PH, borderRadius: 60, background: C.page, border: `6px solid ${C.line}`, boxSizing: 'border-box', boxShadow: '0 30px 70px rgba(0,0,0,.55)', padding: '70px 22px 0', transform: `translateX(${buzz}px)`, ...enter(f, s + 8, span) }}>
-        <div style={{ position: 'absolute', left: PW / 2 - 50, top: 18, width: 88, height: 26, borderRadius: 13, background: C.panel2 }} />
-        <div style={{ fontFamily: SANS, fontWeight: 300, fontSize: 84, letterSpacing: -2, color: C.ink, textAlign: 'center' }}>11:42</div>
-        <div style={{ fontFamily: SANS, fontSize: 22, color: C.soft, textAlign: 'center', marginTop: 2, marginBottom: 34 }}>Friday</div>
-        {f >= s + 18 && (
-          <div style={{ background: C.panel, border: `2px solid ${C.line}`, borderRadius: 26, padding: '22px 22px 20px', opacity: p(f, s + 18, s + 26), transform: `translateY(${(1 - p(f, s + 18, s + 28)) * -20}px)` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <AppMark size={30} />
-              <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 650, color: C.ink }}>Nekko Agent</span>
-              <span style={{ marginLeft: 'auto', fontFamily: SANS, fontSize: 18, color: C.faint }}>now</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: SANS, fontSize: 24, fontWeight: 650, color: approved ? C.ok : C.ink, marginTop: 16 }}>
-              {approved ? <Check size={24} /> : <Dot color={C.plum} size={12} />}{approved ? 'Approved. Pushing.' : 'Needs your OK'}
-            </div>
-            <div style={{ fontFamily: MONO, fontSize: 19, color: C.soft, marginTop: 10 }}>git push origin main</div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 18, fontFamily: SANS, fontSize: 22, fontWeight: 650 }}>
-              <span style={{ flex: 1, textAlign: 'center', padding: '12px 0', borderRadius: 14, border: `2px solid ${C.line}`, color: C.soft, opacity: approved ? 0.4 : 1 }}>Deny</span>
-              <span style={{ flex: 1, textAlign: 'center', padding: '12px 0', borderRadius: 14, background: C.main, border: `2px solid ${C.plum2}`, color: C.ink, transform: `scale(${pressed ? 0.94 : 1})` }}>{approved ? 'Done' : 'Approve'}</span>
-            </div>
-          </div>
-        )}
-      </div>
-      <Peek f={f} x={PX + PW / 2 - 96 + buzz} edge={PY} eyes={approved ? 'happy' : eyesAt(f, false)} hop={hop} sparkle={approved && f < s + 90} />
-    </AbsoluteFill>
+    </div>
   );
 }
 
-// ─── 6 End card ────────────────────────────────────────────────────────────
-function AppMark({ size }: { size: number }) {
+function EndFace({ f }: { f: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 512 512">
-      <defs><linearGradient id="tile" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#190019" /><stop offset="1" stopColor="#3A1438" /></linearGradient></defs>
-      <rect width="512" height="512" rx="114" fill="url(#tile)" stroke="#854f6c" strokeWidth="10" />
-      <g transform="translate(13.46 73.87) scale(20.2117)" fill="#FFFFFF" fillRule="evenodd">
-        <path d="M4.059,10.357C4.034,10.285 4.015,10.212 4.003,10.138L3.007,4.165L2.649,2.016L9.117,5.897C11.039,5.29 12.961,5.29 14.883,5.897L21.351,2.016L20.005,10.088C19.987,10.199 19.959,10.308 19.921,10.415L19.921,10.416C18.733,13.756 15.551,16.006 12,16.006C8.428,16.006 5.23,13.729 4.059,10.357L4.059,10.357ZM5.009,10.027C6.04,12.996 8.856,15 12,15C15.126,15 17.927,13.019 18.973,10.079C18.991,10.028 19.004,9.976 19.013,9.923L20,4L15,7C13,6.267 11,6.267 9,7L4,4L4.995,9.972C4.999,9.991 5.003,10.009 5.009,10.027Z" />
-      </g>
-    </svg>
+    <div style={{ ...FACE, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 26, opacity: p(f, 532, 548) }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, whiteSpace: 'nowrap', transform: `translateY(${(1 - p(f, 534, 554)) * 12}px)` }}>
+        <AppMark size={84} />
+        <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: 68, letterSpacing: -2.5, color: C.ink }}>Nekko Agent</span>
+      </div>
+      <div style={{ fontFamily: MONO, fontSize: 36, color: C.ink, opacity: p(f, 544, 558) }}>nekkoagent.com</div>
+    </div>
   );
 }
-function End({ f }: { f: number }) {
-  const span = [SC.end[0], FRAMES + 20] as const;
-  const edge = 560;
+
+// The console session, drawn as plain text (no game art).
+function TvPanel({ f }: { f: number }) {
+  const x = interpolate(f, [298, 324, 414, 438], [-420, 80, 80, -420], { ...clamp, easing: Easing.bezier(0.65, 0, 0.35, 1) });
+  if (x <= -420) return null;
+  const mins = 12 + Math.max(0, Math.floor((f - 300) / 4));
   return (
-    <AbsoluteFill style={{ opacity: p(f, SC.end[0], SC.end[0] + 14) }}>
-      <Headline f={f} span={span} kicker="Local AI" size={88} top={130}>$0 per token.<br /><Grad>Play while it works.</Grad></Headline>
-      <Panel y={edge} style={{ padding: '56px 52px 50px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20, ...enter(f, span[0] + 8, span) }}>
-          <AppMark size={84} />
-          <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: 68, letterSpacing: -2.5, color: C.ink }}>Nekko Agent</span>
-        </div>
-        <div style={{ fontFamily: MONO, fontSize: 36, color: C.ink, ...enter(f, span[0] + 22, span) }}>nekkoagent.com</div>
-      </Panel>
-      <Peek f={f} x={444} edge={edge} eyes={eyesAt(f, true)} />
-    </AbsoluteFill>
+    <div style={{ position: 'absolute', left: x, top: 360, width: 340, height: 600, background: C.panel, border: `2px solid ${C.line}`, borderRadius: 28, boxSizing: 'border-box', boxShadow: '0 30px 70px rgba(0,0,0,.55)', padding: '40px 36px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ fontFamily: MONO, fontSize: 22, color: C.faint }}>On the TV</div>
+      <div style={{ fontFamily: SANS, fontWeight: 750, fontSize: 46, lineHeight: 1.1, color: C.ink, marginTop: 14 }}>GTA VI</div>
+      <div style={{ fontFamily: SANS, fontSize: 28, color: C.soft, marginTop: 8 }}>Story mode</div>
+      <div style={{ marginTop: 'auto' }}>
+        <div style={{ fontFamily: MONO, fontSize: 22, color: C.faint }}>Playing for</div>
+        <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 84, letterSpacing: -3, color: C.ink, fontVariantNumeric: 'tabular-nums' }}>{Math.floor(mins / 60)}:{String(mins % 60).padStart(2, '0')}</div>
+      </div>
+    </div>
   );
+}
+
+// ─── Nekko's mood along the timeline ───────────────────────────────────────
+function nekkoEyes(f: number): keyof typeof EYES {
+  if (f < 214) return 'closed';                 // asleep on the idle PC
+  if (f < 262) return f % 40 > 36 ? 'closed' : 'open';
+  if (f < 290) return 'happy';                  // the GPU has a job
+  if (f >= 484 && f < 520) return 'happy';      // approved
+  if (f >= 556) return 'happy';
+  return eyesAt(f, false);
+}
+/** A small settle each time the card lands, a happy hop on approval. */
+function nekkoHop(f: number) {
+  for (const land of [102, 322, 448, 554]) if (f >= land && f < land + 10) return Math.sin(((f - land) / 10) * Math.PI) * -1.2;
+  if (f >= 484 && f < 505) return [-1, -2, -1][Math.floor((f - 484) / 7)] ?? 0;
+  return 0;
 }
 
 export function GtaIdleGpu() {
   const f = useCurrentFrame();
+  const x = track(f, CARD.x), y = track(f, CARD.y), w = track(f, CARD.w), h = track(f, CARD.h);
+  const buzz = f >= 452 && f < 464 ? Math.sin((f - 452) * 2.4) * 4 * (1 - (f - 452) / 12) : 0;
   return (
     <AbsoluteFill style={{ background: PAGE_BG, overflow: 'hidden', fontFamily: SANS }}>
       <PixelWave f={f} />
-      {f < SC.out[1] && <Out f={f} />}
-      {f >= SC.console[0] && f < SC.console[1] && <Console f={f} />}
-      {f >= SC.wake[0] && f < SC.wake[1] && <Wake f={f} />}
-      {f >= SC.play[0] && f < SC.play[1] && <Play f={f} />}
-      {f >= SC.phone[0] && f < SC.phone[1] && <Phone f={f} />}
-      {f >= SC.end[0] && <End f={f} />}
+
+      <Headline f={f} at={-14} out={62} kicker="Launch week" align="center" top={360} size={150}
+        lines={['GTA VI', <Grad key="g">is out.</Grad>]} />
+      <Headline f={f} at={82} out={176} kicker="PS5 and Xbox only"
+        lines={["It's on your console.", <span key="n" style={{ color: C.faint }}>Not your PC.</span>]} />
+      <Headline f={f} at={186} out={290} kicker="Meanwhile"
+        lines={['Your GPU is', <Grad key="g">unemployed.</Grad>]} />
+      <Headline f={f} at={304} out={412} kicker="Tonight" top={96} size={76}
+        lines={[<>You play. <Grad>It works.</Grad></>]} />
+      <Headline f={f} at={426} out={520} kicker="From your phone" top={260} width={470} size={84}
+        lines={['Approve', 'from the', <Grad key="g">couch.</Grad>]} sub="Risky steps wait for your OK. Tap it between missions." />
+      <Headline f={f} at={538} kicker="Local AI" top={130} size={88}
+        lines={['$0 per token.', <Grad key="g">Play while it works.</Grad>]} />
+
+      {/* chips under the PC card while the model works */}
+      <div style={{ position: 'absolute', left: 96, top: 870, display: 'flex', gap: 14, fontFamily: SANS, fontSize: 28, color: C.soft }}>
+        {['No tokens', 'No subscription', 'Stays on your PC'].map((t, i) => (
+          <span key={t} style={{ padding: '10px 22px', borderRadius: 999, border: `2px solid ${C.line}`, opacity: win(f, 266 + i * 5, 288 + i * 2, 12), transform: `translateY(${(1 - p(f, 266 + i * 5, 282 + i * 5)) * 14}px)` }}>{t}</span>
+        ))}
+      </div>
+
+      <TvPanel f={f} />
+
+      {f >= CARD_KEYS[0] && (
+        <>
+          <div style={{ position: 'absolute', left: x + buzz, top: y, width: w, height: h, background: C.panel,
+            border: `${track(f, CARD.b)}px solid ${C.line}`, borderRadius: track(f, CARD.r), boxSizing: 'border-box', boxShadow: '0 30px 70px rgba(0,0,0,.55)', overflow: 'hidden' }}>
+            <PcFace f={f} />
+            <AgentFace f={f} />
+            <PhoneFace f={f} w={w} />
+            <EndFace f={f} />
+          </div>
+          <Peek f={f} x={x + buzz + w * track(f, CARD.nekko) - 96} edge={y} eyes={nekkoEyes(f)} hop={nekkoHop(f)} sparkle={f >= 484 && f < 516} />
+        </>
+      )}
     </AbsoluteFill>
   );
 }
