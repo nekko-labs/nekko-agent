@@ -200,6 +200,7 @@ export const PHONE_CHANNELS = [
   'providers:setEnabled',
   'remote:stop',
   'security:challenge',
+  'session:cancelWatch',
   'session:create',
   'session:delete',
   'session:fork',
@@ -464,6 +465,7 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
   'engine:unloadAll',
   'model:load',
   'model:unload',
+  'session:cancelWatch',
   'session:create',
   'session:delete',
   'session:fork',
@@ -1097,6 +1099,12 @@ export function screenPhoneCall(
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
       return {};
+    case 'session:cancelWatch':
+      // One watch of one chat (a clip's Cancel): the chat's Stop already ends them all.
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'watch id');
+      if (args.length > 2) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
     case 'session:photo':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'message id');
@@ -1322,6 +1330,7 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
     case 'workflow:run':
       return isObj(result) ? pick(result, PHONE_WORKFLOW_RUN_VIEW) : null;
     case 'task:runNow':
+    case 'session:cancelWatch':
       return null;
     case 'pr:sessionList':
       return phonePrsView(result);
@@ -1515,6 +1524,7 @@ export async function callFromPhone(
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
   if (channel === 'session:photo') callArgs = [args[0], args[1], args[2]];
+  if (channel === 'session:cancelWatch') callArgs = [args[0], args[1]];
   if ((PHONE_TERMINAL_CHANNELS as readonly string[]).includes(channel)) callArgs = phoneTerminalCallArgs(channel, args);
   if (channel === 'terminal:create') {
     // A new terminal starts in the chat's folder, as the desktop's does: the phone never names a path.

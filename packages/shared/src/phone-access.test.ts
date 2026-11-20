@@ -214,6 +214,14 @@ describe('settings from a phone', () => {
     expect(redactPhoneResult('session:watches', null)).toEqual([]);
   });
 
+  it("cancels one watch of a chat for a phone (session:cancelWatch), nothing more", () => {
+    expect(screenPhoneCall('session:cancelWatch', ['s1', 'w1'])).toEqual({});
+    expect(() => screenPhoneCall('session:cancelWatch', ['s1'])).toThrow(PhoneAccessError);
+    expect(() => screenPhoneCall('session:cancelWatch', ['', 'w1'])).toThrow(PhoneAccessError);
+    expect(() => screenPhoneCall('session:cancelWatch', ['s1', 'w1', 'x'])).toThrow(PhoneAccessError);
+    expect(redactPhoneResult('session:cancelWatch', { secret: 1 })).toBeNull();
+  });
+
   it('takes a sealed provider key and a switch from a phone, never a plaintext save (decision 0016)', () => {
     const good = { id: 'claude-phone', kind: 'anthropic', label: ' Anthropic ', sealedKey: 'AQID' };
     expect(screenPhoneCall('providers:saveSealed', [good])).toEqual({});
