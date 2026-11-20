@@ -7,7 +7,7 @@ recordings. No sound.
 
 | Composition | Length | Shows |
 | --- | --- | --- |
-| `GtaIdleGpu` | 15 s | Three slow beats: "Playing GTA VI?", "Put your PC to work. So you can focus on the mission.", then Nekko holding a generic pixel controller over the Nekko Agent wordmark and nekkoagent.com. Text settles in and dissolves out. No Rockstar artwork, logo, type or colours: the game is named in text only |
+| `GtaIdleGpu` | 18 s | Three slow beats: "Playing GTA VI?"; "Put your PC to work." with the PC finishing three tasks on Qwen3 8B, then "So you can focus on the mission."; Nekko holding a generic pixel controller (grips in his paws) with "3 tasks done", the Nekko Agent wordmark and nekkoagent.com. No Rockstar artwork, logo, type or colours: the game is named in text only |
 
     npm install
     npm run render

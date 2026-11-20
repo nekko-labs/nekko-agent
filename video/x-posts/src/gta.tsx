@@ -1,5 +1,5 @@
-// "Playing GTA VI?", a square post for X (1:1, 15 s). Three slow beats, one
-// idea each: the question, the offer (your PC works on local AI while you play)
+// "Playing GTA VI?", a square post for X (1:1, 18 s). Three slow beats, one
+// idea each: the question, the offer (your PC works through tasks on local AI)
 // and Nekko Agent, with Nekko holding a controller.
 //
 // Brand dark palette (spec/brand/colour-palette.md, docs/design-system.md):
@@ -14,7 +14,7 @@ import {
   staticFile, useCurrentFrame,
 } from 'remotion';
 
-const FRAMES = 450; // 15 s at 30 fps
+const FRAMES = 540; // 18 s at 30 fps
 const W = 1080, H = 1080;
 
 const C = {
@@ -75,31 +75,34 @@ const EYES = {
   happy: 'M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z',
   focus: 'M11 16H13V18H11Z M20 16H22V18H20Z',
 } as const;
-// Pad: a bar with two grips below his chin, d-pad left, two buttons right.
-const PAD = 'M4 23H28V24H29V29H28V33H23V31H9V33H4V29H3V24H4Z';
-const DPAD = 'M7 26H8V25H9V26H10V27H9V28H8V27H7Z';
+// Pad, held the right way up: shoulder buttons on top, grips at the bottom in
+// his paws, d-pad left, two buttons right.
+const PAD = 'M5 23H27V24H28V32H27V33H22V30H10V33H5V32H4V24H5Z';
+const DPAD = 'M8 26H9V25H10V26H11V27H10V28H9V27H8Z';
 function GamerNekko({ f, size }: { f: number; size: number }) {
   const t = f % 60;
-  const eyes: keyof typeof EYES = t > 55 ? 'closed' : (Math.floor(f / 90) % 3 === 2 ? 'happy' : 'focus');
-  const tilt = Math.sin(f / 9) * 0.6;                 // leaning into a turn
+  const eyes: keyof typeof EYES = t > 55 ? 'closed' : 'focus';
+  const lean = Math.round(Math.sin(f / 9) * 1.4) * 0.5;  // leaning into a turn, whole pixels only
   const pressA = Math.floor(f / 7) % 3 === 0, pressB = Math.floor(f / 11) % 2 === 0;
   return (
     <svg width={size} height={size * 34 / 32} viewBox="0 0 32 34" shapeRendering="crispEdges" style={{ overflow: 'visible' }}>
-      <g transform={`rotate(${tilt} 16 18)`}>
+      <g transform={`translate(${lean} 0)`}>
         <path d={HEAD} fill={C.nekkoFace} stroke={C.nekkoLine} strokeWidth={1} />
         <path d={EYES[eyes]} fill={C.nekkoEyes} />
         <path d="M15 20H17V21H15Z" fill={C.nekkoMouth} />
       </g>
-      <g transform={`translate(0 ${Math.sin(f / 9) * 0.4}) rotate(${-tilt * 1.4} 16 27)`}>
+      <g transform={`translate(${-lean} 0)`}>
+        <rect x={6} y={21.6} width={4} height={1.6} fill={C.panel2} stroke={C.nekkoLine} strokeWidth={0.8} />
+        <rect x={22} y={21.6} width={4} height={1.6} fill={C.panel2} stroke={C.nekkoLine} strokeWidth={0.8} />
         <path d={PAD} fill={C.panel2} stroke={C.nekkoLine} strokeWidth={1} />
         <path d={DPAD} fill={C.faint} />
-        <rect x={21} y={26.2} width={1.6} height={1.6} fill={pressA ? C.rose : C.plum2} />
-        <rect x={23.6} y={24.8} width={1.6} height={1.6} fill={pressB ? C.rose : C.plum2} />
+        <rect x={21.4} y={26.4} width={1.6} height={1.6} fill={pressA ? C.rose : C.plum2} />
+        <rect x={23.8} y={25} width={1.6} height={1.6} fill={pressB ? C.rose : C.plum2} />
         <rect x={14} y={26} width={1.4} height={0.8} fill={C.faint} />
         <rect x={16.6} y={26} width={1.4} height={0.8} fill={C.faint} />
-        {/* paws wrapped round the outer ends of the pad */}
-        <rect x={1} y={24 + (pressA ? 0.4 : 0)} width={4} height={4} fill={C.nekkoFace} stroke={C.nekkoLine} strokeWidth={1} />
-        <rect x={27} y={24 + (pressB ? 0.4 : 0)} width={4} height={4} fill={C.nekkoFace} stroke={C.nekkoLine} strokeWidth={1} />
+        {/* paws round the grips */}
+        <rect x={3} y={29 + (pressA ? 0.4 : 0)} width={5} height={4} fill={C.nekkoFace} stroke={C.nekkoLine} strokeWidth={1} />
+        <rect x={24} y={29 + (pressB ? 0.4 : 0)} width={5} height={4} fill={C.nekkoFace} stroke={C.nekkoLine} strokeWidth={1} />
       </g>
     </svg>
   );
@@ -119,10 +122,45 @@ function Soft({ f, at, out = 1e9, children, style }: { f: number; at: number; ou
 
 const CENTER: React.CSSProperties = { position: 'absolute', left: 0, right: 0, textAlign: 'center' };
 
+const Check = ({ size = 34 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke={C.ok} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+const Dot = ({ color, size = 14 }: { color: string; size?: number }) => <span style={{ width: size, height: size, borderRadius: size, background: color, display: 'inline-block', flexShrink: 0 }} />;
+
+// The PC's work while you play: one row finishes about every 1.5 s.
+const TASKS = ['Answer 12 support emails', 'Fix the checkout bug', 'Draft the launch post'];
+const TASK_AT = [176, 222, 268];
+function WorkCard({ f }: { f: number }) {
+  return (
+    <div style={{ width: 760, margin: '0 auto', background: C.panel, border: `2px solid ${C.line}`, borderRadius: 28, boxShadow: '0 30px 70px rgba(0,0,0,.5)', padding: '36px 44px', boxSizing: 'border-box', textAlign: 'left' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <span style={{ fontFamily: SANS, fontWeight: 650, fontSize: 32, color: C.ink }}>Your PC</span>
+        <span style={{ fontFamily: MONO, fontSize: 22, color: C.faint }}>Qwen3 8B · local</span>
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, fontFamily: SANS, fontSize: 26, color: C.soft }}><Dot color={C.ok} />Working</span>
+      </div>
+      <div style={{ marginTop: 22 }}>
+        {TASKS.map((t, i) => {
+          const done = p(f, TASK_AT[i], TASK_AT[i] + 12);
+          return (
+            <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '14px 0', fontFamily: SANS, fontSize: 34, color: done > 0.5 ? C.ink : C.soft }}>
+              <span style={{ position: 'relative', width: 34, height: 34, display: 'grid', placeItems: 'center' }}>
+                <span style={{ position: 'absolute', opacity: 1 - done }}><Dot color={C.plum} /></span>
+                <span style={{ position: 'absolute', opacity: done, transform: `scale(${0.6 + done * 0.4})` }}><Check /></span>
+              </span>{t}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontFamily: MONO, fontSize: 22, color: C.faint, marginTop: 14 }}>No tokens · no subscription · $0.00</div>
+    </div>
+  );
+}
+
 // ─── Timeline (frames at 30 fps) ───────────────────────────────────────────
-//   0.0–4.0  Playing GTA VI?
-//   4.3–9.8  Put your PC to work / so you can focus on the mission.
-//  10.0–15   Nekko with a controller, Nekko Agent, nekkoagent.com
+//   0.0–3.7  Playing GTA VI?
+//   4.0–11   Put your PC to work. The PC finishes three tasks, slowly.
+//            So you can focus on the mission.
+//  11.3–18   Nekko with a controller, "3 tasks done" above him, Nekko Agent
 export function GtaIdleGpu() {
   const f = useCurrentFrame();
   return (
@@ -130,31 +168,33 @@ export function GtaIdleGpu() {
       <PixelWave f={f} />
 
       {/* 1 — the question */}
-      <Soft f={f} at={-8} out={112} style={{ ...CENTER, top: 400 }}>
+      <Soft f={f} at={-8} out={100} style={{ ...CENTER, top: 400 }}>
         <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 150, lineHeight: 1, letterSpacing: -6, color: C.ink }}>
           Playing<br /><Grad>GTA VI?</Grad>
         </div>
       </Soft>
 
-      {/* 2 — the offer */}
-      <div style={{ ...CENTER, top: 380 }}>
-        <Soft f={f} at={132} out={282}>
-          <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 104, lineHeight: 1.02, letterSpacing: -4, color: C.ink }}>Put your PC<br />to work.</div>
-        </Soft>
-        <Soft f={f} at={168} out={282} style={{ marginTop: 34 }}>
-          <div style={{ fontFamily: SANS, fontWeight: 650, fontSize: 52, lineHeight: 1.15, letterSpacing: -1.5 }}><Grad>So you can focus<br />on the mission.</Grad></div>
-        </Soft>
-      </div>
+      {/* 2 — the PC works */}
+      <Soft f={f} at={120} out={322} style={{ ...CENTER, top: 130 }}>
+        <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 92, letterSpacing: -3.5, color: C.ink }}>Put your PC to work.</div>
+      </Soft>
+      <Soft f={f} at={140} out={322} style={{ ...CENTER, top: 300 }}><WorkCard f={f} /></Soft>
+      <Soft f={f} at={290} out={322} style={{ ...CENTER, top: 790 }}>
+        <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 60, letterSpacing: -2 }}><Grad>So you can focus on the mission.</Grad></div>
+      </Soft>
 
       {/* 3 — Nekko Agent */}
-      <Soft f={f} at={300} style={{ ...CENTER, top: 170, display: 'flex', justifyContent: 'center' }}>
+      <Soft f={f} at={340} style={{ ...CENTER, top: 150, display: 'flex', justifyContent: 'center' }}>
         <GamerNekko f={f} size={420} />
       </Soft>
-      <Soft f={f} at={324} style={{ ...CENTER, top: 680, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22 }}>
+      <Soft f={f} at={400} style={{ position: 'absolute', left: 780, top: 300 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.panel, border: `2px solid ${C.line}`, borderRadius: 999, padding: '12px 22px', fontFamily: SANS, fontSize: 26, color: C.ink }}><Check size={26} />3 tasks done</div>
+      </Soft>
+      <Soft f={f} at={364} style={{ ...CENTER, top: 690, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22 }}>
         <AppMark size={88} />
         <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: 84, letterSpacing: -3, color: C.ink }}>Nekko Agent</span>
       </Soft>
-      <Soft f={f} at={346} style={{ ...CENTER, top: 812 }}>
+      <Soft f={f} at={384} style={{ ...CENTER, top: 822 }}>
         <div style={{ fontFamily: MONO, fontSize: 36, color: C.soft }}>Free local AI · nekkoagent.com</div>
       </Soft>
     </AbsoluteFill>
