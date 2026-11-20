@@ -11,7 +11,7 @@ import { SplitCompass } from './SplitCompass.js';
 /**
  * The chrome around one window in a workspace: a thin title strip that is also
  * the handle you drag it by, the compass that adds a window beside it, and a
- * lifecycle button (Archive by default for chats, Close for other windows).
+ * lifecycle buttons (a chat gets Archive by default plus Close, other windows Close).
  *
  * While any window is being dragged every window covers itself with a target
  * that reads the pointer's nearest edge, because the thing you drop onto is
@@ -293,9 +293,20 @@ export function PaneFrame({
           aria-label={`${action === 'archive' ? 'Archive' : action === 'delete' ? 'Delete' : 'Close'} ${title}`}
           onClick={action === 'archive' ? archive : action === 'delete' || pane.kind === 'terminal' ? deleteWindow : onClose}
         >
-          {/* A chat's control says what it does: archive (kept, restorable) or delete. Only other windows close. */}
+          {/* A chat's control says what it does: archive (kept, restorable) or delete. Its X is the separate Close below. */}
           {action === 'archive' ? <ArchiveIcon className="h-3 w-3" /> : action === 'delete' ? <TrashIcon className="h-3 w-3" /> : <CloseIcon className="h-3 w-3" />}
         </button>
+        {/* A chat also closes, last like every window's X: the agent stops and its window goes,
+            but the chat is neither archived nor deleted and stays in the Agents panel. */}
+        {isChat && <button
+          type="button"
+          className="flex items-center rounded-sm p-1 text-ink-faint hover:text-ink"
+          title={closeTitle}
+          aria-label={`Close ${title}`}
+          onClick={onClose}
+        >
+          <CloseIcon className="h-3 w-3" />
+        </button>}
       </div>
 
       {menu && (
@@ -303,9 +314,8 @@ export function PaneFrame({
           {isChat && <ContextAction onClick={() => { setMenu(null); archive(); }}><ArchiveIcon className="mr-1 h-3.5 w-3.5" />Archive ({WINDOW_HOTKEYS.archive})</ContextAction>}
           {isChat && <ContextAction onClick={() => { setMenu(null); void deleteWindow(); }}>Delete ({WINDOW_HOTKEYS.delete})</ContextAction>}
           {onMinimize && <ContextAction onClick={() => { setMenu(null); onMinimize(); }}>Minimize ({WINDOW_HOTKEYS.minimize})</ContextAction>}
-          {/* A chat has no separate Close: it stopped the agent and dropped the window but left
-              the chat in the Agents panel as Done. Archive takes it off the list; Minimize keeps it. */}
-          {!isChat && <ContextAction onClick={() => { setMenu(null); if (pane.kind === 'terminal') void deleteWindow(); else onClose(); }}>{pane.kind === 'terminal' ? `Close (${WINDOW_HOTKEYS.delete})` : 'Close'}</ContextAction>}
+          {/* Close stops a chat's agent and drops its window; the chat stays listed. Archive takes it off the list. */}
+          <ContextAction onClick={() => { setMenu(null); if (pane.kind === 'terminal') void deleteWindow(); else onClose(); }}>{pane.kind === 'terminal' ? `Close (${WINDOW_HOTKEYS.delete})` : 'Close'}</ContextAction>
         </ContextMenu>
       )}
 
