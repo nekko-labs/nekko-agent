@@ -8,6 +8,7 @@ import { CheckIcon } from '../../icons.js';
 import { familyKind, groupModelFamilies, gpuGuidance, setUpPictureModels, shelveCatalog, type FamilyKind, type LibraryModel, type ModelFamily } from './modelFamilies.js';
 import { VoiceSettings } from '../VoiceSettings.js';
 import { pictureModelBlurb, pictureTimeText } from './pictureModelText.js';
+import { useStore } from '../../store.js';
 
 /**
  * Models, one surface.
@@ -117,6 +118,12 @@ export function ModelsHome({
     return () => { live = false; clearTimeout(timer); };
   }, [query, format]);
 
+  // A jump to one model's settings from elsewhere: when it is not in memory its
+  // drawer lives in its family's variant list, so that family is selected and
+  // any search or kind filter that would hide it is cleared. ModelLibrary then
+  // opens the row and clears the request.
+  const focus = useStore((s) => s.localModelFocus);
+  const focusLoaded = !!focus && resident.some((r) => r.id === focus);
   const picks = useMemo(() => setUpPictureModels(recs), [recs]);
   // The starter list stays chat only: the picks join it under Pictures or Video, or once there is a search.
   const shelves = useMemo(() => shelveCatalog(catalog, picks, models, kind !== 'all' || !!query.trim()), [catalog, picks, models, kind, query]);
@@ -125,6 +132,15 @@ export function ModelsHome({
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return families.filter(f => (kind === 'all' || familyKind(f) === kind) && words.every(word => [f.name, ...f.local.flatMap(m => [m.name, m.sourceRepo, m.quantization, m.folderProvider]), ...f.catalog.flatMap(m => [m.name, m.id, ...m.tags])].join(' ').toLowerCase().includes(word)));
   }, [families, query, kind]);
+  useEffect(() => {
+    if (!focus || focusLoaded) return;
+    const family = families.find(f => f.local.some(m => m.id === focus));
+    if (!family) return;
+    setQuery('');
+    setKind('all');
+    setSelectedKey(family.key);
+    setRepoId(null);
+  }, [focus, focusLoaded, families]);
   const moreIds = useMemo(() => new Set(shelves.more.map(m => m.id)), [shelves]);
   const extra = useMemo(() => matching.filter(f => isMoreFamily(f, moreIds)), [matching, moreIds]);
   const main = useMemo(() => matching.filter(f => !extra.includes(f)), [matching, extra]);

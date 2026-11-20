@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
 import { cssRule, stylesheet } from '../tests/css.js';
-vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
+const storeState = vi.hoisted(() => ({ value: { settings: {} } as Record<string, unknown> }));
+vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select(storeState.value) }));
 vi.mock('../simpleMode.js', async (original) => ({ ...(await original<object>()), useShown: () => true }));
 const quota = vi.hoisted(() => ({ byToken: {} as Record<string, any>, answered: new Set<string>(), nextRefreshAt: null as number | null }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => quota }));
@@ -259,6 +260,41 @@ describe('Local models monitor', () => {
     expect(none).toContain('No local engine installed.');
     expect(none).toContain('Set up a local model');
     expect(none).not.toContain('data-local-model-settings');
+  });
+  it('offers Unload on every loaded model, picture models included, and Unload all for more than one', () => {
+    const pictures = [...models, { id: 'flux', name: 'FLUX.1 schnell', path: '/m/flux.gguf', sizeBytes: 7 * GB, modality: 'image' }] as any;
+    const one = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'flux', loadedOn: 'gpu', vramBytes: 9 * GB }] }), models: pictures }} />);
+    expect(one).toContain('data-local-model-unload="flux"');
+    expect(one).toContain('aria-label="Unload FLUX.1 schnell"');
+    expect(one).toContain('image gen');
+    expect(one).toContain("Open FLUX.1 schnell&#x27;s picture settings");
+    expect(one).not.toContain('Unload all');
+    const two = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'flux' }, { id: 'qwen' }] }), models: pictures }} />);
+    expect(two).toContain('data-local-model-unload="qwen"');
+    expect(two).toContain('data-local-models-unload-all');
+  });
+  it('lists starred then recent models that are not loaded, each with Settings and Load', () => {
+    const more = [...models, { id: 'phi', name: 'Phi 4', path: '/m/phi.gguf', sizeBytes: 2 * GB }] as any;
+    storeState.value = {
+      settings: { favoriteModels: ['nekko-engine::gemma', 'nekko-engine::qwen', 'openai::gpt-5'] },
+      sessions: [{ providerId: 'nekko-engine', modelId: 'phi', updatedAt: 10 }, { providerId: 'nekko-engine', modelId: 'gemma', updatedAt: 20 }],
+    };
+    try {
+      const html = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'qwen' }] }), models: more }} />);
+      const starred = html.slice(html.indexOf('data-local-models-group="starred"'), html.indexOf('data-local-models-group="recent"'));
+      expect(starred).toContain('data-local-model-load="gemma"');
+      expect(starred).toContain('data-local-model-settings="gemma"');
+      expect(starred).toContain('aria-label="Unstar Gemma 3 27B"');
+      // Loaded already: it has its own row with Unload, not a Load shortcut.
+      expect(html).not.toContain('data-local-model-load="qwen"');
+      expect(html).toContain('aria-label="Unstar Qwen3 8B"');
+      const recent = html.slice(html.indexOf('data-local-models-group="recent"'));
+      expect(recent).toContain('data-local-model-load="phi"');
+      expect(recent).toContain('aria-label="Star Phi 4"');
+      expect(recent).not.toContain('data-local-model-load="gemma"');
+      // Offered while the server is stopped too: Load starts it.
+      expect(renderToStaticMarkup(<LocalModels initial={{ status: status({ running: false }), models: more }} />)).toContain('data-local-model-load="gemma"');
+    } finally { storeState.value = { settings: {} }; }
   });
 });
 

@@ -135,6 +135,15 @@ that says so.
 A paused background automation keeps no request open, so its model counts as idle: it
 goes on the idle timer, or sooner when a chat of yours needs the room.
 
+**From the Local models monitor.** The **Local models** monitor in the Monitors panel lists
+what is in memory, picture models included, each with **Unload** and **Settings**, and
+**Unload all** when more than one is loaded. Below that it offers up to four **Starred** and
+three **Recent** models that are not loaded, each with **Load** and **Settings**. Star a model
+with the star beside its name, here or in the model picker. Recent is the models this app
+saw in memory and the models your local chats used, newest first. **Load** uses the model's
+saved settings, or the recommended ones when it has none, and starts the engine if it is
+stopped.
+
 **Configuring a load.** A model's drawer leads with a **memory meter**: graphics memory
 (VRAM) and system memory (RAM) as two bars, each split into other apps, this model (its
 weights, its context, its working space) and what is left, plus a line when part of the

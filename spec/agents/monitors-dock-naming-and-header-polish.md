@@ -25,6 +25,18 @@ User intent: from the Agents view's Panels dock, see which local models are runn
 
 Not verified: packaged app, native window chrome, and a real engine (the fixture uses synthetic engine status).
 
+## Local models monitor: unload, starred and recent (2026-11-20)
+
+User intent (Philip): "I was running an image model and it didn't show the options to unload in the local models monitor. It's important we provide this. Let's show recent and a few starred models in the local models section. The user should be able to configure them or load them." This replaces the read-only rule above: the monitor now changes what is loaded, while load-time settings themselves stay on Model Server.
+
+- **Unload from the monitor** `[implemented; unit-tested; renderer-verified in an isolated fixture]`. Every resident model on this computer has **Unload** beside **Settings**, picture models included (a picture model fills the GPU, so freeing it is the common need). **Unload all** shows when more than one model is loaded. A picture model's row says `image gen`, and its Settings jump opens its picture settings, not the context and GPU-layer drawer. A connected computer's rows keep the Unload they already had.
+- **Starred and Recent** `[implemented; unit-tested; renderer-verified in an isolated fixture]`. Under the loaded models: up to 4 **Starred** models (the `nekko-engine::<id>` keys in `favoriteModels`, the same stars as the model picker) and up to 3 **Recent** ones, newest first, neither repeating a loaded model and Recent not repeating a starred one. Recent merges the models the app saw resident (kept on this device in `localStorage`, `nekko.localModels.recent`, last 20, recorded while the monitor polls and on Load) with chats whose provider is the built-in engine. Each row has a star toggle, **Settings** and **Load**. Load uses the model's saved preset, or the planner's answer when there is none (the same path as a library row's Load), and starts the engine if it is stopped, so the shortcuts show while the server is stopped too. Shown for this computer only; a watched computer keeps its *Load a model* control.
+- **Settings for a model that is not loaded** `[implemented; renderer-verified in an isolated fixture]`. `openLocalModelSettings(id)` now also serves a model that is not resident: Model Server switches to its Models tab, selects that model's family (clearing any search or kind filter), and the variant list unfolds that model's drawer and scrolls to it.
+- **The expert Monitor popover** reuses the same component, so it gains all of the above; its heading reads **Local models** (was *Loaded models*).
+- **Known limits.** Recent only sees picture models that were in memory while the app was polling (the monitor open) or that ran from a local chat; a picture made while the monitor was closed and unloaded right after is not recorded. Recents are per device and are not synced.
+
+Not verified: packaged app and a real engine (the fixture uses synthetic engine status and a stand-in bridge).
+
 ## Task systems, Agent Monitor Tasks and focus-mode clean start (2026-10-16)
 
 - **Implemented: source priority.** The system prompt (`crates/nekko-context/src/prompt.rs`) tells the agent to use workspace folders first, then connected connectors, and only then CLI tools, unless the task is to run something.

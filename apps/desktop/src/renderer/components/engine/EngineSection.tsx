@@ -55,6 +55,9 @@ export function EngineSection({
   const [models, setModels] = useState<Array<LocalModel & { loaded: boolean }>>([]);
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [tab, setTab] = useState<Tab>('models');
+  // A jump to one model's settings lands on the Models tab, wherever this page was left.
+  const focus = useStore((s) => s.localModelFocus);
+  useEffect(() => { if (focus) setTab('models'); }, [focus]);
   const [busy, setBusy] = useState<'starting' | 'stopping' | null>(null);
   const [showLog, setShowLog] = useState(false);
   const runtimeDownload = useDownloadAction({ runtime: 'llama' });

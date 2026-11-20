@@ -1,7 +1,7 @@
 import { monitorPickup } from './monitorPickup.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SubscriptionLimits, SystemStats, UsageSlice, UsageSummary } from '@nekko-agent/shared';
-import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
+import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, MODALITY_LABELS, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
@@ -12,7 +12,9 @@ import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { MonitorComputerSwitch, useMonitors, useResourceSample, useWatchedComputer } from './ResourceMonitor.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
-import { ServerIcon, MoneyIcon, SlidersIcon, CubeIcon, PanelIcon } from '../icons.js';
+import { ServerIcon, MoneyIcon, SlidersIcon, CubeIcon, PanelIcon, StarIcon } from '../icons.js';
+import { ENGINE_PROVIDER_ID, loadLocalModel, localModelShortcuts, noteLocalModelsUsed, readRecentLocalModels } from './engine/localModelShortcuts.js';
+import { nextFavoriteModels } from './agent-console/modelPickerInteractions.js';
 import { GfBarChartHorizontalIcon, GfBoltIcon, GfCloseIcon, GfMinusIcon } from '../gentleface-icons.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
@@ -680,20 +682,22 @@ export function hardwareRows(monitors: Record<MonitorKind, boolean>, system: Sys
 
 const TEMP_COLOR = { ok: 'var(--ink-faint)', warn: 'var(--warning)', hot: 'var(--danger)' } as const;
 
-/** The built-in Model Server's provider id (`PROVIDER_ID` in EngineSection). */
-const ENGINE_PROVIDER_ID = 'nekko-engine';
-
 /** How often the Local models monitor re-reads the engine, matching the chat's model dock. */
 const LOCAL_MODELS_POLL_MS = 6000;
 
 /**
- * What the local engine holds in memory and where each model runs, with a jump
- * to that model's own settings on Model Server. Read-only by design: GPU offload,
- * context and KV cache are load-time settings with a reload behind them, and they
- * belong on the page that explains what changing them costs.
+ * What the local engine holds in memory and where each model runs, with
+ * Unload on every model (picture models included: one fills the GPU) and a
+ * jump to its own settings on Model Server. Below that, a few starred and
+ * recent models with Load and Settings, so the next one is a click away.
+ * GPU offload, context and KV cache themselves stay on Model Server, which
+ * explains what changing them costs.
  */
 export function LocalModels({ initial }: { initial?: { status: EngineStatus | null; models: LocalModel[] } } = {}) {
   const computer = useWatchedComputer();
+  const favorites = useStore((s) => s.settings?.favoriteModels);
+  const chats = useStore((s) => s.sessions);
+  const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<EngineStatus | null>(initial?.status ?? null);
   const [models, setModels] = useState<LocalModel[]>(initial?.models ?? []);
   const [read, setRead] = useState(Boolean(initial));
@@ -731,6 +735,48 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
   const resident = status?.resident ?? [];
   const installed = Boolean((status as { installed?: boolean } | null)?.installed ?? status?.install?.binPath);
   const openServer = () => store().setView('modelserver');
+  const library = new Map(models.map((m) => [m.id, m]));
+  // What this computer holds counts as used, so it is in Recent once it unloads.
+  useEffect(() => {
+    if (computer || !status?.running || !status.resident.length) return;
+    noteLocalModelsUsed(status.resident.map((r) => ({ id: r.id, at: r.lastUsedAt ?? Date.now() })));
+  }, [computer, status]);
+  const act = async (id: string, verb: string, run: () => Promise<{ ok: boolean; message?: string }>) => {
+    setBusy(id);
+    const res = await run().catch((e: Error) => ({ ok: false, message: e.message }));
+    setBusy(null);
+    if (!res.ok) store().pushToast('error', res.message || `Couldn't ${verb} it.`);
+    setTick((n) => n + 1);
+  };
+  const unload = (id: string) => act(id, 'unload', () => window.nekko.unloadModel(ENGINE_PROVIDER_ID, id));
+  const unloadAll = () => act('*', 'unload them', async () => {
+    const results = await Promise.all(resident.map((r) => window.nekko.unloadModel(ENGINE_PROVIDER_ID, r.id).catch((e: Error) => ({ ok: false, message: e.message }))));
+    return results.find((r) => !r.ok) ?? { ok: true };
+  });
+  const load = (m: LocalModel) => {
+    noteLocalModelsUsed([{ id: m.id, at: Date.now() }]);
+    return act(m.id, 'load', () => loadLocalModel(ENGINE_PROVIDER_ID, m));
+  };
+  const toggleStar = async (id: string) => {
+    await window.nekko.updateSettings({ favoriteModels: nextFavoriteModels(favorites, `${ENGINE_PROVIDER_ID}::${id}`) }).catch(() => null);
+    void store().refreshSettings(false);
+  };
+  const starredSet = new Set(favorites ?? []);
+  const star = (id: string, name: string) => {
+    const on = starredSet.has(`${ENGINE_PROVIDER_ID}::${id}`);
+    return <button type="button" className="monitors-dock__star" data-local-model-star={id} aria-pressed={on} aria-label={on ? `Unstar ${name}` : `Star ${name}`} title={on ? 'Starred: offered here when it is not loaded' : 'Star it to keep it offered here'} onClick={() => void toggleStar(id)}><StarIcon className="h-3 w-3" filled={on} /></button>;
+  };
+  const kind = (m: LocalModel | undefined) => m?.modality && m.modality !== 'chat' ? MODALITY_LABELS[m.modality] : null;
+  const shortcuts: { starred: LocalModel[]; recent: LocalModel[] } = computer || !installed ? { starred: [], recent: [] } : localModelShortcuts({ models, resident: resident.map((r) => r.id), favorites, seen: readRecentLocalModels(), chats: chats ?? [] });
+  const shortcutRow = (m: LocalModel) => <div className="monitors-dock__local-model" key={m.id} data-local-model-shortcut={m.id}>
+    <div className="monitors-dock__metric-row">
+      {star(m.id, m.name)}
+      <strong className="monitors-dock__provider-name" title={m.name}>{m.name}</strong>
+      <button type="button" className="monitors-dock__text-button" data-local-model-settings={m.id} aria-label={`Open ${m.name} settings`} title={m.modality === 'image' ? `Open ${m.name}'s picture settings` : `Open ${m.name}'s GPU offload, context and memory settings`} onClick={() => store().openLocalModelSettings(m.id)}>Settings</button>
+      <button type="button" className="monitors-dock__text-button" data-local-model-load={m.id} aria-label={`Load ${m.name}`} disabled={busy === m.id} onClick={() => void load(m)}>{busy === m.id ? 'Loading…' : 'Load'}</button>
+    </div>
+    <p className="monitors-dock__note">{[kind(m), m.parameterSize, m.quantization, formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</p>
+  </div>;
   if (!read) return <div className="monitors-dock__metrics monitors-dock__local-models"><p className="monitors-dock__note">{computer ? 'Reading that computer\'s engine…' : 'Reading the local engine…'}</p></div>;
   return <div className="monitors-dock__metrics monitors-dock__local-models">
     {!installed ? <p>No local engine installed.</p>
@@ -738,14 +784,16 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
       : resident.length === 0 ? <p>No local model is loaded.</p>
       : resident.map((r) => {
         const split = r.loadedOn === 'gpu+cpu' || r.loadedOn === 'cpu';
+        const model = library.get(r.id);
         const name = names.get(r.id) ?? r.id;
         const bytes = r.vramBytes ?? r.sizeBytes;
-        const rest = [r.contextLength ? `${formatTokens(r.contextLength)} context` : null, bytes ? formatBytes(bytes) : null].filter((x): x is string => Boolean(x));
+        const rest = [kind(model), r.contextLength ? `${formatTokens(r.contextLength)} context` : null, bytes ? formatBytes(bytes) : null].filter((x): x is string => Boolean(x));
         return <div className="monitors-dock__local-model" key={r.id} data-local-model={r.id}>
           <div className="monitors-dock__metric-row">
+            {!computer && model && star(r.id, name)}
             <strong className="monitors-dock__provider-name" title={name}>{name}</strong>
-            {!computer && <button type="button" className="monitors-dock__text-button" data-local-model-settings={r.id} title={`Open ${name}'s GPU offload, context and memory settings`} aria-label={`Open ${name} settings`} onClick={() => store().openLocalModelSettings(r.id)}>Settings</button>}
-            {computer && <button type="button" className="monitors-dock__text-button" data-local-model-unload={r.id} aria-label={`Unload ${name}`} onClick={() => change('model:unload', [ENGINE_PROVIDER_ID, r.id])}>Unload</button>}
+            {!computer && <button type="button" className="monitors-dock__text-button" data-local-model-settings={r.id} title={model?.modality === 'image' ? `Open ${name}'s picture settings` : `Open ${name}'s GPU offload, context and memory settings`} aria-label={`Open ${name} settings`} onClick={() => store().openLocalModelSettings(r.id)}>Settings</button>}
+            <button type="button" className="monitors-dock__text-button" data-local-model-unload={r.id} aria-label={`Unload ${name}`} disabled={busy === r.id || busy === '*'} onClick={() => computer ? change('model:unload', [ENGINE_PROVIDER_ID, r.id]) : void unload(r.id)}>{busy === r.id ? 'Unloading…' : 'Unload'}</button>
           </div>
           <p className="monitors-dock__note">
             {r.loadedOn && <span title={placementTitle(r)} style={split ? { color: 'var(--warning)' } : undefined}>{placementLabel(r)}</span>}
@@ -754,6 +802,9 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
           </p>
         </div>;
       })}
+    {!computer && status?.running && resident.length > 1 && <button type="button" className="monitors-dock__text-button" data-local-models-unload-all disabled={busy !== null} onClick={() => void unloadAll()}>{busy === '*' ? 'Unloading…' : 'Unload all'}</button>}
+    {shortcuts.starred.length > 0 && <div className="monitors-dock__local-group" data-local-models-group="starred"><p className="monitors-dock__local-group-label">Starred</p>{shortcuts.starred.map(shortcutRow)}</div>}
+    {shortcuts.recent.length > 0 && <div className="monitors-dock__local-group" data-local-models-group="recent"><p className="monitors-dock__local-group-label">Recent</p>{shortcuts.recent.map(shortcutRow)}</div>}
     {computer && installed && status?.running && server && <ComputerModelServer id={computer} server={server} resident={resident.map((r) => r.id)} change={change} />}
     {/* The Model Server page and a model's settings are this computer's. */}
     {!computer && <button type="button" className="monitors-dock__text-button" onClick={openServer}>{installed ? 'Open Model Server' : 'Set up a local model'}</button>}
