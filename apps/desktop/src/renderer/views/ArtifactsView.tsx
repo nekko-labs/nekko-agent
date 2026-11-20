@@ -18,9 +18,9 @@ import {
   LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
   type LibraryLayout,
 } from '../components/library/libraryPrefs.js';
-import { ChevronDownIcon, ChevronIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
+import { ChevronDownIcon, ChevronIcon, ExternalIcon, FocusLayoutIcon, PanelLeftIcon } from '../icons.js';
 import {
-  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, helperCandidates, mergeArtifacts, movedPaths, presentPaths, readProjectDesignFolders, relocate, sessionArtifacts, withFolderDesigns,
+  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, helperCandidates, libraryEntryFor, mergeArtifacts, movedPaths, presentPaths, readProjectDesignFolders, relocate, sessionArtifacts, withFolderDesigns,
   type ArtifactEntry, type ArtifactKind,
 } from '../artifactsIndex.js';
 
@@ -141,7 +141,8 @@ export function ArtifactsView() {
     focusChatOnWall: s.focusChatOnWall,
     profile: s.settings?.workProfile,
   })));
-  const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen());
+  // A chat's "Open in Library" goes straight to its file: the first-visit guide waits for a visit of its own.
+  const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen() && !useStore.getState().libraryRequest);
   const closeIntro = () => { dismissLibraryIntro(); setShowIntro(false); };
   // The list from the previous visit: shown immediately for a zero-layout-shift
   // repeat visit, then kept as the floor while new batches arrive (#3043).
@@ -164,6 +165,10 @@ export function ArtifactsView() {
   // Which version of the picked design is open (its newest when null), and whether its file is shown instead of the canvas.
   const [version, setVersion] = useState<string | null>(null);
   const [asFile, setAsFile] = useState(false);
+  // The open file fills Library, with the list and the sliders put away.
+  const [full, setFull] = useState(false);
+  // A file a chat opened here that Library had not listed yet: swapped for its listed entry once it is.
+  const unlisted = useRef<{ path: string; origin?: { id: string; title: string } } | null>(null);
   const [includeArchived, setIncludeArchived] = useState(true);
   const [show, setShow] = useState<Show>('all');
   const [layout, setLayout] = useState<LibraryLayout>(loadLibraryLayout);
@@ -311,7 +316,38 @@ export function ArtifactsView() {
     return next;
   });
   // In List the list gives way to the preview, so the change is animated; elsewhere it is a swap.
-  const pick = (e: ArtifactEntry | null) => { setSelected(e); setVersion(null); setAsFile(false); };
+  const pick = (e: ArtifactEntry | null) => { unlisted.current = null; setSelected(e); setVersion(null); setAsFile(false); setFull(false); };
+
+  // "Open in Library" from a chat: that file, full screen. It opens at once, from
+  // the path alone if Library has not listed it yet, and becomes its listed entry
+  // (with its other versions) once the list has it.
+  const libraryRequest = useStore((s) => s.libraryRequest);
+  useEffect(() => {
+    if (!libraryRequest) return;
+    useStore.setState({ libraryRequest: null });
+    const chat = libraryRequest.sessionId ? sessions.find((s) => s.id === libraryRequest.sessionId) : undefined;
+    const origin = libraryRequest.sessionId ? { id: libraryRequest.sessionId, title: chat?.title ?? 'Chat' } : undefined;
+    const found = libraryEntryFor(everything, libraryRequest.path, origin);
+    unlisted.current = found.listed ? null : { path: found.entry.path, origin };
+    setShowIntro(false);
+    setSelected(found.entry);
+    setVersion(found.version);
+    setAsFile(false);
+    setFull(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryRequest]);
+  useEffect(() => {
+    // Picking another file (or going back) clears it, so while it is set the chat's file is still the one open.
+    const want = unlisted.current;
+    if (!want) return;
+    const found = libraryEntryFor(everything, want.path, want.origin);
+    if (!found.listed) return;
+    unlisted.current = null;
+    setSelected(found.entry);
+    // The list stands for a design by its newest version: keep the one the chat named open.
+    setVersion(found.version ?? (found.entry.path === want.path ? null : want.path));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [everything]);
   const select = (e: ArtifactEntry | null) => (layout === 'list' ? transition(() => pick(e), true) : pick(e));
   // Back to Library from a file: Escape outside a field, or the mouse's back button.
   const back = useRef(() => {});
@@ -450,7 +486,7 @@ export function ArtifactsView() {
   return (
     <div className="flex h-full min-h-0 flex-col" data-artifacts-view data-library-layout={layout}>
       {showIntro && <LibraryIntro onClose={closeIntro} />}
-      <header className={`${selected ? 'hidden md:flex' : 'flex'} min-w-0 items-center gap-3 border-b border-line px-4 py-2`}>
+      <header className={`${full ? 'hidden' : selected ? 'hidden md:flex' : 'flex'} min-w-0 items-center gap-3 border-b border-line px-4 py-2`}>
         {!hasAppChrome && <h1 className="view-title shrink-0">Library</h1>}
         {!noFiles && (
           <div className="library-types min-w-0 overflow-x-auto">
@@ -464,8 +500,8 @@ export function ArtifactsView() {
         {!noFiles && <SlideToggle label="Layout" options={LAYOUT_OPTIONS} value={layout} onChange={pickLayout} iconOnly className="hidden shrink-0 md:inline-flex" transitionName="library-layout" />}
       </header>
 
-      {noFiles ? placeholder : <div className="flex min-h-0 flex-1">
-        <aside className={`library-list ${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col ${listWide ? '' : 'md:w-[340px] md:border-r md:border-line'}`}>
+      {noFiles && !selected ? placeholder : <div className="flex min-h-0 flex-1">
+        <aside className={`library-list ${full ? 'hidden' : selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col ${listWide ? '' : 'md:w-[340px] md:border-r md:border-line'}`}>
           <div className={`space-y-2 px-3 pb-2 pt-3 ${listWide ? 'md:px-5' : ''}`}>
             <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter Library" value={query} onChange={(e) => setQuery(e.target.value)} />
             <label className="flex items-center gap-2 text-2xs text-ink-faint">
@@ -497,6 +533,11 @@ export function ArtifactsView() {
                   <p className="truncate text-sm font-semibold">{selected.title}</p>
                   <p className="truncate font-mono text-2xs text-ink-faint" title={openPath}>{openPath}</p>
                 </div>
+                {/* Narrow windows already give the file the whole width. */}
+                <button type="button" className="btn btn-ghost hidden shrink-0 gap-2 py-1 text-xs md:inline-flex" data-library-full aria-pressed={full}
+                  onClick={() => setFull((on) => !on)} title={full ? 'Show the Library list beside the file' : 'Give the file the whole of Library'}>
+                  <PanelLeftIcon className="h-3.5 w-3.5" /> {full ? 'Show list' : 'Full screen'}
+                </button>
                 {selected.sessionId && (
                   <button type="button" className="btn btn-primary gap-2 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Single agent view`}>
                     <FocusLayoutIcon className="h-3.5 w-3.5" /> Open chat

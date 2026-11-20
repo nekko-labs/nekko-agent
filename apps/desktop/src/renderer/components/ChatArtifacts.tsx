@@ -4,6 +4,7 @@ import { LOCAL_IMAGE_EXT } from '../localImages.js';
 import { LocalImageCard } from './LocalImageCard.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { mainCheckoutPath } from '../artifactPaths.js';
+import { artifactKind } from '../artifactsIndex.js';
 import { useStore } from '../store.js';
 import { MarkdownSandbox, safeHref } from './Markdown.js';
 import { isolatedDocument } from './ArtifactPreview.js';
@@ -113,6 +114,7 @@ export function HtmlRenderingCard({ artifact, sessionId }: { artifact: ChatArtif
   const box = React.useRef<HTMLDivElement>(null);
   const frame = React.useRef<HTMLIFrameElement>(null);
   const path = artifact.path;
+  const design = artifactKind(path) === 'design';
 
   React.useEffect(() => {
     if (sandbox || near) return;
@@ -173,7 +175,11 @@ export function HtmlRenderingCard({ artifact, sessionId }: { artifact: ChatArtif
         {bridge && <button type="button" className="artifact-card-action rounded-md border px-2 py-1 text-xs disabled:opacity-50" disabled={sandbox || !source}
           title={source ? 'Open an interactive preview in its own isolated window' : 'Available once the page has loaded'} onClick={() => { void interactive(); }}>Interactive</button>}
         <button type="button" className="artifact-card-action rounded-md border px-2 py-1 text-xs disabled:opacity-50" disabled={sandbox}
-          title={sandbox ? 'Host file previews are unavailable in Sandbox' : `Open ${path}`} onClick={open}>Open ↗</button>
+          title={sandbox ? 'Host file previews are unavailable in Sandbox' : `Open ${path}${design ? ' beside this chat' : ''}`} onClick={open}>{design ? 'Open in chat' : 'Open ↗'}</button>
+        {/* A design can also fill Library, on its canvas with its versions. */}
+        {design && <button type="button" className="artifact-card-action rounded-md border px-2 py-1 text-xs disabled:opacity-50" disabled={sandbox} data-open-in-library
+          title={sandbox ? 'Host file previews are unavailable in Sandbox' : `Open ${path} in Library, full screen`}
+          onClick={() => { if (!sandbox) useStore.getState().openInLibrary(path, sessionId); }}>Open in Library</button>}
       </span>
     </div>
     {error && <p role="status" className="px-3 pb-2 text-2xs text-ink-soft">{error}</p>}
