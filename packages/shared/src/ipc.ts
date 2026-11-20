@@ -237,6 +237,7 @@ export const IpcChannels = {
   reposList: 'repos:list',
   reposClone: 'repos:clone',
   reposSetSandbox: 'repos:setSandbox',
+  reposSuggestFolder: 'repos:suggestFolder',
   workspaceRemove: 'workspace:remove',
   workspaceIndex: 'workspace:index',
   workspaceIndexStatus: 'workspace:indexStatus',
@@ -1107,6 +1108,12 @@ export interface NekkoApi {
   cloneRepo(repo: Pick<import('./workspace.js').RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>, opts?: { sessionId?: string }): Promise<import('./workspace.js').RepoCloneResult>;
   /** A sandbox chat's sandbox repositories, before the sandbox is set up (#2561). */
   setSandboxRepos(sessionId: string, repos: import('./chat.js').SandboxRepo[]): Promise<Session>;
+  /**
+   * After `path` is added: the folder to offer as the repositories folder (it,
+   * or its parent, holds several repositories), or null. Null once a
+   * repositories folder is chosen or the offer was made.
+   */
+  suggestRepoFolder(path: string): Promise<{ suggested: string } | null>;
   indexWorkspace(id: string): Promise<IndexStatus>;
   getIndexStatus(id: string): Promise<IndexStatus | null>;
   searchWorkspace(id: string, query: string): Promise<SearchHit[]>;

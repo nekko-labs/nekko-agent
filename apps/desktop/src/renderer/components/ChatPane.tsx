@@ -120,6 +120,7 @@ import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
 import { AuditTrail } from './AuditTrail.js';
 import { GitHubStarAsk } from './GitHubStarAsk.js';
+import { RepoFolderOffer } from './RepoFolderOffer.js';
 import { starAskAfterReply } from '../starAsk.js';
 import { ShieldCheckIcon } from '../icons.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
@@ -786,6 +787,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const userPromptRef = useRef(false);
   const [starAsk, setStarAsk] = useState(false);
   const closeStarAsk = useCallback(() => setStarAsk(false), []);
+  // The one-time repositories folder offer, in the chat a folder was added to.
+  const repoFolderOffer = useStore((s) => (s.repoFolderOffer?.sessionId === sessionId ? s.repoFolderOffer.suggested : null));
   // A failed reply stays in the transcript with a retry, instead of vanishing
   // with the toast.
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -3020,6 +3023,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
                 {starAsk && !streaming && !question && !secretAsk && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
+                {repoFolderOffer && !question && !secretAsk && !approval && !readOnly && <RepoFolderOffer suggested={repoFolderOffer} />}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!secretAsk || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}

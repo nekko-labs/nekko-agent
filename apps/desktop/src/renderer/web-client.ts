@@ -622,6 +622,7 @@ function makeWebClient(): NekkoApi {
     listRepos: (query) => call(IpcChannels.reposList, query ?? ''),
     cloneRepo: (repo, opts) => call(IpcChannels.reposClone, repo, opts ?? {}),
     setSandboxRepos: (id, repos) => call(IpcChannels.reposSetSandbox, id, repos),
+    suggestRepoFolder: (path) => call(IpcChannels.reposSuggestFolder, path),
     indexWorkspace: (id) => call(IpcChannels.workspaceIndex, id),
     getIndexStatus: (id) => call(IpcChannels.workspaceIndexStatus, id),
     searchWorkspace: (id, query) => call(IpcChannels.workspaceSearch, id, query),

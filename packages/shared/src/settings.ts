@@ -282,6 +282,8 @@ export interface AppSettings {
   defaultWorkspaceIds?: string[];
   /** Where repositories added to a chat's environment are cloned. Unset: `~/nekko-repos`. */
   repoCloneDir?: string;
+  /** The one-time offer to use the folder holding the user's repositories as `repoCloneDir` was made (answered either way). */
+  repoCloneDirOffered?: boolean;
   connectors: ConnectorConfig[];
   defaultProviderId?: string;
   defaultModelId?: string;

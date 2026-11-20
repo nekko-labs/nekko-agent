@@ -215,6 +215,12 @@ interface UiState {
   settingsError: string | null;
   mascotMood: MascotMood;
   toasts: Toast[];
+  /**
+   * The one-time offer to keep repositories in the folder that already holds
+   * the user's (`suggested`), shown in the chat a folder was just added to.
+   */
+  repoFolderOffer: { sessionId: string; suggested: string } | null;
+  setRepoFolderOffer: (offer: { sessionId: string; suggested: string } | null) => void;
   paletteOpen: boolean;
   /**
    * The project folder new work is filed under. Named for the folder, not for
@@ -650,6 +656,8 @@ export const useStore = create<UiState>((set, get) => ({
   settingsError: null,
   mascotMood: 'waving',
   toasts: [],
+  repoFolderOffer: null,
+  setRepoFolderOffer: (offer) => set({ repoFolderOffer: offer }),
   claudePlanSheet: false,
   addProviderKind: null,
   paletteOpen: false,

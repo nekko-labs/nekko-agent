@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-pub const CHANNELS: &[&str] = &["repos:list", "repos:clone", "repos:setSandbox"];
+pub const CHANNELS: &[&str] = &["repos:list", "repos:clone", "repos:setSandbox", "repos:suggestFolder"];
 
 /// A first clone of a large repository can take a while.
 const CLONE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -61,7 +61,16 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 Some(p) => p,
                 // No copy and no repositories folder yet: the user picks one first.
                 None if !chosen => {
-                    let suggested = nekko_js::home_dir().unwrap_or_default().join(DEFAULT_DIR);
+                    // The folder already holding the user's repositories, else `~/nekko-repos`.
+                    let saved = saved_paths(&settings);
+                    let suggested = tokio::task::spawn_blocking(move || {
+                        let home = nekko_js::home_dir();
+                        saved.iter().find_map(|p| main_folder(p, home.as_deref()))
+                    })
+                    .await
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| nekko_js::home_dir().unwrap_or_default().join(DEFAULT_DIR));
                     return Ok(json!({ "needsFolder": true, "suggested": suggested.to_string_lossy() }));
                 }
                 None => tokio::task::spawn_blocking(move || clone(&plan))
@@ -97,6 +106,22 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             tokio::task::spawn_blocking(move || store.set_sandbox_repos(&id, &repos))
                 .await
                 .map_err(|e| e.to_string())?
+        }
+        // After a folder is added: whether to offer its main folder as the
+        // repositories folder. Asked once, and only while none is chosen.
+        "repos:suggestFolder" => {
+            if clone_dir_set(&settings) || settings.get("repoCloneDirOffered").and_then(Value::as_bool) == Some(true) {
+                return Ok(Value::Null);
+            }
+            let path = args.first().and_then(Value::as_str).unwrap_or_default().trim().to_string();
+            if path.is_empty() {
+                return Ok(Value::Null);
+            }
+            let found =
+                tokio::task::spawn_blocking(move || main_folder(Path::new(&path), nekko_js::home_dir().as_deref()))
+                    .await
+                    .map_err(|e| format!("search failed: {e}"))?;
+            Ok(found.map_or(Value::Null, |p| json!({ "suggested": p.to_string_lossy() })))
         }
         other => Err(format!("unknown channel {other}")),
     }
@@ -198,6 +223,35 @@ fn scan_roots() -> Vec<PathBuf> {
     .iter()
     .map(|d| home.join(d))
     .collect()
+}
+
+/// How many repositories directly inside a folder make it look like the one
+/// someone keeps all their code in.
+const MAIN_FOLDER_REPOS: usize = 2;
+
+/// The folder that looks like where `added` lives with its siblings: `added`
+/// itself when it is not a repository but holds several, else its parent when
+/// that holds several. Never the home folder or a drive root, and never a
+/// folder inside a repository.
+fn main_folder(added: &Path, home: Option<&Path>) -> Option<PathBuf> {
+    let is_repo = |d: &Path| d.join(".git").exists();
+    let key = |d: &Path| nekko_settings::folder_path_key(&d.to_string_lossy());
+    let too_broad = |d: &Path| d.parent().is_none() || home.is_some_and(|h| key(h) == key(d));
+    let holds_repos = |d: &Path| {
+        let Ok(rd) = std::fs::read_dir(d) else { return false };
+        // shortcut: a bounded look at the first entries; a huge folder is rarely the code folder.
+        rd.filter_map(Result::ok)
+            .take(2000)
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()) && is_repo(&e.path()))
+            .take(MAIN_FOLDER_REPOS)
+            .count()
+            >= MAIN_FOLDER_REPOS
+    };
+    [Some(added), added.parent()]
+        .into_iter()
+        .flatten()
+        .find(|d| !too_broad(d) && !is_repo(d) && !d.parent().is_some_and(is_repo) && holds_repos(d))
+        .map(Path::to_path_buf)
 }
 
 /// `https://u@Host/a/b.git`, `git@host:a/b` and `ssh://git@host/a/b` all become `host/a/b`.
@@ -504,6 +558,33 @@ mod tests {
         // Only `origin` counts.
         assert_eq!(find_local("https://github.com/other/app", &[], std::slice::from_ref(&root)), None);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_folder_holding_several_repositories_is_the_main_folder() {
+        let home = std::env::temp_dir().join(format!("nekko-main-folder-{}", std::process::id()));
+        let code = home.join("code");
+        for name in ["app", "site"] {
+            std::fs::create_dir_all(code.join(name).join(".git")).unwrap();
+        }
+        std::fs::create_dir_all(code.join("app").join("vendor").join("lib").join(".git")).unwrap();
+        std::fs::create_dir_all(code.join("notes")).unwrap();
+        let lone = home.join("one");
+        std::fs::create_dir_all(lone.join("solo").join(".git")).unwrap();
+        let h = Some(home.as_path());
+        // A repository: its parent. The code folder itself: that folder.
+        assert_eq!(main_folder(&code.join("app"), h), Some(code.clone()));
+        assert_eq!(main_folder(&code, h), Some(code.clone()));
+        // A plain folder beside the repositories also points at them.
+        assert_eq!(main_folder(&code.join("notes"), h), Some(code.clone()));
+        // One repository is not a main folder, and nothing inside a repository is.
+        assert_eq!(main_folder(&lone.join("solo"), h), None);
+        assert_eq!(main_folder(&code.join("app").join("vendor"), h), None);
+        // Several repositories straight in the home folder: never the home folder.
+        std::fs::create_dir_all(home.join("a").join(".git")).unwrap();
+        std::fs::create_dir_all(home.join("b").join(".git")).unwrap();
+        assert_eq!(main_folder(&home.join("a"), h), None);
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
