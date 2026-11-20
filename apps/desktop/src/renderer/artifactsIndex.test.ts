@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage, SessionSummary } from '@nekko-agent/shared';
-import { artifactCandidates, artifactKind, designVersion, folderDesigns, groupArtifacts, groupDesignVersions, libraryEntryFor, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
+import { artifactCandidates, artifactKind, inDesignPlace, designVersion, folderDesigns, groupArtifacts, groupDesignVersions, libraryEntryFor, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
 
 const msg = (id: string, content: string, createdAt: number, extra: Partial<ChatMessage> = {}): ChatMessage => ({ id, role: 'assistant', content, createdAt, ...extra });
 const write = (path: string) => ({ id: path, name: 'write_file', input: { path, content: 'x' } });
@@ -8,23 +8,29 @@ const write = (path: string) => ({ id: path, name: 'write_file', input: { path, 
 const claudeWrite = (file_path: string) => ({ id: file_path, name: 'Write', input: { file_path, content: 'x' }, executedBy: 'claude-code' as const });
 
 describe('artifacts index', () => {
-  it('sorts files into kinds, with design folders winning for pages and images', () => {
+  it('sorts files into kinds, with design folders winning for pages but never for pictures', () => {
     expect(artifactKind('C:/p/reports/audit.md')).toBe('doc');
     expect(artifactKind('/p/reports/dash.html')).toBe('web');
     expect(artifactKind('/p/nekko-designs/login/index.html')).toBe('design');
-    expect(artifactKind('/p/nekko-designs/hero.svg')).toBe('design');
+    // A design's picture is an Image (#3145).
+    expect(artifactKind('/p/nekko-designs/hero.svg')).toBe('image');
+    expect(artifactKind('/p/mockups/home.png')).toBe('image');
+    expect(inDesignPlace('/p/nekko-designs/hero.svg')).toBe(true);
+    expect(inDesignPlace('/p/reports/dash.html')).toBe(false);
     expect(artifactKind('/p/docs/flow.mmd')).toBe('diagram');
     expect(artifactKind('/p/out.csv')).toBe('data');
     expect(artifactKind('/p/plan.xlsx')).toBe('office');
     expect(artifactKind('/p/src/index.ts')).toBeNull();
   });
 
-  it('files a page or image as a design when its own name says so, wherever it sits', () => {
+  it('files a page as a design when its own name says so, wherever it sits', () => {
     for (const path of [
       '/p/reports/ios-connection-strip-design.html', '/p/.scratch/provider-import-mockup.html', '/p/reports/library-layouts/prototype.html',
-      '/tmp/agent-plan-concepts.html', '/p/out/checkout_wireframe.png', '/p/reports/Login Mock-up.svg', '/p/docs/onboarding.canvas.html',
+      '/tmp/agent-plan-concepts.html', '/p/docs/onboarding.canvas.html',
     ]) expect(artifactKind(path), path).toBe('design');
-    // The word has to stand alone in the name, and only pages and images are designs.
+    // A picture named as a design is still an Image.
+    for (const path of ['/p/out/checkout_wireframe.png', '/p/reports/Login Mock-up.svg']) expect(artifactKind(path), path).toBe('image');
+    // The word has to stand alone in the name, and only pages are designs.
     expect(artifactKind('/p/reports/redesigned-dashboard.html')).toBe('web');
     expect(artifactKind('/p/reports/mockingbird.png')).toBe('image');
     expect(artifactKind('/p/reports/ci-runners-p4-design.md')).toBe('doc');
@@ -73,14 +79,18 @@ describe('artifacts index', () => {
       ['C:/proj/nekko-designs/login.html', 'Login'], ['C:/proj/nekko-designs/checkout/index.html', 'Checkout'], ['C:/proj/nekko-designs/hero.svg', 'Hero'],
     ]);
     expect(folder[0]).toEqual({ path: 'C:/proj/nekko-designs/login.html', title: 'Login', filename: 'login.html', kind: 'design', sessionId: '', sessionTitle: 'Shop', at: 0, source: 'folder' });
+    // The folder's picture joins Library as an Image.
+    expect(folder[2]).toMatchObject({ filename: 'hero.svg', kind: 'image' });
 
     const chat = sessionArtifacts({ id: 's1', title: 'Login page', messages: [msg('a', '', 7, { toolCalls: [write('nekko-designs/Login.html')] })] }, 'C:/proj');
     const all = withFolderDesigns(chat, [...folder, ...folder]);
     expect(all.map((e) => [e.path, e.sessionId])).toEqual([
       ['C:/proj/nekko-designs/Login.html', 's1'], ['C:/proj/nekko-designs/checkout/index.html', ''], ['C:/proj/nekko-designs/hero.svg', ''],
     ]);
-    // Chat-made designs lead their group; folder-only ones follow in the folder's order.
-    expect(groupArtifacts(all)[0].items.map((e) => e.filename)).toEqual(['Login.html', 'index.html', 'hero.svg']);
+    // Chat-made designs lead their group; folder-only ones follow in the folder's order. The picture is under Images.
+    const groups = groupArtifacts(all);
+    expect(groups.find((g) => g.kind.id === 'design')?.items.map((e) => e.filename)).toEqual(['Login.html', 'index.html']);
+    expect(groups.find((g) => g.kind.id === 'image')?.items.map((e) => e.filename)).toEqual(['hero.svg']);
     expect(groupArtifacts(all, 'shop').flatMap((g) => g.items.map((e) => e.filename))).toEqual(['index.html', 'hero.svg']);
   });
 

@@ -1507,3 +1507,31 @@ async fn each_request_starts_with_the_one_before_so_the_prompt_cache_holds() {
     assert!(users[2].get("turnContext").is_none());
     assert_eq!(saved["memoryFrame"]["notes"].as_array().unwrap().len(), 1);
 }
+
+/// #3143: another computer's chat, synced here through Nekko Cloud, names its home and is a
+/// read-only copy. A send is refused before anything is admitted or reaches a model.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chat_from_another_computer_takes_no_turn_here() {
+    let session = json!({
+        "id": "s_elsewhere", "title": "From the laptop", "workspaceId": "w1", "messages": [],
+        "createdAt": 1, "updatedAt": 1, "home": { "deviceId": "dev-laptop", "device": "Laptop" }
+    });
+    let rig = turn_rig("elsewhere", session);
+    let model = scripted_model(vec![say_text("never")]).await;
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider],
+        "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    });
+    write_settings(&rig, settings).await;
+    let opts = json!({ "sessionId": "s_elsewhere", "providerId": "p1", "modelId": "synthetic", "text": "hello" });
+    let (status, refused) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{refused}");
+    assert!(refused.to_string().contains("belongs to Laptop"), "{refused}");
+    assert!(model.requests.lock().unwrap().is_empty(), "a copy never reaches a model");
+    assert!(saved_session(&rig, "s_elsewhere")["messages"].as_array().unwrap().is_empty());
+}

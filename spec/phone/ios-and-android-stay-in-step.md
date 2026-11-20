@@ -106,6 +106,12 @@ Nothing is recorded as a true OS exclusive yet.
 | --- | --- | --- | --- |
 | The chat's secret box when the agent asks for a secret (`request_secret`) | Not implemented: the chat looks busy while it waits | Not implemented: the chat looks busy while it waits | [#2603](https://github.com/nekko-labs/nekko-agent/issues/2603), [#2604](https://github.com/nekko-labs/nekko-agent/issues/2604) |
 
+## The computer a synced chat came from (desktop first, #3143)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| A synced chat names the computer it belongs to, and chats group by computer | Not implemented: synced chats show without their computer | Not implemented: no Nekko Cloud sync screens yet (#2835) | [#3147](https://github.com/nekko-labs/nekko-agent/issues/3147) |
+
 ## Quiet transcript follow-up
 
 | Feature | iPhone | Android | Follow-up |

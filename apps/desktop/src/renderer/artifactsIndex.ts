@@ -49,13 +49,23 @@ const DESIGN_NAME = /(?:^|[-_. ])(?:designs?|mock-?ups?|mocks?|prototypes?|wiref
 const NOT_AN_OUTPUT = /(?:^|\/)(?:node_modules|\.git|dist|build|out|target|src|app|apps|packages|lib|public|test|tests|\.shots|\.github|\.claude)\//i;
 const NOT_AN_OUTPUT_NAME = /^(?:package(?:-lock)?\.json|tsconfig.*\.json|readme\.md|changelog\.md|agents\.md|claude\.md|spec\.md|tasks\.md|license(?:\.md)?|\.?.*rc\.json)$/i;
 
+/** Whether a file sits where designs go, or its own name says it is one, whatever its kind. */
+export function inDesignPlace(path: string): boolean {
+  const p = path.replaceAll('\\', '/');
+  const name = p.split('/').pop() ?? '';
+  return DESIGN_DIR.test(p) || DESIGN_NAME.test(name.replace(/\.[^.]+$/, ''));
+}
+
+/**
+ * What kind of file Library lists it as. A page in a designs place is a Design;
+ * a picture is always an Image, even a design's screenshot or mockup (#3145).
+ */
 export function artifactKind(path: string): ArtifactKind | null {
   const p = path.replaceAll('\\', '/');
   const ext = p.split('/').pop()?.split('.').pop()?.toLowerCase() ?? '';
   const kind = KIND_BY_EXT[ext];
   if (!kind) return null;
-  const name = p.split('/').pop() ?? '';
-  if ((kind === 'web' || kind === 'image') && (DESIGN_DIR.test(p) || DESIGN_NAME.test(name.replace(/\.[^.]+$/, '')))) return 'design';
+  if (kind === 'web' && inDesignPlace(p)) return 'design';
   return kind;
 }
 
@@ -134,8 +144,8 @@ export function sessionArtifacts(
       if (!absolute && !basePath) continue;
       const path = normalize(absolute ? raw : `${basePath}/${raw}`);
       const kind = artifactKind(path);
-      // Reading, editing or searching a file makes it this chat's only when it is a design.
-      if (!kind || (!Object.hasOwn(WRITE_TOOLS, call.name) && kind !== 'design')) continue;
+      // Reading, editing or searching a file makes it this chat's only when it is a design, or a design's picture.
+      if (!kind || (!Object.hasOwn(WRITE_TOOLS, call.name) && kind !== 'design' && !(kind === 'image' && inDesignPlace(path)))) continue;
       const filename = path.split('/').pop() ?? path;
       // A worktree's own folder (`.claude/worktrees/x/`) is not a sign of an app's source: judge the path inside it.
       const inRepo = mainCheckoutPath(path) ?? path;
@@ -149,15 +159,16 @@ export function sessionArtifacts(
 
 /**
  * The designs sitting in a project's designs folder, from a listing of it (and
- * of its subfolders): pages and images only. No chat is attached, so they carry
- * the project's name instead.
+ * of its subfolders): its pages, as Designs, and its pictures, as Images. No
+ * chat is attached, so they carry the project's name instead.
  */
 export function folderDesigns(project: string, files: ReadonlyArray<{ path: string; name: string }>): ArtifactEntry[] {
   const out: ArtifactEntry[] = [];
   for (const f of files) {
     const path = normalize(f.path);
-    if (artifactKind(path) !== 'design') continue;
-    out.push({ path, title: titleFor(path), filename: f.name, kind: 'design', sessionId: '', sessionTitle: project, at: 0, source: 'folder' });
+    const kind = artifactKind(path);
+    if (kind !== 'design' && kind !== 'image') continue;
+    out.push({ path, title: titleFor(path), filename: f.name, kind, sessionId: '', sessionTitle: project, at: 0, source: 'folder' });
   }
   return out;
 }
