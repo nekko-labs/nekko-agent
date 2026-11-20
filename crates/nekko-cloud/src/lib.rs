@@ -79,6 +79,7 @@ pub const CHANNELS: &[&str] = &[
     "sync:revoke",
     "sync:now",
     "sync:setEnabled",
+    "sync:setKind",
     "sync:deleteAll",
     "library:sync",
     "org:list",
@@ -305,6 +306,20 @@ impl Cloud {
                 }
                 Ok(self.changed())
             }
+            // One kind of record (`chats`, `library`) on or off for this computer (#3089).
+            "sync:setKind" => {
+                let kind = arg(args, 0);
+                let on = args.get(1).and_then(Value::as_bool).unwrap_or(false);
+                let mut known = false;
+                self.edit(|s| known = s.set_kind(&kind, on))?;
+                if !known {
+                    return Err("Unknown kind of sync.".into());
+                }
+                if on && self.ready() {
+                    self.kick();
+                }
+                Ok(self.changed())
+            }
             "sync:deleteAll" => self.delete_all().await,
             // The files Library lists on this computer (#2748). Kept only while Library sync is
             // available to this account; a new or changed file starts a sync at once.
@@ -325,7 +340,7 @@ impl Cloud {
                         }
                     }
                 })?;
-                if fresh && self.ready() {
+                if fresh && self.ready() && lock(&self.state).kind_on("library") {
                     self.kick();
                 }
                 Ok(self.changed())
@@ -496,7 +511,7 @@ impl Cloud {
         // isn't open to this account, so the app shows no trace of it.
         let library = if s.account.as_ref().is_some_and(|a| a.can_sync && a.library_cloud) {
             let key = s.key_id.unwrap_or(0);
-            let on = has_keys && s.enabled;
+            let on = has_keys && s.enabled && s.kind_on("library");
             let files: serde_json::Map<String, Value> = s
                 .library_files
                 .keys()
@@ -553,6 +568,8 @@ impl Cloud {
             "sync": {
                 "phase": phase,
                 "enabled": s.enabled,
+                // What syncs on this computer, kind by kind (#3089).
+                "kinds": { "chats": s.kind_on("chats"), "library": s.kind_on("library") },
                 "recoveryConfirmed": s.recovery_confirmed,
                 "keyEpoch": s.key_id,
                 "lastSyncAt": s.last_sync_at,
@@ -1434,25 +1451,50 @@ impl Cloud {
 
     /// Pull and apply everything new. False when it stopped at a record under
     /// a newer key epoch than this device holds (it stays unread until then).
+    /// A record whose kind is off here is passed over unapplied (`State::kinds_off`).
+    /// A kind turned back on mid-pull moves the cursor back: the pull notices
+    /// (`State::rewinds`) and carries on from there rather than past it.
     async fn pull(&self, token: &str) -> Result<bool, String> {
         let account_id = self.account_id()?;
-        loop {
-            let since = lock(&self.state).cursor;
+        'pages: loop {
+            let (since, rewinds) = {
+                let s = lock(&self.state);
+                (s.cursor, s.rewinds)
+            };
             let page =
                 self.api.get(token, &format!("/v1/sync/pull?since={since}&limit={PULL_PAGE}")).await.map_err(e)?;
             let objects = page["objects"].as_array().cloned().unwrap_or_default();
             let held = self.key_id();
+            // Moves the cursor on, unless a kind came back on since this page began.
+            let advance = |to: u64| -> Result<bool, String> {
+                let mut rewound = false;
+                self.edit(|s| {
+                    if s.rewinds == rewinds {
+                        s.cursor = s.cursor.max(to);
+                    } else {
+                        rewound = true;
+                    }
+                })?;
+                Ok(!rewound)
+            };
             for o in &objects {
                 if o["keyId"].as_u64().is_some_and(|k| k > u64::from(held)) {
                     return Ok(false);
                 }
-                self.apply(&account_id, o)?;
-                if let Some(seq) = o["seq"].as_u64() {
-                    self.edit(|s| s.cursor = s.cursor.max(seq))?;
+                let skip = lock(&self.state).skips_collection(o["collection"].as_str().unwrap_or(""));
+                if !skip {
+                    self.apply(&account_id, o)?;
+                }
+                if let Some(seq) = o["seq"].as_u64()
+                    && !advance(seq)?
+                {
+                    continue 'pages;
                 }
             }
             let next = page["next"].as_u64().unwrap_or(since);
-            self.edit(|s| s.cursor = s.cursor.max(next))?;
+            if !advance(next)? {
+                continue 'pages;
+            }
             if page["more"].as_bool() != Some(true) || objects.is_empty() {
                 return Ok(true);
             }
@@ -1631,8 +1673,13 @@ impl Cloud {
     }
 
     /// Push what changed here, and anything last written under an older
-    /// epoch. True when a conflict needs another pass.
+    /// epoch. True when a conflict needs another pass. Nothing while Chats is
+    /// off here: chats changed or deleted meanwhile go up once it is back on.
     async fn push(&self, token: &str) -> Result<bool, String> {
+        if !lock(&self.state).kind_on("chats") {
+            lock(&self.live).skipped.clear();
+            return Ok(false);
+        }
         let account_id = self.account_id()?;
         let key_id = self.key_id();
         let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
@@ -1737,7 +1784,7 @@ impl Cloud {
     async fn push_library(&self, token: &str) -> Result<bool, String> {
         let st = lock(&self.state).clone();
         let device_id = st.device_id.clone().unwrap_or_default();
-        if !st.account.as_ref().is_some_and(|a| a.library_cloud) || device_id.is_empty() {
+        if !st.account.as_ref().is_some_and(|a| a.library_cloud) || device_id.is_empty() || !st.kind_on("library") {
             lock(&self.live).library_skipped.clear();
             return Ok(false);
         }
@@ -1746,10 +1793,20 @@ impl Cloud {
         let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
 
         enum Work {
-            File { path: String, size: u64, modified: f64 },
+            File {
+                path: String,
+                size: u64,
+                modified: f64,
+            },
             /// A file over 8 MB: push only a thumbnail record (#3044).
-            Thumb { path: String, size: u64, modified: f64 },
-            Gone { path: String },
+            Thumb {
+                path: String,
+                size: u64,
+                modified: f64,
+            },
+            Gone {
+                path: String,
+            },
         }
         let mut work = Vec::new();
         let mut skipped: BTreeMap<String, &'static str> = BTreeMap::new();
@@ -1787,10 +1844,21 @@ impl Cloud {
                             }
                         }
                     } else if !synced.is_some_and(|k| {
-                        k.key_id == key_id && k.size == size && k.modified_at == modified
-                            && k.thumbnail_digest == st.library_files.get(path)
-                                .map(|f| if f.thumbnail_data.is_empty() { String::new() } else { records::digest(f.thumbnail_data.as_bytes()) })
-                                .unwrap_or_default()
+                        k.key_id == key_id
+                            && k.size == size
+                            && k.modified_at == modified
+                            && k.thumbnail_digest
+                                == st
+                                    .library_files
+                                    .get(path)
+                                    .map(|f| {
+                                        if f.thumbnail_data.is_empty() {
+                                            String::new()
+                                        } else {
+                                            records::digest(f.thumbnail_data.as_bytes())
+                                        }
+                                    })
+                                    .unwrap_or_default()
                     }) {
                         work.push(Work::File { path: path.clone(), size, modified });
                     }
@@ -1835,20 +1903,30 @@ impl Cloud {
                             path,
                             plain,
                             LibrarySynced {
-                                modified_at: at, size: 0, digest: String::new(),
-                                deleted: true, key_id, thumbnail_digest: String::new(),
+                                modified_at: at,
+                                size: 0,
+                                digest: String::new(),
+                                deleted: true,
+                                key_id,
+                                thumbnail_digest: String::new(),
                             },
                         )
                     }
                     Work::Thumb { path, size, modified } => {
                         // Thumb-only record for a file over 8 MB (#3044).
                         let Some(f) = st.library_files.get(&path) else { continue };
-                        if f.thumbnail_data.is_empty() { continue; }
+                        if f.thumbnail_data.is_empty() {
+                            continue;
+                        }
                         let thumbnail_digest = records::digest(f.thumbnail_data.as_bytes());
                         let plain = library::thumb_plaintext(&device_id, &st.device_label, f, modified, size);
                         let synced = LibrarySynced {
-                            modified_at: modified, size, digest: String::new(),
-                            deleted: false, key_id, thumbnail_digest,
+                            modified_at: modified,
+                            size,
+                            digest: String::new(),
+                            deleted: false,
+                            key_id,
+                            thumbnail_digest,
                         };
                         (path, plain, synced)
                     }
@@ -1872,13 +1950,19 @@ impl Cloud {
                             records::digest(f.thumbnail_data.as_bytes())
                         };
                         let synced = LibrarySynced {
-                            modified_at: modified, size, digest, deleted: false, key_id, thumbnail_digest,
+                            modified_at: modified,
+                            size,
+                            digest,
+                            deleted: false,
+                            key_id,
+                            thumbnail_digest,
                         };
-                        if st
-                            .library
-                            .get(&path)
-                            .is_some_and(|k| !k.deleted && k.key_id == key_id && k.digest == synced.digest && k.thumbnail_digest == synced.thumbnail_digest)
-                        {
+                        if st.library.get(&path).is_some_and(|k| {
+                            !k.deleted
+                                && k.key_id == key_id
+                                && k.digest == synced.digest
+                                && k.thumbnail_digest == synced.thumbnail_digest
+                        }) {
                             self.edit(|s| {
                                 s.library.insert(path.clone(), synced.clone());
                             })?;
