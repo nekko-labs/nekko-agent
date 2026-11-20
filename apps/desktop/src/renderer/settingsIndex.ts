@@ -79,19 +79,34 @@ export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: str
   { group: 'support', label: 'Help out the Nekko Team', keywords: 'support star starred github improve usage crash reports telemetry privacy' },
   { group: 'cloud', label: 'Nekko Cloud', keywords: 'account sign in sign out plan billing sync chats library devices recovery key fleet management organization team share computers delete account' },
   { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history chats archive complete idle delete confirm desktop behavior close window tray low memory language tips setup wizard' },
-  { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access relay tailscale' },
-  { group: 'customize', label: 'Customize', keywords: 'view appearance theme agents wall customization system prompt wrapper fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
-  { group: 'agents', label: 'Agents', keywords: 'agent loop hooks spec-driven development orchestration delegation routes automations' },
+    { group: 'customize', label: 'Appearance', keywords: 'customize view theme agents wall fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
+  { group: 'agents', label: 'Agents', keywords: 'agent loop system prompt wrapper customization prompt size profiles hooks spec-driven development orchestration delegation routes automations' },
   { group: 'safety', label: 'Safety', keywords: 'chat modes default mode no restrictions yolo ask security step-up sandbox guardrails permissions' },
-  { group: 'connections', label: 'Connections', keywords: 'network activity log' },
+  { group: 'connections', label: 'Connections', keywords: 'network activity log all connections off' },
+  { group: 'phone', label: 'Phone and computers', keywords: 'phone pairing qr mobile iphone remote access relay tailscale computers fleet devices' },
   { group: 'tools', label: 'Tools', keywords: 'git management project management pull requests terminal shell mcp servers' },
   { group: 'system', label: 'System', keywords: 'updates developer experimental backup data privacy' },
 ];
 
-/** Open Settings scrolled to one group (the page mounts on the next frame). */
-export function openSettingsGroup(group: string) {
+/** Fired when openSettingsGroup() leaves a target for a Settings page already on screen. */
+export const SETTINGS_TARGET_EVENT = 'nekko:settings-target';
+let settingsTarget: string | null = null;
+
+/** The group or section openSettingsGroup() asked for, once: Settings reads it when it mounts or hears the event. */
+export function takeSettingsTarget() {
+  const target = settingsTarget;
+  settingsTarget = null;
+  return target;
+}
+
+/**
+ * Open Settings on the page holding `target`: a group id (`customize`) or any
+ * `settings-<target>` anchor inside one (`simple`, `computers`), scrolled to it.
+ */
+export function openSettingsGroup(target: string) {
+  settingsTarget = target;
   useStore.getState().setView('settings');
-  requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(`settings-${group}`)?.scrollIntoView({ block: 'start' })));
+  window.dispatchEvent(new Event(SETTINGS_TARGET_EVENT));
 }
 
 const hits = (hay: string, query: string) => {

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { activeGroup, scrollTopFor, SETTINGS_GROUPS } from './SettingsView.js';
+import { activeGroup, groupSection, SETTINGS_GROUPS } from './SettingsView.js';
 
 vi.mock('../chrome.js', () => ({ hasAppChrome: false }));
-vi.mock('../store.js', () => ({ useStore: Object.assign(() => ({}), { getState: () => ({}) }) }));
+vi.mock('../store.js', () => ({ useStore: Object.assign(() => ({}), { getState: () => ({ setView: () => {} }) }) }));
 
 /** A scroller whose groups sit at the given viewport tops (scroller top is 0). */
 function scroller(tops: number[], atBottom = false) {
@@ -15,27 +15,43 @@ function scroller(tops: number[], atBottom = false) {
 }
 
 describe('Settings section nav', () => {
-  it('puts Profile first, then team support, then Nekko Cloud', () => {
+  it('puts Profile first, then team support, then Nekko Cloud, unlabelled', () => {
     expect(SETTINGS_GROUPS.slice(0, 3).map((g) => g.id)).toEqual(['profile', 'support', 'cloud']);
+    expect(SETTINGS_GROUPS.slice(0, 3).map(groupSection)).toEqual([undefined, undefined, undefined]);
   });
-  it('highlights the last group whose top has scrolled past the top', () => {
+
+  it('files the rest under Nekko Agent, then Privacy and devices', () => {
+    const under = (label: string) => SETTINGS_GROUPS.filter((g) => groupSection(g) === label).map((g) => g.label);
+    expect(under('Nekko Agent')).toEqual(['General', 'Appearance', 'Agents', 'Tools']);
+    expect(under('Privacy and devices')).toEqual(['Safety', 'Connections', 'Phone and computers', 'System']);
+    // Each label's groups sit together, so the rail draws each label once.
+    const sections = SETTINGS_GROUPS.map(groupSection).filter(Boolean);
+    expect(sections.filter((s, i) => s !== sections[i - 1])).toEqual(['Nekko Agent', 'Privacy and devices']);
+  });
+
+  it('has no separate Computers group: it lives on Phone and computers', () => {
+    expect(SETTINGS_GROUPS.map((g) => g.id)).not.toContain('computers');
+  });
+
+  it('while searching, picks the last group whose top has scrolled past the top', () => {
     expect(activeGroup(scroller([-400, 10, 300]))).toBe('support');
     expect(activeGroup(scroller([0, 200, 400]))).toBe('profile');
   });
-  it('highlights the last group once scrolled to the bottom, even if it is short', () => {
+
+  it('while searching, picks the last group once scrolled to the bottom, even if it is short', () => {
     expect(activeGroup(scroller([-800, -500, 80], true))).toBe('cloud');
   });
-  it('jumps the same distance at any text size, though rects are zoomed and scrollTop is not', () => {
-    const at = (zoom: number, targetTop: number) => scrollTopFor(
-      { scrollTop: 100, clientHeight: 500, offsetHeight: 500, scrollHeight: 5000, getBoundingClientRect: () => ({ top: 20 * zoom, height: 500 * zoom }) } as unknown as HTMLElement,
-      { getBoundingClientRect: () => ({ top: targetTop * zoom }) } as unknown as HTMLElement,
-    );
-    expect(at(1, 820)).toBe(900);
-    expect(at(1.5, 820)).toBeCloseTo(900);
-    expect(at(0.8, 820)).toBeCloseTo(900);
-  });
-  it('stops a jump at the end of the page', () => {
-    const page = { scrollTop: 0, clientHeight: 500, offsetHeight: 500, scrollHeight: 1000, getBoundingClientRect: () => ({ top: 0, height: 750 }) } as unknown as HTMLElement;
-    expect(scrollTopFor(page, { getBoundingClientRect: () => ({ top: 3000 }) } as unknown as HTMLElement)).toBe(500);
+});
+
+describe('openSettingsGroup', () => {
+  it('leaves its target for Settings once and tells a mounted page', async () => {
+    const events: string[] = [];
+    vi.stubGlobal('window', { dispatchEvent: (e: Event) => events.push(e.type) });
+    const { openSettingsGroup, takeSettingsTarget, SETTINGS_TARGET_EVENT } = await import('../settingsIndex.js');
+    openSettingsGroup('simple');
+    expect(events).toEqual([SETTINGS_TARGET_EVENT]);
+    expect(takeSettingsTarget()).toBe('simple');
+    expect(takeSettingsTarget()).toBeNull();
+    vi.unstubAllGlobals();
   });
 });

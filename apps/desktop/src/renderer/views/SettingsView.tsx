@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AboutYouSection } from './AboutYouSettings.js';
 import { allowModeChange } from '../components/YoloWarning.js';
 import { CHAT_MODE_ICON, GfServerIcon, SettingsIcon } from '../gentleface-icons.js';
@@ -14,7 +14,7 @@ import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { CloudIcon, ComputerIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, UserIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { CloudIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, UserIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -24,8 +24,7 @@ import { OrganizationSettings } from '../components/cloud/OrganizationSettings.j
 import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
 import { UsageReportsSection } from '../components/UsageReports.js';
 import { GitHubStarSupport } from '../components/GitHubStarSupport.js';
-import { EXPERIMENTAL_FLAGS, saveSettings } from '../settingsIndex.js';
-import { zoomOf } from '../textScale.js';
+import { EXPERIMENTAL_FLAGS, saveSettings, SETTINGS_TARGET_EVENT, takeSettingsTarget } from '../settingsIndex.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { PictureModelSettings } from '../components/PictureModelSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
@@ -64,21 +63,26 @@ const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
   { value: 'yolo', label: CHAT_MODE_LABEL.yolo, desc: 'Run everything without confirming (deny rules still block).' },
 ];
 
-/** You first (Profile), then helping the team, then your Nekko Cloud account; the rest follow. */
+/**
+ * You first (Profile), then helping the team, then your Nekko Cloud account.
+ * The rest sit under two rail labels: how Nekko Agent works, then privacy and
+ * the devices it reaches. Each group is its own page.
+ */
 export const SETTINGS_GROUPS = [
   { id: 'profile', label: 'Profile', icon: UserIcon },
   { id: 'support', label: 'Help out the Nekko Team', icon: WandIcon },
   { id: 'cloud', label: 'Nekko Cloud', icon: CloudIcon },
-  { id: 'general', label: 'General', icon: SunIcon },
-  { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
-  { id: 'computers', label: 'Computers', icon: ComputerIcon },
-  { id: 'customize', label: 'Customize', icon: SlidersIcon },
-  { id: 'agents', label: 'Agents', icon: RobotIcon },
-  { id: 'safety', label: 'Safety', icon: ShieldIcon },
-  { id: 'connections', label: 'Connections', icon: GlobeIcon },
-  { id: 'tools', label: 'Tools', icon: WrenchIcon },
-  { id: 'system', label: 'System', icon: SettingsIcon },
+  { id: 'general', label: 'General', icon: SunIcon, section: 'Nekko Agent' },
+  { id: 'customize', label: 'Appearance', icon: SlidersIcon, section: 'Nekko Agent' },
+  { id: 'agents', label: 'Agents', icon: RobotIcon, section: 'Nekko Agent' },
+  { id: 'tools', label: 'Tools', icon: WrenchIcon, section: 'Nekko Agent' },
+  { id: 'safety', label: 'Safety', icon: ShieldIcon, section: 'Privacy and devices' },
+  { id: 'connections', label: 'Connections', icon: GlobeIcon, section: 'Privacy and devices' },
+  { id: 'phone', label: 'Phone and computers', icon: PhoneIcon, section: 'Privacy and devices' },
+  { id: 'system', label: 'System', icon: SettingsIcon, section: 'Privacy and devices' },
 ] as const;
+/** The rail label a group sits under, if any (the first three have none). */
+export const groupSection = (g: (typeof SETTINGS_GROUPS)[number]): string | undefined => ('section' in g ? g.section : undefined);
 /**
  * Server sits in the rail's top block, after Connectors, and leads the page:
  * the agent server is how other programs reach this app, so it is found where
@@ -86,12 +90,21 @@ export const SETTINGS_GROUPS = [
  */
 export const SERVER_GROUP = { id: 'server', label: 'Server', icon: GfServerIcon } as const;
 type SettingsGroupId = (typeof SETTINGS_GROUPS)[number]['id'] | typeof SERVER_GROUP.id;
+const GROUP_IDS = new Set<string>([SERVER_GROUP.id, ...SETTINGS_GROUPS.map((g) => g.id)]);
 
-function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.ReactNode }) {
-  const label = [SERVER_GROUP, ...SETTINGS_GROUPS].find((g) => g.id === id)!.label;
+/** Which group is on screen; `all` while searching, so a search reaches every page. */
+const PageContext = createContext<{ active: SettingsGroupId; all: boolean }>({ active: SETTINGS_GROUPS[0].id, all: true });
+
+/** The page you were on, kept for the next time Settings opens. */
+let lastPage: SettingsGroupId = SETTINGS_GROUPS[0].id;
+
+function SettingsGroup({ id, label, children }: { id: SettingsGroupId; label?: string; children: React.ReactNode }) {
+  const page = useContext(PageContext);
+  const title = label ?? [SERVER_GROUP, ...SETTINGS_GROUPS].find((g) => g.id === id)!.label;
+  // Every group stays mounted, only hidden: deep links, anchors and search find it by id.
   return (
-    <div id={`settings-${id}`} data-settings-group={id} className="settings-group" aria-labelledby={`settings-${id}-title`} role="region">
-      <h2 id={`settings-${id}-title`} className="settings-group-title">{label}</h2>
+    <div id={`settings-${id}`} data-settings-group={id} className="settings-group" aria-labelledby={`settings-${id}-title`} role="region" hidden={!page.all && page.active !== id}>
+      <h2 id={`settings-${id}-title`} className="settings-group-title">{title}</h2>
       {children}
     </div>
   );
@@ -99,7 +112,7 @@ function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.
 
 /**
  * Developer settings in Simple mode: folded behind one row rather than gone,
- * so they stay one click away (Settings > Customize > Simple mode, Advanced settings).
+ * so they stay one click away (Settings > Appearance > Simple mode, Advanced settings).
  */
 function AdvancedFold({ children }: { children: React.ReactNode }) {
   const shown = useShown('set-tools');
@@ -113,7 +126,7 @@ function AdvancedFold({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The group whose top has passed the top of the scroller (the last one once scrolled to the bottom). */
+/** While searching (every group shown): the group whose top has passed the top of the scroller, or the last one at the bottom. */
 export function activeGroup(scroller: HTMLElement): SettingsGroupId {
   const groups = [...scroller.querySelectorAll<HTMLElement>('[data-settings-group]')];
   if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return (groups.at(-1)?.dataset.settingsGroup ?? SETTINGS_GROUPS[0].id) as SettingsGroupId;
@@ -123,51 +136,56 @@ export function activeGroup(scroller: HTMLElement): SettingsGroupId {
   return cur as SettingsGroupId;
 }
 
-/** The `scrollTop` that brings `target` to the top of `scroller`, or as near as the page's end allows. */
-export function scrollTopFor(scroller: HTMLElement, target: HTMLElement): number {
-  const distance = (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / zoomOf(scroller);
-  return Math.min(scroller.scrollTop + distance, scroller.scrollHeight - scroller.clientHeight);
-}
-
 export function SettingsView() {
   const { applyTheme, onboardingOpen, wavePreset, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, wavePreset: s.resolvedPreset, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState<SettingsGroupId>(SERVER_GROUP.id);
+  const [active, setActiveState] = useState<SettingsGroupId>(lastPage);
+  const setActive = (id: SettingsGroupId) => { lastPage = id; setActiveState(id); };
+  const [searching, setSearching] = useState(false);
   // Simple says nothing about computers until one is connected; Detailed is where the first one is paired.
   const [expert] = useExpertMode();
   const hasComputers = useStore((s) => s.computers.length > 0);
   const computersPage = expert || hasComputers;
-  const jumping = useRef(0);
-  // Section spy: it measures the page, so at most once a frame, not per scroll event.
-  const spyFrame = useRef(0);
-  const onScroll = () => {
-    if (spyFrame.current) return;
-    spyFrame.current = requestAnimationFrame(() => {
-      spyFrame.current = 0;
-      if (scrollRef.current && !jumping.current) setActive(activeGroup(scrollRef.current));
-    });
-  };
+  const phoneLabel = computersPage ? undefined : 'Phone pairing';
   const goTo = (id: SettingsGroupId) => {
     setActive(id);
     const scroller = scrollRef.current;
-    const target = document.getElementById(`settings-${id}`);
-    if (!scroller || !target) return;
-    const from = scroller.scrollTop;
-    const to = scrollTopFor(scroller, target);
-    cancelAnimationFrame(jumping.current);
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { scroller.scrollTop = to; return; }
-    // Native smooth scroll takes ~500ms over a long page; this lands in 200ms with an ease-out.
-    const start = performance.now();
-    const step = (t: number) => {
-      const p = Math.min(1, (t - start) / 200);
-      scroller.scrollTop = from + (to - from) * (1 - (1 - p) ** 3);
-      jumping.current = p < 1 ? requestAnimationFrame(step) : 0;
-    };
-    jumping.current = requestAnimationFrame(step);
+    if (!scroller) return;
+    // While searching every page is shown, so jump to the group; otherwise its page starts at the top.
+    if (searching) document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start' });
+    else scroller.scrollTop = 0;
   };
+  /** Show the page holding `el` (a section, row or group) and bring `el` into view. */
+  const showElement = (el: HTMLElement | null, block: ScrollLogicalPosition = 'start') => {
+    const group = el?.closest<HTMLElement>('[data-settings-group]')?.dataset.settingsGroup;
+    if (!el || !group || !GROUP_IDS.has(group)) return false;
+    setActive(group as SettingsGroupId);
+    requestAnimationFrame(() => el.scrollIntoView({ block }));
+    return true;
+  };
+  const onSearchOpen = (open: boolean, match: HTMLElement | null) => {
+    setSearching(open);
+    if (open || !scrollRef.current) return;
+    // Closing keeps you where the search took you: that match's page, scrolled to it.
+    if (!showElement(match, 'center')) setActive(activeGroup(scrollRef.current));
+  };
+  const hasSettings = !!settings;
+  // openSettingsGroup(): open on the page that holds the target, now or once settings load.
+  useEffect(() => {
+    if (!hasSettings) return;
+    const open = () => {
+      const target = takeSettingsTarget();
+      if (!target) return;
+      if (!showElement(document.getElementById(`settings-${target}`)) && GROUP_IDS.has(target)) setActive(target as SettingsGroupId);
+    };
+    open();
+    window.addEventListener(SETTINGS_TARGET_EVENT, open);
+    return () => window.removeEventListener(SETTINGS_TARGET_EVENT, open);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSettings]);
   const reload = useCallback(() => refreshSettings(false), [refreshSettings]);
 
   useEffect(() => { void reload(); }, [reload]);
@@ -208,27 +226,33 @@ export function SettingsView() {
               <Icon className="h-4 w-4 shrink-0" />{label}<span aria-hidden="true" className="ml-auto text-ink-faint">↗</span>
             </button>
           ))}
-          <button type="button" className="settings-nav-item" aria-current={active === SERVER_GROUP.id ? 'true' : undefined} onClick={() => goTo(SERVER_GROUP.id)}>
+          <button type="button" className="settings-nav-item" aria-current={active === SERVER_GROUP.id ? 'page' : undefined} onClick={() => goTo(SERVER_GROUP.id)}>
             <SERVER_GROUP.icon className="h-4 w-4 shrink-0" />{SERVER_GROUP.label}
           </button>
         </div>
-        <SettingsSearch root={pageRef} />
+        <SettingsSearch root={pageRef} onOpenChange={onSearchOpen} />
         <nav aria-label="Settings sections" className="settings-nav">
-          {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              className="settings-nav-item"
-              aria-current={active === g.id ? 'true' : undefined}
-              onClick={() => goTo(g.id)}
-            >
-              <g.icon className="h-4 w-4 shrink-0" />{g.label}
-            </button>
-          ))}
+          {SETTINGS_GROUPS.map((g, i) => {
+            const section = groupSection(g);
+            return (
+              <React.Fragment key={g.id}>
+                {section && section !== (i > 0 ? groupSection(SETTINGS_GROUPS[i - 1]) : undefined) && <div className="settings-nav-label">{section}</div>}
+                <button
+                  type="button"
+                  className="settings-nav-item"
+                  aria-current={active === g.id ? 'page' : undefined}
+                  onClick={() => goTo(g.id)}
+                >
+                  <g.icon className="h-4 w-4 shrink-0" />{g.id === 'phone' ? phoneLabel ?? g.label : g.label}
+                </button>
+              </React.Fragment>
+            );
+          })}
         </nav>
       </aside>
-      <div ref={scrollRef} className="settings-content" onScroll={onScroll}>
-        <div ref={pageRef} className="settings-page" data-presenter-exempt>
+      <div ref={scrollRef} className="settings-content">
+        <PageContext.Provider value={{ active, all: searching }}>
+        <div ref={pageRef} className="settings-page" data-settings-paged={searching ? undefined : ''} data-presenter-exempt>
           {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
           <div className="min-w-0">
             <SettingsGroup id="server">
@@ -307,15 +331,16 @@ export function SettingsView() {
                 </div>
               </section>
             </SettingsGroup>
-            <SettingsGroup id="phone">
+            <SettingsGroup id="phone" label={phoneLabel}>
               {/* Remote access (relay) */}
               <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
+              {/* settings-computers: the old group's anchor, so links to it still land here. */}
+              {computersPage && <div id="settings-computers">
+                <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
+              </div>}
             </SettingsGroup>
-            {computersPage && <SettingsGroup id="computers">
-              <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
-            </SettingsGroup>}
             <SettingsGroup id="customize">
-              <SettingsSection id="appearance" title={tr('settings.appearance')}>
+              <SettingsSection id="appearance" title="Theme">
                 <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
                 <SettingRow
                   title="Background animation"
@@ -353,12 +378,13 @@ export function SettingsView() {
               <div id="settings-simple">
                 <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
               </div>
-              <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
-              <ErrorBoundary label="System prompt size"><PromptProfilesSettings settings={settings} update={update} /></ErrorBoundary>
               <FunSection settings={settings} update={update} />
             </SettingsGroup>
             <SettingsGroup id="agents">
               <ErrorBoundary label="Agent loop"><AgentLoopSection settings={settings} update={update} /></ErrorBoundary>
+              {/* The system prompt shapes how agents answer, so it lives with them, not with Appearance. */}
+              <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="System prompt size"><PromptProfilesSettings settings={settings} update={update} /></ErrorBoundary>
               <SettingsSection id="spec-driven" title="Spec-driven development" help="The default workflow for building a spec and tasks from a conversation. Each chat can override it in the Context panel.">
                 <ChoiceList
                   label="Spec-driven development"
@@ -478,6 +504,7 @@ export function SettingsView() {
             <p className="mt-(--q-section) text-center text-2xs text-ink-faint">Nekko Agent · open source · MIT</p>
           </div>
         </div>
+        </PageContext.Provider>
       </div>
     </div>
   );

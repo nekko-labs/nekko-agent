@@ -11,7 +11,7 @@ area: brand
 
 ## The theme
 
-- **Where it is.** Settings → Customize → Appearance (and the onboarding theme step) lists **Winter** under **Seasonal**, next to Spooky. Its preset id is `winter` (`THEME_PRESETS` in `packages/shared/src/themes.ts`).
+- **Where it is.** Settings → Appearance → Theme (and the onboarding theme step) lists **Winter** under **Seasonal**, next to Spooky. Its preset id is `winter` (`THEME_PRESETS` in `packages/shared/src/themes.ts`).
 - **Dark: a snowy night.** Midnight-blue ground and windows (`--paper` `#0a111d`, `--win` `#0f1828`, surfaces `#111b2b` / `#1a2638`, line `#233249`), cool near-white ink, an **ice-blue** accent (`#8fd3fe`) and an **aurora-mint** partner (`#9ef0c9`). Primary buttons take midnight text on the pale accent. Every text pairing meets WCAG AA (`contrast.test.ts`).
 - **Light.** Like Spooky, the core light surfaces with deeper accents that stay readable on them: ice `#0a6694` and pine `#13795b` (`LIGHT_ACCENTS` in `themeMode.ts`).
 - **Phones.** The iPhone and Android catalogs are written from the shared one, so both list Winter and apply its colours and, in dark mode, its surfaces.
