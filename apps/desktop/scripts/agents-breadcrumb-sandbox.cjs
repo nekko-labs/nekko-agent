@@ -42,8 +42,8 @@ app.whenReady().then(async () => {
           if (view === 'settings') {
             await run('document.querySelector("[data-back-to-agents]").focus()');
             await check('keyboard focus on return control', 'document.activeElement.matches("[data-back-to-agents]")');
-            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
-            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+            await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+            await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
           } else await run('document.querySelector("[data-back-to-agents]").click()');
           await sleep(150);
           const stateAfter = await run('JSON.stringify({ active:layoutFixture.store.getState().activeSessionId, layout:layoutFixture.store.getState().wallLayout })');
