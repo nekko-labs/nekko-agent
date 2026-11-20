@@ -39,6 +39,20 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Stopping a chat reads cached summaries, not every chat file (#3120, 2026-11-20)
+Area: engine daemon
+Result: improvement (warm); regression on a cold cache
+Conditions: Windows 11 Pro, AMD Ryzen 9 9950X3D (32 logical cores); release `nekko-store` test build; a scratch test (not committed) wrote synthetic chats with one 1 MB text reply each to a temp data dir and timed the old lookup (`SessionStore::list_meta`) and the new one (`SessionStore::summaries`) three rounds in a row, in one process, so the OS file cache was warm after round 0.
+
+| Metric | Before (`list_meta`) | After (`summaries`) |
+|---|---|---|
+| 500 chats, round 0 | 229.7 ms | 1.480 s (cold summary cache) |
+| 500 chats, rounds 1-2 | 199.3 ms, 201.4 ms | 23.2 ms, 22.8 ms |
+| 2000 chats, round 0 | 1.004 s | 5.591 s (cold summary cache) |
+| 2000 chats, rounds 1-2 | 1.023 s, 1.086 s | 119.1 ms, 118.0 ms |
+
+Why: `chat:abort` looked for sub-agent chats by reading and parsing every chat file on each stop, and Archive stops twice. The summaries cache re-reads only changed files, and the chat list fills it when the app starts, so a stop normally takes the warm path; the first stop before any listing pays the cold cost once. Not measured: the felt time of Close or Archive in the running app, or Philip's real chat folder. Source: #3120.
+
 ## Worktree list reads worktrees in parallel (#3080, 2026-11-20)
 Area: engine daemon
 Result: improvement

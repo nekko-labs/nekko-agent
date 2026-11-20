@@ -875,25 +875,14 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
 /// admission) and the chat's dev servers.
 pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
     // Include detached delegated descendants: their parent turn may already have ended.
-    let mut ids = vec![session_id.to_string()];
-    {
-        let metas = ctx.sessions.list_meta();
-        loop {
-            let before = ids.len();
-            for meta in &metas {
-                if let (Some(parent), Some(id)) =
-                    (meta.get("parentSessionId").and_then(Value::as_str), meta.get("id").and_then(Value::as_str))
-                    && ids.iter().any(|s| s == parent)
-                    && !ids.iter().any(|s| s == id)
-                {
-                    ids.push(id.to_string());
-                }
-            }
-            if ids.len() == before {
-                break;
-            }
-        }
-    }
+    // Found from the cached summaries, off the async threads: reading every chat
+    // file here (list_meta) made Close and Archive wait seconds on a big folder (#3120).
+    let ids = {
+        let (store, root) = (ctx.sessions.clone(), session_id.to_string());
+        tokio::task::spawn_blocking(move || chat_and_descendants(&root, &store.summaries()))
+            .await
+            .unwrap_or_else(|_| vec![session_id.to_string()])
+    };
     for id in &ids {
         ctx.admission.abort(id);
         ctx.image_turns.abort(id);
@@ -904,7 +893,32 @@ pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// The chats with a turn (or an image turn) running.
+/// `root` first, then every chat below it by `parentSessionId`, at any depth.
+fn chat_and_descendants(root: &str, chats: &[Value]) -> Vec<String> {
+    let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+    for chat in chats {
+        if let (Some(parent), Some(id)) =
+            (chat.get("parentSessionId").and_then(Value::as_str), chat.get("id").and_then(Value::as_str))
+        {
+            children.entry(parent).or_default().push(id);
+        }
+    }
+    let mut ids = vec![root.to_string()];
+    let mut seen: HashSet<String> = ids.iter().cloned().collect();
+    let mut next = 0;
+    while next < ids.len() {
+        let below = children.get(ids[next].as_str()).cloned().unwrap_or_default();
+        for id in below {
+            if seen.insert(id.to_string()) {
+                ids.push(id.to_string());
+            }
+        }
+        next += 1;
+    }
+    ids
+}
+
+///The chats with a turn (or an image turn) running.
 pub fn running_chats(ctx: &Ctx) -> Vec<String> {
     let mut ids: Vec<String> = Vec::new();
     for id in ctx.turns.running_sessions().into_iter().chain(ctx.image_turns.running_sessions()) {
@@ -1358,6 +1372,21 @@ async fn session_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stopping_a_chat_reaches_every_sub_agent_below_it_and_nothing_else() {
+        let chats = [
+            json!({ "id": "grandchild", "parentSessionId": "child" }),
+            json!({ "id": "root" }),
+            json!({ "id": "child", "parentSessionId": "root" }),
+            json!({ "id": "sibling", "parentSessionId": "root" }),
+            json!({ "id": "other", "parentSessionId": "elsewhere" }),
+            json!({ "id": "loop", "parentSessionId": "root" }),
+            json!({ "id": "root", "parentSessionId": "loop" }),
+        ];
+        assert_eq!(chat_and_descendants("root", &chats), ["root", "child", "sibling", "loop", "grandchild"]);
+        assert_eq!(chat_and_descendants("alone", &chats), ["alone"]);
+    }
 
     #[test]
     fn activity_counts_working_chats_by_phase() {
