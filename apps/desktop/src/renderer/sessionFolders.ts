@@ -75,6 +75,27 @@ export async function applyFolderSelection(sessionId: string, sel: FolderSelecti
 }
 
 /**
+ * After a folder or repository is added: when no repositories folder is chosen
+ * yet and the added folder (or its parent) holds several repositories, offer
+ * that folder once, in this chat. Best effort: never fails the add.
+ */
+export async function offerRepoFolder(sessionId: string, path: string): Promise<void> {
+  const settings = useStore.getState().settings;
+  if (settings?.repoCloneDir?.trim() || settings?.repoCloneDirOffered || useStore.getState().repoFolderOffer) return;
+  try {
+    const found = await window.nekko.suggestRepoFolder(path);
+    if (found?.suggested) useStore.getState().setRepoFolderOffer({ sessionId, suggested: found.suggested });
+  } catch { /* An older daemon without the channel: no offer. */ }
+}
+
+/** The offer answered (or dismissed): it is never made again. `dir` becomes the repositories folder. */
+export async function answerRepoFolderOffer(dir: string | null): Promise<void> {
+  useStore.getState().setRepoFolderOffer(null);
+  await window.nekko.updateSettings(dir ? { repoCloneDir: dir, repoCloneDirOffered: true } : { repoCloneDirOffered: true });
+  await useStore.getState().refreshSettings();
+}
+
+/**
  * Pick a folder and wire it into the chat. Returns the updated chat, or null
  * when the picker was cancelled. A folder already registered is reused.
  */
@@ -91,7 +112,9 @@ export async function addFolderToChat(
   if (!folder) return null;
   await useStore.getState().refreshSettings();
 
-  return applyFolderSelection(sessionId, mode === 'primary' ? withPrimary(session, folder.id) : withIncluded(session, folder.id));
+  const updated = await applyFolderSelection(sessionId, mode === 'primary' ? withPrimary(session, folder.id) : withIncluded(session, folder.id));
+  void offerRepoFolder(sessionId, folder.path);
+  return updated;
 }
 
 /** Wire an already-known folder path (one the agent found) into the chat. */
@@ -100,7 +123,9 @@ export async function addFolderPathToChat(sessionId: string, session: ChatFolder
   const folder = folders.find((w) => sameFolderPath(w.path, path)) ?? null;
   if (!folder) return { session: null, folder: null };
   await useStore.getState().refreshSettings();
-  return { session: await applyFolderSelection(sessionId, withIncluded(session, folder.id)), folder };
+  const updated = await applyFolderSelection(sessionId, withIncluded(session, folder.id));
+  void offerRepoFolder(sessionId, folder.path);
+  return { session: updated, folder };
 }
 
 /** Whether a GitHub or GitLab connector is connected, so repositories can be listed. */
@@ -131,6 +156,8 @@ export async function addRepoToChat(
   if (result.needsFolder) throw new RepoFolderNeeded(result.suggested);
   if (result.sandbox) return { session: result.session, path: SANDBOX_REPO_PLACE };
   await useStore.getState().refreshSettings();
+  // A copy found on this computer (not cloned) may sit among the user's other repositories.
+  if (result.reused) void offerRepoFolder(sessionId, result.path);
   if (!result.folderId) return { session: null, path: result.path };
   return { session: await applyFolderSelection(sessionId, withIncluded(session, result.folderId)), path: result.path };
 }

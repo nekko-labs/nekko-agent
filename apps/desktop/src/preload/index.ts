@@ -296,6 +296,7 @@ const api: NekkoApi = {
   listRepos: (query) => inv(IpcChannels.reposList, query ?? ''),
   cloneRepo: (repo, opts) => inv(IpcChannels.reposClone, repo, opts ?? {}),
   setSandboxRepos: (id, repos) => inv(IpcChannels.reposSetSandbox, id, repos),
+  suggestRepoFolder: (path) => inv(IpcChannels.reposSuggestFolder, path),
   indexWorkspace: (id) => inv(IpcChannels.workspaceIndex, id),
   getIndexStatus: (id) => inv(IpcChannels.workspaceIndexStatus, id),
   searchWorkspace: (id, query) => inv(IpcChannels.workspaceSearch, id, query),
