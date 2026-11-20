@@ -54,11 +54,11 @@ final class PermissionChecklistUITests: XCTestCase {
     func testSettingsEntryReusesChecklistWithoutOnboardingCTA() {
         let app = launch(settings: true, dark: true)
         let link = app.buttons["settings.permissions"]
-        XCTAssertTrue(link.waitForExistence(timeout: 15))
-        for _ in 0..<5 {
-            if link.isHittable { break }
-            app.swipeUp()
-        }
+        // Settings is a List, which builds only the rows on screen, and the row sits
+        // below the fold since the profile and computer rows moved to the top (#2947).
+        XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 15))
+        for _ in 0..<10 where !(link.exists && link.isHittable) { app.swipeUp() }
+        XCTAssertTrue(link.waitForExistence(timeout: 5))
         link.tap()
         open("notifications", in: app)
         XCTAssertTrue(app.buttons["permissions.action.notifications"].waitForExistence(timeout: 10))
