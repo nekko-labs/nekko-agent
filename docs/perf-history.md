@@ -39,6 +39,17 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Worktree list reads worktrees in parallel (#3078, 2026-11-20)
+Area: engine daemon
+Result: improvement
+Conditions: Windows 11 Pro, 32 logical cores; debug `nekkod` test build; the ignored test `list_timing_on_real_repositories` running the Settings > Git management listing over eight real, busy repositories (98 linked worktrees, 76 of them in one repository), read-only (`git worktree list`, `git status` with `GIT_OPTIONAL_LOCKS=0`, `git rev-list --count`), warm file cache, no chat owners; two runs each, alternating, same build.
+
+| Metric | 1 thread (one worktree at a time, as before) | 8 threads |
+|---|---|---|
+| Listing time, 98 worktrees | 15.42 s, 14.34 s | 4.15 s, 4.91 s |
+
+Why: the listing now covers every linked worktree, not only the chat-made ones, and each costs a `git status` and a `git rev-list`; those now run on up to 8 threads. A separate run at 4, 8 and 16 threads gave 5.15 s, 4.39 s / 4.42 s and 3.98 s / 4.62 s, so 8 was kept: past it the disk, not the thread count, sets the pace. Before this change the list showed only the one chat-made worktree on this machine, so there is no like-for-like "old list" time. Manual Remove now reads only the one worktree it removes, and the hourly sweep reads only chat-made ones. Source: #3078.
+
 ## Quitting shuts down agents' simulators (#3001, 2026-11-19)
 Area: engine daemon
 Result: regression (quit time, only while an agent's simulator is booted)

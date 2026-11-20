@@ -906,6 +906,65 @@ export function PullRequestsSection({ settings, update }: { settings: AppSetting
   );
 }
 
+const folderName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+
+/** Worktrees by repository, in the host's order; within one, chat-made before those made outside Nekko. */
+export function groupWorktrees(list: ChatWorktreeInfo[]): { sourceRoot: string; label: string; rows: ChatWorktreeInfo[] }[] {
+  const groups = new Map<string, { sourceRoot: string; label: string; rows: ChatWorktreeInfo[] }>();
+  for (const w of list) {
+    const key = w.sourceRoot.replace(/\\/g, '/').toLowerCase();
+    const g = groups.get(key) ?? { sourceRoot: w.sourceRoot, label: w.projectName || folderName(w.sourceRoot), rows: [] };
+    g.rows.push(w);
+    groups.set(key, g);
+  }
+  return [...groups.values()].map((g) => ({ ...g, rows: [...g.rows.filter((w) => w.madeByChat !== false), ...g.rows.filter((w) => w.madeByChat === false)] }));
+}
+
+/** Why Remove is unavailable, in words, or '' when it is. */
+export function worktreeBlocked(w: ChatWorktreeInfo): string {
+  if (w.locked) return `Locked${w.lockedReason ? ` (${w.lockedReason})` : ''}. Unlock it with git worktree unlock first.`;
+  if (w.running) return 'Stop the chat first.';
+  if (w.dirtyCount) return 'Has uncommitted changes.';
+  return '';
+}
+
+export function WorktreeGroups({ worktrees, busy, onRemove }: { worktrees: ChatWorktreeInfo[]; busy: string | null; onRemove: (w: ChatWorktreeInfo) => void }) {
+  return (
+    <>
+      {groupWorktrees(worktrees).map((g, i) => (
+        <div key={g.sourceRoot} className={i ? 'mt-(--q-group)' : undefined}>
+          <div className="mb-(--q-tight) truncate px-3 text-xs text-ink-faint" title={g.sourceRoot}>{g.label}</div>
+          {g.rows.map((w) => {
+            const blocked = worktreeBlocked(w);
+            const outside = w.madeByChat === false;
+            const detail = [
+              w.locked && 'locked',
+              outside && 'Made outside Nekko',
+              w.branch ?? 'detached',
+              w.dirtyCount ? `${w.dirtyCount} uncommitted` : 'clean',
+              w.unmergedCount ? `${w.unmergedCount} unmerged commit${w.unmergedCount === 1 ? '' : 's'}` : 'no new commits',
+            ].filter(Boolean).join(' · ');
+            return (
+              <div key={w.root} className="quiet-row min-h-(--q-row) justify-between gap-4" data-quiet-row>
+                <div className="min-w-0">
+                  <div className={`truncate text-sm font-medium${w.locked ? ' text-ink-faint' : ''}`} title={w.root}>
+                    {outside ? folderName(w.root) : (w.sessionTitle ?? <span className="text-ink-faint">Deleted chat</span>)}
+                    {w.running && <span className="ml-2 text-xs font-normal text-ink-faint">running</span>}
+                  </div>
+                  <div className="mt-(--q-tight) truncate font-mono text-2xs text-ink-faint" title={w.root}>{detail}</div>
+                </div>
+                <button className="btn btn-ghost quiet-row-action shrink-0 py-1 text-xs text-danger-text" disabled={!!blocked || busy === w.root} title={blocked || 'Remove this worktree folder'} onClick={() => onRemove(w)}>
+                  {busy === w.root ? 'Removing...' : 'Remove'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function GitManagementSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   const [worktrees, setWorktrees] = useState<ChatWorktreeInfo[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -924,9 +983,11 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
     setMessage(null);
     try {
       const { branchDeleted } = await window.nekko.removeChatWorktree(w.root);
-      setMessage(branchDeleted
-        ? `Removed the worktree and its merged branch ${w.branch}.`
-        : `Removed the worktree. Branch ${w.branch} was kept because it has commits not on the main checkout; the chat picks it back up if continued.`);
+      setMessage(!w.branch
+        ? 'Removed the worktree.'
+        : branchDeleted
+          ? `Removed the worktree and its merged branch ${w.branch}.`
+          : `Removed the worktree. Branch ${w.branch} was kept because it has commits not on the main checkout${w.madeByChat === false ? '.' : '; the chat picks it back up if continued.'}`);
     } catch (e) {
       setMessage(String((e as Error).message ?? e));
     } finally {
@@ -976,27 +1037,14 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
 
       <div>
         <div className="mt-(--q-group) mb-(--q-heading) flex items-center justify-between gap-3">
-          <span className="quiet-group-label">Chat worktrees</span>
+          <span className="quiet-group-label">Worktrees</span>
           <button className="btn btn-ghost py-1 text-xs" onClick={refresh}>Refresh</button>
         </div>
-        <p className="text-xs text-ink-faint">Worktrees are kept when a chat is archived or deleted. Removing one frees the folder: Git refuses if it has uncommitted changes, and its branch is deleted only once merged.</p>
+        <p className="text-xs text-ink-faint">Every worktree of your projects' repositories. Removing one frees the folder: Git refuses if it has uncommitted changes, and its branch is deleted only once merged. Only chat worktrees are removed automatically.</p>
         <div className="-mx-3 mt-(--q-inline)">
           {worktrees === null && <p className="px-3 text-xs text-ink-faint">Loading...</p>}
-          {worktrees?.length === 0 && <p className="px-3 text-xs text-ink-faint">No chat worktrees.</p>}
-          {worktrees?.map((w) => {
-            const blocked = w.running ? 'Stop the chat first.' : w.dirtyCount ? 'Has uncommitted changes.' : '';
-            return (
-              <div key={w.root} className="quiet-row min-h-(--q-row) justify-between gap-4" data-quiet-row>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{w.sessionTitle ?? <span className="text-ink-faint">Deleted chat</span>}{w.running && <span className="ml-2 text-xs font-normal text-ink-faint">running</span>}</div>
-                  <div className="mt-(--q-tight) truncate font-mono text-2xs text-ink-faint" title={w.root}>{w.branch ?? 'detached'} · {w.dirtyCount ? `${w.dirtyCount} uncommitted` : 'clean'} · {w.unmergedCount ? `${w.unmergedCount} unmerged commit${w.unmergedCount === 1 ? '' : 's'}` : 'no new commits'}</div>
-                </div>
-                <button className="btn btn-ghost quiet-row-action shrink-0 py-1 text-xs text-danger-text" disabled={!!blocked || busy === w.root} title={blocked || 'Remove this worktree folder'} onClick={() => void remove(w)}>
-                  {busy === w.root ? 'Removing...' : 'Remove'}
-                </button>
-              </div>
-            );
-          })}
+          {worktrees?.length === 0 && <p className="px-3 text-xs text-ink-faint">No worktrees in your projects.</p>}
+          {worktrees && <WorktreeGroups worktrees={worktrees} busy={busy} onRemove={(w) => void remove(w)} />}
         </div>
         {message && <p role="status" className="mt-(--q-inline) text-xs text-ink-soft">{message}</p>}
       </div>
