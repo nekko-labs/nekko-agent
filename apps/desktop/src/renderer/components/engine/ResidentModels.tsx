@@ -3,6 +3,7 @@ import type { EngineSettings, LoadingModel, LocalModel, ResidentModel } from '@n
 import { useStore } from '../../store.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
+import { ImageGeneration } from './ImageGeneration.js';
 
 /**
  * The models actually in memory right now.
@@ -196,7 +197,10 @@ export function ResidentModels({
               {/* The model's own settings, one click from the row that says it
                   is loaded. The drawer folds shut the same way it opens, and
                   its primary verb reloads with whatever was changed. */}
-              {open === r.id && model && (
+              {/* A picture model's settings are its companion files and defaults,
+                  not a context window or GPU layers. */}
+              {open === r.id && model?.modality === 'image' && <ImageGeneration model={model} onChanged={onChanged} />}
+              {open === r.id && model && model.modality !== 'image' && (
                 <EngineLoadDrawer
                   providerId={providerId}
                   model={{ ...model, loaded: true }}

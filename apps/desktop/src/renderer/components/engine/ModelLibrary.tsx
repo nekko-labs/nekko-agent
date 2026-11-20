@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
 import type { GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
 import { MODALITY_LABELS, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
@@ -8,6 +8,7 @@ import { StatusDot } from '../primitives/index.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
 import { ImageGeneration } from './ImageGeneration.js';
+import { loadLocalModel } from './localModelShortcuts.js';
 import { gpuGuidance } from './modelFamilies.js';
 import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
@@ -106,10 +107,7 @@ export function ModelLibrary({
     // A row's Load uses whatever this model was last saved with, and the planner's
     // own answer when it has never been configured. Opening the drawer is for
     // changing that, not for performing it.
-    const params = model.preset ? { ...model.preset, budgetFraction: undefined } : null;
-    const req = (params || model.modality === 'image'
-      ? window.nekko.runtimeLoad(providerId, model.id, params ?? {})
-      : autoLoad(providerId, model.id)).catch((e: Error) => ({ ok: false, message: e.message }));
+    const req = loadLocalModel(providerId, model);
     // The load is registered the moment the host picks the call up. Refreshing
     // now (and once a beat later, in case this read raced the registration)
     // puts the model in the "In memory" block while it is still streaming in,
@@ -202,6 +200,22 @@ export function ModelLibrary({
   /** Residency, by model id: where a loaded model actually sits. */
   const residentById = useMemo(() => new Map((resident ?? []).map((r) => [r.id, r])), [resident]);
 
+  // Another surface (the Local models monitor's starred and recent rows) asked
+  // for a model that is not in memory: the In memory list cannot serve that, so
+  // this list unfolds the row's settings, shows every row, and scrolls to it.
+  const focus = useStore((s) => s.localModelFocus);
+  const clearFocus = useStore((s) => s.clearLocalModelFocus);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const target = focus ? models.find((m) => m.id === focus) : undefined;
+    if (!target || target.loaded) return;
+    setFilter('all');
+    setShown(Math.max(LIST_PAGE, models.length));
+    setOpen(target.id);
+    clearFocus();
+    requestAnimationFrame(() => rootRef.current?.querySelector(`[data-library-row="${CSS.escape(target.id)}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  }, [focus, models, clearFocus]);
+
   const runImport = async () => {
     const path = importPath.trim();
     if (!path) return;
@@ -215,7 +229,7 @@ export function ModelLibrary({
   };
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div className="flex items-center justify-between">
         <p className="text-xs text-ink-faint">
           {models.length === 0
@@ -311,7 +325,7 @@ export function ModelLibrary({
     // run, but not at the speed the card implies.
     const fitWarn = m.gpuFit === 'partial' || m.gpuFit === 'wont';
     return (
-      <div key={m.id}>
+      <div key={m.id} data-library-row={m.id} className="scroll-mt-4">
         <div
           className="flex min-h-(--q-row) flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 text-xs transition-colors duration-(--dur-fast) hover:bg-(--q-wash)"
           style={{ opacity: unsupported ? 0.85 : 1, background: m.loaded ? 'var(--accent-soft)' : undefined }}
@@ -495,23 +509,4 @@ function modalityTitle(modality: ModelModality): string {
     default:
       return 'A chat model';
   }
-}
-
-/**
- * Load with the planner's own answer at a middling budget.
- *
- * A model nobody has configured still has to load sensibly, and asking the same
- * planner the drawer asks means the quick path and the considered path cannot
- * disagree.
- */
-async function autoLoad(providerId: string, modelId: string): Promise<{ ok: boolean; message?: string }> {
-  const auto = await window.nekko.runtimeAutoFit(providerId, modelId, 0.75).catch(() => null);
-  return window.nekko.runtimeLoad(providerId, modelId, {
-    contextTokens: auto?.request.contextTokens,
-    kvCacheDtype: auto?.request.kvCacheDtype,
-    gpuLayers:
-      auto?.plan.totalLayers && auto.request.gpuLayerFraction < 1
-        ? Math.round(auto.plan.totalLayers * auto.request.gpuLayerFraction)
-        : undefined,
-  });
 }
