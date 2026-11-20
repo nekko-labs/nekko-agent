@@ -74,7 +74,7 @@ describe('HTML rendering card', () => {
     expect(observers[0].disconnect).toHaveBeenCalled();
   });
 
-  it('draws the page scriptless, offline and inert at a desktop viewport', () => {
+  it('draws a page that cannot be served scriptless, offline and inert at a desktop viewport', () => {
     vi.stubGlobal('window', { nekko: {}, nekkoPreview: { open: vi.fn() } });
     const out = render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true, { path: page.path, source: '<h1>Hi</h1><script>alert(1)</script>' }]);
     expect(out).toContain('<iframe');
@@ -86,8 +86,49 @@ describe('HTML rendering card', () => {
     expect(out).toContain('referrerPolicy="no-referrer"');
     expect(out).toContain('Pricing page');
     expect(out).toContain('index.html');
-    expect(out).toContain('>Interactive</button>');
+    // Interactivity is not a button: a page that can be served runs in the card itself.
+    expect(out).not.toContain('Interactive');
     expect(out).toContain('Open ↗');
+  });
+
+  it('runs a page that can be served, live and clickable, and reads nothing', async () => {
+    const readFile = vi.fn();
+    const serveHtmlPreview = vi.fn().mockResolvedValue({ id: 'p1', url: 'http://127.0.0.1:5000/p1/index.html' });
+    const releaseHtmlPreview = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('window', { nekko: { readFile, serveHtmlPreview, releaseHtmlPreview } });
+    render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true]);
+    const cleanups = await runEffects();
+    expect(serveHtmlPreview).toHaveBeenCalledWith(page.path, { internet: false });
+    expect(readFile).not.toHaveBeenCalled();
+    expect(hooks.set).toHaveBeenCalledWith({ path: page.path, url: 'http://127.0.0.1:5000/p1/index.html' });
+    // Leaving releases the served page.
+    cleanups.forEach(c => typeof c === 'function' && c());
+    expect(releaseHtmlPreview).toHaveBeenCalledWith('p1');
+
+    const out = render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true, null, { path: page.path, url: 'http://127.0.0.1:5000/p1/index.html' }, null]);
+    expect(out).toContain('data-render-live');
+    expect(out).toContain('src="http://127.0.0.1:5000/p1/index.html"');
+    expect(out).toContain('sandbox="allow-scripts allow-forms allow-modals"');
+    expect(out).not.toContain('allow-same-origin');
+    expect(out).not.toContain('pointer-events:none');
+    expect(out).not.toMatch(/data-render-live[^>]*aria-hidden/);
+    expect(out).toContain('width:1280px');
+    expect(out).not.toContain('Interactive');
+  });
+
+  it('falls back to the still picture when the page cannot be served', async () => {
+    const readFile = vi.fn().mockResolvedValue({ content: '<p>x</p>', binary: false, truncated: false });
+    const serveHtmlPreview = vi.fn().mockRejectedValue(new Error('refused'));
+    vi.stubGlobal('window', { nekko: { readFile, serveHtmlPreview } });
+    render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true]);
+    await runEffects();
+    expect(hooks.set).toHaveBeenCalledWith(page.path);
+    render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true, null, null, page.path]);
+    await runEffects();
+    expect(readFile).toHaveBeenCalledWith(page.path);
+    const out = render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true, { path: page.path, source: '<p>x</p>' }, null, page.path]);
+    expect(out).toContain('sandbox=""');
+    expect(out).not.toContain('data-render-live');
   });
 
   it('scales the frame to the card width', async () => {
@@ -99,16 +140,13 @@ describe('HTML rendering card', () => {
     expect(frame.style.transform).toBe('scale(0.5)');
   });
 
-  it('opens the file pane, and the isolated interactive window with the page source', async () => {
-    const open = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal('window', { nekko: {}, nekkoPreview: { open } });
+  it('opens the file pane, with no separate interactive window', () => {
+    vi.stubGlobal('window', { nekko: {}, nekkoPreview: { open: vi.fn() } });
     hooks.states = [true, { path: page.path, source: '<p>x</p>' }]; hooks.index = 0;
     const buttons = elements(HtmlRenderingCard({ artifact: page, sessionId: 's' })).filter(e => e.type === 'button');
-    buttons.find(b => text(b.props.children) === 'Open ↗')!.props.onClick();
+    expect(buttons.map(b => text(b.props.children))).toEqual(['Open ↗']);
+    buttons[0].props.onClick();
     expect(hooks.open).toHaveBeenCalledWith(page.path, 's');
-    buttons.find(b => text(b.props.children) === 'Interactive')!.props.onClick();
-    await Promise.resolve();
-    expect(open).toHaveBeenCalledWith('<p>x</p>');
   });
 
   it('offers a design both ways: in the chat, or full screen in Library', () => {
@@ -135,13 +173,6 @@ describe('HTML rendering card', () => {
     expect(out).toMatch(/disabled=""[^>]*data-open-in-library/);
   });
 
-  it('hides Interactive without the desktop bridge and disables it until the page loads', () => {
-    vi.stubGlobal('window', { nekko: {} });
-    expect(render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true, { path: page.path, source: '<p>x</p>' }])).not.toContain('Interactive');
-    vi.stubGlobal('window', { nekko: {}, nekkoPreview: { open: vi.fn() } });
-    expect(render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true, null])).toMatch(/disabled=""[^>]*>Interactive/);
-  });
-
   it('keeps the card plain for large, binary, truncated or unreadable pages', async () => {
     expect(htmlThumbnail({ content: 'x'.repeat(THUMB_MAX_CHARS + 1), binary: false, truncated: false })).toEqual({ note: 'Too large to preview here' });
     expect(htmlThumbnail({ content: '<p>', binary: false, truncated: true })).toEqual({ note: 'Too large to preview here' });
@@ -158,14 +189,16 @@ describe('HTML rendering card', () => {
 
   it('never reads host files in Sandbox', async () => {
     const readFile = vi.fn();
-    vi.stubGlobal('window', { nekko: { readFile }, nekkoPreview: { open: vi.fn() } });
+    const serveHtmlPreview = vi.fn();
+    vi.stubGlobal('window', { nekko: { readFile, serveHtmlPreview }, nekkoPreview: { open: vi.fn() } });
     hooks.sandbox = true;
-    const out = render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true, { path: page.path, source: '<p>x</p>' }]);
+    const out = render(<HtmlRenderingCard artifact={page} sessionId="s" />, [true, { path: page.path, source: '<p>x</p>' }, { path: page.path, url: 'http://127.0.0.1:5000/x' }]);
     await runEffects();
     expect(readFile).not.toHaveBeenCalled();
+    expect(serveHtmlPreview).not.toHaveBeenCalled();
     expect(out).not.toContain('<iframe');
     expect(out).toContain('unavailable in Sandbox');
-    expect(out.match(/disabled=""/g)).toHaveLength(2);
+    expect(out.match(/disabled=""/g)).toHaveLength(1);
   });
 });
 
