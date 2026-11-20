@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { CatalogModel, ImageRecommendedOption, Recommendations } from '@nekko-agent/shared';
 import { catalogKind, familyKind, groupModelFamilies, setUpPictureModels, shelveCatalog, type LibraryModel } from './modelFamilies.js';
-import { KIND_FILTERS, isMoreFamily, kindNote, setUpFitText, setUpModelOf } from './ModelsHome.js';
+import { KIND_FILTERS, familiesFor, familyLine, isMoreFamily, kindNote, setUpFitText, setUpModelOf } from './ModelsHome.js';
 import { durationText, pictureModelBlurb, pictureTimeText } from './pictureModelText.js';
 import { RecommendationList, imageFitText } from './RecommendedModels.js';
 import { needsOffload } from '../agent-console/imageOffload.js';
@@ -57,7 +57,7 @@ const withPictures: Recommendations = {
 
 describe('picture models in the recommendations', () => {
   it('lists the picture picks beside the chat ones, with no speed and the offload said', () => {
-    const html = renderToStaticMarkup(<RecommendationList recs={withPictures} models={[{ path: '/m/flux-2-klein-4b-Q4_0.gguf' }]} open onDownload={vi.fn()} onRecheck={vi.fn()} />);
+    const html = renderToStaticMarkup(<RecommendationList recs={withPictures} models={[{ path: '/m/flux-2-klein-4b-Q4_0.gguf' }]} onDownload={vi.fn()} onRecheck={vi.fn()} />);
     expect(html).toContain('Create pictures');
     expect(html).toContain('Z-Image Turbo');
     expect(html).toContain('Tight, with offload');
@@ -187,9 +187,33 @@ describe('how long a picture takes', () => {
 
   it('shows it on the pick\'s row in Best for this machine', () => {
     const timed: Recommendations = { ...withPictures, imageTasks: [{ ...withPictures.imageTasks![0], pick: option({ time: { seconds: 31, basis: 'measuredHere', samples: 4 } }) }] };
-    const html = renderToStaticMarkup(<RecommendationList recs={timed} models={[]} open onDownload={vi.fn()} onRecheck={vi.fn()} />);
+    const html = renderToStaticMarkup(<RecommendationList recs={timed} models={[]} onDownload={vi.fn()} onRecheck={vi.fn()} />);
     expect(html).toContain('data-picture-time="measuredHere"');
     expect(html).toContain('31 s a picture here');
-    expect(renderToStaticMarkup(<RecommendationList recs={withPictures} models={[]} open onDownload={vi.fn()} onRecheck={vi.fn()} />)).not.toContain('data-picture-time');
+    expect(renderToStaticMarkup(<RecommendationList recs={withPictures} models={[]} onDownload={vi.fn()} onRecheck={vi.fn()} />)).not.toContain('data-picture-time');
+  });
+});
+
+describe('the two halves of the Models section', () => {
+  const families = groupModelFamilies(
+    [local('Ckpt_Q38.gguf', { lastLoadError: 'a tensor is missing', sizeBytes: 3.9 * 1024 ** 3 }), local('Gemma-4-E4B-Q4_K_M.gguf', { loaded: true, parameterSize: '7.5B' })],
+    [catalog('unsloth/Qwen3-8B-GGUF', { parameterSize: '8B', quants: [{ label: 'Q4_K_M', file: 'a.gguf', sizeBytes: 5 * 1024 ** 3 }, { label: 'Q8_0', file: 'b.gguf', sizeBytes: 9 * 1024 ** 3 }] })],
+  );
+
+  it('lists what is on disk in one, and what can be downloaded in the other', () => {
+    expect(familiesFor('installed', families).map(f => f.name)).toEqual(['Ckpt', 'Gemma-4-E4B']);
+    expect(familiesFor('find', families).map(f => f.name)).toEqual(['Qwen3-8B']);
+  });
+
+  it('puts a failed load on the row instead of its size, in the danger colour', () => {
+    const ckpt = families.find(f => f.name === 'Ckpt')!;
+    expect(familyLine(ckpt, 'installed', undefined)).toEqual({ text: 'Last load failed', tone: 'danger', title: 'a tensor is missing' });
+  });
+
+  it('says the parameters, size and state of a healthy row, and the quant range of a downloadable one', () => {
+    const gemma = families.find(f => f.name === 'Gemma-4-E4B')!;
+    expect(familyLine(gemma, 'installed', undefined).text).toMatch(/^4B effective · .+ · in memory$/);
+    const qwen = families.find(f => f.name === 'Qwen3-8B')!;
+    expect(familyLine(qwen, 'find', { budgetBytes: 30 * 1024 ** 3, kind: 'vram' }).text).toBe('8B · 2 quants, 5.0 GB to 9.0 GB · smallest fits on GPU (estimated)');
   });
 });

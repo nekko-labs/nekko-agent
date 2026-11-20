@@ -285,8 +285,8 @@ export function ModelLibrary({
 
       {models.length === 0 ? (
         <p className="mt-(--q-inline) text-xs text-ink-faint">
-          Nothing here yet. Download one of the picks for this machine above or a model from the list, open{' '}
-          <strong>Folders</strong> to point at a folder another app already fills, or add a GGUF you have.
+          Nothing here yet. Get one under <strong>Find new models</strong>, open <strong>Folders</strong> to point at a
+          folder another app already fills, or add a GGUF you have.
         </p>
       ) : visible.length === 0 ? (
         <p className="mt-3 text-xs text-ink-faint">

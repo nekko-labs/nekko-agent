@@ -90,18 +90,28 @@ Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`
 the engine before it starts. If an engine still dies for a missing DLL, the error says so
 and links Microsoft's 25 MB redistributable.
 
-**Best for this machine.** The Models page opens on a pick per task (chat, coding, a
+**On this machine, or Find new models.** Under **Models** a switch picks between the models
+you have and getting a new one. **On this machine** lists what is downloaded: each row gives
+the parameters, the size and whether it fits on your GPU, and a model whose last load failed
+shows a warning triangle and "Last load failed" instead of a check. Select one to see its
+variants and, under your GPU's name, its weights, what each 1k tokens of context costs, and
+how much context fits beside whatever else is loaded. **Find new models** searches Hugging
+Face. What is loaded right now is listed above both, under **Running now**. The agent server
+(for the CLI and MCP) is in **Settings > Server**.
+
+**Best for this machine.** Find new models opens on a pick per task (chat, coding, a
 small fast model for routing, embeddings, vision) made for this machine's GPU and memory.
-Each pick says what it costs before you download it: the memory it takes out of what the
-machine has for models, the download size, and the speed to expect at the start of a
-conversation. A speed with no `~` was measured with that file on that kind of hardware, a
+Each pick says what it costs before you download it: its parameters, the memory it takes out
+of what the machine has for models (a bar shows the weights and the context separately), the
+download size, how much context fits in what is left, and the speed to expect at the start
+of a conversation. **Quants** lists every build of that model with the same figures, so you
+can trade a little quality for a longer context, or the other way round. A speed with no `~` was measured with that file on that kind of hardware, a
 `~` speed is estimated from the hardware's memory bandwidth, and "rough" means the estimate
 was calibrated on a different kind of GPU. Once you have used a model, "here" marks the speed
 your own replies ran at (the median of the last 20), which then also decides whether it is fast
 enough to stay the pick. A GPU we have no figures for gets no speed rather than a guess. When nothing fits that is fast enough for a task, the pick is the fastest
 that fits and says so. The list comes with the app and works offline; **Check this
-machine again** re-reads the hardware after a change. Once you have models the block folds
-to one line. When a new GPU, or a newer version of the list, puts a better model within reach
+machine again** re-reads the hardware after a change. When a new GPU, or a newer version of the list, puts a better model within reach
 than the one you have for a task, a card above it says so ("A better coding model now fits
 your 16 GB GPU") with the model it would replace; **Not now** puts it away until the next
 change.

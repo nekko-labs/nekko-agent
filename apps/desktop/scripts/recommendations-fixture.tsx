@@ -33,6 +33,7 @@ const downloads: string[] = [];
 const dismissed: string[] = [];
 const bridge: any = {
   engineStatus: async () => status(), engineModels: async () => library, engineDownloads: async () => [], engineCatalog: async () => catalog,
+  decisionsCatalog: async () => [], decisionsModels: async () => [],
   listModelFolders: async () => [], getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
   machineDismissNudge: async () => { dismissed.push('all'); return { ok: true }; },
   machineRecommendations: async () => {

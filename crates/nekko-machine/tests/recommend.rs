@@ -513,3 +513,31 @@ fn video_clips_need_a_graphics_card_or_unified_memory() {
         assert!(!t.options.is_empty(), "the model is still listed, said not to fit");
     }
 }
+
+/// Each pick lists every quant of its model with what it needs here, and the
+/// longest context that still fits beside its weights: never below the
+/// context it was picked at, never past the model's own, and shorter for a
+/// bigger quant of the same model.
+#[test]
+fn picks_say_what_each_quant_needs_and_how_much_context_fits() {
+    let r = rec(&rtx_5090(), bundled_feed());
+    for t in &r.tasks {
+        let p = t.pick.as_ref().unwrap();
+        assert!(!p.quants.is_empty(), "{}", t.task);
+        assert!(p.quants.iter().any(|q| q.quant == p.quant), "{}: the pick's own quant is listed", t.task);
+        assert!(
+            p.fit_context_tokens >= p.context_tokens.min(p.max_context_tokens.unwrap_or(f64::MAX)) - 1024.0,
+            "{}",
+            t.task
+        );
+        if let Some(max) = p.max_context_tokens {
+            assert!(p.fit_context_tokens <= max, "{}", t.task);
+        }
+        for q in &p.quants {
+            assert!(q.memory_bytes > q.download_bytes, "{} {}: memory counts more than the weights", t.task, q.quant);
+            if q.download_bytes > p.download_bytes {
+                assert!(q.fit_context_tokens <= p.fit_context_tokens, "{} {}", t.task, q.quant);
+            }
+        }
+    }
+}
