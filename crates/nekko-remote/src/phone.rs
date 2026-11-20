@@ -512,6 +512,14 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                 return Err(denied("value-invalid", "refresh"));
             }
         }
+        "session:cancelWatch" => {
+            // One watch of one chat (a clip's Cancel): the chat's Stop already ends them all.
+            id(0, "chat id")?;
+            id(1, "watch id")?;
+            if args.len() > 2 {
+                return Err(denied("option-denied", "extra argument"));
+            }
+        }
         "session:photo" => {
             id(0, "chat id")?;
             id(1, "message id")?;
@@ -778,7 +786,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
                 Value::Null
             }
         }
-        "task:runNow" => Value::Null,
+        "task:runNow" | "session:cancelWatch" => Value::Null,
         "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
         "session:watches" => crate::phone_views::watches(&result, &policy().watch_view, policy().views.text_chars),
         "machine:summary" => {
@@ -1011,6 +1019,7 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         "chat:editQueued" => vec![first.clone(), args[1].clone(), pick(&args[2], &policy().queue_edit_keys)],
         "pr:sessionList" => vec![first.clone(), json!(args.get(1) == Some(&Value::Bool(true)))],
         "session:photo" => args[..3].to_vec(),
+        "session:cancelWatch" => args[..2].to_vec(),
         "limits:get" => {
             // The phone names a provider; the computer reads that provider's limits key itself.
             let providers = run("providers:list".to_string(), json!([])).await?;
@@ -1834,6 +1843,22 @@ mod tests {
             "engine": { "running": true, "startedAt": 1, "resident": [{ "id": "m", "name": "M", "contextTokens": 8 }], "loading": 0, "memory": { "totalMB": 1 } } });
         assert_eq!(redact("machine:summary", raw), want);
         assert_eq!(redact("machine:summary", Value::Null), Value::Null);
+    }
+
+    /// `session:cancelWatch` (a clip's Cancel from a phone): a chat id and a watch id, nothing else, no result.
+    #[test]
+    fn screens_a_phones_watch_cancel() {
+        assert!(screen("session:cancelWatch", &[json!("s1"), json!("w1")]).is_ok());
+        assert_eq!(screen("session:cancelWatch", &[json!("s1")]).map(|_| ()), Err(denied("value-invalid", "watch id")));
+        assert_eq!(
+            screen("session:cancelWatch", &[json!(""), json!("w1")]).map(|_| ()),
+            Err(denied("value-invalid", "chat id"))
+        );
+        assert_eq!(
+            screen("session:cancelWatch", &[json!("s1"), json!("w1"), json!("x")]).map(|_| ()),
+            Err(denied("option-denied", "extra argument"))
+        );
+        assert_eq!(redact("session:cancelWatch", json!({"secret": 1})), Value::Null);
     }
 
     /// `session:watches` (2026-10-24): a chat id is required; the view keeps the

@@ -349,4 +349,18 @@
     <string name="car_reply">Reply</string>
     <string name="car_mark_read">Mark as read</string>
     <string name="car_not_sent">Not sent: this chat isn’t on the computer the phone is connected to.</string>
+    <!-- The paid clip card (#3038) and a clip's chip (#2973) -->
+    <string name="chat_clip_title">Make a clip with %1$s</string>
+    <string name="chat_clip_via">through %1$s · paid from your %2$s account</string>
+    <string name="chat_clip_total">Total</string>
+    <string name="chat_clip_not_priced">Not priced</string>
+    <string name="chat_clip_warning_prompt">Once started it cannot be stopped, and it is charged even if you stop the chat. The prompt leaves this computer for %1$s and the model\'s provider.</string>
+    <string name="chat_clip_warning_picture">Once started it cannot be stopped, and it is charged even if you stop the chat. The prompt and the first picture leave this computer for %1$s and the model\'s provider.</string>
+    <string name="chat_clip_cancel">Cancel</string>
+    <string name="chat_clip_make">Make clip</string>
+    <string name="chat_clip_make_price">Make clip · %1$s</string>
+    <string name="chat_clip_starting">Starting…</string>
+    <string name="chat_clip_cancel_watch">Cancel clip</string>
+    <string name="chat_clip_cancelling">Cancelling…</string>
+    <string name="chat_clip_cancel_failed">Couldn\'t cancel the clip: %1$s</string>
 </resources>

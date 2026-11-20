@@ -142,6 +142,24 @@ class TranscriptTest {
         assertTrue(tool.output!!.endsWith("3 images, on the computer"))
     }
 
+    @Test fun `a picture tool's result keeps its message and picture count, other tools keep the note`() {
+        val s = Session.from(WireJson.parseToJsonElement("""
+            {"id":"s1","title":"T","messages":[
+              {"id":"a","role":"assistant","content":"","toolCalls":[{"id":"c1","name":"generate_image","input":{}},{"id":"c2","name":"computer_screenshot","input":{}}]},
+              {"id":"t1","role":"tool","content":"","toolResult":{"toolCallId":"c1","output":"Saved","omittedImages":2}},
+              {"id":"t2","role":"tool","content":"","toolResult":{"toolCallId":"c2","output":"ok","omittedImages":1}}
+            ]}
+        """.trimIndent()))!!
+        val (pic, shot) = Transcript.fromMessages(s.messages).map { it as Block.Tool }
+        assertEquals("t1", pic.resultMessageId)
+        assertEquals(2, pic.pictures)
+        assertEquals("Saved", pic.output)
+        assertEquals(0, shot.pictures)
+        assertTrue(shot.output!!.endsWith("1 image, on the computer"))
+        assertTrue(Transcript.makesPictures("edit_image"))
+        assertFalse(Transcript.makesPictures("computer_screenshot"))
+    }
+
     @Test fun `a prompt keeps its thumbnails, one per photo, blank where the phone has none`() {
         val s = Session.from(WireJson.parseToJsonElement("""
             {"id":"s1","messages":[{"id":"u","role":"user","content":"look","images":["data:image/jpeg;base64,QQ==","",7]}]}

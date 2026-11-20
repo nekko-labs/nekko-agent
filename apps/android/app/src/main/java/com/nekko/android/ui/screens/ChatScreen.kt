@@ -735,6 +735,7 @@ private fun ChatScreenContent(
                     }, startAlways = alwaysNow == a.call.id, onStartedAlways = { alwaysNow = null })
                 }
                 vm.shownQuestion(chat.question)?.let { QuestionCard(it, onAnswer = vm::answer) }
+                com.nekko.android.ui.chat.ClipWatchChips(watches, onCancel = vm::cancelClip)
                 prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
                 // An archived chat reads like the desktop's: no message box until it is restored.
                 if (archivedAt != null && !chat.running) ArchivedBar(
