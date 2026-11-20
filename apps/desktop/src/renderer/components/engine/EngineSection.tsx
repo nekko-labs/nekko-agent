@@ -1,11 +1,11 @@
 import { useDownloadAction } from './useDownloadAction.js';
 import { DownloadProgress } from './DownloadProgress.js';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DownloadJob, EngineStatus, LocalModel } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { Toggle } from '../primitives/index.js';
 import { CheckIcon, CopyIcon } from '../../icons.js';
-import { formatBytes } from '../runtimes/verdict.js';
+import { SettingsIcon } from '../../gentleface-icons.js';
 import { EngineInstallCard } from './EngineInstallCard.js';
 import { ModelsHome, type ModelsMode } from './ModelsHome.js';
 import { ResidentModels } from './ResidentModels.js';
@@ -62,7 +62,13 @@ export function EngineSection({
   const focus = useStore((s) => s.localModelFocus);
   useEffect(() => { if (focus) setTab('installed'); }, [focus]);
   const [busy, setBusy] = useState<'starting' | 'stopping' | null>(null);
-  const [showLog, setShowLog] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const logRef = useRef<HTMLElement>(null);
+  // A failed start opens Configure on the logs, so the reason is in view.
+  const showLog = () => {
+    setConfigOpen(true);
+    requestAnimationFrame(() => logRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  };
   const runtimeDownload = useDownloadAction({ runtime: 'llama' });
   const repairing = runtimeDownload.active;
 
@@ -121,7 +127,6 @@ export function EngineSection({
   const installed = Boolean(install.binPath || status.diffusionInstall?.binPath);
   // A model's weights, shards and helper files are one download, so the count is per model, not per file.
   const active = groupDownloads(jobs).filter((g) => isActive(g.state));
-  const residentBytes = status.resident.reduce((n, r) => n + (r.vramBytes ?? 0), 0);
   const borrowed = models.filter((m) => m.managed === false).length;
 
   // One click puts a broken engine right: the same build, downloaded again into
@@ -149,7 +154,7 @@ export function EngineSection({
       'error' in res ? (res as { error: string }).error : 'ok' in res && !res.ok ? res.message : null;
     if (failure) {
       pushToast('error', failure);
-      setShowLog(true);
+      showLog();
     }
     await refresh();
     onProvidersChanged();
@@ -174,10 +179,15 @@ export function EngineSection({
       {error && <ServiceLoadState label="model server" error={error} retry={refresh} />}
       {/* The agent server moved to Settings > Server: this page is about models. */}
       <div className="min-w-0">
+      {/* The header is the server's whole state: the dot and the Serving
+          switch say whether it is up, the address is what other apps point
+          at, and Configure holds everything else. There used to be a
+          "Running" row under it repeating the switch. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--accent)' }} />
+        <StatusDot running={running && installed} busy={busy !== null} />
         <h2 className="text-base font-semibold">Model server</h2>
-        <div className="ml-auto flex items-center gap-3">
+        {installed && running && <AddressPill address={address} />}
+        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
           <ServerPowerSwitch
             running={running}
             busy={busy !== null}
@@ -196,11 +206,60 @@ export function EngineSection({
               label="Start the model server with Nekko"
             />
           </label>
+          <button
+            type="button"
+            className={`btn btn-ghost gap-2 text-xs ${configOpen ? 'text-accent' : ''}`}
+            aria-expanded={configOpen}
+            aria-controls="model-server-configure"
+            title="Server settings, runtimes and logs"
+            data-icon-hover
+            data-model-server-configure
+            onClick={() => setConfigOpen((o) => !o)}
+          >
+            <SettingsIcon className="h-4 w-4" />
+            Configure
+          </button>
         </div>
       </div>
-      <p className="mt-0.5 text-xs text-ink-faint">
-        Serve text and image models on one address, using managed runtimes or models already on this machine.
-      </p>
+
+      {/* Server settings, runtimes and logs: what you reach for when setting
+          the server up or when a start fails, folded behind Configure. It
+          opens itself when a start fails, on the logs. */}
+      <div id="model-server-configure" className="library-fold" data-open={configOpen ? '' : undefined} inert={!configOpen}>
+        <div>
+          <div className="mt-(--q-group) space-y-(--q-group) border-t border-line pt-(--q-group)" data-model-server-config>
+            <Shown id="engine">
+              <section>
+                <h3 className="quiet-group-label">Server</h3>
+                <div className="mt-(--q-heading)">
+                  <EngineServerSettings settings={status.settings} install={install} running={running} onChanged={() => { void refresh(); onProvidersChanged(); }} />
+                </div>
+              </section>
+            </Shown>
+            {/* Which image and MLX runtimes are installed matters to few
+                people. The first card's divider would sit right under the
+                label, so it goes. */}
+            <section>
+              <h3 className="quiet-group-label">Runtimes</h3>
+              <div className="[&>div:first-child]:mt-(--q-heading) [&>div:first-child]:border-t-0 [&>div:first-child]:pt-0">
+                <ErrorBoundary label="Image runtime"><DiffusionInstallCard install={status.diffusionInstall} onChanged={refresh} /></ErrorBoundary>
+                <ErrorBoundary label="MLX runtime"><MlxInstallCard install={status.mlxInstall} onChanged={refresh} /></ErrorBoundary>
+              </div>
+            </section>
+            {/* The engine's own output: when a start fails this is where you look. */}
+            <section ref={logRef}>
+              <h3 className="quiet-group-label">Server logs</h3>
+              {status.log.length > 0 ? (
+                <pre className="mt-(--q-heading) max-h-40 overflow-auto rounded bg-[color-mix(in_srgb,var(--ink-faint)_8%,transparent)] p-2 font-mono text-2xs">
+                  {status.log.join('\n')}
+                </pre>
+              ) : (
+                <p className="mt-(--q-heading) text-xs text-ink-faint">Nothing logged yet.</p>
+              )}
+            </section>
+          </div>
+        </div>
+      </div>
 
       <div className="mt-3 min-w-0">
         {/* The install card used to be the *whole* card until an engine existed,
@@ -208,22 +267,6 @@ export function EngineSection({
             already on it showed "not installed" and nothing else. What we have is
             true whether or not the runtime is downloaded; only running it isn't. */}
         {!install.binPath && <EngineInstallCard install={install} onChanged={refresh} />}
-        {installed && (
-          <div className="flex min-h-7 flex-wrap items-center gap-2">
-            <StatusDot running={running} busy={busy !== null} />
-            <span className="text-sm">{running ? 'Running' : 'Stopped'}</span>
-            {install.version && <span className="text-2xs text-ink-faint">{install.version}</span>}
-            {running && (
-              <span className="text-2xs text-ink-faint">
-                {status.resident.length} loaded
-                {residentBytes > 0 ? ` · ${formatBytes(residentBytes)} on GPU` : ''}
-              </span>
-            )}
-            <div className="ml-auto flex items-center gap-2">
-              {running && <AddressPill address={address} />}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="min-w-0">
@@ -269,33 +312,6 @@ export function EngineSection({
               </p>
             )}
           </>
-        )}
-
-        <Shown id="engine"><details className="mt-4 border-t border-line pt-4">
-          <summary className="cursor-pointer text-xs font-medium">Model server settings</summary>
-          <div className="mt-3"><EngineServerSettings settings={status.settings} install={install} running={running} onChanged={() => { void refresh(); onProvidersChanged(); }} /></div>
-        </details></Shown>
-        {/* Which image and MLX runtimes are installed matters to few people, so
-            it folds away like the server settings. The first card's divider
-            would sit right under the summary, so it goes. */}
-        <details className="mt-4 border-t border-line pt-4">
-          <summary className="cursor-pointer text-xs font-medium">Runtimes</summary>
-          <div className="[&>div:first-child]:mt-3 [&>div:first-child]:border-t-0 [&>div:first-child]:pt-0">
-            <ErrorBoundary label="Image runtime"><DiffusionInstallCard install={status.diffusionInstall} onChanged={refresh} /></ErrorBoundary>
-            <ErrorBoundary label="MLX runtime"><MlxInstallCard install={status.mlxInstall} onChanged={refresh} /></ErrorBoundary>
-          </div>
-        </details>
-
-        {/* The engine's own output, under the server it came from rather than
-            the model library: when a start fails this is where you look, and
-            it opens itself (showLog) so you do not have to. */}
-        {status.log.length > 0 && (
-          <details className="mt-3" open={showLog}>
-            <summary className="cursor-pointer text-2xs text-ink-faint">Server logs</summary>
-            <pre className="mt-1 max-h-40 overflow-auto rounded bg-[color-mix(in_srgb,var(--ink-faint)_8%,transparent)] p-2 font-mono text-2xs">
-              {status.log.join('\n')}
-            </pre>
-          </details>
         )}
       </div>
       </div>

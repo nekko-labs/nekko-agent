@@ -337,6 +337,17 @@ fn commit() -> Option<(u64, u64)> {
     None
 }
 
+/// How much memory is left to allocate, in bytes: the tighter of available
+/// physical memory and, on Windows, what is left of the commit limit. Cheap
+/// (no process list), for checks made every second, like a model load's
+/// overload protection.
+pub fn headroom() -> u64 {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_memory();
+    let available = sys.available_memory();
+    commit().map_or(available, |(_, left)| available.min(left))
+}
+
 /// Memory now. The process list is read only when memory is short, unless
 /// `detail` asks for it anyway.
 pub fn state(detail: bool) -> MemoryState {

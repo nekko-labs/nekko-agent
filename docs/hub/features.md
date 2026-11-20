@@ -30,6 +30,8 @@ This is a capability guide, not a promise that every provider, platform or insta
 
 Models places cloud providers in up to **three columns** when there is enough room, falling back to two or one as the content narrows. A minimal floating menu beside the content jumps between **Cloud providers**, **Local model server**, and the local **Models** and **Connected servers** sections. On smaller windows the menu sits above the content. The local destinations have their own spaced targets. This is a shared-renderer layout; native phone app layouts and live provider sign-in are separate capabilities.
 
+The **Model server** header shows whether it is serving (the dot and the Serving switch) and the address other apps point at. **Configure**, at its right, opens the server settings, the image and MLX runtimes, and the server logs. **Loaded models** lists what is in memory; while a model loads, its row draws the graphics memory filling up and warns when the model needs more than is free. **Overload protection** (Configure, on by default) stops a load before it leaves less than 500 MB of graphics or system memory free and releases what the load took, so the computer does not freeze; set how much it keeps free under **Keep free**.
+
 Provider cards in Models label **Subscription** versus **API**. Claude Code uses its reported login mode: a Claude plan shows Subscription, while API-key and cloud logins show API. OpenRouter sign-in is still metered API billing. Local servers and unknown Claude login modes get neither label; connection health is shown separately.
 
 ## Can Nekko Agent work offline?
