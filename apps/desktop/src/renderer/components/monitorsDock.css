@@ -40,7 +40,7 @@
    pill, the monitor header's icons and the app views a monitor hosts
    (Automations) keep their own quiet look. The :where() leaves them out
    without raising this rule over the dock's later, narrower button rules. */
-.monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button)),
+.monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button, .monitors-dock__icon-action)),
 .monitors-dock input[type='number'] {
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -51,7 +51,7 @@
 }
 .monitors-dock button { cursor: pointer; }
 @media (hover: hover) {
-  .monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button)):hover:not(:disabled) { background: var(--surface); }
+  .monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button, .monitors-dock__icon-action)):hover:not(:disabled) { background: var(--surface); }
 }
 .monitors-dock button:disabled { opacity: .5; cursor: default; }
 .monitors-dock button:not(.quiet-switch):focus-visible,
@@ -277,6 +277,15 @@
 .monitors-dock__local-model .monitors-dock__metric-row strong { text-align: left; flex: 1; }
 .monitors-dock__local-model .monitors-dock__note { margin-top: 0; }
 .monitors-dock__local-model button.monitors-dock__text-button { flex-shrink: 0; }
+/* Settings and Load: quiet Gentleface icons, named by their tooltip, played once on hover. */
+.monitors-dock button.monitors-dock__icon-action { flex-shrink: 0; display: grid; place-items: center; width: 24px; height: 24px; padding: 4px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-faint); transition: color 120ms ease; }
+@media (hover: hover) { .monitors-dock button.monitors-dock__icon-action:hover:not(:disabled) { color: var(--ink); } }
+/* The last icon's glyph lines up with the right edge, like Unload's text. */
+.monitors-dock__local-model .monitors-dock__metric-row > .monitors-dock__icon-action:last-child { margin-right: -4px; }
+.monitors-dock__busy { flex-shrink: 0; color: var(--ink-faint); font-size: var(--text-2xs); }
+/* Nothing loaded: a beach and one line, hovered to play the breeze. */
+.monitors-dock__local-idle { display: flex; align-items: center; gap: 8px; color: var(--ink-faint); font-size: var(--text-2xs); }
+.monitors-dock__local-idle .monitors-dock__icon { flex-shrink: 0; color: var(--ink-soft); }
 .monitors-dock__local-model button.monitors-dock__text-button:disabled { opacity: 0.5; }
 /* Starred and Recent: a group label, then rows, a step of space above each group. */
 .monitors-dock__local-group { display: grid; gap: 8px; margin-top: 12px; }
