@@ -903,6 +903,8 @@ export const useStore = create<UiState>((set, get) => ({
   reloadModels: async (providerId) => {
     if (get().activeProviderId !== providerId) return;
     const models = await window.nekko.listModels(providerId);
+    // An empty list reads as a failed listing: keep what is shown rather than unset the model.
+    if (!models.length || get().activeProviderId !== providerId) return;
     set({ models });
     // Same rule as selectProvider: a model the refreshed catalog dropped is
     // unset rather than left pointing at an id that will 400.
