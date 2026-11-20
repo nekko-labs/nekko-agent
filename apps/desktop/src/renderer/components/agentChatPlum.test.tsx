@@ -20,6 +20,8 @@ describe('agent chat visual continuity', () => {
     expect(cssRule(css, `${palette} .command-wall-layout[data-wall-layout] .command-wall-window[data-wall-selected] > .panel`)['--nekko-glow']).toBe('1');
     expect(hasSelector(css, /data-wall-working.*> \.panel/)).toBe(false);
     expect(cssRule(css, `${palette} .command-wall-window[data-wall-selected] > .panel::before`).animation).toContain('agent-window-colour');
+    // A smooth endless fade redraws the window every display frame (#3136).
+    expect(cssRule(css, `${palette} .command-wall-window[data-wall-selected] > .panel::before`).animation).toMatch(/steps\(\d+\)/);
     expect(cssRule(css, `${palette} .command-wall-window > .panel::before`)['pointer-events']).toBe('none');
   });
   it('reuses static new-chat dithering behind selected existing conversations only', () => {

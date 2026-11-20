@@ -39,6 +39,17 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
+Area: GPU/memory
+Result: improvement expected; after number pending (measured once merged, see below)
+Conditions: Apple M1 Max (32-core GPU), macOS 27.2, built-in 3456x2234 ProMotion display; dev build (`npm run dev`), app in front and idle with no empty chat open (so no pixel wave). GPU share of Nekko Agent's GPU process from the driver's per-client `accumulatedGPUTime` (`ioreg -c IOAccelerator`), sampled every 2 s.
+
+| Metric | x-plum-dark, smooth fade | terminal theme (no glow) |
+|---|---|---|
+| GPU process, share of the GPU | 13.2-20.0% (steady ~15% over 90 s) | 0.7-5.2% (two 10-13% samples while the theme repainted) |
+
+Why: the selected window's glow (`agent-window-colour`, 24 s each way, forever) changed opacity on every display frame, so the window was recomposited at up to 120 Hz while the app was in front; `steps(48)` changes it about twice a second, in steps under 2% opacity. The after number on x-plum-dark with the stepped glow is still to be measured on the same machine once this lands. Source: #3136.
+
 ## Stopping a chat reads cached summaries, not every chat file (#3120, 2026-11-20)
 Area: engine daemon
 Result: improvement (warm); regression on a cold cache

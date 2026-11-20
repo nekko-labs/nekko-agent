@@ -4287,7 +4287,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   background: radial-gradient(100% 90% at 15% 0%, rgb(107 77 153 / .22), transparent 80%), radial-gradient(100% 75% at 90% 100%, rgb(163 80 119 / .12), transparent 80%);
   opacity: 0;
 }
-:is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] > .panel::before { animation: agent-window-colour 24s ease-in-out infinite alternate; }
+/* Stepped, not smooth: a smooth fade recomposites the window every display frame (#3136). */
+:is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] > .panel::before { animation: agent-window-colour 24s steps(48) infinite alternate; }
 @keyframes agent-window-colour { from { opacity: .1; } to { opacity: .9; } }
 @media (prefers-reduced-motion: reduce) {
   :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-layout[data-wall-layout] .command-wall-window > .panel { transition: none; }
