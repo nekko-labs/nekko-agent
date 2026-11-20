@@ -32,7 +32,8 @@ h1{margin:0;padding:32px 40px 8px;font-size:28px}
 </style></head><body><h1>${title}</h1><div class="canvas">${frames}</div></body></html>`;
 const DESIGNS = {
   'checkout-design.html': page('Checkout, first pass', [frameBox('Cart', '#fff'), frameBox('Payment', '#fff'), frameBox('Done', '#fff')].join('')),
-  'checkout-design-v2.html': page('Checkout, second pass', [frameBox('Cart', '#fdf6fa'), frameBox('Payment', '#fdf6fa'), frameBox('Done', '#f1faf3')].join('')),
+  // Its script marks the page when it runs, so the journey can tell a running page from a still picture.
+  'checkout-design-v2.html': page('Checkout, second pass', [frameBox('Cart', '#fdf6fa'), frameBox('Payment', '#fdf6fa'), frameBox('Done', '#f1faf3')].join('') + '<script>document.body.dataset.ran = "yes"</script>'),
 };
 
 app.whenReady().then(async () => {
@@ -97,6 +98,8 @@ app.whenReady().then(async () => {
       f.bridge.openPath = async p => { f.lastOpenPath = p; };
       f.bridge.serveHtmlPreview = async (p, o) => { f.asked.push({ p, controls: o.controls === true }); return ${js(urls)}[p + '|' + (o.controls === true)]; };
       f.bridge.releaseHtmlPreview = async () => {};
+      // The desktop app's preload offers the isolated interactive window; the fixture has none of its own.
+      window.nekkoPreview = { open: async () => { f.previewOpened = true; } };
       f.store.setState({ settings: { ...f.store.getState().settings, theme: 'dark', workspaces: [{ id: 'w1', name: 'Shop', path: ${js(project)}, addedAt: 1 }] } }); f.store.getState().applyTheme();
       f.store.getState().refreshSessions();
       f.store.getState().focusChatOnWall(chat.id);
@@ -104,13 +107,22 @@ app.whenReady().then(async () => {
     // The wall's first entrance stalls in a hidden window (no frames to finish it), so leave and come back once,
     // the same on both sides, then let the cards' pages draw before the picture.
     await sleep(1500);
-    await run(`layoutFixture.store.getState().setView('settings')`); await sleep(600);
+    await run(`layoutFixture.store.getState().setView('artifacts')`); await sleep(600);
     await backToChat();
     await run(`document.querySelector('[data-render-card]')?.scrollIntoView({ block: 'center' })`); await sleep(2500);
     await shot('chat-cards');
     if (baseline) { report.success = true; return; }
 
-    await check(`[${card('Checkout, second pass')}, ${card('Checkout, first pass')}].every(c => c && [...c.querySelectorAll('button')].map(b => b.textContent.trim()).filter(t => t !== 'Interactive').join('|') === 'Open in chat|Open in Library')`, 'a-design-card-offers-chat-and-library');
+    await check(`[${card('Checkout, second pass')}, ${card('Checkout, first pass')}].every(c => c && [...c.querySelectorAll('button')].map(b => b.textContent.trim()).join('|') === 'Open in chat|Open in Library')`, 'a-design-card-offers-chat-and-library-and-no-interactive-button');
+
+    // The card runs the page itself: served offline with its folder, in the served-page sandbox, taking the pointer.
+    const liveFrame = `${card('Checkout, second pass')}.querySelector('[data-render-live] iframe')`;
+    await check(`!!${liveFrame} && ${liveFrame}.src === ${js(urls[`${file('checkout-design-v2.html')}|false`].url)} && ${liveFrame}.getAttribute('sandbox') === 'allow-scripts allow-forms allow-modals' && getComputedStyle(${liveFrame}).pointerEvents !== 'none' && ${liveFrame}.tabIndex !== -1`, 'card-runs-the-page-live-and-clickable');
+    // Library's tiles (visited above) ask with the canvas script; the card's own request is the one without it, and its frame shows that page.
+    await check(`layoutFixture.asked.some(a => a.p === ${js(file('checkout-design-v2.html'))} && a.controls === false)`, 'card-page-served-without-the-canvas-script');
+    const cardPage = win.webContents.mainFrame.framesInSubtree.find(f => f.url === urls[`${file('checkout-design-v2.html')}|false`].url);
+    report.checks['card-page-scripts-run'] = !!cardPage && await cardPage.executeJavaScript('document.body.dataset.ran') === 'yes';
+    if (!report.checks['card-page-scripts-run']) throw Error('card-page-scripts-run');
 
     // Open in Library: Library, the design on its canvas, filling the page. The guide waits for a visit of its own.
     await press('Checkout, second pass', 'Open in Library'); await sleep(2800);
