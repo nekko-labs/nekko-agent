@@ -431,11 +431,34 @@ pub struct Choice {
     /// Budget left after loading it (negative when it does not fit).
     pub headroom_bytes: f64,
     pub context_tokens: f64,
+    /// The model's own longest context, when the feed records one.
+    pub max_context_tokens: Option<f64>,
+    /// The longest context (up to the model's own) that still fits the
+    /// budget beside these weights: what the rest of the memory buys.
+    pub fit_context_tokens: f64,
     pub placement: Placement,
     pub fit: Fit,
     pub speed: Option<Speed>,
     /// Slower than the task's minimum.
     pub too_slow: bool,
+    /// Every quant of this model on this machine, best first, so the UI can
+    /// show what each one needs. Empty inside `quants` itself.
+    pub quants: Vec<QuantFit>,
+}
+
+/// One quant of a recommended model: what it needs here and how it fits.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuantFit {
+    pub quant: String,
+    pub download_label: String,
+    /// Every file to download for this quant, as `Choice::files`.
+    pub files: Vec<String>,
+    pub download_bytes: f64,
+    /// Weights + KV cache at the task's context + compute buffers.
+    pub memory_bytes: f64,
+    pub fit_context_tokens: f64,
+    pub fit: Fit,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -523,6 +546,32 @@ pub fn overhead_bytes(g: &Geometry, context: f64) -> f64 {
     let per_token = g.layers.unwrap_or(32.0) * g.head_dim.unwrap_or(128.0) * 4.0;
     OVERHEAD_FLOOR_BYTES + per_token * context.min(GRAPH_CONTEXT_CAP)
 }
+
+/// Granularity of a context that fits: whole thousands of tokens, as people read them.
+const CONTEXT_STEP: f64 = 1024.0;
+
+/// The longest context, at most `cap` tokens, whose weights + KV cache +
+/// compute buffers stay within `budget`. Memory only grows with context, so a
+/// binary search over whole steps finds it.
+pub fn fit_context(weights: f64, model: &Model, budget: f64, cap: f64) -> f64 {
+    let need = |ctx: f64| weights + kv_bytes(&model.kv, ctx) + overhead_bytes(&model.geometry, ctx);
+    let steps = (cap / CONTEXT_STEP).floor();
+    if steps < 1.0 || need(CONTEXT_STEP) > budget {
+        return 0.0;
+    }
+    if need(cap) <= budget {
+        return cap;
+    }
+    let (mut lo, mut hi) = (1.0, steps);
+    while hi - lo > 1.0 {
+        let mid = ((lo + hi) / 2.0).floor();
+        if need(mid * CONTEXT_STEP) <= budget { lo = mid } else { hi = mid }
+    }
+    lo * CONTEXT_STEP
+}
+
+/// With no recorded maximum, a context that fits is counted up to this.
+const UNKNOWN_MAX_CONTEXT: f64 = 131072.0;
 
 /* -------------------------------------------------------------- evaluate */
 
@@ -626,10 +675,18 @@ fn choice(feed: &Feed, task: &Task, model: &Model, quant: &Quant, target: &Targe
         memory_bytes: memory.round(),
         headroom_bytes: (target.budget - memory).round(),
         context_tokens: context,
+        max_context_tokens: model.max_context,
+        fit_context_tokens: fit_context(
+            weights,
+            model,
+            target.budget,
+            model.max_context.unwrap_or(UNKNOWN_MAX_CONTEXT),
+        ),
         placement: target.placement,
         fit,
         speed,
         too_slow,
+        quants: Vec::new(),
     }
 }
 
@@ -693,7 +750,21 @@ fn options(feed: &Feed, task: &Task, target: &Target, local: &Local) -> Vec<Choi
         .filter(|m| !task.projector || m.projector.is_some())
         .filter_map(|m| {
             let all: Vec<Choice> = m.quants.iter().map(|q| choice(feed, task, m, q, target, local)).collect();
-            best_quant(&all).cloned()
+            best_quant(&all).cloned().map(|mut best| {
+                best.quants = all
+                    .iter()
+                    .map(|o| QuantFit {
+                        quant: o.quant.clone(),
+                        download_label: o.download_label.clone(),
+                        files: o.files.clone(),
+                        download_bytes: o.download_bytes,
+                        memory_bytes: o.memory_bytes,
+                        fit_context_tokens: o.fit_context_tokens,
+                        fit: o.fit,
+                    })
+                    .collect();
+                best
+            })
         })
         .collect()
 }

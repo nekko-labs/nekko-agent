@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AboutYouSection } from './AboutYouSettings.js';
 import { allowModeChange } from '../components/YoloWarning.js';
-import { CHAT_MODE_ICON, SettingsIcon } from '../gentleface-icons.js';
+import { CHAT_MODE_ICON, GfServerIcon, SettingsIcon } from '../gentleface-icons.js';
 import { CHAT_MODE_LABEL, AUTO_ARCHIVE_CHOICES, AUTO_ARCHIVE_DEFAULT_DAYS, autoArchiveDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -45,6 +45,8 @@ import { StyleSection } from './StyleSection.js';
 import { openCustomize } from '../components/CustomizeExperience.js';
 import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
 import { useExpertMode, useShown } from '../simpleMode.js';
+import { forwardWheelToContent } from '../railWheel.js';
+import { AgentServerSection } from '../components/server/AgentServerSection.js';
 import { ChoiceList, SettingRow, SettingsLabel, SettingsSection } from '../components/SettingsSection.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
@@ -77,10 +79,16 @@ export const SETTINGS_GROUPS = [
   { id: 'tools', label: 'Tools', icon: WrenchIcon },
   { id: 'system', label: 'System', icon: SettingsIcon },
 ] as const;
-type SettingsGroupId = (typeof SETTINGS_GROUPS)[number]['id'];
+/**
+ * Server sits in the rail's top block, after Connectors, and leads the page:
+ * the agent server is how other programs reach this app, so it is found where
+ * the app's own connections are, not on the Models page it used to share.
+ */
+export const SERVER_GROUP = { id: 'server', label: 'Server', icon: GfServerIcon } as const;
+type SettingsGroupId = (typeof SETTINGS_GROUPS)[number]['id'] | typeof SERVER_GROUP.id;
 
 function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.ReactNode }) {
-  const label = SETTINGS_GROUPS.find((g) => g.id === id)!.label;
+  const label = [SERVER_GROUP, ...SETTINGS_GROUPS].find((g) => g.id === id)!.label;
   return (
     <div id={`settings-${id}`} data-settings-group={id} className="settings-group" aria-labelledby={`settings-${id}-title`} role="region">
       <h2 id={`settings-${id}-title`} className="settings-group-title">{label}</h2>
@@ -110,7 +118,7 @@ export function activeGroup(scroller: HTMLElement): SettingsGroupId {
   const groups = [...scroller.querySelectorAll<HTMLElement>('[data-settings-group]')];
   if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return (groups.at(-1)?.dataset.settingsGroup ?? SETTINGS_GROUPS[0].id) as SettingsGroupId;
   const top = scroller.getBoundingClientRect().top + 24;
-  let cur: string = SETTINGS_GROUPS[0].id;
+  let cur: string = groups[0]?.dataset.settingsGroup ?? SETTINGS_GROUPS[0].id;
   for (const g of groups) if (g.getBoundingClientRect().top <= top) cur = g.dataset.settingsGroup!;
   return cur as SettingsGroupId;
 }
@@ -127,7 +135,7 @@ export function SettingsView() {
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState<SettingsGroupId>(SETTINGS_GROUPS[0].id);
+  const [active, setActive] = useState<SettingsGroupId>(SERVER_GROUP.id);
   // Simple says nothing about computers until one is connected; Detailed is where the first one is paired.
   const [expert] = useExpertMode();
   const hasComputers = useStore((s) => s.computers.length > 0);
@@ -190,7 +198,7 @@ export function SettingsView() {
   if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
-    <div className="settings-panel">
+    <div className="settings-panel" onWheel={(e) => forwardWheelToContent(e, scrollRef.current)}>
       <aside className="settings-rail">
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
         <div aria-label="Skills and connectors" className="settings-shortcuts">
@@ -200,6 +208,9 @@ export function SettingsView() {
               <Icon className="h-4 w-4 shrink-0" />{label}<span aria-hidden="true" className="ml-auto text-ink-faint">↗</span>
             </button>
           ))}
+          <button type="button" className="settings-nav-item" aria-current={active === SERVER_GROUP.id ? 'true' : undefined} onClick={() => goTo(SERVER_GROUP.id)}>
+            <SERVER_GROUP.icon className="h-4 w-4 shrink-0" />{SERVER_GROUP.label}
+          </button>
         </div>
         <SettingsSearch root={pageRef} />
         <nav aria-label="Settings sections" className="settings-nav">
@@ -220,6 +231,9 @@ export function SettingsView() {
         <div ref={pageRef} className="settings-page" data-presenter-exempt>
           {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
           <div className="min-w-0">
+            <SettingsGroup id="server">
+              <ErrorBoundary label="Agent server"><AgentServerSection /></ErrorBoundary>
+            </SettingsGroup>
             <SettingsGroup id="profile">
               <AboutYouSection settings={settings} update={update} />
             </SettingsGroup>

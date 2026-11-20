@@ -7,7 +7,10 @@ import { Toggle } from '../primitives/index.js';
 import { CheckIcon, CopyIcon } from '../../icons.js';
 import { formatBytes } from '../runtimes/verdict.js';
 import { EngineInstallCard } from './EngineInstallCard.js';
-import { ModelsHome } from './ModelsHome.js';
+import { ModelsHome, type ModelsMode } from './ModelsHome.js';
+import { ResidentModels } from './ResidentModels.js';
+import { ModelsModeSwitch } from './ModelsModeSwitch.js';
+import { QuietTabs } from '../primitives/index.js';
 import { DownloadsPanel } from './DownloadsPanel.js';
 import { groupDownloads, isActive } from './downloadGroups.js';
 import { EngineServerSettings } from './EngineServerSettings.js';
@@ -15,7 +18,6 @@ import { ModelFolders } from './ModelFolders.js';
 import { DiffusionInstallCard } from './DiffusionInstallCard.js';
 import { MlxInstallCard } from './MlxInstallCard.js';
 import { DecisionModels } from './DecisionModels.js';
-import { LocalServerSection } from '../server/LocalServerSection.js';
 import { ServerPowerSwitch } from '../server/ServerPowerSwitch.js';
 import { ServiceLoadState } from '../ServiceLoadState.js';
 import { ErrorBoundary } from '../ErrorBoundary.js';
@@ -39,7 +41,8 @@ import { Shown } from '../ModeViews.js';
 const POLL_MS = 6000;
 const PROVIDER_ID = 'nekko-engine';
 
-type Tab = 'models' | 'downloads' | 'folders';
+/** The two halves of the library, and the two panels that feed it. */
+type Tab = ModelsMode | 'downloads' | 'folders';
 
 export function EngineSection({
   onProvidersChanged,
@@ -54,10 +57,10 @@ export function EngineSection({
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<Array<LocalModel & { loaded: boolean }>>([]);
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
-  const [tab, setTab] = useState<Tab>('models');
-  // A jump to one model's settings lands on the Models tab, wherever this page was left.
+  const [tab, setTab] = useState<Tab | null>(null);
+  // A jump to one model's settings lands on the models on this machine, wherever this page was left.
   const focus = useStore((s) => s.localModelFocus);
-  useEffect(() => { if (focus) setTab('models'); }, [focus]);
+  useEffect(() => { if (focus) setTab('installed'); }, [focus]);
   const [busy, setBusy] = useState<'starting' | 'stopping' | null>(null);
   const [showLog, setShowLog] = useState(false);
   const runtimeDownload = useDownloadAction({ runtime: 'llama' });
@@ -110,6 +113,9 @@ export function EngineSection({
   }, [loadingCount, refresh]);
 
   if (!status) return <ServiceLoadState label="model server" error={error} retry={refresh} />;
+  // An empty machine opens on finding a model; one with models, on them.
+  const shown: Tab = tab ?? (models.length ? 'installed' : 'find');
+  const mode: ModelsMode = shown === 'find' || shown === 'downloads' ? 'find' : 'installed';
 
   const { install, running } = status;
   const installed = Boolean(install.binPath || status.diffusionInstall?.binPath);
@@ -166,11 +172,8 @@ export function EngineSection({
   return (
     <section className="min-w-0 space-y-8">
       {error && <ServiceLoadState label="model server" error={error} retry={refresh} />}
-      {/* The two servers sit side by side, each as four rows of this grid
-          (header, description, status, the rest), so a two-line description
-          on one does not push its status row below the other's. */}
-      <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-2">
-      <div className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
+      {/* The agent server moved to Settings > Server: this page is about models. */}
+      <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--accent)' }} />
         <h2 className="text-base font-semibold">Model server</h2>
@@ -296,47 +299,58 @@ export function EngineSection({
         )}
       </div>
       </div>
-      <ErrorBoundary label="Local API"><LocalServerSection /></ErrorBoundary>
-      </div>
+      {/* What is running leads: "is it loaded, and how much does it hold" is
+          the question a load click is really asking. */}
+      {installed && (
+        <ErrorBoundary label="Running models">
+          <ResidentModels providerId={PROVIDER_ID} resident={status.resident} loading={status.loading} models={models} settings={status.settings} memory={status.memory} onChanged={refresh} />
+        </ErrorBoundary>
+      )}
       <div data-models-section="library" className="min-w-0">
-        <h2 className="text-base font-semibold">Models</h2>
-        <p className="mt-0.5 text-xs text-ink-faint">Find, download and run models from one library.</p>
-        <div className="mt-5 flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
-          <TabButton active={tab === 'models'} onClick={() => setTab('models')}>
-            Models{models.length > 0 ? ` (${models.length})` : ''}
-          </TabButton>
-          <TabButton active={tab === 'downloads'} onClick={() => setTab('downloads')}>
-            Downloads{active.length > 0 ? ` (${active.length})` : ''}
-          </TabButton>
-          <TabButton active={tab === 'folders'} onClick={() => setTab('folders')}>
-            Folders{borrowed > 0 ? ` (${borrowed} borrowed)` : ''}
-          </TabButton>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h2 className="text-base font-semibold">Models</h2>
+          <ModelsModeSwitch
+            value={shown === 'installed' || shown === 'find' ? shown : null}
+            installedCount={models.length}
+            onChange={setTab}
+          />
+          <QuietTabs<'downloads' | 'folders'>
+            className="ml-auto"
+            label="Downloads and folders"
+            value={shown === 'downloads' || shown === 'folders' ? shown : null}
+            onChange={setTab}
+            items={[
+              { value: 'downloads', label: 'Downloads', hint: active.length > 0 ? String(active.length) : undefined },
+              { value: 'folders', label: 'Folders', hint: borrowed > 0 ? `${borrowed} borrowed` : undefined },
+            ]}
+          />
         </div>
 
-        <div className="mt-5">
-          <ErrorBoundary key={tab} label="Model library">
-          {tab === 'models' && (
+        <div className="mt-(--q-group)">
+          <ErrorBoundary key={shown} label="Model library">
+          {(shown === 'installed' || shown === 'find') && (
             <ModelsHome
               providerId={PROVIDER_ID}
+              mode={mode}
               models={models}
               canLoad={installed}
               memory={status.memory}
               resident={status.resident}
-              loading={status.loading}
               settings={status.settings}
               running={running}
               onChanged={refresh}
               onOpenModel={onOpenModel}
+              onFind={() => setTab('find')}
               mlx={Boolean(status.mlxInstall?.available.length)}
             />
           )}
-          {tab === 'downloads' && <DownloadsPanel jobs={jobs} onChanged={refresh} />}
-          {tab === 'folders' && <ModelFolders onChanged={refresh} />}
+          {shown === 'downloads' && <DownloadsPanel jobs={jobs} onChanged={refresh} />}
+          {shown === 'folders' && <ModelFolders onChanged={refresh} />}
           </ErrorBoundary>
         </div>
 
-        {tab === 'models' && (
-          <section data-decisions-subgroup className="mt-10 border-t pt-5" style={{ borderColor: 'var(--line)' }}>
+        {shown === 'installed' && (
+          <section data-decisions-subgroup className="mt-(--q-section)">
             <h3 className="text-sm font-semibold">Decision models</h3>
             <div className="mt-3">
               <ErrorBoundary label="Decision models">
@@ -347,30 +361,6 @@ export function EngineSection({
         )}
       </div>
     </section>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      className="rounded-full px-3 py-1 text-xs"
-      style={
-        active
-          ? { background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }
-          : { color: 'var(--ink-faint)' }
-      }
-      onClick={onClick}
-    >
-      {children}
-    </button>
   );
 }
 

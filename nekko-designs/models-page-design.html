@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Models page and Server settings design</title>
+<style>
+:root{--paper:#0b0c14;--surface:#14151f;--s2:#1d1f2c;--line:#252735;--ink:#eaeaf4;--soft:#a3a4b6;--faint:#87899b;--accent:#c084b5;--accent-soft:rgba(192,132,181,.18);--success:#4ec98a;--warning:#e0a44a;--danger:#e0574a;--danger-text:#ef6a5d;--info:#6bb8d4;--wash:rgba(234,234,244,.06)}
+body{margin:0;background:#07080e;color:var(--ink);font:13px/1.45 Geist,Inter,system-ui,sans-serif}
+header{padding:32px 24px 0}header h1{margin:0;font-size:20px}header p{margin:6px 0 0;color:var(--soft);max-width:760px}
+main{padding:32px 24px;display:flex;flex-wrap:wrap;gap:48px;align-items:flex-start}
+figure{margin:0;display:flex;flex-direction:column;gap:10px}
+figcaption{display:flex;flex-direction:column;gap:2px;font-size:12px;max-width:640px}figcaption span{color:var(--faint)}
+.f{background:var(--paper);border-radius:12px;outline:1px solid var(--line);box-sizing:border-box;padding:20px;overflow:hidden}
+.row{display:flex;align-items:center;gap:8px}.col{display:flex;flex-direction:column}
+.h20{font-size:20px;font-weight:600}.h16{font-size:16px;font-weight:600}.t14{font-size:14px;font-weight:500}
+.meta{font-size:12px;color:var(--faint)}.soft{color:var(--soft)}.faint{color:var(--faint)}.mono{font-family:"Geist Mono",ui-monospace,monospace}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.sw{width:36px;height:20px;border-radius:10px;background:var(--accent);padding:2px;box-sizing:border-box;display:flex;justify-content:flex-end;flex:none}.sw i{width:16px;height:16px;border-radius:50%;background:#fff}
+.sw.off{background:var(--s2);justify-content:flex-start}.sw.off i{background:var(--faint)}
+.btn{height:28px;padding:0 12px;border-radius:8px;background:var(--wash);color:var(--ink);font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;border:0}
+.btn.p{background:#190019;outline:1px solid #854f6c}.link{color:var(--accent);font-weight:500}
+.ico{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.rail{width:200px;flex:none;display:flex;flex-direction:column;gap:2px;padding-right:20px}
+.ni{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 8px;border-radius:10px;color:var(--ink)}.ni.on{background:var(--s2);font-weight:500}
+.hr{height:1px;background:var(--line);margin:8px 0}
+.qrow{display:flex;align-items:center;gap:12px;min-height:40px;padding:8px;margin:0 -8px;border-radius:8px}.qrow.hover{background:var(--wash)}
+.lbl{font-size:12px;font-weight:500;color:var(--soft)}
+.seg{display:inline-flex;padding:2px;border-radius:10px;background:var(--s2);gap:2px}.seg b{font-weight:500;padding:5px 14px;border-radius:8px;color:var(--soft);font-size:13px}.seg b.on{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.4)}
+.field{height:32px;border-radius:8px;background:var(--wash);display:flex;align-items:center;padding:0 12px;color:var(--faint)}
+.chip{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--wash);color:var(--soft)}
+.bar{height:6px;border-radius:3px;background:var(--s2);position:relative;overflow:hidden}.bar i{position:absolute;inset:0 auto 0 0;border-radius:3px}
+table{border-collapse:collapse;width:100%;font-size:12px}td,th{padding:6px 8px;text-align:left}th{font-weight:500;color:var(--soft)}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.pick td{background:var(--accent-soft)}tr.pick td:first-child{border-radius:6px 0 0 6px}tr.pick td:last-child{border-radius:0 6px 6px 0}
+.warn{color:var(--warning)}.ok{color:var(--success)}.bad{color:var(--danger-text)}
+</style>
+</head>
+<body>
+<header><h1>Models page rework, and the Agent server in Settings</h1>
+<p>Dusk theme. The Agent server leaves the Models page for Settings, as its own Server section under Connectors. The Models page leads with what is running, then one switch between what is on this machine and finding something new; picks for this machine live in Find. Each model says its parameters, what each quant needs in VRAM, and how much context fits in what is left. A model whose last load failed wears a warning, never a check.</p></header>
+<main>
+
+<!-- 1. Settings: Server, collapsed -->
+<figure><figcaption><b>1. Settings › Server (collapsed)</b><span>Server joins the top of the rail, after Connectors. The header is the whole answer: status word, address, the on/off switch top right. Everything else waits behind Configure.</span></figcaption>
+<div class="f" style="width:880px;display:flex">
+  <div class="rail">
+    <div class="ni"><svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12"/><circle cx="5" cy="4" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="7" cy="12" r="1.5"/></svg>Customize</div>
+    <div class="ni"><svg class="ico" viewBox="0 0 16 16"><path d="M8 2l1.8 3.7 4 .6-2.9 2.8.7 4L8 11.2 4.4 13.1l.7-4L2.2 6.3l4-.6z"/></svg>Skills<span class="faint" style="margin-left:auto">↗</span></div>
+    <div class="ni"><svg class="ico" viewBox="0 0 16 16"><path d="M6 10l4-4M5 7L3.5 8.5a2.5 2.5 0 003.5 3.5L8.5 10.5M11 9l1.5-1.5A2.5 2.5 0 009 4L7.5 5.5"/></svg>Connectors<span class="faint" style="margin-left:auto">↗</span></div>
+    <div class="ni on"><svg class="ico" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4.5" rx="1.5"/><rect x="2" y="9" width="12" height="4.5" rx="1.5"/><path d="M5 4.75h.01M5 11.25h.01"/></svg>Server</div>
+    <div class="hr"></div>
+    <div class="field" style="height:32px">Search settings</div>
+    <div style="height:8px"></div>
+    <div class="ni faint">Profile</div><div class="ni faint">Help out the Nekko Team</div><div class="ni faint">Nekko Cloud</div><div class="ni faint">General</div><div class="ni faint">…</div>
+  </div>
+  <div style="flex:1;min-width:0;padding-left:20px;border-left:1px solid var(--line)">
+    <div class="h20">Server</div>
+    <div style="height:20px"></div>
+    <div class="row" style="gap:12px">
+      <div class="col" style="gap:4px;flex:1;min-width:0">
+        <div class="h16">Agent server</div>
+        <div class="meta">Lets the nekko-agent CLI, scripts and other agents (over MCP) drive this app.</div>
+      </div>
+      <div class="row" style="gap:8px"><span class="dot" style="background:var(--success)"></span><span class="soft">Running</span><span class="sw"><i></i></span></div>
+    </div>
+    <div class="row" style="margin-top:12px;gap:12px">
+      <span class="mono meta" style="color:var(--soft)">http://127.0.0.1:1439/api</span>
+      <svg class="ico faint" viewBox="0 0 16 16"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10V4.5A1.5 1.5 0 014.5 3H10"/></svg>
+      <span class="meta">4 requests · 1 listening</span>
+    </div>
+    <div class="qrow hover" style="margin-top:12px">
+      <svg class="ico soft" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.8M8 12.4v1.8M1.8 8h1.8M12.4 8h1.8M3.6 3.6l1.3 1.3M11.1 11.1l1.3 1.3M3.6 12.4l1.3-1.3M11.1 4.9l1.3-1.3"/></svg>
+      <span class="t14">Configure</span><span class="meta">Address, token, CLI and MCP</span>
+      <svg class="ico faint" style="margin-left:auto" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>
+    </div>
+  </div>
+</div></figure>
+
+<!-- 2. Settings: Server, configure open -->
+<figure><figcaption><b>2. Settings › Server, Configure open</b><span>The chevron turns, the rows open beneath. Start on launch is a row here, not a second switch in the header. CLI and MCP become groups, not tabs.</span></figcaption>
+<div class="f" style="width:660px">
+  <div class="row" style="gap:12px">
+    <div class="col" style="gap:4px;flex:1"><div class="h16">Agent server</div><div class="meta">Lets the nekko-agent CLI, scripts and other agents (over MCP) drive this app.</div></div>
+    <div class="row" style="gap:8px"><span class="dot" style="background:var(--success)"></span><span class="soft">Running</span><span class="sw"><i></i></span></div>
+  </div>
+  <div class="row" style="margin-top:12px;gap:12px"><span class="mono meta" style="color:var(--soft)">http://127.0.0.1:1439/api</span><span class="meta">4 requests</span></div>
+  <div class="qrow" style="margin-top:12px">
+    <svg class="ico" style="color:var(--ink)" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.8M8 12.4v1.8M1.8 8h1.8M12.4 8h1.8M3.6 3.6l1.3 1.3M11.1 11.1l1.3 1.3M3.6 12.4l1.3-1.3M11.1 4.9l1.3-1.3"/></svg>
+    <span class="t14">Configure</span>
+    <svg class="ico faint" style="margin-left:auto;transform:rotate(90deg)" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>
+  </div>
+  <div style="padding-left:24px">
+    <div class="qrow"><div class="col" style="flex:1"><span class="t14">Start with Nekko</span><span class="meta">Bring the server up when the app opens.</span></div><span class="sw"><i></i></span></div>
+    <div class="qrow"><div class="col" style="flex:1"><span class="t14">Reachable from</span><span class="meta">Only this computer. The safe default.</span></div><div class="field" style="width:200px;color:var(--ink)">This computer only ▾</div></div>
+    <div class="qrow"><div class="col" style="flex:1"><span class="t14">Port</span></div><div class="field mono" style="width:90px;color:var(--ink)">1439</div></div>
+    <div class="qrow"><div class="col" style="flex:1"><span class="t14">Token</span><span class="meta">Sent as a Bearer token. Rolling it updates the CLI and MCP entries.</span></div><span class="mono meta">••••••••••••</span><span class="btn">Show</span><span class="btn">Roll</span></div>
+    <div style="height:20px"></div>
+    <div class="lbl">Command line</div>
+    <div class="qrow"><svg class="ico soft" viewBox="0 0 16 16"><path d="M3 5l3 3-3 3M8 11h5"/></svg><span class="mono">nekko-agent</span><span class="row meta" style="gap:6px"><span class="dot" style="background:var(--success);width:6px;height:6px"></span>On your PATH</span><span class="btn" style="margin-left:auto">Reinstall</span></div>
+    <div style="height:20px"></div>
+    <div class="lbl">MCP clients</div>
+    <div class="qrow"><span class="t14">Claude Code</span><span class="row meta" style="gap:6px"><span class="dot" style="background:var(--success);width:6px;height:6px"></span>Added</span><span class="faint" style="margin-left:auto;font-size:12px">Show snippet</span></div>
+    <div class="qrow"><span class="t14">Codex</span><span class="meta">Installed, not added</span><span class="btn" style="margin-left:auto">Add</span></div>
+    <div class="qrow"><span class="t14">Environment and other clients</span><span class="meta">bash / PowerShell lines, MCP JSON</span><span class="faint" style="margin-left:auto">›</span></div>
+  </div>
+</div></figure>
+
+<!-- 3. Models: running + installed -->
+<figure><figcaption><b>3. Models › Local model server: running rows, then On this machine</b><span>Running now leads the section as plain rows (no box). The switch under Models picks what the list below is about. Ckpt's last load failed, so its row wears the warning triangle, not a check, and says why on its detail line.</span></figcaption>
+<div class="f" style="width:1120px">
+  <div class="row" style="gap:12px">
+    <div class="col" style="gap:4px;flex:1"><div class="h16">Model server</div><div class="meta">Serves text and image models on one address.</div></div>
+    <span class="mono meta" style="color:var(--soft)">http://127.0.0.1:11500/v1</span>
+    <div class="row" style="gap:8px"><span class="dot" style="background:var(--success)"></span><span class="soft">Running</span><span class="sw"><i></i></span></div>
+  </div>
+  <div style="height:20px"></div>
+  <div class="row"><span class="lbl">Running now</span><span class="meta" style="margin-left:auto">1 of 2 slots · 7.1 GB of 30.8 GB VRAM</span></div>
+  <div class="bar" style="margin:8px 0 4px"><i style="width:23%;background:var(--accent)"></i></div>
+  <div class="qrow">
+    <span class="dot" style="background:var(--success)"></span>
+    <div class="col" style="flex:1;min-width:0"><span class="t14">Gemma 4 E4B <span class="meta">Q4_K_M</span></span><span class="meta">7.1 GB VRAM · 32K of 128K context · on GPU, 42/42 layers · in use</span></div>
+    <span class="btn">Settings</span><span class="btn">Keep loaded</span><span class="btn">Unload</span>
+  </div>
+  <div class="qrow">
+    <span class="dot" style="background:var(--accent);opacity:.7"></span>
+    <div class="col" style="flex:1;min-width:0"><span class="t14">Qwen3.5 9B <span class="meta">Q5_K_M</span></span><span class="meta">Reading the file into memory · 6s so far</span></div>
+    <div class="bar" style="width:160px"><i style="width:62%;background:var(--accent)"></i></div><span class="mono meta">62%</span>
+  </div>
+  <div style="height:40px"></div>
+  <div class="row" style="gap:16px"><div class="h16">Models</div><div class="seg"><b class="on">On this machine · 22</b><b>Find new models</b></div><span class="meta" style="margin-left:auto">Downloads · Folders (21 borrowed)</span></div>
+  <div style="height:20px"></div>
+  <div style="display:grid;grid-template-columns:300px 1fr;gap:20px">
+    <div>
+      <div class="field">Filter my models</div>
+      <div class="row" style="gap:4px;margin-top:8px"><span class="chip" style="background:var(--s2);color:var(--ink)">All</span><span class="chip">Chat</span><span class="chip">Pictures</span><span class="chip">Video</span></div>
+      <div style="height:8px"></div>
+      <div class="qrow" style="background:var(--accent-soft)"><div class="col" style="flex:1"><span class="t14">Ckpt</span><span class="meta bad">Last load failed</span></div><svg class="ico" style="color:var(--warning)" viewBox="0 0 16 16" aria-label="Problem"><path d="M8 2.2l6 10.6H2z"/><path d="M8 6.5v2.8M8 11h.01"/></svg></div>
+      <div class="qrow"><div class="col" style="flex:1"><span class="t14">flux-2-klein-9b</span><span class="meta">9B · 5.4 GB · fits on GPU</span></div><svg class="ico ok" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></div>
+      <div class="qrow"><div class="col" style="flex:1"><span class="t14">Gemma-4-31B-QAT</span><span class="meta warn">31B · 18.9 GB · part on CPU at 128K</span></div><svg class="ico ok" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></div>
+      <div class="qrow"><div class="col" style="flex:1"><span class="t14">Gemma-4-E4B</span><span class="meta">7.5B · 5.0 GB · in memory</span></div><span class="dot" style="background:var(--success);width:6px;height:6px"></span></div>
+      <div class="qrow"><div class="col" style="flex:1"><span class="t14">gemma4:latest</span><span class="meta">8B · 9.6 GB · fits on GPU</span></div><svg class="ico ok" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></div>
+    </div>
+    <div>
+      <div class="h20">Ckpt</div>
+      <div class="meta" style="margin-top:4px">1.4B parameters · 1 variant · 3.9 GB on disk</div>
+      <div style="height:20px"></div>
+      <div class="qrow">
+        <div class="col" style="flex:1"><span class="t14">Ckpt_Q38 <span class="meta">Q8_0</span></span><span class="meta">3.9 GB weights · 256K max context · vision</span></div>
+        <span class="btn">Settings</span><span class="link" style="padding:0 8px">Load</span>
+      </div>
+      <div class="row bad" style="gap:8px;align-items:flex-start;font-size:12px;padding:0 0 0 0"><svg class="ico" style="width:14px;height:14px;margin-top:2px" viewBox="0 0 16 16"><path d="M8 2.2l6 10.6H2z"/><path d="M8 6.5v2.8M8 11h.01"/></svg><span>Last load failed: the file doesn't match what llama.cpp expects (a tensor is missing or unexpected). Re-download it, or pick a different build.</span></div>
+      <div style="height:20px"></div>
+      <div class="lbl">On this GPU</div>
+      <div class="row" style="gap:20px;margin-top:8px;font-size:12px">
+        <div class="col"><span class="faint">Weights</span><span class="t14">3.9 GB</span></div>
+        <div class="col"><span class="faint">Context per 1K tokens</span><span class="t14">96 MB</span></div>
+        <div class="col"><span class="faint">Fits beside what is loaded</span><span class="t14">232K of 256K</span></div>
+        <div class="col"><span class="faint">Free now</span><span class="t14">23.7 GB of 30.8 GB</span></div>
+      </div>
+    </div>
+  </div>
+</div></figure>
+
+<!-- 4. Models: find new -->
+<figure><figcaption><b>4. Models › Find new models</b><span>Search covers Hugging Face. Before a search, the picks for this machine lead: each says parameters, its quant's weights, VRAM at the task's context, and the most context that fits in this GPU. Quants opens the per-quant table.</span></figcaption>
+<div class="f" style="width:1120px">
+  <div class="row" style="gap:16px"><div class="h16">Models</div><div class="seg"><b>On this machine · 22</b><b class="on">Find new models</b></div></div>
+  <div style="height:20px"></div>
+  <div class="field" style="width:100%;box-sizing:border-box">Search Hugging Face</div>
+  <div style="height:20px"></div>
+  <div class="row"><span class="lbl">Best for this machine</span><span class="meta">NVIDIA GeForce RTX 5090 · CUDA · 30.8 GB for models</span><span class="meta" style="margin-left:auto">Check again</span></div>
+  <div style="height:8px"></div>
+  <!-- pick: chat -->
+  <div class="qrow" style="align-items:flex-start">
+    <span class="meta" style="width:96px;padding-top:2px">Chat</span>
+    <div class="col" style="flex:1;gap:4px;min-width:0">
+      <div class="row"><span class="t14">Qwen3.8 27B</span><span class="meta">27B parameters · Q4_K_M · 16.4 GB download</span></div>
+      <div class="row" style="gap:12px">
+        <div class="bar" style="width:260px"><i style="width:59%;background:var(--accent)"></i><i style="left:59%;width:8%;background:var(--info)"></i></div>
+        <span class="meta"><span style="color:var(--ink)">18.3 GB</span> of 30.8 GB at 16K context · 62 tok/s here</span>
+      </div>
+      <div class="meta">Context: up to <span style="color:var(--ink)">88K</span> fits in this GPU · 256K max</div>
+    </div>
+    <span class="row meta" style="gap:6px"><span class="dot" style="background:var(--success);width:6px;height:6px"></span>Fits</span>
+    <span class="btn">Quants</span><span class="btn p">Download</span>
+  </div>
+  <div style="padding:0 0 8px 104px">
+    <table>
+      <tr><th>Quant</th><th class="n">Weights</th><th class="n">VRAM at 16K</th><th class="n">Context that fits</th><th>Fit</th><th></th></tr>
+      <tr><td class="mono">Q8_0</td><td class="n">28.6 GB</td><td class="n">30.5 GB</td><td class="n">4K</td><td class="bad">Too big</td><td></td></tr>
+      <tr><td class="mono">Q6_K</td><td class="n">22.1 GB</td><td class="n">24.0 GB</td><td class="n">40K</td><td class="warn">Tight</td><td class="faint">Download</td></tr>
+      <tr><td class="mono">Q5_K_M</td><td class="n">19.2 GB</td><td class="n">21.1 GB</td><td class="n">64K</td><td class="ok">Fits</td><td class="faint">Download</td></tr>
+      <tr class="pick"><td class="mono">Q4_K_M · pick</td><td class="n">16.4 GB</td><td class="n">18.3 GB</td><td class="n">88K</td><td class="ok">Fits</td><td class="link">Download</td></tr>
+      <tr><td class="mono">IQ3_M</td><td class="n">12.3 GB</td><td class="n">14.2 GB</td><td class="n">128K</td><td class="ok">Fits</td><td class="faint">Download</td></tr>
+    </table>
+  </div>
+  <!-- pick: code -->
+  <div class="qrow" style="align-items:flex-start">
+    <span class="meta" style="width:96px;padding-top:2px">Coding</span>
+    <div class="col" style="flex:1;gap:4px;min-width:0">
+      <div class="row"><span class="t14">Qwen3 Coder 30B A3B</span><span class="meta">30B parameters, 3B active · Q4_K_M · 18.6 GB download</span></div>
+      <div class="row" style="gap:12px"><div class="bar" style="width:260px"><i style="width:68%;background:var(--accent)"></i><i style="left:68%;width:10%;background:var(--info)"></i></div><span class="meta"><span style="color:var(--ink)">21.0 GB</span> of 30.8 GB at 32K context · ~140 tok/s</span></div>
+      <div class="meta">Context: up to <span style="color:var(--ink)">128K</span> fits in this GPU · 256K max</div>
+    </div>
+    <span class="row meta" style="gap:6px"><span class="dot" style="background:var(--success);width:6px;height:6px"></span>Downloaded</span>
+    <span class="btn">Quants</span><span class="btn" style="visibility:hidden">Download</span>
+  </div>
+  <div class="qrow" style="align-items:flex-start">
+    <span class="meta" style="width:96px;padding-top:2px">Vision</span>
+    <div class="col" style="flex:1;gap:4px;min-width:0">
+      <div class="row"><span class="t14">Gemma 4 26B A4B</span><span class="meta">26B parameters, 4B active · Q4_K_M · 17.0 GB download</span></div>
+      <div class="row" style="gap:12px"><div class="bar" style="width:260px"><i style="width:77%;background:var(--accent)"></i><i style="left:77%;width:6%;background:var(--info)"></i></div><span class="meta"><span style="color:var(--ink)">25.6 GB</span> of 30.8 GB at 16K context · ~118 tok/s</span></div>
+      <div class="meta">Context: up to <span class="warn">40K</span> fits in this GPU · 256K max</div>
+    </div>
+    <span class="row meta warn" style="gap:6px"><span class="dot" style="background:var(--warning);width:6px;height:6px"></span>Tight</span>
+    <span class="btn">Quants</span><span class="btn p" style="background:var(--wash);outline:0">Download</span>
+  </div>
+  <div class="row meta" style="gap:16px;margin-top:8px"><span class="row" style="gap:6px"><i style="width:10px;height:6px;border-radius:2px;background:var(--accent)"></i>weights</span><span class="row" style="gap:6px"><i style="width:10px;height:6px;border-radius:2px;background:var(--info)"></i>context + working memory</span><span>From the model list shipped with this version.</span></div>
+  <div style="height:40px"></div>
+  <div class="lbl">More from Hugging Face</div>
+  <div class="qrow"><div class="col" style="flex:1"><span class="t14">unsloth/gpt-oss-20b-GGUF</span><span class="meta">20B parameters · 12 quants, 11.3 to 21.0 GB · smallest fits on GPU (estimated)</span></div><span class="faint" style="font-size:12px">412K downloads</span><span class="btn">Open</span></div>
+</div></figure>
+
+</main>
+</body>
+</html>

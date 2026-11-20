@@ -6,6 +6,7 @@ import { CloudIcon, ComputerIcon } from '../icons.js';
 import { ModelsView } from './ModelsView.js';
 import { ModelServerView } from './ModelServerView.js';
 import { FirstLocalModel } from '../components/engine/FirstLocalModel.js';
+import { forwardWheelToContent } from '../railWheel.js';
 
 /**
  * The page's sections in reading order, as the side menu lists them. Each
@@ -77,7 +78,7 @@ export function ModelsWorkspace() {
     shown.current = view;
   }, [view, goTo]);
   const fullLocal = firstRun.value === false;
-  return <div className="models-layout">
+  return <div className="models-layout" onWheel={(e) => { releaseJump(); forwardWheelToContent(e, scrollRef.current); }}>
     <aside className="models-rail">
       {!hasAppChrome && <h1 className="view-title">Models</h1>}
       <nav aria-label="Models sections" className="models-navigation">

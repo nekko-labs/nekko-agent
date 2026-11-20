@@ -1,11 +1,12 @@
 import { ModelDownloadButton } from './ModelDownloadButton.js';
 import { useStore } from '../../store.js';
 import { useEffect, useState } from 'react';
-import type { ImageRecommendedOption, LocalModel, Recommendations, TaskRecommendation } from '@nekko-agent/shared';
-import { CheckIcon, ChevronIcon } from '../../icons.js';
-import { formatBytes } from '../runtimes/verdict.js';
+import type { ImageRecommendedOption, LocalModel, RecommendationPlacement, RecommendedOption, Recommendations, TaskRecommendation } from '@nekko-agent/shared';
+import { formatBytes, formatTokens } from '../runtimes/verdict.js';
+import { StatusDot } from '../primitives/index.js';
 import { fitText, hardwareText, isDownloaded, memoryText, nudgeTitle, speedText } from './recommendationText.js';
 import { pictureTimeText } from './pictureModelText.js';
+import { contextFitText, memorySplit, paramsLabel } from './modelFacts.js';
 
 /**
  * "What should I run here", answered per task before anything is downloaded.
@@ -13,21 +14,22 @@ import { pictureTimeText } from './pictureModelText.js';
  * The daemon picks from a list shipped with the app against this machine's
  * profile (`machine:recommendations`): for each task, the best model that fits
  * with room to spare and is fast enough, at its best quant. A row is that one
- * decision, with what it costs: the download, the memory it takes out of what
- * the machine has, and the speed to expect, labelled by how sure it is.
+ * decision, with what it costs and what it leaves: its parameters, the
+ * download, the memory it takes at the task's context (weights, then the
+ * context and working buffers, drawn on one meter against the machine's
+ * budget), the longest context that still fits, and the speed to expect,
+ * labelled by how sure it is. Quants opens every quant of that model with the
+ * same figures, so a bigger or smaller build is one click away.
  *
- * Open on a machine with nothing downloaded, where it is the question; folded
- * to its summary once there are models, where it is a second opinion. An
- * upgrade (a new GPU, or a newer list, ranking a better model above the one
- * the user has) is said above it, folded or not.
+ * It leads Find new models, the half of the Models page about getting a model;
+ * an upgrade (a new GPU, or a newer list, ranking a better model above the one
+ * the user has) is said above it.
  */
-export function RecommendedModels({ models, onQueued }: { models: LocalModel[]; onQueued: () => void }) {
+export function RecommendedModels({ models, onQueued, nudgesOnly = false }: { models: LocalModel[]; onQueued: () => void; /** On this machine: only an upgrade, the picks stay in Find. */ nudgesOnly?: boolean }) {
   const [recs, setRecs] = useState<Recommendations | null>(null);
   const [failed, setFailed] = useState(false);
   const [checking, setChecking] = useState(false);
   const pushToast = useStore(s => s.pushToast);
-  // Decided once: a list that arrives later must not fold the block under the reader.
-  const [open] = useState(models.length === 0);
 
   const load = (refresh: boolean) => {
     setChecking(true);
@@ -56,14 +58,7 @@ export function RecommendedModels({ models, onQueued }: { models: LocalModel[]; 
   return (
     <>
       <UpgradeNudges recs={recs} onDownload={download} onDismiss={dismiss} />
-      <RecommendationList
-        recs={recs}
-        models={models}
-        open={open}
-        checking={checking}
-        onDownload={download}
-        onRecheck={() => load(true)}
-      />
+      {!nudgesOnly && <RecommendationList recs={recs} models={models} checking={checking} onDownload={download} onRecheck={() => load(true)} />}
     </>
   );
 }
@@ -85,25 +80,20 @@ export function UpgradeNudges({
     .filter((x): x is { n: (typeof recs.nudges)[number]; t: TaskRecommendation } => !!x.t?.pick);
   if (!rows.length) return null;
   return (
-    <div
-      className="mb-3 rounded-xl border p-4"
-      style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, var(--line))', background: 'color-mix(in srgb, var(--accent) 7%, transparent)' }}
-      role="status"
-      data-upgrade-nudges
-    >
+    <div className="mb-(--q-group)" role="status" data-upgrade-nudges>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold">{nudgeTitle(recs)}</p>
+        <p className="text-sm font-semibold text-info">{nudgeTitle(recs)}</p>
         <button className="btn btn-ghost py-0.5 text-xs text-ink-faint" onClick={onDismiss}>
           Not now
         </button>
       </div>
-      <div className="mt-1 space-y-1">
+      <div className="mt-(--q-tight)">
         {rows.map(({ n, t }) => {
           const p = t.pick!;
           const state = queued[t.task];
           return (
-            <div key={n.task} className="flex flex-wrap items-center gap-x-2 gap-y-1" data-upgrade-nudge={n.task}>
-              <span className="w-[118px] shrink-0 text-xs text-ink-faint">{t.label}</span>
+            <div key={n.task} className="flex min-h-(--q-row) flex-wrap items-center gap-x-2 gap-y-1" data-upgrade-nudge={n.task}>
+              <span className="w-[96px] shrink-0 text-xs text-ink-faint">{t.label}</span>
               <span className="min-w-0 flex-1 text-xs">
                 <span className="font-medium">{p.name}</span> <span className="text-ink-faint">{p.quant} · {formatBytes(p.downloadBytes)} download, instead of {n.haveName}</span>
               </span>
@@ -120,11 +110,15 @@ export function UpgradeNudges({
   );
 }
 
+/** Where the budget lives, for "fits in …". */
+export function budgetPlace(placement: RecommendationPlacement): string {
+  return placement === 'gpu' ? 'this GPU' : placement === 'unified' ? 'the GPU share of memory' : 'memory';
+}
+
 /** The block itself, from props only. */
 export function RecommendationList({
   recs,
   models,
-  open,
   checking = false,
   queued = {},
   onDownload,
@@ -132,7 +126,6 @@ export function RecommendationList({
 }: {
   recs: Recommendations;
   models: Pick<LocalModel, 'path'>[];
-  open: boolean;
   checking?: boolean;
   /** Per task, what happened to its download request. */
   queued?: Record<string, string>;
@@ -142,97 +135,174 @@ export function RecommendationList({
   const picked = recs.tasks.filter(t => t.pick);
   const pictures = (recs.imageTasks ?? []).filter(t => t.pick);
   return (
-    <details
-      className="group mb-5 rounded-2xl border p-5"
-      style={{
-        borderColor: 'color-mix(in srgb, var(--accent) 30%, var(--line))',
-        background: 'color-mix(in srgb, var(--accent) 7%, transparent)',
-      }}
-      open={open}
-      data-recommendations
-    >
-      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1">
-        <ChevronIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform group-open:rotate-90" />
-        <span className="text-sm font-semibold">Best for this machine</span>
+    <section className="min-w-0" data-recommendations aria-labelledby="recommendations-title">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <h3 id="recommendations-title" className="quiet-group-label">Best for this machine</h3>
         <span className="text-xs text-ink-faint">{hardwareText(recs)}</span>
-        <span className="ml-auto text-xs text-ink-faint group-open:hidden">
-          {picked.length + pictures.length} pick{picked.length + pictures.length === 1 ? '' : 's'}
-        </span>
-      </summary>
-      <div className="mt-3 divide-y divide-line">
-        {picked.map(t => {
-          const p = t.pick!;
-          const speed = speedText(p, t, recs.hardware);
-          const fit = fitText(p);
-          const have = isDownloaded(p, models);
-          const state = queued[t.task];
-          return (
-            <div key={t.task} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-recommendation={t.task}>
-              <div className="w-[118px] shrink-0 text-xs text-ink-faint">{t.label}</div>
-              <div className="min-w-[180px] flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium">{p.name}</span>
-                  <span className="chip" title={`${p.repo}: ${p.files.join(', ')}`}>{p.quant}</span>
-                  <span
-                    className="rounded-full px-2 py-0.5 text-2xs"
-                    style={{
-                      background: `color-mix(in srgb, ${p.fit === 'fits' ? 'var(--success)' : 'var(--warning)'} 16%, transparent)`,
-                      color: p.fit === 'fits' ? 'var(--success)' : 'var(--warning)',
-                    }}
-                    title={fit.title}
-                  >
-                    {fit.text}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-2xs text-ink-faint">
-                  <span title="Weights, the conversation's memory at this task's context, and the engine's working buffers">
-                    {memoryText(p, recs.budget)}
-                  </span>
-                  {' · '}
-                  {formatBytes(p.downloadBytes)} download
-                  {speed && (
-                    <>
-                      {' · '}
-                      <span className="text-ink-soft" title={speed.title} data-speed-basis={p.speed?.basis ?? 'unknown'}>
-                        {speed.text}
-                      </span>
-                    </>
-                  )}
-                </p>
-                {t.belowTargetSpeed && (
-                  <p className="mt-0.5 text-2xs" style={{ color: 'var(--warning)' }}>
-                    Slower than the {t.minTokensPerSecond} tok/s this task wants; the fastest that fits here.
-                  </p>
-                )}
-              </div>
-              <div className="shrink-0">
-                {have ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-success">
-                    <CheckIcon className="h-3.5 w-3.5" /> Downloaded
-                  </span>
-                ) : state ? (
-                  <span className="text-xs text-ink-faint" role="status">{state}</span>
-                ) : (
-                  <ModelDownloadButton modelId={p.repo} quant={p.downloadLabel} onResult={res => onDownload(t, res)} />
-                )}
-              </div>
-            </div>
-          );
-        })}
+        <button className="btn btn-ghost ml-auto py-1 text-xs" onClick={onRecheck} disabled={checking}>
+          {checking ? 'Checking…' : 'Check this machine again'}
+        </button>
+      </div>
+      <div className="mt-(--q-heading)">
+        {picked.map(t => (
+          <TaskPickRow key={t.task} t={t} recs={recs} models={models} state={queued[t.task]} onDownload={res => onDownload(t, res)} />
+        ))}
         {pictures.map(t => (
           <ImageRecommendationRow key={t.task} label={t.label} p={t.pick!} recs={recs} have={isDownloaded(t.pick!, models)} state={queued[t.task]}
             onDownload={res => onDownload({ task: t.task }, res)} />
         ))}
       </div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-2xs text-ink-faint">
-        <span>
-          {feedText(recs)} Speeds are for the start of a conversation: ~ marks an estimate, "here" what this machine measured.
-        </span>
-        <button className="btn btn-ghost py-1 text-xs" onClick={onRecheck} disabled={checking}>
-          {checking ? 'Checking…' : 'Check this machine again'}
-        </button>
+      <div className="mt-(--q-inline) flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-ink-faint">
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-1.5 w-2.5 rounded-sm bg-accent" aria-hidden />weights</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-1.5 w-2.5 rounded-sm bg-info" aria-hidden />context and working memory</span>
+        <span>{feedText(recs)} Speeds are for the start of a conversation: ~ marks an estimate, "here" what this machine measured.</span>
       </div>
-    </details>
+    </section>
+  );
+}
+
+/** Weights, then context and working memory, against the budget. */
+export function MemoryMeter({ memoryBytes, weightsBytes, budgetBytes, className = '' }: { memoryBytes: number; weightsBytes: number; budgetBytes: number; className?: string }) {
+  const { weights, rest } = memorySplit(memoryBytes, weightsBytes, budgetBytes);
+  return (
+    <span
+      className={`relative inline-block h-1.5 overflow-hidden rounded-full bg-surface-2 ${className}`}
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={budgetBytes}
+      aria-valuenow={memoryBytes}
+      aria-label={`${formatBytes(memoryBytes)} of ${formatBytes(budgetBytes)}`}
+    >
+      <span className="absolute inset-y-0 left-0 rounded-full bg-accent transition-[width] duration-(--dur-slow) ease-(--ease-out)" style={{ width: `${weights * 100}%` }} />
+      <span className="absolute inset-y-0 rounded-r-full bg-info transition-[width,left] duration-(--dur-slow) ease-(--ease-out)" style={{ left: `${weights * 100}%`, width: `${rest * 100}%` }} />
+    </span>
+  );
+}
+
+const FIT_WORD = { fits: 'Fits', tight: 'Tight', tooBig: 'Too big' } as const;
+const FIT_TEXT_CLASS = { fits: 'text-success', tight: 'text-warning-text', tooBig: 'text-danger-text' } as const;
+
+/** One task's pick: what it is, what it needs, what it leaves, and every other quant behind Quants. */
+function TaskPickRow({
+  t,
+  recs,
+  models,
+  state,
+  onDownload,
+}: {
+  t: TaskRecommendation;
+  recs: Recommendations;
+  models: Pick<LocalModel, 'path'>[];
+  state?: string;
+  onDownload: (result?: { ok: boolean; message: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const p = t.pick!;
+  const speed = speedText(p, t, recs.hardware);
+  const fit = fitText(p);
+  const have = isDownloaded(p, models);
+  const params = paramsLabel(p.name);
+  const place = budgetPlace(p.placement);
+  const context = contextFitText(p.fitContextTokens, p.maxContextTokens, place);
+  const quants = p.quants ?? [];
+  return (
+    <div data-recommendation={t.task}>
+      <div className="-mx-2 flex flex-wrap items-start gap-x-4 gap-y-1 rounded-lg px-2 py-(--q-inline)" data-quiet-row>
+        <div className="w-[96px] shrink-0 pt-0.5 text-xs text-ink-faint">{t.label}</div>
+        <div className="min-w-[220px] flex-1">
+          <p className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-sm font-medium">{p.name}</span>
+            <span className="text-xs text-ink-faint" title={`${p.repo}: ${p.files.join(', ')}`}>
+              {[params, p.quant, `${formatBytes(p.downloadBytes)} download`].filter(Boolean).join(' · ')}
+            </span>
+          </p>
+          <p className="mt-(--q-tight) flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
+            <MemoryMeter memoryBytes={p.memoryBytes} weightsBytes={p.downloadBytes} budgetBytes={recs.budget.bytes} className="w-[200px]" />
+            <span title="Weights, the conversation's memory at this task's context, and the engine's working buffers">
+              <span className="text-ink">{formatBytes(p.memoryBytes)}</span> of {formatBytes(recs.budget.bytes)} at {formatTokens(p.contextTokens)} context
+            </span>
+            {speed && (
+              <span className="text-ink-soft" title={speed.title} data-speed-basis={p.speed?.basis ?? 'unknown'}>
+                {speed.text}
+              </span>
+            )}
+          </p>
+          {context && <p className="mt-(--q-tight) text-xs text-ink-faint" data-context-fit>Context: {context}</p>}
+          {t.belowTargetSpeed && (
+            <p className="mt-(--q-tight) text-xs text-warning-text">
+              Slower than the {t.minTokensPerSecond} tok/s this task wants; the fastest that fits here.
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={`inline-flex items-center gap-1.5 text-xs ${p.fit === 'fits' ? 'text-ink-soft' : 'text-warning-text'}`} title={fit.title}>
+            <StatusDot tone={p.fit === 'fits' ? 'success' : 'warning'} size={6} />
+            {have ? 'Downloaded' : fit.text}
+          </span>
+          {quants.length > 1 && (
+            <button type="button" className="btn btn-ghost py-1 text-xs" aria-expanded={open} data-quants-toggle onClick={() => setOpen(v => !v)}>
+              Quants
+            </button>
+          )}
+          {have ? null : state ? (
+            <span className="text-xs text-ink-faint" role="status">{state}</span>
+          ) : (
+            <ModelDownloadButton modelId={p.repo} quant={p.downloadLabel} onResult={onDownload} variant="quiet" />
+          )}
+        </div>
+      </div>
+      <div className={`collapse-wrap ${open ? '' : 'collapsed'}`} aria-hidden={!open}>
+        <div className="min-h-0 overflow-hidden">
+          {open && <QuantTable p={p} models={models} place={place} onDownload={onDownload} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Every quant of one pick's model: its weights, its memory at the task's context, and the context that fits. */
+export function QuantTable({
+  p,
+  models,
+  place,
+  onDownload,
+}: {
+  p: RecommendedOption;
+  models: Pick<LocalModel, 'path'>[];
+  place: string;
+  onDownload: (result?: { ok: boolean; message: string }) => void;
+}) {
+  return (
+    <table className="mb-(--q-inline) ml-[112px] w-[calc(100%-112px)] text-xs" data-quant-table>
+      <thead>
+        <tr className="text-left text-ink-soft">
+          <th className="py-1 pr-4 font-medium">Quant</th>
+          <th className="py-1 pr-4 text-right font-medium">Weights</th>
+          <th className="py-1 pr-4 text-right font-medium">Memory at {formatTokens(p.contextTokens)}</th>
+          <th className="py-1 pr-4 text-right font-medium">Context that fits</th>
+          <th className="py-1 pr-4 font-medium">Fit</th>
+          <th className="py-1" />
+        </tr>
+      </thead>
+      <tbody className="tabular-nums">
+        {(p.quants ?? []).map(q => {
+          const pick = q.quant === p.quant;
+          const have = isDownloaded(q, models);
+          return (
+            <tr key={q.quant} className={pick ? 'bg-accent-soft' : undefined} data-quant={q.quant}>
+              <td className="rounded-l-md py-1 pl-1 pr-4 font-mono text-2xs">{q.quant}{pick ? <span className="font-sans text-ink-faint"> · pick</span> : null}</td>
+              <td className="py-1 pr-4 text-right">{formatBytes(q.downloadBytes)}</td>
+              <td className="py-1 pr-4 text-right">{formatBytes(q.memoryBytes)}</td>
+              <td className="py-1 pr-4 text-right" title={`The longest context that fits in ${place} beside these weights`}>{q.fitContextTokens > 0 ? formatTokens(q.fitContextTokens) : 'none'}</td>
+              <td className={`py-1 pr-4 ${FIT_TEXT_CLASS[q.fit]}`}>{FIT_WORD[q.fit]}</td>
+              <td className="rounded-r-md py-1 pr-1 text-right">
+                {have ? <span className="text-ink-faint">Downloaded</span> : q.fit === 'tooBig' ? null : <ModelDownloadButton modelId={p.repo} quant={q.downloadLabel} onResult={onDownload} variant="quiet" />}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
@@ -272,44 +342,34 @@ function ImageRecommendationRow({
   const fit = imageFitText(p);
   const time = pictureTimeText(p);
   const ok = p.fit === 'fits' && !p.offloadToCpu;
+  const params = paramsLabel(p.name);
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-recommendation={p.modelId} data-image-recommendation>
-      <div className="w-[118px] shrink-0 text-xs text-ink-faint">{label}</div>
-      <div className="min-w-[180px] flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium">{p.name}</span>
-          <span className="chip" title={`${p.repo}: ${p.files.join(', ')}`}>{p.quant}</span>
-          <span
-            className="rounded-full px-2 py-0.5 text-2xs"
-            style={{ background: `color-mix(in srgb, ${ok ? 'var(--success)' : 'var(--warning)'} 16%, transparent)`, color: ok ? 'var(--success)' : 'var(--warning)' }}
-            title={fit.title}
-          >
-            {fit.text}
+    <div className="-mx-2 flex flex-wrap items-start gap-x-4 gap-y-1 rounded-lg px-2 py-(--q-inline)" data-recommendation={p.modelId} data-image-recommendation data-quiet-row>
+      <div className="w-[96px] shrink-0 pt-0.5 text-xs text-ink-faint">{label}</div>
+      <div className="min-w-[220px] flex-1">
+        <p className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-sm font-medium">{p.name}</span>
+          <span className="text-xs text-ink-faint" title={`${p.repo}: ${p.files.join(', ')}`}>
+            {[params, p.quant, `${formatBytes(p.downloadBytes)} download, with its supporting files`, p.license].filter(Boolean).join(' · ')}
           </span>
-        </div>
-        <p className="mt-0.5 text-2xs text-ink-faint">
+        </p>
+        <p className="mt-(--q-tight) flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
+          <MemoryMeter memoryBytes={p.memoryBytes} weightsBytes={Math.min(p.memoryBytes, p.downloadBytes)} budgetBytes={recs.budget.bytes} className="w-[200px]" />
           <span title="Every file plus working room, or with offload the largest file plus working room. Not measured yet.">
-            ~{formatBytes(p.memoryBytes)} of {formatBytes(recs.budget.bytes)}
+            ~{memoryText({ memoryBytes: p.memoryBytes } as RecommendedOption, recs.budget)}
           </span>
-          {' · '}
-          {formatBytes(p.downloadBytes)} download, with its supporting files · {p.license}
-          {time && (
-            <>
-              {' · '}
-              <span className="text-ink-soft" title={time.title} data-picture-time={p.time?.basis}>{time.text}</span>
-            </>
-          )}
+          {time && <span className="text-ink-soft" title={time.title} data-picture-time={p.time?.basis}>{time.text}</span>}
         </p>
       </div>
-      <div className="shrink-0">
-        {have ? (
-          <span className="inline-flex items-center gap-1 text-xs text-success">
-            <CheckIcon className="h-3.5 w-3.5" /> Downloaded
-          </span>
-        ) : state ? (
+      <div className="flex shrink-0 items-center gap-2">
+        <span className={`inline-flex items-center gap-1.5 text-xs ${ok ? 'text-ink-soft' : 'text-warning-text'}`} title={fit.title}>
+          <StatusDot tone={ok ? 'success' : 'warning'} size={6} />
+          {have ? 'Downloaded' : fit.text}
+        </span>
+        {have ? null : state ? (
           <span className="text-xs text-ink-faint" role="status">{state}</span>
         ) : (
-          <ModelDownloadButton modelId={p.repo} quant={p.downloadLabel} onResult={onDownload} />
+          <ModelDownloadButton modelId={p.repo} quant={p.downloadLabel} onResult={onDownload} variant="quiet" />
         )}
       </div>
     </div>

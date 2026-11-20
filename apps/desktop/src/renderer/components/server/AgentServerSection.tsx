@@ -15,35 +15,32 @@ import {
   apiServerUrl,
 } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
-import { Badge, Toggle } from '../primitives/index.js';
-import { CheckIcon, CopyIcon, TerminalIcon } from '../../icons.js';
-import { ServerPowerSwitch } from './ServerPowerSwitch.js';
+import { Badge, StatusDot, Toggle } from '../primitives/index.js';
+import { CheckIcon, ChevronIcon, CopyIcon, TerminalIcon } from '../../icons.js';
+import { SettingsIcon } from '../../gentleface-icons.js';
+import { SettingRow } from '../SettingsSection.js';
 
 /**
- * Nekko Agent as something other programs can drive, as one block on the Models
- * tab.
+ * The agent server, in Settings > Server: Nekko Agent as something other
+ * programs can drive.
  *
- * The engine section above it answers "what runs my models"; this one answers
- * the question right after it, which every local-model app eventually has to:
- * *how do I get at this from outside the window*. Three surfaces, because there
- * are three answers and they build on each other — a server on this machine, a
- * CLI that talks to it, and an MCP entry so other agents can.
+ * Three answers to "how do I get at this from outside the window", building
+ * on each other: a server on this machine, a CLI that talks to it, and an MCP
+ * entry so other agents can. Installing the app sets all three up (loopback,
+ * a generated token, the CLI linked onto PATH, MCP entries carrying both), so
+ * the header is the whole answer most people need: is it running, where, and
+ * the switch. Everything else waits behind Configure.
  *
- * Installing the app sets all three up: the server is on (loopback, with a
- * generated token), the CLI ships inside the app and is linked onto PATH, and
- * the MCP entries it writes carry the address and token. So the Server tab owns
- * the address, the token and the environment in one block, and the CLI and MCP
- * tabs say what is already in place rather than listing steps to do by hand.
+ * It lived beside the model server on the Models page until the Models page
+ * rework; it is a setting of this app, not of the models it runs.
  */
 
 const POLL_MS = 4000;
 
-type Tab = 'server' | 'cli' | 'mcp';
-
-export function LocalServerSection() {
+export function AgentServerSection() {
   const pushToast = useStore((s) => s.pushToast);
   const [status, setStatus] = useState<ApiServerStatus | null>(null);
-  const [tab, setTab] = useState<Tab>('server');
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -60,7 +57,7 @@ export function LocalServerSection() {
 
   const { settings, running } = status;
   // The web and self-hosted editions are already serving this page, so there is
-  // nothing here to switch on: the CLI and MCP tabs still apply, the server one
+  // nothing to switch on: the CLI and MCP groups still apply, the server one
   // says where it is instead of offering to start it.
   const canToggle = status.available !== false;
 
@@ -81,103 +78,104 @@ export function LocalServerSection() {
   // otherwise the bound one. Present even while stopped, because it describes
   // where the server *will* be.
   const url = status.clientUrl;
+  const word = busy ? 'Working…' : running ? 'Running' : 'Stopped';
 
   return (
-    // Four rows (header, description, status, the rest) on the grid it shares
-    // with the model server, so the two panels' matching rows line up.
-    <section className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
-      {/* Same header shape as the model server's: the power switch and the
-          launch toggle, so the two servers on this page switch the same way.
-          The switch reads `running` (is it listening) but flips `enabled`
+    <section id="agent-server" aria-labelledby="agent-server-heading" className="settings-section min-w-0" data-agent-server>
+      {/* The switch reads `running` (is it listening) but flips `enabled`
           (should it be), which is the setting the backend acts on. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--accent-2)' }} />
-        <h2 className="text-base font-semibold">Agent server</h2>
-        <div className="ml-auto flex items-center gap-3">
-          {status.available === false && <span className="chip">this edition</span>}
+      <div className="flex min-w-0 items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <h2 id="agent-server-heading" className="text-base font-semibold">Agent server</h2>
+          <p className="mt-(--q-tight) text-xs text-ink-faint">
+            Lets the <span className="font-mono">nekko-agent</span> CLI, scripts and other agents (over MCP) drive this app.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2" data-agent-server-status>
+          <StatusDot tone={busy ? 'warning' : running ? 'success' : 'neutral'} />
+          <span className="text-sm text-ink-soft">{canToggle ? word : 'Serving this page'}</span>
           {canToggle && (
-            <>
-              <ServerPowerSwitch
-                running={running}
-                busy={busy}
-                onToggle={() => void save({ enabled: !settings.enabled })}
-                labelWhat="agent server"
-              />
-              <label
-                className="flex items-center gap-2 text-xs text-ink-soft"
-                title="Bring the agent server up when the app opens"
-              >
-                Start Server on Nekko Launch
-                <Toggle
-                  value={settings.startOnLaunch !== false}
-                  onChange={(v) => void save({ startOnLaunch: v })}
-                  disabled={busy}
-                  label="Start the agent server with Nekko"
-                />
-              </label>
-            </>
+            <Toggle
+              value={running}
+              onChange={() => void save({ enabled: !settings.enabled })}
+              disabled={busy}
+              label={running ? 'Stop the agent server' : 'Start the agent server'}
+            />
           )}
         </div>
       </div>
-      <p className="mt-0.5 text-xs text-ink-faint">
-        Drive this app from other programs, the <span className="font-mono">nekko-agent</span> CLI, or other agents
-        over MCP.
-      </p>
 
-      <div className="mt-3 flex min-h-7 flex-wrap items-center gap-2 self-start">
-        <StatusDot running={running} busy={busy} />
-        <span className="text-sm">{running ? 'Running' : 'Stopped'}</span>
-        {running && (
-          <span className="text-2xs text-ink-faint">
+      {running && (
+        <div className="mt-(--q-inline) flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+          <CopyPill value={`${url}/api`} title="Copy the address other tools should point at" />
+          <span className="text-xs text-ink-faint">
             {status.requests} request{status.requests === 1 ? '' : 's'}
             {status.clients > 0 ? ` · ${status.clients} listening` : ''}
           </span>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          {running && <CopyPill value={`${url}/api`} title="Copy the address other tools should point at" />}
         </div>
-      </div>
+      )}
+      {status.error && <p className="mt-(--q-inline) text-xs text-danger-text">{status.error}</p>}
+      {settings.bind === 'lan' && running && (
+        <p className="mt-(--q-inline) text-xs text-warning-text">
+          Reachable from your whole network on port {settings.port}. Anything with the token can run the agent,
+          including its shell and file tools.
+        </p>
+      )}
 
-      <div className="min-w-0">
-
-        {status.error && (
-          <p className="mt-2 text-xs" style={{ color: 'var(--danger)' }}>
-            {status.error}
-          </p>
-        )}
-        {settings.bind === 'lan' && running && (
-          <p className="mt-2 text-xs" style={{ color: 'var(--warning)' }}>
-            Reachable from your whole network on port {settings.port}. Anything with the token can run the agent,
-            including its shell and file tools.
-          </p>
-        )}
-
-        {/* Everything past "is it on and where is it" is configuration you set
-            once: folded away like the model server's settings, so the panel
-            stays as short as the question most people arrive with. */}
-        <details className="mt-4 border-t border-line pt-4">
-          <summary className="cursor-pointer text-xs font-medium">Agent server settings</summary>
-          <div className="mt-3 flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
-            <TabButton active={tab === 'server'} onClick={() => setTab('server')}>Server</TabButton>
-            <TabButton active={tab === 'cli'} onClick={() => setTab('cli')}>CLI</TabButton>
-            <TabButton active={tab === 'mcp'} onClick={() => setTab('mcp')}>MCP</TabButton>
-          </div>
-
-          <div className="mt-3">
-            {tab === 'server' &&
-              (canToggle ? (
-                <ServerTab status={status} busy={busy} onSave={save} />
-              ) : (
-                <p className="text-xs text-ink-soft">
-                  This edition already is the Nekko Agent server — it is serving this page. Point the CLI and MCP
-                  clients at <span className="font-mono">{url}</span> with the token that server was started with
-                  (<span className="font-mono">NEKKO_TOKEN</span>).
-                </p>
-              ))}
-            {tab === 'cli' && <CliTab running={running} />}
-            {tab === 'mcp' && <McpTab url={url} token={settings.token} running={running} />}
-          </div>
-        </details>
+      <button
+        type="button"
+        className="quiet-row mt-(--q-inline) -mx-2 flex w-[calc(100%+16px)] items-center gap-2 rounded-lg px-2 text-left"
+        aria-expanded={open}
+        aria-controls="agent-server-configure"
+        data-agent-server-configure
+        onClick={() => setOpen((v) => !v)}
+      >
+        <SettingsIcon className="h-4 w-4 shrink-0 text-ink-soft" />
+        <span className="text-sm font-medium">Configure</span>
+        <span className="min-w-0 truncate text-xs text-ink-faint">Address, token, CLI and MCP</span>
+        <ChevronIcon className={`ml-auto h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform duration-(--dur-med) ease-(--ease-out) ${open ? 'rotate-90' : ''}`} />
+      </button>
+      <div id="agent-server-configure" className={`collapse-wrap ${open ? '' : 'collapsed'}`} aria-hidden={!open}>
+        <div className="min-h-0 overflow-hidden">
+          {open && (
+            <div className="space-y-(--q-group) pb-1 pl-6 pt-(--q-inline)">
+              {canToggle && (
+                <SettingRow
+                  title="Start with Nekko"
+                  detail="Bring the agent server up when the app opens."
+                  control={
+                    <Toggle
+                      value={settings.startOnLaunch !== false}
+                      onChange={(v) => void save({ startOnLaunch: v })}
+                      disabled={busy}
+                      label="Start the agent server with Nekko"
+                    />
+                  }
+                />
+              )}
+              <div>
+                <p className="quiet-group-label mb-(--q-heading)">Connection</p>
+                {canToggle ? (
+                  <ServerTab status={status} busy={busy} onSave={save} />
+                ) : (
+                  <p className="text-xs text-ink-soft">
+                    This edition already is the Nekko Agent server: it is serving this page. Point the CLI and MCP
+                    clients at <span className="font-mono">{url}</span> with the token that server was started with
+                    (<span className="font-mono">NEKKO_TOKEN</span>).
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="quiet-group-label mb-(--q-heading)">Command line</p>
+                <CliTab running={running} />
+              </div>
+              <div>
+                <p className="quiet-group-label mb-(--q-heading)">MCP clients</p>
+                <McpTab url={url} token={settings.token} running={running} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -401,7 +399,7 @@ function CliTab({ running }: { running: boolean }) {
       {cli === null ? (
         <p className="text-xs text-ink-faint">Checking the command…</p>
       ) : bundled ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3" style={{ borderColor: 'var(--line)' }}>
+        <div className="flex min-h-(--q-row) flex-wrap items-center gap-2 py-(--q-inline)" data-quiet-row>
           <TerminalIcon className="h-4 w-4 shrink-0 text-ink-faint" />
           <span className="font-mono text-xs">nekko-agent</span>
           {cli.installed && cli.onPath ? (
@@ -505,11 +503,7 @@ function McpTab({ url, token, running }: { url: string; token: string; running: 
           <p className="text-xs text-ink-faint">None of the supported tools are installed on this machine.</p>
         )}
         {tools?.map((t) => (
-          <div
-            key={t.id}
-            className="flex flex-wrap items-center gap-2 rounded-xl border p-3"
-            style={{ borderColor: 'var(--line)' }}
-          >
+          <div key={t.id} className="flex min-h-(--q-row) flex-wrap items-center gap-2 py-(--q-inline)" data-quiet-row>
             <TerminalIcon className="h-4 w-4 shrink-0 text-ink-faint" />
             <span className="text-xs font-medium">{t.label}</span>
             {t.installed ? (
@@ -675,17 +669,6 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     >
       {children}
     </button>
-  );
-}
-
-function StatusDot({ running, busy }: { running: boolean; busy: boolean }) {
-  const color = busy ? 'var(--warning)' : running ? 'var(--accent-2)' : 'var(--ink-faint)';
-  return (
-    <span
-      className="inline-block h-2 w-2 shrink-0 rounded-full"
-      style={{ background: color, opacity: busy ? 0.7 : 1 }}
-      aria-hidden
-    />
   );
 }
 
