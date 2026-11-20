@@ -3,6 +3,7 @@ import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
 import type { EngineMemory, GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
 import { MODALITY_LABELS, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
+import { notifyModelsChanged } from '../../modelCatalog.js';
 import { TrashIcon, WarningIcon } from '../../icons.js';
 import { StatusDot } from '../primitives/index.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
@@ -129,6 +130,8 @@ export function ModelLibrary({
     const res = await window.nekko.engineDeleteModel(model.id);
     pushToast(res.ok ? 'success' : 'error', res.message);
     onChanged();
+    // Open chats drop it from their pickers.
+    if (res.ok) notifyModelsChanged();
   };
 
   const fetchCompanions = async (model: LocalModel) => {
@@ -228,6 +231,7 @@ export function ModelLibrary({
       setImportPath('');
       setImporting(false);
       onChanged();
+      notifyModelsChanged();
     }
   };
 
