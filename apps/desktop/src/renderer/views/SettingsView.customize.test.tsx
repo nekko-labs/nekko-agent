@@ -15,8 +15,9 @@ import { UpdateProvider } from '../components/UpdateBanner.js';
 
 describe('Settings Customize section', () => {
   it('replaces the separate presentation groups with team support before General and phone pairing', () => {
-    expect(SETTINGS_GROUPS.map(group => group.id)).toEqual(['profile', 'support', 'cloud', 'general', 'phone', 'computers', 'customize', 'agents', 'safety', 'connections', 'tools', 'system']);
-    expect(SETTINGS_GROUPS.find(group => group.id === 'customize')?.label).toBe('Customize');
+    expect(SETTINGS_GROUPS.map(group => group.id)).toEqual(['profile', 'support', 'cloud', 'general', 'customize', 'agents', 'tools', 'safety', 'connections', 'phone', 'system']);
+    // The id stays customize so links into it keep working; the rail says Appearance.
+    expect(SETTINGS_GROUPS.find(group => group.id === 'customize')?.label).toBe('Appearance');
   });
 
   it('groups personalization once, keeps anchors and separates operational settings', () => {
@@ -26,7 +27,7 @@ describe('Settings Customize section', () => {
     const groups = html.split(/(?=<div id="settings-[^"]+" data-settings-group=)/);
     const customize = groups.find(group => group.startsWith('<div id="settings-customize"'))!;
     const general = groups.find(group => group.startsWith('<div id="settings-general"'))!;
-    for (const label of ['View settings', 'Appearance', 'Agents wall', 'System prompt']) {
+    for (const label of ['View settings', 'Agents wall', 'Fonts and text']) {
       expect(customize).toContain(label);
       expect(general).not.toContain(label);
     }
@@ -38,15 +39,33 @@ describe('Settings Customize section', () => {
     }
     expect(html.indexOf('data-settings-group="profile"')).toBeLessThan(html.indexOf('data-settings-group="support"'));
     expect(html.indexOf('data-settings-group="support"')).toBeLessThan(html.indexOf('data-settings-group="cloud"'));
-    for (const id of ['customization', 'settings-style', 'settings-animations', 'settings-simple']) {
+    for (const id of ['settings-style', 'settings-animations', 'settings-simple']) {
       expect(customize).toContain(`id="${id}"`);
       expect(html.split(`id="${id}"`)).toHaveLength(2);
     }
+    // The system prompt shapes agents, so it sits with them rather than with Appearance.
+    const agents = groups.find(group => group.startsWith('<div id="settings-agents"'))!;
+    expect(agents).toContain('System prompt');
+    expect(customize).not.toContain('System prompt');
+    expect(agents).toContain('id="customization"');
     expect(general).toContain('Desktop notifications');
     for (const id of ['profile', 'cloud', 'phone', 'safety', 'connections', 'system']) {
       expect(groups.some(group => group.startsWith(`<div id="settings-${id}"`))).toBe(true);
       expect(customize).not.toContain(`data-settings-group="${id}"`);
     }
     expect(html.indexOf('Search settings')).toBeLessThan(html.indexOf('data-settings-group="general"'));
+  });
+
+  it('shows one page at a time: Profile first, every other group mounted but hidden', () => {
+    const html = renderToStaticMarkup(<UpdateProvider><SettingsView /></UpdateProvider>);
+    const open = [...html.matchAll(/<div id="settings-([a-z]+)" data-settings-group=[^>]*>/g)];
+    expect(open.length).toBeGreaterThan(10);
+    for (const [tag, id] of open) expect(tag.includes('hidden=""')).toBe(id !== 'profile');
+    // The rail labels the second and third blocks, and marks the page on screen.
+    expect(html).toContain('<div class="settings-nav-label">Nekko Agent</div>');
+    expect(html).toContain('<div class="settings-nav-label">Privacy and devices</div>');
+    const current = html.split('aria-current="page"');
+    expect(current).toHaveLength(2);
+    expect(current[1].slice(0, current[1].indexOf('</button>'))).toContain('Profile');
   });
 });
