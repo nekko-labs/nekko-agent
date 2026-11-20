@@ -29,7 +29,7 @@ export interface SettingEntry {
   id: string;
   label: string;
   /** The Settings group (`settings-<group>` on the page) it lives in. */
-  group: 'support' | 'general' | 'customize' | 'agents' | 'safety' | 'tools' | 'system';
+  group: 'profile' | 'support' | 'cloud' | 'general' | 'customize' | 'agents' | 'safety' | 'tools' | 'system';
   /** Extra words people search for that the label does not say. */
   keywords?: string;
   control: SettingControl;
@@ -75,10 +75,12 @@ export const SETTINGS_INDEX: SettingEntry[] = [
 
 /** Each Settings group with the sections it holds, so searching "hooks" or "guardrails" can jump there. */
 export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: string }> = [
+  { group: 'profile', label: 'Profile', keywords: 'about you name email what you do role work profile account me' },
   { group: 'support', label: 'Help out the Nekko Team', keywords: 'support star starred github improve usage crash reports telemetry privacy' },
+  { group: 'cloud', label: 'Nekko Cloud', keywords: 'account sign in sign out plan billing sync chats library devices recovery key fleet management organization team share computers delete account' },
   { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history chats archive complete idle delete confirm desktop behavior close window tray low memory language tips setup wizard' },
-  { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access sync' },
-  { group: 'customize', label: 'Customize', keywords: 'view appearance theme agents wall customization fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
+  { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access relay tailscale' },
+  { group: 'customize', label: 'Customize', keywords: 'view appearance theme agents wall customization system prompt wrapper fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
   { group: 'agents', label: 'Agents', keywords: 'agent loop hooks spec-driven development orchestration delegation routes automations' },
   { group: 'safety', label: 'Safety', keywords: 'chat modes default mode no restrictions yolo ask security step-up sandbox guardrails permissions' },
   { group: 'connections', label: 'Connections', keywords: 'network activity log' },

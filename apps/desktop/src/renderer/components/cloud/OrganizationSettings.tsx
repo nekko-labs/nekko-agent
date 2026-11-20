@@ -48,14 +48,14 @@ export interface OrgViewProps extends OrgHandlers {
   now?: number;
 }
 
-/** Settings > Phone pairing > Organization: share this computer with a team and see the team's computers. */
+/** Settings > Nekko Cloud > Fleet management: your organization, whether this computer is shared with it, and its computers. */
 export function OrganizationView(p: OrgViewProps) {
   // Signed out: nothing new. Sign in under Sync first.
   if (p.gate === 'signed-out') return null;
   const org = p.detail;
   return (
-    <SettingsSection id="organization" title="Organization" aria-label="Organization" data-testid="org-settings"
-      help="Share your computers with a team. Your chats are never shared.">
+    <SettingsSection id="organization" title="Fleet management" aria-label="Fleet management" data-testid="org-settings"
+      help="Your organization's computers, and whether this one is shared with it. Your chats are never shared.">
       {p.gate === 'needs-plan' && (
         <div className="sync-row mt-(--q-inline)" data-testid="org-needs-plan">
           <p className="text-sm text-ink-soft">Organizations are part of Nekko Cloud Pro and Team.</p>
@@ -398,7 +398,7 @@ export function OrganizationSettings() {
     },
     onGoToSync: () => document.getElementById('sync')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     // Upgrade lives under the account in Sync.
-    onSeePlans: status?.account?.features?.billing ? () => document.getElementById('sync')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined,
+    onSeePlans: status?.account?.features?.billing ? () => document.getElementById('cloud-account')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined,
   };
 
   return (

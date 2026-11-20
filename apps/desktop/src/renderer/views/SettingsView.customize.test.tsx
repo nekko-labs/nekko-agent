@@ -15,7 +15,7 @@ import { UpdateProvider } from '../components/UpdateBanner.js';
 
 describe('Settings Customize section', () => {
   it('replaces the separate presentation groups with team support before General and phone pairing', () => {
-    expect(SETTINGS_GROUPS.map(group => group.id)).toEqual(['support', 'general', 'phone', 'computers', 'customize', 'agents', 'safety', 'connections', 'tools', 'system']);
+    expect(SETTINGS_GROUPS.map(group => group.id)).toEqual(['profile', 'support', 'cloud', 'general', 'phone', 'computers', 'customize', 'agents', 'safety', 'connections', 'tools', 'system']);
     expect(SETTINGS_GROUPS.find(group => group.id === 'customize')?.label).toBe('Customize');
   });
 
@@ -26,16 +26,24 @@ describe('Settings Customize section', () => {
     const groups = html.split(/(?=<div id="settings-[^"]+" data-settings-group=)/);
     const customize = groups.find(group => group.startsWith('<div id="settings-customize"'))!;
     const general = groups.find(group => group.startsWith('<div id="settings-general"'))!;
-    for (const label of ['View settings', 'Appearance', 'Agents wall', 'System prompt', 'About you']) {
+    for (const label of ['View settings', 'Appearance', 'Agents wall', 'System prompt']) {
       expect(customize).toContain(label);
       expect(general).not.toContain(label);
     }
+    // Who you are lives in Profile, the first group, not Customize.
+    const profile = groups.find(group => group.startsWith('<div id="settings-profile"'))!;
+    for (const label of ['What Nekko calls you', 'Email for updates', 'What you mostly do', 'More about you']) {
+      expect(profile).toContain(label);
+      expect(customize).not.toContain(label);
+    }
+    expect(html.indexOf('data-settings-group="profile"')).toBeLessThan(html.indexOf('data-settings-group="support"'));
+    expect(html.indexOf('data-settings-group="support"')).toBeLessThan(html.indexOf('data-settings-group="cloud"'));
     for (const id of ['customization', 'settings-style', 'settings-animations', 'settings-simple']) {
       expect(customize).toContain(`id="${id}"`);
       expect(html.split(`id="${id}"`)).toHaveLength(2);
     }
     expect(general).toContain('Desktop notifications');
-    for (const id of ['phone', 'safety', 'connections', 'system']) {
+    for (const id of ['profile', 'cloud', 'phone', 'safety', 'connections', 'system']) {
       expect(groups.some(group => group.startsWith(`<div id="settings-${id}"`))).toBe(true);
       expect(customize).not.toContain(`data-settings-group="${id}"`);
     }

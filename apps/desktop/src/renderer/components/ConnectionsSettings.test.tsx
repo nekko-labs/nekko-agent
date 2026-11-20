@@ -31,6 +31,10 @@ describe('Settings > Connections', () => {
     for (const c of CONNECTIONS) expect(html).toContain(`data-connection="${c.id}"`);
     expect(html.match(/Show log/g)).toHaveLength(CONNECTIONS.length);
     expect(html).toContain('no usage or crash reports unless you turn them on');
+    // The master switch is the section's last row, in danger words (#3076).
+    expect(html.indexOf('All connections off')).toBeGreaterThan(html.lastIndexOf('data-connection='));
+    expect(html.indexOf('All connections off')).toBeGreaterThan(html.indexOf('Clear connection logs'));
+    expect(html).toContain('<span class="text-danger-text">All connections off</span>');
   });
 
   it('centres every row switch on its text, like All connections off (#2397)', () => {
@@ -42,11 +46,13 @@ describe('Settings > Connections', () => {
     }
   });
 
-  it('All connections off saves the switch and greys every row', () => {
+  it('All connections off is the last switch, saves and greys every row', () => {
     const { list, update } = toggles({} as AppSettings);
-    list[0].props.onChange(true);
+    const allOff = list.at(-1)!;
+    expect(allOff.props.label).toBe('All connections off');
+    allOff.props.onChange(true);
     expect(update).toHaveBeenCalledWith({ connections: { allOff: true } });
-    const off = toggles({ connections: { allOff: true } } as AppSettings).list.slice(1);
+    const off = toggles({ connections: { allOff: true } } as AppSettings).list.slice(0, -1);
     expect(off.every((t) => t.props.disabled && t.props.value === false)).toBe(true);
   });
 

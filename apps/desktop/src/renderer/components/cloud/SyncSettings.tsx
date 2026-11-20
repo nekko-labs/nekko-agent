@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { type CloudStatus, type SyncDevice, cloudError } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/Toggle.js';
 import { StatusDot } from '../primitives/index.js';
@@ -11,8 +11,12 @@ import { PlanRow, TeamSwitches } from './PlanAndBilling.js';
 import { LogOutIcon } from '../../gentleface-icons.js';
 import './cloud.css';
 
-/** Settings → Sync: Nekko Cloud sign-in and end-to-end encrypted chat sync. */
-export function SyncSettings() {
+/**
+ * Settings > Nekko Cloud: the account (sign in, plan, sign out), then, once
+ * signed in, end-to-end encrypted Sync, `fleet` (Fleet management) and the
+ * danger zone.
+ */
+export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
   const [status, setStatus] = useState<CloudStatus | null>(null);
   const [signIn, setSignIn] = useState(false);
   const [recovery, setRecovery] = useState<{ key: string | null } | null>(null);
@@ -79,97 +83,112 @@ export function SyncSettings() {
   const others = status?.sync.devices.filter((d) => !d.thisDevice && !d.revoked).length ?? 0;
   const pending = status?.sync.devices.filter((d) => !d.trusted && !d.revoked && !d.thisDevice && d.askedToJoin) ?? [];
 
+  const signedIn = !!status?.signedIn;
+  const synced = !!status && ['idle', 'syncing', 'paused', 'error'].includes(phase);
+  const problem = error || status?.sync.error;
+
   return (
-    <SettingsSection id="sync" title="Sync" aria-label="Sync" data-testid="sync-settings"
-      help="Your chats on every device, end-to-end encrypted. Nekko Labs can't read them."
-      meta={<PhasePill status={status} />}>
-      <div className="sync-card-hero mt-(--q-inline)"><SyncVisual phase={phase} others={others} /></div>
-
-      {phase === 'signed-out' && (
-        <div className="text-center">
-          <p className="mx-auto max-w-md text-sm text-ink-soft">Sign in to Nekko Cloud to keep your chats in step across your computers and your iPhone. Everything is encrypted here before it leaves this computer.</p>
-          <button className="btn btn-primary mt-(--q-inline)" onClick={openSignIn} data-testid="sync-sign-in">{pendingCode ? 'Enter your sign-in code' : 'Sign in to Nekko Cloud'}</button>
-        </div>
-      )}
-
-      {status?.signedIn && (
-        <div className="sync-row">
-          <div className="min-w-0 text-sm">
-            <div className="truncate font-medium text-ink">{status.account?.email}</div>
-            <div className="mt-(--q-tight) text-xs text-ink-faint">{planLabel(status.account?.plan)}</div>
+    <>
+      <SettingsSection id="cloud-account" title="Account" aria-label="Nekko Cloud account" data-testid="cloud-account"
+        help={signedIn ? undefined : 'One account for sync across your computers and iPhone, and for sharing computers with a team.'}>
+        {phase === 'signed-out' && (
+          <div className="text-center" data-testid="sync-settings">
+            <div className="sync-card-hero mt-(--q-inline)"><SyncVisual phase={phase} others={others} /></div>
+            <p className="mx-auto max-w-md text-sm text-ink-soft">Sign in to Nekko Cloud to keep your chats in step across your computers and your iPhone. Everything is encrypted here before it leaves this computer.</p>
+            <button className="btn btn-primary mt-(--q-inline)" onClick={openSignIn} data-testid="sync-sign-in">{pendingCode ? 'Enter your sign-in code' : 'Sign in to Nekko Cloud'}</button>
           </div>
-          <button className="btn btn-ghost shrink-0 py-1! text-xs!" disabled={!!busy} onClick={() => void act('out', () => window.nekko.cloudSignOut())}><LogOutIcon className="mr-1 h-3.5 w-3.5" />Sign out</button>
-        </div>
-      )}
-      {/* Hidden until the Nekko team switches billing on (#2724). */}
-      {status?.account?.features?.billing && <PlanRow plan={status.account.plan} />}
-      {status?.account?.staff && <TeamSwitches />}
-
-      {phase === 'needs-plan' && (
-        <div className="sync-row">
-          <p className="text-sm text-ink-soft">Sync is part of Nekko Cloud Pro and Team. Your chats stay on this computer until then.</p>
-        </div>
-      )}
-
-      {phase === 'off' && (
-        <div className="sync-row">
-          <p className="text-sm text-ink-soft">Turn sync on to encrypt your chats on this computer and keep a copy only your devices can open. You'll get a recovery key to save.</p>
-          <button className="btn btn-primary shrink-0" disabled={!!busy} onClick={() => void turnOn()} data-testid="sync-turn-on">{busy === 'on' ? 'Setting up…' : 'Turn on sync'}</button>
-        </div>
-      )}
-
-      {phase === 'needs-join' && <JoinOptions busy={!!busy} act={act} />}
-
-      {phase === 'awaiting-approval' && (
-        <div className="sync-row flex-col items-stretch!">
-          <p className="text-sm text-ink-soft">On a computer or iPhone that already syncs, open <strong>Settings → Sync</strong>, choose <strong>Approve</strong> next to <strong>{status?.sync.devices.find((d) => d.thisDevice)?.label ?? 'this device'}</strong>, and type this code:</p>
-          <div className="fingerprint my-(--q-group)" data-testid="sync-join-code">{status?.sync.joinCode ?? '…'}</div>
-          <p className="mb-(--q-inline) text-center text-xs text-ink-faint">The code proves to each device that the other is really yours. Don't share it with anyone else.</p>
-          <div className="flex justify-center gap-2">
-            <button className="btn btn-ghost py-1! text-xs!" onClick={() => void act('now', () => window.nekko.syncNow())}>Check now</button>
-            <button className="btn btn-ghost py-1! text-xs!" onClick={() => void act('restore', async () => { await window.nekko.syncSetEnabled(false); return window.nekko.cloudRefresh(); })}>Use the recovery key instead</button>
+        )}
+        {signedIn && (
+          <div className="sync-row">
+            <div className="min-w-0 text-sm">
+              <div className="truncate font-medium text-ink" data-testid="cloud-account-email">{status.account?.email}</div>
+              <div className="mt-(--q-tight) text-xs text-ink-faint">{planLabel(status.account?.plan)}</div>
+            </div>
+            <button className="btn btn-ghost shrink-0 py-1! text-xs!" disabled={!!busy} onClick={() => void act('out', () => window.nekko.cloudSignOut())}><LogOutIcon className="mr-1 h-3.5 w-3.5" />Sign out</button>
           </div>
-        </div>
-      )}
+        )}
+        {/* Hidden until the Nekko team switches billing on (#2724). */}
+        {status?.account?.features?.billing && <PlanRow plan={status.account.plan} />}
+        {status?.account?.staff && <TeamSwitches />}
+        {!signedIn && problem && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text">{problem}</p>}
+      </SettingsSection>
 
-      {status && ['idle', 'syncing', 'paused', 'error'].includes(phase) && (
-        <>
-          {!status.sync.recoveryConfirmed && (
-            <div className="sync-row mt-(--q-inline) rounded-xl px-4" style={{ background: 'var(--warning-soft)' }} role="status">
-              <p className="text-xs text-ink">You haven't confirmed your recovery key yet. Without it, losing every device means losing your synced chats.</p>
-              <button className="btn btn-ghost shrink-0 py-1! text-xs!" onClick={() => setRecovery({ key: null })}>Confirm it</button>
+      {/* Everything below needs an account: it appears once you sign in. */}
+      {signedIn && (
+        <SettingsSection id="sync" title="Sync" aria-label="Sync" data-testid="sync-settings"
+          help="Your chats on every device, end-to-end encrypted. Nekko Labs can't read them."
+          meta={<PhasePill status={status} />}>
+          <div className="sync-card-hero mt-(--q-inline)"><SyncVisual phase={phase} others={others} /></div>
+
+          {phase === 'needs-plan' && (
+            <div className="sync-row">
+              <p className="text-sm text-ink-soft">Sync is part of Nekko Cloud Pro and Team. Your chats stay on this computer until then.</p>
             </div>
           )}
-          <div className="sync-row">
-            <div className="text-sm">
-              <div className="font-medium text-ink">{syncLine(status)}</div>
-              <div className="mt-(--q-tight) text-xs text-ink-faint">{detailLine(status)}</div>
+
+          {phase === 'off' && (
+            <div className="sync-row">
+              <p className="text-sm text-ink-soft">Turn sync on to encrypt your chats on this computer and keep a copy only your devices can open. You'll get a recovery key to save.</p>
+              <button className="btn btn-primary shrink-0" disabled={!!busy} onClick={() => void turnOn()} data-testid="sync-turn-on">{busy === 'on' ? 'Setting up…' : 'Turn on sync'}</button>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <button className="btn btn-ghost py-1! text-xs!" disabled={phase === 'syncing' || !status.sync.enabled} onClick={() => void act('now', () => window.nekko.syncNow())} data-testid="sync-now">Sync now</button>
-              <Toggle label="Sync this computer" value={status.sync.enabled} onChange={(on) => void act('enable', () => window.nekko.syncSetEnabled(on))} />
-            </div>
-          </div>
-          <div className="sync-row">
-            <p className="text-xs text-ink-faint">Every chat syncs except incognito ones. To keep a chat on this computer, turn off <strong className="font-medium text-ink-soft">Sync</strong> beside the message box in that chat.</p>
-          </div>
-          <Devices devices={status.sync.devices} pending={pending} busy={!!busy} act={act} />
-          {others === 0 && (
-            <p className="mt-(--q-inline) text-xs text-info-text">
-              Add your iPhone or another computer too. A second device is the easiest way back in if this one is lost.
-            </p>
           )}
-          <div className="sync-row">
-            <p className="text-xs text-ink-faint">Keys on this computer are kept in {status.keysStoredIn}. Key epoch {status.sync.keyEpoch ?? '–'}.</p>
-          </div>
-        </>
+
+          {phase === 'needs-join' && <JoinOptions busy={!!busy} act={act} />}
+
+          {phase === 'awaiting-approval' && (
+            <div className="sync-row flex-col items-stretch!">
+              <p className="text-sm text-ink-soft">On a computer or iPhone that already syncs, open <strong>Settings → Sync</strong>, choose <strong>Approve</strong> next to <strong>{status?.sync.devices.find((d) => d.thisDevice)?.label ?? 'this device'}</strong>, and type this code:</p>
+              <div className="fingerprint my-(--q-group)" data-testid="sync-join-code">{status?.sync.joinCode ?? '…'}</div>
+              <p className="mb-(--q-inline) text-center text-xs text-ink-faint">The code proves to each device that the other is really yours. Don't share it with anyone else.</p>
+              <div className="flex justify-center gap-2">
+                <button className="btn btn-ghost py-1! text-xs!" onClick={() => void act('now', () => window.nekko.syncNow())}>Check now</button>
+                <button className="btn btn-ghost py-1! text-xs!" onClick={() => void act('restore', async () => { await window.nekko.syncSetEnabled(false); return window.nekko.cloudRefresh(); })}>Use the recovery key instead</button>
+              </div>
+            </div>
+          )}
+
+          {status && synced && (
+            <>
+              {!status.sync.recoveryConfirmed && (
+                <div className="sync-row mt-(--q-inline) rounded-xl px-4" style={{ background: 'var(--warning-soft)' }} role="status">
+                  <p className="text-xs text-ink">You haven't confirmed your recovery key yet. Without it, losing every device means losing your synced chats.</p>
+                  <button className="btn btn-ghost shrink-0 py-1! text-xs!" onClick={() => setRecovery({ key: null })}>Confirm it</button>
+                </div>
+              )}
+              <div className="sync-row">
+                <div className="text-sm">
+                  <div className="font-medium text-ink">{syncLine(status)}</div>
+                  <div className="mt-(--q-tight) text-xs text-ink-faint">{detailLine(status)}</div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button className="btn btn-ghost py-1! text-xs!" disabled={phase === 'syncing' || !status.sync.enabled} onClick={() => void act('now', () => window.nekko.syncNow())} data-testid="sync-now">Sync now</button>
+                  <Toggle label="Sync this computer" value={status.sync.enabled} onChange={(on) => void act('enable', () => window.nekko.syncSetEnabled(on))} />
+                </div>
+              </div>
+              <div className="sync-row">
+                <p className="text-xs text-ink-faint">Every chat syncs except incognito ones. To keep a chat on this computer, turn off <strong className="font-medium text-ink-soft">Sync</strong> beside the message box in that chat.</p>
+              </div>
+              <Devices devices={status.sync.devices} pending={pending} busy={!!busy} act={act} />
+              {others === 0 && (
+                <p className="mt-(--q-inline) text-xs text-info-text">
+                  Add your iPhone or another computer too. A second device is the easiest way back in if this one is lost.
+                </p>
+              )}
+              <div className="sync-row">
+                <p className="text-xs text-ink-faint">Keys on this computer are kept in {status.keysStoredIn}. Key epoch {status.sync.keyEpoch ?? '–'}.</p>
+              </div>
+            </>
+          )}
+          {problem && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text">{problem}</p>}
+        </SettingsSection>
       )}
 
-      {status?.signedIn && (
-        <div className="sync-row flex-col items-stretch!" data-testid="sync-danger-zone">
-          <div className="quiet-group-label">Danger zone</div>
+      {signedIn && fleet}
+
+      {signedIn && (
+        <SettingsSection id="cloud-danger" title="Danger zone" aria-label="Nekko Cloud danger zone" data-testid="sync-danger-zone">
           <ul className="-mx-2 mt-(--q-inline)">
-            {['idle', 'syncing', 'paused', 'error'].includes(phase) && (
+            {synced && (
               <li className="quiet-row min-h-(--q-row) justify-between gap-3 px-2!" data-quiet-row>
                 <div className="min-w-0 text-sm">
                   <div className="font-medium text-ink">Delete everything synced</div>
@@ -189,14 +208,13 @@ export function SyncSettings() {
               <button className="btn btn-ghost shrink-0 py-1! text-xs! text-danger-text!" disabled={!!busy} data-cloud-delete-account onClick={() => setDeleting(true)}>Delete account</button>
             </li>
           </ul>
-        </div>
+        </SettingsSection>
       )}
 
-      {(error || status?.sync.error) && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text">{error || status?.sync.error}</p>}
       {signIn && <CloudSignIn status={status} pending={pendingCode} onPending={setPendingCode} onClose={() => setSignIn(false)} />}
       {deleting && <DeleteAccountDialog email={status?.account?.email ?? ''} onClose={() => setDeleting(false)} onDeleted={(s) => { setStatus(s); setDeleting(false); }} />}
       {recovery && <RecoveryKeyDialog recoveryKey={recovery.key} email={status?.account?.email ?? ''} onDone={() => setRecovery(null)} />}
-    </SettingsSection>
+    </>
   );
 }
 

@@ -14,7 +14,7 @@ import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ComputerIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { CloudIcon, ComputerIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, UserIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -62,9 +62,11 @@ const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
   { value: 'yolo', label: CHAT_MODE_LABEL.yolo, desc: 'Run everything without confirming (deny rules still block).' },
 ];
 
-/** Help out the team sits first; General and Phone pairing remain adjacent. */
+/** You first (Profile), then helping the team, then your Nekko Cloud account; the rest follow. */
 export const SETTINGS_GROUPS = [
+  { id: 'profile', label: 'Profile', icon: UserIcon },
   { id: 'support', label: 'Help out the Nekko Team', icon: WandIcon },
+  { id: 'cloud', label: 'Nekko Cloud', icon: CloudIcon },
   { id: 'general', label: 'General', icon: SunIcon },
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
   { id: 'computers', label: 'Computers', icon: ComputerIcon },
@@ -106,9 +108,9 @@ function AdvancedFold({ children }: { children: React.ReactNode }) {
 /** The group whose top has passed the top of the scroller (the last one once scrolled to the bottom). */
 export function activeGroup(scroller: HTMLElement): SettingsGroupId {
   const groups = [...scroller.querySelectorAll<HTMLElement>('[data-settings-group]')];
-  if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return (groups.at(-1)?.dataset.settingsGroup ?? 'support') as SettingsGroupId;
+  if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return (groups.at(-1)?.dataset.settingsGroup ?? SETTINGS_GROUPS[0].id) as SettingsGroupId;
   const top = scroller.getBoundingClientRect().top + 24;
-  let cur: string = 'support';
+  let cur: string = SETTINGS_GROUPS[0].id;
   for (const g of groups) if (g.getBoundingClientRect().top <= top) cur = g.dataset.settingsGroup!;
   return cur as SettingsGroupId;
 }
@@ -125,7 +127,7 @@ export function SettingsView() {
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState<SettingsGroupId>('support');
+  const [active, setActive] = useState<SettingsGroupId>(SETTINGS_GROUPS[0].id);
   // Simple says nothing about computers until one is connected; Detailed is where the first one is paired.
   const [expert] = useExpertMode();
   const hasComputers = useStore((s) => s.computers.length > 0);
@@ -218,9 +220,16 @@ export function SettingsView() {
         <div ref={pageRef} className="settings-page" data-presenter-exempt>
           {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
           <div className="min-w-0">
+            <SettingsGroup id="profile">
+              <AboutYouSection settings={settings} update={update} />
+            </SettingsGroup>
             <SettingsGroup id="support">
               <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="GitHub support"><GitHubStarSupport /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="cloud">
+              {/* Account first; Sync, Fleet management and the danger zone appear once signed in. */}
+              <ErrorBoundary label="Nekko Cloud"><SyncSettings fleet={<ErrorBoundary label="Fleet management"><OrganizationSettings /></ErrorBoundary>} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="general">
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
@@ -272,7 +281,7 @@ export function SettingsView() {
                 />
               </SettingsSection>
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
-              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
+              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('cloud')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
               <section className="card mt-5 p-5" data-repo-folder>
                 <h2 className="font-semibold">Repositories folder</h2>
                 <p className="mt-1 text-xs text-ink-soft">Where a repository added to a chat is cloned when no copy is already on this computer. Repositories already added stay where they are.</p>
@@ -287,16 +296,11 @@ export function SettingsView() {
             <SettingsGroup id="phone">
               {/* Remote access (relay) */}
               <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
-              {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
-              <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
-              <ErrorBoundary label="Organization"><OrganizationSettings /></ErrorBoundary>
             </SettingsGroup>
             {computersPage && <SettingsGroup id="computers">
               <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
             </SettingsGroup>}
             <SettingsGroup id="customize">
-              {/* Personal: how Nekko addresses you belongs with the rest of personalization (#2102). */}
-              <AboutYouSection settings={settings} update={update} />
               <SettingsSection id="appearance" title={tr('settings.appearance')}>
                 <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
                 <SettingRow
@@ -1008,7 +1012,6 @@ function CustomizationSection({ settings, update }: { settings: AppSettings; upd
   return (
     <SettingsSection id="customization" title="Customization" help="Sent to the selected provider on every chat turn, so leave secrets out. Edits save when you leave a field.">
       {([
-        { key: 'aboutUser', label: 'About you', hint: 'Your name, role, experience, goals, language, and communication preferences.', fallback: '' },
         { key: 'systemInstructions', label: 'System prompt', hint: 'Additional standing instructions for how Nekko should work with you.', fallback: '' },
         { key: 'turnWrapper', label: 'Server prompt wrapper', hint: 'Applied server-side to each user turn without altering the saved user message. Titles and plans use app tools when available.', fallback: DEFAULT_TURN_WRAPPER },
       ] as const).map((field) => (
