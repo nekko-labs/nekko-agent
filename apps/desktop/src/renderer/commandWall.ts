@@ -608,7 +608,7 @@ export function sanitizeWallLayout(raw: unknown): WallLayout {
   const dimension = (n: unknown, fallback: number) => typeof n === 'number' && Number.isFinite(n)
     ? Math.min(6, Math.max(1, Math.round(n))) : fallback;
   return {
-    mode: value.mode === 'focus' ? 'focus' : 'grid',
+    mode: value.mode === 'focus' ? 'focus' : value.mode === 'grid' || value.mode === 'fixed' ? 'grid' : DEFAULT_WALL_LAYOUT.mode,
     cols: dimension(value.cols, DEFAULT_WALL_LAYOUT.cols),
     rows: dimension(value.rows, DEFAULT_WALL_LAYOUT.rows),
     // Grid was a third layout mode until 2026-10-24; a wall saved in it opens as Dynamic with Fixed grid on.

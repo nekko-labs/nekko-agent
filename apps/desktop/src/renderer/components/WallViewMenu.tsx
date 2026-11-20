@@ -52,12 +52,13 @@ export function WallViewOptions({ wall, setWall, onPickMultiAgent, onCustomize }
         onChange={() => setWall(w => ({ ...w, snap: !w.snap }))} />
     </label>
     <ScreensControl mode={wall.layout.mode} embedded />
-    <fieldset className="view-experience"><legend>Interface detail</legend>
-      {[false, true].map(on => <label className="screens-option" key={String(on)}>
-        <input type="radio" name="view-interface-detail" checked={expert === on} onChange={() => setExpert(on)} />
-        <span><strong>{on ? 'Detailed' : 'Simple'}</strong><span>{on ? 'Show every available control.' : 'Keep everyday controls in focus.'}</span></span>
-      </label>)}
-    </fieldset>
+    <div className="view-experience">
+      <label className="wall-view-snap">
+        <span><strong>Detailed interface</strong><span>{expert ? 'Show every available control.' : 'Keep everyday controls in focus.'}</span></span>
+        <input type="checkbox" role="switch" data-view-interface-detail checked={expert} onChange={() => setExpert(!expert)} />
+      </label>
+      <p className="view-experience__example">Want to see the difference? <button type="button" className="text-accent hover:underline" onClick={() => { onCustomize?.(); openSettingsGroup('simple'); }}>See the example in settings</button></p>
+    </div>
     <button type="button" className="view-customize" onClick={() => { onCustomize?.(); openSettingsGroup('customize'); }}>Customize <span aria-hidden="true">↗</span></button>
   </>;
 }

@@ -1,4 +1,4 @@
-// Synthetic evidence fixture for the View menu's "Open new agents" groups
+// Synthetic evidence fixture for the View menu (its "Open new agents" groups moved to Settings)
 // (#2399). No host, no network; the screens and desktops are made up in
 // view-option-groups-chrome.
 import './view-option-groups-chrome';

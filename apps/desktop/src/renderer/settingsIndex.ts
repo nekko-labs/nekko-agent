@@ -79,7 +79,7 @@ export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: str
   { group: 'support', label: 'Help out the Nekko Team', keywords: 'support star starred github improve usage crash reports telemetry privacy' },
   { group: 'cloud', label: 'Nekko Cloud', keywords: 'account sign in sign out plan billing sync chats library devices recovery key fleet management organization team share computers delete account' },
   { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history chats archive complete idle delete confirm desktop behavior close window tray low memory language tips setup wizard' },
-    { group: 'customize', label: 'Appearance', keywords: 'customize view theme agents wall fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
+    { group: 'customize', label: 'Appearance', keywords: 'customize view theme agents wall fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer screens desktops monitors new agents placement balanced main screen' },
   { group: 'agents', label: 'Agents', keywords: 'agent loop system prompt wrapper customization prompt size profiles hooks spec-driven development orchestration delegation routes automations' },
   { group: 'safety', label: 'Safety', keywords: 'chat modes default mode no restrictions yolo ask security step-up sandbox guardrails permissions' },
   { group: 'connections', label: 'Connections', keywords: 'network activity log all connections off' },

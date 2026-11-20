@@ -40,8 +40,8 @@ export function AboutYouSection({ settings, update }: { settings: AppSettings; u
       } />
       <label className="mt-(--q-group) block">
         <span className="block text-sm font-medium">More about you</span>
-        <span className="mt-(--q-tight) block text-xs text-ink-faint">Your role, experience, goals and how you like answers. Sent to the chosen model with every chat, so leave secrets out.</span>
         <textarea key={settings.aboutUser ?? ''} aria-label="About you" className="quiet-field mt-(--q-inline) min-h-[100px] resize-y text-xs leading-relaxed"
+          placeholder="Your role, experience, goals and how you like answers. Sent to the chosen model with every chat, so leave secrets out."
           defaultValue={settings.aboutUser ?? ''} onBlur={(e) => { if (e.target.value !== (settings.aboutUser ?? '')) void update({ aboutUser: e.target.value }); }} />
       </label>
     </SettingsSection>

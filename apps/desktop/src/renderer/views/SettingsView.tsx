@@ -43,6 +43,7 @@ import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEver
 import { StyleSection } from './StyleSection.js';
 import { openCustomize } from '../components/CustomizeExperience.js';
 import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
+import { OpenNewAgentsSettings } from '../components/ScreensControl.js';
 import { useExpertMode, useShown } from '../simpleMode.js';
 import { forwardWheelToContent } from '../railWheel.js';
 import { AgentServerSection } from '../components/server/AgentServerSection.js';
@@ -370,6 +371,7 @@ export function SettingsView() {
                   }} />}
                 />
               </SettingsSection>
+              <ErrorBoundary label="Open new agents"><OpenNewAgentsSettings /></ErrorBoundary>
               <SettingsSection id="view-settings" title="View settings" help="Optional sidebar shortcuts. Skills and Connectors are always at the top of Settings.">
                 {(['skills', 'connectors'] as const).map((view) => (
                   <SettingRow key={view} title={`Show ${tr(`nav.${view}`)} in sidebar`} control={<Toggle aria-label={`Show ${view === 'skills' ? 'Skills' : 'Connectors'} in sidebar`} on={settings.sidebarViews?.[view] === true} onChange={(v) => update({ sidebarViews: { ...settings.sidebarViews, [view]: v } })} />} />

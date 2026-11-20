@@ -70,8 +70,7 @@ app.whenReady().then(async () => {
       await run("document.querySelector('[aria-label=\"Screen 2, on\"]').click()"); await sleep(100);
       await run("document.querySelector('[aria-label=\"Screen 2, off\"]').click()"); await sleep(100);
       await check('screen toggle calls bridge and reflects state', "viewCalls.some(c=>c[0]==='toggle' && c[1]==='2' && c[2]===true) && document.querySelector('[aria-label=\"Screen 2, on\"]').getAttribute('aria-checked')==='true'");
-      await run("document.querySelectorAll('[name=screens-placement]')[0].click()");
-      await check('placement calls bridge and reflects state', "viewCalls.some(c=>c[0]==='placement' && c[1]==='main-first') && document.querySelectorAll('[name=screens-placement]')[0].checked");
+      await check('placement lives in Settings, not the menu', "!document.querySelector('[data-wall-view-menu] [name=screens-placement]')");
       await run("document.querySelector('[data-wall-view-menu]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
       await check('Escape restores trigger focus', "document.activeElement.matches('[data-wall-view-toggle]') && !document.querySelector('[data-wall-view-menu]')");
       await run("document.querySelector('[data-wall-view-toggle]').click()"); await sleep(100);

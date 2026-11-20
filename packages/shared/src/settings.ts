@@ -94,7 +94,7 @@ export interface MonitorsDock {
   /** Independent minimization state for each monitor. */
   minimized: Record<MonitorKey, boolean>;
 }
-export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2, fixedGrid: false };
+export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'focus', cols: 3, rows: 2, fixedGrid: false };
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   side: 'right', show: true, simpleShow: false,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13 and an

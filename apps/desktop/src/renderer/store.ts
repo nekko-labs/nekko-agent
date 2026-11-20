@@ -8,6 +8,7 @@ import { AUTO_ARCHIVE_CHOICES, agentsToAutoArchive, autoArchiveDays, DEFAULT_IMA
 import type { MascotMood } from './components/Mascot.js';
 import { setPageZoom, syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
+import { ENGINE_PROVIDER_ID } from './components/engine/localModelShortcuts.js';
 import { putCachedSession } from './sessionCache.js';
 import { autoDismisses, overflowToasts, TOAST_EXIT_MS, TOAST_MS } from './toastQueue.js';
 import { loadLayout, maxIdSeq, pruneLayout, saveLayout } from './workspacePersist.js';
@@ -86,11 +87,12 @@ export function viewEnabled(view: View, settings: AppSettings | null | undefined
  * full-screen takeover on upgrade. A configured provider is the strongest
  * "setup already happened" signal we have, so the wizard auto-opens only on a
  * genuinely fresh install; everyone else can reach it from Settings → Replay
- * setup.
+ * setup. The built-in engine's entry doesn't count: nekkod saves it at every
+ * launch, before this first read, so a fresh install always has it.
  */
 export function shouldAutoOpenOnboarding(settings: AppSettings | null | undefined): boolean {
   if (!settings || settings.onboarding?.completedAt) return false;
-  return (settings.providers?.length ?? 0) === 0;
+  return !settings.providers?.some((p) => p.id !== ENGINE_PROVIDER_ID);
 }
 
 /** A message routed into a chat's composer from another surface (editor comment, design note). */
