@@ -1118,6 +1118,18 @@
     },
     {
       "input": {
+        "architecture": "qwen_image"
+      },
+      "out": "image"
+    },
+    {
+      "input": {
+        "architecture": "z_image"
+      },
+      "out": "image"
+    },
+    {
+      "input": {
         "architecture": "whisper"
       },
       "out": "audio"

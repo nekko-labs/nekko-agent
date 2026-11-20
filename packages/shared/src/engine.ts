@@ -404,7 +404,7 @@ export const MODALITY_LABELS: Record<ModelModality, string> = {
  * serve them no matter which flags accompany the file.
  */
 const IMAGE_GEN_ARCHS =
-  /^(sd\d?|sdxl|sd-?turbo|stable-?diffusion.*|flux.*|wuerstchen|pixart.*|ltxv.*|hidream.*|chroma.*|qwen-?image.*|z-?image.*|ovis-?image.*|wan\d.*|hunyuan.*(image|video).*|cogvideo.*)/i;
+  /^(sd\d?|sdxl|sd[-_]?turbo|stable[-_]?diffusion.*|flux.*|wuerstchen|pixart.*|ltxv.*|hidream.*|chroma.*|qwen[-_]?image.*|z[-_]?image.*|ovis[-_]?image.*|wan\d.*|hunyuan.*(image|video).*|cogvideo.*)/i;
 
 /** Speech-recognition and audio weights; these need a speech engine, not an LLM server. */
 const AUDIO_ARCHS = /^(whisper.*|parakeet.*|moonshine.*|sense-?voice.*|wav2vec.*|hubert.*|seamless.*|zipformer.*)/i;
