@@ -1,8 +1,10 @@
 // Journey: finding out what changed in this version. The "What's new" sheet,
 // opened by hand from the title-bar pill after an update, Settings > Updates,
 // About and the command palette; its highlights, "Show more" (the list scrolls,
-// the sheet keeps its size), the link to the full release notes, and a version
-// with no highlights.
+// the sheet keeps its size), the link to the website's What's new page, a version
+// with no highlights, and opening by itself once after an update to a newer line
+// (not after a nightly, not while an agent is running, not again once closed, not
+// with "Show after updates" off).
 import { expect, scenarioTest } from './harness';
 
 const test = scenarioTest('whats-new', { width: 1100, height: 720 });
@@ -35,6 +37,17 @@ test("what's new", async ({ scenario, shot }) => {
 
     return Object.values((await dialog.boundingBox())!).map(Math.round);
   };
+  // The two faces of one setting: the sheet's footer and Settings > Updates.
+  const footerSwitch = sheet.getByRole('switch', { name: 'Show after updates' });
+  const settingsSwitch = page.getByRole('switch', { name: "Show what's new after updates" });
+  /** A launch on `v` after `from`, on an install that has not shown the sheet for any line yet. */
+  const fresh = (v: string, from: string) => page.evaluate(([next, last]) => {
+    (window as any).integration.forget();
+    (window as any).integration.launch(next, last);
+  }, [v, from] as const);
+  const running = (ids: string[]) => page.evaluate((x) => (window as any).integration.running(x), ids);
+  // What the launch decided can only be seen by waiting: it opens within one frame of the version arriving.
+  const settle = () => page.waitForTimeout(500);
   const focused = (testId: string) => page.evaluate((id) => document.activeElement?.getAttribute('data-testid') === id, testId);
 
   // The line with the most highlights, so the journey follows whatever the build bundles.
@@ -115,10 +128,10 @@ test("what's new", async ({ scenario, shot }) => {
     await theme('light'); await shot('sheet-expanded-light'); await theme('dark');
   });
 
-  await test.step("See every change opens this version's release page", async () => {
+  await test.step("See every change opens this line's section of the website's What's new page", async () => {
     await everyChange.click();
     expect(await lastOpened()).toBe(release);
-    expect(release).toContain(`/releases/tag/v${VERSION}`);
+    expect(release).toBe(`https://nekkoagent.com/whatsnew#${line}`);
   });
 
   await test.step('Escape closes it', async () => {
@@ -179,6 +192,103 @@ test("what's new", async ({ scenario, shot }) => {
     await launch(VERSION);
   });
 
+  // Opening by itself: the newest line the build bundles, after a version in the line before it.
+  const ordered = Object.keys(lines).sort((a, b) => {
+    const [x, y] = [a, b].map((l) => l.split('.').map(Number)) as [number[], number[]];
+    return x[0]! - y[0]! || x[1]! - y[1]!;
+  });
+  const NEWEST = ordered.at(-1)!;
+  const BUMPED = `${NEWEST}.1000`;
+  const BEFORE = `${ordered.at(-2)!}.1004`;
+
+  await test.step('after an update to a newer line it opens by itself, in place of the pill', async () => {
+    // The last step's launch has read its version: a launch still starting would record its own as the last one.
+    await expect(page.locator('.update-version')).toContainText(VERSION);
+    await fresh(BUMPED, BEFORE);
+    await expect(sheet).toHaveAttribute('data-whats-new', BUMPED);
+    await expect(pill).toHaveCount(0);
+    await expect(footerSwitch).toHaveAttribute('aria-checked', 'true');
+    await expect(more).toBeVisible();
+    await shot('auto-open-dark');
+    await theme('light'); await shot('auto-open-light'); await theme('dark');
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+  });
+
+  await test.step('not again once closed, on a restart or the same update seen again', async () => {
+    await relaunch();
+    await settle();
+    await expect(sheet).toHaveCount(0);
+    await launch(BUMPED, BEFORE);
+    await settle();
+    await expect(sheet).toHaveCount(0);
+    await expect(pill).toBeVisible();
+  });
+
+  await test.step('not after a nightly in the same line', async () => {
+    await fresh(`${NEWEST}.1005`, `${NEWEST}.1004`);
+    await settle();
+    await expect(sheet).toHaveCount(0);
+    await expect(pill).toBeVisible();
+  });
+
+  await test.step('not on a first install', async () => {
+    await page.evaluate(() => localStorage.removeItem('op_last_version'));
+    await page.evaluate(() => (window as any).integration.forget());
+    await relaunch();
+    await settle();
+    await expect(sheet).toHaveCount(0);
+  });
+
+  await test.step('it waits while an agent is running, then opens', async () => {
+    await running(['agent-1']);
+    await fresh(BUMPED, BEFORE);
+    await settle();
+    await expect(sheet).toHaveCount(0);
+    await expect(pill).toBeVisible();
+    await running([]);
+    await expect(sheet).toHaveAttribute('data-whats-new', BUMPED);
+    await expect(pill).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+  });
+
+  await test.step('still waiting when the app quits, it opens on the next launch', async () => {
+    await running(['agent-1']);
+    await fresh(BUMPED, BEFORE);
+    await settle();
+    await relaunch();
+    await settle();
+    await expect(sheet).toHaveCount(0);
+    await running([]);
+    await expect(sheet).toHaveAttribute('data-whats-new', BUMPED);
+    // The sheet takes focus once it is ready for keys.
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+  });
+
+  await test.step('the switch in Settings stops it, and is the footer switch', async () => {
+    await expect(settingsSwitch).toHaveAttribute('aria-checked', 'true');
+    await shot('settings-switch-dark');
+    await theme('light'); await shot('settings-switch-light'); await theme('dark');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await settingsSwitch.click();
+    await expect(settingsSwitch).toHaveAttribute('aria-checked', 'false');
+    await fresh(BUMPED, BEFORE);
+    await settle();
+    await expect(sheet).toHaveCount(0);
+
+    // The pill and the other ways in stay.
+    await expect(pill).toBeVisible();
+    await fromSettings.click();
+    await expect(footerSwitch).toHaveAttribute('aria-checked', 'false');
+    await footerSwitch.click();
+    await expect(footerSwitch).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await expect(settingsSwitch).toHaveAttribute('aria-checked', 'true');
+  });
+
   // A release with many changes: the list scrolls inside a sheet that does not grow.
   const longList = async (label: string) => {
     await fromSettings.click();
@@ -191,10 +301,12 @@ test("what's new", async ({ scenario, shot }) => {
     expect(await box(), 'the sheet keeps its size').toEqual(before);
     expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight), 'the list scrolls').toBe(true);
 
-    // By keyboard alone: Shift+Tab from the first control wraps to the footer, then back to the last row.
+    // By keyboard alone: Shift+Tab from the first control wraps to the footer, its switch, then back to the last row.
     await close.focus();
     await page.keyboard.press('Shift+Tab');
     await expect(everyChange).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(footerSwitch).toBeFocused();
     await page.keyboard.press('Shift+Tab');
     await expect(rows.last()).toBeFocused();
     await expect(rows.last()).toBeInViewport({ ratio: 0.99 });
@@ -217,6 +329,8 @@ test("what's new", async ({ scenario, shot }) => {
 
   await test.step('a long list scrolls inside the sheet', async () => {
     await page.evaluate((n) => (window as any).integration.long(n), LONG_COUNT);
+    // Its line counts as seen, so the sheet does not open by itself (covered above).
+    await page.evaluate((l) => (window as any).integration.seen(l), LONG_VERSION.split('.').slice(0, 2).join('.'));
     await launch(LONG_VERSION);
     await longList('desktop');
   });

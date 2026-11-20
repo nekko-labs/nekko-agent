@@ -1,9 +1,9 @@
-import { RELEASE_NOTES_URL } from '@nekko-agent/shared';
-import bundled from './whatsNew.json';
+import bundled from '../../../../docs/hub/whats-new.json';
 
 /**
- * The highlights behind the "What's new" sheet. They ship in the build
- * (`whatsNew.json`, keyed by MAJOR.MINOR), so the sheet needs no network.
+ * The highlights behind the "What's new" sheet. They come from the file the
+ * website's What's new page is built from (`docs/hub/whats-new.json`, keyed by
+ * MAJOR.MINOR) and ship in the build, so the sheet needs no network.
  * Pure helpers, kept out of the component so they test without a DOM.
  */
 
@@ -22,6 +22,7 @@ export interface Highlight {
 export const TOP_HIGHLIGHTS = 3;
 
 const REPO_URL = 'https://github.com/nekko-labs/nekko-agent';
+const PAGE_URL = 'https://nekkoagent.com/whatsnew';
 
 /** The line a build belongs to: `0.10.1004` is in `0.10`. */
 export function lineOf(version: string): string | null {
@@ -30,7 +31,7 @@ export function lineOf(version: string): string | null {
   return match ? `${match[1]}.${match[2]}` : null;
 }
 
-/** The file is written by a release step: read what is well formed, drop the rest. */
+/** The file is written by hand: read what is well formed, drop the rest (the site build is what rejects it). Unknown fields are ignored. */
 function readHighlight(raw: unknown): Highlight | null {
   if (typeof raw !== 'object' || raw === null) return null;
 
@@ -47,7 +48,8 @@ export function highlightsFor(version: string, data: unknown = bundled): Highlig
   const line = lineOf(version);
   if (!line || typeof data !== 'object' || data === null || !Object.hasOwn(data, line)) return [];
 
-  const list = (data as Record<string, unknown>)[line];
+  const entry = (data as Record<string, unknown>)[line];
+  const list = typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>).highlights : undefined;
   if (!Array.isArray(list)) return [];
 
   return list.map(readHighlight).filter((item): item is Highlight => item !== null);
@@ -58,13 +60,69 @@ export function splitHighlights(list: Highlight[]): { top: Highlight[]; rest: Hi
   return { top: list.slice(0, TOP_HIGHLIGHTS), rest: list.slice(TOP_HIGHLIGHTS) };
 }
 
+/** The running line's section of the website's What's new page; a development build has a line too. */
+export function whatsNewUrl(version: string): string {
+  const line = lineOf(version);
+
+  return line ? `${PAGE_URL}#${line}` : PAGE_URL;
+}
+
+const parts = (line: string) => line.split('.').map(Number) as [number, number];
+
+/** The newer of two MAJOR.MINOR lines: what "seen" settles on, so a move back never lowers it. */
+export function newerLine(a: string | null, b: string): string {
+  if (!a) return b;
+
+  const [x, y] = [parts(a), parts(b)];
+
+  return x[0] > y[0] || (x[0] === y[0] && x[1] > y[1]) ? a : b;
+}
+
+/** The line this install has already seen: the last one shown, else the last version's (an install from before this existed), else none (a first install). */
+export function seenLine(shown: string | null, lastVersion: string | null): string | null {
+  return shown ?? (lastVersion ? lineOf(lastVersion) : null);
+}
+
+export interface AutoOpenInput {
+  /** The running version. */
+  version: string;
+  /** `seenLine`: null on a first install. */
+  seen: string | null;
+  edition: 'desktop' | 'web';
+  /** "Show after updates". */
+  enabled: boolean;
+  /** The running line has highlights. */
+  hasHighlights: boolean;
+  /** An agent is running or waiting for an answer, or another dialog is open. */
+  busy: boolean;
+}
+
 /**
- * The GitHub release page for the running version. Every version the updater
- * installs is a release with its own page; a local build is not, and gets the
- * latest release instead.
+ * Whether the sheet opens by itself at launch: `open`, `wait` (it would, once
+ * nothing is busy) or `no`. Only a release or nightly on a newer line than the
+ * one seen opens it; a development build or the Local Web UI never does.
  */
-export function releaseUrl(version: string): string {
-  return /^\d+\.\d{2}\.\d{4}$/.test(version) ? `${REPO_URL}/releases/tag/v${version}` : RELEASE_NOTES_URL;
+export function autoOpen({ version, seen, edition, enabled, hasHighlights, busy }: AutoOpenInput): 'open' | 'wait' | 'no' {
+  const line = lineOf(version);
+  if (edition !== 'desktop' || !line || !/^\d+\.\d+\.\d+$/.test(version)) return 'no';
+  if (!seen || newerLine(seen, line) === seen) return 'no';
+  if (!enabled || !hasHighlights) return 'no';
+
+  return busy ? 'wait' : 'open';
+}
+
+const LS_SHOWN = 'nekko_whats_new_line';
+
+/** The line the sheet was last shown for on this install, or settled on without showing. */
+export function shownLine(): string | null {
+  try { return localStorage.getItem(LS_SHOWN); } catch { return null; }
+}
+
+/** Remember `line` as shown; a move to an older line never lowers it. */
+export function markShown(line: string | null): void {
+  if (!line) return;
+
+  try { localStorage.setItem(LS_SHOWN, newerLine(shownLine(), line)); } catch { /* storage is off: it may open again */ }
 }
 
 /** Open the sheet from anywhere: the update pill, Settings, About, the palette. */
