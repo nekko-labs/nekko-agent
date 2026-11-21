@@ -1,9 +1,17 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { updateChecks } from '@nekko-agent/shared';
 import { NekkoAvatar } from './Mascot.js';
 import { useUpdater } from './UpdateBanner.js';
-import { Group, Modal, Row } from './primitives/index.js';
+import { Group, Modal, Row, Toggle } from './primitives/index.js';
 import { GfCloseIcon, GfIcon, isGfIconName } from '../gentleface-icons.js';
-import { highlightsFor, prUrl, releaseUrl, splitHighlights, type Highlight } from '../whatsNew.js';
+import { useStore } from '../store.js';
+import { saveSettings } from '../settingsIndex.js';
+import { runningSessionIds } from '../liveRuns.js';
+import { localAgentStarts, onLocalAgentWorking } from '../workingAgents.js';
+import { autoOpen, highlightsFor, lineOf, markShown, newerLine, prUrl, seenLine, shownLine, splitHighlights, whatsNewUrl, type Highlight } from '../whatsNew.js';
+
+/** How often a launch that is waiting for quiet looks again, besides when a run ends. */
+const RECHECK_MS = 15_000;
 
 /** Every row has a glyph: the highlight's own, or this when it names none we bundle. */
 const FALLBACK_ICON = 'sparkles';
@@ -24,6 +32,34 @@ function HighlightRow({ item, rowRef, className }: { item: Highlight; rowRef?: R
       />
     </div>
   );
+}
+
+/** "Show after updates": the same setting as Settings > Updates. */
+function ShowAfterUpdates() {
+  const settings = useStore((s) => s.settings);
+  if (!settings) return null;
+
+  const on = updateChecks(settings).whatsNew;
+
+  return (
+    <label className="flex items-center gap-2 text-xs text-ink-soft">
+      <Toggle value={on} label="Show after updates" onChange={(v) => void saveSettings({ updates: { ...settings.updates, whatsNew: v } })} />
+      Show after updates
+    </label>
+  );
+}
+
+/** Whether opening now would interrupt: an agent running or waiting for an answer, or another dialog up. Unknown counts as busy. */
+async function busyNow(): Promise<boolean> {
+  if (useStore.getState().onboardingOpen || document.querySelector('[aria-modal="true"]')) return true;
+  if (localAgentStarts().length > 0 || runningSessionIds().length > 0) return true;
+
+  const [running, pending] = await Promise.all([
+    window.nekko.runningSessions().catch(() => null),
+    window.nekko.pendingInput().catch(() => null),
+  ]);
+
+  return !running || !pending || running.length > 0 || Object.keys(pending).length > 0;
 }
 
 function Sheet({ version, data, onClose }: { version: string; data?: unknown; onClose: () => void }) {
@@ -80,16 +116,18 @@ function Sheet({ version, data, onClose }: { version: string; data?: unknown; on
                 <HighlightRow key={`${item.pr}-${i}`} item={item} rowRef={i === 0 ? firstMore : undefined} className="whats-new-more" />
               ))}
             </Group>
+
+            {rest.length > 0 && !expanded && (
+              <button type="button" className="btn btn-ghost" onClick={showMore} data-whats-new-more>
+                Show more
+              </button>
+            )}
           </div>
         )}
 
         <footer className="flex min-h-14 shrink-0 items-center gap-2 px-5 pb-5 pt-2">
-          {rest.length > 0 && !expanded && (
-            <button type="button" className="btn btn-ghost -ml-3" onClick={showMore} data-whats-new-more>
-              Show more
-            </button>
-          )}
-          <button type="button" className="ml-auto text-xs text-accent hover:underline" onClick={() => void window.nekko.openPath(releaseUrl(version))} data-whats-new-all>
+          <ShowAfterUpdates />
+          <button type="button" className="ml-auto text-xs text-accent hover:underline" onClick={() => void window.nekko.openPath(whatsNewUrl(version))} data-whats-new-all>
             See every change ↗
           </button>
         </footer>
@@ -100,13 +138,20 @@ function Sheet({ version, data, onClose }: { version: string; data?: unknown; on
 
 /**
  * The "What's new" sheet: the few changes in this version worth knowing,
- * from the highlights bundled with the build, and a link to the full release
- * notes. A modal over whatever view is showing, opened with `openWhatsNew()`.
- * `data` replaces the bundled highlights (tests).
+ * from the highlights bundled with the build, and a link to the website's
+ * What's new page. A modal over whatever view is showing, opened with
+ * `openWhatsNew()`, and by itself once on the first launch on a newer line
+ * (`autoOpen`; spec/desktop/whats-new-sheet.md). `data` replaces the bundled
+ * highlights (tests).
  */
 export function WhatsNewSheet({ data }: { data?: unknown } = {}) {
   const [open, setOpen] = useState(false);
-  const version = useUpdater().app?.version;
+  const { app, previousVersion, dismissResult } = useUpdater();
+  const version = app?.version;
+  const settingsLoaded = useStore((s) => s.settings !== null);
+  // The pill goes when the sheet opens by itself: the latest `dismissResult`, whenever that is.
+  const dismiss = useRef(dismissResult);
+  dismiss.current = dismissResult;
 
   useEffect(() => {
     const show = () => setOpen(true);
@@ -114,6 +159,63 @@ export function WhatsNewSheet({ data }: { data?: unknown } = {}) {
 
     return () => window.removeEventListener('nekko:whats-new', show);
   }, []);
+
+  // However it opened, this line has now been shown.
+  useEffect(() => {
+    if (open && version) markShown(lineOf(version));
+  }, [open, version]);
+
+  // Once per launch: open by itself, wait for quiet, or settle the line as seen.
+  useEffect(() => {
+    if (!app || !settingsLoaded) return;
+
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopListening = () => {};
+    const line = lineOf(app.version);
+
+    const decide = async () => {
+      clearTimeout(timer);
+      // Read now, not at launch: the switch may change, or the sheet be opened by hand, while it waits.
+      const settings = useStore.getState().settings;
+      const seen = seenLine(shownLine(), previousVersion);
+      const input = {
+        version: app.version,
+        seen,
+        edition: app.edition,
+        enabled: settings ? updateChecks(settings).whatsNew : false,
+        hasHighlights: highlightsFor(app.version, data).length > 0,
+        busy: false,
+      };
+      let next = autoOpen(input);
+      if (next === 'open' && await busyNow()) next = 'wait';
+      if (!live) return;
+
+      if (next === 'wait') {
+        // Keep what was seen before this launch: the next launch has lost the old version, and still has to open it.
+        markShown(seen);
+        timer = setTimeout(() => void decide(), RECHECK_MS);
+        return;
+      }
+
+      stopListening();
+      if (next === 'open') {
+        setOpen(true);
+        dismiss.current();
+      } else if (line) {
+        markShown(newerLine(seen, line));
+      }
+    };
+
+    stopListening = onLocalAgentWorking((_, working) => { if (!working) void decide(); });
+    void decide();
+
+    return () => {
+      live = false;
+      clearTimeout(timer);
+      stopListening();
+    };
+  }, [app, previousVersion, settingsLoaded, data]);
 
   if (!open || !version) return null;
 

@@ -217,9 +217,11 @@ the top too (they offer no Auto, so no Fusion).
 
 ### See what's new in this version
 
-**What's new** lists the few changes in your version worth knowing about, each with the pull request that made it. **Show more** lists the rest, which scroll inside the sheet, and **See every change** opens the full release notes on GitHub. The list ships with the app, so it opens without a connection.
+**What's new** lists the few changes in your version worth knowing about, each with the pull request that made it. **Show more** lists the rest, which scroll inside the sheet, and **See every change** opens your version's section of the [What's new](https://nekkoagent.com/whatsnew) page on this site. The list ships with the app, so it opens without a connection.
 
 Open it from **Settings → Updates → What's new**, from **About Nekko Agent**, by typing "what's new" in the command palette (Ctrl/Cmd+K), or from the **What's new** pill in the title bar right after an update. The ✕ on that pill dismisses it without opening the list.
+
+It also opens by itself once, on the first launch after an update to a new release line (0.10 to 0.11; not for a nightly or patch build within a line). If an agent is working, it waits until none is. To stop that, turn off **Show after updates** at the bottom of the list, or **Settings → Updates → Show what's new after updates**; both are the same switch.
 
 ### Search everything (Ctrl/Cmd+K)
 

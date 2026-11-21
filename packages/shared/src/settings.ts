@@ -139,7 +139,8 @@ export interface CommandWallSetting {
  * The background refresh checks under Settings → Updates, one toggle each.
  * These are metadata refreshes only: a check may swap a provider's model list
  * or the skills shelf, never downloads or installs anything (app updates keep
- * their own download/install flow).
+ * their own download/install flow). `whatsNew` is not a check: it is whether
+ * the What's new sheet opens by itself after an update.
  */
 export interface UpdateCheckSettings {
   /** New app versions (desktop: GitHub releases; web: server version). */
@@ -148,19 +149,22 @@ export interface UpdateCheckSettings {
   modelLists?: boolean;
   /** Refresh the skills marketplace catalog. */
   skills?: boolean;
+  /** Open the What's new sheet once on the first launch on a newer line ("Show after updates"). */
+  whatsNew?: boolean;
 }
 
 /**
  * Resolve the effective per-check flags. `app` falls back to the legacy
  * `autoUpdate` field so existing installs keep their choice; `modelLists`
  * defaults on since it only queries providers the user already configured;
- * `skills` defaults off (opt-in network refresh).
+ * `skills` defaults off (opt-in network refresh); `whatsNew` defaults on.
  */
 export function updateChecks(s: AppSettings): Required<UpdateCheckSettings> {
   return {
     app: s.updates?.app ?? s.autoUpdate ?? false,
     modelLists: s.updates?.modelLists ?? true,
     skills: s.updates?.skills ?? false,
+    whatsNew: s.updates?.whatsNew ?? true,
   };
 }
 
