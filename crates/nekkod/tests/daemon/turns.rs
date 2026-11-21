@@ -351,6 +351,66 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     assert!(asked.ends_with("Explain the pineapple"), "{asked}");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn exact_model_guidance_follows_the_admitted_route_and_keeps_the_cache_prefix() {
+    let rig = turn_rig(
+        "exact-model-guidance",
+        json!({
+            "id": "s_scoped", "title": "Named", "workspaceId": "w1", "executionMode": "unified",
+            "messages": [], "createdAt": 1, "updatedAt": 1, "providerId": "other", "modelId": "other-model"
+        }),
+    );
+    let model = scripted_model(vec![say_text("one"), say_text("two"), say_text("three"), say_text("four")]).await;
+    let provider = |id| {
+        json!({
+            "id": id, "kind": "openai-compat", "label": id, "enabled": true,
+            "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+        })
+    };
+    write_settings(
+        &rig,
+        json!({
+            "providers": [provider("p1"), provider("other")],
+            "workspaces": [{"id": "w1", "name": "project", "path": rig.workspace.to_string_lossy()}],
+            "systemInstructions": "Include a summary.",
+            "promptProfiles": {
+                "providers": { "p1": "large" },
+                "models": { "p1::synthetic": "small" },
+                "modelInstructions": {
+                    "p1::synthetic": "Use numbered steps.",
+                    "other::other-model": "This text belongs to the saved route, not the admitted one."
+                }
+            }
+        }),
+    )
+    .await;
+    for (provider, model, text) in [
+        ("p1", "synthetic", "first"),
+        ("p1", "synthetic", "second"),
+        ("p1", "synthetic-v2", "third"),
+        ("other", "synthetic", "fourth"),
+    ] {
+        let opts = json!({"sessionId": "s_scoped", "providerId": provider, "modelId": model, "text": text});
+        let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+        assert_eq!((status, body), (200, Value::Null));
+    }
+    let requests = turn_requests(&model);
+    assert_eq!(requests.len(), 4);
+    for (i, request) in requests.iter().enumerate() {
+        let system = request["messages"][0]["content"].as_str().unwrap();
+        let profile = if i < 2 { nekko_context::PromptProfile::Small } else { nekko_context::PromptProfile::Large };
+        assert!(system.starts_with(&nekko_context::intro(profile)), "request {i} got the wrong sizing profile");
+        assert_eq!(system.matches("Use numbered steps.").count(), usize::from(i < 2));
+        assert!(!system.contains("This text belongs to the saved route"));
+        assert!(system.contains("Include a summary."));
+        assert!(system.contains("Always run the tests."));
+        assert!(system.contains("Server instructions for this user turn:"));
+    }
+    let first = requests[0]["messages"].as_array().unwrap();
+    let second = requests[1]["messages"].as_array().unwrap();
+    assert_eq!(first, &second[..first.len()], "unchanged overlay leaves the prior request prefix intact");
+}
+
 /// A model reply of `n` text chunks (`word0 word1 ...`), then a stop.
 fn slow_text(word: &str, n: usize) -> String {
     let mut chunks: Vec<Value> = (0..n)
