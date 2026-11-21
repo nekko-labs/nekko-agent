@@ -209,6 +209,15 @@ test('the highlights file is refused when an entry is incomplete or unsafe', () 
   for (const data of bad) assert.throws(() => parseWhatsNew(data), JSON.stringify(data));
 });
 
+test('a highlight may be marked major and tagged with a kind, and nothing else', () => {
+  const h = (over) => ({ title: 't', detail: 'd', pr: 1, authors: ['a'], ...over });
+  const ok = [{ major: true }, { major: false }, { kind: 'improvement' }, { kind: 'performance' }, { kind: 'fix' }, { major: false, kind: 'fix' }];
+  for (const over of ok) assert.equal(parseWhatsNew({ '0.10': line({ highlights: [h(over)] }) }).length, 1, JSON.stringify(over));
+
+  const bad = [{ major: 'yes' }, { major: 1 }, { major: null }, { kind: 'feature' }, { kind: '' }, { kind: 3 }, { kind: 'Fix' }];
+  for (const over of bad) assert.throws(() => parseWhatsNew({ '0.10': line({ highlights: [h(over)] }) }), JSON.stringify(over));
+});
+
 test('release lines are listed newest first', () => {
   const lines = parseWhatsNew({ '0.10': line(), '1.10': line({ tag: 'v1.10.1000' }), '0.11': line({ tag: 'v0.11.1000' }) });
   assert.deepEqual(lines.map((l) => l.line), ['1.10', '0.11', '0.10']);
@@ -297,6 +306,178 @@ test('highlights sit in two columns when there is room', () => {
   assert.match(html, /@media \(min-width: 900px\) \{[^}]*\.highlights \{[^}]*grid-template-columns: 1fr 1fr;/);
 });
 
+test('a release with no major highlight renders as it did before headliners', () => {
+  const lines = parseWhatsNew({
+    '0.9': line({
+      date: '2026-11-08',
+      tag: 'v0.9.5',
+      contributors: ['octo-cat', 'ada'],
+      highlights: [
+        { title: 'A thing', detail: 'What it does.', pr: 12, authors: ['octo-cat'] },
+        { title: 'B', detail: 'D.', pr: 13, authors: ['ada'], major: false, kind: 'fix' },
+      ],
+    }),
+  });
+  const html = whatsNewPage(lines, new Map(), () => 0);
+  const from = html.indexOf('      <section id="0.9"');
+  // Captured from the page before headliners existed: a major-free line keeps every byte.
+  assert.equal(
+    html.slice(from, html.indexOf('</section>', from) + 10),
+    '      <section id="0.9" aria-labelledby="release-0.9">\n        <header class="release-head">\n          <h2 id="release-0.9">0.9</h2>\n          <time datetime="2026-11-08">November 2026</time>\n        </header>\n        <p class="release-intro">One sentence.</p>\n        <ul class="highlights">\n          <li>\n            <h3>A thing</h3>\n            <p>What it does.</p>\n            <p class="shipped"><span class="by-faces"><span class="by-avatar" aria-hidden="true">OC</span></span><span>Shipped by <a class="by" href="https://github.com/octo-cat" rel="noopener">octo-cat</a> <span aria-hidden="true">·</span> <a href="https://github.com/nekko-labs/nekko-agent/pull/12" rel="noopener">#12</a></span></p>\n          </li>\n          <li>\n            <h3>B</h3>\n            <p>D.</p>\n            <p class="shipped"><span class="by-faces"><span class="by-avatar" aria-hidden="true">AD</span></span><span>Shipped by <a class="by" href="https://github.com/ada" rel="noopener">ada</a> <span aria-hidden="true">·</span> <a href="https://github.com/nekko-labs/nekko-agent/pull/13" rel="noopener">#13</a></span></p>\n          </li>\n        </ul>\n        <p class="everyone-who">Everyone who shipped 0.9</p>\n        <ul class="everyone">\n          <li><a class="by" href="https://github.com/ada" rel="noopener"><span class="by-avatar" aria-hidden="true">AD</span>ada</a></li>\n          <li><a class="by" href="https://github.com/octo-cat" rel="noopener"><span class="by-avatar" aria-hidden="true">OC</span>octo-cat</a></li>\n        </ul>\n        <p class="release-all"><a href="https://github.com/nekko-labs/nekko-agent/releases/tag/v0.9.5" rel="noopener">See every change in 0.9 on GitHub ↗</a></p>\n      </section>',
+  );
+  assert.doesNotMatch(html, /class="headliners"|More in 0\.9/);
+});
+
+test('a release with major highlights puts its people first, then the headliners, then the rest grouped by kind', () => {
+  const lines = parseWhatsNew({
+    '0.10': line({
+      contributors: ['ada', 'bob'],
+      highlights: [
+        { title: 'Small one', detail: 'd', pr: 1, authors: ['ada'], kind: 'improvement' },
+        { title: 'Big one', detail: 'Big detail.', pr: 2, authors: ['bob'], major: true },
+        { title: 'Faster', detail: 'd', pr: 3, authors: ['ada'], kind: 'performance' },
+        { title: 'Second big', detail: 'd', pr: 4, authors: ['ada'], major: true },
+        { title: 'Untagged', detail: 'd', pr: 5, authors: ['bob'] },
+        { title: 'Fixed it', detail: 'd', pr: 6, authors: ['bob'], kind: 'fix' },
+        { title: 'Another small', detail: 'd', pr: 7, authors: ['ada'], kind: 'improvement' },
+      ],
+    }),
+  });
+  const html = whatsNewPage(lines, new Map(), () => 0);
+  const section = html.slice(html.indexOf('<section id="0.10"'), html.indexOf('</section>'));
+  const at = (s) => {
+    const i = section.indexOf(s);
+    assert.ok(i >= 0, s);
+    return i;
+  };
+
+  // Intro, everyone who shipped, the headliners card, the one-liners, the GitHub link.
+  const order = ['class="release-intro"', 'class="everyone-who"', 'class="headliners"', 'class="more-all"', 'class="release-all"'].map(at);
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.doesNotMatch(section, /<ul class="highlights">/);
+
+  // The card: the pixel Nekko peeking over with the word HEADLINERS, then the major highlights in file order, the first one leading.
+  const card = section.slice(at('class="headliners"'), at('class="more-all"'));
+  assert.match(card, /<svg class="headliners-nekko"[^>]*aria-hidden="true"/);
+  assert.match(card, /<\/svg><span class="headliners-word">Headliners<\/span>/);
+  assert.doesNotMatch(card, /headliners-pill/);
+  assert.deepEqual([...card.matchAll(/<h3>([^<]+)<\/h3>/g)].map((m) => m[1]), ['Big one', 'Second big']);
+  assert.ok(card.indexOf('class="headliner-lead"') < card.indexOf('Big one'));
+  assert.ok(card.includes('Big detail.'));
+  assert.ok(card.includes('href="https://github.com/bob"') && card.includes('/pull/2"'));
+
+  // The rest, grouped under one heading per kind (Improvements, Performance, Fixes, then the untagged),
+  // file order inside each group, and no tag repeated on the rows.
+  const more = section.slice(at('class="more-all"'), at('class="release-all"'));
+  const groups = [...more.matchAll(/<h3 class="more-group">([^<]+)<\/h3>\s*<ul class="more">([\s\S]*?)<\/ul>/g)].map((m) => [
+    m[1],
+    [...m[2].matchAll(/<span class="more-title">([^<]+)<\/span>/g)].map((t) => t[1]),
+  ]);
+  assert.deepEqual(groups, [
+    ['Improvements', ['Small one', 'Another small']],
+    ['Performance', ['Faster']],
+    ['Fixes', ['Fixed it']],
+    ['Also in 0.10', ['Untagged']],
+  ]);
+  assert.doesNotMatch(more, /more-kind|More in 0\.10/);
+  for (const pr of [1, 3, 5, 6, 7]) assert.ok(more.includes(`href="https://github.com/nekko-labs/nekko-agent/pull/${pr}"`), `#${pr}`);
+  assert.doesNotMatch(more, /Big one|Second big/);
+
+  // Only the kinds a release has get a heading.
+  const fixesOnly = whatsNewPage(parseWhatsNew({ '0.10': line({ highlights: [
+    { title: 'Big', detail: 'd', pr: 1, authors: ['a'], major: true },
+    { title: 'F', detail: 'd', pr: 2, authors: ['a'], kind: 'fix' },
+  ] }) }));
+  assert.deepEqual([...fixesOnly.matchAll(/<h3 class="more-group">([^<]+)<\/h3>/g)].map((m) => m[1]), ['Fixes']);
+
+  // All major: no one-liners.
+  const allMajor = whatsNewPage(parseWhatsNew({ '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['a'], major: true }] }) }));
+  assert.match(allMajor, /class="headliners"/);
+  assert.doesNotMatch(allMajor, /class="more-all"|class="more-group"/);
+});
+
+test('every one-liner reads title, authors (faces first), then the pull request link', () => {
+  const lines = parseWhatsNew({
+    '0.10': line({
+      contributors: ['ada', 'bob'],
+      highlights: [
+        { title: 'Big one', detail: 'd', pr: 1, authors: ['bob'], major: true },
+        { title: 'Solo', detail: 'd', pr: 2, authors: ['ada'], kind: 'fix' },
+        { title: 'Pair', detail: 'd', pr: 3, authors: ['ada', 'bob'] },
+      ],
+    }),
+  });
+  const html = whatsNewPage(lines, new Map([['ada', '/contributors/ada-0123456789abcdef.png']]), () => 0);
+  const more = html.slice(html.indexOf('class="more-all"'), html.indexOf('class="release-all"'));
+  const items = [...more.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((m) => m[1]);
+  assert.equal(items.length, 2);
+  for (const [item, pr, authors] of [[items[0], 2, ['ada']], [items[1], 3, ['ada', 'bob']]]) {
+    const by = item.indexOf('class="more-by"');
+    const link = item.indexOf(`/pull/${pr}"`);
+    assert.ok(item.indexOf('class="more-title"') < by && by < link, `#${pr}: title, authors, link`);
+    assert.ok(item.slice(link - 120, link).includes('class="more-pr"'), `#${pr}: link in its own column`);
+    const credit = item.slice(by, link);
+    assert.equal([...credit.matchAll(/class="by-avatar"/g)].length, authors.length, `#${pr}: one face each`);
+    assert.deepEqual([...credit.matchAll(/<a class="by" href="https:\/\/github.com\/([^"]+)" rel="noopener">([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]), authors.map((a) => [a, a]));
+    assert.ok(credit.indexOf('class="by-faces"') < credit.indexOf('<a class="by"'), `#${pr}: faces first`);
+  }
+  assert.match(items[1], /<\/a>, <a class="by"/);
+  assert.match(items[0], /src="\/contributors\/ada-0123456789abcdef\.png"[^>]*width="20" height="20"/);
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  assert.match(css, /\.more \.by-avatar \{ width: 20px; height: 20px;/);
+});
+
+test('one-liners line up in three columns from 560px, the pull request last, and stack below that', () => {
+  const html = build().get('whatsnew.html');
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  const wide = css.match(/@media \(min-width: 560px\) \{([^@]*)\}\n/)?.[1] ?? '';
+  // One grid for every group, so the author and pull request columns line up across all of them.
+  assert.match(wide, /\.more-all \{[^}]*display: grid; grid-template-columns: minmax\(0, 1fr\) max-content max-content;/);
+  assert.match(wide, /\.more-all > \.more, \.more li \{[^}]*grid-column: 1 \/ -1; display: grid; grid-template-columns: subgrid;/);
+  assert.match(wide, /\.more-dot \{ display: none; \}/);
+  assert.match(css, /\.more-pr \{[^}]*font-variant-numeric: tabular-nums;/);
+  assert.doesNotMatch(css, /\.more \{[^}]*border-top/, 'no hairline');
+  assert.doesNotMatch(css, /more-kind|more-in \{/);
+});
+
+test('a headliner left alone on the last two-column row takes the full width', () => {
+  const html = build().get('whatsnew.html');
+  // The lead spans the row; after it they pair up, so an even-numbered last item has no partner.
+  assert.match(html, /@media \(min-width: 900px\) \{[^\n]*\.headliner-lead, \.headliner-list > li:last-child:nth-child\(even\) \{ grid-column: 1 \/ -1; \}/);
+});
+
+test('the headliners card is a soft plum panel, in tokens, and holds still', () => {
+  const html = build().get('whatsnew.html');
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  const rule = (sel) => {
+    const at = css.indexOf(`${sel} {`);
+    return at === -1 ? '' : css.slice(at, css.indexOf('}', at));
+  };
+  // Option A: a filled panel, no sticker border or offset shadow; White uses the home page's peach band, Dark the plum tint.
+  assert.match(rule('.headliners'), /background: var\(--band-peach\);/);
+  assert.match(rule('.headliners'), /border-radius: 18px;/);
+  assert.doesNotMatch(rule('.headliners'), /border:|box-shadow/);
+  assert.match(rule(":root[data-theme='dark'] .headliners"), /background: var\(--peach-soft\);/);
+  assert.match(rule('.headliners-word'), /font: 700 24px\/1 var\(--led\);/);
+  assert.doesNotMatch(css, /headliners-pill/);
+  const added = css.slice(css.indexOf('.headliners'));
+  assert.doesNotMatch(added, /#[0-9a-f]{3,8}\b/i, 'tokens only');
+  assert.doesNotMatch(added, /animation|transition/, 'no motion');
+  // Every shipped line has the headliners Kai picked (2026-11-20), and every other highlight has a kind.
+  const picked = {
+    '0.10': ['Search everything with Ctrl/Cmd+K', 'Plan & billing in Settings', 'Guided Google Gemini setup'],
+    '0.9': ['Nekko and Indigo themes', 'Asks before data leaves'],
+    '0.8': ['The Nekko engine', 'One board for every chat', 'Android app'],
+    '0.7': ['Sign in with your Claude subscription', 'Sign in with your ChatGPT subscription', 'Run models locally'],
+  };
+  const shipped = loadWhatsNew();
+  assert.deepEqual(shipped.map((l) => l.line), Object.keys(picked));
+  for (const l of shipped) {
+    assert.deepEqual(l.highlights.filter((h) => h.major).map((h) => h.title), picked[l.line], l.line);
+    for (const h of l.highlights.filter((h) => !h.major)) assert.ok(h.kind, `${l.line}: ${h.title} has a kind`);
+  }
+});
+
 test('each credit leads with the avatars, then says who shipped it', () => {
   const html = whatsNewPage(parseWhatsNew({ '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['one', 'two'] }] }) }));
   const credit = html.slice(html.indexOf('<p class="shipped">'), html.indexOf('</p>', html.indexOf('<p class="shipped">')));
@@ -351,6 +532,30 @@ test('avatars come only from the contributor cache, with initials when one is mi
   assert.ok(html.includes('src="/contributors/Octo-Cat-0123456789abcdef.png"'));
   assert.ok(html.includes('>OC<') && html.includes('>NO<'), 'initials stay under the image and stand in when it is missing');
   assert.doesNotMatch(whatsNewPage(lines), /<img class="by-img"/);
+});
+
+test('cached avatars are 28px on headliners, plain highlights and the people row, 20px on one-liners', () => {
+  const highlights = [
+    { title: 'Big one', detail: 'd', pr: 1, authors: ['ada', 'bob'], major: true },
+    { title: 'Pair', detail: 'd', pr: 2, authors: ['ada', 'bob'] },
+  ];
+  const lines = parseWhatsNew({
+    '0.10': line({ contributors: ['ada', 'bob'], highlights }),
+    '0.9': line({ date: '2026-11-08', tag: 'v0.9.5', contributors: ['ada', 'bob'], highlights: [highlights[1]] }),
+  });
+  const avatars = new Map([['ada', '/contributors/ada-0123456789abcdef.png'], ['bob', '/contributors/bob-0123456789abcdef.png']]);
+  const html = whatsNewPage(lines, avatars, () => 0);
+
+  const sizes = (part) => [...part.matchAll(/<img class="by-img"[^>]*width="(\d+)" height="(\d+)"/g)].map((m) => `${m[1]}x${m[2]}`);
+  const shipped = [...html.matchAll(/<p class="shipped">[\s\S]*?<\/p>/g)].map((m) => m[0]);
+  const oneLiners = [...html.matchAll(/<span class="more-by">[\s\S]*?<\/span><\/span>/g)].map((m) => m[0]);
+  const people = [...html.matchAll(/<ul class="everyone">[\s\S]*?<\/ul>/g)].map((m) => m[0]);
+
+  assert.equal(shipped.length, 2, 'one headliner in 0.10, one plain highlight in 0.9');
+  for (const credit of shipped) assert.deepEqual(sizes(credit), ['28x28', '28x28']);
+  assert.equal(oneLiners.length, 1);
+  assert.deepEqual(sizes(oneLiners[0]), ['20x20', '20x20']);
+  for (const row of people) assert.deepEqual(sizes(row), ['28x28', '28x28']);
 });
 
 test('text from the highlights file is escaped on the page', () => {
