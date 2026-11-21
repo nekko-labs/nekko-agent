@@ -517,7 +517,7 @@ export function ModelPicker({
         aria-expanded={open}
         title={unavailableModel ? `${unavailableModel} is not available right now. Pick a model again.` : needsChoice ? 'This chat has no model yet - pick one' : `Model: ${currentName} · ${providerLabel}`}
       >
-        <span className={`min-w-0 ${placeholder && !modelId ? 'whitespace-nowrap' : 'whitespace-normal'} break-words text-left`} data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : placeholder && !modelId ? placeholder : currentName}</span>
+        <span className="min-w-0 truncate text-left" data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : placeholder && !modelId ? placeholder : currentName}</span>
         {chipAccount && !unavailableModel && !needsChoice && <span className="min-w-0 max-w-[96px] shrink truncate text-ink-faint" data-model-chip-account>{chipAccount}</span>}
         <span className="ctl-caret shrink-0">▾</span>
       </button>}

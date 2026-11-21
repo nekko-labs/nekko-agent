@@ -131,9 +131,11 @@ describe('model chip name priority', () => {
     expect(out).toContain('x-ai/grok-5');
     expect(out).not.toContain('No model');
   });
-  it('wraps the complete model name rather than ellipsizing it for the account label', () => {
+  it('keeps the model name on one line and puts the complete name in the tooltip', () => {
     const out = renderToStaticMarkup(<ModelPicker open={false} providers={[{id:'p',kind:'anthropic',label:'Claude API very long account',enabled:true,baseUrl:''}]} providerId="p" modelId="m" models={[{id:'m',providerId:'p',name:'Claude Opus 4.6'}]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
-    expect(out).toContain('whitespace-normal break-words text-left');
+    expect(out).toContain('min-w-0 truncate text-left');
+    expect(out).not.toContain('whitespace-normal');
+    expect(out).toContain('title="Model: Claude Opus 4.6');
     expect(out).toContain('data-model-chip-name="true">Claude Opus 4.6</span>');
     expect(out).toContain('ctl-caret shrink-0');
     expect(out).not.toContain('ctl-menu-label');
