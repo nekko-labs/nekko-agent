@@ -126,6 +126,12 @@ describe('subscription model version labels', () => {
 });
 
 describe('model chip name priority', () => {
+  it('drops the maker from the chip, so it reads the model and version only', () => {
+    const chip = (name: string) => renderToStaticMarkup(<ModelPicker open={false} providers={[{ id: 'p', kind: 'anthropic', label: 'Claude', enabled: true, baseUrl: '' }]} providerId="p" modelId="m" models={[{ id: 'm', providerId: 'p', name }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+    expect(chip('Claude Opus 5.5')).toContain('data-model-chip-name="true">Opus 5.5</span>');
+    expect(chip('Claude Opus 5.5')).toContain('title="Model: Claude Opus 5.5');
+    expect(chip('GPT-5.1')).toContain('data-model-chip-name="true">GPT-5.1</span>');
+  });
   it('names a saved model its list has not delivered yet instead of No model', () => {
     const out = renderToStaticMarkup(<ModelPicker open={false} providers={[{ id: 'or', kind: 'openrouter', label: 'OpenRouter', enabled: true, baseUrl: 'http://localhost' }]} providerId="or" modelId="x-ai/grok-5" models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
     expect(out).toContain('x-ai/grok-5');
@@ -136,7 +142,7 @@ describe('model chip name priority', () => {
     expect(out).toContain('min-w-0 truncate text-left');
     expect(out).not.toContain('whitespace-normal');
     expect(out).toContain('title="Model: Claude Opus 4.6');
-    expect(out).toContain('data-model-chip-name="true">Claude Opus 4.6</span>');
+    expect(out).toContain('data-model-chip-name="true">Opus 4.6</span>');
     expect(out).toContain('ctl-caret shrink-0');
     expect(out).not.toContain('ctl-menu-label');
   });
