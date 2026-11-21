@@ -440,6 +440,12 @@ test('one-liners line up in three columns from 560px, the pull request last, and
   assert.doesNotMatch(css, /more-kind|more-in \{/);
 });
 
+test('a headliner left alone on the last two-column row takes the full width', () => {
+  const html = build().get('whatsnew.html');
+  // The lead spans the row; after it they pair up, so an even-numbered last item has no partner.
+  assert.match(html, /@media \(min-width: 900px\) \{[^\n]*\.headliner-lead, \.headliner-list > li:last-child:nth-child\(even\) \{ grid-column: 1 \/ -1; \}/);
+});
+
 test('the headliners card is a soft plum panel, in tokens, and holds still', () => {
   const html = build().get('whatsnew.html');
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
@@ -457,11 +463,18 @@ test('the headliners card is a soft plum panel, in tokens, and holds still', () 
   const added = css.slice(css.indexOf('.headliners'));
   assert.doesNotMatch(added, /#[0-9a-f]{3,8}\b/i, 'tokens only');
   assert.doesNotMatch(added, /animation|transition/, 'no motion');
-  // The shipped 0.10 has headliners and one-liners; the older lines have neither.
-  for (const l of loadWhatsNew()) {
-    const majors = l.highlights.filter((h) => h.major).length;
-    if (l.line === '0.10') assert.ok(majors >= 1 && majors < l.highlights.length, '0.10');
-    else assert.equal(majors, 0, l.line);
+  // Every shipped line has the headliners Kai picked (2026-11-20), and every other highlight has a kind.
+  const picked = {
+    '0.10': ['Search everything with Ctrl/Cmd+K', 'Plan & billing in Settings', 'Guided Google Gemini setup'],
+    '0.9': ['Nekko and Indigo themes', 'Asks before data leaves'],
+    '0.8': ['The Nekko engine', 'One board for every chat', 'Android app'],
+    '0.7': ['Sign in with your Claude subscription', 'Sign in with your ChatGPT subscription', 'Run models locally'],
+  };
+  const shipped = loadWhatsNew();
+  assert.deepEqual(shipped.map((l) => l.line), Object.keys(picked));
+  for (const l of shipped) {
+    assert.deepEqual(l.highlights.filter((h) => h.major).map((h) => h.title), picked[l.line], l.line);
+    for (const h of l.highlights.filter((h) => !h.major)) assert.ok(h.kind, `${l.line}: ${h.title} has a kind`);
   }
 });
 

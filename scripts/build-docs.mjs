@@ -594,7 +594,7 @@ ${majors.length ? headlined(l, majors) : plain(l)}
       .headliner-list p { margin: 0; }
       .headliner-list .shipped { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; }
       .legal .headliner-lead h3 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
-      @media (min-width: 900px) { .headliner-list { grid-template-columns: 1fr 1fr; gap: 28px 32px; } .headliner-lead { grid-column: 1 / -1; } }
+      @media (min-width: 900px) { .headliner-list { grid-template-columns: 1fr 1fr; gap: 28px 32px; } .headliner-lead, .headliner-list > li:last-child:nth-child(even) { grid-column: 1 / -1; } }
       @media (max-width: 560px) { .headliners { padding: 34px 20px 24px; } .legal .headliners-tab { left: 16px; } }
       /* The other highlights, one heading per kind. Narrow: the title, then who shipped it and the pull request under it.
          From 560px: one grid for every group (title, author, pull request), so the columns line up down the page. */
