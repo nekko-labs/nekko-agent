@@ -110,3 +110,24 @@ pub fn pick(models: &[Value], prompt: &str) -> Option<Value> {
     let chosen = if want_strong { ranked.first() } else { ranked.iter().find(|r| r.1 >= 2).or(ranked.first()) };
     chosen.map(|(m, _)| m.get("id").cloned().unwrap_or(Value::Null))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    // The nekkod builder stage compiles this crate, so every file it include_str!s
+    // from outside crates/ must be copied into that stage of the Dockerfile.
+    #[test]
+    fn nekkod_stage_copies_the_tier_rules() {
+        let dockerfile = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Dockerfile");
+        let text = std::fs::read_to_string(&dockerfile).expect("read Dockerfile");
+        let stage = text
+            .split("\nFROM ")
+            .find(|s| s.contains("AS nekkod"))
+            .expect("nekkod stage in Dockerfile");
+        assert!(
+            stage.contains("COPY packages/shared/src/model-tiers.json"),
+            "nekkod stage does not copy packages/shared/src/model-tiers.json"
+        );
+    }
+}
