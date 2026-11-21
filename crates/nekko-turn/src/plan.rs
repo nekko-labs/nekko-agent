@@ -79,6 +79,16 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
         .filter(|t| !disabled.contains(name(t)))
         .filter(|t| !offline || tool_allowed_offline(name(t)))
         .collect();
+    if session.get("orchestrate") == Some(&Value::Bool(true))
+        && !incognito
+        && let Some(spawn) = tools.iter_mut().find(|t| name(t) == "spawn_agent")
+    {
+        spawn["parameters"]["properties"]["capability"] = serde_json::json!({
+            "type": "string",
+            "enum": ["small", "medium", "large"],
+            "description": "Optional worker capability. Omit provider_id and model_id when using it. Saved routing choices take priority."
+        });
+    }
     tools.push(c.update_plan.clone());
     if session.get("titleAuto") != Some(&Value::Bool(false)) && !parent {
         tools.push(c.set_chat_title.clone());
@@ -508,6 +518,25 @@ mod tests {
 
     fn names(input: serde_json::Value) -> Vec<String> {
         turn_tools(&input).iter().map(|t| name(t).to_string()).collect()
+    }
+
+    #[test]
+    fn spawn_capability_schema_is_optional_and_scoped_to_orchestrate() {
+        let spawn = |input| turn_tools(&input).into_iter().find(|t| name(t) == "spawn_agent");
+        let plain = spawn(serde_json::json!({})).unwrap();
+        assert!(plain["parameters"]["properties"].get("capability").is_none());
+        for flag in [serde_json::json!(false), serde_json::json!("true")] {
+            assert_eq!(spawn(serde_json::json!({"session":{"orchestrate":flag}})), Some(plain.clone()));
+        }
+        let mut offered = spawn(serde_json::json!({"session":{"orchestrate":true}})).unwrap();
+        let capability = offered["parameters"]["properties"].as_object_mut().unwrap().remove("capability").unwrap();
+        assert_eq!(capability["enum"], serde_json::json!(["small", "medium", "large"]));
+        assert_eq!(offered, plain, "nothing else about the spawn tool changes");
+        assert!(spawn(serde_json::json!({"session":{"orchestrate":true}, "noTools":true})).is_none());
+        assert!(spawn(serde_json::json!({"session":{"orchestrate":true}, "offline":true})).is_none());
+        assert!(
+            spawn(serde_json::json!({"session":{"orchestrate":true}, "orchestration":{"strategy":"solo"}})).is_none()
+        );
     }
 
     #[test]

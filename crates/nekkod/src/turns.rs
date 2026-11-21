@@ -36,9 +36,10 @@ use crate::chat_client::{ProviderClient, ShieldedClient};
 use crate::decide::DecideService;
 use crate::hub::Hub;
 use crate::mcp::Mcp;
+use crate::orchestrate_state::{self, SpawnOutcome};
 use nekko_agent::{ProviderConfig, ProviderKind, create_provider};
 use nekko_js as js;
-use nekko_loop::{Cancel, RunOptions, Steering, ToolRunner, run_agent};
+use nekko_loop::{Cancel, ReplyOutcome, RunOptions, Steering, ToolRunner, run_agent};
 use nekko_store::SessionStore;
 use nekko_tools::{ChangeTracker, CommandLog, Processes, ToolCall, ToolContext, approver_fn, is_ported};
 use nekko_turn as turn;
@@ -320,6 +321,7 @@ enum Out {
 
 /// A running turn, as the routes that reach into it see it.
 struct Shared {
+    admitted: bool,
     session_id: String,
     cancel: Cancel,
     steering: Steering,
@@ -337,6 +339,8 @@ struct Shared {
     /// The message of the last `error` event the turn sent, for a parent that
     /// drives it as a sub-agent (the TS route reads it off the events).
     last_error: Arc<Mutex<Option<String>>>,
+    /// Reply evidence for an admitted Orchestrate worker, not a public turn field.
+    worker_reply: Mutex<Option<ReplyOutcome>>,
     /// A workflow run's chat (`unattended`): nobody is there to answer.
     unattended: Unattended,
     /// The turn is under way: a Claude Agent turn only once it has the
@@ -369,8 +373,8 @@ impl Unattended {
     }
 }
 
-/// How a launched turn ended: its summary and the last error it reported.
-pub(crate) type Ended = oneshot::Receiver<(Value, Option<String>)>;
+/// How a launched turn ended: summary, last error, and scoped reply evidence.
+pub(crate) type Ended = oneshot::Receiver<(Value, Option<String>, Option<ReplyOutcome>)>;
 
 /// Note an `error` event's message.
 fn note_error(slot: &Mutex<Option<String>>, event: &Value) {
@@ -998,14 +1002,15 @@ impl Turns {
 
     /// `chat:turn`: start driving a turn.
     pub fn start(self: &Arc<Self>, hub: Hub, spec: Value) -> Result<Value, String> {
-        self.launch(hub, spec).map(|_| json!({ "started": true }))
+        // chat:turn accepts caller-built specs, not admissions owned here.
+        self.launch_turn(hub, spec, false, false).map(|_| json!({ "started": true }))
     }
 
-    /// Start a turn and hear how it ended (its summary, after what follows
-    /// it here, and the last error it reported), with its id: a `spawn_agent`
-    /// child the parent turn waits on.
+    /// Start an admitted turn and hear how it ended (its summary, after what
+    /// follows it here, and the last error it reported), with its id: a
+    /// `spawn_agent` child the parent turn waits on.
     pub(crate) fn launch(self: &Arc<Self>, hub: Hub, spec: Value) -> Result<(String, Ended), String> {
-        self.launch_turn(hub, spec, false)
+        self.launch_turn(hub, spec, false, true)
     }
 
     /// A turn for the work a chat's Claude Code child started on its own
@@ -1024,10 +1029,16 @@ impl Turns {
             opts.retain(|k, _| ["sessionId", "providerId", "modelId"].contains(&k.as_str()));
             opts.insert("text".into(), json!(""));
         }
-        self.launch_turn(hub, spec, true).is_ok()
+        self.launch_turn(hub, spec, true, true).is_ok()
     }
 
-    fn launch_turn(self: &Arc<Self>, hub: Hub, spec: Value, wake: bool) -> Result<(String, Ended), String> {
+    fn launch_turn(
+        self: &Arc<Self>,
+        hub: Hub,
+        spec: Value,
+        wake: bool,
+        admitted: bool,
+    ) -> Result<(String, Ended), String> {
         let store = self.store.clone();
         let turn_id = str_at(&spec, "turnId").ok_or("chat:turn needs a turnId")?.to_string();
         let opts = spec.get("opts").cloned().ok_or("chat:turn needs the send options")?;
@@ -1039,6 +1050,7 @@ impl Turns {
         let claude_code = spec.pointer("/facts/provider/kind").and_then(Value::as_str) == Some("claude-code");
         let (tx, rx) = mpsc::unbounded_channel();
         let shared = Arc::new(Shared {
+            admitted,
             session_id,
             cancel: Cancel::default(),
             steering: Arc::default(),
@@ -1046,6 +1058,7 @@ impl Turns {
             latest: Arc::default(),
             default_mode: spec.pointer("/settings/defaultChatMode").and_then(Value::as_str).map(str::to_string),
             last_error: Arc::default(),
+            worker_reply: Mutex::default(),
             unattended: Unattended::default(),
             active: std::sync::atomic::AtomicBool::new(!claude_code),
             turn_id: turn_id.clone(),
@@ -1085,7 +1098,7 @@ impl Turns {
             // The chat's agent terminal stops showing a running command.
             me.agent_logs.finish(&shared.session_id);
             me.after_turn_hooks(&store, &spec, &summary);
-            let _ = ended_tx.send((summary, lock(&shared.last_error).clone()));
+            let _ = ended_tx.send((summary, lock(&shared.last_error).clone(), *lock(&shared.worker_reply)));
         });
         Ok((id, ended_rx))
     }
@@ -1343,6 +1356,33 @@ impl Turns {
             "noTools": js::truthy(opts.get("noTools")),
         });
         let mut tools = turn::turn_tools(&tool_input);
+        let role = if shared.admitted
+            && !sandbox
+            && !claude_code
+            && !crate::connections::offline(&loaded)
+            && self.dispatch.get().is_some()
+            && (loaded.get("orchestrate") == Some(&Value::Bool(true))
+                || facts.get(orchestrate_state::WORKER_FACT) == Some(&Value::Bool(true)))
+        {
+            // Admission sends only a subset of settings. Read the same exact
+            // capability overrides that the worker router uses, without copying
+            // the live settings or passing them into the prompt.
+            let st = self.settings.clone();
+            let saved = tokio::task::spawn_blocking(move || st.shared()).await.ok();
+            let tiers = saved.as_ref().and_then(|s| s.pointer("/fusion/modelTiers"));
+            orchestrate_state::turn_role(&store, &loaded, opts, facts, settings, &tools, tiers).await
+        } else {
+            None
+        };
+        let worker = shared.admitted && facts.get(orchestrate_state::WORKER_FACT) == Some(&Value::Bool(true));
+        if worker {
+            tools.retain(|t| !matches!(turn::catalog::name(t), "spawn_agent" | "delegation_targets"));
+        } else if role.is_none()
+            && let Some(spawn) = tools.iter_mut().find(|t| turn::catalog::name(t) == "spawn_agent")
+            && let Some(properties) = spawn.pointer_mut("/parameters/properties").and_then(Value::as_object_mut)
+        {
+            properties.remove("capability");
+        }
         // A sandbox turn: only the container's tools, the copied folders as
         // `folder-N`, and no host context (attachments, guidelines, memory,
         // connectors, the index), as `admitTurn` and `sendChat` compose it.
@@ -1393,8 +1433,14 @@ impl Turns {
             .unwrap_or_default();
         // The prompt's tool-specific instructions follow what the chat can do,
         // so a tool behind `run_code` keeps them.
-        let prompt_tools: Vec<&Value> = tools.iter().chain(code_mode.iter().flat_map(|c| c.wrapped.iter())).collect();
-        let system = turn::turn_system_prompt(&json!({
+        let prompt_tools: Vec<&Value> = tools
+            .iter()
+            .chain(code_mode.iter().flat_map(|c| c.wrapped.iter()))
+            // The coordinator replaces the legacy delegation hint, which can
+            // describe concurrent execution and interpolate routing settings.
+            .filter(|t| role.is_none() || turn::catalog::name(t) != "spawn_agent")
+            .collect();
+        let mut system = turn::turn_system_prompt(&json!({
             "workspaces": workspaces,
             "tools": prompt_tools,
             "settings": settings,
@@ -1406,6 +1452,13 @@ impl Turns {
             "workMode": loaded.get("workMode").cloned().unwrap_or(Value::Null),
             "promptProfile": facts.pointer("/promptProfile/profile").cloned().unwrap_or(Value::Null),
         }));
+
+        let role_guard = role.as_ref().map(|role| (role.worker, role.projected_children.clone()));
+        let dynamic_role = role.map(|role| {
+            system.push_str("\n\n");
+            system.push_str(&role.instruction);
+            role.context
+        });
 
         if shared.cancel.is_cancelled() {
             return json!({ "early": true });
@@ -1419,6 +1472,18 @@ impl Turns {
             turn::apply_turn_input(&mut session_value, opts, nekko_js::now_ms());
         }
         keep_turn_context(&mut session_value, messages_before, parts);
+        // Attach fresh role data to this request's user message only. A spawn
+        // resume has no new input; use its latest user message for this run.
+        let role_context = dynamic_role.and_then(|data| {
+            let messages = session_value["messages"].as_array()?;
+            let relevant = if js::truthy(opts.get("resume")) || js::truthy(opts.get("regenerate")) {
+                messages.as_slice()
+            } else {
+                messages.get(messages_before..)?
+            };
+            let id = relevant.iter().rfind(|m| str_at(m, "role") == Some("user"))?.get("id")?;
+            Some((id.clone(), data))
+        });
         let session = Arc::new(Mutex::new(session_value));
         let queued = spec.get("queued").filter(|q| !q.is_null()).cloned();
         if let Some(q) = queued {
@@ -1462,6 +1527,10 @@ impl Turns {
                 obj.get("messages").and_then(Value::as_array).and_then(|m| m.last()).and_then(|m| m.get("id"))
             {
                 run["afterMessageId"] = id.clone();
+            }
+            if worker && let (Some(parent), Some(call)) = (obj.get("parentSessionId"), obj.get("spawnCallId")) {
+                run["spawnParentId"] = parent.clone();
+                run["spawnCallId"] = call.clone();
             }
             obj.insert("activeRun".into(), run);
             obj.remove("turnFailure");
@@ -1549,6 +1618,15 @@ impl Turns {
             ProviderClient::new(provider)
         };
         let client = ShieldedClient::new(client, shield.clone());
+        let assignment_offered = role_guard.is_some() && !worker;
+        let role_guard = role_guard.map(|(worker, projected_children)| orchestrate_state::LiveRole {
+            store: store.clone(),
+            settings: self.settings.clone(),
+            session_id: session_id.clone(),
+            worker,
+            projected_children,
+        });
+        let client = orchestrate_state::TurnContextClient { inner: client, context: role_context, live: role_guard };
         // An automation's turn on a model on this computer steps aside for the
         // person at it (background.rs); any other turn runs as it is.
         let gate = crate::background::Mode::from_opts(opts)
@@ -1678,7 +1756,7 @@ impl Turns {
             // The decision runner the host picked; the local one is this daemon's.
             decide: (facts.get("decideWith").and_then(Value::as_str) == Some("local")).then(|| self.decide.clone()),
             hub: hub.clone(),
-            spawn: facts.get("spawn") == Some(&Value::Bool(true)),
+            spawn: !worker && facts.get("spawn") == Some(&Value::Bool(true)),
             mcp: own_mcp.is_some().then(|| self.mcp.clone()),
             mode: mode.clone(),
             sandbox_mode: settings.get("sandboxMode").and_then(Value::as_str).map(str::to_string),
@@ -1698,6 +1776,8 @@ impl Turns {
             training: js::truthy(lock(&session).get("trainingRunId")),
             provider_id: spec["opts"].get("providerId").cloned().unwrap_or(Value::Null),
             model_id: spec["opts"].get("modelId").cloned().unwrap_or(Value::Null),
+            parent_effort: shared.admitted.then(|| str_at(facts, "effort").map(str::to_owned)).flatten(),
+            assignment_offered,
             allow_spawn: turn::plan::allows_spawn(settings.get("orchestration")),
             decide_with: facts.get("decideWith").and_then(Value::as_str).map(str::to_string),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
@@ -1728,13 +1808,16 @@ impl Turns {
             cancel: shared.cancel.clone(),
             steering: shared.steering.clone(),
         };
-        run_agent(run, &client, &runner, &mut |event: Value, transcript: &[Value]| {
+        let reply = run_agent(run, &client, &runner, &mut |event: Value, transcript: &[Value]| {
             if is_checkpoint(&event) {
                 *lock(&latest) = Some(transcript.to_vec());
             }
             let _ = events.send(Out::Loop(event, None));
         })
         .await;
+        if worker {
+            *lock(&shared.worker_reply) = Some(reply);
+        }
         drop(runner);
         // What the shield hid, by kind and never by value, for the engine log.
         if let Some(shield) = &shield {
@@ -2971,6 +3054,8 @@ struct TurnTools {
     /// lists, and what a `spawn_agent` child inherits.
     provider_id: Value,
     model_id: Value,
+    parent_effort: Option<String>,
+    assignment_offered: bool,
     /// The orchestration strategy offers sub-agents (`allowSpawn`).
     allow_spawn: bool,
     /// Which decision runner `decide` uses (`facts.decideWith`): `local`, `typesafe`, or none.
@@ -3774,51 +3859,21 @@ impl TurnTools {
         let Some(pid) = provider_id.as_str().filter(|p| !js::trim(p).is_empty() && js::trim(p) == *p) else {
             return failure("invalid_provider_id", "Use an exact nonblank provider ID.");
         };
-        let settings = self.turns.settings.get();
-        let provider = settings.get("providers").and_then(Value::as_array).and_then(|ps| {
-            ps.iter()
-                .find(|p| p.get("id").and_then(Value::as_str) == Some(pid) && js::truthy(p.get("enabled")))
-                .cloned()
-        });
-        let Some(provider) = provider else {
-            return failure(
-                "provider_unavailable",
-                "Provider is unknown or disabled. Enable the intended provider in Models.",
-            );
-        };
-        if crate::admission::provider_endpoint(&provider).is_none() {
-            return failure("invalid_endpoint", "Configure a valid HTTP(S) endpoint for the intended provider.");
-        }
         if self.shared.cancel.is_cancelled() {
             return failure("cancelled", "Discovery cancelled.");
         }
-        let unavailable = || {
-            failure(
-                "model_list_unavailable",
-                "Could not verify the intended provider model list. Check service availability and credentials in Models, then refresh. No fallback was used.",
-            )
+        let Some(d) = self.turns.dispatch.get() else {
+            return failure("delegation_unavailable", "Delegation discovery is unavailable.");
         };
-        let Some(d) = self.turns.dispatch.get() else { return unavailable() };
-        let listed = match d("models:listStatus".into(), vec![json!(pid)]).await {
-            Ok(v) if v.get("error").is_none_or(Value::is_null) => v,
-            _ => return unavailable(),
+        let request = json!({"sessionId": self.shared.session_id, "sourceId": self.provider_id, "providerId": pid});
+        let targets = match d("turn:delegationTargets".into(), vec![request]).await {
+            Ok(Value::Array(models)) => models,
+            Err(e) => return failure("model_list_unavailable", &e),
+            _ => return failure("model_list_unavailable", "No verified model list was returned."),
         };
         if self.shared.cancel.is_cancelled() {
             return failure("cancelled", "Discovery cancelled.");
         }
-        let targets: Vec<Value> = listed
-            .get("models")
-            .and_then(Value::as_array)
-            .map(|ms| {
-                ms.iter()
-                    .filter(|m| {
-                        m.get("providerId").and_then(Value::as_str) == Some(pid)
-                            && nekko_messaging::auto::is_chat_model(m)
-                    })
-                    .map(|m| json!({ "modelId": m.get("id").cloned().unwrap_or(Value::Null) }))
-                    .collect()
-            })
-            .unwrap_or_default();
         let message = if targets.is_empty() {
             "No chat models available. Load or install a model on this provider, then refresh."
         } else {
@@ -3834,6 +3889,9 @@ impl TurnTools {
             MAX_CHILD_RESUMES, can_resume_child_failure, child_interrupted_message, sub_agent_answer, sub_agent_failure,
         };
         let id = str_at(call, "id").unwrap_or_default().to_string();
+        if call.pointer("/input/capability").is_some() && !self.assignment_offered {
+            return sub_agent_failure(&id, "Delegation capability was not offered on this turn.");
+        }
         // A sub-agent starts without this chat's history, so this chat's
         // taint does not follow it: in a tainted chat, delegating asks.
         let ask = match turn::host_tool_approval("spawn_agent", Some(&self.mode), self.sandbox_mode.as_deref()) {
@@ -3854,8 +3912,15 @@ impl TurnTools {
         }
         let mut child: Option<String> = None;
         let mut failure: Option<String> = None;
+        let mut reply = None;
+        let mut aborted = false;
+        let mut interrupted = false;
+        let mut lost = false;
+        let mut prepare_error = None;
         for attempt in 0..=MAX_CHILD_RESUMES {
             failure = None;
+            reply = None;
+            lost = false;
             let prepared = match self.turns.dispatch.get() {
                 // Checked, made and admitted here (spawn.rs); the parent's own mode is the child's.
                 Some(d) => {
@@ -3864,19 +3929,23 @@ impl TurnTools {
                     parent["mode"] = json!(self.mode);
                     let req = json!({
                         "parent": parent, "providerId": self.provider_id, "modelId": self.model_id, "callId": id,
+                        "approvedMode": self.mode, "approvedSandboxMode": self.sandbox_mode, "parentEffort": self.parent_effort,
                         "input": call.get("input").cloned().unwrap_or(Value::Null), "attempt": attempt, "childId": child,
                     });
                     d("turn:spawnPrepare".into(), vec![req]).await
                 }
                 None => Err("the daemon is still starting".into()),
             };
-            let prepared = match prepared {
+            let prepared = match prepared.and_then(|v| match v.get("error") {
+                Some(e) => Err(js::display(e)),
+                None => Ok(v),
+            }) {
                 Ok(v) => v,
-                Err(e) => return sub_agent_failure(&id, &e),
+                Err(e) => {
+                    prepare_error = Some(e);
+                    break;
+                }
             };
-            if let Some(e) = prepared.get("error") {
-                return sub_agent_failure(&id, &js::display(e));
-            }
             child = str_at(&prepared, "childId").map(str::to_string).or(child);
             if let Some(f) = prepared.get("failure") {
                 failure = Some(js::display(f));
@@ -3887,19 +3956,56 @@ impl TurnTools {
                         self.shared.cancel.on_cancel(move || {
                             turns.abort(&child_turn);
                         });
-                        let (_, last_error) =
-                            ended.await.unwrap_or((Value::Null, Some("The sub-agent's turn was lost.".into())));
-                        failure = last_error;
+                        match ended.await {
+                            Ok((summary, last_error, last_reply)) => {
+                                aborted = summary.get("aborted") == Some(&Value::Bool(true));
+                                interrupted = aborted || str_at(&summary, "stop") == Some("connectivity");
+                                failure = last_error;
+                                reply = last_reply;
+                            }
+                            Err(_) => {
+                                lost = true;
+                                failure = Some("The sub-agent's turn was lost.".into());
+                            }
+                        }
                     }
                     Err(e) => failure = Some(e),
                 }
             }
-            if self.shared.cancel.is_cancelled() || !failure.as_deref().is_some_and(can_resume_child_failure) {
+            if interrupted
+                || self.shared.cancel.is_cancelled()
+                || !failure.as_deref().is_some_and(can_resume_child_failure)
+            {
                 break;
             }
         }
-        if self.shared.cancel.is_cancelled() {
+        let stopped = self.shared.cancel.is_cancelled();
+        if self.assignment_offered
+            && let Some(child) = &child
+        {
+            let outcome = match reply {
+                _ if interrupted || (stopped && reply.is_none()) => SpawnOutcome::Interrupted,
+                _ if lost => SpawnOutcome::Unknown,
+                _ if failure.is_some() || prepare_error.is_some() => SpawnOutcome::Failed,
+                Some(ReplyOutcome::Returned) => SpawnOutcome::Returned,
+                Some(ReplyOutcome::OutputLimited | ReplyOutcome::Partial) => SpawnOutcome::Partial,
+                _ => SpawnOutcome::Unknown,
+            };
+            let (store, child, parent, call) =
+                (self.store.clone(), child.clone(), self.shared.session_id.clone(), id.clone());
+            let saved = tokio::task::spawn_blocking(move || {
+                orchestrate_state::record_spawn_outcome(&store, &child, &parent, &call, outcome)
+            })
+            .await;
+            if !matches!(saved, Ok(Ok(()))) {
+                crate::logs::note("Could not save the delegated task outcome");
+            }
+        }
+        if stopped || aborted {
             return sub_agent_failure(&id, "Stopped with the chat.");
+        }
+        if let Some(e) = prepare_error {
+            return sub_agent_failure(&id, &e);
         }
         let messages = match &child {
             Some(c) => {
@@ -3917,7 +4023,25 @@ impl TurnTools {
                 &id,
                 &child_interrupted_message(child.as_deref().unwrap_or_default(), &f, messages.as_deref()),
             ),
-            None => result(&id, sub_agent_answer(messages.as_deref())),
+            None => {
+                let answer = sub_agent_answer(messages.as_deref());
+                let output = match reply {
+                    Some(ReplyOutcome::OutputLimited) => format!(
+                        "Worker outcome: partial (provider output limit). Do not treat this answer as complete or verified.\n\n{answer}"
+                    ),
+                    Some(ReplyOutcome::Partial) => format!(
+                        "Worker outcome: partial (the worker loop stopped early). Do not treat this answer as complete or verified.\n\n{answer}"
+                    ),
+                    Some(ReplyOutcome::Unknown) => {
+                        "Worker outcome: unknown. The worker did not produce a written final answer.".into()
+                    }
+                    None if self.assignment_offered => format!(
+                        "Worker outcome: unknown. The worker's reply outcome was not recorded; do not assume the assignment is complete.\n\n{answer}"
+                    ),
+                    _ => answer,
+                };
+                result(&id, output)
+            }
         }
     }
 

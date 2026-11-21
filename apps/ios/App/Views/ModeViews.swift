@@ -246,6 +246,7 @@ struct RunOptionRow: View {
         case "incognito": "Incognito"
         case "gitIsolation": "Separate Git branch"
         case "workMode": "Work mode"
+        case "orchestrate": "Orchestrate"
         case "memory": "Memory"
         case "guidance": "Project rules"
         case "privacy": "Privacy Shield"
@@ -272,7 +273,7 @@ struct RunOptionRow: View {
 
     var body: some View {
         if option.values.isEmpty {
-            Toggle(title, isOn: Binding(get: { value?.bool ?? false }, set: { set(.bool($0)) }))
+            Toggle(title, isOn: Binding(get: { value?.bool == true }, set: { set(.bool($0)) }))
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("run.\(option.key)")
         } else {
@@ -422,6 +423,15 @@ struct ModelEffortPanel: View {
     @State private var error: String?
     @State private var busy: Effort?
 
+    private func runOption(_ option: RunOption) -> some View {
+        RunOptionRow(option: option, value: chat.runOptions[option.key]) { value in
+            error = nil
+            Task {
+                do { try await chat.setRunOption(option.key, value) } catch { self.error = error.localizedDescription }
+            }
+        }
+    }
+
     var body: some View {
         let levels = Effort.levels(for: chat.modelId ?? "")
         let level = chat.effort.flatMap { levels.firstIndex(of: $0) }
@@ -463,14 +473,9 @@ struct ModelEffortPanel: View {
             if prefs.shows("run-settings") {
                 Divider()
                 Text("Run settings").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
-                ForEach(RunOption.all) { option in
-                    RunOptionRow(option: option, value: chat.runOptions[option.key]) { value in
-                        error = nil
-                        Task {
-                            do { try await chat.setRunOption(option.key, value) } catch { self.error = error.localizedDescription }
-                        }
-                    }
-                }
+                ForEach(RunOption.all.filter { !$0.isApproach }, content: runOption)
+                Text("Approach").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                ForEach(RunOption.all.filter(\.isApproach), content: runOption)
                 Button { choosingTools = true } label: {
                     HStack {
                         Text("Tools").foregroundStyle(palette.ink)

@@ -91,6 +91,12 @@ describe('Mode panel markup', () => {
     expect(html()).not.toContain('on · code mode');
     store.providers = undefined;
   });
+  it.each([undefined, false, true, 'true'])("shows Orchestrate independently of Tool style (%s)", (value) => {
+    for (const toolApproach of ['code', 'list'] as const) {
+      session = { ...base, toolApproach, orchestrate: value } as Session;
+      expect(html()).toContain(`role="switch" aria-checked="${value === true}" aria-label="Orchestrate"`);
+    }
+  });
   it('leaves model and effort controls to the composer', () => {
     session = { ...base, effort: 'low' } as Session;
     const out = html();
@@ -108,6 +114,17 @@ describe('Mode panel markup', () => {
 });
 
 describe('Mode panel writes', () => {
+  it('writes only the boolean for this chat, never the tool style or app defaults', async () => {
+    session.toolApproach = 'code';
+    const d = deps();
+    const actions = modePanelActions(d);
+    await actions.setOrchestrate(true);
+    await actions.setOrchestrate(false);
+    expect(window.nekko.setSessionOptions).toHaveBeenNthCalledWith(1, 'chat', { orchestrate: true });
+    expect(window.nekko.setSessionOptions).toHaveBeenNthCalledWith(2, 'chat', { orchestrate: false });
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
+    expect(d.onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({ toolApproach: 'code', orchestrate: false }));
+  });
   it('saves approvals as the default only after the chat took them', async () => {
     const d = deps();
     await modePanelActions(d).setApprovals('ask');
