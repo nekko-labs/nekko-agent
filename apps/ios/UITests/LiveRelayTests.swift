@@ -20,6 +20,16 @@ final class LiveRelayTests: XCTestCase {
     /// the tree has taken 3 to 12 s there, so a 10 or 15 s wait saw two reads (#1019).
     private let busyWait: TimeInterval = 60
 
+    /// Exercise the real Settings list in isolation, without a relay.
+    func testRevealFinishedRepliesInSettings() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-uiTestReset", "YES", "-uiTestPermissionsSettings"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 10))
+        let finished = app.switches["settings.notify.finished"]
+        XCTAssertTrue(revealNotificationControl(finished, in: app))
+    }
+
     func testPairStreamAndApproveFromThePhone() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
@@ -1023,8 +1033,10 @@ final class LiveRelayTests: XCTestCase {
             let frame = element.frame
             let navigation = app.navigationBars.firstMatch
             let top = navigation.exists ? navigation.frame.maxY : app.frame.minY
-            let viewport = CGRect(x: app.frame.minX + 8, y: top + 8,
-                                  width: app.frame.width - 16, height: app.frame.maxY - top - 16)
+            // SwiftUI exposes a full-width switch row, including its list margins.
+            // Only the vertical edges need clearance from overlapping chrome.
+            let viewport = CGRect(x: app.frame.minX, y: top + 8,
+                                  width: app.frame.width, height: app.frame.maxY - top - 16)
             return !frame.isEmpty && viewport.contains(frame) && element.isHittable
         }
         for upward in [true, false] {
