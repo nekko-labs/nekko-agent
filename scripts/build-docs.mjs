@@ -346,7 +346,7 @@ const text = (v) => typeof v === 'string' && v.trim() !== '';
 const KINDS = { improvement: 'Improvement', performance: 'Performance', fix: 'Fix' };
 // The home page's pixel Nekko (apps/website/index.html, .pixel-nekko) with its
 // happy eyes, held still: it sits on the headliners card's top edge.
-const HEADLINERS_NEKKO = `<svg class="headliners-nekko" viewBox="0 0 32 32" width="60" height="60" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" style="fill: var(--mascot-face); stroke: var(--mascot-line)" stroke-width="2" /><path d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" style="fill: var(--mascot-eyes)" /><path d="M15 20H17V21H15Z" style="fill: var(--lavender)" /></svg>`;
+const HEADLINERS_NEKKO = `<svg class="headliners-nekko" viewBox="0 0 32 32" width="56" height="56" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" style="fill: var(--mascot-face); stroke: var(--mascot-line)" stroke-width="2" /><path d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" style="fill: var(--mascot-eyes)" /><path d="M15 20H17V21H15Z" style="fill: var(--lavender)" /></svg>`;
 
 // Validate the highlights file and list its release lines newest first. Links
 // are built from the login, PR number and tag, so each is checked here.
@@ -458,12 +458,12 @@ ${shuffled(l.contributors)
   .join('\n')}
         </ul>`;
   // A release with major highlights: its people first, the headliners in the
-  // sticker card under the pixel Nekko, then the rest as one-liners.
+  // soft panel under the pixel Nekko, then the rest as one-liners.
   const headlined = (l, majors) => {
     const rest = l.highlights.filter((h) => !h.major);
     return `${everyone(l)}
         <div class="headliners">
-          <p class="headliners-tab">${HEADLINERS_NEKKO}<span class="headliners-pill"><svg viewBox="0 0 8 8" width="10" height="10" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 0H5V3H8V5H5V8H3V5H0V3H3Z" /></svg>Headliners</span></p>
+          <p class="headliners-tab">${HEADLINERS_NEKKO}<span class="headliners-word">Headliners</span></p>
           <ul class="headliner-list">
 ${majors.map((h, i) => highlight(h, i === 0 ? ' class="headliner-lead"' : '')).join('\n')}
           </ul>
@@ -574,18 +574,19 @@ ${majors.length ? headlined(l, majors) : plain(l)}
         .rail ul { display: flex; flex-wrap: wrap; gap: 0 20px; }
         .rail[data-solo] { display: none; }
       }
-      /* A release's headliners: the site's sticker card, with the pixel Nekko and a pill on its top edge. Still: no motion. */
-      .headliners { position: relative; margin: 72px 0 0; padding: 44px 34px 32px; background: var(--bg-2); border: 2px solid var(--sticker); border-radius: 16px; box-shadow: 5px 5px 0 var(--lavender); }
-      .legal .headliners-tab { position: absolute; top: -42px; left: 26px; display: flex; align-items: flex-end; gap: 8px; margin: 0; }
+      /* A release's headliners: a soft plum panel, no border or offset shadow, with the pixel Nekko peeking over its top edge. Still: no motion. */
+      .headliners { position: relative; margin: 64px 0 0; padding: 40px 36px 34px; background: var(--band-peach); border-radius: 18px; }
+      :root[data-theme='dark'] .headliners { background: var(--peach-soft); }
+      .legal .headliners-tab { position: absolute; top: -34px; left: 28px; display: flex; align-items: flex-end; gap: 10px; margin: 0; }
       .headliners-nekko { flex: none; overflow: visible; }
-      .headliners-pill { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 3px 14px 3px 10px; border-radius: 999px; background: var(--ink); color: var(--bg); font: 700 19px/1.2 var(--led); letter-spacing: 0.06em; text-transform: uppercase; }
-      .headliners-pill svg { flex: none; fill: currentColor; }
+      .headliners-word { padding-bottom: 6px; color: var(--lavender); font: 700 24px/1 var(--led); letter-spacing: 0.04em; text-transform: uppercase; }
+      :root[data-theme='dark'] .headliners-word { color: var(--accent); }
       .headliner-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 28px; }
       .headliner-list p { margin: 0; }
       .headliner-list .shipped { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; }
       .legal .headliner-lead h3 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
       @media (min-width: 900px) { .headliner-list { grid-template-columns: 1fr 1fr; gap: 28px 32px; } .headliner-lead { grid-column: 1 / -1; } }
-      @media (max-width: 560px) { .headliners { padding: 36px 20px 24px; } .legal .headliners-tab { left: 16px; } }
+      @media (max-width: 560px) { .headliners { padding: 34px 20px 24px; } .legal .headliners-tab { left: 16px; } }
       .more-in { margin: 44px 0 0; font: 12px var(--retro-mono); letter-spacing: 0.1em; text-transform: uppercase; }
       .more { list-style: none; padding: 16px 0 0; margin: 14px 0 0; border-top: 1px solid var(--line); display: grid; gap: 10px; font-size: 15px; }
       .legal .more li { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: baseline; gap: 0 12px; color: var(--ink); }

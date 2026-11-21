@@ -354,10 +354,11 @@ test('a release with major highlights puts its people first, then the headliners
   assert.deepEqual([...order].sort((a, b) => a - b), order);
   assert.doesNotMatch(section, /<ul class="highlights">/);
 
-  // The card: the pixel Nekko and the HEADLINERS pill, then the major highlights in file order, the first one leading.
+  // The card: the pixel Nekko peeking over with the word HEADLINERS, then the major highlights in file order, the first one leading.
   const card = section.slice(at('class="headliners"'), at('More in 0.10'));
   assert.match(card, /<svg class="headliners-nekko"[^>]*aria-hidden="true"/);
-  assert.match(card, /<span class="headliners-pill">.*>Headliners<\/span>/);
+  assert.match(card, /<\/svg><span class="headliners-word">Headliners<\/span>/);
+  assert.doesNotMatch(card, /headliners-pill/);
   assert.deepEqual([...card.matchAll(/<h3>([^<]+)<\/h3>/g)].map((m) => m[1]), ['Big one', 'Second big']);
   assert.ok(card.indexOf('class="headliner-lead"') < card.indexOf('Big one'));
   assert.ok(card.includes('Big detail.'));
@@ -376,15 +377,20 @@ test('a release with major highlights puts its people first, then the headliners
   assert.doesNotMatch(allMajor, /More in 0\.10/);
 });
 
-test('the headliners card is the site\'s sticker, in tokens, and holds still', () => {
+test('the headliners card is a soft plum panel, in tokens, and holds still', () => {
   const html = build().get('whatsnew.html');
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
   const rule = (sel) => {
     const at = css.indexOf(`${sel} {`);
     return at === -1 ? '' : css.slice(at, css.indexOf('}', at));
   };
-  assert.match(rule('.headliners'), /border: 2px solid var\(--sticker\);/);
-  assert.match(rule('.headliners'), /box-shadow: 5px 5px 0 var\(--lavender\);/);
+  // Option A: a filled panel, no sticker border or offset shadow; White uses the home page's peach band, Dark the plum tint.
+  assert.match(rule('.headliners'), /background: var\(--band-peach\);/);
+  assert.match(rule('.headliners'), /border-radius: 18px;/);
+  assert.doesNotMatch(rule('.headliners'), /border:|box-shadow/);
+  assert.match(rule(":root[data-theme='dark'] .headliners"), /background: var\(--peach-soft\);/);
+  assert.match(rule('.headliners-word'), /font: 700 24px\/1 var\(--led\);/);
+  assert.doesNotMatch(css, /headliners-pill/);
   const added = css.slice(css.indexOf('.headliners'));
   assert.doesNotMatch(added, /#[0-9a-f]{3,8}\b/i, 'tokens only');
   assert.doesNotMatch(added, /animation|transition/, 'no motion');
