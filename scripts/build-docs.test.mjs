@@ -328,7 +328,7 @@ test('a release with no major highlight renders as it did before headliners', ()
   assert.doesNotMatch(html, /class="headliners"|More in 0\.9/);
 });
 
-test('a release with major highlights puts its people first, then the headliners, then the rest as one-liners', () => {
+test('a release with major highlights puts its people first, then the headliners, then the rest grouped by kind', () => {
   const lines = parseWhatsNew({
     '0.10': line({
       contributors: ['ada', 'bob'],
@@ -338,6 +338,8 @@ test('a release with major highlights puts its people first, then the headliners
         { title: 'Faster', detail: 'd', pr: 3, authors: ['ada'], kind: 'performance' },
         { title: 'Second big', detail: 'd', pr: 4, authors: ['ada'], major: true },
         { title: 'Untagged', detail: 'd', pr: 5, authors: ['bob'] },
+        { title: 'Fixed it', detail: 'd', pr: 6, authors: ['bob'], kind: 'fix' },
+        { title: 'Another small', detail: 'd', pr: 7, authors: ['ada'], kind: 'improvement' },
       ],
     }),
   });
@@ -349,13 +351,13 @@ test('a release with major highlights puts its people first, then the headliners
     return i;
   };
 
-  // Intro, everyone who shipped, the headliners card, "More in", the GitHub link.
-  const order = ['class="release-intro"', 'class="everyone-who"', 'class="headliners"', 'More in 0.10', 'class="release-all"'].map(at);
+  // Intro, everyone who shipped, the headliners card, the one-liners, the GitHub link.
+  const order = ['class="release-intro"', 'class="everyone-who"', 'class="headliners"', 'class="more-all"', 'class="release-all"'].map(at);
   assert.deepEqual([...order].sort((a, b) => a - b), order);
   assert.doesNotMatch(section, /<ul class="highlights">/);
 
   // The card: the pixel Nekko peeking over with the word HEADLINERS, then the major highlights in file order, the first one leading.
-  const card = section.slice(at('class="headliners"'), at('More in 0.10'));
+  const card = section.slice(at('class="headliners"'), at('class="more-all"'));
   assert.match(card, /<svg class="headliners-nekko"[^>]*aria-hidden="true"/);
   assert.match(card, /<\/svg><span class="headliners-word">Headliners<\/span>/);
   assert.doesNotMatch(card, /headliners-pill/);
@@ -364,20 +366,37 @@ test('a release with major highlights puts its people first, then the headliners
   assert.ok(card.includes('Big detail.'));
   assert.ok(card.includes('href="https://github.com/bob"') && card.includes('/pull/2"'));
 
-  // The rest, in file order: tag (when it has one), title, pull request link.
-  const more = section.slice(at('More in 0.10'), at('class="release-all"'));
-  assert.deepEqual([...more.matchAll(/<span class="more-title">([^<]+)<\/span>/g)].map((m) => m[1]), ['Small one', 'Faster', 'Untagged']);
-  assert.deepEqual([...more.matchAll(/<span class="more-kind">([^<]+)<\/span>/g)].map((m) => m[1]), ['Improvement', 'Performance']);
-  for (const pr of [1, 3, 5]) assert.ok(more.includes(`href="https://github.com/nekko-labs/nekko-agent/pull/${pr}"`), `#${pr}`);
+  // The rest, grouped under one heading per kind (Improvements, Performance, Fixes, then the untagged),
+  // file order inside each group, and no tag repeated on the rows.
+  const more = section.slice(at('class="more-all"'), at('class="release-all"'));
+  const groups = [...more.matchAll(/<h3 class="more-group">([^<]+)<\/h3>\s*<ul class="more">([\s\S]*?)<\/ul>/g)].map((m) => [
+    m[1],
+    [...m[2].matchAll(/<span class="more-title">([^<]+)<\/span>/g)].map((t) => t[1]),
+  ]);
+  assert.deepEqual(groups, [
+    ['Improvements', ['Small one', 'Another small']],
+    ['Performance', ['Faster']],
+    ['Fixes', ['Fixed it']],
+    ['Also in 0.10', ['Untagged']],
+  ]);
+  assert.doesNotMatch(more, /more-kind|More in 0\.10/);
+  for (const pr of [1, 3, 5, 6, 7]) assert.ok(more.includes(`href="https://github.com/nekko-labs/nekko-agent/pull/${pr}"`), `#${pr}`);
   assert.doesNotMatch(more, /Big one|Second big/);
 
-  // All major: no "More in" list.
+  // Only the kinds a release has get a heading.
+  const fixesOnly = whatsNewPage(parseWhatsNew({ '0.10': line({ highlights: [
+    { title: 'Big', detail: 'd', pr: 1, authors: ['a'], major: true },
+    { title: 'F', detail: 'd', pr: 2, authors: ['a'], kind: 'fix' },
+  ] }) }));
+  assert.deepEqual([...fixesOnly.matchAll(/<h3 class="more-group">([^<]+)<\/h3>/g)].map((m) => m[1]), ['Fixes']);
+
+  // All major: no one-liners.
   const allMajor = whatsNewPage(parseWhatsNew({ '0.10': line({ highlights: [{ title: 't', detail: 'd', pr: 1, authors: ['a'], major: true }] }) }));
   assert.match(allMajor, /class="headliners"/);
-  assert.doesNotMatch(allMajor, /More in 0\.10/);
+  assert.doesNotMatch(allMajor, /class="more-all"|class="more-group"/);
 });
 
-test('every one-liner names each of its authors after the pull request link, faces first', () => {
+test('every one-liner reads title, authors (faces first), then the pull request link', () => {
   const lines = parseWhatsNew({
     '0.10': line({
       contributors: ['ada', 'bob'],
@@ -389,13 +408,15 @@ test('every one-liner names each of its authors after the pull request link, fac
     }),
   });
   const html = whatsNewPage(lines, new Map([['ada', '/contributors/ada-0123456789abcdef.png']]), () => 0);
-  const more = html.slice(html.indexOf('<ul class="more">'), html.indexOf('</ul>', html.indexOf('<ul class="more">')));
+  const more = html.slice(html.indexOf('class="more-all"'), html.indexOf('class="release-all"'));
   const items = [...more.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((m) => m[1]);
   assert.equal(items.length, 2);
   for (const [item, pr, authors] of [[items[0], 2, ['ada']], [items[1], 3, ['ada', 'bob']]]) {
     const by = item.indexOf('class="more-by"');
-    assert.ok(by > item.indexOf(`/pull/${pr}"`), `#${pr}: authors after the link`);
-    const credit = item.slice(by);
+    const link = item.indexOf(`/pull/${pr}"`);
+    assert.ok(item.indexOf('class="more-title"') < by && by < link, `#${pr}: title, authors, link`);
+    assert.ok(item.slice(link - 120, link).includes('class="more-pr"'), `#${pr}: link in its own column`);
+    const credit = item.slice(by, link);
     assert.equal([...credit.matchAll(/class="by-avatar"/g)].length, authors.length, `#${pr}: one face each`);
     assert.deepEqual([...credit.matchAll(/<a class="by" href="https:\/\/github.com\/([^"]+)" rel="noopener">([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]), authors.map((a) => [a, a]));
     assert.ok(credit.indexOf('class="by-faces"') < credit.indexOf('<a class="by"'), `#${pr}: faces first`);
@@ -404,6 +425,19 @@ test('every one-liner names each of its authors after the pull request link, fac
   assert.match(items[0], /src="\/contributors\/ada-0123456789abcdef\.png"[^>]*width="20" height="20"/);
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
   assert.match(css, /\.more \.by-avatar \{ width: 20px; height: 20px;/);
+});
+
+test('one-liners line up in three columns from 560px, the pull request last, and stack below that', () => {
+  const html = build().get('whatsnew.html');
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  const wide = css.match(/@media \(min-width: 560px\) \{([^@]*)\}\n/)?.[1] ?? '';
+  // One grid for every group, so the author and pull request columns line up across all of them.
+  assert.match(wide, /\.more-all \{[^}]*display: grid; grid-template-columns: minmax\(0, 1fr\) max-content max-content;/);
+  assert.match(wide, /\.more-all > \.more, \.more li \{[^}]*grid-column: 1 \/ -1; display: grid; grid-template-columns: subgrid;/);
+  assert.match(wide, /\.more-dot \{ display: none; \}/);
+  assert.match(css, /\.more-pr \{[^}]*font-variant-numeric: tabular-nums;/);
+  assert.doesNotMatch(css, /\.more \{[^}]*border-top/, 'no hairline');
+  assert.doesNotMatch(css, /more-kind|more-in \{/);
 });
 
 test('the headliners card is a soft plum panel, in tokens, and holds still', () => {

@@ -343,7 +343,7 @@ ${rendered.html}
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i;
 const text = (v) => typeof v === 'string' && v.trim() !== '';
 // A highlight's optional `kind`, and how the page labels it.
-const KINDS = { improvement: 'Improvement', performance: 'Performance', fix: 'Fix' };
+const KINDS = { improvement: 'Improvements', performance: 'Performance', fix: 'Fixes' };
 // The home page's pixel Nekko (apps/website/index.html, .pixel-nekko) with its
 // happy eyes, held still: it sits on the headliners card's top edge.
 const HEADLINERS_NEKKO = `<svg class="headliners-nekko" viewBox="0 0 32 32" width="56" height="56" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" style="fill: var(--mascot-face); stroke: var(--mascot-line)" stroke-width="2" /><path d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" style="fill: var(--mascot-eyes)" /><path d="M15 20H17V21H15Z" style="fill: var(--lavender)" /></svg>`;
@@ -458,6 +458,7 @@ ${shuffled(l.contributors)
   .join('\n')}
         </ul>`;
   // A one-liner's credit: small faces, then each login, as "Shipped by" does on a headliner.
+  // The rest of a release's highlights go under one heading per kind, in KINDS order, then the untagged.
   const oneLinerBy = (authors) => `<span class="more-by"><span class="by-faces">${authors.map((a) => face(a, 20)).join('')}</span><span>${authors.map(person).join(', ')}</span></span>`;
   // A release with major highlights: its people first, the headliners in the
   // soft panel under the pixel Nekko, then the rest as one-liners.
@@ -472,12 +473,18 @@ ${majors.map((h, i) => highlight(h, i === 0 ? ' class="headliner-lead"' : '')).j
         </div>${
           rest.length
             ? `
-        <p class="more-in">More in ${l.line}</p>
-        <ul class="more">
-${rest
-  .map((h) => `          <li>${h.kind ? `<span class="more-kind">${KINDS[h.kind]}</span>` : ''}<span><span class="more-title">${escapeHtml(h.title)}</span> <span aria-hidden="true">·</span> ${pr(h.pr)} <span aria-hidden="true">·</span> ${oneLinerBy(h.authors)}</span></li>`)
+        <div class="more-all">
+${[...Object.keys(KINDS), undefined]
+  .map((kind) => [kind ? KINDS[kind] : `Also in ${l.line}`, rest.filter((h) => h.kind === kind)])
+  .filter(([, items]) => items.length)
+  .map(
+    ([heading, items]) => `          <h3 class="more-group">${heading}</h3>
+          <ul class="more">
+${items.map((h) => `            <li><span class="more-title">${escapeHtml(h.title)}</span>${oneLinerBy(h.authors)}<span class="more-dot" aria-hidden="true">·</span><span class="more-pr">${pr(h.pr)}</span></li>`).join('\n')}
+          </ul>`,
+  )
   .join('\n')}
-        </ul>`
+        </div>`
             : ''
         }`;
   };
@@ -589,14 +596,28 @@ ${majors.length ? headlined(l, majors) : plain(l)}
       .legal .headliner-lead h3 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
       @media (min-width: 900px) { .headliner-list { grid-template-columns: 1fr 1fr; gap: 28px 32px; } .headliner-lead { grid-column: 1 / -1; } }
       @media (max-width: 560px) { .headliners { padding: 34px 20px 24px; } .legal .headliners-tab { left: 16px; } }
-      .more-in { margin: 44px 0 0; font: 12px var(--retro-mono); letter-spacing: 0.1em; text-transform: uppercase; }
-      .more { list-style: none; padding: 16px 0 0; margin: 14px 0 0; border-top: 1px solid var(--line); display: grid; gap: 10px; font-size: 15px; }
-      .legal .more li { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: baseline; gap: 0 12px; color: var(--ink); }
-      .more li > span:only-child { grid-column: 2; }
-      .more-by { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+      /* The other highlights, one heading per kind. Narrow: the title, then who shipped it and the pull request under it.
+         From 560px: one grid for every group (title, author, pull request), so the columns line up down the page. */
+      .more-all { margin: 44px 0 0; }
+      .legal .more-group { margin: 32px 0 12px; font: 12px var(--retro-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+      .legal .more-group:first-child { margin-top: 0; }
+      .more { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; font-size: 15px; }
+      .more li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--ink); }
+      .more-title { flex: 1 0 100%; }
+      .more-by { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
       .more .by-avatar { width: 20px; height: 20px; font-size: 8px; }
       .more .by-avatar + .by-avatar { margin-left: -5px; }
-      .more-kind { font: 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+      .more-dot { color: var(--muted); }
+      .more-pr { font-size: 14px; font-variant-numeric: tabular-nums; }
+      .legal .more-pr a { color: var(--muted); }
+      @media (min-width: 560px) {
+        .more-all { display: grid; grid-template-columns: minmax(0, 1fr) max-content max-content; column-gap: 28px; }
+        .more-all > .more-group { grid-column: 1 / -1; }
+        .more-all > .more, .more li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
+        .more { gap: 10px; }
+        .more-dot { display: none; }
+        .more-pr { justify-self: end; }
+      }
     </style>
   </head>
   <body>
