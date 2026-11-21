@@ -34,6 +34,7 @@ import { ServiceLoadState } from '../components/ServiceLoadState.js';
 import { ServiceManagement } from '../components/ServiceManagement.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
+import { AgentsBreadcrumb } from '../components/AgentsBreadcrumb.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { AnimationsSection, DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
@@ -254,6 +255,7 @@ export function SettingsView() {
       <div ref={scrollRef} className="settings-content">
         <PageContext.Provider value={{ active, all: searching }}>
         <div ref={pageRef} className="settings-page" data-settings-paged={searching ? undefined : ''} data-presenter-exempt>
+          <AgentsBreadcrumb />
           {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
           <div className="min-w-0">
             <SettingsGroup id="server">
