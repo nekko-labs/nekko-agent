@@ -26,6 +26,8 @@ describe('composer effort and suggestions', () => {
       const row = out.slice(out.indexOf('data-composer-mode-row'));
       expect(row.indexOf('data-chat-mode-button')).toBeLessThan(row.indexOf('data-composer-suggestions'));
       expect(row).toContain('composer-suggestions ml-auto shrink-0');
+      // Approvals are one of Mode's options, so no separate approvals chip beside it.
+      expect(out).not.toContain('data-asks-first');
     });
   }
   it('shows effort in the Simple composer by default, not only inside the model menu', () => {

@@ -20,3 +20,9 @@ Desktop and Local Web UI Mode changes now persist changed fields as defaults for
 ### Composer folders (#2339)
 
 Implemented: folders are outside Mode. Every new and active text-agent composer shows one selected-folder picker immediately right of **+**, in Simple and Detailed, even with details collapsed. The picker keeps primary/supporting folders, adding, default stars, per-chat removal and saved-access revocation distinct. While a reply runs the picker remains visible but disabled. Folders remain excluded from saved modes. Automated and visual verification are recorded with the PR; packaged macOS/Linux and native mobile are not covered by this renderer change.
+
+### Mode shows its options as icons; no separate approvals chip (2026-11-22)
+
+**User intent:** "hide the restrictions since it's already in mode. mode should show the icons for the chosen relevant options."
+
+Implemented: the composer's Mode button reads the saved mode's name (or Custom), then one small icon per option that differs from the baseline, each the same icon the Mode panel uses for it: worktree or sandbox, the model scope (cloud, local + cloud, local), approvals when not Guardrails, offline, incognito, effort when not normal, memory and project rules when changed, and code mode. Running locally on this machine is the baseline and gets no icon. The words ("worktree · no restrictions · incognito · high") stay in the button's tooltip, in each icon's own tooltip, and in its accessible name. The separate approvals chip ("No restrictions") no longer sits on the composer bar, the details row or the new-chat row while Mode is shown; when Simple mode hides Mode it comes back, so approvals stay one click away either way. Verified by unit tests and a hidden fixture capture of a wall window in Expert mode; the Local Web UI shares this renderer and was not captured separately.
