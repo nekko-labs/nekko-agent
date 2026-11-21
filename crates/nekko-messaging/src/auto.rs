@@ -118,6 +118,8 @@ pub fn pick(models: &[Value], prompt: &str) -> Option<Value> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::is_chat_model;
     use serde_json::json;
 
@@ -142,5 +144,18 @@ mod tests {
         )));
         assert!(is_chat_model(&m("chat/Qwen3.8-27B", "Qwen3.8-27B")));
         assert!(is_chat_model(&m("qwen2.5-vl-7b-instruct", "Qwen2.5 VL 7B")));
+    }
+
+    // The nekkod builder stage compiles this crate, so every file it include_str!s
+    // from outside crates/ must be copied into that stage of the Dockerfile.
+    #[test]
+    fn nekkod_stage_copies_the_tier_rules() {
+        let dockerfile = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Dockerfile");
+        let text = std::fs::read_to_string(&dockerfile).expect("read Dockerfile");
+        let stage = text.split("\nFROM ").find(|s| s.contains("AS nekkod")).expect("nekkod stage in Dockerfile");
+        assert!(
+            stage.contains("COPY packages/shared/src/model-tiers.json"),
+            "nekkod stage does not copy packages/shared/src/model-tiers.json"
+        );
     }
 }
