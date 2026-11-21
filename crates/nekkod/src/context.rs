@@ -135,6 +135,11 @@ pub fn preview(
     let system_text = nekko_context::build_system_prompt(&nekko_context::PromptContext {
         workspaces: &folders,
         system_instructions: Some(&system_instructions),
+        model_instructions: if session.is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
+            None
+        } else {
+            crate::prompt_profile::model_instructions(settings, provider_id, kind, model_name)
+        },
         turn_wrapper: Some(&turn_wrapper),
         about_user: settings.get("aboutUser").and_then(Value::as_str),
         context_block: "",
@@ -291,6 +296,32 @@ mod tests {
             assert_eq!(nekko_js::stringify(&got), nekko_js::stringify(&expected[i]), "case {i}");
         }
         let _ = std::fs::remove_dir_all(&root_dir);
+    }
+
+    #[test]
+    fn preview_counts_only_the_selected_models_instructions() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = json!({
+            "providers": [{"id": "local", "kind": "ollama"}, {"id": "other", "kind": "ollama"}, {"id": "cc", "kind": "claude-code"}]
+        });
+        let item = |settings: &Value, provider: &str, model: &str, mode: &str| {
+            let session = json!({"providerId": provider, "modelId": model, "executionMode": mode});
+            let preview = preview(dir.path(), Some(&session), settings, &[], &[], "linux");
+            let system = preview["items"].as_array().unwrap().iter().find(|i| i["id"] == "system:base").unwrap();
+            (system["tokens"].as_u64().unwrap(), preview["promptProfile"].clone())
+        };
+        let base = item(&settings, "local", "m", "unified");
+        settings["promptProfiles"]["modelInstructions"] = json!({
+            "local::m": "Use British English in the summary.",
+            "cc::m": "Do not send to the Claude harness."
+        });
+        let scoped = item(&settings, "local", "m", "unified");
+        assert!(scoped.0 > base.0);
+        assert_eq!(scoped.1, base.1);
+        assert_eq!(item(&settings, "local", "m-v2", "unified"), base);
+        assert_eq!(item(&settings, "other", "m", "unified"), base);
+        assert_eq!(item(&settings, "local", "m", "sandbox"), base);
+        assert_eq!(item(&settings, "cc", "m", "unified"), base);
     }
 
     #[test]
