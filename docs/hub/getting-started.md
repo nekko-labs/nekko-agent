@@ -40,7 +40,7 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 
 ## Returning to Agents
 
-On desktop and the Local Web UI, the Settings navigation rail includes an **← Agents / Settings** breadcrumb. Click **Agents** to return directly to your agents. Settings content and other pages keep their existing layouts and navigation.
+On desktop and the Local Web UI, the top of the Settings page shows an **← Agents / Settings** breadcrumb. Click **Agents** to return directly to your agents. Other pages keep their existing navigation.
 
 ## Typing in a new agent window
 

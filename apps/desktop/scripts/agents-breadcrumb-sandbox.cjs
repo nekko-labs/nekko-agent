@@ -7,8 +7,7 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 const baseline = process.env.NEKKO_BREADCRUMB_BASELINE === '1';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const report = { baseline, captures: [], checks: [], errors: [], geometry: {} };
-const baselineReport = process.env.NEKKO_BREADCRUMB_COMPARE ? JSON.parse(fs.readFileSync(process.env.NEKKO_BREADCRUMB_COMPARE, 'utf8')) : null;
+const report = { baseline, captures: [], checks: [], errors: [] };
 const js = value => JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
@@ -35,17 +34,6 @@ app.whenReady().then(async () => {
         await run('layoutFixture.store.getState().setView(' + js(view) + ')');
         await sleep(450);
         await shot(view + '-' + width);
-        if (view === 'settings') {
-          const geometry = await run(
-            "(() => { const selectors = ['.settings-panel', '.settings-content', '.settings-page', '[data-settings-group=profile]', '#settings-profile-title']; return selectors.map(s => { const e=document.querySelector(s); const r=e.getBoundingClientRect(); const c=getComputedStyle(e); return {selector:s,x:r.x,y:r.y,width:r.width,height:r.height,padding:c.padding,overflowY:c.overflowY}; }); })()"
-          );
-          report.geometry[width] = geometry;
-          if (baselineReport) {
-            const ok = JSON.stringify(geometry) === JSON.stringify(baselineReport.geometry[width]);
-            report.checks.push({name: 'settings-' + width + ': unchanged content geometry', ok});
-            if (!ok) throw Error('Settings content geometry changed at ' + width);
-          }
-        }
         if (!baseline && view !== 'settings') {
           await check(view + '-' + width + ': no breadcrumb outside Settings', '!document.querySelector("[data-agents-breadcrumb]")');
         }
@@ -54,7 +42,7 @@ app.whenReady().then(async () => {
           await check(view + '-' + width + ': one return control', 'document.querySelectorAll("[data-back-to-agents]").length === 1');
         }
         if (!baseline && view === 'settings') {
-          await check('breadcrumb lives in Settings rail', '!!document.querySelector(".settings-rail [data-agents-breadcrumb]")');
+          await check('breadcrumb lives in Settings content', '!!document.querySelector(".settings-page > [data-agents-breadcrumb]") && !document.querySelector(".settings-rail [data-agents-breadcrumb]")');
           const stateBefore = await run('JSON.stringify({ active:layoutFixture.store.getState().activeSessionId, layout:layoutFixture.store.getState().wallLayout })');
           await run('document.querySelector("[data-back-to-agents]").focus()');
           await check('keyboard focus on return control', 'document.activeElement.matches("[data-back-to-agents]")');

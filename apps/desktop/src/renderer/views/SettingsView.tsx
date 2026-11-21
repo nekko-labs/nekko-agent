@@ -219,7 +219,6 @@ export function SettingsView() {
   return (
     <div className="settings-panel" onWheel={(e) => forwardWheelToContent(e, scrollRef.current)}>
       <aside className="settings-rail">
-        <AgentsBreadcrumb />
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
         <div aria-label="Skills and connectors" className="settings-shortcuts">
           <button className="settings-nav-item" onClick={openCustomize}>Customize</button>
@@ -255,6 +254,7 @@ export function SettingsView() {
       <div ref={scrollRef} className="settings-content">
         <PageContext.Provider value={{ active, all: searching }}>
         <div ref={pageRef} className="settings-page" data-settings-paged={searching ? undefined : ''} data-presenter-exempt>
+          <AgentsBreadcrumb />
           {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
           <div className="min-w-0">
             <SettingsGroup id="server">
