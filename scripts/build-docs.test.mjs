@@ -534,6 +534,30 @@ test('avatars come only from the contributor cache, with initials when one is mi
   assert.doesNotMatch(whatsNewPage(lines), /<img class="by-img"/);
 });
 
+test('cached avatars are 28px on headliners, plain highlights and the people row, 20px on one-liners', () => {
+  const highlights = [
+    { title: 'Big one', detail: 'd', pr: 1, authors: ['ada', 'bob'], major: true },
+    { title: 'Pair', detail: 'd', pr: 2, authors: ['ada', 'bob'] },
+  ];
+  const lines = parseWhatsNew({
+    '0.10': line({ contributors: ['ada', 'bob'], highlights }),
+    '0.9': line({ date: '2026-11-08', tag: 'v0.9.5', contributors: ['ada', 'bob'], highlights: [highlights[1]] }),
+  });
+  const avatars = new Map([['ada', '/contributors/ada-0123456789abcdef.png'], ['bob', '/contributors/bob-0123456789abcdef.png']]);
+  const html = whatsNewPage(lines, avatars, () => 0);
+
+  const sizes = (part) => [...part.matchAll(/<img class="by-img"[^>]*width="(\d+)" height="(\d+)"/g)].map((m) => `${m[1]}x${m[2]}`);
+  const shipped = [...html.matchAll(/<p class="shipped">[\s\S]*?<\/p>/g)].map((m) => m[0]);
+  const oneLiners = [...html.matchAll(/<span class="more-by">[\s\S]*?<\/span><\/span>/g)].map((m) => m[0]);
+  const people = [...html.matchAll(/<ul class="everyone">[\s\S]*?<\/ul>/g)].map((m) => m[0]);
+
+  assert.equal(shipped.length, 2, 'one headliner in 0.10, one plain highlight in 0.9');
+  for (const credit of shipped) assert.deepEqual(sizes(credit), ['28x28', '28x28']);
+  assert.equal(oneLiners.length, 1);
+  assert.deepEqual(sizes(oneLiners[0]), ['20x20', '20x20']);
+  for (const row of people) assert.deepEqual(sizes(row), ['28x28', '28x28']);
+});
+
 test('text from the highlights file is escaped on the page', () => {
   const html = whatsNewPage(parseWhatsNew({ '0.10': line({ intro: 'a <b> & c', highlights: [{ title: '<script>x</script>', detail: 'd', pr: 1, authors: ['a'] }] }) }));
   assert.ok(html.includes('a &lt;b&gt; &amp; c'));

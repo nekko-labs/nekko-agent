@@ -449,7 +449,7 @@ ${lines
   const highlight = (h, cls = '') => `          <li${cls}>
             <h3>${escapeHtml(h.title)}</h3>
             <p>${escapeHtml(h.detail)}</p>
-            <p class="shipped"><span class="by-faces">${h.authors.map(face).join('')}</span><span>Shipped by ${h.authors.map(person).join(', ')} <span aria-hidden="true">·</span> ${pr(h.pr)}</span></p>
+            <p class="shipped"><span class="by-faces">${h.authors.map((a) => face(a)).join('')}</span><span>Shipped by ${h.authors.map(person).join(', ')} <span aria-hidden="true">·</span> ${pr(h.pr)}</span></p>
           </li>`;
   const everyone = (l) => `        <p class="everyone-who">Everyone who shipped ${l.line}</p>
         <ul class="everyone">
