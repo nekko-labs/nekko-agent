@@ -26,14 +26,20 @@ describe('composer effort and suggestions', () => {
       const row = out.slice(out.indexOf('data-composer-mode-row'));
       expect(row.indexOf('data-chat-mode-button')).toBeLessThan(row.indexOf('data-composer-suggestions'));
       expect(row).toContain('composer-suggestions ml-auto shrink-0');
+      // The folder sits on this bottom row, before Mode, and no longer on the bar.
+      expect(row.indexOf('composer-folders')).toBeGreaterThan(-1);
+      expect(row.indexOf('composer-folders')).toBeLessThan(row.indexOf('data-chat-mode-button'));
+      expect(out.slice(0, out.indexOf('data-composer-mode-row'))).not.toContain('composer-folders');
     });
   }
-  it('shows effort in the Simple composer by default, not only inside the model menu', () => {
+  it('shows effort as a gauge inside the model chip, with no label of its own, like the phone', () => {
     const out = box();
     expect(out).toContain('data-composer-foot');
-    expect(out).toContain('class="effort-slider');
+    const chip = out.slice(out.indexOf('aria-haspopup="listbox"'));
+    expect(chip.indexOf('data-effort-gauge')).toBeLessThan(chip.indexOf('data-model-chip-name'));
     expect(out).toContain('Reasoning effort: Unavailable');
-    expect(out).toContain('disabled=""');
+    expect(out).not.toContain('class="effort-slider');
+    expect(out).not.toMatch(/<span>Effort<\/span>/);
     expect(out).not.toContain('data-composer-suggestions');
     expect(out).not.toContain('Prompt suggestions test control');
   });
