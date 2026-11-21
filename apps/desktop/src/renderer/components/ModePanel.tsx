@@ -2,10 +2,10 @@ import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { allowModeChange } from './YoloWarning.js';
 import { createPortal } from 'react-dom';
 import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND } from '@nekko-agent/shared';
-import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
+import type { ChatMode, EffortLevel, SavedModeSummaryPart, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
   CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getWorkMode, matchSavedMode, newSavedModeId,
-  modePatchSkips, savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
+  modePatchSkips, savedModeSummary, savedModeSummaryParts, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
@@ -523,6 +523,23 @@ export function ToolApproachPicker({ approach, locked = null, onPick }: { approa
  */
 export function modeButtonLabel(session: Session, settings: Parameters<typeof chatModeState>[1], opts: { claudeAgent?: boolean } = {}) {
   const { active, current } = chatModeState(session, settings);
-  const summary = savedModeSummary(opts.claudeAgent ? { ...current, toolApproach: undefined } : current);
-  return { name: active?.name ?? 'Custom', icon: active ? SAVED_MODE_GLYPH[active.icon] : SparkleIcon, summary };
+  const parts = savedModeSummaryParts(opts.claudeAgent ? { ...current, toolApproach: undefined } : current);
+  const summary = parts.map((p) => p.label).join(' · ');
+  return { name: active?.name ?? 'Custom', icon: active ? SAVED_MODE_GLYPH[active.icon] : SparkleIcon, summary, parts };
+}
+
+type Glyph = (p: { className?: string }) => React.ReactElement;
+/** The Mode panel's own icon for each summary part. Running locally is the baseline, so it gets none. */
+export function summaryPartIcon(part: SavedModeSummaryPart): Glyph | null {
+  switch (part.key) {
+    case 'where': return part.value === 'worktree' ? WorktreeIcon : part.value === 'sandbox' ? CubeIcon : null;
+    case 'models': return part.value === 'cloud' ? CloudIcon : part.value === 'fusion' ? RouteIcon : LaptopIcon;
+    case 'approvals': return CHAT_MODE_ICON[part.value as ChatMode] ?? null;
+    case 'offline': return GlobeOffIcon;
+    case 'incognito': return IncognitoIcon;
+    case 'effort': return GaugeIcon;
+    case 'memory': return BrainCircuitIcon;
+    case 'guidance': return ListIcon;
+    case 'code': return CodeIcon;
+  }
 }

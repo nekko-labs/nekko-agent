@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@nekko-agent/shared';
 import { STARTER_MODES } from '@nekko-agent/shared';
-import { CODE_MODE_DOCS, ModePanel, ToolApproachPicker, chatModeState, modeButtonLabel, modePanelActions } from './ModePanel.js';
+import { CODE_MODE_DOCS, ModePanel, ToolApproachPicker, chatModeState, modeButtonLabel, modePanelActions, summaryPartIcon } from './ModePanel.js';
 
 const store = vi.hoisted(() => ({
   providers: undefined as undefined | { id: string; kind: string; name: string }[],
@@ -243,5 +243,10 @@ describe('saved modes', () => {
     // A Claude Agent chat never runs in code mode, so its label doesn't claim it.
     expect(modeButtonLabel({ ...session, toolApproach: 'code' }, store.settings).summary).toContain('code mode');
     expect(modeButtonLabel({ ...session, toolApproach: 'code' }, store.settings, { claudeAgent: true }).summary).not.toContain('code mode');
+  });
+  it('draws each chosen option as its Mode panel icon, and none for running locally', () => {
+    const icons = modeButtonLabel({ ...session, mode: 'yolo', incognito: true }, store.settings).parts.map((p) => [p.key, !!summaryPartIcon(p)]);
+    expect(icons).toEqual([['where', true], ['approvals', true], ['incognito', true]]);
+    expect(summaryPartIcon({ key: 'where', value: 'local', label: 'local' })).toBeNull();
   });
 });
