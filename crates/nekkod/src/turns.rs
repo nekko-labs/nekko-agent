@@ -3868,7 +3868,14 @@ impl TurnTools {
         let request = json!({"sessionId": self.shared.session_id, "sourceId": self.provider_id, "providerId": pid});
         let targets = match d("turn:delegationTargets".into(), vec![request]).await {
             Ok(Value::Array(models)) => models,
-            Err(e) => return failure("model_list_unavailable", &e),
+            Err(e) => {
+                let code = match e.as_str() {
+                    crate::spawn::DISCOVERY_PROVIDER_UNAVAILABLE => "provider_unavailable",
+                    crate::spawn::DISCOVERY_INVALID_ENDPOINT => "invalid_endpoint",
+                    _ => "model_list_unavailable",
+                };
+                return failure(code, &e);
+            }
             _ => return failure("model_list_unavailable", "No verified model list was returned."),
         };
         if self.shared.cancel.is_cancelled() {

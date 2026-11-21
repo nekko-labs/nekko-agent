@@ -445,6 +445,12 @@ fn same_provider(id: &Value, settings: &Value, current: &Value) -> bool {
     find(id, settings) == find(id, current)
 }
 
+// The internal RPC transports failures as strings. Keep these two fixed messages
+// shared with the tool adapter so callers retain their actionable error codes.
+pub(crate) const DISCOVERY_PROVIDER_UNAVAILABLE: &str =
+    "Provider is unknown or disabled. Enable the intended provider in Models.";
+pub(crate) const DISCOVERY_INVALID_ENDPOINT: &str = "Configure a valid HTTP(S) endpoint for the intended provider.";
+
 /// Discovery also goes through the saved scope: it is a network request on
 /// the chosen provider, not permission to enumerate other configured accounts.
 pub(crate) async fn discover(ctx: &Ctx, req: &Value) -> Result<Vec<Value>, String> {
@@ -481,10 +487,10 @@ pub(crate) async fn discover(ctx: &Ctx, req: &Value) -> Result<Vec<Value>, Strin
     let target = s(req, "providerId")
         .and_then(find)
         .filter(|p| js::truthy(p.get("enabled")))
-        .ok_or("Provider is unknown or disabled. Enable the intended provider in Models.")?;
+        .ok_or(DISCOVERY_PROVIDER_UNAVAILABLE)?;
     check_delegation_route(&parent, source_id.and_then(find), target)?;
     if crate::admission::provider_endpoint(target).is_none() {
-        return Err("Configure a valid HTTP(S) endpoint for the intended provider.".into());
+        return Err(DISCOVERY_INVALID_ENDPOINT.into());
     }
     let mut models = delegation_models(ctx, target, true).await?;
     models.retain(|m| nekko_messaging::auto::is_chat_model(m) && m.get("id").is_some_and(exact));
