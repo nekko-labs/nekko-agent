@@ -38,6 +38,12 @@ The first time it opens, Nekko says hi and asks a few quick questions, all of th
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
+## A new ChatGPT model is missing
+
+The ChatGPT connection lists models returned by your signed-in account's Codex catalog, not every model announced for the OpenAI API. OpenAI can filter that catalog by your plan, rollout and the client version Nekko reports. Keep Nekko updated; installing a newer Codex CLI separately does not update Nekko's catalog request. After updating and restarting Nekko, reopen the model picker. During normal use, successful catalogs can be cached for up to five minutes.
+
+OpenAI now documents [GPT-6.2 Astra](https://developers.openai.com/api/docs/models/gpt-6.2-astra), model ID `gpt-6.2-astra`. New source builds request the catalog as Codex `0.171.0`, but the model appears only when your account's catalog includes it. The discovery change has synthetic provider-test coverage, not live entitlement verification. Nekko does not automatically switch existing chats to a new model.
+
 ## Returning to Agents
 
 On desktop and the Local Web UI, the top of the Settings page shows an **← Agents / Settings** breadcrumb. Click **Agents** to return directly to your agents. Other pages keep their existing navigation.

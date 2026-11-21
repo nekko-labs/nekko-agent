@@ -421,7 +421,7 @@
     "requests": [
       {
         "method": "GET",
-        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
+        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.171.0",
         "headers": {
           "Accept": "application/json",
           "Authorization": "Bearer oauth-chatgpt-token",
@@ -440,7 +440,7 @@
     "requests": [
       {
         "method": "GET",
-        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
+        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.171.0",
         "headers": {
           "Accept": "application/json",
           "Authorization": "Bearer oauth-chatgpt-token",
@@ -459,7 +459,7 @@
     "requests": [
       {
         "method": "GET",
-        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
+        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.171.0",
         "headers": {
           "Accept": "application/json",
           "Authorization": "Bearer oauth-chatgpt-token",
