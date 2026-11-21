@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { APPROVE_TOOL, WATCH_TOOL, TITLE_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, MEDIA_MODELS_TOOL, GENERATE_VIDEO_TOOL, askNekkod, callNekkod, handleBridgeMessage, offeredTools } from './bridge.js';
 
@@ -25,6 +27,26 @@ describe('askNekkod', () => {
       behavior: 'deny',
       message: 'No.',
     });
+  });
+
+  it('waits on a real socket with no headers timeout, as a person answering takes', async () => {
+    // Node's fetch gave up after 300 s without response headers ("fetch failed"),
+    // which denied any approval the user took longer than five minutes to answer.
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => setTimeout(() => res.end(JSON.stringify({ behavior: 'allow', updatedInput: JSON.parse(body).input })), 50));
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const { port } = server.address() as AddressInfo;
+    const globalFetch = vi.spyOn(globalThis, 'fetch');
+    try {
+      await expect(askNekkod(`http://127.0.0.1:${port}`, 'tok', prompt)).resolves.toEqual({ behavior: 'allow', updatedInput: { command: 'ls' } });
+      expect(globalFetch).not.toHaveBeenCalled();
+    } finally {
+      globalFetch.mockRestore();
+      server.close();
+    }
   });
 
   it('denies when nekkod refuses, is unreachable or answers nonsense', async () => {
