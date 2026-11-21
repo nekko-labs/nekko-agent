@@ -84,6 +84,11 @@ class HardwareMonitorControllerTest {
             signed,
         )
         assertEquals(false, com.nekko.protocol.ModelServerSettings.from(json("""{"clientModelSettings":false}"""))!!.devicesChoose)
+        // Overload protection: on unless the computer says off, and the reserve it keeps is the computer's.
+        assertEquals("unset means on", null, m.state.value.engine!!.server!!.overloadGuard)
+        val guarded = com.nekko.protocol.ModelServerSettings.from(json("""{"overloadGuard":false,"overloadReserveMB":1024}"""))!!
+        assertEquals(false, guarded.overloadGuard)
+        assertEquals(1024, guarded.overloadReserveMB)
     }
 
     @Test fun `an older computer says it has no monitors, and one missing reading leaves the rest`() = runTest {

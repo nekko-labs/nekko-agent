@@ -148,10 +148,16 @@ data class ModelServerSettings(
     val jitLoad: Boolean? = null,
     /** Off, the Model Server's own saved settings decide and devices can't change them. */
     val devicesChoose: Boolean = true,
+    /** Overload protection: stop a load before it leaves less than the reserve free. On unless turned off. */
+    val overloadGuard: Boolean? = null,
+    /** How much overload protection keeps free, in MB; set on the computer, read here for the label. */
+    val overloadReserveMB: Int? = null,
 ) {
     companion object {
         /** The idle times offered, in seconds: 5 minutes, 15 minutes, an hour, never. */
         val IDLE_CHOICES = listOf(300, 900, 3600, 0)
+        /** The reserve when the computer names none (`OVERLOAD_RESERVE_MB_DEFAULT`). */
+        const val OVERLOAD_RESERVE_DEFAULT_MB = 500
 
         fun from(e: JsonElement?): ModelServerSettings? {
             val o = e.obj() ?: return null
@@ -160,6 +166,8 @@ data class ModelServerSettings(
                 idleTtlSeconds = o.long("idleTtlSeconds")?.toInt(),
                 jitLoad = (o["jitLoad"] as? JsonPrimitive)?.booleanOrNull,
                 devicesChoose = (o["clientModelSettings"] as? JsonPrimitive)?.booleanOrNull ?: true,
+                overloadGuard = (o["overloadGuard"] as? JsonPrimitive)?.booleanOrNull,
+                overloadReserveMB = o.long("overloadReserveMB")?.toInt(),
             )
         }
     }

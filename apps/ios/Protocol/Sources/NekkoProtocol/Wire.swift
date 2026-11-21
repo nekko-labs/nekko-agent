@@ -22,6 +22,8 @@ public enum Channels {
     public static let attachmentUpload = "attachment:upload"
     /// A chat's durable watches: what each watches, when it wakes and how that went (never the continuation prompt).
     public static let sessionWatches = "session:watches"
+    /// Stop a watch (a clip being made, say): `(chatId, watchId)`. An agent-class call, like Stop: no signature.
+    public static let sessionCancelWatch = "session:cancelWatch"
     /// A computer's page in one read: version, hardware, live stats, the model server (`PHONE_MACHINE_VIEW`).
     public static let machineSummary = "machine:summary"
     /// The Monitors pane's one read (`PHONE_MONITOR_VIEW`), added on the computer in #989.
@@ -144,7 +146,7 @@ public enum Channels {
         sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, toolsList, changesList, auditRead,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
-        usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
+        usageSummary, limitsGet, sessionWatches, sessionCancelWatch, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
         serviceStatus, serviceUpdateState, serviceRestart, serviceUpdateCheck, serviceUpdateDownload, serviceUpdateInstall,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
