@@ -418,11 +418,11 @@ export function whatsNewPage(lines, avatars = new Map(), rng = Math.random) {
   const description = 'The changes worth knowing in each Nekko Agent release, and the people who shipped them.';
   const canonical = `${ORIGIN}/whatsnew`;
   const og = `${ORIGIN}/og/whatsnew.jpg?v=${OG_VERSION}`;
-  const face = (login) => {
+  const face = (login, size = 28) => {
     const avatar = avatars.get(login.toLowerCase());
     return (
       `<span class="by-avatar" aria-hidden="true">${escapeHtml(login.slice(0, 2).toUpperCase())}` +
-      (avatar ? `<img class="by-img" src="${escapeHtml(avatar)}" alt="" width="28" height="28" loading="lazy" decoding="async" />` : '') +
+      (avatar ? `<img class="by-img" src="${escapeHtml(avatar)}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async" />` : '') +
       `</span>`
     );
   };
@@ -457,6 +457,8 @@ ${shuffled(l.contributors)
   .map((login) => `          <li><a class="by" href="https://github.com/${login}" rel="noopener">${face(login)}${escapeHtml(login)}</a></li>`)
   .join('\n')}
         </ul>`;
+  // A one-liner's credit: small faces, then each login, as "Shipped by" does on a headliner.
+  const oneLinerBy = (authors) => `<span class="more-by"><span class="by-faces">${authors.map((a) => face(a, 20)).join('')}</span><span>${authors.map(person).join(', ')}</span></span>`;
   // A release with major highlights: its people first, the headliners in the
   // soft panel under the pixel Nekko, then the rest as one-liners.
   const headlined = (l, majors) => {
@@ -473,7 +475,7 @@ ${majors.map((h, i) => highlight(h, i === 0 ? ' class="headliner-lead"' : '')).j
         <p class="more-in">More in ${l.line}</p>
         <ul class="more">
 ${rest
-  .map((h) => `          <li>${h.kind ? `<span class="more-kind">${KINDS[h.kind]}</span>` : ''}<span><span class="more-title">${escapeHtml(h.title)}</span> <span aria-hidden="true">·</span> ${pr(h.pr)}</span></li>`)
+  .map((h) => `          <li>${h.kind ? `<span class="more-kind">${KINDS[h.kind]}</span>` : ''}<span><span class="more-title">${escapeHtml(h.title)}</span> <span aria-hidden="true">·</span> ${pr(h.pr)} <span aria-hidden="true">·</span> ${oneLinerBy(h.authors)}</span></li>`)
   .join('\n')}
         </ul>`
             : ''
@@ -591,6 +593,9 @@ ${majors.length ? headlined(l, majors) : plain(l)}
       .more { list-style: none; padding: 16px 0 0; margin: 14px 0 0; border-top: 1px solid var(--line); display: grid; gap: 10px; font-size: 15px; }
       .legal .more li { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: baseline; gap: 0 12px; color: var(--ink); }
       .more li > span:only-child { grid-column: 2; }
+      .more-by { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+      .more .by-avatar { width: 20px; height: 20px; font-size: 8px; }
+      .more .by-avatar + .by-avatar { margin-left: -5px; }
       .more-kind { font: 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
     </style>
   </head>

@@ -377,6 +377,35 @@ test('a release with major highlights puts its people first, then the headliners
   assert.doesNotMatch(allMajor, /More in 0\.10/);
 });
 
+test('every one-liner names each of its authors after the pull request link, faces first', () => {
+  const lines = parseWhatsNew({
+    '0.10': line({
+      contributors: ['ada', 'bob'],
+      highlights: [
+        { title: 'Big one', detail: 'd', pr: 1, authors: ['bob'], major: true },
+        { title: 'Solo', detail: 'd', pr: 2, authors: ['ada'], kind: 'fix' },
+        { title: 'Pair', detail: 'd', pr: 3, authors: ['ada', 'bob'] },
+      ],
+    }),
+  });
+  const html = whatsNewPage(lines, new Map([['ada', '/contributors/ada-0123456789abcdef.png']]), () => 0);
+  const more = html.slice(html.indexOf('<ul class="more">'), html.indexOf('</ul>', html.indexOf('<ul class="more">')));
+  const items = [...more.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((m) => m[1]);
+  assert.equal(items.length, 2);
+  for (const [item, pr, authors] of [[items[0], 2, ['ada']], [items[1], 3, ['ada', 'bob']]]) {
+    const by = item.indexOf('class="more-by"');
+    assert.ok(by > item.indexOf(`/pull/${pr}"`), `#${pr}: authors after the link`);
+    const credit = item.slice(by);
+    assert.equal([...credit.matchAll(/class="by-avatar"/g)].length, authors.length, `#${pr}: one face each`);
+    assert.deepEqual([...credit.matchAll(/<a class="by" href="https:\/\/github.com\/([^"]+)" rel="noopener">([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]), authors.map((a) => [a, a]));
+    assert.ok(credit.indexOf('class="by-faces"') < credit.indexOf('<a class="by"'), `#${pr}: faces first`);
+  }
+  assert.match(items[1], /<\/a>, <a class="by"/);
+  assert.match(items[0], /src="\/contributors\/ada-0123456789abcdef\.png"[^>]*width="20" height="20"/);
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  assert.match(css, /\.more \.by-avatar \{ width: 20px; height: 20px;/);
+});
+
 test('the headliners card is a soft plum panel, in tokens, and holds still', () => {
   const html = build().get('whatsnew.html');
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
