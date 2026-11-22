@@ -479,6 +479,8 @@ export const IpcChannels = {
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
   mcpHypergateConnect: 'mcp:hypergate:connect',
+  mcpHypergateCheck: 'mcp:hypergate:check',
+  mcpHypergateStart: 'mcp:hypergate:start',
   // Narrow capability-driven service controls for paired devices.
   serviceStatus: 'service:status',
   serviceRestart: 'service:restart',
@@ -1508,6 +1510,10 @@ export interface NekkoApi {
   detectHypergate(port?: number): Promise<import('./mcp.js').HypergateInfo | null>;
   /** Connect to a local Hypergate daemon: claim a token, save the entry, bring its tools online. */
   connectHypergate(port?: number): Promise<import('./mcp.js').HypergateInfo | null>;
+  /** Whether Hypergate is on this computer, and the running daemon's info if it answers. */
+  checkHypergate(port?: number): Promise<import('./mcp.js').HypergateCheck>;
+  /** Start an installed Hypergate and wait for it to answer; null if it did not come up. */
+  startHypergate(port?: number): Promise<import('./mcp.js').HypergateInfo | null>;
   /** Register this device's push token with the relay (mobile/relay only; no-op elsewhere). */
   registerPushToken(token: string, platform: 'ios' | 'android'): Promise<void>;
   /** Check for a newer version (desktop: GitHub feed; web: server version). */

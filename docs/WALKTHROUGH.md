@@ -456,9 +456,24 @@ reads none.
 ## 8. Connectors
 
 The **Connectors** tab links external sources so their content can be pulled into
-context: **Linear**, **Slack**, **Discord** (token-based), and **Gmail** /
-**Google Drive** (OAuth). Tokens are stored locally. Connect one, fetch a sample
-to confirm it works, and the results become available to the assistant.
+context. Tokens are stored locally. Connect one, fetch a sample to confirm it
+works, and the results become available to the assistant. The page is grouped by
+kind:
+
+- **Git providers**: GitHub and GitLab.
+- **Project management**: Linear, Jira, Asana, Trello, ClickUp, Todoist, Floop
+  and a local tasks file.
+- **Chat and email**: Slack, Discord, Microsoft Teams and Gmail.
+- **Docs and files**: Google Drive.
+- **Gateways**: [Hypergate](https://hypergate.app), which runs your MCP servers
+  behind one endpoint and keeps your API keys in a local vault. **Connect** first
+  looks for it on this computer. If it is running, Nekko Agent connects at once
+  and the row shows its version and how many servers it manages. If it is
+  installed but stopped, **Start Hypergate** starts it and then connects. If it
+  is not installed, **Get Hypergate** opens its site.
+- **MCP servers**: the servers set up in **Settings → MCP servers**. **Manage**
+  opens that section to add or change one.
+- **Messaging channels**: Telegram, to message your agent from your phone.
 
 ---
 

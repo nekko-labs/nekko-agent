@@ -153,3 +153,24 @@ describe('a connected row keeps its details collapsed (#2562)', () => {
     expect(gh).not.toContain('nekko-labs/nekko-agent');
   });
 });
+
+describe('connector groups', () => {
+  it('lists every connector once, under its group, in the groups order', () => {
+    const html = renderToStaticMarkup(<ConnectorGrid />);
+    const at = (s: string) => html.indexOf(s);
+    const labels = ['Git providers', 'Project management', 'Chat and email', 'Docs and files'];
+    for (const l of labels) expect(html, l).toContain(`>${l}</h3>`);
+    expect(labels.map((l) => at(`>${l}<`))).toEqual([...labels.map((l) => at(`>${l}<`))].sort((a, b) => a - b));
+    for (const c of CONNECTOR_CATALOG) expect(html.split(`data-connector="${c.kind}"`).length - 1, c.kind).toBe(1);
+    // GitHub sits under Git providers, Linear under Project management, Slack under Chat and email.
+    expect(at('data-connector="github"')).toBeLessThan(at('>Project management<'));
+    expect(at('data-connector="linear"')).toBeGreaterThan(at('>Project management<'));
+    expect(at('data-connector="slack"')).toBeGreaterThan(at('>Chat and email<'));
+    expect(at('data-connector="gdrive"')).toBeGreaterThan(at('>Docs and files<'));
+  });
+
+  it('puts extra groups after the catalog', () => {
+    const html = renderToStaticMarkup(<ConnectorGrid><section data-extra>Gateways</section></ConnectorGrid>);
+    expect(html.indexOf('data-extra')).toBeGreaterThan(html.indexOf('data-connector="gdrive"'));
+  });
+});
