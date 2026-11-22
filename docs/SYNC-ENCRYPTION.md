@@ -1,6 +1,6 @@
 # End-to-end encrypted sync
 
-Nekko Cloud **Pro** and **Team** sync your chats between your computers and phones. The sync is end-to-end encrypted: your devices lock every chat before it leaves them, and Nekko Cloud only ever stores the locked copy. Nekko Labs can't read your synced chats. We don't hold the keys, and nobody can make us produce something we don't have.
+Nekko Cloud **Pro** and **Enterprise** sync your chats between your computers and phones. The sync is end-to-end encrypted: your devices lock every chat before it leaves them, and Nekko Cloud only ever stores the locked copy. Nekko Labs can't read your synced chats. We don't hold the keys, and nobody can make us produce something we don't have.
 
 If you turn on **Help improve Nekko Agent** (off unless you turn it on), samples you share are encrypted too, with a key that never sits on any server, and carry nothing that ties them to your account.
 
@@ -40,11 +40,11 @@ flowchart TB
 
 ## Signing in the first time
 
-Settings > Nekko Cloud > **Sign in to Nekko Cloud** (or **New here? Create an account**) opens a short walkthrough: what Nekko Cloud is, then GitHub, Google, Apple or an emailed code, then a plan, then sync. On a Pro or Team account the Sync step turns sync on for this computer and shows your recovery key to save, as above; an account that already syncs on another device is sent to add this computer instead. Later sign-ins on the same computer skip the opening page. The plan step compares Free, Pro and Enterprise, with the full list one click away. Until billing goes live, choosing Pro there runs a test checkout that shows the ways to pay where you are (cards, Apple Pay or Google Pay, Link, and local options such as ACH, SEPA debit, iDEAL, UPI or Pix): nothing is charged and your plan stays as it is.
+Settings > Nekko Cloud > **Sign in to Nekko Cloud** (or **New here? Create an account**) opens a short walkthrough: what Nekko Cloud is, then GitHub, Google, Apple or an emailed code, then a plan, then sync. On a Pro or Enterprise account the Sync step turns sync on for this computer and shows your recovery key to save, as above; an account that already syncs on another device is sent to add this computer instead. Later sign-ins on the same computer skip the opening page. The plan step compares Free, Pro and Enterprise, with the full list one click away. Until billing goes live, choosing Pro there runs a test checkout that shows the ways to pay where you are (cards, Apple Pay or Google Pay, Link, and local options such as ACH, SEPA debit, iDEAL, UPI or Pix): nothing is charged and your plan stays as it is.
 
 ## Plans
 
-- **Pro and Team** can turn sync on (5 GB and 20 GB of encrypted storage per account).
+- **Pro and Enterprise** can turn sync on (5 GB and 20 GB of encrypted storage per account).
 - **Free** keeps everything on your own devices, as today.
 - **Downgrading never locks you out.** If a Pro plan ends, your devices can still download and decrypt what was synced, and you can delete it; only new uploads stop.
 - **Delete everything synced** removes every record, keyring and device from Nekko Cloud at once. Your account stays, and your chats stay on your devices.
@@ -183,7 +183,7 @@ All sync routes take `Authorization: Bearer nk_…`. Writes answer `402 {"error"
 ## What's built
 
 - [x] Encryption format and reference implementation (`crates/nekko-sync`), with tests for tampering, relabelling, rollback, rotation, wrong devices and recovery-key typos; vectors cross-checked against Node's `crypto`.
-- [x] Nekko Cloud: Supabase sign-in, device tokens, the storage API, Pro and Team gating, quotas, revocation, delete everything, anonymous donations (`apps/nekko-agent-api`), and `npm run dev:local`, the whole service with a stand-in Supabase on one machine.
+- [x] Nekko Cloud: Supabase sign-in, device tokens, the storage API, Pro and Enterprise gating, quotas, revocation, delete everything, anonymous donations (`apps/nekko-agent-api`), and `npm run dev:local`, the whole service with a stand-in Supabase on one machine.
 - [x] The sync engine (`crates/nekko-cloud`) in nekkod, tested with three devices against the local service (`tests/live.rs`): sign-in, turn on, recovery-key restore, approval by join code, edits both ways, revoke, rotate and seal again, deletes, and no plaintext on the server. `tests/attacks.rs` runs the internal review's attacks through a proxy that rewrites the server's answers: a keyring from an untrusted key, a swapped key at approval, a lowered rollback guard and a replayed revision, writes under an old epoch, and a withheld account record. Each is refused.
 - [x] An internal adversarial review ([reports/crypto-review-internal-2026-10-22.md](../reports/crypto-review-internal-2026-10-22.md)) and its fixes ([decision 0008](decisions/0008-authenticated-wraps-and-join-codes.md)).
 - [x] Settings → Sync and the sign-in screen on the computer, with the animated sync picture, the recovery key and kit, devices, approve and remove.

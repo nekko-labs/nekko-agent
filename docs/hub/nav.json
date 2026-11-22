@@ -169,7 +169,7 @@
           "slug": "sync-encryption",
           "title": "Encrypted sync",
           "source": "docs/SYNC-ENCRYPTION.md",
-          "description": "How Pro and Team sync your chats without Nekko Cloud being able to read them."
+          "description": "How Pro and Enterprise sync your chats without Nekko Cloud being able to read them."
         },
         {
           "slug": "cli",

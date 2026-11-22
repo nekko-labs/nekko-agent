@@ -6,7 +6,7 @@
 
 A Nekko Cloud machine is a sandboxed computer in the cloud that your phone pairs with like any
 other computer, so you can use cloud models from your phone with no computer of your own
-switched on. It is part of Nekko Cloud Pro and Team.
+switched on. It is part of Nekko Cloud Pro and Enterprise.
 
 ## What it is
 

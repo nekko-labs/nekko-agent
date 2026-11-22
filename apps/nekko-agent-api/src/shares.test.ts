@@ -47,7 +47,7 @@ describe("the library switches", () => {
 });
 
 describe("shared Library files", () => {
-  it("are hidden until the switch reaches the account, and need Pro or Team to write", async () => {
+  it("are hidden until the switch reaches the account, and need Pro or Enterprise to write", async () => {
     const philip = await user("philip@nekkolabs.com");
     const someone = await user("someone@example.com");
     const free = await user("davide@nekkolabs.com", "free");

@@ -12,7 +12,7 @@ public protocol SyncAgreementKey {
     func sharedSecret(with peer: P256.KeyAgreement.PublicKey) throws -> SharedSecret
 }
 
-/// End-to-end encrypted chat sync with Nekko Cloud (Pro and Team), byte for
+/// End-to-end encrypted chat sync with Nekko Cloud (Pro and Enterprise), byte for
 /// byte as `crates/nekko-sync` makes it; both are held to
 /// `Fixtures/sync-crypto.json` (a copy of `crates/nekko-sync/tests/golden/sync-crypto.json`).
 /// The design is `docs/SYNC-ENCRYPTION.md`; in short:

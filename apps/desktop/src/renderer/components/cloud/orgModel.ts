@@ -34,7 +34,7 @@ export function orgErrorText(e: unknown): string {
   const raw = cloudError(e);
   if (UNKNOWN_CHANNEL.test(raw)) return 'Organizations are not available in this version of Nekko Agent yet. Update the app and try again.';
   if (/orgs-not-available/.test(raw)) return 'Organizations are not available for your account yet.';
-  if (/plan-required/.test(raw)) return 'Creating an organization needs Nekko Cloud Pro or Team.';
+  if (/plan-required/.test(raw)) return 'Creating an organization needs Nekko Cloud Pro or Enterprise.';
   if (/last-owner/.test(raw)) return 'An organization needs at least one owner.';
   if (/needs-synced-device/.test(raw)) return 'Unlock your account on this computer to see this organization\'s computers.';
   return raw || 'Something went wrong. Try again.';

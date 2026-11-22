@@ -5,7 +5,7 @@
 //! The Supabase access token is traded once for this device's Nekko Cloud
 //! token and dropped; the token goes in the [`vault`].
 //!
-//! **Sync (Pro and Team).** Every chat is sealed on this device with
+//! **Sync (Pro and Enterprise).** Every chat is sealed on this device with
 //! `nekko-sync` and only ciphertext is uploaded; see `docs/SYNC-ENCRYPTION.md`.
 //! Turning sync on for an account's first device makes the keyring and the
 //! recovery key (shown once). Another device joins either with the recovery
@@ -1008,7 +1008,7 @@ impl Cloud {
         let token = self.token()?;
         self.refresh().await?;
         if !self.account().is_some_and(|a| a.can_sync) {
-            return Err("Sync needs a Pro or Team plan.".into());
+            return Err("Sync needs a Pro or Enterprise plan.".into());
         }
         if self.keyring(self.key_id()).is_some() {
             self.edit(|s| s.enabled = true)?;

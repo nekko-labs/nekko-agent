@@ -116,7 +116,7 @@ export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
 
           {phase === 'needs-plan' && (
             <div className="sync-row">
-              <p className="text-sm text-ink-soft">Sync is part of Nekko Cloud Pro and Team. Your chats stay on this computer until then.</p>
+              <p className="text-sm text-ink-soft">Sync is part of Nekko Cloud Pro and Enterprise. Your chats stay on this computer until then.</p>
             </div>
           )}
 
