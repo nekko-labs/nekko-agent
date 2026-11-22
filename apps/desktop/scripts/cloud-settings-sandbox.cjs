@@ -18,7 +18,7 @@ function stub(scenario) {
   f.bridge.engineModels = async () => [];
   f.bridge.listRemoteDevices = async () => [];
   f.bridge.getRemoteStatus = async () => ({ enabled: false });
-  const initial = { signedIn: true, keysStoredIn: 'Windows Credential Manager', account: { plan: 'pro', email: 'you@example.com' }, sync: { phase: scenario === 'restore' ? 'needs-join' : 'idle', enabled: true, recoveryConfirmed: true, keyEpoch: 1, devices: [], skipped: {} } };
+  const initial = { signedIn: true, keysStoredIn: 'Windows Credential Manager', account: { plan: 'pro', email: 'you@example.com' }, sync: { phase: scenario === 'restore' ? 'needs-join' : 'idle', enabled: true, recoveryConfirmed: true, keyEpoch: 1, devices: [], chats: 3, skipped: {} } };
   let state = initial;
   const org = { id: 'old', name: 'First fleet', role: 'owner', hasKey: true, sharing: false, members: [], invites: [] };
   let list = ['missing', 'populated'].includes(scenario) ? [org] : [];
@@ -47,7 +47,7 @@ function stub(scenario) {
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
-  const win = new BrowserWindow({ width: 1200, height: 900, x: -5000, y: -5000, useContentSize: true, show: false, focusable: false, skipTaskbar: true, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
+  const win = new BrowserWindow({ width: 1200, height: 900, x: -5000, y: -5000, useContentSize: true, show: false, focusable: false, skipTaskbar: true, webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, backgroundThrottling: false } });
   const errors = [];
   win.on('focus', () => errors.push('Fixture took focus'));
   win.webContents.on('console-message', (e) => { if (e.level === 'error') errors.push(e.message.slice(0, 1400) + " " + e.sourceId + ":" + e.lineNumber); });
@@ -62,12 +62,22 @@ app.whenReady().then(async () => {
   }
   const fill = (id, value) => run('(' + fillField + ')(' + q(id) + ',' + js(value) + ')');
   function scrollSection(id) {
-    const el = document.getElementById(id);
+    const section = document.getElementById(id);
+    const el = id === 'sync' ? (section.querySelector('[data-testid=sync-join-setup]') ?? section.querySelector('[data-testid=sync-restore-key]')?.parentElement ?? section) : section;
     const pane = el.closest('.settings-content');
-    pane.scrollTop += el.getBoundingClientRect().top - pane.getBoundingClientRect().top - 12;
+    pane.scrollTop += el.getBoundingClientRect().top - pane.getBoundingClientRect().top - 16;
+    return el.getBoundingClientRect().height > 0;
   }
-  const show = (id) => run('(' + scrollSection + ')(' + js(id) + ')');
-  const capture = () => win.capturePage(undefined, { stayHidden: true }).then((image) => image.toPNG());
+  const show = (id) => wait('(' + scrollSection + ')(' + js(id) + ')');
+  const capture = async () => {
+    const image = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => { win.webContents.removeListener('paint', painted); reject(Error('No offscreen frame')); }, 2500);
+      function painted(_event, _dirty, image) { clearTimeout(timeout); resolve(image); }
+      win.webContents.once('paint', painted);
+      win.webContents.invalidate();
+    });
+    return image.toPNG();
+  };
   const shot = async (name) => { win.webContents.invalidate(); await sleep(250); fs.writeFileSync(path.join(out, name + '.png'), await capture()); };
   async function open(scenario, target) {
     await run("layoutFixture.store.setState({ view:'chat' })");
@@ -75,6 +85,8 @@ app.whenReady().then(async () => {
     await run('(' + stub + ')(' + js(scenario) + ')');
     await run("layoutFixture.store.setState({ view:'settings' })");
     await wait(q(target));
+    await run('[...document.querySelectorAll(".settings-nav-item")].find((b) => b.textContent.trim() === "Nekko Cloud").click()');
+    await wait('document.querySelector("#settings-cloud")?.getBoundingClientRect().height > 0');
   }
   try {
     await win.loadFile(path.join(out, 'index.html'));
