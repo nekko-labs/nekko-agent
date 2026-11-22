@@ -38,6 +38,12 @@ The first time it opens, Nekko says hi and asks a few quick questions, all of th
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
+## A new ChatGPT model is missing
+
+The ChatGPT connection lists models returned by your signed-in account's Codex catalog, not every model announced for the OpenAI API. OpenAI can filter that catalog by your plan, rollout and the client version Nekko reports. Keep Nekko updated; installing a newer Codex CLI separately does not update Nekko's catalog request. After updating and restarting Nekko, reopen the model picker. During normal use, successful catalogs can be cached for up to five minutes.
+
+OpenAI now documents [GPT-6.2 Astra](https://developers.openai.com/api/docs/models/gpt-6.2-astra), model ID `gpt-6.2-astra`. New source builds request the catalog as Codex `0.171.0`, but the model appears only when your account's catalog includes it. The discovery change has synthetic provider-test coverage, not live entitlement verification. Nekko does not automatically switch existing chats to a new model.
+
 ## Returning to Agents
 
 On desktop and the Local Web UI, the top of the Settings page shows an **← Agents / Settings** breadcrumb. Click **Agents** to return directly to your agents. Other pages keep their existing navigation.
@@ -243,7 +249,7 @@ The group heading stays at the top of the list while you scroll its agents, then
 
 ### Switching what the Agents panel lists
 
-A row of icons at the top of the Agents panel picks which kind of window it lists: **Agents**, **Terminals**, **Photos and videos** and **Files**. Click an icon, or use the arrow keys once it has focus; hover an icon for its name. Agents shows the agent cards described above. Terminals and Photos and videos show just those. Files is a file browser: under **Open** are the files already open in your agent windows, and under **Folders** your connected folders and repositories, which unfold in place. Pick a file to open it in a window on the wall, where you can edit and save it (Ctrl/Cmd+S). The panel remembers your choice.
+A row of icons at the top of the Agents panel picks which kind of window it lists: **Agents**, **Terminals**, **Photos and videos** and **Files**. Click an icon, or use the arrow keys once it has focus; hover an icon for its name. Agents shows the agent cards described above. Terminals and Photos and videos show just those. Files is a file browser: under **Open** are the files already open in your agent windows, and under **Folders** your connected folders and repositories, which unfold in place. Choose **Add folder…** below the list to connect another folder, or click the **×** beside a folder to disconnect it from Nekko and its chats without deleting anything on disk. Pick a file to open it in a window on the wall, where you can edit and save it (Ctrl/Cmd+S). The panel remembers your choice.
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Animations > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 

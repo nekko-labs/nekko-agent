@@ -13,6 +13,10 @@
 
 Older entries below may use the names from when they shipped: the web edition (Local Web UI), Nekko Server (Model Server), Nekko Agent Cloud (Nekko Cloud).
 
+## Instructions for a model (#3175)
+
+Implemented in desktop Settings > System prompt size: save [additional instructions for an exact provider and model](spec/context/model-sized-system-prompts.md#exact-model-instructions-3175), or clear and save to remove them. They add to the built-in and global instructions for the model that actually runs the turn, without changing prompt size, routing, tools, or permissions. The Context Inspector counts the matching addition for the selected model. Sandbox and Claude Agent chats do not use these additions. The text is sent to the matching inference provider, so do not put secrets in it.
+
 ## New agent window defaults
 
 Implemented; 67 focused tests, 1,145 desktop tests, desktop typecheck, isolated production build and five docs tests pass: an explicit model choice in a chat (including its expanded picker) or Add window becomes the next agent window's saved provider/model pair. Auto is saved as Auto, not the model it later resolves to. Browsing providers, loading catalogs and switching existing chats do not rewrite defaults or other chats' choices. New chats prefer the saved pair over a transient active catalog; startup restores settings before loading that catalog. A successful permission-mode change saves Ask, Guardrails or YOLO as the default for new chats; failed or missing-session updates do not. Effort remains app-wide and execution mode retains its existing saved default and sandbox setup flow. Incognito and Offline remain explicit session-only privacy choices, never inherited globally. No new network calls beyond existing settings/session APIs, permissions or telemetry. Acceptance: exact provider/model pairs, Auto, saved-default startup ordering, session-choice precedence, failed permission updates, and effort/execution/privacy regressions. Isolated visual interaction and packaged-app verification remain pending with the parent task.

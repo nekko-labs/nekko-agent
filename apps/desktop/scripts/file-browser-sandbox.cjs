@@ -3,6 +3,8 @@
 // layout-evidence-integration.cjs with NEKKO_LAYOUT_FIXTURE=wall-polish-fixture.tsx
 // NEKKO_LAYOUT_SANDBOX=file-browser-sandbox.cjs. NEKKO_BASELINE=1 (with
 // NEKKO_TEST_SOURCE at the base revision) captures the before shots without checks.
+// NEKKO_FOLDER_CONTROLS=before|after captures matching populated and empty views
+// at desktop and narrow widths; after also checks the folder actions.
 const { app, BrowserWindow, session } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -30,6 +32,43 @@ app.whenReady().then(async () => {
     // A hidden window delivers no frames, so a transition would be captured at its first frame: settle everything at its end state.
     await win.webContents.insertCSS('*, *::before, *::after { transition: none !important; animation: none !important; }');
     for (let i = 0; i < 60 && !(await run("!!document.querySelector('[data-agent-panel]')")); i++) await sleep(200);
+    const folderControls = process.env.NEKKO_FOLDER_CONTROLS;
+    if (folderControls) {
+      const add = `[...document.querySelectorAll('[data-file-browser] button')].find(b => b.textContent.trim() === 'Add folder…')`;
+      const remove = (name) => `document.querySelector('[aria-label="Disconnect ${name}"]')`;
+      const waitFor = async (name, expression) => {
+        let ok = false;
+        for (let i = 0; i < 40 && !(ok = await run(expression)); i++) await sleep(50);
+        check(name, ok, {});
+      };
+      for (const [width, height] of [[1200, 800], [390, 700]]) {
+        win.setContentSize(width, height);
+        for (const folders of [true, false]) {
+          await run(`window.integration.reset({ empty: true, folders: ${folders} })`);
+          await sleep(500);
+          if (width < 768) await run(`document.querySelector('[aria-label="Open agent list"]').click()`);
+          await run(pick('Files'));
+          check('Files sidebar populated as requested', await run(`document.querySelectorAll('[data-connected-folder]').length === ${folders ? 3 : 0}`));
+          await shot(`folders-${width}-${folders ? 'populated' : 'empty'}-${folderControls}`);
+          if (folderControls !== 'after') continue;
+          await waitFor('Add folder is last', `${add} === document.querySelector('[data-file-browser]').lastElementChild`);
+          await run(`(${add}).click()`);
+          await waitFor('cancelling the picker does not add a folder', `window.integration.calls.filter(c => c.method === 'pickFolder').length === 1 && !window.integration.calls.some(c => c.method === 'addFolder') && !(${add}).hasAttribute('aria-disabled')`);
+          await run(`window.integration.setFolderPicker('C:/fixture/additional'); (${add}).click()`);
+          await waitFor('connect adds a folder without changing the active chat or project', `!!document.querySelector('[data-connected-folder="ws-added"]') && document.querySelectorAll('[data-connected-folder]').length === ${folders ? 4 : 1} && window.integration.state().activeProjectId === null && !window.integration.records().some(s => s.workspaceId)`);
+          const target = folders ? 'shop' : 'additional';
+          const id = folders ? 'ws-shop' : 'ws-added';
+          await run(`window.integration.blockFolder('${id}'); ${remove(target)}.click()`);
+          await waitFor('a refused disconnect keeps the row and explains the error', `!!${remove(target)} && window.integration.state().toasts.some(t => t.kind === 'error' && t.message.includes('Wait for chats using this folder'))`);
+          await run(`window.integration.blockFolder(null); ${remove(target)}.focus(); ${remove(target)}.click()`);
+          await waitFor('disconnect affects only the target and keeps the Files view open', `!${remove(target)} && document.querySelectorAll('[data-connected-folder]').length === ${folders ? 3 : 0} && !document.querySelector('[data-folder-tree]') && window.integration.calls.filter(c => c.method === 'removeFolder').every(c => c.id === '${id}')`);
+          await waitFor('focus returns to Add folder', `document.activeElement === (${add})`);
+        }
+      }
+      check('hidden and non-focusable, with no renderer errors', !win.isVisible() && !win.isFocusable() && report.errors.length === 0, report.errors);
+      report.success = true;
+      return;
+    }
     await run('window.integration.reset({ folders: true })');
     for (let i = 0; i < 60 && !(await run("!!document.querySelector('[data-agent-panel-shows]')")); i++) await sleep(200);
     await sleep(800);
@@ -69,6 +108,6 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify({ out, success: report.success, checks: report.checks.map((c) => `${c.ok ? 'ok ' : 'NO '} ${c.name}`), errors: report.errors.slice(0, 5) }, null, 2));
     win.destroy();
-    app.quit();
+    app.exit(report.success ? 0 : 1);
   }
 });

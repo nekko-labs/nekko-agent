@@ -1,4 +1,4 @@
-import { unsupportedLoadReason, type LocalModel } from '@nekko-agent/shared';
+import { modelModality, unsupportedLoadReason, type LocalModel, type ModelModality } from '@nekko-agent/shared';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 
 /**
@@ -25,6 +25,15 @@ export function paramsLabel(name: string, parameterSize?: string): string | null
   const p = paramsText(name, parameterSize);
   if (!p) return null;
   return p.includes(',') ? p.replace(',', ' parameters,') : p.endsWith('effective') ? p.replace(' effective', ' effective parameters') : `${p} parameters`;
+}
+
+const TYPE_LABELS: Record<ModelModality, string> = {
+  chat: 'Chat', vision: 'Vision', embedding: 'Embeddings', image: 'Image generation',
+  audio: 'Audio', draft: 'Draft model', unknown: 'Unknown type',
+};
+
+export function localTypeLabel(model: LocalModel): string {
+  return TYPE_LABELS[model.modality ?? modelModality(model)];
 }
 
 /** What is wrong with a model on disk, worst first, or null when nothing is. */
