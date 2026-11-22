@@ -22,6 +22,10 @@ A team in Nekko Cloud. Philip creates the organization "Nekko Labs", this Window
 - The server never holds key material or readable descriptors.
 - Opening a chat on a listed computer: only for a computer of your own account that is online, shares with that org, has remote access on and is verified against the account record. No code. Its relay details are sealed under the account keyring, so other members never see them. The computer lets the device in only while both hold the account's current keys, the device is in the account record and sharing stays on; when any of that changes, the live connection is cut within 15 seconds, not only the listing. Nothing is added to the computer's paired devices, and nothing about the link is saved on either side.
 
+## Fleet creation in Settings (#3216)
+
+On desktop and in the Local Web UI, an unlocked account can choose **Create a fleet** in Settings > Nekko Cloud > Fleet management, whether the list is empty or already has fleets. A failed lookup of one fleet does not hide the list, invitations, or the create action. If the list itself cannot load, the panel explains that and offers **Try again**, rather than treating it as an empty list. The form keeps the name if creation fails and selects the new fleet on success. A fleet is still an organization; creation does not share this computer or any chats. The hosted feature flag, plan and allowlist are unchanged. Production fleet creation is not verified.
+
 ## Implemented: Cloud API slice (#2586)
 
 `apps/nekko-agent-api/src/orgs.ts` and migration `0015_orgs.sql`. Routes exist only with `NEKKO_ORGS_ENABLED=1` (always on in `npm run dev:local`), independent of `NEKKO_FLEET_ENABLED`. `NEKKO_ORGS_ALLOWED_EMAILS` (comma-separated, compared lower-case; unset allows everyone) limits who may create orgs, accept invites or call org fleet routes (`403 {"error":"orgs-not-available"}`). Withdrawing one's own computer is never blocked by the allowlist. Routes, wire shapes and tables are in the [API README](../../apps/nekko-agent-api/README.md).
