@@ -2,6 +2,7 @@ import { ResourceQueueSection } from '../components/server/ResourceQueueSection.
 import { useCallback, useEffect, useState } from 'react';
 import type { EngineMemory, LocalModel } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
+import { SystemModels } from '../components/engine/SystemModels.js';
 import { EngineSection } from '../components/engine/EngineSection.js';
 import { ModelDetail } from '../components/engine/ModelDetail.js';
 import { hasAppChrome } from '../chrome.js';
@@ -50,6 +51,7 @@ export function ModelServerView({ embedded = false }: { embedded?: boolean }) {
         {!embedded && !hasAppChrome && <h1 className="view-title">Model Server</h1>}
 
 
+        {!embedded && <div className="mt-7"><SystemModels /></div>}
         <div className={embedded ? "" : "mt-7"}>
           <EngineSection
             onProvidersChanged={refreshProviders}

@@ -90,14 +90,9 @@ Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`
 the engine before it starts. If an engine still dies for a missing DLL, the error says so
 and links Microsoft's 25 MB redistributable.
 
-**On this machine, or Find new models.** Under **Models** a switch picks between the models
-you have and getting a new one. **On this machine** lists what is downloaded: each row gives
-the parameters, the size and whether it fits on your GPU, and a model whose last load failed
-shows a warning triangle and "Last load failed" instead of a check. Select one to see its
-variants and, under your GPU's name, its weights, what each 1k tokens of context costs, and
-how much context fits beside whatever else is loaded. **Find new models** searches Hugging
-Face. What is loaded right now is listed above both, under **Running now**. The agent server
-(for the CLI and MCP) is in **Settings > Server**.
+**System models** is a separate section above the local library, even before you download a chat model. It holds the on-device speech engines for dictation. Selecting a speech engine here does not change your default chat model.
+
+**On this machine, or Find new models.** Under **Models**, the switch picks between the models you have and getting a new one from Hugging Face. Each installed row shows what it does, the parameter count when known, the disk size, and whether it fits on your GPU. A failed load shows a warning and its explanation. Use the **star** to put a model in your chat picker’s favorites, or the **check** to make a chat or vision model the default for new chats. The **trash** deletes files managed by Nekko that the engine can remove; files borrowed from another app stay untouched. When a family has more than one variant, choose the family and use the controls on the exact variant. Select a model for GPU and context details. Models currently in memory appear above the library under **Loaded models**. The agent server (for the CLI and MCP) is in **Settings > Server**.
 
 **Best for this machine.** Find new models opens on a pick per task (chat, coding, a
 small fast model for routing, embeddings, vision) made for this machine's GPU and memory.
