@@ -10,6 +10,7 @@ import { MiddleTruncate } from './primitives/MiddleTruncate.js';
 import type { HLJSApi } from 'highlight.js';
 import { detectLanguage, HIGHLIGHT_MAX_CHARS, highlightHtml, languageName, loadHighlighter } from '../codeHighlight.js';
 import { SlideToggle } from './library/SlideToggle.js';
+import { fileListed, locateMovedFile } from '../locateFile.js';
 
 /** Fixed editor line height (px) so the comment gutter aligns row-for-row. */
 const LINE_H = 20;
@@ -83,15 +84,51 @@ function readAutoSavePref(): boolean {
  * it) or Run now (send it). Deliberately not a full IDE, just enough to read,
  * tweak, and steer changes without leaving Nekko Agent.
  */
-export function FilePane({ path, readOnly = false }: {
+export function FilePane({ path, readOnly = false, onMoved }: {
   path: string;
   /** Show the file without any way to change it (Library's designs, which change by a new version instead). */
   readOnly?: boolean;
+  /** The file was found somewhere else (its worktree was removed, or a link guessed the wrong folder): point the window there. */
+  onMoved?: (to: string) => void;
 }) {
+  // A file that can't be read is looked for (#3210): the main checkout of a removed worktree, or a designs
+  // folder nearby for a page named by its bare name. Only after a failed read, so opening a file costs nothing extra.
+  const [where, setWhere] = useState<{ asked: string; path: string; missing: boolean }>({ asked: path, path, missing: false });
+  const moved = useRef(onMoved);
+  moved.current = onMoved;
+  const current = where.asked === path ? where : { asked: path, path, missing: false };
+  useEffect(() => { setWhere({ asked: path, path, missing: false }); }, [path]);
+  const unreadable = useCallback((tried: string) => {
+    const listDir = typeof window !== 'undefined' ? window.nekko?.listDir : undefined;
+    if (!listDir) return;
+    void (async () => {
+      const ls = (p: string) => listDir(p);
+      // Still listed: it is there but unreadable (too big, locked), so the pane's own empty state stands.
+      if ((await fileListed(tried, ls)) !== false) return;
+      const found = await locateMovedFile(tried, ls);
+      setWhere((w) => (w.path !== tried ? w : found ? { ...w, path: found } : { ...w, missing: true }));
+      if (found) moved.current?.(found);
+    })();
+  }, []);
+  if (current.missing) return <MissingFile path={current.path} />;
   // File panes are independent host documents, not owned by the globally focused chat.
-  return <HostFilePane path={path} readOnly={readOnly} />;
+  return <HostFilePane key={current.path} path={current.path} readOnly={readOnly} onUnreadable={unreadable} />;
 }
-function HostFilePane({ path, readOnly }: { path: string; readOnly: boolean }) {
+
+/** A file that is gone and could not be found anywhere near: said plainly, never shown as an empty file. */
+function MissingFile({ path }: { path: string }) {
+  const name = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-(--q-tight) p-(--q-pad) text-center" role="status" data-file-missing>
+      <FileTypeIcon name={name} size={20} />
+      <p className="mt-(--q-inline) text-sm font-medium text-ink">{name} isn't here anymore</p>
+      <p className="max-w-md text-xs text-ink-faint">It was moved or deleted, and there's no copy of it in a designs folder nearby.</p>
+      <MiddleTruncate className="max-w-md font-mono text-xs text-ink-faint" text={path} />
+    </div>
+  );
+}
+
+function HostFilePane({ path, readOnly, onUnreadable }: { path: string; readOnly: boolean; onUnreadable?: (path: string) => void }) {
   const isMd = /\.(md|markdown)$/i.test(path);
   const isHtml = /\.(html?|svg)$/i.test(path);
   const isMermaid = /\.(mmd|mermaid)$/i.test(path);
@@ -151,7 +188,7 @@ function HostFilePane({ path, readOnly }: { path: string; readOnly: boolean }) {
       setTruncated(f.truncated);
       setDirty(false);
       setLoaded(true);
-    }).catch(() => { if (live) { setLoaded(true); setBinary(false); } });
+    }).catch(() => { if (live) { setLoaded(true); setBinary(false); onUnreadable?.(path); } });
     window.nekko.listComments(path).then((c) => { if (live) setComments(c); }).catch(() => {});
     return () => { live = false; };
   }, [path]);
