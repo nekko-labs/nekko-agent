@@ -173,10 +173,10 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       await expect(page.getByText('Back to active agents')).toHaveCount(0);
     });
 
-    await test.step('a chat window archives, with no Close that would leave it listed as Done', async () => {
-      // #3021: the window menu's Close stopped the agent and dropped the window
-      // but left the chat in the Agents panel as Done. A chat window offers
-      // Archive (off the list), Delete and Minimize (kept on the list), never Close.
+    await test.step('a chat window archives from its menu, which also offers Close', async () => {
+      // A chat window offers Archive (off the list), Delete, Minimize (kept on
+      // the list) and Close (stops the agent, drops the window, keeps the chat
+      // listed; #3111, decision 0110). Archive takes it off the list.
       // The project chat restored above is active again; show it on the board.
       await openList();
       await card('Archived project conversation').evaluate((el) => (el as HTMLElement).click());
@@ -184,7 +184,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       const strip = page.locator('[data-pane-title-strip]').filter({ has: page.locator(`button[aria-label="${label}"]`) });
       await expect(strip).toHaveCount(1);
       await strip.evaluate((el) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })));
-      await expect(page.locator('[role=menu] [role=menuitem]')).toHaveText([/^Archive/, /^Delete/, /^Minimize/]);
+      await expect(page.locator('[role=menu] [role=menuitem]')).toHaveText([/^Archive/, /^Delete/, /^Minimize/, /^Close/]);
       await shot(`window-menu-${theme}-${width}`);
       await page.keyboard.press('Escape');
       await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
