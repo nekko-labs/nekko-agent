@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
 import type { EngineMemory, GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
-import { MODALITY_LABELS, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
+import { MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { notifyModelsChanged } from '../../modelCatalog.js';
-import { TrashIcon, WarningIcon } from '../../icons.js';
+import { WarningIcon } from '../../icons.js';
 import { StatusDot } from '../primitives/index.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
 import { ImageGeneration } from './ImageGeneration.js';
 import { loadLocalModel } from './localModelShortcuts.js';
 import { gpuGuidance } from './modelFamilies.js';
+import { ModelRowActions, type ModelRowControl } from './ModelRowActions.js';
+import { localTypeLabel, paramsLabel } from './modelFacts.js';
 import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
 /**
@@ -60,6 +62,7 @@ export function ModelLibrary({
   models,
   canLoad,
   onChanged,
+  actions,
   query = '',
   autoloadIds,
   running,
@@ -75,6 +78,7 @@ export function ModelLibrary({
   /** False until the engine binary exists: the list is real, running it is not. */
   canLoad: boolean;
   onChanged: () => void;
+  actions: ModelRowControl;
   /** Live filter from the shared search box (matches name, id, quant, folder). */
   query?: string;
   /** Ids marked to load when the engine starts. */
@@ -123,15 +127,6 @@ export function ModelLibrary({
     setBusy(null);
     pushToast(res.ok ? 'success' : 'error', res.message ?? (res.ok ? 'Loaded.' : "Couldn't load it."));
     onChanged();
-  };
-
-  const remove = async (model: LocalModel) => {
-    if (!window.confirm(`Delete ${model.name}? The file is removed from disk.`)) return;
-    const res = await window.nekko.engineDeleteModel(model.id);
-    pushToast(res.ok ? 'success' : 'error', res.message);
-    onChanged();
-    // Open chats drop it from their pickers.
-    if (res.ok) notifyModelsChanged();
   };
 
   const fetchCompanions = async (model: LocalModel) => {
@@ -330,7 +325,6 @@ export function ModelLibrary({
     const live = residentById.get(m.id);
     // A model that cannot fill the GPU wears the warning on its row: it will
     // run, but not at the speed the card implies.
-    const fitWarn = m.gpuFit === 'partial' || m.gpuFit === 'wont';
     return (
       <div key={m.id} data-library-row={m.id} className="scroll-mt-4">
         <div
@@ -338,16 +332,15 @@ export function ModelLibrary({
           style={{ opacity: unsupported ? 0.85 : 1, background: m.loaded ? 'var(--accent-soft)' : undefined }}
           data-quiet-row
         >
-          <div className="min-w-48 flex-1" title={m.path}>
+          <div className="min-w-0 flex-[1_1_12rem]" title={m.path}>
             <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
-            <p className="truncate text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
+            {actions.isDefault(m) && <span className="text-2xs text-accent">Default</span>}
+            <p className="text-xs text-ink-soft" data-model-facts>{[localTypeLabel(m), paramsLabel(m.name, m.parameterSize), m.sizeBytes > 0 && formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</p>
+            <p className="text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
               {[
                 gpuGuidance(m.sizeBytes, memory, m),
                 m.quantization,
-                m.parameterSize,
-                formatBytes(m.sizeBytes),
                 m.maxContext && `${formatTokens(m.maxContext)} max context`,
-                m.modality && m.modality !== 'chat' && MODALITY_LABELS[m.modality],
                 m.format === 'mlx' && 'MLX',
                 autoloadIds?.has(m.id) && 'loads on start',
                 m.gpuFit === 'cpu' && !unsupported && 'CPU only',
@@ -358,7 +351,7 @@ export function ModelLibrary({
             </p>
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1">
             {m.loaded ? (
               <span className="mr-1 inline-flex items-center gap-1.5 text-2xs text-ink-soft" title={live ? placementTitle(live) : undefined}>
                 <StatusDot color="var(--accent)" size={6} />
@@ -419,20 +412,7 @@ export function ModelLibrary({
                 {busy === m.id ? 'Loading…' : 'Load'}
               </button>
             )}
-            {m.managed === false ? (
-              // The file belongs to whichever app downloaded it. Saying so
-              // beats a delete button that refuses after the click.
-              <span
-                className="px-2 text-2xs text-ink-faint"
-                title={`Delete this in ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'the app that downloaded it'}`}
-              >
-                borrowed
-              </span>
-            ) : (
-              <button className="btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11!" title="Delete this model" aria-label="Delete this model" onClick={() => void remove(m)}>
-                <TrashIcon className="h-3.5 w-3.5" />
-              </button>
-            )}
+            <ModelRowActions model={m} actions={actions} />
           </div>
         </div>
 
