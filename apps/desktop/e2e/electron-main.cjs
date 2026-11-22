@@ -18,7 +18,9 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({
     width: Number(process.env.NEKKO_E2E_WIDTH || 1200),
     height: Number(process.env.NEKKO_E2E_HEIGHT || 900),
-    useContentSize: true, show: false, focusable: false, skipTaskbar: true,
+    // No frame and no thick (resize) frame: Windows holds either to a minimum
+    // width, so a journey's 360px resize stopped at 375 at 125% scaling.
+    useContentSize: true, frame: false, thickFrame: false, show: false, focusable: false, skipTaskbar: true,
     x: left - 16000, y: -16000,
     title: 'Nekko Agent end-to-end (isolated)',
     webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false },

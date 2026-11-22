@@ -170,9 +170,15 @@ mod tests {
     fn matches_the_vectors_the_phones_check() {
         let salt: [u8; SALT_LEN] = core::array::from_fn(|i| 255 - i as u8);
         let (acct, org, dev) = ("a1111111-2b3d-4e5f-8a6b-9c0d1e2f3a4b", ORG, DEV);
-        assert_eq!(seal_connect_with(&ring(), acct, 2, org, dev, 5, b"route", salt).unwrap(), "Af_-_fz7-vn49_b19PPy8fDv7u3s6-rp6Ofm5eTj4uHgEQi7QXKQ1mE_WqWTbDmKTSL088myJiCOC9GdT_48iwYlsZwvrE0JHmhXPjm1s5YoaPbVg8lUFTep_Nn23n7Zk9ZOavmjJae9_9n43-TQgSzkkt5sfX71i2kp1ZHhEuY7HSscUosbPTFBLkW1ENmOeLUW5CbPRxXaxvJUWgjHajok5oiMWDqzlZMUWROzWD0PxczVIq3I35jWFPc-QW8UMh7dFzfvhwHm2p3m92SQA1XZC8hZD99CcDloPoiVJufH_sqqj8AJIFZxq0XMr0fiZRKmPoaKFCuQ6AY4KFiNInHRuPQYHM4PBetgNDnZoPYe7MEgTLiBW-8C4JGlYNw-4qkHiTZuGTlxmoRACp28QZg");
+        assert_eq!(
+            seal_connect_with(&ring(), acct, 2, org, dev, 5, b"route", salt).unwrap(),
+            "Af_-_fz7-vn49_b19PPy8fDv7u3s6-rp6Ofm5eTj4uHgEQi7QXKQ1mE_WqWTbDmKTSL088myJiCOC9GdT_48iwYlsZwvrE0JHmhXPjm1s5YoaPbVg8lUFTep_Nn23n7Zk9ZOavmjJae9_9n43-TQgSzkkt5sfX71i2kp1ZHhEuY7HSscUosbPTFBLkW1ENmOeLUW5CbPRxXaxvJUWgjHajok5oiMWDqzlZMUWROzWD0PxczVIq3I35jWFPc-QW8UMh7dFzfvhwHm2p3m92SQA1XZC8hZD99CcDloPoiVJufH_sqqj8AJIFZxq0XMr0fiZRKmPoaKFCuQ6AY4KFiNInHRuPQYHM4PBetgNDnZoPYe7MEgTLiBW-8C4JGlYNw-4qkHiTZuGTlxmoRACp28QZg"
+        );
         let aad = hello_proof_aad(acct, 4, dev);
-        assert_eq!(crate::record::seal_with_aad(&ring(), &aad, b"proof", salt), "Af_-_fz7-vn49_b19PPy8fDv7u3s6-rp6Ofm5eTj4uHgEQi7QXCNzHo8WqWTbDmKTSL088myJiCOC9GdT_48iwYlsZwvrE0JHmhXPjm1s5YoaPbVg8lUFTep_Nn23n7Zk9ZOavmjJae9_9n43-TQgSzkkt5sfX71i2kp1ZHhEuY7HSscUosbPTFBLkW1ENmOeLUW5CbPRxXaxvJUWgjHajok5oiMWDqzlZMUWROzWD0PxczVIq3I35jWFPc-QW8UMh7dFzfvhwHm2p3m92SQA1XZC8hZD99CcDloPoiVJufH_sqqj8AJIFZxq0XMr0fiZRKmPoaKFCuQ6AY4KFiNInHRuPQYHM4PBetgNDnZoPYe7MEgTLiBW-8C4JGlYNw-4khm8NKkH7zTvzv1uQekTHQ");
+        assert_eq!(
+            crate::record::seal_with_aad(&ring(), &aad, b"proof", salt),
+            "Af_-_fz7-vn49_b19PPy8fDv7u3s6-rp6Ofm5eTj4uHgEQi7QXCNzHo8WqWTbDmKTSL088myJiCOC9GdT_48iwYlsZwvrE0JHmhXPjm1s5YoaPbVg8lUFTep_Nn23n7Zk9ZOavmjJae9_9n43-TQgSzkkt5sfX71i2kp1ZHhEuY7HSscUosbPTFBLkW1ENmOeLUW5CbPRxXaxvJUWgjHajok5oiMWDqzlZMUWROzWD0PxczVIq3I35jWFPc-QW8UMh7dFzfvhwHm2p3m92SQA1XZC8hZD99CcDloPoiVJufH_sqqj8AJIFZxq0XMr0fiZRKmPoaKFCuQ6AY4KFiNInHRuPQYHM4PBetgNDnZoPYe7MEgTLiBW-8C4JGlYNw-4khm8NKkH7zTvzv1uQekTHQ"
+        );
     }
 
     #[test]
