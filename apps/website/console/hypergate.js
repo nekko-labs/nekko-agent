@@ -10,6 +10,7 @@ export async function hypergate(root,refresh) {
     el('p','Back up Hypergate setup and review changes on your computers. Cloud sync is currently available to verified Nekko Labs employees.',root);return;
   }
   el('p','Employee preview · Personal setup',root).className='eyebrow';
+  el('h2','Settings',root);
   el('p','Save a portable setup for your computers. Each computer reviews and applies it in Hypergate. Saving here never starts or stops a server.',root);
   if(!doc.setup){el('h2','No setup published yet',root);el('p','Open Settings → Nekko Cloud in Hypergate and publish this computer’s setup to get started.',root);action(root,'Refresh',refresh);return;}
   const draft=structuredClone(doc.setup);
