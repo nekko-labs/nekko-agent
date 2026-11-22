@@ -13,20 +13,29 @@
 //
 // `scripts/dev-signing-identity.sh` creates that certificate once per Mac
 // ("Nekko Agent Development", self-signed, in the login keychain).
-// NEKKO_DEV_SIGN_IDENTITY picks another one (an "Apple Development" identity,
-// say), or `-` for ad-hoc. Without either, builds stay ad-hoc as before.
+// Set nekko.devSigningIdentity in the repository's local Git config to keep
+// using an existing identity, or set NEKKO_DEV_SIGN_IDENTITY to override it.
+// Neither selects a personal signing key unless the developer opts in.
 const { spawnSync } = require('node:child_process');
+const { resolve } = require('node:path');
 
 const DEV_IDENTITY = 'Nekko Agent Development';
+const repo = resolve(__dirname, '../../..');
 /** The identifier nekkod is signed with, stable across builds and checkouts. */
 const DAEMON_IDENTIFIER = 'dev.nekkolabs.nekkod';
 
 /** What `codesign --sign` should use, or null for ad-hoc. */
-function devSigningIdentity(env = process.env) {
-  if (process.platform !== 'darwin') return null;
-  const chosen = env.NEKKO_DEV_SIGN_IDENTITY;
+function devSigningIdentity(env = process.env, { platform = process.platform, run = spawnSync } = {}) {
+  if (platform !== 'darwin') return null;
+  let chosen = env.NEKKO_DEV_SIGN_IDENTITY;
+  if (!chosen && !env.CI) {
+    // Resolve from the source tree, not the caller's cwd (often apps/desktop).
+    // A linked worktree shares the repository's local config.
+    const local = run('git', ['-C', repo, 'config', '--local', '--get', 'nekko.devSigningIdentity'], { encoding: 'utf8' });
+    if (local.status === 0) chosen = local.stdout.trim();
+  }
   if (chosen) return chosen === '-' ? null : chosen;
-  const found = spawnSync('/usr/bin/security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
+  const found = run('/usr/bin/security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
   return found.status === 0 && found.stdout.includes(`"${DEV_IDENTITY}"`) ? DEV_IDENTITY : null;
 }
 
@@ -39,8 +48,9 @@ function signDevDaemon(path, env = process.env) {
   if (process.platform !== 'darwin') return true;
   const identity = devSigningIdentity(env);
   if (!identity) {
-    console.warn('nekkod is ad-hoc signed, so macOS asks twice for Keychain access after every rebuild. '
-      + 'Run apps/desktop/scripts/dev-signing-identity.sh once to be asked once per rebuild instead (docs/signing.md, "Development builds").');
+    console.warn('nekkod has no stable signing identity, so macOS can ask twice for Keychain access after each rebuild. '
+      + 'Set nekko.devSigningIdentity to an Apple Development identity, or run apps/desktop/scripts/dev-signing-identity.sh '
+      + 'to reduce it to one prompt per rebuild (docs/signing.md, "Development builds").');
     return false;
   }
   const signed = spawnSync('/usr/bin/codesign', ['--force', '--sign', identity, '--identifier', DAEMON_IDENTIFIER, path], { stdio: 'inherit' });
