@@ -21,6 +21,8 @@ Where a reference points:
 
 **PR and issue chips.** `#2480`, `PR #2636`, `issue #12` and `owner/repo#5`, in prose or as a code span, render as the existing PR chip with GitHub's live state glyph and tone (or the issue chip with the issue's state when the reply says "issue"), linking to GitHub in the browser. The live state is the same cached `gh`/REST read the PR cards use. A bare `#N` uses the chat's repo: the GitHub repo its folder's `origin` points at, reported by the engine's git status (`GitStatus.github`), or else the one repo all of the chat's PRs are in. With no repo it stays text. A bare one-digit number (`step #3`) stays text unless the reply calls it a PR or issue. Colours (`#2480ff`), anchors (`page.html#12`), entities and URLs are never read as references.
 
+**Linked PRs and issues.** A Markdown link or bare URL to one GitHub PR (`.../pull/N`) or one issue (`.../issues/N`) renders as the same chip, keeping the link's text as the label (or `repo#N` for a bare URL), with no site Preview button. The issue list and an issue's sub-pages stay ordinary links. Implemented on desktop; screenshots not captured.
+
 ## Boundaries and acceptance
 
 - Chat messages get chips wherever a reference resolves (the user's own messages use the same renderer). Documents opened in the file pane keep prose references as text; a code span there that names a file is a chip.
