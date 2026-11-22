@@ -1,4 +1,5 @@
-import catalog from './plan-catalog.json';
+// The import attribute lets Node load the built dist/ (the CLI, the Local Web UI server); bundlers accept it too.
+import catalog from './plan-catalog.json' with { type: 'json' };
 
 /**
  * What each Nekko Cloud plan includes (#3191): the walkthrough's plan step and
