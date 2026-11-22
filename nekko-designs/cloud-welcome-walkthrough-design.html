@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nekko Cloud: first sign-in and sign-up walkthrough</title>
+<style>
+  /* Canvas chrome. */
+  body { margin:0; padding:32px; background:#e6e5ec; font:14px/1.45 "Geist", -apple-system, "Segoe UI", system-ui, sans-serif; color:#1d1b22; }
+  header.page { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:20px; }
+  header.page h1 { font-size:18px; margin:0 0 4px; }
+  header.page p { margin:0; color:#5d5966; font-size:13px; max-width:780px; }
+  .replay { font:inherit; font-size:12px; padding:6px 12px; border-radius:8px; border:0; background:#1d1b22; color:#fff; cursor:pointer; }
+  h2.row-title { font-size:12px; font-weight:500; color:#5d5966; margin:28px 0 12px; }
+  .canvas { display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start; }
+  .frame { display:flex; flex-direction:column; gap:10px; }
+  .frame .label { font-size:12px; color:#5d5966; }
+  .frame .label b { color:#1d1b22; font-weight:600; margin-right:6px; }
+  .frame .why { font-size:12px; color:#7b7785; max-width:440px; }
+  .window { position:relative; width:480px; height:640px; border-radius:14px; overflow:hidden; display:grid; place-items:center; }
+  .window.narrow { width:360px; }
+
+  /* Themes: the real tokens from styles.css. */
+  .t-light { --paper:#fbfbfd; --win:#fcfcfe; --surface:#ffffff; --surface-2:#f2f2f7; --ink:#17171d; --ink-soft:#52525e; --ink-faint:#6c6c77; --line:#e8e8ef;
+    --accent:#5a2352; --accent-2:#8a4a7f; --success:#3aa870; --danger:#d24738; --danger-text:#b4372f; --info:#1f6680; --shadow-ink:#17171d; }
+  .t-dusk { --paper:#0b0c14; --win:#181a25; --surface:#14151f; --surface-2:#1d1f2c; --ink:#eaeaf4; --ink-soft:#a3a4b6; --ink-faint:#87899b; --line:#252735;
+    --accent:#c084b5; --accent-2:#c99bb3; --success:#4ec98a; --danger:#e0574a; --danger-text:#f08a7e; --info:#6bb8d4; --shadow-ink:#000; }
+  .t-light, .t-dusk { --accent-soft:color-mix(in srgb, var(--accent) 14%, transparent); --ring:color-mix(in srgb, var(--accent) 38%, transparent);
+    --ease-out:cubic-bezier(0.22, 1, 0.36, 1); --font-mono:"Geist Mono", ui-monospace, "Cascadia Mono", monospace; color:var(--ink); background:var(--paper); }
+
+  /* A fake app behind the walkthrough, so the frosted glass reads. */
+  .app-behind { position:absolute; inset:0; padding:20px; display:flex; flex-direction:column; gap:10px; }
+  .app-behind i { display:block; height:10px; border-radius:5px; background:var(--surface-2); }
+
+  /* ===== The walkthrough (ports to cloud.css as-is) ===== */
+  .cw-backdrop { position:absolute; inset:0; display:grid; place-items:center; padding:20px;
+    background:color-mix(in srgb, var(--paper) 70%, transparent); backdrop-filter:blur(6px); }
+  .cw-backdrop::before { content:''; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(55% 70% at 0% 100%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+      radial-gradient(50% 60% at 100% 0%, color-mix(in srgb, var(--accent-2) 13%, transparent), transparent 70%),
+      radial-gradient(40% 45% at 92% 96%, color-mix(in srgb, #ff7eb6 10%, transparent), transparent 70%); }
+  .cw { position:relative; width:min(420px, 100%); border-radius:20px; padding:8px 24px 16px;
+    background:color-mix(in srgb, var(--win) 72%, transparent); backdrop-filter:blur(24px) saturate(160%);
+    box-shadow:inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent), 0 30px 80px -30px color-mix(in srgb, var(--accent) 50%, transparent), 0 2px 12px -4px color-mix(in srgb, var(--shadow-ink) 30%, transparent);
+    animation:cw-rise .32s var(--ease-out); }
+  .t-light .cw { background:color-mix(in srgb, #fff 80%, transparent); }
+  .cw::after { content:''; position:absolute; inset:-1px; border-radius:inherit; padding:1px; pointer-events:none;
+    background:linear-gradient(120deg, var(--accent), var(--accent-2) 40%, #46e0bd 58%, #ffbe5c 76%, #ff7eb6);
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; opacity:.55; }
+  .cw-close { position:absolute; right:12px; top:12px; width:28px; height:28px; border:0; border-radius:8px; background:none; color:var(--ink-faint); display:grid; place-items:center; z-index:2; }
+  .cw-scene { height:160px; margin:0 -24px; transition:height .26s var(--ease-out); }
+  .cw-scene.is-compact { height:88px; }
+  .cw-scene svg { display:block; width:100%; height:100%; overflow:visible; }
+  .cw-body { animation:cw-step-in .24s var(--ease-out) both; }
+  .cw h1 { font-size:20px; font-weight:600; letter-spacing:-0.01em; text-align:center; margin:4px 0 0; }
+  .cw .lede { margin:4px auto 0; max-width:320px; font-size:14px; color:var(--ink-soft); text-align:center; line-height:1.45; }
+  .cw .stack { margin-top:20px; display:flex; flex-direction:column; gap:8px; }
+  .btn { height:36px; border-radius:10px; border:0; font:500 14px/1 inherit; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:8px; width:100%; cursor:pointer; }
+  .btn-primary { background:var(--accent); color:var(--paper); }
+  .t-dusk .btn-primary { background:#190019; color:#f3e8ee; box-shadow:inset 0 0 0 1px #854f6c; }
+  .btn-quiet { background:color-mix(in srgb, var(--ink) 6%, transparent); color:var(--ink); }
+  .btn-link { background:none; color:var(--ink-soft); height:28px; font-size:12px; }
+  .provider { height:40px; border-radius:11px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font:500 14px/1 inherit; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:12px; }
+  .provider svg { width:17px; height:17px; }
+  .provider.is-hover { border-color:color-mix(in srgb, var(--accent) 45%, var(--line)); background:color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+  .cw-stagger > * { animation:cw-item-in .28s var(--ease-out) both; }
+  .cw-stagger > *:nth-child(2) { animation-delay:.04s; } .cw-stagger > *:nth-child(3) { animation-delay:.08s; }
+  .cw-stagger > *:nth-child(4) { animation-delay:.12s; } .cw-stagger > *:nth-child(5) { animation-delay:.16s; } .cw-stagger > *:nth-child(6) { animation-delay:.2s; }
+  .or { display:flex; align-items:center; gap:12px; margin:16px 0; font-size:12px; color:var(--ink-soft); }
+  .or::before, .or::after { content:''; flex:1; height:1px; background:var(--line); }
+  .field { height:36px; border-radius:10px; border:0; background:color-mix(in srgb, var(--ink) 5%, transparent); color:var(--ink); padding:0 12px; font:14px inherit; font-family:inherit; display:flex; align-items:center; }
+  .field.ph { color:var(--ink-faint); }
+  .field.focus { box-shadow:0 0 0 3px var(--ring), inset 0 0 0 1px var(--accent); }
+  .fine { margin-top:16px; display:flex; gap:8px; font-size:12px; color:var(--ink-faint); line-height:1.45; }
+  .fine svg { flex:none; margin-top:1px; color:var(--success); }
+  .foot { margin-top:16px; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+  .foot .back { justify-self:start; font-size:12px; color:var(--ink-soft); background:none; border:0; padding:4px 8px; margin-left:-8px; border-radius:6px; font-family:inherit; }
+  .dots { display:flex; gap:6px; }
+  .dots i { height:6px; width:6px; border-radius:3px; background:var(--line); transition:width .2s var(--ease-out), background .2s; }
+  .dots i.on { width:18px; background:var(--accent); } .dots i.done { background:var(--accent-soft); }
+  .otp { display:flex; justify-content:center; gap:8px; margin-top:20px; }
+  .otp span { width:44px; height:52px; border-radius:12px; background:color-mix(in srgb, var(--ink) 5%, transparent); display:grid; place-items:center; font:600 22px/1 var(--font-mono); }
+  .otp span:nth-child(3) { margin-right:12px; }
+  .otp span.f { animation:cw-digit .2s var(--ease-out) both; } .otp span.cur { box-shadow:0 0 0 3px var(--ring), inset 0 0 0 1px var(--accent); }
+  .otp span:nth-child(1) { animation-delay:.3s; } .otp span:nth-child(2) { animation-delay:.42s; } .otp span:nth-child(3) { animation-delay:.54s; } .otp span:nth-child(4) { animation-delay:.66s; }
+  .row-meta { display:flex; justify-content:space-between; font-size:12px; color:var(--ink-faint); margin-top:12px; }
+  .alert { margin-top:12px; text-align:center; font-size:12px; color:var(--danger-text); }
+  .info { font-size:12px; color:var(--info); }
+
+  /* Plans: rows, the chosen one on an accent wash with a check. */
+  .plans { margin-top:16px; display:flex; flex-direction:column; gap:4px; }
+  .plan { display:flex; gap:12px; align-items:flex-start; padding:10px 12px; border-radius:12px; transition:background .2s var(--ease-out); }
+  .plan.sel { background:var(--accent-soft); }
+  .plan .tick { width:16px; height:16px; flex:none; margin-top:2px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--line); display:grid; place-items:center; transition:background .2s, box-shadow .2s; }
+  .plan.sel .tick { background:var(--accent); box-shadow:none; }
+  .plan.sel .tick svg { animation:cw-pop .2s var(--ease-out) both; }
+  .plan .name { font-weight:500; font-size:14px; } .plan.sel .name { color:var(--accent); }
+  .plan .det { font-size:12px; color:var(--ink-faint); margin-top:2px; }
+  .plan .price { margin-left:auto; font-size:12px; color:var(--ink-soft); white-space:nowrap; padding-top:2px; font-variant-numeric:tabular-nums; }
+
+  /* Test-mode checkout: the card is the picture. */
+  .card-wrap { perspective:900px; margin:8px auto 0; width:288px; }
+  .ccard { position:relative; height:172px; border-radius:16px; padding:16px 18px; color:#f3e8ee; overflow:hidden;
+    background:radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent-2) 75%, #190019), color-mix(in srgb, var(--accent) 55%, #190019) 65%);
+    box-shadow:0 24px 48px -24px color-mix(in srgb, var(--accent) 80%, transparent), inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent);
+    transform-origin:50% 100%; animation:cw-card-in .6s var(--ease-out) both; }
+  .ccard::before { content:''; position:absolute; inset:0; background:linear-gradient(115deg, transparent 30%, color-mix(in srgb, #fff 26%, transparent) 46%, transparent 62%); transform:translateX(-120%); animation:cw-sheen 1.1s .5s var(--ease-out) both; }
+  .ccard.paying::before { animation:cw-sheen 1s var(--ease-out) infinite; }
+  .ccard .top { display:flex; justify-content:space-between; align-items:center; font-size:12px; opacity:.9; }
+  .ccard .chip { width:34px; height:26px; border-radius:6px; margin-top:18px; background:linear-gradient(135deg, color-mix(in srgb, #ffbe5c 70%, var(--paper)), color-mix(in srgb, #ffbe5c 40%, var(--accent))); }
+  .ccard .num { margin-top:14px; font:500 18px/1 var(--font-mono); letter-spacing:.06em; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .ccard .num i { font-style:normal; opacity:0; animation:cw-char .01s both; }
+  .ccard .bottom { position:absolute; left:18px; right:18px; bottom:14px; display:flex; justify-content:space-between; font-size:12px; opacity:.9; }
+  .ccard .done { position:absolute; inset:0; display:grid; place-items:center; background:color-mix(in srgb, var(--success) 88%, transparent); color:var(--paper); animation:cw-fade .26s var(--ease-out) both; }
+  .ccard .done svg { animation:cw-pop .3s .1s var(--ease-out) both; }
+  .ccard.paid { animation:cw-card-paid .4s var(--ease-out) both; }
+  .test-chip { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--info); }
+  .test-chip::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--info); }
+  .sum { display:flex; justify-content:space-between; margin-top:16px; font-size:14px; }
+  .sum span:last-child { font-variant-numeric:tabular-nums; }
+  .spin { width:14px; height:14px; border-radius:50%; border:2px solid currentColor; border-top-color:transparent; animation:cw-spin .8s linear infinite; }
+
+  /* Recovery key, group by group. */
+  .rkey { margin-top:16px; display:grid; grid-template-columns:repeat(4, auto); justify-content:center; gap:8px 14px; padding:16px; border-radius:14px; background:var(--surface-2); }
+  .rkey span { font:600 15px/1.2 var(--font-mono); letter-spacing:.06em; animation:cw-key .3s var(--ease-out) both; }
+  .pair { display:flex; gap:8px; margin-top:8px; } .pair .btn { height:28px; font-size:12px; }
+  .check { display:flex; gap:8px; align-items:center; font-size:14px; margin-top:12px; }
+  .check i { width:16px; height:16px; border-radius:4px; background:var(--accent); display:grid; place-items:center; }
+
+  /* All set rows. */
+  .rows { margin-top:16px; display:flex; flex-direction:column; }
+  .rows div { display:flex; gap:12px; align-items:center; min-height:40px; font-size:14px; animation:cw-item-in .28s var(--ease-out) both; }
+  .rows div:nth-child(2) { animation-delay:.08s; } .rows div:nth-child(3) { animation-delay:.16s; }
+  .rows small { display:block; font-size:12px; color:var(--ink-faint); }
+  .rows svg { flex:none; color:var(--success); }
+  .rows .wait svg { color:var(--ink-faint); }
+
+  /* ===== The scene ===== */
+  .cw-s * { transition:opacity .36s var(--ease-out), transform .6s var(--ease-out), stroke .3s, fill .3s; transform-box:view-box; }
+  .cw-s .orbit { fill:none; stroke:var(--line); stroke-width:1.5; stroke-dasharray:2 5; transform-origin:180px 80px; }
+  .cw-s .ring { fill:none; stroke-width:2; stroke-linecap:round; stroke-dasharray:252; stroke-dashoffset:252; transform:rotate(-90deg); transform-origin:180px 80px; transition:stroke-dashoffset .9s var(--ease-out), opacity .3s, stroke .3s; opacity:0; }
+  .cw-s .dev rect.body, .cw-s .dev path.body { fill:var(--surface); stroke:var(--line); stroke-width:1.2; }
+  .cw-s .dev .b { fill:var(--surface-2); } .cw-s .dev .b.you { fill:var(--accent-soft); }
+  .cw-s .dev .ok { fill:var(--success); opacity:0; transform:scale(.4); transform-origin:center; transform-box:fill-box; }
+  .cw-s .arc { fill:none; stroke:var(--line); stroke-width:1.5; stroke-dasharray:3 4; }
+  .cw-s .pk { offset-rotate:0deg; }
+  .cw-s .pk.l { offset-path:path("M100 74 Q 118 54 142 66"); animation:cw-travel 2.4s var(--ease-out) infinite; }
+  .cw-s .pk.r { offset-path:path("M218 66 Q 246 50 276 70"); animation:cw-travel 2.4s 1.2s var(--ease-out) infinite; }
+  .cw-s .cipher { fill:var(--accent); offset-path:path("M218 66 Q 246 50 274 72"); animation:cw-travel 1.8s var(--ease-out) infinite; }
+  .cw-s .cipher.b2 { animation-delay:.6s; } .cw-s .cipher.b3 { animation-delay:1.2s; }
+  .cw-s .plain { fill:var(--ink-faint); offset-path:path("M100 74 Q 118 54 142 66"); animation:cw-travel 1.8s var(--ease-out) infinite; }
+  .cw-s .plain.b2 { animation-delay:.6s; } .cw-s .plain.b3 { animation-delay:1.2s; }
+  .cw-s .nekko { transform-origin:180px 80px; }
+  .cw-s .pixel-eyes { transition:transform .4s var(--ease-out); }
+  .cw-s .badge { transform-origin:205px 102px; opacity:0; transform:scale(.6); }
+  .cw-s .lockb { fill:var(--accent); } .cw-s .lockg { stroke:var(--paper); fill:none; stroke-width:1.6; stroke-linecap:round; } .cw-s .lockf { fill:var(--paper); }
+  .cw-s .checkb { fill:var(--success); } .cw-s .checkg { stroke:var(--paper); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .cw-s .browser rect.body { fill:var(--surface); stroke:var(--line); stroke-width:1.2; } .cw-s .browser .bar { fill:var(--line); } .cw-s .browser .go { fill:var(--accent-soft); } .cw-s .browser .gol { fill:var(--accent); }
+  .cw-s .link { fill:none; stroke:var(--line); stroke-width:1.5; stroke-dasharray:3 4; }
+  .cw-s .linkpk { fill:var(--accent); offset-path:path("M146 78 Q 196 52 242 72"); animation:cw-travel 1.6s var(--ease-out) infinite; }
+  .cw-s .mail rect, .cw-s .mail path.body { fill:var(--surface); stroke:var(--line); stroke-width:1.2; } .cw-s .mail .flap { fill:none; stroke:var(--ink-faint); stroke-width:1.2; stroke-linejoin:round; } .cw-s .mail .seal { fill:var(--accent); }
+  .cw-s .cloud path { fill:var(--surface); stroke:var(--line); stroke-width:1.2; } .cw-s .cloud .cl { fill:var(--accent-soft); }
+  .cw-s .browser, .cw-s .link, .cw-s .g-link, .cw-s .mail, .cw-s .cloud, .cw-s .g-sync { opacity:0; }
+
+  /* Scene: welcome. Everything in, devices one after another. */
+  .cw-s.s-welcome .dev, .cw-s.s-done .dev { animation:cw-dev-in .5s var(--ease-out) both; }
+  .cw-s.s-welcome .dev.r, .cw-s.s-done .dev.r { animation-delay:.12s; }
+  .cw-s.s-welcome .arc, .cw-s.s-done .arc { stroke-dashoffset:0; animation:cw-draw .7s .25s var(--ease-out) both; }
+  .cw-s.s-welcome .nekko { animation:cw-pop .45s .05s var(--ease-out) both; }
+  .cw-s.s-welcome .badge.lock, .cw-s.s-sync .badge.lock { opacity:1; transform:scale(1); transition-delay:.35s; }
+  /* Scene: account. Devices step aside, the prism ring draws round Nekko, who looks down at the buttons. */
+  .cw-s.s-account .dev.l, .cw-s.s-browser .dev.l, .cw-s.s-code .dev.l, .cw-s.s-in .dev.l, .cw-s.s-plan .dev.l { opacity:0; transform:translateX(-12px); }
+  .cw-s.s-account .dev.r, .cw-s.s-browser .dev.r, .cw-s.s-code .dev.r, .cw-s.s-in .dev.r, .cw-s.s-plan .dev.r, .cw-s.s-sync .dev.r { opacity:0; transform:translateX(12px); }
+  .cw-s:is(.s-account, .s-browser, .s-code, .s-in, .s-plan) :is(.arc, .g-pk) { opacity:0; }
+  .cw-s:is(.s-account, .s-code, .s-in) .ring { opacity:1; stroke-dashoffset:0; }
+  .cw-s:is(.s-account, .s-code, .s-in, .s-browser, .s-plan) .orbit { opacity:0; transform:scale(.9); }
+  .cw-s.s-account .pixel-eyes { transform:translate(0, 1.5px); }
+  /* Scene: waiting for the browser. Nekko moves aside and watches a dot travel to the browser. */
+  .cw-s.s-browser .nekko { transform:translateX(-62px); }
+  .cw-s.s-browser .pixel-eyes { transform:translate(1.5px, 0); }
+  .cw-s.s-browser :is(.browser, .link, .g-link) { opacity:1; }
+  .cw-s.s-browser .browser { animation:cw-dev-in .5s var(--ease-out) both; }
+  .cw-s.s-browser .glow { opacity:.6; transform:translateX(-62px); }
+  /* Scene: the emailed code lands beside Nekko. */
+  .cw-s.s-code .mail { opacity:1; animation:cw-mail .7s var(--ease-out) both; }
+  .cw-s.s-code .pixel-eyes { transform:translate(1.5px, -.5px); }
+  /* Scene: you're in. The ring turns to success and a check lands. */
+  .cw-s.s-in .ring { stroke:var(--success); }
+  .cw-s:is(.s-in, .s-done) .badge.ok { opacity:1; transform:scale(1); transition-delay:.25s; }
+  /* Scene: plan (compact). Just Nekko. */
+  .cw-s.s-plan .nekko { transform:scale(.9); }
+  /* Scene: sync. Plain chats leave the laptop, get locked by Nekko, and go to the cloud as ciphertext. */
+  .cw-s.s-sync :is(.cloud, .g-sync) { opacity:1; }
+  .cw-s.s-sync .g-pk { opacity:0; }
+  .cw-s.s-sync .cloud { animation:cw-dev-in .5s .1s var(--ease-out) both; }
+  .cw-s.s-sync .badge.lock { transform:scale(1.15); }
+  /* Scene: done. Everything connected. */
+  .cw-s.s-done .arc { stroke:color-mix(in srgb, var(--success) 55%, var(--line)); stroke-dasharray:none; }
+  .cw-s.s-done .dev .ok { opacity:1; transform:scale(1); transition-delay:.5s; }
+  .cw-s.s-done .dev.r .ok { transition-delay:.62s; }
+  .cw-s.s-done .g-pk { opacity:0; }
+
+  @keyframes cw-rise { from { opacity:0; transform:translateY(8px) scale(.985); } }
+  @keyframes cw-step-in { from { opacity:0; transform:translateX(8px); } }
+  @keyframes cw-item-in { from { opacity:0; transform:translateY(4px); } }
+  @keyframes cw-dev-in { from { opacity:0; transform:translateY(8px); } }
+  @keyframes cw-pop { from { opacity:0; transform:scale(.92); } }
+  @keyframes cw-draw { from { stroke-dasharray:3 4; stroke-dashoffset:60; opacity:0; } }
+  @keyframes cw-travel { 0% { offset-distance:0%; opacity:0; } 15% { opacity:1; } 85% { opacity:1; } 100% { offset-distance:100%; opacity:0; } }
+  @keyframes cw-mail { from { opacity:0; transform:translate(56px, -28px) rotate(-10deg); } }
+  @keyframes cw-digit { from { color:transparent; transform:translateY(4px); } }
+  @keyframes cw-card-in { from { opacity:0; transform:rotateX(18deg) translateY(12px); } }
+  @keyframes cw-card-paid { 50% { transform:scale(.985); } }
+  @keyframes cw-sheen { to { transform:translateX(120%); } }
+  @keyframes cw-char { to { opacity:1; } }
+  @keyframes cw-key { from { opacity:0; transform:translateY(4px); filter:none; } }
+  @keyframes cw-fade { from { opacity:0; } }
+  @keyframes cw-spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .cw *, .cw-s * { animation:none !important; transition:opacity .2s !important; } }
+
+  /* Settings entry point. */
+  .settings { position:absolute; inset:0; padding:28px; }
+  .settings h3 { font-size:20px; margin:0 0 4px; } .settings .help { font-size:12px; color:var(--ink-faint); }
+  .settings .hero { margin:28px auto 0; text-align:center; max-width:360px; }
+  .settings .hero p { font-size:14px; color:var(--ink-soft); }
+  .settings .hero .btn { width:auto; display:inline-flex; padding:0 14px; height:28px; font-size:14px; }
+  .settings .hero .new { display:block; margin-top:8px; font-size:12px; color:var(--accent); }
+
+  .motion { background:#fff; border-radius:14px; padding:16px 20px; width:480px; font-size:12px; }
+  .motion table { width:100%; border-collapse:collapse; } .motion td { padding:5px 0; vertical-align:top; } .motion td:first-child { color:#5d5966; width:130px; } .motion td:last-child { text-align:right; color:#7b7785; white-space:nowrap; padding-left:12px; }
+</style>
+</head>
+<body>
+
+<template id="scene">
+  <svg viewBox="0 0 360 160" aria-hidden="true">
+    <defs>
+      <radialGradient id="cwGlow"><stop offset="0" stop-color="var(--accent)" stop-opacity=".22"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></radialGradient>
+      <linearGradient id="cwPrism" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset=".45" stop-color="var(--accent-2)"/><stop offset=".62" stop-color="#46e0bd"/><stop offset=".8" stop-color="#ffbe5c"/><stop offset="1" stop-color="#ff7eb6"/></linearGradient>
+    </defs>
+    <circle class="glow" cx="180" cy="80" r="70" fill="url(#cwGlow)"/>
+    <circle class="orbit" cx="180" cy="80" r="42"/>
+    <circle class="ring" cx="180" cy="80" r="40" stroke="url(#cwPrism)"/>
+    <path class="arc" d="M100 74 Q 118 54 142 66"/>
+    <path class="arc" d="M218 66 Q 246 50 276 70"/>
+    <g class="g-pk"><circle class="pk l" r="2.6" fill="url(#cwPrism)"/><circle class="pk r" r="2.6" fill="url(#cwPrism)"/></g>
+    <g class="g-sync"><rect class="plain" width="9" height="4" rx="2"/><rect class="plain b2" width="9" height="4" rx="2"/><rect class="plain b3" width="9" height="4" rx="2"/>
+    <rect class="cipher" width="6" height="6" rx="1.5"/><rect class="cipher b2" width="6" height="6" rx="1.5"/><rect class="cipher b3" width="6" height="6" rx="1.5"/></g>
+    <g class="dev l">
+      <rect class="body" x="34" y="60" width="62" height="40" rx="5"/>
+      <path class="body" d="M26 104 H104 L98 110 H32 Z"/>
+      <rect class="b" x="42" y="68" width="28" height="6" rx="3"/><rect class="b you" x="58" y="78" width="30" height="6" rx="3"/><rect class="b" x="42" y="88" width="22" height="6" rx="3"/>
+      <circle class="ok" cx="96" cy="60" r="5"/>
+    </g>
+    <g class="dev r">
+      <rect class="body" x="276" y="48" width="36" height="64" rx="8"/>
+      <rect class="b" x="288" y="52" width="12" height="3" rx="1.5"/>
+      <rect class="b" x="282" y="62" width="20" height="5" rx="2.5"/><rect class="b you" x="288" y="71" width="18" height="5" rx="2.5"/><rect class="b" x="282" y="80" width="16" height="5" rx="2.5"/>
+      <circle class="ok" cx="312" cy="48" r="5"/>
+    </g>
+    <g class="cloud">
+      <path d="M262 92 a16 16 0 0 1 4 -31 a22 22 0 0 1 41 -4 a17 17 0 0 1 9 35 Z"/>
+      <rect class="cl" x="276" y="70" width="8" height="8" rx="2"/><rect class="cl" x="288" y="70" width="8" height="8" rx="2"/><rect class="cl" x="300" y="70" width="8" height="8" rx="2"/>
+    </g>
+    <g class="browser">
+      <rect class="body" x="244" y="46" width="88" height="64" rx="8"/>
+      <circle class="bar" cx="254" cy="55" r="2"/><circle class="bar" cx="261" cy="55" r="2"/><circle class="bar" cx="268" cy="55" r="2"/>
+      <rect class="bar" x="256" y="70" width="44" height="4" rx="2"/>
+      <rect class="go" x="256" y="84" width="64" height="14" rx="7"/><rect class="gol" x="276" y="89.5" width="24" height="3" rx="1.5"/>
+    </g>
+    <path class="link" d="M146 78 Q 196 52 242 72"/>
+    <g class="g-link"><circle class="linkpk" r="2.6"/></g>
+    <g class="mail">
+      <rect x="226" y="46" width="36" height="25" rx="4"/>
+      <path class="flap" d="M228 49 L244 61 L260 49"/>
+      <circle class="seal" cx="244" cy="61" r="3"/>
+    </g>
+    <g class="nekko">
+      <g transform="translate(156 56) scale(1.5)" shape-rendering="crispEdges">
+        <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#16161c" stroke="#f3e8ee" stroke-width="2"/>
+        <g class="pixel-eyes" fill="#ffffff">
+          <path class="eo" d="M11 15H13V18H11Z M20 15H22V18H20Z"/>
+          <path class="eh" d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" opacity="0"/>
+        </g>
+        <path d="M15 20H17V21H15Z" fill="#854f6c"/>
+      </g>
+    </g>
+    <g class="badge lock"><circle class="lockb" cx="205" cy="102" r="10"/><path class="lockg" d="M201.6 101 v-2.4 a3.4 3.4 0 0 1 6.8 0 V101"/><rect class="lockf" x="200" y="100.5" width="10" height="7" rx="1.6"/></g>
+    <g class="badge ok"><circle class="checkb" cx="205" cy="102" r="10"/><path class="checkg" d="M200.5 102.2 l3 3 l5.6 -6"/></g>
+  </svg>
+</template>
+
+<header class="page">
+  <div>
+    <h1>Nekko Cloud: first sign-in and sign-up walkthrough</h1>
+    <p>Opens when someone presses Sign in to Nekko Cloud for the first time on a device, or chooses Create an account. One frosted window with the prism edge; the picture at the top is one drawing that morphs from step to step. Billing is test mode until Stripe is live. Issue #3187.</p>
+  </div>
+  <button class="replay" onclick="replay()">Replay motion</button>
+</header>
+
+<h2 class="row-title">Where it starts</h2>
+<div class="canvas">
+  <section class="frame"><div class="label"><b>0</b>Settings &gt; Nekko Cloud, signed out</div>
+    <div class="window t-light"><div class="settings">
+      <h3>Account</h3><div class="help">One account for sync across your computers and iPhone, and for sharing computers with a team.</div>
+      <div class="hero"><div class="cw-scene" style="height:140px;margin:0" data-scene="welcome"></div>
+        <p>Sign in to Nekko Cloud to keep your chats in step across your computers and your iPhone.</p>
+        <button class="btn btn-primary">Sign in to Nekko Cloud</button>
+        <a class="new">New here? Create an account</a></div>
+    </div></div>
+    <div class="why">Sign in opens the walkthrough at Welcome the first time on this device, then straight at Account. Create an account always starts at Welcome.</div>
+  </section>
+</div>
+
+<h2 class="row-title">The walkthrough, Light Nekko</h2>
+<div class="canvas">
+
+  <section class="frame"><div class="label"><b>1</b>Welcome</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i><i style="width:70%"></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close" aria-label="Close">✕</button>
+      <div class="cw-scene" data-scene="welcome"></div>
+      <div class="cw-body">
+        <h1>Your Nekko, on every device</h1>
+        <p class="lede">One account keeps your chats in step on your computers and iPhone, end-to-end encrypted.</p>
+        <div class="stack cw-stagger">
+          <button class="btn btn-primary">Create your account</button>
+          <button class="btn btn-link">I already have an account</button>
+        </div>
+      </div>
+      <div class="foot"><span></span><div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">Laptop and phone rise in one after the other, the dotted links draw, prism packets travel through Nekko and the lock lands. Packets loop quietly; reduced motion shows the still picture.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>2</b>Account</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="account"></div>
+      <div class="cw-body">
+        <h1>Create your account</h1>
+        <p class="lede">Pick how you'd like to sign in. It's the same for signing in later.</p>
+        <div class="stack cw-stagger">
+          <div class="provider is-hover"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>Continue with GitHub</div>
+          <div class="provider"><svg viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z"/><path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33Z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z"/></svg>Continue with Google</div>
+          <div class="provider"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.18 8.5c-.02-1.66 1.36-2.46 1.42-2.5-.78-1.13-1.98-1.29-2.41-1.3-1.02-.1-2 .6-2.52.6-.53 0-1.32-.59-2.18-.57-1.12.02-2.15.65-2.73 1.65-1.17 2.02-.3 5 .84 6.64.56.8 1.22 1.7 2.08 1.67.84-.03 1.15-.54 2.16-.54 1 0 1.3.54 2.18.52.9-.01 1.47-.81 2.02-1.62.64-.93.9-1.83.91-1.88-.02 0-1.75-.67-1.77-2.67ZM9.53 3.63c.46-.56.77-1.33.68-2.1-.66.03-1.46.44-1.93 1-.42.48-.79 1.27-.69 2.02.73.06 1.48-.37 1.94-.92Z"/></svg>Continue with Apple</div>
+        </div>
+        <div class="or">or</div>
+        <div class="stack" style="margin-top:0"><div class="field ph">you@example.com</div><button class="btn btn-quiet">Email me a sign-in code</button></div>
+      </div>
+      <div class="foot"><button class="back">Back</button><div class="dots"><i class="done"></i><i class="on"></i><i></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">Devices step aside and the prism ring draws round Nekko, who glances down at the choices. The primary here is the provider you pick, so the email button is quiet until an address is typed.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>3</b>Waiting for the browser</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="browser"></div>
+      <div class="cw-body">
+        <h1>Finish in your browser</h1>
+        <p class="lede">We opened GitHub in your browser. This window moves on by itself when you're done.</p>
+        <div class="stack cw-stagger"><button class="btn btn-quiet">Open the page again</button><button class="btn btn-link">Use another way</button></div>
+      </div>
+      <div class="foot"><button class="back">Back</button><div class="dots"><i class="done"></i><i class="on"></i><i></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">Nekko slides left and watches a dot run to the browser, on a loop until the callback lands. Use another way cancels the browser sign-in.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>4</b>Check your email</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="code"></div>
+      <div class="cw-body">
+        <h1>Check your email</h1>
+        <p class="lede">We sent a 6-digit code to <b style="color:var(--ink)">philip@nekkolabs.com</b>.</p>
+        <div class="otp"><span class="f">4</span><span class="f">8</span><span class="f">1</span><span class="f">0</span><span class="cur"></span><span></span></div>
+        <div class="row-meta"><span>Use another way</span><span>Send again in 24s</span></div>
+      </div>
+      <div class="foot"><button class="back">Back</button><div class="dots"><i class="done"></i><i class="on"></i><i></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">The envelope swoops in beside Nekko. Each digit rises in as it's typed; the sixth signs in by itself (no Sign in button to hunt for).</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>5</b>You're in</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="in"></div>
+      <div class="cw-body">
+        <h1>You're in</h1>
+        <p class="lede">Signed in as philip@nekkolabs.com. Two quick choices and you're set.</p>
+        <div class="stack cw-stagger"><button class="btn btn-primary">Continue</button></div>
+      </div>
+      <div class="foot"><span></span><div class="dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">The ring turns green, Nekko smiles and a check lands. No Back: you are signed in now; closing keeps you signed in.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>6</b>Choose a plan</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene is-compact" data-scene="plan"></div>
+      <div class="cw-body">
+        <h1>Choose a plan</h1>
+        <p class="lede">Everything on this computer stays free. Pro adds your other devices.</p>
+        <div class="plans cw-stagger" role="radiogroup">
+          <div class="plan"><span class="tick"></span><div><div class="name">Free</div><div class="det">Your account. Chats stay on this computer.</div></div><span class="price">$0</span></div>
+          <div class="plan sel"><span class="tick"><svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 5.2l2 2 4-4.4" stroke="var(--paper)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><div class="name">Pro</div><div class="det">Synced chats, Nekko Cloud machines, organizations.</div></div><span class="price">$12 a month</span></div>
+          <div class="plan"><span class="tick"></span><div><div class="name">Team</div><div class="det">Pro for everyone on your team. Talk to us.</div></div><span class="price">Per seat</span></div>
+        </div>
+        <div class="stack"><button class="btn btn-primary">Continue with Pro</button></div>
+      </div>
+      <div class="foot"><span></span><div class="dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">The picture shrinks to make room (height eases, 260ms). Rows, not cards: the chosen plan gets the accent wash and a check that pops in. Team turns the button into Email us. Skipped when the account already syncs.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>7</b>Checkout, test mode</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-body" style="padding-top:28px">
+        <div class="card-wrap"><div class="ccard">
+          <div class="top"><span>Test card</span><span>Nekko Cloud Pro</span></div>
+          <div class="chip"></div>
+          <div class="num" data-type="4242 4242 4242 4242"></div>
+          <div class="bottom"><span>philip@nekkolabs.com</span><span>12/34</span></div>
+        </div></div>
+        <div class="sum"><span>Nekko Cloud Pro</span><span>$12 a month</span></div>
+        <div class="test-chip" style="margin-top:4px">Test mode: nothing is charged</div>
+        <div class="stack"><button class="btn btn-primary">Pay $12</button></div>
+      </div>
+      <div class="foot"><button class="back">Back</button><div class="dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">The card tips up into place, a sheen crosses it and the test card number types itself in. No card fields: nobody can type a real card into a page that charges nothing. With billing live, this step is the real Stripe Checkout in the browser instead.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>8</b>Paying</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-body" style="padding-top:28px">
+        <div class="card-wrap"><div class="ccard paying" style="animation:none">
+          <div class="top"><span>Test card</span><span>Nekko Cloud Pro</span></div><div class="chip"></div>
+          <div class="num">4242 4242 4242 4242</div>
+          <div class="bottom"><span>philip@nekkolabs.com</span><span>12/34</span></div>
+        </div></div>
+        <div class="sum"><span>Nekko Cloud Pro</span><span>$12 a month</span></div>
+        <div class="test-chip" style="margin-top:4px">Test mode: nothing is charged</div>
+        <div class="stack"><button class="btn btn-primary" style="opacity:.7"><span class="spin"></span>Paying…</button></div>
+      </div>
+      <div class="foot"><span></span><div class="dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">About 1.5s. The sheen keeps passing while it works.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>9</b>Paid</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-body" style="padding-top:28px">
+        <div class="card-wrap"><div class="ccard paid">
+          <div class="top"><span>Test card</span><span>Nekko Cloud Pro</span></div><div class="chip"></div>
+          <div class="num">4242 4242 4242 4242</div>
+          <div class="bottom"><span>philip@nekkolabs.com</span><span>12/34</span></div>
+          <div class="done"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12.5 20.5l5 5 10-11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div></div>
+        <h1 style="margin-top:20px">You're on Pro</h1>
+        <p class="lede info" style="color:var(--info)">Test mode: nothing was charged and your account's plan hasn't changed.</p>
+        <div class="stack"><button class="btn btn-primary">Continue</button></div>
+      </div>
+      <div class="foot"><span></span><div class="dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">The card dips a touch and turns green with a check. The Petrol line keeps the fake honest.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>10</b>Sync and the recovery key</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="sync"></div>
+      <div class="cw-body">
+        <h1>Save your recovery key</h1>
+        <p class="lede">Sync is on. If you ever lose every device, this key is the only way back to your chats. We can't reset it.</p>
+        <div class="rkey"><span style="animation-delay:.1s">7KQ2M</span><span style="animation-delay:.14s">XW9DA</span><span style="animation-delay:.18s">P3RTE</span><span style="animation-delay:.22s">HN6VC</span><span style="animation-delay:.26s">YB8LF</span><span style="animation-delay:.3s">2GZUQ</span><span style="animation-delay:.34s">MJ4SK</span><span style="animation-delay:.38s">T5EWD</span><span style="animation-delay:.42s">AC7NR</span><span style="animation-delay:.46s">QX3HP</span><span style="animation-delay:.5s">L9BVM</span></div>
+        <div class="pair"><button class="btn btn-quiet">Copy</button><button class="btn btn-quiet">Save recovery kit</button></div>
+        <label class="check"><i><svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 5.2l2 2 4-4.4" stroke="var(--paper)" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></i>I've saved it somewhere safe</label>
+        <div class="stack" style="margin-top:12px"><button class="btn btn-primary">Continue</button></div>
+      </div>
+      <div class="foot"><span></span><div class="dots"><i class="done"></i><i class="done"></i><i class="done"></i><i class="on"></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">Plain chats leave the laptop, pass Nekko's lock and reach the cloud as ciphertext. The key's groups rise in one by one. Continue then asks for the key back, as today.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>11</b>All set</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="done"></div>
+      <div class="cw-body">
+        <h1>You're all set</h1>
+        <div class="rows">
+          <div><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.2l2.1 2.1 4.3-4.6" stroke="var(--paper)" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg><span>philip@nekkolabs.com<small>Nekko Cloud Pro</small></span></div>
+          <div><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.2l2.1 2.1 4.3-4.6" stroke="var(--paper)" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg><span>Sync is on<small>Recovery key saved</small></span></div>
+          <div class="wait"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>Add your iPhone<small>Sign in on it with the same account</small></span></div>
+        </div>
+        <div class="stack"><button class="btn btn-primary">Start using Nekko Agent</button></div>
+      </div>
+      <div class="foot"><span></span><div class="dots"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="on"></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">Back to the first picture, now connected: links go solid green and each device gets its dot. Rows rise in one after another.</div>
+  </section>
+</div>
+
+<h2 class="row-title">States, Dusk and a narrow window</h2>
+<div class="canvas">
+  <section class="frame"><div class="label"><b>12</b>Invite-only refusal</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="account"></div>
+      <div class="cw-body">
+        <h1>Create your account</h1>
+        <p class="lede">Pick how you'd like to sign in. It's the same for signing in later.</p>
+        <div class="stack"><div class="provider">Continue with GitHub</div><div class="provider">Continue with Google</div><div class="provider">Continue with Apple</div></div>
+        <p class="alert" role="alert">Nekko Cloud is invite-only for now. This account isn't on the list yet.</p>
+      </div>
+      <div class="foot"><button class="back">Back</button><div class="dots"><i class="done"></i><i class="on"></i><i></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">Errors are one line in danger text under the choices; the walkthrough stays put.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>13</b>All set on Free (or test-mode Pro)</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="in"></div>
+      <div class="cw-body">
+        <h1>You're all set</h1>
+        <div class="rows">
+          <div><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.2l2.1 2.1 4.3-4.6" stroke="var(--paper)" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg><span>philip@nekkolabs.com<small>Nekko Cloud Free</small></span></div>
+          <div class="wait"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>Sync is waiting for Pro<small>Your chats stay on this computer</small></span></div>
+        </div>
+        <div class="stack"><button class="btn btn-primary">Start using Nekko Agent</button></div>
+      </div>
+      <div class="foot"><span></span><div class="dots"><i class="done"></i><i class="done"></i><i class="done"></i><i class="on"></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">When the plan can't sync, the Sync step is skipped and the dots drop to four.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>14</b>Welcome, Dusk</div>
+    <div class="window t-dusk"><div class="app-behind"><i style="width:40%"></i><i></i><i style="width:70%"></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="welcome"></div>
+      <div class="cw-body">
+        <h1>Your Nekko, on every device</h1>
+        <p class="lede">One account keeps your chats in step on your computers and iPhone, end-to-end encrypted.</p>
+        <div class="stack cw-stagger"><button class="btn btn-primary">Create your account</button><button class="btn btn-link">I already have an account</button></div>
+      </div>
+      <div class="foot"><span></span><div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+  </section>
+
+  <section class="frame"><div class="label"><b>15</b>Checkout, Dusk</div>
+    <div class="window t-dusk"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-body" style="padding-top:28px">
+        <div class="card-wrap"><div class="ccard">
+          <div class="top"><span>Test card</span><span>Nekko Cloud Pro</span></div><div class="chip"></div>
+          <div class="num" data-type="4242 4242 4242 4242"></div>
+          <div class="bottom"><span>philip@nekkolabs.com</span><span>12/34</span></div>
+        </div></div>
+        <div class="sum"><span>Nekko Cloud Pro</span><span>$12 a month</span></div>
+        <div class="test-chip" style="margin-top:4px">Test mode: nothing is charged</div>
+        <div class="stack"><button class="btn btn-primary">Pay $12</button></div>
+      </div>
+      <div class="foot"><button class="back">Back</button><div class="dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+  </section>
+
+  <section class="frame"><div class="label"><b>16</b>Account at 360px, Dusk</div>
+    <div class="window narrow t-dusk"><div class="cw-backdrop" style="padding:12px"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="account"></div>
+      <div class="cw-body">
+        <h1>Sign in to Nekko Cloud</h1>
+        <p class="lede">Keep your chats on every device, end-to-end encrypted. Nekko Labs can't read them.</p>
+        <div class="stack"><div class="provider">Continue with GitHub</div><div class="provider">Continue with Google</div><div class="provider">Continue with Apple</div></div>
+        <div class="or">or</div>
+        <div class="stack" style="margin-top:0"><div class="field focus">philip@nekkolabs.com</div><button class="btn btn-primary">Email me a sign-in code</button></div>
+      </div>
+    </div></div></div>
+    <div class="why">A later sign-in on this device: no Welcome, no dots. A typed address makes the email button the primary.</div>
+  </section>
+</div>
+
+<h2 class="row-title">Motion</h2>
+<div class="canvas"><div class="motion"><table>
+  <tr><td>Window in</td><td>Fades, rises 8px, scales from 0.985</td><td>320ms</td></tr>
+  <tr><td>Step change</td><td>Content fades in from 8px in the direction of travel; buttons stagger 40ms</td><td>240ms</td></tr>
+  <tr><td>Window height</td><td>Eases to the next step's height; the picture shrinks for plans</td><td>260ms</td></tr>
+  <tr><td>Picture morph</td><td>Shared drawing: parts fade and slide between scenes, Nekko's eyes follow the action</td><td>360 to 600ms</td></tr>
+  <tr><td>Ambient</td><td>Packets along the links, the dot to the browser</td><td>1.6 to 2.4s loops</td></tr>
+  <tr><td>Card</td><td>Tips up from 18deg, sheen, number types at 28ms a character</td><td>600ms + 0.5s</td></tr>
+  <tr><td>Paid</td><td>Card dips to 0.985, green wash, check pops from 0.92</td><td>400ms</td></tr>
+  <tr><td>Reduced motion</td><td>Only fades; the picture is still; the card number is shown at once</td><td></td></tr>
+  <tr><td>Curve</td><td>--ease-out everywhere, nothing bounces or overshoots</td><td></td></tr>
+</table></div></div>
+
+<script>
+  function fill() {
+    const tpl = document.getElementById('scene');
+    document.querySelectorAll('[data-scene]').forEach((host, i) => {
+      host.innerHTML = '';
+      const svg = tpl.content.firstElementChild.cloneNode(true);
+      // Unique gradient ids per copy.
+      svg.querySelectorAll('[id]').forEach((n) => { const id = n.id; n.id = id + i; svg.querySelectorAll('*').forEach((m) => ['fill', 'stroke'].forEach((a) => { const v = m.getAttribute(a); if (v === `url(#${id})`) m.setAttribute(a, `url(#${id + i})`); })); });
+      svg.querySelector('.glow').setAttribute('fill', `url(#cwGlow${i})`);
+      svg.querySelector('.ring').setAttribute('stroke', `url(#cwPrism${i})`);
+      svg.querySelectorAll('.pk').forEach((p) => p.setAttribute('fill', `url(#cwPrism${i})`));
+      const scene = host.dataset.scene;
+      svg.classList.add('cw-s');
+      // Start from the welcome layout, then move to the scene, so the morph plays.
+      svg.classList.add(scene === 'welcome' || scene === 'done' ? 's-' + scene : 's-account');
+      host.appendChild(svg);
+      if (['in', 'done'].includes(scene)) svg.querySelector('.eo').setAttribute('opacity', '0'), svg.querySelector('.eh').setAttribute('opacity', '1');
+      requestAnimationFrame(() => requestAnimationFrame(() => { svg.setAttribute('class', 'cw-s s-' + scene); }));
+    });
+    document.querySelectorAll('[data-type]').forEach((n) => {
+      n.innerHTML = [...n.dataset.type].map((c, i) => `<i style="animation-delay:${0.55 + i * 0.028}s">${c === ' ' ? '&nbsp;' : c}</i>`).join('');
+    });
+  }
+  function replay() {
+    document.querySelectorAll('.window').forEach((w) => { const c = w.cloneNode(true); w.replaceWith(c); });
+    fill();
+  }
+  fill();
+</script>
+</body>
+</html>

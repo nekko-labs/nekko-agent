@@ -117,8 +117,10 @@ async function main() {
   const a = await page(A);
   await both(a, '01-signed-out');
   await a.click('[data-testid=sync-sign-in]');
-  await a.waitForSelector('[data-testid=cloud-signin]');
-  await both(a, '02-sign-in', 'page');
+  await a.waitForSelector('[data-testid=cloud-signin][data-step=welcome]');
+  await both(a, '02a-welcome', 'page', 1200);
+  await a.click('[data-testid=cw-have-account]');
+  await both(a, '02-sign-in', 'page', 900);
   await a.fill('[data-testid=cloud-email]', email);
   await a.click('[data-testid=cloud-send-code]');
   await a.waitForSelector('[data-testid=cloud-otp-0]');
@@ -138,12 +140,15 @@ async function main() {
   await a.keyboard.press('Escape');
   await signInLabel('Sign in to Nekko Cloud');
   await a.click('[data-testid=sync-sign-in]');
+  await a.click('[data-testid=cw-have-account]');
   if (await a.inputValue('[data-testid=cloud-email]') !== '') throw new Error('a cancelled sign-in came back');
   await a.fill('[data-testid=cloud-email]', email);
   await a.click('[data-testid=cloud-send-code]');
   await a.waitForSelector('[data-testid=cloud-otp-0]');
   await a.fill('[data-testid=cloud-otp-0]', '123456');
-  // Signing in turns sync on by itself: the recovery key, the kit, typing it back. Nobody clicks Turn on.
+  // Signing in leads to the walkthrough's Sync step, which turns sync on by itself: the recovery key,
+  // the kit, typing it back. Nobody clicks Turn on.
+  await a.click('[data-testid=cw-continue]');
   await a.waitForSelector('[data-testid=recovery-key]', { timeout: 20000 });
   if (await a.locator('[data-testid=sync-turn-on]').count()) throw new Error('sync waited for Turn on after signing in');
   const recovery = (await a.locator('[data-testid=recovery-key] span').allTextContents()).join('-');
@@ -153,7 +158,10 @@ async function main() {
   await a.fill('[data-testid=recovery-typed]', recovery.toLowerCase());
   await both(a, '06-recovery-confirm', 'page');
   await a.click('[data-testid=recovery-confirm]');
-  await a.waitForSelector('[data-testid=recovery-dialog]', { state: 'detached' });
+  await a.waitForSelector('[data-testid=cloud-signin][data-step=done]');
+  await both(a, '06a-all-set', 'page', 1200);
+  await a.click('[data-testid=cw-finish]');
+  await a.waitForSelector('[data-testid=cloud-signin]', { state: 'detached' });
   await phase(a, 'Up to date');
   await both(a, '07-up-to-date');
 
@@ -161,10 +169,15 @@ async function main() {
   // already syncs), so it lands on adding this computer, quietly; it asks, and shows its code.
   const b = await page(B);
   await b.click('[data-testid=sync-sign-in]');
+  await b.click('[data-testid=cw-have-account]');
   await b.fill('[data-testid=cloud-email]', email);
   await b.click('[data-testid=cloud-send-code]');
   await b.waitForSelector('[data-testid=cloud-otp-0]');
   await b.fill('[data-testid=cloud-otp-0]', '123456');
+  await b.click('[data-testid=cw-continue]');
+  await b.waitForSelector('[data-testid=cloud-signin][data-step=sync] [data-testid=cw-continue]', { timeout: 20000 });
+  await b.click('[data-testid=cw-continue]');
+  await b.click('[data-testid=cw-finish]');
   await phase(b, 'Add this computer');
   await b.waitForTimeout(1500);
   if (await b.locator('[data-testid=sync-settings] [role=alert]').count()) throw new Error(`an error showed: ${await b.locator('[data-testid=sync-settings] [role=alert]').first().textContent()}`);
