@@ -329,7 +329,7 @@ function WorkspaceCardImpl({
         {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
-          : <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+          : <span className="min-w-0 flex-1 truncate text-xs leading-[18px] font-semibold text-ink">
             {title}
           </span>}
         {/* A title-only card has no room for both: its PR says more than the time. */}
@@ -483,7 +483,7 @@ function RenameField({ title, onDone }: { title: string; onDone: (title: string 
   };
   return (
     <input
-      className="min-w-0 flex-1 rounded-sm border border-accent bg-surface px-1 text-sm text-ink outline-none"
+      className="min-w-0 flex-1 rounded-sm border border-accent bg-surface px-1 text-xs text-ink outline-none"
       aria-label="Chat title"
       value={value}
       autoFocus
