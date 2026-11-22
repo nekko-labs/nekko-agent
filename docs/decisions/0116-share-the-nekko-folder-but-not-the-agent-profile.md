@@ -1,4 +1,4 @@
-# 0114. Share the Nekko folder, not the Agent profile
+# 0116. Share the Nekko folder, not the Agent profile
 
 Status: accepted. Issue: [#3174](https://github.com/nekko-labs/nekko-agent/issues/3174).
 

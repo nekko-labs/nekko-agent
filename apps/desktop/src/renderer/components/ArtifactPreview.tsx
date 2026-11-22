@@ -72,11 +72,17 @@ function ServedPreview({ path, source, title, onTextEdit, reloadKey }: {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [editing]);
+  // Every reload asks the server again (#3210): a page it let go of (it keeps a bounded set) comes back on
+  // the next save instead of a blank frame. The frame on screen stays until the new address arrives.
+  const reload = reloadKey !== undefined ? String(reloadKey) : `${source.length}:${hashText(source)}`;
+  const shownFor = useRef('');
   useEffect(() => {
     let live = true;
     let id = '';
     const release = (served: string) => { void window.nekko.releaseHtmlPreview?.(served).catch(() => {}); };
-    setServed(null); setFailed('');
+    const page = `${path}\n${internet}\n${editing && canEdit}`;
+    if (shownFor.current !== page) { shownFor.current = page; setServed(null); }
+    setFailed('');
     window.nekko.serveHtmlPreview!(path, { internet, edit: editing && canEdit }).then((s) => {
       if (!s?.url) throw new Error('Nothing here can serve the page.');
       if (!live) { release(s.id); return; }
@@ -84,7 +90,7 @@ function ServedPreview({ path, source, title, onTextEdit, reloadKey }: {
       setServed(s);
     }).catch((e) => { if (live) setFailed((e as Error).message || 'The page could not be served.'); });
     return () => { live = false; if (id) release(id); };
-  }, [path, internet, editing, canEdit]);
+  }, [path, internet, editing, canEdit, reload]);
   if (failed) return <StaticPreview source={source} title={title} note={`${failed} Showing it without its files or scripts.`} />;
   return <div className="flex h-full min-h-96 flex-col gap-2 p-3" data-served-preview>
     <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -104,8 +110,9 @@ function ServedPreview({ path, source, title, onTextEdit, reloadKey }: {
     </div>
     <div className="min-h-96 flex-1 overflow-auto rounded-lg bg-surface-2">
       {served
-        // A saved edit reloads the frame from disk: `reloadKey` says when the save landed, else a change of `source` does.
-        ? <iframe ref={frame} key={`${served.url}:${reloadKey ?? `${source.length}:${hashText(source)}`}`} title={title} src={served.url} sandbox={SERVED_PREVIEW_SANDBOX}
+        // A saved edit reloads the frame from disk: `reloadKey` says when the save landed, else a change of `source` does,
+        // and each reload is served at a fresh address.
+        ? <iframe ref={frame} key={served.url} title={title} src={served.url} sandbox={SERVED_PREVIEW_SANDBOX}
             referrerPolicy="no-referrer" style={{ width, height: '100%', minHeight: 480, border: 0, background: 'white' }} />
         : <p className="p-4 text-xs text-ink-faint">Loading…</p>}
     </div>
