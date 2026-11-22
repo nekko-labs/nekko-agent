@@ -1,3 +1,5 @@
+import { request } from 'node:http';
+
 import { VERSION } from './version.js';
 
 /**
@@ -192,12 +194,38 @@ export type BridgeDecision =
 
 const deny = (message: string): BridgeDecision => ({ behavior: 'deny', message });
 
+type Post = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<Response>;
+
+/**
+ * A POST that waits as long as the person takes. Node's fetch fails ("fetch
+ * failed") after 300 s without response headers (undici's headersTimeout),
+ * which denied every approval left unanswered for five minutes while nekkod
+ * kept showing it as waiting. node:http sets no such limit.
+ */
+export const waitingPost: Post = (url, init) =>
+  new Promise((resolve, reject) => {
+    const req = request(url, { method: init.method, headers: init.headers }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('error', reject);
+      res.on('end', () => {
+        try {
+          resolve(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 500 }));
+        } catch (e) {
+          reject(e as Error);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.end(init.body);
+  });
+
 /** Ask nekkod about one permission prompt. Never throws: a failure is a deny. */
 export async function askNekkod(
   url: string,
   token: string,
   prompt: Record<string, unknown>,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: Post = waitingPost,
 ): Promise<BridgeDecision> {
   try {
     const res = await fetchImpl(`${url.replace(/\/$/, '')}/harness/approve`, {
