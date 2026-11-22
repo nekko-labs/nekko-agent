@@ -1,15 +1,24 @@
 import { useEffect, useId, useState } from 'react';
-import { PixelHead } from '../Mascot.js';
+import { NekkoCloudMarkPaths } from './NekkoCloudMark.js';
 
 /** Which picture the walkthrough shows; one drawing that morphs between them. */
 export type WelcomeScene = 'welcome' | 'account' | 'browser' | 'code' | 'in' | 'plan' | 'sync' | 'done';
 
+/** The links from each device up to the mark, and the packets that run along them. */
+export const SCENE_LINKS = [
+  'M48 104 C 48 80 140 78 162 62',
+  'M128 100 C 128 84 160 78 172 63',
+  'M232 100 C 232 84 200 78 188 63',
+  'M312 104 C 312 80 220 78 198 62',
+] as const;
+
 /**
- * The picture at the top of the Nekko Cloud walkthrough (#3187,
- * nekko-designs/cloud-welcome-walkthrough-design.html): your laptop and phone
- * kept in step through Nekko, end-to-end encrypted. Every scene draws the same
- * parts; cloud.css moves, shows and hides them per scene, so going from one
- * step to the next plays as one continuous motion.
+ * The picture at the top of the Nekko Cloud walkthrough (#3187, v2 in #3190,
+ * nekko-designs/cloud-welcome-walkthrough-design-v2.html): a laptop, a
+ * desktop, a phone and a tablet kept in step through the Nekko Cloud mark,
+ * end-to-end encrypted. Every scene draws the same parts; cloud.css moves,
+ * shows and hides them per scene, so going from one step to the next plays as
+ * one continuous motion.
  */
 export function CloudWelcomeScene({ scene }: { scene: WelcomeScene }) {
   const id = useId().replace(/:/g, '');
@@ -17,12 +26,11 @@ export function CloudWelcomeScene({ scene }: { scene: WelcomeScene }) {
   const prism = `cw-prism-${id}`;
   // Mount on the account layout and move to the real scene a frame later, so the first picture
   // plays its entrance instead of appearing already in place.
-  const [shown, setShown] = useState<WelcomeScene>(scene === 'welcome' || scene === 'done' ? scene : 'account');
+  const [shown, setShown] = useState<WelcomeScene>(scene === 'welcome' || scene === 'done' || scene === 'sync' ? scene : 'account');
   useEffect(() => {
     const raf = requestAnimationFrame(() => setShown(scene));
     return () => cancelAnimationFrame(raf);
   }, [scene]);
-  const happy = shown === 'in' || shown === 'done';
 
   return (
     <svg className={`cw-s s-${shown}`} viewBox="0 0 360 160" aria-hidden="true" focusable="false" data-scene={shown}>
@@ -39,44 +47,42 @@ export function CloudWelcomeScene({ scene }: { scene: WelcomeScene }) {
           <stop offset="1" className="cw-prism-5" />
         </linearGradient>
       </defs>
-      <circle className="glow" cx="180" cy="80" r="70" fill={`url(#${glow})`} />
-      <circle className="orbit" cx="180" cy="80" r="42" />
-      <circle className="ring" cx="180" cy="80" r="40" stroke={`url(#${prism})`} />
-      <path className="arc" d="M100 74 Q 118 54 142 66" />
-      <path className="arc" d="M218 66 Q 246 50 276 70" />
+      <circle className="ring" cx="180" cy="80" r="44" stroke={`url(#${prism})`} />
+      {SCENE_LINKS.map((d) => <path key={d} className="link" d={d} />)}
       <g className="g-pk">
-        <circle className="pk l" r="2.6" fill={`url(#${prism})`} />
-        <circle className="pk r" r="2.6" fill={`url(#${prism})`} />
+        {SCENE_LINKS.map((_, i) => <circle key={i} className={`pk p${i + 1}`} r="2.4" fill={`url(#${prism})`} />)}
       </g>
-      <g className="g-sync">
-        <rect className="plain" width="9" height="4" rx="2" />
-        <rect className="plain b2" width="9" height="4" rx="2" />
-        <rect className="plain b3" width="9" height="4" rx="2" />
-        <rect className="cipher" width="6" height="6" rx="1.5" />
-        <rect className="cipher b2" width="6" height="6" rx="1.5" />
-        <rect className="cipher b3" width="6" height="6" rx="1.5" />
+      <g className="dev d1">
+        <rect className="body" x="20" y="104" width="56" height="34" rx="4" />
+        <path className="body" d="M12 141 H84 L79 146 H17 Z" />
+        <rect className="b" x="27" y="111" width="24" height="5" rx="2.5" />
+        <rect className="b you" x="40" y="120" width="28" height="5" rx="2.5" />
+        <rect className="b" x="27" y="129" width="18" height="5" rx="2.5" />
+        <circle className="ok" cx="76" cy="104" r="4.5" />
       </g>
-      <g className="dev l">
-        <rect className="body" x="34" y="60" width="62" height="40" rx="5" />
-        <path className="body" d="M26 104 H104 L98 110 H32 Z" />
-        <rect className="b" x="42" y="68" width="28" height="6" rx="3" />
-        <rect className="b you" x="58" y="78" width="30" height="6" rx="3" />
-        <rect className="b" x="42" y="88" width="22" height="6" rx="3" />
-        <circle className="ok" cx="96" cy="60" r="5" />
+      <g className="dev d2">
+        <rect className="body" x="100" y="100" width="56" height="38" rx="4" />
+        <rect className="body" x="124" y="138" width="8" height="4" />
+        <rect className="body" x="116" y="142" width="24" height="3" rx="1.5" />
+        <rect className="b" x="107" y="107" width="26" height="5" rx="2.5" />
+        <rect className="b you" x="122" y="116" width="27" height="5" rx="2.5" />
+        <rect className="b" x="107" y="125" width="20" height="5" rx="2.5" />
+        <circle className="ok" cx="156" cy="100" r="4.5" />
       </g>
-      <g className="dev r">
-        <rect className="body" x="276" y="48" width="36" height="64" rx="8" />
-        <rect className="b" x="288" y="52" width="12" height="3" rx="1.5" />
-        <rect className="b" x="282" y="62" width="20" height="5" rx="2.5" />
-        <rect className="b you" x="288" y="71" width="18" height="5" rx="2.5" />
-        <rect className="b" x="282" y="80" width="16" height="5" rx="2.5" />
-        <circle className="ok" cx="312" cy="48" r="5" />
+      <g className="dev d3">
+        <rect className="body" x="219" y="98" width="26" height="48" rx="6" />
+        <rect className="b" x="227" y="101.5" width="10" height="2.5" rx="1.25" />
+        <rect className="b" x="223" y="109" width="14" height="4" rx="2" />
+        <rect className="b you" x="227" y="116" width="14" height="4" rx="2" />
+        <rect className="b" x="223" y="123" width="11" height="4" rx="2" />
+        <circle className="ok" cx="245" cy="98" r="4.5" />
       </g>
-      <g className="cloud">
-        <path d="M262 92 a16 16 0 0 1 4 -31 a22 22 0 0 1 41 -4 a17 17 0 0 1 9 35 Z" />
-        <rect className="cl" x="276" y="70" width="8" height="8" rx="2" />
-        <rect className="cl" x="288" y="70" width="8" height="8" rx="2" />
-        <rect className="cl" x="300" y="70" width="8" height="8" rx="2" />
+      <g className="dev d4">
+        <rect className="body" x="284" y="104" width="56" height="40" rx="6" />
+        <rect className="b" x="291" y="111" width="24" height="5" rx="2.5" />
+        <rect className="b you" x="306" y="120" width="27" height="5" rx="2.5" />
+        <rect className="b" x="291" y="129" width="18" height="5" rx="2.5" />
+        <circle className="ok" cx="340" cy="104" r="4.5" />
       </g>
       <g className="browser">
         <rect className="body" x="244" y="46" width="88" height="64" rx="8" />
@@ -87,24 +93,30 @@ export function CloudWelcomeScene({ scene }: { scene: WelcomeScene }) {
         <rect className="go" x="256" y="84" width="64" height="14" rx="7" />
         <rect className="gol" x="276" y="89.5" width="24" height="3" rx="1.5" />
       </g>
-      <path className="link" d="M146 78 Q 196 52 242 72" />
-      <g className="g-link"><circle className="linkpk" r="2.6" /></g>
+      <path className="blink" d="M152 80 Q 198 56 242 72" />
+      <g className="g-blink"><circle className="blinkpk" r="2.4" /></g>
       <g className="mail">
-        <rect x="226" y="46" width="36" height="25" rx="4" />
-        <path className="flap" d="M228 49 L244 61 L260 49" />
-        <circle className="seal" cx="244" cy="61" r="3" />
+        <rect x="228" y="44" width="36" height="25" rx="4" />
+        <path className="flap" d="M230 47 L246 59 L262 47" />
+        <circle className="seal" cx="246" cy="59" r="3" />
       </g>
-      <g className={`nekko${happy ? ' pixel-happy' : ''}`}>
-        <g transform="translate(156 56) scale(1.5)" shapeRendering="crispEdges"><PixelHead /></g>
-      </g>
-      <g className="badge lock">
-        <circle className="lockb" cx="205" cy="102" r="10" />
-        <path className="lockg" d="M201.6 101 v-2.4 a3.4 3.4 0 0 1 6.8 0 V101" />
-        <rect className="lockf" x="200" y="100.5" width="10" height="7" rx="1.6" />
-      </g>
-      <g className="badge ok">
-        <circle className="checkb" cx="205" cy="102" r="10" />
-        <path className="checkg" d="M200.5 102.2 l3 3 l5.6 -6" />
+      <g className="mark">
+        <g className="mark-in">
+          <circle cx="180" cy="80" r="64" fill={`url(#${glow})`} />
+          <g transform="translate(148 56)">
+            <NekkoCloudMarkPaths>
+              <g className="badge lock">
+                <circle className="lockb" cx="56" cy="40" r="8" />
+                <path className="lockg" d="M53 39.5 v-2 a3 3 0 0 1 6 0 v2" />
+                <rect className="lockf" x="51.5" y="39" width="9" height="6.5" rx="1.5" />
+              </g>
+              <g className="badge ok">
+                <circle className="checkb" cx="56" cy="40" r="8" />
+                <path className="checkg" d="M52.2 40.3 l2.6 2.6 l5 -5.4" />
+              </g>
+            </NekkoCloudMarkPaths>
+          </g>
+        </g>
       </g>
     </svg>
   );

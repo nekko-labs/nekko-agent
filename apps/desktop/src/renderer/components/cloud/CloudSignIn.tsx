@@ -187,7 +187,7 @@ export function CloudSignIn({ status, pending, onPending, onClose, start = 'acco
 
   return (
     <div className="cloud-signin-backdrop cw-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="cloud-signin cw" role="dialog" aria-modal="true" aria-labelledby="cw-title" data-testid="cloud-signin" data-step={step}>
+      <div className={`cloud-signin cw${step === 'plan' ? ' is-wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="cw-title" data-testid="cloud-signin" data-step={step}>
         <button className="cw-close absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-lg text-ink-faint hover:bg-surface-2 hover:text-ink" aria-label="Close" onClick={close} data-testid="cw-close">
           <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
         </button>
@@ -198,8 +198,8 @@ export function CloudSignIn({ status, pending, onPending, onClose, start = 'acco
           <div key={stepKey} className={`cw-body-in${dir === 'back' ? ' is-back' : ''}`}>
             {step === 'welcome' && (
               <>
-                <h1 id="cw-title">Your Nekko, on every device</h1>
-                <p className="cloud-lede">One account keeps your chats in step on your computers and iPhone, end-to-end encrypted.</p>
+                <h1 id="cw-title">Your way, on every device</h1>
+                <p className="cloud-lede">Your profile, computers, fleet and settings follow you to every device, end-to-end encrypted.</p>
                 <div className="cw-stagger mt-(--q-group) flex flex-col gap-2">
                   <button className="btn btn-primary w-full" onClick={() => { setIntent('create'); go('account'); }} data-testid="cw-create">Create your account</button>
                   <button className="btn btn-ghost w-full text-ink-soft! text-xs!" onClick={() => { setIntent('signin'); go('account'); }} data-testid="cw-have-account">I already have an account</button>

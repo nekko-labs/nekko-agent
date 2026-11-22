@@ -40,7 +40,7 @@ flowchart TB
 
 ## Signing in the first time
 
-Settings > Nekko Cloud > **Sign in to Nekko Cloud** (or **New here? Create an account**) opens a short walkthrough: what Nekko Cloud is, then GitHub, Google, Apple or an emailed code, then a plan, then sync. On a Pro or Team account the Sync step turns sync on for this computer and shows your recovery key to save, as above; an account that already syncs on another device is sent to add this computer instead. Later sign-ins on the same computer skip the opening page. Until billing goes live, choosing Pro there runs a test checkout: nothing is charged and your plan stays as it is.
+Settings > Nekko Cloud > **Sign in to Nekko Cloud** (or **New here? Create an account**) opens a short walkthrough: what Nekko Cloud is, then GitHub, Google, Apple or an emailed code, then a plan, then sync. On a Pro or Team account the Sync step turns sync on for this computer and shows your recovery key to save, as above; an account that already syncs on another device is sent to add this computer instead. Later sign-ins on the same computer skip the opening page. The plan step compares Free, Pro and Enterprise, with the full list one click away. Until billing goes live, choosing Pro there runs a test checkout that shows the ways to pay where you are (cards, Apple Pay or Google Pay, Link, and local options such as ACH, SEPA debit, iDEAL, UPI or Pix): nothing is charged and your plan stays as it is.
 
 ## Plans
 
