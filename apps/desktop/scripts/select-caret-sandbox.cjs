@@ -10,6 +10,7 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 app.disableHardwareAcceleration();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const js = v => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const report = { checks: {}, captures: [], errors: [] };
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:)/.test(d.url) }));
@@ -17,7 +18,7 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1100, height: 800, useContentSize: true, show: false, focusable: false, skipTaskbar: true, x: -10000, y: -10000, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
   const run = code => win.webContents.executeJavaScript(code, true);
   const crop = async (name, selector, pad = 16) => {
-    const r = await run(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; e.scrollIntoView({ block: 'center' }); const b = e.getBoundingClientRect(); return { x: Math.max(0, Math.round(b.x - ${pad})), y: Math.max(0, Math.round(b.y - ${pad})), width: Math.round(b.width + ${pad * 2}), height: Math.round(b.height + ${pad * 2}) }; })()`);
+    const r = await run(`(() => { const e = document.querySelector(${js(selector)}); if (!e) return null; e.scrollIntoView({ block: 'center' }); const b = e.getBoundingClientRect(); return { x: Math.max(0, Math.round(b.x - ${pad})), y: Math.max(0, Math.round(b.y - ${pad})), width: Math.round(b.width + ${pad * 2}), height: Math.round(b.height + ${pad * 2}) }; })()`);
     if (!r) { report.errors.push('missing ' + selector); return; }
     await sleep(300);
     const file = path.join(out, name + '.png');
@@ -55,7 +56,7 @@ app.whenReady().then(async () => {
       const groups = await run(`JSON.stringify([...document.querySelectorAll('[data-settings-group]')].map(g => g.dataset.settingsGroup))`);
       let n = 0;
       for (const g of JSON.parse(groups)) {
-        await run(`window.settingsFixture.openSettingsGroup(${JSON.stringify(g)})`);
+        await run(`window.settingsFixture.openSettingsGroup(${js(g)})`);
         await sleep(300);
         if (await run(`!!document.querySelector('#settings-${g} select')`)) { await crop(`select-${g}`, `#settings-${g} select`); if (++n >= 3) break; }
       }
