@@ -3,11 +3,11 @@ import { type CloudStatus, type SyncDevice, type SyncKind, cloudError } from '@n
 import { Toggle } from '../primitives/Toggle.js';
 import { StatusDot } from '../primitives/index.js';
 import { SettingRow, SettingsSection } from '../SettingsSection.js';
-import { CODE_LIFETIME_MS, CloudSignIn, type PendingCode } from './CloudSignIn.js';
+import { CODE_LIFETIME_MS, CloudSignIn, type PendingCode, hasBeenWelcomed } from './CloudSignIn.js';
 import { RecoveryKeyDialog } from './RecoveryKeyDialog.js';
 import { DeleteAccountDialog } from './DeleteAccountDialog.js';
 import { SyncVisual } from './SyncVisual.js';
-import { PlanRow, TeamSwitches } from './PlanAndBilling.js';
+import { PlanRow, TeamSwitches, planLabel } from './PlanAndBilling.js';
 import { LogOutIcon } from '../../gentleface-icons.js';
 import './cloud.css';
 
@@ -18,16 +18,17 @@ import './cloud.css';
  */
 export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
   const [status, setStatus] = useState<CloudStatus | null>(null);
-  const [signIn, setSignIn] = useState(false);
+  // The walkthrough (#3187): Welcome first on this device's first sign-in and for Create an account.
+  const [signIn, setSignIn] = useState<'welcome' | 'account' | null>(null);
   const [recovery, setRecovery] = useState<{ key: string | null } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [deleting, setDeleting] = useState(false);
   // An emailed code outlives its window: Sign in reopens it until it's used, cancelled or expired.
   const [pendingCode, setPendingCode] = useState<PendingCode | null>(null);
-  const openSignIn = () => {
+  const openSignIn = (create = false) => {
     if (pendingCode && Date.now() - pendingCode.sentAt > CODE_LIFETIME_MS) setPendingCode(null);
-    setSignIn(true);
+    setSignIn(create || !hasBeenWelcomed() ? 'welcome' : 'account');
   };
   useEffect(() => { if (status?.signedIn) setPendingCode(null); }, [status?.signedIn]);
 
@@ -68,18 +69,8 @@ export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
 
   const phase = status?.sync.phase ?? 'signed-out';
 
-  // Signing in here turns sync on by default, so the recovery key shows at once. Only a sign-in this
-  // window sees happen counts: opening Settings while signed in, or after turning sync off, starts nothing.
-  const wasSignedIn = useRef<boolean | null>(null);
-  const autoOn = useRef(false);
-  useEffect(() => {
-    if (!status) return;
-    if (wasSignedIn.current === false && status.signedIn) autoOn.current = true;
-    wasSignedIn.current = status.signedIn;
-    if (!autoOn.current || !status.signedIn) return;
-    autoOn.current = false;
-    if (phase === 'off') void turnOn(true);
-  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Signing in still turns sync on by default, so the recovery key shows at once: the walkthrough's
+  // Sync step does it (CloudSignIn), so a sign-in here starts nothing of its own.
   const others = status?.sync.devices.filter((d) => !d.thisDevice && !d.revoked).length ?? 0;
   const pending = status?.sync.devices.filter((d) => !d.trusted && !d.revoked && !d.thisDevice && d.askedToJoin) ?? [];
 
@@ -95,7 +86,10 @@ export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
           <div className="text-center" data-testid="sync-settings">
             <div className="sync-card-hero mt-(--q-inline)"><SyncVisual phase={phase} others={others} /></div>
             <p className="mx-auto max-w-md text-sm text-ink-soft">Sign in to Nekko Cloud to keep your chats in step across your computers and your iPhone. Everything is encrypted here before it leaves this computer.</p>
-            <button className="btn btn-primary mt-(--q-inline)" onClick={openSignIn} data-testid="sync-sign-in">{pendingCode ? 'Enter your sign-in code' : 'Sign in to Nekko Cloud'}</button>
+            <button className="btn btn-primary mt-(--q-inline)" onClick={() => openSignIn()} data-testid="sync-sign-in">{pendingCode ? 'Enter your sign-in code' : 'Sign in to Nekko Cloud'}</button>
+            {!pendingCode && (
+              <button className="mx-auto mt-(--q-inline) block text-xs text-(--accent) hover:underline" onClick={() => openSignIn(true)} data-testid="sync-create-account">New here? Create an account</button>
+            )}
           </div>
         )}
         {signedIn && (
@@ -209,7 +203,7 @@ export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
         </SettingsSection>
       )}
 
-      {signIn && <CloudSignIn status={status} pending={pendingCode} onPending={setPendingCode} onClose={() => setSignIn(false)} />}
+      {signIn && <CloudSignIn start={signIn} status={status} pending={pendingCode} onPending={setPendingCode} onClose={() => setSignIn(null)} />}
       {deleting && <DeleteAccountDialog email={status?.account?.email ?? ''} onClose={() => setDeleting(false)} onDeleted={(s) => { setStatus(s); setDeleting(false); }} />}
       {recovery && <RecoveryKeyDialog recoveryKey={recovery.key} email={status?.account?.email ?? ''} onDone={() => setRecovery(null)} />}
     </>
@@ -335,10 +329,6 @@ function PhasePill({ status }: { status: CloudStatus | null }) {
   // A dot and a word; the word takes the state's colour only when it needs you.
   const word = tone === 'warning' ? 'text-warning-text' : tone === 'danger' ? 'text-danger-text' : 'text-ink-soft';
   return <span className={`inline-flex items-center gap-1.5 ${word}`} data-testid="sync-phase"><StatusDot tone={tone} pulse={tone === 'info'} size={7} />{text}</span>;
-}
-
-function planLabel(plan?: string) {
-  return plan === 'team' ? 'Nekko Cloud Team' : plan === 'pro' ? 'Nekko Cloud Pro' : 'Free plan';
 }
 
 function syncLine(s: CloudStatus) {

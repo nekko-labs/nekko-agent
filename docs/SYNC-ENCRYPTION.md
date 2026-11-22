@@ -38,6 +38,10 @@ flowchart TB
 - **Recovery key.** When you turn sync on, you get a recovery key: 55 characters in groups of five, with a checksum that catches a typo. You save it (copy it, or save the printable recovery kit with a QR code), then type it back so we know it was saved right. The recovery key stands for a P-256 key pair; every key epoch's keyring is also sealed to its public half, so your devices never hold the recovery secret, yet a rotation after removing a device is still recoverable. If you lose every device, the recovery key on a new one gets your chats back; without it, nobody can, including us. There is deliberately no password option: a password-derived key could be guessed by whoever holds the encrypted keyring, and that is the server.
 - **The account record.** Each key epoch has one more sealed record: the epoch number, the devices the account trusts, and the recovery key's public half. Only a holder of that epoch's keyring can write it, so the server can't slip a device of its own into the next key rotation, or swap the recovery key that new epochs are sealed to. A device refuses an account record that names another epoch or a different recovery key from the one it pinned, and never accepts an older revision of any record than one it has seen.
 
+## Signing in the first time
+
+Settings > Nekko Cloud > **Sign in to Nekko Cloud** (or **New here? Create an account**) opens a short walkthrough: what Nekko Cloud is, then GitHub, Google, Apple or an emailed code, then a plan, then sync. On a Pro or Team account the Sync step turns sync on for this computer and shows your recovery key to save, as above; an account that already syncs on another device is sent to add this computer instead. Later sign-ins on the same computer skip the opening page. Until billing goes live, choosing Pro there runs a test checkout: nothing is charged and your plan stays as it is.
+
 ## Plans
 
 - **Pro and Team** can turn sync on (5 GB and 20 GB of encrypted storage per account).
