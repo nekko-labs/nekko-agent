@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { capacityBands } from './GpuCapacityBar.js';
 import { busyNote, contextText, contextThatFits, DESKTOP_RESERVE_BYTES } from './ModelGpuFacts.js';
 
 const GB = 1024 ** 3;
@@ -29,4 +30,24 @@ describe('ModelGpuFacts', () => {
   });
 
   it('reads the full context as All', () => expect(contextText(maxCtx, maxCtx)).toBe('All 256k'));
+});
+
+
+describe('GPU capacity bar', () => {
+  const geometry = { weightsBytes: 7 * GB, overheadBytes: GB, kvCacheBytes: 8 * GB };
+  const widths = (free: number, rec: number | null = 8192, max = 32768) => Object.fromEntries(
+    capacityBands(geometry, free * GB, max, rec).map(b => [b.id, b.bytes / GB]));
+  it('counts only the added context between stops and leaves actual headroom at the end', () => {
+    expect(widths(20)).toEqual({ model: 8, min: 1, rec: 1, max: 6, free: 4 });
+    expect(widths(16)).not.toHaveProperty('free');
+  });
+  it('splits at the byte budget, even inside minimum context or inside the model', () => {
+    expect(widths(12)).toEqual({ model: 8, min: 1, rec: 1, max: 2, short: 4 });
+    expect(widths(8.5)).toEqual({ model: 8, min: 0.5, rec: 0, max: 0, short: 7.5 });
+    expect(widths(4)).toEqual({ model: 4, min: 0, rec: 0, max: 0, short: 12 });
+  });
+  it('keeps coincident milestones without charging twice or inventing an unknown recommendation', () => {
+    expect(widths(16, 2048, 2048)).toEqual({ model: 8, min: 8, rec: 0, max: 0 });
+    expect(widths(16, null)).not.toHaveProperty('rec');
+  });
 });
