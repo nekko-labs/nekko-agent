@@ -197,4 +197,10 @@
     <string name="tools_preview_page">Page %1$d sur %2$d</string>
     <string name="tools_preview_card">%1$s, %2$s. Ouvre un aperçu depuis votre ordinateur</string>
     <string name="tools_preview_file">fichier</string>
+    <string name="grants_title">Autorisé sans demander</string>
+    <string name="grants_tools">Outils toujours autorisés</string>
+    <string name="grants_recipients">Destinataires connus</string>
+    <string name="grants_remove_tool">Redemander avant %1$s</string>
+    <string name="grants_remove_recipient">Redemander avant d’écrire à %1$s</string>
+    <string name="grants_note">En retirer un fait redemander l’appel suivant, dans ce chat seulement.</string>
 </resources>

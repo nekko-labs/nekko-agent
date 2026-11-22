@@ -1,8 +1,7 @@
-import { CheckCircleIcon } from '../gentleface-icons.js';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Direction, DropTarget, PaneKind, WbPane } from '../layout.js';
-import { CloseIcon, TrashIcon, MinimizeIcon } from '../icons.js';
+import { ArchiveIcon, CloseIcon, TrashIcon, MinimizeIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { confirmDeletion } from './DeleteConfirmation.js';
@@ -12,7 +11,7 @@ import { SplitCompass } from './SplitCompass.js';
 /**
  * The chrome around one window in a workspace: a thin title strip that is also
  * the handle you drag it by, the compass that adds a window beside it, and a
- * lifecycle button (Complete by default for chats, Close for other windows).
+ * lifecycle buttons (a chat gets Archive by default plus Close, other windows Close).
  *
  * While any window is being dragged every window covers itself with a target
  * that reads the pointer's nearest edge, because the thing you drop onto is
@@ -166,7 +165,7 @@ export function PaneFrame({
   onSplit: (dir: Direction, kind: WbPane['kind']) => void;
   onAddWindow?: () => void;
   onClose: () => void;
-  /** Remove only the wall window, without completing or deleting its chat. */
+  /** Remove only the wall window, without archiving or deleting its chat. */
   onMinimize?: () => void;
   /** Wall Focus action immediately beside Minimize. */
   focusAction?: React.ReactNode;
@@ -184,12 +183,13 @@ export function PaneFrame({
 }) {
   const [over, setOver] = useState<DropTarget | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const chatPaneAction = useStore((s) => s.settings?.chatPaneAction ?? 'complete');
+  // The stored value is still 'complete' (older builds and the phones read it); it means Archive.
+  const chatPaneAction = useStore((s) => (s.settings?.chatPaneAction === 'delete' ? 'delete' : 'archive'));
   const archiveChat = useStore((s) => s.archiveChat);
   const deleteChatForever = useStore((s) => s.deleteChatForever);
   const isChat = pane.kind === 'chat' && !!pane.refId;
   const action = isChat ? chatPaneAction : 'close';
-  const complete = () => { void archiveChat(pane.refId); };
+  const archive = () => { void archiveChat(pane.refId); };
   const deleteChat = () => { void deleteChatForever(pane.refId); };
   const deleteWindow = async () => {
     if (isChat) return deleteChat();
@@ -201,10 +201,10 @@ export function PaneFrame({
     } catch (error) { useStore.getState().pushToast('error', 'Could not close terminal: ' + String(error)); }
   };
   const element = useRef<HTMLDivElement>(null);
-  const actions = useRef({ complete, deleteWindow, onMinimize, isChat });
-  actions.current = { complete, deleteWindow, onMinimize, isChat };
+  const actions = useRef({ archive, deleteWindow, onMinimize, isChat });
+  actions.current = { archive, deleteWindow, onMinimize, isChat };
   useEffect(() => element.current ? registerWindow(pane.id, element.current, (action) => {
-    if (action === 'complete' && actions.current.isChat) actions.current.complete();
+    if (action === 'archive' && actions.current.isChat) actions.current.archive();
     if (action === 'minimize') actions.current.onMinimize?.();
     if (action === 'delete') void actions.current.deleteWindow();
   }) : undefined, [pane.id]);
@@ -288,21 +288,33 @@ export function PaneFrame({
           <MinimizeIcon className="h-3 w-3" />
         </button>}
         <button
-          className="rounded-sm p-1 text-ink-faint hover:text-ink"
-          title={action === 'complete' ? `Complete this chat (${WINDOW_HOTKEYS.complete})` : action === 'delete' ? `Delete this chat forever (${WINDOW_HOTKEYS.delete})` : pane.kind === 'terminal' ? `Close terminal (${WINDOW_HOTKEYS.delete})` : closeTitle}
-          aria-label={`${action === 'complete' ? 'Complete' : action === 'delete' ? 'Delete' : 'Close'} ${title}`}
-          onClick={action === 'complete' ? complete : action === 'delete' || pane.kind === 'terminal' ? deleteWindow : onClose}
+          className="flex items-center rounded-sm p-1 text-ink-faint hover:text-ink"
+          title={action === 'archive' ? `Archive this chat (${WINDOW_HOTKEYS.archive})` : action === 'delete' ? `Delete this chat forever (${WINDOW_HOTKEYS.delete})` : pane.kind === 'terminal' ? `Close terminal (${WINDOW_HOTKEYS.delete})` : closeTitle}
+          aria-label={`${action === 'archive' ? 'Archive' : action === 'delete' ? 'Delete' : 'Close'} ${title}`}
+          onClick={action === 'archive' ? archive : action === 'delete' || pane.kind === 'terminal' ? deleteWindow : onClose}
         >
-          {/* An X reads as "close" to everyone; for a chat it completes (kept, restorable), never deletes. */}
-          {action === 'delete' ? <TrashIcon className="h-3 w-3" /> : <CloseIcon className="h-3 w-3" />}
+          {/* A chat's control says what it does: archive (kept, restorable) or delete. Its X is the separate Close below. */}
+          {action === 'archive' ? <ArchiveIcon className="h-3 w-3" /> : action === 'delete' ? <TrashIcon className="h-3 w-3" /> : <CloseIcon className="h-3 w-3" />}
         </button>
+        {/* A chat also closes, last like every window's X: the agent stops and its window goes,
+            but the chat is neither archived nor deleted and stays in the Agents panel. */}
+        {isChat && <button
+          type="button"
+          className="flex items-center rounded-sm p-1 text-ink-faint hover:text-ink"
+          title={closeTitle}
+          aria-label={`Close ${title}`}
+          onClick={onClose}
+        >
+          <CloseIcon className="h-3 w-3" />
+        </button>}
       </div>
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-          {isChat && <ContextAction onClick={() => { setMenu(null); complete(); }}><CheckCircleIcon className="mr-1 h-3.5 w-3.5" />Complete ({WINDOW_HOTKEYS.complete})</ContextAction>}
+          {isChat && <ContextAction onClick={() => { setMenu(null); archive(); }}><ArchiveIcon className="mr-1 h-3.5 w-3.5" />Archive ({WINDOW_HOTKEYS.archive})</ContextAction>}
           {isChat && <ContextAction onClick={() => { setMenu(null); void deleteWindow(); }}>Delete ({WINDOW_HOTKEYS.delete})</ContextAction>}
           {onMinimize && <ContextAction onClick={() => { setMenu(null); onMinimize(); }}>Minimize ({WINDOW_HOTKEYS.minimize})</ContextAction>}
+          {/* Close stops a chat's agent and drops its window; the chat stays listed. Archive takes it off the list. */}
           <ContextAction onClick={() => { setMenu(null); if (pane.kind === 'terminal') void deleteWindow(); else onClose(); }}>{pane.kind === 'terminal' ? `Close (${WINDOW_HOTKEYS.delete})` : 'Close'}</ContextAction>
         </ContextMenu>
       )}

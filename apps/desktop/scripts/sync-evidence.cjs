@@ -117,18 +117,40 @@ async function main() {
   const a = await page(A);
   await both(a, '01-signed-out');
   await a.click('[data-testid=sync-sign-in]');
-  await a.waitForSelector('[data-testid=cloud-signin]');
-  await both(a, '02-sign-in', 'page');
+  await a.waitForSelector('[data-testid=cloud-signin][data-step=welcome]');
+  await both(a, '02a-welcome', 'page', 1200);
+  await a.click('[data-testid=cw-have-account]');
+  await both(a, '02-sign-in', 'page', 900);
   await a.fill('[data-testid=cloud-email]', email);
   await a.click('[data-testid=cloud-send-code]');
   await a.waitForSelector('[data-testid=cloud-otp-0]');
   await both(a, '03-code', 'page');
+  // Clicking outside closes the window but the code still waits: Sign in reopens it.
+  const signInLabel = (t) => a.waitForFunction((x) => document.querySelector('[data-testid=sync-sign-in]')?.textContent === x, t, { timeout: 5000 });
+  await a.mouse.click(8, 8);
+  await a.waitForSelector('[data-testid=cloud-signin]', { state: 'detached' });
+  await signInLabel('Enter your sign-in code');
+  await both(a, '03a-code-waiting');
+  await a.click('[data-testid=sync-sign-in]');
+  await a.waitForSelector('[data-testid=cloud-otp-0]');
+  // Cancel drops the waiting code: the window starts over, and so does the next one.
+  await a.click('[data-testid=cloud-code-cancel]');
+  await a.waitForSelector('[data-testid=cloud-send-code]');
+  await both(a, '03b-cancelled', 'page');
+  await a.keyboard.press('Escape');
+  await signInLabel('Sign in to Nekko Cloud');
+  await a.click('[data-testid=sync-sign-in]');
+  await a.click('[data-testid=cw-have-account]');
+  if (await a.inputValue('[data-testid=cloud-email]') !== '') throw new Error('a cancelled sign-in came back');
+  await a.fill('[data-testid=cloud-email]', email);
+  await a.click('[data-testid=cloud-send-code]');
+  await a.waitForSelector('[data-testid=cloud-otp-0]');
   await a.fill('[data-testid=cloud-otp-0]', '123456');
-  await phase(a, 'Off');
-  await both(a, '04-off');
-  // Turn on: the recovery key, the kit, typing it back.
-  await a.click('[data-testid=sync-turn-on]');
-  await a.waitForSelector('[data-testid=recovery-key]');
+  // Signing in leads to the walkthrough's Sync step, which turns sync on by itself: the recovery key,
+  // the kit, typing it back. Nobody clicks Turn on.
+  await a.click('[data-testid=cw-continue]');
+  await a.waitForSelector('[data-testid=recovery-key]', { timeout: 20000 });
+  if (await a.locator('[data-testid=sync-turn-on]').count()) throw new Error('sync waited for Turn on after signing in');
   const recovery = (await a.locator('[data-testid=recovery-key] span').allTextContents()).join('-');
   await both(a, '05-recovery-key', 'page');
   await a.check('[data-testid=recovery-saved]');
@@ -136,15 +158,30 @@ async function main() {
   await a.fill('[data-testid=recovery-typed]', recovery.toLowerCase());
   await both(a, '06-recovery-confirm', 'page');
   await a.click('[data-testid=recovery-confirm]');
-  await a.waitForSelector('[data-testid=recovery-dialog]', { state: 'detached' });
+  await a.waitForSelector('[data-testid=cloud-signin][data-step=done]');
+  await both(a, '06a-all-set', 'page', 1200);
+  await a.click('[data-testid=cw-finish]');
+  await a.waitForSelector('[data-testid=cloud-signin]', { state: 'detached' });
   await phase(a, 'Up to date');
   await both(a, '07-up-to-date');
 
-  // B: same account, so it has to join; it asks, and shows its code.
-  await call(B, 'cloud:sendCode', [email]);
-  await call(B, 'cloud:verifyCode', [email, '123456']);
+  // B: same account, signed in through the window. Sync can't start by itself here (the account
+  // already syncs), so it lands on adding this computer, quietly; it asks, and shows its code.
   const b = await page(B);
+  await b.click('[data-testid=sync-sign-in]');
+  await b.click('[data-testid=cw-have-account]');
+  await b.fill('[data-testid=cloud-email]', email);
+  await b.click('[data-testid=cloud-send-code]');
+  await b.waitForSelector('[data-testid=cloud-otp-0]');
+  await b.fill('[data-testid=cloud-otp-0]', '123456');
+  await b.click('[data-testid=cw-continue]');
+  await b.waitForSelector('[data-testid=cloud-signin][data-step=sync] [data-testid=cw-continue]', { timeout: 20000 });
+  await b.click('[data-testid=cw-continue]');
+  await b.click('[data-testid=cw-finish]');
   await phase(b, 'Add this computer');
+  await b.waitForTimeout(1500);
+  if (await b.locator('[data-testid=sync-settings] [role=alert]').count()) throw new Error(`an error showed: ${await b.locator('[data-testid=sync-settings] [role=alert]').first().textContent()}`);
+  if (await b.locator('[data-testid=recovery-key]').count()) throw new Error('a second computer made a new recovery key');
   await both(b, '08-needs-join');
   await b.click('[data-testid=sync-request-join]');
   await phase(b, 'Waiting for approval');

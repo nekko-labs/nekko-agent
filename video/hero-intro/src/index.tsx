@@ -14,18 +14,18 @@ export const DURATION = 412; // 13.7 s
 type Theme = {
   bg: string; glow: string; ink: string; accent: string; muted: string;
   card: string; cardBorder: string; rule: string; check: string;
-  catFill: string; catStroke: string; catMouth: string; shadow: string;
+  catFill: string; catStroke: string; catEyes: string; catMouth: string; shadow: string;
 };
 const THEMES: Record<'dark' | 'light', Theme> = {
   dark: {
     bg: '#0c0b10', glow: '#1a0920', ink: '#ffffff', accent: '#c083b7', muted: '#e5e3eb',
     card: '#15151d', cardBorder: 'rgba(255,255,255,0.07)', rule: 'rgba(255,255,255,0.05)', check: '#c083b7',
-    catFill: '#101714', catStroke: '#f2f1e9', catMouth: '#c083b7', shadow: 'none',
+    catFill: '#16161c', catStroke: '#f3e8ee', catEyes: '#ffffff', catMouth: '#854f6c', shadow: 'none',
   },
   light: {
     bg: '#fbfafd', glow: '#efe6ef', ink: '#000000', accent: '#5b2352', muted: '#0e0c0d',
     card: '#ffffff', cardBorder: 'rgba(0,0,0,0.04)', rule: 'rgba(0,0,0,0.06)', check: '#5b2352',
-    catFill: '#ffffff', catStroke: '#0e0c0d', catMouth: '#5b2352', shadow: '0 30px 80px rgba(91,35,82,0.12)',
+    catFill: '#ffffff', catStroke: '#190019', catEyes: '#190019', catMouth: '#854f6c', shadow: '0 30px 80px rgba(91,35,82,0.12)',
   },
 };
 
@@ -67,12 +67,12 @@ function Reveal({ start, children, out }: { start: number; children: React.React
   );
 }
 
-/** The app's PixelHead (apps/desktop/src/renderer/components/Mascot.tsx), recoloured per theme. */
+/** The app's PixelHead (apps/desktop/src/renderer/components/Mascot.tsx), in Nekko's dark or light colours (spec/brand/colour-palette.md). */
 function Cat({ t, size, eyes }: { t: Theme; size: number; eyes: 'open' | 'happy' }) {
   return (
     <svg viewBox="0 0 32 32" width={size} height={size} shapeRendering="crispEdges">
       <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill={t.catFill} stroke={t.catStroke} strokeWidth="2" strokeLinejoin="miter" />
-      <path fill={t.catStroke} d={eyes === 'open'
+      <path fill={t.catEyes} d={eyes === 'open'
         ? 'M11 15H13V18H11Z M20 15H22V18H20Z'
         : 'M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z'} />
       <path d="M15 20H17V21H15Z" fill={t.catMouth} />

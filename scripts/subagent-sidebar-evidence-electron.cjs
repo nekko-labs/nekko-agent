@@ -11,13 +11,13 @@ const capture=async name=>{await stable();await win.capturePage(undefined,{stayH
 const check=async(name,s)=>{try{report.checks.push({name,passed:!!await run(s)})}catch(e){report.checks.push({name,passed:false,error:String(e)})}};
 try{await win.loadFile(path.join(dir,'index.html'));win.showInactive();await sleep(800);await stable();
 for(const width of [1280,480])for(const theme of ['light','dark']){await resize(width);if(width<768){await run(`(()=>{const b=document.querySelector('[aria-label="Open agent list"]');if(b)b.click()})()`);await sleep(100)}await run(`document.documentElement.dataset.theme='${theme}'`);await stable();const label=`${width}-${theme}`;
-await check(label+' full card count',`document.querySelectorAll('[data-completion-row]').length===${kind==='after'?2:4}`);
+await check(label+' full card count',`document.querySelectorAll('[data-archive-row]').length===${kind==='after'?2:4}`);
 await check(label+' compact child row remains',`[...document.querySelectorAll('button')].some(x=>x.textContent.includes('Repair CI and merge PR'))`);
 await capture(`subagent-sidebar-${kind}-${label}`);}
 await run(`(()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('Repair CI and merge PR'));b.click()})()`);
 await check('nested child opens transcript',`window.evidence.opened==='ci'`);
 await run(`window.evidence.closeParent()`);await sleep(200);
-await check('closed parent retains compact children',`document.querySelectorAll('[data-completion-row]').length===${kind==='after'?2:4}`);
+await check('closed parent retains compact children',`document.querySelectorAll('[data-archive-row]').length===${kind==='after'?2:4}`);
 await capture(`subagent-sidebar-${kind}-saved-parent`);
 report.background={focused:win.isFocused(),bounds:win.getBounds()};
 }catch(e){report.errors.push(String(e));try{await capture('failure-debug')}catch{}}finally{fs.writeFileSync(path.join(dir,'status.json'),JSON.stringify(report,null,2));console.log(kind,JSON.stringify({checks:report.checks.length,failed:report.checks.filter(x=>!x.passed),errors:report.errors,captures:report.captures.length},null,2));win.destroy();app.exit(report.errors.length||report.checks.some(c=>!c.passed)?1:0)}});

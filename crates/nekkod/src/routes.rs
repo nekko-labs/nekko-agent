@@ -7,7 +7,7 @@ use nekko_term::{
     resolve_shell,
 };
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -87,6 +87,9 @@ pub struct Ctx {
     /// The Claude policy: the shipped table, a verified signed override, and
     /// the dev-only preview (`claude:*`, and the gates the Claude paths call).
     pub claude_policy: Arc<crate::claude_policy::ClaudePolicyStore>,
+    /// A signed model list newer than the bundled one, verified and handed to
+    /// `machine` (`machine:recommendations` reads it there).
+    pub model_feed: Arc<crate::model_feed::ModelFeedStore>,
     /// The messaging bridges (`messaging:status`).
     pub messaging: Arc<crate::messaging::Messaging>,
     /// What Electron main used to answer (dialogs, shell, microphone, updater), for the desktop app.
@@ -392,6 +395,7 @@ impl Table {
             handler!(|ctx, channel, args| Ok(merge_pending(json!({}), ctx.turns.pending.snapshot()))),
         );
         t.add(&["chat:running"], handler!(|ctx, channel, args| Ok(json!(running_chats(ctx)))));
+        t.add(&["chat:activity"], handler!(|ctx, channel, args| Ok(chat_activity(ctx))));
         t.add(
             crate::model_tunnel::CHANNELS,
             handler!(|ctx, channel, args| ctx.tunnel.clone().route(ctx, channel, &args).await),
@@ -545,6 +549,10 @@ impl Table {
             }),
         );
         t.add(crate::context::CHANNELS, handler!(|ctx, channel, args| crate::context::route(ctx, channel, args).await));
+        t.add(
+            crate::cloud_media::CHANNELS,
+            handler!(|ctx, channel, args| crate::cloud_media::route(ctx, channel, &args).await),
+        );
         t.add(crate::side::CHANNELS, handler!(|ctx, channel, args| crate::side::route(ctx, channel, &args).await));
         t.add(
             crate::privacy::CHANNELS,
@@ -736,6 +744,11 @@ impl Table {
             crate::activity::CHANNELS,
             handler!(|ctx, channel, args| crate::activity::route(ctx, channel, &args).await),
         );
+        t.add(crate::servers::CHANNELS, handler!(|ctx, channel, args| crate::servers::route(channel, &args).await));
+        t.add(
+            crate::simulators::CHANNELS,
+            handler!(|ctx, channel, args| crate::simulators::route(channel, &args).await),
+        );
         t.add(crate::background::CHANNELS, handler!(|ctx, channel, args| Ok(ctx.turns.background_state())));
         t.add(&["resource:queue"], handler!(|ctx, channel, args| ctx.resource_queue.route(&args).await));
         t.add(
@@ -752,6 +765,8 @@ impl Table {
                     || (channel == "session:setOptions"
                         && arg(&args, 1).get("archivedAt").is_some_and(|v| !v.is_null()));
                 let id = str_arg(&args, 0).unwrap_or_default().to_string();
+                // Continue at the limit's reset, or not any more (limit_resume.rs).
+                let failure_changed = channel == "session:setOptions" && arg(&args, 1).get("turnFailure").is_some();
                 let protected: Option<ProtectedSession> = if channel == "sessions:clearHistory" {
                     let (turns, image_turns, admission) =
                         (ctx.turns.clone(), ctx.image_turns.clone(), ctx.admission.clone());
@@ -773,6 +788,9 @@ impl Table {
                     args,
                 )
                 .await?;
+                if failure_changed {
+                    crate::limit_resume::follow(ctx, &id, &result);
+                }
                 if closing {
                     stop_chat(ctx, &id).await?;
                 }
@@ -857,25 +875,14 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
 /// admission) and the chat's dev servers.
 pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
     // Include detached delegated descendants: their parent turn may already have ended.
-    let mut ids = vec![session_id.to_string()];
-    {
-        let metas = ctx.sessions.list_meta();
-        loop {
-            let before = ids.len();
-            for meta in &metas {
-                if let (Some(parent), Some(id)) =
-                    (meta.get("parentSessionId").and_then(Value::as_str), meta.get("id").and_then(Value::as_str))
-                    && ids.iter().any(|s| s == parent)
-                    && !ids.iter().any(|s| s == id)
-                {
-                    ids.push(id.to_string());
-                }
-            }
-            if ids.len() == before {
-                break;
-            }
-        }
-    }
+    // Found from the cached summaries, off the async threads: reading every chat
+    // file here (list_meta) made Close and Archive wait seconds on a big folder (#3120).
+    let ids = {
+        let (store, root) = (ctx.sessions.clone(), session_id.to_string());
+        tokio::task::spawn_blocking(move || chat_and_descendants(&root, &store.summaries()))
+            .await
+            .unwrap_or_else(|_| vec![session_id.to_string()])
+    };
     for id in &ids {
         ctx.admission.abort(id);
         ctx.image_turns.abort(id);
@@ -886,7 +893,32 @@ pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// The chats with a turn (or an image turn) running.
+/// `root` first, then every chat below it by `parentSessionId`, at any depth.
+fn chat_and_descendants(root: &str, chats: &[Value]) -> Vec<String> {
+    let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+    for chat in chats {
+        if let (Some(parent), Some(id)) =
+            (chat.get("parentSessionId").and_then(Value::as_str), chat.get("id").and_then(Value::as_str))
+        {
+            children.entry(parent).or_default().push(id);
+        }
+    }
+    let mut ids = vec![root.to_string()];
+    let mut seen: HashSet<String> = ids.iter().cloned().collect();
+    let mut next = 0;
+    while next < ids.len() {
+        let below = children.get(ids[next].as_str()).cloned().unwrap_or_default();
+        for id in below {
+            if seen.insert(id.to_string()) {
+                ids.push(id.to_string());
+            }
+        }
+        next += 1;
+    }
+    ids
+}
+
+///The chats with a turn (or an image turn) running.
 pub fn running_chats(ctx: &Ctx) -> Vec<String> {
     let mut ids: Vec<String> = Vec::new();
     for id in ctx.turns.running_sessions().into_iter().chain(ctx.image_turns.running_sessions()) {
@@ -895,6 +927,38 @@ pub fn running_chats(ctx: &Ctx) -> Vec<String> {
         }
     }
     ids
+}
+
+/// `chat:activity`: how many chats are working, by where they are in the
+/// agent loop, as the Agent board groups them (`statusGroupOf` in
+/// agentPanelView.ts). The `npm run dev` status line reads it every second, so
+/// it touches no chat files.
+pub fn chat_activity(ctx: &Ctx) -> Value {
+    let waiting = ctx.turns.pending.snapshot();
+    let waiting: HashSet<&str> =
+        waiting.as_object().map(|m| m.keys().map(String::as_str).collect()).unwrap_or_default();
+    activity_counts(&ctx.turns.running_phases(), &waiting, &ctx.image_turns.running_sessions())
+}
+
+/// [`chat_activity`] from what is running: a chat waiting on an answer or an
+/// approval needs input; one checking or landing its work is verifying;
+/// anything else working (reading, editing, making a picture, a turn that has
+/// only just started) is building.
+fn activity_counts(turns: &[(String, Option<&str>)], waiting: &HashSet<&str>, images: &[String]) -> Value {
+    let (mut building, mut verifying, mut input) = (0, 0, 0);
+    let mut seen: HashSet<&str> = HashSet::new();
+    for (id, phase) in turns {
+        if !seen.insert(id) {
+            continue;
+        }
+        match phase {
+            _ if waiting.contains(id.as_str()) => input += 1,
+            Some("verifying" | "shipping") => verifying += 1,
+            _ => building += 1,
+        }
+    }
+    building += images.iter().filter(|id| seen.insert(id)).count();
+    json!({ "building": building, "verifying": verifying, "input": input })
 }
 
 /// Merge the host's pending input with the daemon's, the daemon's winning
@@ -1308,6 +1372,38 @@ async fn session_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stopping_a_chat_reaches_every_sub_agent_below_it_and_nothing_else() {
+        let chats = [
+            json!({ "id": "grandchild", "parentSessionId": "child" }),
+            json!({ "id": "root" }),
+            json!({ "id": "child", "parentSessionId": "root" }),
+            json!({ "id": "sibling", "parentSessionId": "root" }),
+            json!({ "id": "other", "parentSessionId": "elsewhere" }),
+            json!({ "id": "loop", "parentSessionId": "root" }),
+            json!({ "id": "root", "parentSessionId": "loop" }),
+        ];
+        assert_eq!(chat_and_descendants("root", &chats), ["root", "child", "sibling", "loop", "grandchild"]);
+        assert_eq!(chat_and_descendants("alone", &chats), ["alone"]);
+    }
+
+    #[test]
+    fn activity_counts_working_chats_by_phase() {
+        let turns = vec![
+            ("a".to_string(), Some("building")),
+            ("b".to_string(), Some("verifying")),
+            ("c".to_string(), Some("shipping")),
+            ("d".to_string(), Some("verifying")),
+            ("e".to_string(), Some("exploring")),
+            ("f".to_string(), None),
+            ("a".to_string(), Some("building")),
+        ];
+        let waiting: HashSet<&str> = ["d"].into_iter().collect();
+        let images = vec!["g".to_string(), "a".to_string()];
+        assert_eq!(activity_counts(&turns, &waiting, &images), json!({ "building": 4, "verifying": 2, "input": 1 }));
+        assert_eq!(activity_counts(&[], &HashSet::new(), &[]), json!({ "building": 0, "verifying": 0, "input": 0 }));
+    }
 
     #[tokio::test]
     async fn session_listings_count_only_active_watches_and_preserve_phone_summaries() {

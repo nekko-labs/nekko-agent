@@ -32,7 +32,7 @@ Start with "Nekko" at the beginning of a sentence: "Fix the login bug. Nekko, se
 | "Nekko, how's it going" | Shows what the chat is doing: working, waiting for you, or watching a PR. |
 | "Nekko, open the one about billing" | Opens the chat that matches. If several match, pick one by tapping it or saying "Nekko, the first one". If none match, the words are typed. |
 | "Nekko, ship it" | See below. |
-| "Nekko, complete this session" | Completes the chat, after you confirm. |
+| "Nekko, archive this chat" | Archives the chat, after you confirm. "Complete this session" works too. |
 | "Nekko, open settings", "Nekko, switch to desktop 2" | Opens a page, or switches desktops or screens. |
 
 Each command shows a short message ("Erased", "Sent", "New chat") so you know it ran. If a message can't be sent (no model picked, for example), the reason shows and your words stay in the message box. Commands about a chat (erase, clear, send, ship, how's it going, complete) work on the chat you're looking at; with none open you'll see "Open a chat first".
@@ -44,7 +44,7 @@ Each command shows a short message ("Erased", "Sent", "New chat") so you know it
 - An open PR **and** a question waiting: you choose **Merge owner/repo#123** (the PR's name) or **Go ahead**.
 - Still working: "It's still working".
 
-**Confirming.** Only merging and completing a chat ask first. Say "Nekko, yes" or tap **Confirm**; "Nekko, no" or **Cancel** to back out. A question waits one minute, then goes away, so a "yes" much later does nothing.
+**Confirming.** Only merging and archiving a chat ask first. Say "Nekko, yes" or tap **Confirm**; "Nekko, no" or **Cancel** to back out. A question waits one minute, then goes away, so a "yes" much later does nothing.
 
 To use the microphone for dictation only, turn off **Enable "Nekko..." commands** in Settings > Dictation. This switch is on the computer only: the phones always listen for "Nekko" commands. On Android they run from the message box's **+ → Dictate** microphone, which types your words at each pause; **Hold to talk** does the same for one held phrase.
 
@@ -56,7 +56,7 @@ Without Whisper on your computer, speech is turned into text on the iPhone only,
 
 ### From the status dashboard
 
-**Implemented in the current worktree; not yet native-verified or shipped.** The Lock Screen/expanded Dynamic Island card shows Building, Need input and Done counts. While the app runs they cover the same chats as the chat list (every paired computer's and the iPhone's), and the header names that scope ("All computers"); while it is suspended, the active computer's push covers that computer and shows its name. Done covers the last two hours, not all time. Watching/Failed and stale/partial detail appear when relevant. The card no longer sends plain speech to a focused chat. All enabled Live Activity levels use this dashboard; choose Minimal to avoid chat-text push payloads. Standard/Detailed still allow chat details through the relay and Apple’s push service even though the dashboard draws counts.
+**Implemented in the current worktree; not yet native-verified or shipped.** The Lock Screen/expanded Dynamic Island card shows Building, Need input and Done counts. While the app runs they cover the same chats as the chat list (every paired computer's and the iPhone's), and the header names that scope ("All computers"); while it is suspended, the active computer's push covers that computer and shows its name. Done covers the last two hours, not all time. Watching/Failed and stale/partial detail appear when relevant. The card no longer sends plain speech to a focused chat. All enabled Live Activity levels use this dashboard; choose Minimal to avoid chat-text push payloads. Standard/Detailed still allow chat details through the relay and Apple’s push service even though the dashboard draws counts. In Settings > Live Activities the preview follows the level you pick: nothing at None, counts at Minimal, and at Standard and Detailed the chat names, steps and latest reply lines that level sends are listed under it.
 
 On iOS 18+, **Talk to Nekko** uses an authenticated recording intent: Face ID/passcode comes before capture. One tap listens until you pause: the card shows **Listening… speak now** with what you can say, **Hearing you…** once you speak, and a timer; **Finish speaking** ends capture sooner and **Cancel** discards current input. If Nekko Agent can't use the microphone yet, the button reads **Allow microphone**: it opens the app and asks right away (or opens Settings if the microphone was turned off there), since iOS can't ask from the Lock Screen. Then tap **Talk to Nekko** again. The background recording path still needs physical-iPhone verification. On iOS 17, **Open app for voice** opens the chat list without automatic listening. Secondary **Open app** leads to review, questions and approvals.
 

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync, spawn, execFileSync } from 'node:child_process';
 import { devBanner } from './dev-banner.mjs';
+import { pinnedLine, statusLine, STALE_MS, TICK_MS } from './dev-status.mjs';
 import { devSigningIdentity } from './dev-signing.cjs';
 const require = createRequire(import.meta.url);
 if (process.env.ELECTRON_RUN_AS_NODE) throw new Error('Unset ELECTRON_RUN_AS_NODE before launching Nekko Agent');
@@ -17,6 +18,10 @@ env.NEKKO_DEV_STOP_FILE = stopFile;
 // The app writes this once its engine and API are up (see reportDevReady).
 const readyFile = join(tmpdir(), `nekko-dev-ready-${env.NEKKO_DEV_OWNER}`);
 env.NEKKO_DEV_READY_FILE = readyFile;
+// The app's main process writes a heartbeat here every second: what its agents
+// are doing, for the status line pinned under the logs (see reportDevStatus).
+const statusFile = join(tmpdir(), `nekko-dev-status-${env.NEKKO_DEV_OWNER}`);
+env.NEKKO_DEV_STATUS_FILE = statusFile;
 let ownedCache;
 /**
  * The cached runtime bakes the app icon in, so its ready marker records which
@@ -147,12 +152,47 @@ const child = spawn(process.execPath, [cli, process.argv[2] || 'dev'], {
   detached: process.platform !== 'win32',
 });
 let stopping = false;
+let stoppingSince = null;
+// The pinned status line: only in a terminal tall enough, and not when
+// NEKKO_DEV_STATUS=off (a terminal that mishandles scroll regions).
+const pinned = process.stdout.isTTY && process.env.NEKKO_DEV_STATUS !== 'off' ? pinnedLine(process.stdout) : null;
+let statusTimer;
+if (pinned) {
+  const color = !process.env.NO_COLOR;
+  const launchedAt = Date.now();
+  let report = null;
+  let frame = 0;
+  let tick = 0;
+  statusTimer = setInterval(() => {
+    // The file every fourth tick; the indicator steps only while it is fresh.
+    if (tick++ % 4 === 0) { try { report = JSON.parse(readFileSync(statusFile, 'utf8')); } catch {} }
+    const now = Date.now();
+    if (!report || now - report.at < STALE_MS || stoppingSince != null) frame++;
+    pinned.draw(statusLine({ now, startedAt: launchedAt, frame, report, stoppingSince, columns: process.stdout.columns, color }));
+  }, TICK_MS);
+  statusTimer.unref();
+}
 const cleanup = () => {
+  clearInterval(statusTimer);
+  pinned?.close();
   try { rmSync(stopFile, { force: true }); } catch {}
   try { rmSync(readyFile, { force: true }); } catch {}
+  try { rmSync(statusFile, { force: true }); } catch {}
   if (keys) try { process.stdin.setRawMode(false); } catch {}
 };
-child.on('exit', code => { cleanup(); process.exit(stopping ? 0 : code ?? 1); });
+let restarting = false;
+child.on('exit', code => {
+  cleanup();
+  if (restarting) {
+    // The whole of `npm run dev` again, so a pull's new dependencies, engine
+    // and main process are all picked up, in this same terminal.
+    // shortcut: each restart nests one more idle launcher process; re-exec in place if that ever matters.
+    process.stdin.pause();
+    console.log('[nekko] Restarting with what is on disk...');
+    process.exit(spawnSync('npm', ['run', 'dev'], { cwd: resolve('../..'), stdio: 'inherit', shell: process.platform === 'win32' }).status ?? 1);
+  }
+  process.exit(stopping ? 0 : code ?? 1);
+});
 
 /** End electron-vite, Electron, the engine and anything they started. */
 const killTree = () => {
@@ -171,6 +211,7 @@ const STOP_GRACE_MS = 10_000;
 const stop = () => {
   if (stopping) { console.log('\n[nekko] Forcing stop.'); killTree(); return; }
   stopping = true;
+  stoppingSince = Date.now();
   console.log('\n[nekko] Stopping Nekko Agent cleanly... (press again to force)');
   writeFileSync(stopFile, 'stop');
   const stopOwned = () => {
@@ -193,9 +234,10 @@ if (keys) {
   process.stdin.resume();
   process.stdin.on('data', (data) => {
     const key = data.toString();
-    if (key === '\r' || key === '\n' || key.toLowerCase() === 'q' || key === '\x03') stop();
+    if (key.toLowerCase() === 'r' && !stopping) { restarting = true; stop(); }
+    else if (key === '\r' || key === '\n' || key.toLowerCase() === 'q' || key === '\x03') { restarting = false; stop(); }
   });
-  console.log('[nekko] Press Enter or q to stop Nekko Agent cleanly (twice to force).');
+  console.log('[nekko] Press Enter or q to stop Nekko Agent cleanly (twice to force), r to restart after a pull.');
 }
 
 // Once the app reports in, say what is running and how to stop it, after

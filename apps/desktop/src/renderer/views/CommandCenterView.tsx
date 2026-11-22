@@ -175,6 +175,14 @@ export function CommandCenterView() {
   }), []);
   // Tell main how full this wall is, for "prioritize empty windows".
   const paneCount = useMemo(() => allPanes(wall.root).length, [wall.root]);
+  // The Files view lists the files open in the agent windows: on the wall, and
+  // beside an agent. Compared shallowly so an unrelated workspace change keeps the same list.
+  const besideFiles = useStore(useShallow((s) => s.workspaces.flatMap((w) => allPanes(w.root).filter((p) => p.kind === 'file').map((p) => p.refId))));
+  const openFiles = useMemo(() => [...new Set([
+    ...allPanes(wall.root).filter((p) => p.kind === 'file').map((p) => p.refId),
+    ...besideFiles,
+  ])], [wall.root, besideFiles]);
+  const activeFile = useMemo(() => allPanes(wall.root).find((p) => p.id === wall.activeZone && p.kind === 'file')?.refId ?? null, [wall.root, wall.activeZone]);
   // An untouched new chat does not count, so a fresh screen still reads as empty for placement.
   const usedPaneCount = useMemo(() => allPanes(wall.root).filter((p) => p.kind !== 'chat' || sessions.some((s) => s.id === p.refId && s.messageCount > 0)).length, [wall.root, sessions]);
   useEffect(() => { displaysBridge?.report(usedPaneCount); }, [usedPaneCount]);
@@ -341,18 +349,18 @@ export function CommandCenterView() {
   // the first on the wall. Ctrl+Tab / Ctrl+Shift+Tab walk the windows in
   // reading order; Ctrl+1…9 (or Alt+1…9) pick one by its number.
   const [addOpen, setAddOpen] = useState(false);
-  const [completedId, setCompletedId] = useState<string | null>(null);
-  // The reader shows a completed chat only while it stays completed: restoring
+  const [archivedId, setArchivedId] = useState<string | null>(null);
+  // The reader shows an archived chat only while it stays archived: restoring
   // or deleting it (from its bar or the agent list's menu) closes the reader.
   useEffect(() => {
-    if (completedId && listsReady && !sessions.some((s) => s.id === completedId && s.archivedAt)) setCompletedId(null);
-  }, [completedId, listsReady, sessions]);
+    if (archivedId && listsReady && !sessions.some((s) => s.id === archivedId && s.archivedAt)) setArchivedId(null);
+  }, [archivedId, listsReady, sessions]);
   const [selected, setSelected] = useState<string | null>(() => wall.hero);
   useEffect(() => {
     if (wall.hero) setSelected(wall.hero);
   }, [wall.hero]);
   const selectAgent = useCallback((id: string | null) => {
-    setCompletedId(null);
+    setArchivedId(null);
     setSelected(id);
     // The agent's zone becomes the active one too.
     setWall((w) => {
@@ -361,7 +369,7 @@ export function CommandCenterView() {
     });
   }, [setWall]);
   // Another tab (Artifacts) asked to show a chat here, Focused. Waits for the
-  // lists so the chat is known; a completed chat opens read-only, as the
+  // lists so the chat is known; an archived chat opens read-only, as the
   // agent panel opens one.
   const focusRequest = useStore((s) => s.focusRequest);
   useEffect(() => {
@@ -370,8 +378,8 @@ export function CommandCenterView() {
     const { sessionId, keepLayout } = focusRequest;
     const chat = sessions.find((s) => s.id === sessionId);
     if (!chat) { useStore.getState().pushToast('error', 'That chat no longer exists.'); return; }
-    if (chat.archivedAt) { setCompletedId(chat.id); return; }
-    setCompletedId(null);
+    if (chat.archivedAt) { setArchivedId(chat.id); return; }
+    setArchivedId(null);
     setWall((w) => {
       const opened = openWallPane(w, 'chat', chat.id);
       return keepLayout || opened.layout.mode === 'focus' ? opened : { ...opened, layout: { ...opened.layout, mode: 'focus' } };
@@ -399,7 +407,7 @@ export function CommandCenterView() {
     const { activeModelId, models } = useStore.getState();
     const providerReady = !needsProviderSetup(providers, activeModelId ?? models[0]?.id);
     if (startingEmpty.current || emptyStartFailed.current) return;
-    if (!shouldStartFromEmptyWall({ listsReady, hasWindows: paneCount > 0, readingCompleted: !!completedId, providerReady })) return;
+    if (!shouldStartFromEmptyWall({ listsReady, hasWindows: paneCount > 0, readingArchived: !!archivedId, providerReady })) return;
     startingEmpty.current = true;
     void (async () => {
       // A screen window cannot see which blank chat another window shows, so it makes its own.
@@ -416,7 +424,7 @@ export function CommandCenterView() {
       setSelected(id);
     })().catch((e) => { emptyStartFailed.current = true; reportAddFailure(e); }).finally(() => { startingEmpty.current = false; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listsReady, paneCount, completedId, providers, sessions]);
+  }, [listsReady, paneCount, archivedId, providers, sessions]);
   // A window picked from the keyboard is ready to type into: its composer opens and takes the caret.
   const typeInto = useCallback((id: string | null) => {
     selectAgent(id);
@@ -483,14 +491,14 @@ export function CommandCenterView() {
     observer.observe(column);
     for (const child of column.children) observer.observe(child);
     return () => observer.disconnect();
-  }, [wall.layout.mode, completedId, agentsPresent]);
+  }, [wall.layout.mode, archivedId, agentsPresent]);
 
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-1 pr-px pt-0">
       {showZonesIntro && <Suspense fallback={null}><ZonesIntro onClose={() => setWall((w) => ({ ...w, zonesIntro: true }))} /></Suspense>}
       <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen} onPickMultiAgent={() => setMultiAgentPicked(true)}
         onAdd={(kind) => {
-          setCompletedId(null);
+          setArchivedId(null);
           const add = (kind === 'image' || kind === 'video') ? newChat({ kind: 'chat', chatType: kind }).then((id) => addFromToolbar('chat', id, true)) : addFromToolbar(kind);
           void add.catch(reportAddFailure);
         }}
@@ -499,37 +507,40 @@ export function CommandCenterView() {
           await addFromToolbar(selection.kind, ref, !selection.refId);
           // Unless placement sent the new agent to another screen.
           if (selection.kind === 'chat' && (owners.current.get(ref) ?? windowKey) === windowKey) selectAgent(ref);
-          setCompletedId(null);
+          setArchivedId(null);
           setAddOpen(false);
         }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} onOpenChat={openChat} onOpenModels={() => setView('models')} />
-        <div ref={agentWorkspaceRef} className="wall-agent-workspace" data-tabs={agentsPresent && panel.orientation === 'horizontal' ? 'top' : 'left'}>
-      {!panel.show && <div className="agent-panel-collapsed" data-orientation={panel.orientation}>
-        <AgentPanelControls show={false} orientation={panel.orientation}
-          onToggle={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }))}
-          onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))} />
+        <div ref={agentWorkspaceRef} className="wall-agent-workspace" data-tabs="left">
+      {!panel.show && <div className="agent-panel-collapsed">
+        <AgentPanelControls show={false}
+          onToggle={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }))} />
       </div>}
-      {agentsPresent && <div className="wall-agents-presence" data-orientation={panel.orientation} data-panel-open={panel.show} inert={!panel.show} aria-hidden={!panel.show}><AgentSidebar onCreate={async (kind, projectId, shell) => {
+      {agentsPresent && <div className="wall-agents-presence" data-panel-open={panel.show} inert={!panel.show} aria-hidden={!panel.show}><AgentSidebar onCreate={async (kind, projectId, shell) => {
         const id = kind === 'terminal' ? await newTerminal(projectId, shell) : await newChat({ kind: 'chat', chatType: kind === 'image' || kind === 'video' ? kind : 'multimodal' }, projectId);
         await addFromToolbar(kind === 'terminal' ? 'terminal' : 'chat', id, true);
-        setCompletedId(null);
-      }} selectedId={completedId ?? selected} onOpenChat={(id) => {
-        if (sessions.find((session) => session.id === id)?.archivedAt) setCompletedId(id);
+        setArchivedId(null);
+      }} selectedId={archivedId ?? selected} onOpenChat={(id) => {
+        if (sessions.find((session) => session.id === id)?.archivedAt) setArchivedId(id);
         else {
-          setCompletedId(null);
+          setArchivedId(null);
           // Focus shows the chosen chat. Every other layout keeps its windows
           // and marks the chat's window active, adding one when it has none.
           // One guarded wall update, so reselecting the active chat changes nothing.
           void addFromToolbar('chat', id);
         }
-      }} onOpenTerminal={(id) => { setCompletedId(null); void addFromToolbar('terminal', id); }}
-        orientation={panel.orientation}
+      }} onOpenTerminal={(id) => { setArchivedId(null); void addFromToolbar('terminal', id); }}
+        onOpenFile={(path) => {
+          setArchivedId(null);
+          void addFromToolbar('file', path).catch(reportAddFailure);
+        }}
+        openFiles={openFiles}
+        activeFile={activeFile}
         zoneTints={agentTints}
-        onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))}
         onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} /></div>}
       <div className="wall-column">
-      {completedId ? <div className="panel panel-ring flex min-h-0 flex-1 flex-col overflow-hidden"><button className="btn btn-ghost self-start" onClick={() => setCompletedId(null)}>Back to active agents</button><ChatPane key={completedId} sessionId={completedId} readOnly /></div> : <CommandWall
+      {archivedId ? <div className="panel panel-ring flex min-h-0 flex-1 flex-col overflow-hidden"><button className="btn btn-ghost self-start" onClick={() => setArchivedId(null)}>Back to active agents</button><ChatPane key={archivedId} sessionId={archivedId} readOnly /></div> : <CommandWall
         state={wall}
         setState={setWall}
         sessions={sessions}

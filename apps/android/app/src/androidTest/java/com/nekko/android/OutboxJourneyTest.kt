@@ -114,10 +114,10 @@ class OutboxJourneyTest {
             }
         }
         compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("newChat.offlineNote")).fetchSemanticsNodes().isNotEmpty() }
-        // #2475: the iPhone's two lines, the computer named in both; the dots are read once, as "…".
+        // #2475/#2473: the connection line names the computer; the queue line does not imply a draft sends.
         val name = repo.state.value.active!!.name
         compose.onNode(hasTestTag("reconnect.title"), useUnmergedTree = true).assert(androidx.compose.ui.test.hasContentDescription("$name is reconnecting…"))
-        compose.onNode(hasTestTag("reconnect.draft"), useUnmergedTree = true).assert(androidx.compose.ui.test.hasText("Draft your message now and it will send when $name reconnects"))
+        compose.onNode(hasTestTag("reconnect.draft"), useUnmergedTree = true).assert(androidx.compose.ui.test.hasText("Prompts you send wait on this phone."))
         // The dots cycle every 0.4 s, or stay all shown with animations off.
         fun dots() = (1..3).first { n -> compose.onAllNodes(hasTestTag("reconnect.dots.$n"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         val still = android.provider.Settings.Global.getFloat(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f

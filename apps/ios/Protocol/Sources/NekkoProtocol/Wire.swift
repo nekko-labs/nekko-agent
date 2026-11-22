@@ -18,8 +18,12 @@ public enum Channels {
     public static let sessionGet = "session:get"
     /// One photo a user attached, sharp enough for the full-screen viewer: `(chatId, messageId, index)` → a data URL or null.
     public static let sessionPhoto = "session:photo"
+    /// A clip from the phone in pieces (#2777, the iPhone side is #2635): (chatId, uploadId, name, offset, total, base64 chunk).
+    public static let attachmentUpload = "attachment:upload"
     /// A chat's durable watches: what each watches, when it wakes and how that went (never the continuation prompt).
     public static let sessionWatches = "session:watches"
+    /// Stop a watch (a clip being made, say): `(chatId, watchId)`. An agent-class call, like Stop: no signature.
+    public static let sessionCancelWatch = "session:cancelWatch"
     /// A computer's page in one read: version, hardware, live stats, the model server (`PHONE_MACHINE_VIEW`).
     public static let machineSummary = "machine:summary"
     /// The Monitors pane's one read (`PHONE_MONITOR_VIEW`), added on the computer in #989.
@@ -138,11 +142,11 @@ public enum Channels {
 
     public static let all = [
         chatGenerateImage, engineModels,
-        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
+        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto, attachmentUpload,
         sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, toolsList, changesList, auditRead,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
-        usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
+        usageSummary, limitsGet, sessionWatches, sessionCancelWatch, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
         serviceStatus, serviceUpdateState, serviceRestart, serviceUpdateCheck, serviceUpdateDownload, serviceUpdateInstall,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
@@ -411,6 +415,9 @@ public struct Session: Equatable, Sendable {
     /// MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in
     /// this chat (decision 0054): the egress gate stops asking for them.
     public var allowedMcpTools: [String] = []
+    /// Recipients this chat has written to through an MCP tool (decision 0063):
+    /// writing to one of them again does not ask for its recipient.
+    public var knownRecipients: [String] = []
 
     /// A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts).
     public static func inSubagent(_ text: String) -> String { "Do this in a subagent, then report back:\n\n\(text)" }
@@ -444,7 +451,8 @@ public struct Session: Equatable, Sendable {
             runOptions: RunOption.values(of: v),
             parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), imageParams: ImageChatParams.from(v["imageParams"]), executionMode: v.str("executionMode"),
             disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [],
-            allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [])
+            allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [],
+            knownRecipients: v["knownRecipients"]?.array?.compactMap(\.string) ?? [])
     }
 }
 
@@ -462,7 +470,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public let providerId: String?
     /// The project folder (`workspace:list` id); nil for General.
     public let workspaceId: String?
-    /// When the chat was completed (the desktop's archive); nil while active.
+    /// When the chat was archived; nil while active.
     public var archivedAt: Int64?
     /// Manual position from the desktop sidebar's drag order.
     public let order: Double?
@@ -482,7 +490,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public var chatType: String? = nil
     public var imageParams: ImageChatParams? = nil
 
-    /// Real, top-level chats, active or completed: what the phone lists.
+    /// Real, top-level chats, active or archived: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
 
     public static func from(_ v: JSONValue?) -> SessionSummary? {
@@ -508,7 +516,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
         (list?.array ?? []).compactMap(from)
     }
 
-    /// Every top-level chat, completed ones included, newest first.
+    /// Every top-level chat, archived ones included, newest first.
     public static func visible(_ list: JSONValue?) -> [SessionSummary] {
         (list?.array ?? []).compactMap(from).filter(\.isVisible).sorted { $0.updatedAt > $1.updatedAt }
     }
@@ -532,8 +540,8 @@ public struct ChatGroup: Equatable, Sendable, Identifiable {
     public let name: String
     /// Active chats: dragged ones in manual order first, then most recent.
     public let active: [SessionSummary]
-    /// Completed chats, most recently completed first.
-    public let completed: [SessionSummary]
+    /// Archived chats, most recently archived first.
+    public let archived: [SessionSummary]
     public var id: String { key }
 
     public static func of(_ chats: [SessionSummary], folders: [WorkspaceFolder]) -> [ChatGroup] {
@@ -549,12 +557,12 @@ public struct ChatGroup: Equatable, Sendable, Identifiable {
                 default: return a.updatedAt > b.updatedAt
                 }
             }
-            let completed = all.filter(\.archived).sorted { ($0.archivedAt ?? 0) > ($1.archivedAt ?? 0) }
-            return ChatGroup(key: key, name: name, active: active, completed: completed)
+            let archivedChats = all.filter(\.archived).sorted { ($0.archivedAt ?? 0) > ($1.archivedAt ?? 0) }
+            return ChatGroup(key: key, name: name, active: active, archived: archivedChats)
         }
         var out: [ChatGroup] = []
         let g = group(general, "General")
-        if !g.active.isEmpty || !g.completed.isEmpty { out.append(g) }
+        if !g.active.isEmpty || !g.archived.isEmpty { out.append(g) }
         out += folders.map { group($0.id, $0.name) }
         return out
     }
@@ -588,17 +596,65 @@ public struct ComputerUse: Equatable, Sendable {
     }
 }
 
+/// Which Claude login a Claude subscription provider (`claude-code`) is signed in as
+/// (`ProviderAccount` in packages/shared/src/models.ts, #2488). One email can hold a
+/// personal plan (Pro, Max) and an organization seat (Team, Enterprise); each is its own provider.
+public struct ProviderAccount: Equatable, Sendable {
+    public enum Scope: String, Sendable {
+        /// The person's own plan; its name is always "Personal".
+        case personal
+        /// A Team or Enterprise seat; its name is the organization's.
+        case organization
+    }
+
+    public var signedIn: Bool
+    /// Missing for an API-key login or a signed-out one.
+    public var email: String?
+    public var scope: Scope?
+    /// "Personal", or the organization's name.
+    public var name: String?
+    /// `pro`, `max`, `team`, `enterprise`, or whatever a newer Claude Code prints; may be missing.
+    public var plan: String?
+
+    public init(signedIn: Bool, email: String? = nil, scope: Scope? = nil, name: String? = nil, plan: String? = nil) {
+        self.signedIn = signedIn
+        self.email = email
+        self.scope = scope
+        self.name = name
+        self.plan = plan
+    }
+
+    /// nil when the computer sent none (not read yet, an older build, or not a Claude subscription).
+    public static func from(_ v: JSONValue?) -> ProviderAccount? {
+        guard let v, v.object != nil else { return nil }
+        let blank = { (s: String?) in s.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } }
+        return ProviderAccount(signedIn: v.flag("signedIn"), email: blank(v.str("email")),
+                               scope: v.str("scope").flatMap(Scope.init(rawValue:)), name: blank(v.str("name")), plan: blank(v.str("plan")))
+    }
+}
+
 /// A provider as the phone keeps it: never the API key, base URL or token reference.
 public struct PublicProvider: Equatable, Sendable, Identifiable {
     public let id: String
     public let kind: String
     public let label: String
     public let enabled: Bool
+    /// Which Claude login it is, for a Claude subscription provider; nil otherwise.
+    public let account: ProviderAccount?
+
+    public init(id: String, kind: String, label: String, enabled: Bool, account: ProviderAccount? = nil) {
+        self.id = id
+        self.kind = kind
+        self.label = label
+        self.enabled = enabled
+        self.account = account
+    }
 
     public static func list(_ v: JSONValue?) -> [PublicProvider] {
         (v?.array ?? []).compactMap { p in
             guard let id = p.str("id") else { return nil }
-            return PublicProvider(id: id, kind: p.str("kind") ?? "", label: p.str("label") ?? id, enabled: p.flag("enabled"))
+            return PublicProvider(id: id, kind: p.str("kind") ?? "", label: p.str("label") ?? id, enabled: p.flag("enabled"),
+                                  account: ProviderAccount.from(p["account"]))
         }
     }
 
@@ -629,7 +685,7 @@ public struct RemoteDefaults: Equatable, Sendable {
 /// The computer's settings a phone may see and change (`PHONE_SETTINGS_KEYS`).
 public struct PcSettings: Equatable, Sendable {
     public enum ChatMode: String, CaseIterable, Sendable { case ask, guardrails, yolo }
-    public enum ChatAction: String, CaseIterable, Sendable { case complete, delete }
+    public enum ChatAction: String, CaseIterable, Sendable { case archive = "complete", delete }  // rawValue "complete" is the persisted settings value (desktop, Android, older builds)
 
     public var effort: Effort?
     public var defaultChatMode: ChatMode?
@@ -666,7 +722,7 @@ public struct PcSettings: Equatable, Sendable {
 
     /// What the computer does when a key is unset (shared/settings.ts defaults).
     public var effectiveMode: ChatMode { defaultChatMode ?? .guardrails }
-    public var effectiveAction: ChatAction { chatPaneAction ?? .complete }
+    public var effectiveAction: ChatAction { chatPaneAction ?? .archive }
     public var confirmDelete: Bool { skipDeleteConfirmation != true }
 
     public static func from(_ v: JSONValue?) -> PcSettings {
@@ -813,12 +869,24 @@ public struct ModelInfo: Equatable, Sendable, Identifiable {
     public let providerId: String
     public let name: String
     public let loaded: Bool
+    /// Size on disk, when the provider says (local model servers).
+    public var sizeBytes: Int64? = nil
+    /// The context window in tokens, when the provider says.
+    public var contextLength: Int64? = nil
+    /// Family, quantization and the like, as text (`details` on the wire).
+    public var details: [String: String] = [:]
+
+    /// "8B", from the details a model server or the Nekko engine gives.
+    public var parameters: String? { details["parameterSize"] ?? details["params"] }
 
     public static func list(_ v: JSONValue?) -> [ModelInfo] {
         (v?.array ?? []).compactMap { m in
             guard let id = m.str("id") else { return nil }
             let name = m.str("name").flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } ?? id
-            return ModelInfo(id: id, providerId: m.str("providerId") ?? "", name: name, loaded: m.flag("loaded"))
+            let details = (m["details"]?.object ?? [:]).compactMapValues { $0.string }
+            return ModelInfo(id: id, providerId: m.str("providerId") ?? "", name: name, loaded: m.flag("loaded"),
+                             sizeBytes: m.long("sizeBytes").flatMap { $0 > 0 ? $0 : nil },
+                             contextLength: m.long("contextLength").flatMap { $0 > 0 ? $0 : nil }, details: details)
         }
     }
 }

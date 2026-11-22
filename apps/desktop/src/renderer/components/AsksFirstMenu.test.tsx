@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ChatMode, Session } from '@nekko-agent/shared';
 import { CHAT_MODE_ICON } from '../gentleface-icons.js';
-import { ASKS_FIRST, ASKS_MENU_WIDTH, permissionMarks, PermissionRows, PRIVACY_SHIELD_DOCS, privacyToggles } from './AsksFirstMenu.js';
+import { ASKS_FIRST, ASKS_MENU_WIDTH, chatGrants, GrantRows, permissionMarks, PermissionRows, PRIVACY_SHIELD_DOCS, privacyToggles, revokeGrant } from './AsksFirstMenu.js';
 
 describe('the approvals selector', () => {
   it('offers exactly the tool policy values, in plain words', () => {
@@ -91,5 +91,44 @@ describe('quiet permission rows', () => {
   });
   it('links to the canonical Privacy Shield guide', () => {
     expect(PRIVACY_SHIELD_DOCS).toBe('https://nekkoagent.com/docs/privacy-shield');
+  });
+});
+
+describe('allowed in this chat', () => {
+  const session = {
+    id: 's',
+    allowedMcpTools: ['mcp__slack__post_message', 'mcp__github__create_issue'],
+    knownRecipients: ['general', 'ann@example.com'],
+  } as unknown as Session;
+
+  it('lists the always-allowed MCP tools, then the known recipients, by readable name', () => {
+    expect(chatGrants(session).map((g) => [g.kind, g.label])).toEqual([
+      ['tool', 'Post message (Slack)'],
+      ['tool', 'Create issue (Github)'],
+      ['recipient', 'general'],
+      ['recipient', 'ann@example.com'],
+    ]);
+  });
+
+  it('shows nothing for a chat that allowed nothing', () => {
+    const empty = { id: 's' } as unknown as Session;
+    expect(chatGrants(empty)).toEqual([]);
+    expect(renderToStaticMarkup(<GrantRows grants={[]} onRemove={() => {}} />)).toBe('');
+  });
+
+  it('takes back one tool or one recipient and leaves the rest', () => {
+    const [slack, , general] = chatGrants(session);
+    expect(revokeGrant(session, slack)).toEqual({ allowedMcpTools: ['mcp__github__create_issue'] });
+    expect(revokeGrant(session, general)).toEqual({ knownRecipients: ['ann@example.com'] });
+  });
+
+  it('gives each a named remove action under its heading, disabled while saving', () => {
+    const html = renderToStaticMarkup(<GrantRows grants={chatGrants(session)} onRemove={() => {}} busy />);
+    expect(html).toContain('aria-label="Allowed in this chat"');
+    expect(html.indexOf('Always allowed tools')).toBeLessThan(html.indexOf('Known recipients'));
+    expect(html).toContain('aria-label="Ask again before Post message (Slack)"');
+    expect(html).toContain('aria-label="Ask again before writing to general"');
+    expect(html.match(/data-asks-revoke=/g)).toHaveLength(4);
+    expect(html.match(/disabled=""/g)).toHaveLength(4);
   });
 });

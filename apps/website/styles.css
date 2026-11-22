@@ -1204,11 +1204,15 @@ html { -webkit-tap-highlight-color: transparent; }
   --grad-fun: linear-gradient(100deg, #190019 0%, #3a1438 100%); --btn-ink: #ffffff;
 }
 :root[data-theme='white'] { --ink: #000000; }
+/* Nekko, White look: a white cat with a black line and eyes. */
+:root[data-theme='white'] { --mascot-face: #ffffff; --mascot-line: #190019; --mascot-eyes: #190019; }
+:root[data-theme='white'] .nekko-peek { --peek-face: #ffffff; --peek-line: #190019; --peek-eyes: #190019; }
 :root[data-theme='dark'] {
   --bg: #0c0c11; --bg-2: #16161c; --ink: #ffffff; --muted: #a3a1b0;
   --line: #26262f; --accent: #c99bb3; --accent-2: #c99bb3;
   --sticker: #854f6c; --peach-soft: #190019;
-  --mascot-line: #854f6c; --mascot-eyes: #854f6c;
+  /* Nekko, Dark look: matches the peeking Nekko (black face, pale line, white eyes). */
+  --mascot-face: #16161c; --mascot-line: #f3e8ee; --mascot-eyes: #ffffff;
   --grad-text: linear-gradient(110deg, #854f6c 0%, #e6d0dc 100%);
 }
 :root[data-theme='dark'] body {
@@ -1274,9 +1278,9 @@ video { filter: brightness(1.0001); }
 .pillar-tour.is-timed .pillar-item.is-active .pillar-line { display: block; }
 .pillar-stage { display: flex; flex-direction: column; }
 /* Nekko peeks over the top-right corner of the demo box, paws on its edge, like
-   over the beta card. She sits on .pillar-frame (outside .pillar-media, which
-   clips), and the frame keeps her headroom whether or not she has loaded, so
-   nothing moves when she appears. Her drawing, colours, moods and the phone
+   over the beta card. He sits on .pillar-frame (outside .pillar-media, which
+   clips), and the frame keeps his headroom whether or not he has loaded, so
+   nothing moves when he appears. His drawing, colours, moods and the phone
    size are the beta peek's (.nekko-peek). */
 .pillar-frame { position: relative; padding-top: 80px; }
 .pillar-peek { top: -2px; }
@@ -1315,3 +1319,40 @@ video { filter: brightness(1.0001); }
 .pillar-bench-stats dd b { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; color: var(--accent); margin-right: 4px; }
 .pillar-bench-stats dd.micro { margin-top: 6px; color: var(--muted); font-size: 12px; }
 @media (max-width: 900px) { .pillar-bench-stats { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
+
+/* Windows install help: the panel that appears under a download button once a Windows
+   installer starts downloading (site.js, INSTALL_HELP). One quiet surface, space before
+   lines, a 200ms fade and 8px rise in, a faster fade out. */
+.install-help {
+  width: min(720px, 100%); margin: 20px auto 0; padding: 20px;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: var(--shadow); text-align: left;
+  animation: ih-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.install-help.ih-out { animation: ih-out 150ms ease-in both; }
+@keyframes ih-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes ih-out { to { opacity: 0; } }
+.ih-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.ih-title { font-family: var(--sans); font-size: 16px; font-weight: 600; color: var(--ink); }
+.ih-sub { margin-top: 4px; font-size: 14px; color: var(--muted); }
+.ih-close {
+  flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+@media (hover: hover) { .ih-close:hover { background: var(--line); color: var(--ink); } }
+.ih-video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: #0b0c14; }
+.ih-foot { display: flex; gap: 20px; margin-top: 12px; }
+.ih-link {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font-family: var(--sans); font-size: 14px; font-weight: 500; color: var(--accent);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .install-help { padding: 16px; }
+  .ih-video { aspect-ratio: 9 / 16; max-height: 78vh; margin: 0 auto; width: auto; max-width: 100%; }
+  .ih-foot { flex-direction: column; gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .install-help, .install-help.ih-out { animation: none; }
+}

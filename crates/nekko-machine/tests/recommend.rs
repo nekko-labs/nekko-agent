@@ -418,6 +418,42 @@ fn every_picture_task_is_answered_with_a_model_that_can_do_it() {
 }
 
 #[test]
+fn a_picture_time_is_only_ever_one_that_was_measured() {
+    use nekko_machine::measured::machine_key;
+    use nekko_machine::recommend::ImageMeasured;
+    let card = rtx_5090();
+    let before = rec(&card, bundled_feed());
+    let pick = image(&before, "imageCreate").pick.clone().unwrap();
+    assert_eq!(pick.time, None, "nothing measured, nothing said");
+    assert!(!serde_json::to_string(&pick).unwrap().contains("\"time\""));
+
+    // A run on this class of hardware, at the size and steps it was made at.
+    let mut owned = bundled_feed().clone();
+    owned.image_measured.push(ImageMeasured {
+        hardware: before.hardware.class_id.clone().unwrap(),
+        model: pick.model_id.clone(),
+        quant: pick.quant.clone(),
+        seconds: 18.0,
+        width: 1024,
+        height: 1024,
+        steps: 20,
+    });
+    let t = image(&rec(&card, &owned), "imageCreate").pick.clone().unwrap().time.unwrap();
+    assert_eq!(
+        (t.seconds, t.basis, t.samples, t.width, t.steps),
+        (18.0, SpeedBasis::Measured, None, Some(1024), Some(20))
+    );
+
+    // Three pictures made here replace it: the median, with no size claimed.
+    let mut local = LocalSpeeds::default();
+    for s in [21.0, 26.0, 24.0] {
+        local.add_picture(&format!("/models/image/{}", pick.files[0]), &machine_key(&card), s, 1);
+    }
+    let t = image(&recommend(&card, &owned, &local), "imageCreate").pick.clone().unwrap().time.unwrap();
+    assert_eq!((t.seconds, t.basis, t.samples, t.width), (24.0, SpeedBasis::MeasuredHere, Some(3), None));
+}
+
+#[test]
 fn a_big_nvidia_card_keeps_every_file_on_the_gpu() {
     // Q8_0 of Qwen Image would leave little room: the comfortable Q4_K_M wins.
     assert_eq!(image_pick(&rtx_5090(), "imageCreate"), want("qwen-image", "Q4_K_M", false, Placement::Gpu));
@@ -475,5 +511,33 @@ fn video_clips_need_a_graphics_card_or_unified_memory() {
         let t = image(&r, "videoCreate");
         assert!(t.pick.is_none(), "{:?}", t.pick);
         assert!(!t.options.is_empty(), "the model is still listed, said not to fit");
+    }
+}
+
+/// Each pick lists every quant of its model with what it needs here, and the
+/// longest context that still fits beside its weights: never below the
+/// context it was picked at, never past the model's own, and shorter for a
+/// bigger quant of the same model.
+#[test]
+fn picks_say_what_each_quant_needs_and_how_much_context_fits() {
+    let r = rec(&rtx_5090(), bundled_feed());
+    for t in &r.tasks {
+        let p = t.pick.as_ref().unwrap();
+        assert!(!p.quants.is_empty(), "{}", t.task);
+        assert!(p.quants.iter().any(|q| q.quant == p.quant), "{}: the pick's own quant is listed", t.task);
+        assert!(
+            p.fit_context_tokens >= p.context_tokens.min(p.max_context_tokens.unwrap_or(f64::MAX)) - 1024.0,
+            "{}",
+            t.task
+        );
+        if let Some(max) = p.max_context_tokens {
+            assert!(p.fit_context_tokens <= max, "{}", t.task);
+        }
+        for q in &p.quants {
+            assert!(q.memory_bytes > q.download_bytes, "{} {}: memory counts more than the weights", t.task, q.quant);
+            if q.download_bytes > p.download_bytes {
+                assert!(q.fit_context_tokens <= p.fit_context_tokens, "{} {}", t.task, q.quant);
+            }
+        }
     }
 }

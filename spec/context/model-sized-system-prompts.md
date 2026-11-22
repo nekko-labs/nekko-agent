@@ -25,11 +25,23 @@ Order: the user's per-model setting, the user's per-provider default, then the a
 - Automatic (only with `auto: true`): no model chosen: Large. A known context window under 16,000 tokens: Small ("Small: 8k context"). A model Auto rates tier 5 or up, or the shared capability rules call large or frontier: Large. A local or unknown-size server (llama.cpp, Ollama, LM Studio, vLLM, OpenAI-compatible) whose model is rated small (about 13B and under): Small. Everything else, including quick cloud models such as Haiku and mini: Medium.
 - The reason string rides with the turn's facts and the Context Inspector preview (`promptProfile: { profile, reason }`).
 
+## Exact-model instructions (#3175)
+
+In **Settings > System prompt size > Instructions for a model**, choose the provider and model, write additional instructions, and save. Clear the text and save to remove the addition. The choice does not set or change the prompt size.
+
+The setting is `promptProfiles.modelInstructions`, a map from the exact, case-sensitive `<providerId>::<modelId>` pair to text. There is no provider-wide, family, alias, or display-name fallback. Empty or missing text adds nothing. Additions follow the route actually admitted for the turn, including a delegated chat's own route; they do not select that route or grant tools or permissions. Sandbox and Claude Agent chats do not use them.
+
+The built-in profile and global instructions still apply, as do tool guidance, work tracking, and server instructions. The inspector counts the matching addition for the chat's selected model. Unset additions leave the prompt unchanged. Saved additions are stable system text, not per-message context, and do not change provider cache policy or create a prompt cache on disk. Editing or removing an addition can change the cached prefix, just like editing the global system prompt. The text is saved with settings and sent to the matching inference provider; do not put secrets in it.
+
 ## Status
 
 Implemented: the profiles, the selection logic with automatic sizing off by default, `promptProfiles` (including `auto`) in settings, the preview field, tests for selection and for each profile's content.
 
-Planned, not built: showing the reason in the Context Inspector; a Settings screen with a tab per profile (built-in text read-only, "Your additions", and an advanced "Replace the built-in prompt" with Reset); a per-model override in the model's settings; trimming Large. Unverified: whether Small beats Medium on small local models (task success, valid tool calls, tokens in). The measurement run (a ~8B and a ~32B local model and a frontier model, each profile, results in `docs/perf-history.md`) is tracked in #2771; automatic sizing stays off until it shows Small winning.
+Also implemented (#2771): the reason line under the Context Inspector's window bar; Settings > System prompt size with the automatic checkbox, a tab per profile showing its built-in text read-only (`context:promptProfiles`), a default per provider and an override per model (chosen from the active provider's models).
+
+Also implemented for #3175: exact-route additions and a Settings editor, separate from profile selection.
+
+Planned, not built: per-profile "Your additions" and an advanced "Replace the built-in prompt" with Reset (open question 2, so not built); trimming Large. Unverified: whether Small beats Medium on small local models (task success, valid tool calls, tokens in). The measurement run (a ~8B and a ~32B local model and a frontier model, each profile, results in `docs/perf-history.md`) is tracked in #2771; automatic sizing stays off until it shows Small winning.
 
 ## Open questions for Philip (not decided)
 

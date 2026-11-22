@@ -90,6 +90,22 @@ impl Remote {
         self.svc.stop();
     }
 
+    /// `remote:pairing`: how to reach this computer's relay agent while remote
+    /// access is on (relay, room, room secret, host key), or null.
+    pub fn pairing(&self) -> Value {
+        self.svc.pairing()
+    }
+
+    /// Let devices of this computer's account connect through the fleet (fleet.rs).
+    pub fn set_fleet_gate(&self, gate: Arc<dyn nekko_remote::fleet::FleetGate>) {
+        self.svc.set_fleet_gate(gate);
+    }
+
+    /// Cut off fleet devices the account no longer allows (fleet.rs).
+    pub fn recheck_fleet(&self) -> Vec<String> {
+        self.svc.recheck_fleet()
+    }
+
     pub async fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {
         let svc = self.svc.clone();
         let (channel, args) = (channel.to_string(), args.to_vec());

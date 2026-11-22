@@ -18,6 +18,12 @@ enum BrandColor {
     static let accentOnDark = Color(red: 0xC0 / 255, green: 0x84 / 255, blue: 0xB5 / 255)
     /// The cat's line on plum: white, as on the app icon.
     static let mark = Color.white
+    /// Nekko, the pixel mascot, in his fixed colours (spec/brand/colour-palette.md):
+    /// near-black face `#16161C`, pale line `#F3E8EE`, white eyes, mouth `#854F6C`.
+    static let nekkoFace = Color(red: 0x16 / 255, green: 0x16 / 255, blue: 0x1C / 255)
+    static let nekkoLine = Color(red: 0xF3 / 255, green: 0xE8 / 255, blue: 0xEE / 255)
+    static let nekkoEyes = Color.white
+    static let nekkoNose = Color(red: 0x85 / 255, green: 0x4F / 255, blue: 0x6C / 255)
 
     // Dark Nekko's state and ink tokens (`Palette.make(dark: true)`), for status glyphs on a
     // fixed dark surface that cannot read the theme: the Live Activity card and the watch.

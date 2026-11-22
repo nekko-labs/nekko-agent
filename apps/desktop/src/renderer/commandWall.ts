@@ -38,9 +38,13 @@ import {
 
 export type WallFilter = 'all' | 'chat' | 'terminal';
 
-/** Only chats and shells belong in the wall tree; dashboard monitors live in the Monitors dock. */
-export type WallKind = 'chat' | 'terminal';
-export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal'];
+/**
+ * What the wall tree holds: chats and shells, a file opened from the Agents
+ * panel's Files view, and a Browser or Files window saved from before (#2824). Dashboard monitors
+ * live in the Monitors dock.
+ */
+export type WallKind = 'chat' | 'terminal' | 'browser' | 'files' | 'file';
+export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal', 'browser', 'files', 'file'];
 
 export type { WallLayout, WallLayoutMode, MonitorsDock, MonitorsSide, MonitorKey } from '@nekko-agent/shared';
 export { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK };
@@ -102,7 +106,7 @@ export interface CommandWallState {
   watermark: number;
   composer: ComposerDock;
   tabs?: 'top' | 'left' | 'hidden';
-  /** The panel of agent cards beside (or above) the wall. */
+  /** The panel of agent cards beside the wall. */
   agentPanel?: AgentPanelPrefs;
   /** Snap to grid: windows stay evenly spaced, and dividers snap back to even spacing. */
   snap?: boolean;
@@ -116,13 +120,13 @@ export interface CommandWallState {
 
 export interface AgentPanelPrefs {
   show: boolean;
-  orientation: 'vertical' | 'horizontal';
 }
-export const DEFAULT_AGENT_PANEL: AgentPanelPrefs = { show: true, orientation: 'vertical' };
+export const DEFAULT_AGENT_PANEL: AgentPanelPrefs = { show: true };
 
 export function readAgentPanel(raw: unknown): AgentPanelPrefs {
   const p = raw && typeof raw === 'object' ? (raw as Partial<AgentPanelPrefs>) : {};
-  return { show: p.show !== false, orientation: p.orientation === 'horizontal' ? 'horizontal' : 'vertical' };
+  // A saved `orientation` from the retired row layout is dropped: the panel is always a column.
+  return { show: p.show !== false };
 }
 
 /** Below this width the wall stacks its windows one above the other: a phone, or a very narrow window. */
@@ -387,7 +391,7 @@ function wallChat(s: SessionSummary): boolean {
  * What a wall starts with, and what a wall from before zones becomes: two
  * zones side by side holding the two most recently active chats of `pool`
  * (an empty zone for each one missing). Everything else is minimized, which
- * only takes it off the board: no chat is completed.
+ * only takes it off the board: no chat is archived.
  */
 export function seedWall(state: CommandWallState, pool: SessionSummary[], now: number): CommandWallState {
   const ids = pool.filter((s) => wallChat(s) && !s.parentSessionId).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, START_ZONES).map((s) => s.id);
@@ -397,7 +401,7 @@ export function seedWall(state: CommandWallState, pool: SessionSummary[], now: n
 
 /**
  * Keep the wall honest against what exists: a zone whose chat is gone or
- * archived (completing a chat takes it off the board) or whose terminal is
+ * archived (archiving a chat takes it off the board) or whose terminal is
  * gone is emptied, never removed. New chats are not opened on the board by
  * themselves; they wait in the agents panel. Called once both lists have
  * loaded; returns the same object when nothing changed.
@@ -604,7 +608,7 @@ export function sanitizeWallLayout(raw: unknown): WallLayout {
   const dimension = (n: unknown, fallback: number) => typeof n === 'number' && Number.isFinite(n)
     ? Math.min(6, Math.max(1, Math.round(n))) : fallback;
   return {
-    mode: value.mode === 'focus' ? 'focus' : 'grid',
+    mode: value.mode === 'focus' ? 'focus' : value.mode === 'grid' || value.mode === 'fixed' ? 'grid' : DEFAULT_WALL_LAYOUT.mode,
     cols: dimension(value.cols, DEFAULT_WALL_LAYOUT.cols),
     rows: dimension(value.rows, DEFAULT_WALL_LAYOUT.rows),
     // Grid was a third layout mode until 2026-10-24; a wall saved in it opens as Dynamic with Fixed grid on.

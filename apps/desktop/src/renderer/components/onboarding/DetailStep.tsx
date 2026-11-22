@@ -182,7 +182,7 @@ export function DetailStep({ commitRef }: { commitRef: CommitRef }) {
             <span className="block text-sm font-semibold">Show monitors</span>
             <span className="block text-xs text-ink-soft">CPU, memory, GPU and agents at work.</span>
           </span>
-          <input type="checkbox" role="switch" className="setup-switch" checked={monitors} onChange={(e) => setMonitorsPick(e.target.checked)} />
+          <input type="checkbox" role="switch" className="quiet-switch" checked={monitors} onChange={(e) => setMonitorsPick(e.target.checked)} />
         </label>
         <p className="mt-3 text-2xs text-ink-faint">Switch any time with Simple / Detailed, or in Settings › Simple mode.</p>
       </div>

@@ -220,6 +220,36 @@ async fn models_page_calls_match_the_host() {
     assert_eq!(io.runs.lock().unwrap().iter().filter(|r| *r == "lms version").count(), 1);
 }
 
+/// A closed LM Studio stays closed while the Models page polls it: `lms ls`
+/// launches the app, so it never runs when the server does not answer (#2961).
+#[tokio::test]
+async fn polling_a_closed_lm_studio_never_runs_lms_ls() {
+    let providers = json!([{ "id": "l", "kind": "lmstudio", "baseUrl": "http://localhost:1234/v1" }]);
+    let (io, rt) = rig(json!({}), json!({ "lms version": "lms 0.3", "lms ls --json": "[]" }), providers);
+    assert_eq!(rt.facts("l").await, Vec::<Value>::new());
+    assert_eq!(rt.status("l").await["running"], json!(false));
+    let runs = io.runs.lock().unwrap().clone();
+    assert!(runs.iter().all(|r| r == "lms version"), "{runs:?}");
+}
+
+/// A turn on an LM Studio model is the one time a closed LM Studio is opened.
+#[tokio::test]
+async fn a_turn_opens_a_closed_local_lm_studio_and_nothing_else() {
+    let providers = json!([
+        { "id": "l", "kind": "lmstudio", "baseUrl": "http://localhost:1234/v1" },
+        { "id": "up", "kind": "lmstudio", "baseUrl": "http://localhost:4321/v1/" },
+        { "id": "r", "kind": "lmstudio", "baseUrl": "http://10.1.1.1:1234/v1" },
+        { "id": "o", "kind": "ollama", "baseUrl": "http://127.0.0.1:11434/v1" },
+    ]);
+    let http = json!({ "GET http://localhost:4321/v1/models ": { "status": 200, "body": "{\"data\":[]}" } });
+    let run = json!({ "lms server start --port 1234": "Success! Server is now running on port 1234" });
+    let (io, rt) = rig(http, run, providers.clone());
+    for p in providers.as_array().unwrap() {
+        rt.open_for_turn(p).await;
+    }
+    assert_eq!(*io.runs.lock().unwrap(), vec!["lms server start --port 1234".to_string()]);
+}
+
 #[tokio::test]
 async fn stop_server_kills_what_listens_on_the_port() {
     let providers = json!([{ "id": "v", "kind": "vllm", "baseUrl": "http://127.0.0.1:8000/v1" }]);

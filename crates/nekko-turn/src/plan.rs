@@ -33,7 +33,8 @@ pub fn turn_can_ask(session: &Value) -> bool {
 
 /// `turnTools(input)`: the tools a (non-sandbox) turn offers, in order. `input`
 /// is the TS `TurnToolInput`: `session`, `offline`, `orchestration`,
-/// `allowBrowserControl`, `mcpTools`, `decide`, `noTools`.
+/// `allowBrowserControl`, `mcpTools`, `decide`, `noTools`, and the daemon's
+/// own `media` and `video` (this computer has a picture / video model ready).
 pub fn turn_tools(input: &Value) -> Vec<Value> {
     let offline = truthy(input, "offline");
     let c = catalog();
@@ -105,6 +106,15 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     }
     if truthy(input, "decide") && !offline && !disabled.contains(name(&c.decide)) {
         tools.push(c.decide.clone());
+    }
+    // Local picture models: nothing leaves the computer, so offline keeps them.
+    if truthy(input, "media") && !training {
+        tools.extend(c.media.iter().filter(|t| !disabled.contains(name(t))).cloned());
+    }
+    // A clip wakes the chat later through a watch, which an incognito or
+    // offline chat cannot be woken by.
+    if truthy(input, "video") && !training && !incognito && !offline && !disabled.contains(name(&c.video)) {
+        tools.push(c.video.clone());
     }
     tools
 }
@@ -347,6 +357,7 @@ pub fn turn_system_prompt(input: &Value) -> String {
         can_ask: has(name(&c.ask_user)),
         can_plan: has(name(&c.update_plan)),
         system_instructions: Some(&instructions),
+        model_instructions: if sandbox { None } else { str_of("modelSystemInstructions") },
         turn_wrapper: Some(wrapper),
         about_user: about,
         checkout_notice: Some(&checkout),
@@ -463,5 +474,73 @@ mod tests {
         assert!(!t.contains("chat context"));
         let turn = turn_system_prompt(&serde_json::json!({ "settings": { "pullRequests": { "linkIssue": false } } }));
         assert!(turn.contains("- Do not link PRs to issues."));
+    }
+
+    #[test]
+    fn exact_model_guidance_adds_one_section_without_changing_any_other_directive() {
+        let model_section = "Model-specific guidance (does not override other instructions):\nUse short headings.\n";
+        let c = catalog();
+        for profile in ["small", "medium", "large"] {
+            let mut input = serde_json::json!({
+                "promptProfile": profile,
+                "workMode": "plan",
+                "tools": [c.ask_user, c.update_plan, { "function": { "name": "agent_watch" } }],
+                "settings": {
+                    "systemInstructions": "Keep test reports.",
+                    "turnWrapper": "Check the result.",
+                    "pullRequests": { "linkIssue": false }
+                },
+                "contextBlock": "Always read the project guide."
+            });
+            let ordinary = turn_system_prompt(&input);
+            input["settings"]["modelSystemInstructions"] = serde_json::json!(" Use short headings. ");
+            let composed = turn_system_prompt(&input);
+            assert_eq!(composed.matches(model_section).count(), 1);
+            assert_eq!(composed.replace(model_section, ""), ordinary);
+            assert!(composed.contains("Keep test reports."));
+            assert!(composed.contains("Do not link PRs to issues."));
+            assert!(composed.contains("Server instructions for this user turn:\nCheck the result."));
+            assert!(composed.contains("Always read the project guide."));
+            input["sandbox"] = serde_json::json!(true);
+            assert!(!turn_system_prompt(&input).contains("Use short headings."));
+        }
+    }
+
+    fn names(input: serde_json::Value) -> Vec<String> {
+        turn_tools(&input).iter().map(|t| name(t).to_string()).collect()
+    }
+
+    #[test]
+    fn picture_tools_come_only_with_a_ready_picture_model() {
+        let session = serde_json::json!({ "id": "s" });
+        let without = names(serde_json::json!({ "session": session }));
+        assert!(!without.iter().any(|n| n == "generate_image"), "{without:?}");
+        let with = names(serde_json::json!({ "session": session, "media": true }));
+        for tool in ["generate_image", "edit_image", "media_models"] {
+            assert!(with.iter().any(|n| n == tool), "{tool}: {with:?}");
+        }
+        // Local models: an offline chat keeps them.
+        let offline = names(serde_json::json!({ "session": session, "media": true, "offline": true }));
+        assert!(offline.iter().any(|n| n == "generate_image"), "{offline:?}");
+        // The chat's own tool switches still apply.
+        let off = serde_json::json!({ "id": "s", "disabledTools": ["edit_image"] });
+        let some = names(serde_json::json!({ "session": off, "media": true }));
+        assert!(some.iter().any(|n| n == "generate_image") && !some.iter().any(|n| n == "edit_image"), "{some:?}");
+        // The clip tool comes with a ready video model, never in incognito.
+        let clip = names(serde_json::json!({ "session": session, "video": true }));
+        assert!(clip.iter().any(|n| n == "generate_video") && !clip.iter().any(|n| n == "generate_image"), "{clip:?}");
+        let hidden = serde_json::json!({ "id": "s", "incognito": true });
+        assert!(!names(serde_json::json!({ "session": hidden, "video": true })).iter().any(|n| n == "generate_video"));
+        assert!(
+            !names(serde_json::json!({ "session": session, "video": true, "offline": true }))
+                .iter()
+                .any(|n| n == "generate_video")
+        );
+        // A tools-off turn gets none.
+        assert!(
+            !names(serde_json::json!({ "session": session, "media": true, "noTools": true }))
+                .iter()
+                .any(|n| n == "generate_image")
+        );
     }
 }

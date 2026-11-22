@@ -21,8 +21,16 @@ pub fn account_local_id(epoch: u32) -> String {
     format!("epoch-{epoch}")
 }
 
-/// The largest plaintext a chat record may be (the server caps a sealed object at 1 MiB).
-pub const MAX_CHAT_BYTES: usize = 1_000_000;
+/// The largest plaintext a chat record may be. Sealed (version, salt, Padmé frame, tag) it stays
+/// under Nekko Cloud's 16 MiB object cap. Long agent sessions run to a few MB, mostly tool output.
+pub const MAX_CHAT_BYTES: usize = 16_000_000;
+/// Nekko Cloud's cap on one sealed object (`MAX_OBJECT_BYTES` in apps/nekko-agent-api).
+pub const MAX_SEALED_BYTES: usize = 16 << 20;
+/// The sealed size of a record with this much plaintext.
+pub fn sealed_len(plaintext: usize) -> usize {
+    // Version byte, salt, the frame (a 4-byte length, Padmé-padded, at least 256 bytes), GCM tag.
+    1 + 32 + nekko_sync::padme((plaintext + 4).max(256)) + 16
+}
 /// A string longer than this that is a `data:` URL is a picture or a file, not text.
 const INLINE_DATA_MIN: usize = 1024;
 pub const IMAGE_NOTE: &str = "[picture not synced]";
@@ -31,7 +39,8 @@ pub const IMAGE_NOTE: &str = "[picture not synced]";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Skip {
     Incognito,
-    LocalOnly,
+    /// The user turned sync off for this chat (`syncOff`).
+    SyncOff,
     TooLarge,
 }
 
@@ -48,25 +57,47 @@ pub fn strip_inline_data(v: &mut Value) -> usize {
     }
 }
 
-/// Whether a chat is synced at all: never incognito chats, and "Local only"
-/// (offline) chats only when the user includes them.
-pub fn excluded(chat: &Value, include_local_only: bool) -> Option<Skip> {
+/// Whether a chat is synced at all: never an incognito chat, nor one the user turned sync off
+/// for. Which mode a chat runs in (Local only included) doesn't matter.
+pub fn excluded(chat: &Value) -> Option<Skip> {
     let flag = |k: &str| chat.get(k).and_then(Value::as_bool) == Some(true);
     if flag("incognito") {
         return Some(Skip::Incognito);
     }
-    if flag("offline") && !include_local_only {
-        return Some(Skip::LocalOnly);
+    if flag("syncOff") {
+        return Some(Skip::SyncOff);
     }
     None
 }
 
-/// The plaintext of a chat's record, or why it is skipped.
-pub fn chat_plaintext(chat: &Value, include_local_only: bool) -> Result<Vec<u8>, Skip> {
-    if let Some(skip) = excluded(chat, include_local_only) {
+/// The computer a chat belongs to: the one it was started on (#3143). A chat's record names it as
+/// `home: { deviceId, device }`. On that computer the chat file carries no `home` (it is simply
+/// this computer's); a copy pulled from another computer keeps it, which is how the app knows the
+/// chat is read-only here and where it came from.
+pub const HOME: &str = "home";
+
+/// The id of the computer a chat (or a chat file) names as its home, if any.
+pub fn home_of(chat: &Value) -> Option<&str> {
+    chat.get(HOME)?.get("deviceId")?.as_str().filter(|id| !id.is_empty())
+}
+
+/// The fields a copy of another computer's chat keeps from this computer when a newer copy
+/// arrives: how it is arranged here, which is this computer's business.
+pub const KEPT_HERE: [&str; 3] = ["pinned", "order", "archivedAt"];
+
+/// The plaintext of a chat's record, or why it is skipped. One of this computer's chats is stamped
+/// with this computer as its home; another computer's copy (re-sealed under a newer key epoch)
+/// keeps the home it names.
+pub fn chat_plaintext(chat: &Value, device_id: &str, device: &str) -> Result<Vec<u8>, Skip> {
+    if let Some(skip) = excluded(chat) {
         return Err(skip);
     }
     let mut c = chat.clone();
+    if home_of(&c).is_none()
+        && let Some(o) = c.as_object_mut()
+    {
+        o.insert(HOME.into(), json!({ "deviceId": device_id, "device": device }));
+    }
     strip_inline_data(&mut c);
     let bytes = serde_json::to_vec(&json!({ "v": 1, "chat": c })).unwrap_or_default();
     if bytes.len() > MAX_CHAT_BYTES {
@@ -174,20 +205,49 @@ mod tests {
     fn pictures_are_left_out_and_text_kept() {
         let big = format!("data:image/png;base64,{}", "A".repeat(5000));
         let chat = json!({ "id": "s_1", "messages": [{ "content": "hi", "images": [big] }], "updatedAt": 5 });
-        let plain = chat_plaintext(&chat, false).unwrap();
+        let plain = chat_plaintext(&chat, "dev-a", "Desk").unwrap();
         let ChatRecord::Chat(back) = parse_chat(&plain).unwrap() else { panic!() };
         assert_eq!(back["messages"][0]["content"], "hi");
         assert_eq!(back["messages"][0]["images"][0], IMAGE_NOTE);
         assert_eq!(updated_at(&back), 5.0);
+        // Stamped with the computer it belongs to (#3143).
+        assert_eq!(home_of(&back), Some("dev-a"));
+        assert_eq!(back[HOME]["device"], "Desk");
+        assert_eq!(home_of(&chat), None);
+        // Another computer's copy keeps its home.
+        let copy = json!({ "id": "s_2", "home": { "deviceId": "dev-b", "device": "Laptop" }, "messages": [] });
+        let ChatRecord::Chat(back) = parse_chat(&chat_plaintext(&copy, "dev-a", "Desk").unwrap()).unwrap() else {
+            panic!()
+        };
+        assert_eq!(back[HOME]["device"], "Laptop");
     }
 
     #[test]
-    fn incognito_never_syncs_and_local_only_only_when_included() {
-        assert_eq!(chat_plaintext(&json!({ "id": "a", "incognito": true }), true), Err(Skip::Incognito));
-        assert_eq!(chat_plaintext(&json!({ "id": "a", "offline": true }), false), Err(Skip::LocalOnly));
-        assert!(chat_plaintext(&json!({ "id": "a", "offline": true }), true).is_ok());
+    fn incognito_and_sync_off_chats_never_sync_and_local_only_mode_does() {
+        assert_eq!(chat_plaintext(&json!({ "id": "a", "incognito": true }), "dev-a", "Desk"), Err(Skip::Incognito));
+        assert_eq!(chat_plaintext(&json!({ "id": "a", "syncOff": true }), "dev-a", "Desk"), Err(Skip::SyncOff));
+        assert!(chat_plaintext(&json!({ "id": "a", "syncOff": false }), "dev-a", "Desk").is_ok());
+        assert!(
+            chat_plaintext(&json!({ "id": "a", "offline": true }), "dev-a", "Desk").is_ok(),
+            "the Local only mode is where models run, not whether it syncs"
+        );
         let huge = json!({ "id": "a", "messages": [{ "content": "x".repeat(MAX_CHAT_BYTES) }] });
-        assert_eq!(chat_plaintext(&huge, false), Err(Skip::TooLarge));
+        assert_eq!(chat_plaintext(&huge, "dev-a", "Desk"), Err(Skip::TooLarge));
+        let big = json!({ "id": "a", "messages": [{ "content": "x".repeat(4_500_000) }] });
+        assert!(chat_plaintext(&big, "dev-a", "Desk").is_ok(), "a long agent session syncs");
+    }
+
+    #[test]
+    fn the_largest_chat_fits_the_server_cap_once_sealed() {
+        assert!(sealed_len(MAX_CHAT_BYTES) <= MAX_SEALED_BYTES);
+        use base64::Engine;
+        let kr = nekko_sync::Keyring::generate();
+        let oid = nekko_sync::object_id(&kr, CHAT, "a").unwrap();
+        for n in [10, 300_000, 4_500_000] {
+            let blob = nekko_sync::seal_record(&kr, "acct", 1, CHAT, &oid, 1, &vec![b'x'; n]).unwrap();
+            let sealed = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(blob).unwrap();
+            assert_eq!(sealed.len(), sealed_len(n));
+        }
     }
 
     #[test]

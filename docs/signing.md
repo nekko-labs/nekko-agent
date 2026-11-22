@@ -48,8 +48,8 @@ the check does not depend on `publisherName` in `app-update.yml`:
 One Ed25519 key signs what a release says about itself: the update feed
 (`latest*.yml`, signed into `latest*.yml.sig`) and the
 [Claude policy override](../spec/product/claude-policy.md)
-(`claude-policy.json`). Its public half is the `RELEASE_SIGNING_KEY` constant
-in `crates/nekko-native/src/release_key.rs`, which both verifiers read. Its
+(`claude-policy.json`) and for a newer model list (`model-feed.json`, signed by `scripts/sign-model-feed.mjs` in the release workflow and verified by `crates/nekkod/src/model_feed.rs`). Its public half is the `RELEASE_SIGNING_KEY` constant
+in `crates/nekko-native/src/release_key.rs`, which every verifier reads. Its
 private half is the `NEKKO_RELEASE_SIGNING_KEY` **repository** secret (not an
 organization secret: only this repo's release workflow signs with it), plus
 one offline copy. Decision:
@@ -661,7 +661,38 @@ for each one it does not recognise:
 "Allow" answers once and asks again on the next start. "Always Allow" adds the
 running nekkod to the list, so restarts of the same build stay silent.
 
-Run this once per Mac:
+### Use an Apple Development identity to keep both approvals
+
+If this Mac already has an **Apple Development** code-signing identity, use it
+instead of the self-signed certificate. Apple Development includes a team ID,
+so both the code identity and the team can stay the same across rebuilds. From
+this repository:
+
+```bash
+security find-identity -v -p codesigning
+# Replace the example with the SHA-1 fingerprint of your Apple Development identity.
+git config --local nekko.devSigningIdentity YOUR_CERTIFICATE_FINGERPRINT
+```
+
+`npm run dev` and `npm run local` pick up this setting on the next rebuild. It
+is stored in this clone's Git metadata, shared by its worktrees, and never
+committed. It does not change release CI signing or grant access to any Keychain
+item. If macOS asks about the existing Nekko credentials item on the first
+launch with the new signature, verify the item and requester, then choose
+**Always Allow** to remember the approval. The first switch can still trigger
+both checks. Test the result by rebuilding with a code change and relaunching
+with the same identity: there should be no Nekko credential-access prompt on an
+unlocked Keychain. The two-rebuild check on a real login Keychain has not yet
+been verified for Apple Development signing. A locked Keychain can still ask
+you to unlock it.
+
+`NEKKO_DEV_SIGN_IDENTITY` overrides the saved choice for one invocation;
+`NEKKO_DEV_SIGN_IDENTITY=-` overrides certificate selection with ad-hoc. To remove the
+saved choice, run `git config --local --unset nekko.devSigningIdentity`.
+
+### Without a team-backed identity
+
+If you do not have an Apple Development identity, run this once per Mac:
 
 ```bash
 apps/desktop/scripts/dev-signing-identity.sh
@@ -684,10 +715,6 @@ with **Always Allow** on both prompts. After that the access list keeps
 matching, and each rebuild asks once (the partition list): Always Allow again.
 The first signing may also ask to let `codesign` use the key: Always Allow.
 
-- `NEKKO_DEV_SIGN_IDENTITY="Apple Development: ..."` signs with an identity you
-  already have. That one has a team ID, which the partition list can name, so
-  rebuilds may not ask at all (not verified here).
-  `NEKKO_DEV_SIGN_IDENTITY=-` keeps ad-hoc.
 - Without the identity nothing breaks: the build stays ad-hoc, says so, and the
   Keychain asks twice after every rebuild. The dev runtime's Screen Recording
   grant is lost whenever it is rebuilt: remove Nekko Agent from System Settings >

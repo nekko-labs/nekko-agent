@@ -5,7 +5,7 @@ import { LocalImageCard } from './LocalImageCard.js';
 import { MarkdownSandbox, MarkdownSession, Markdown } from './Markdown.js';
 import { ChatArtifacts } from './ChatArtifacts.js';
 
-const hooks = vi.hoisted(() => ({ effects: [] as Array<() => void | (() => void)>, set: vi.fn(), state: null as unknown, open: vi.fn() }));
+const hooks = vi.hoisted(() => ({ effects: [] as Array<() => void | (() => void)>, set: vi.fn(), state: null as unknown, open: vi.fn(), library: vi.fn() }));
 vi.mock('react', async importOriginal => {
   const original = await importOriginal<typeof import('react')>();
   return { ...original, default: { ...original,
@@ -13,7 +13,7 @@ vi.mock('react', async importOriginal => {
     useState: () => [hooks.state, hooks.set],
   } };
 });
-vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openFilePane: hooks.open }) } }));
+vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openFilePane: hooks.open, openInLibrary: hooks.library }) } }));
 afterEach(() => { hooks.effects = []; hooks.state = null; vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 async function runEffects() {
@@ -33,6 +33,11 @@ describe('local image cards', () => {
     await runEffects();
     expect(readFile).toHaveBeenCalledWith('/a.svg');
     expect(hooks.set).toHaveBeenCalledWith({ target: '/a.svg', data: 'data:image/svg+xml;charset=utf-8,%3Csvg%2F%3E', error: '' });
+  });
+  it('offers a design image Open in Library beside Open source, and only a design', () => {
+    const design = <MarkdownSession.Provider value="s"><LocalImageCard src="/p/nekko-designs/pricing-mockup.png" title="Pricing" /></MarkdownSession.Provider>;
+    expect(renderToStaticMarkup(design)).toContain('Open in Library');
+    expect(renderToStaticMarkup(<LocalImageCard src="/p/chart.png" title="Chart" />)).not.toContain('Open in Library');
   });
   it('renders loaded SVG exclusively in an img with bounded dimensions', () => {
     hooks.state = { target: '/a.svg', data: 'data:image/svg+xml;charset=utf-8,%3Csvg%2F%3E', error: '' };

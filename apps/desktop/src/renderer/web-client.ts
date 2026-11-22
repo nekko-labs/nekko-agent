@@ -64,6 +64,7 @@ function makeWebClient(): NekkoApi {
   const downloadsUpdatedCbs = new Set<(jobs: import('@nekko-agent/shared').DownloadJob[]) => void>();
   const modelsUpdatedCbs = new Set<(e: { providerId: string }) => void>();
   const backgroundCbs = new Set<(state: import('@nekko-agent/shared').BackgroundState) => void>();
+  const simulatorsCbs = new Set<(e: import('@nekko-agent/shared').SimulatorsUpdated) => void>();
   const skillsUpdatedCbs = new Set<(catalog: import('@nekko-agent/shared').VaizerCatalog) => void>();
   const replayCbs = new Set<(r: AgentReplay) => void>();
   // Narrowing the agent event stream: only over the server's own socket to nekkod.
@@ -77,6 +78,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.changesUpdated) changesCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.tasksUpdated) tasksCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.backgroundUpdated) backgroundCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.simulatorsUpdated) simulatorsCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.runnerImageChanged) imageCbs.forEach((cb) => cb(payload));
@@ -439,8 +441,9 @@ function makeWebClient(): NekkoApi {
     syncRevoke: (deviceId) => call(IpcChannels.syncRevoke, deviceId),
     syncNow: () => call(IpcChannels.syncNow),
     syncSetEnabled: (on) => call(IpcChannels.syncSetEnabled, on),
-    syncSetIncludeLocalOnly: (on) => call(IpcChannels.syncSetIncludeLocalOnly, on),
+    syncSetKind: (kind, on) => call(IpcChannels.syncSetKind, kind, on),
     syncDeleteAll: () => call(IpcChannels.syncDeleteAll),
+    librarySync: (files) => call(IpcChannels.librarySync, files),
     orgList: () => call(IpcChannels.orgList),
     orgCreate: (name) => call(IpcChannels.orgCreate, name),
     orgGet: (orgId) => call(IpcChannels.orgGet, orgId),
@@ -509,6 +512,12 @@ function makeWebClient(): NekkoApi {
     machineDismissNudge: (task) => call(IpcChannels.machineDismissNudge, task ?? null),
     getGpuStats: () => call(IpcChannels.gpuStats),
     getSystemStats: () => call(IpcChannels.systemStats),
+    serversList: () => call(IpcChannels.serversList),
+    simulatorsState: () => call(IpcChannels.simulatorsState),
+    simulatorsShutdown: (id) => call(IpcChannels.simulatorsShutdown, id),
+    simulatorsBoot: (id) => call(IpcChannels.simulatorsBoot, id),
+    simulatorsOpen: (id) => call(IpcChannels.simulatorsOpen, id),
+    simulatorsScreenshot: (id) => call(IpcChannels.simulatorsScreenshot, id),
 
     listSessions: () => call(IpcChannels.sessionsList),
     nextAgentWatchAt: (sessionId) => call(IpcChannels.sessionNextWatch, sessionId),
@@ -557,6 +566,7 @@ function makeWebClient(): NekkoApi {
     toggleContextItem: (sessionId, itemId, included, pinned) =>
       call(IpcChannels.contextToggle, sessionId, itemId, included, pinned),
     setContextPrefs: (sessionId, prefs) => call(IpcChannels.contextSetPrefs, sessionId, prefs),
+    promptProfileTexts: () => call(IpcChannels.contextPromptProfiles),
 
     buildSpec: (sessionId) => call(IpcChannels.specBuild, sessionId),
     buildSpecDoc: (sessionId, docId, workspaceId) => call(IpcChannels.specBuildDoc, sessionId, docId, workspaceId),
@@ -613,6 +623,7 @@ function makeWebClient(): NekkoApi {
     listRepos: (query) => call(IpcChannels.reposList, query ?? ''),
     cloneRepo: (repo, opts) => call(IpcChannels.reposClone, repo, opts ?? {}),
     setSandboxRepos: (id, repos) => call(IpcChannels.reposSetSandbox, id, repos),
+    suggestRepoFolder: (path) => call(IpcChannels.reposSuggestFolder, path),
     indexWorkspace: (id) => call(IpcChannels.workspaceIndex, id),
     getIndexStatus: (id) => call(IpcChannels.workspaceIndexStatus, id),
     searchWorkspace: (id, query) => call(IpcChannels.workspaceSearch, id, query),
@@ -792,6 +803,7 @@ function makeWebClient(): NekkoApi {
     computerRead: async () => null,
     computerModelServer: async () => null,
     createSessionOn: () => Promise.reject(new Error('Connected computers are in the desktop app.')),
+    connectFleetComputer: () => Promise.reject(new Error('Connected computers are in the desktop app.')),
     computerCatalog: async () => null,
     onComputersUpdated: () => () => {},
     listRemoteDevices: () => call(IpcChannels.remoteDevices),
@@ -897,6 +909,10 @@ function makeWebClient(): NekkoApi {
     onBackgroundUpdated: (cb) => {
       backgroundCbs.add(cb);
       return () => backgroundCbs.delete(cb);
+    },
+    onSimulatorsUpdated: (cb) => {
+      simulatorsCbs.add(cb);
+      return () => simulatorsCbs.delete(cb);
     },
     onTrainingUpdated: (cb) => {
       trainingCbs.add(cb);

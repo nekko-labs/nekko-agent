@@ -9,7 +9,7 @@ import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDat
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
 import { fixedWindowBounds, initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
-import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
+import { registerDevLaunch, reportDevReady, reportDevStatus, type DevActivity } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { resolveAppIcon } from './appIcon.js';
 import { desktopVersion } from './appVersion.js';
@@ -23,6 +23,7 @@ import { startAgentBrowser } from './agentBrowser.js';
 import { guardSession } from './connectionsGuard.js';
 import { registerArtifactPreview } from './artifactPreview.js';
 import { registerHtmlPreview } from './htmlPreview.js';
+import { registerLibraryThumbnails } from './libraryThumbnails.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
@@ -635,7 +636,8 @@ if (!isPrimary) app.quit();
 
 app.whenReady().then(async () => {
   registerArtifactPreview((sender) => applicationWindows.has(sender.id));
-  registerHtmlPreview((sender) => applicationWindows.has(sender.id));
+  const isPreviewServedUrl = registerHtmlPreview((sender) => applicationWindows.has(sender.id));
+  registerLibraryThumbnails((sender) => applicationWindows.has(sender.id), isPreviewServedUrl);
   if (!isPrimary) return;
   // No File/Edit/View/Window bar: it cost a whole strip of chrome above the UI
   // to duplicate shortcuts the app already owns. macOS keeps its menu — there
@@ -777,6 +779,11 @@ app.whenReady().then(async () => {
   void engine.call<ApiServerStatus>(IpcChannels.apiServerStatus)
     .then((s) => reportDevReady({ version: appVersion, api: s ? { url: s.clientUrl, enabled: s.settings.enabled } : null, dataDir }))
     .catch(() => reportDevReady({ version: appVersion, api: null, dataDir }));
+  // ...and, once a second, what the agents are doing, for its pinned status line.
+  reportDevStatus({
+    activity: () => engine ? engine.call<DevActivity>(IpcChannels.chatActivity) : Promise.reject(new Error('no engine')),
+    quitting: () => quitting,
+  }, app, BrowserWindow.getAllWindows());
 
   app.on('activate', () => {
     showWindow();

@@ -116,7 +116,7 @@ import { CHAT_ASSET_EXT, CHAT_LINK_EXT, LOOPBACK_HOSTS } from './chat-links.js';
  * Channels a paired phone may call. Built from what the phone clients send
  * (apps/android/protocol Wire.kt `Channels`,
  * apps/ios/Protocol Wire.swift `Channels`), plus the ones the next phone
- * releases need: settings (filtered), completing or deleting a chat the way
+ * releases need: settings (filtered), archiving or deleting a chat the way
  * the desktop does (`session:setOptions` with `archivedAt`, `session:delete`)
  * and voice input. `changes:list` is read only, through `phoneChangesView`, and
  * only when the computer's `phoneChanges` setting is on. Beyond the chat
@@ -144,6 +144,7 @@ export const PHONE_CHANNELS = [
   'app:info',
   'app:quit',
   'artifact:read',
+  'attachment:upload',
   'audit:read',
   'changes:list',
   'chat:abort',
@@ -199,6 +200,7 @@ export const PHONE_CHANNELS = [
   'providers:setEnabled',
   'remote:stop',
   'security:challenge',
+  'session:cancelWatch',
   'session:create',
   'session:delete',
   'session:fork',
@@ -450,6 +452,7 @@ export const PHONE_SAFETY_EXIT_CHANNELS: readonly string[] = ['app:quit', 'devic
 
 export const PHONE_AGENT_CHANNELS: readonly string[] = [
   ...PHONE_SAFETY_EXIT_CHANNELS,
+  'attachment:upload',
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
@@ -462,6 +465,7 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
   'engine:unloadAll',
   'model:load',
   'model:unload',
+  'session:cancelWatch',
   'session:create',
   'session:delete',
   'session:fork',
@@ -533,6 +537,14 @@ export const PHONE_MODE_PROOF = {
 /** `allowedMcpTools` from a phone: MCP tool names (`mcp__<server>__<tool>`) only. */
 export function isMcpToolList(value: unknown): boolean {
   return Array.isArray(value) && value.length <= 200 && value.every((t) => typeof t === 'string' && t.startsWith('mcp__') && t.length <= 200);
+}
+
+/**
+ * `knownRecipients` from a phone: the recipients a chat writes to without
+ * asking (decision 0063), as plain strings, at most 200 of up to 200 characters.
+ */
+export function isRecipientList(value: unknown): boolean {
+  return Array.isArray(value) && value.length <= 200 && value.every((r) => typeof r === 'string' && r.length > 0 && r.length <= 200);
 }
 
 /** Whether moving from `current` (a mode, or nothing) to `next` raises the mode. An unknown mode counts as the most permissive. */
@@ -712,7 +724,7 @@ export const PHONE_PROVIDER_VIEW = ['account.email', 'account.name', 'account.pl
 
 /**
  * Chat options a phone may set with `session:setOptions`: the model, the
- * title and organisation, completing (`archivedAt`), the chat mode and the effort. Not the tools, the execution mode, Git
+ * title and organisation, archiving (`archivedAt`), the chat mode and the effort. Not the tools, the execution mode, Git
  * isolation or offline/incognito.
  */
 export const PHONE_SESSION_OPTION_KEYS = [
@@ -732,6 +744,7 @@ export const PHONE_SESSION_OPTION_KEYS = [
   'guidance',
   'imageParams',
   'incognito',
+  'knownRecipients',
   'memory',
   'mode',
   'modelId',
@@ -749,11 +762,12 @@ export const PHONE_SESSION_OPTION_KEYS = [
 
 /**
  * Options that change what an agent may touch or where its data goes (`allowedMcpTools`:
- * "Always allow this tool", decision 0054). They take
+ * "Always allow this tool", decision 0054; `knownRecipients`: who the chat may
+ * write to without asking, decision 0063). They take
  * the same signed proof as raising a mode, in either direction, since the gate
  * can't always rank two values.
  */
-export const PHONE_GUARDED_OPTION_KEYS = ['allowedMcpTools', 'cloudOnly', 'disabledConnectors', 'disabledMcpServers', 'disabledTools', 'executionMode', 'gitIsolation', 'guidance', 'incognito', 'memory', 'offline', 'privacy'] as const;
+export const PHONE_GUARDED_OPTION_KEYS = ['allowedMcpTools', 'cloudOnly', 'disabledConnectors', 'disabledMcpServers', 'disabledTools', 'executionMode', 'gitIsolation', 'guidance', 'incognito', 'knownRecipients', 'memory', 'offline', 'privacy'] as const;
 
 /** The values a closed chat option may take (the store checks the rest). */
 export const PHONE_OPTION_VALUES = {
@@ -771,9 +785,11 @@ export const PHONE_OPTION_VALUES = {
  * has *Connected devices choose model settings* on. `port`, `bind`, `apiKey`,
  * `corsOrigins` and the model folders stay on the machine: they open it to its
  * network or read its disk. So do the two settings below, which decide this.
+ * Overload protection can be switched from a device; how much it keeps free
+ * (`overloadReserveMB`) is read there, for the label, and set on the machine.
  */
-export const PHONE_ENGINE_KEYS = ['autoStart', 'autoload', 'idleTtlSeconds', 'jitLoad', 'maxLoaded'] as const;
-export const PHONE_MODEL_SERVER_VIEW = [...PHONE_ENGINE_KEYS, 'clientModelSettings', 'shareWithComputers'] as const;
+export const PHONE_ENGINE_KEYS = ['autoStart', 'autoload', 'idleTtlSeconds', 'jitLoad', 'maxLoaded', 'overloadGuard'] as const;
+export const PHONE_MODEL_SERVER_VIEW = [...PHONE_ENGINE_KEYS, 'clientModelSettings', 'shareWithComputers', 'overloadReserveMB'] as const;
 /** Refused with `server-locked` while the Model Server sets its own. */
 export const PHONE_MODEL_SETTING_CHANNELS = ['engine:saveModelPreset', 'engine:settings', 'engine:unloadAll', 'model:load'] as const;
 /** A preset's keys that name files on the machine, which stay there. */
@@ -810,6 +826,28 @@ export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as
 
 /** What a phone receives of each tool (`tools:list`): the name a chat's `disabledTools` holds, and what it does. */
 export const PHONE_TOOL_VIEW = ['description', 'name'] as const;
+
+/**
+ * `attachment:upload` (#2777, #2635): a clip from the phone, in order, as
+ * `(chatId, uploadId, name, offset, total, chunk)` with `chunk` base64 of at
+ * most `chunkBytes`. The computer stages the pieces and, at `total`, moves the
+ * file into the chat's attachments and attaches it. `maxBytes` is the
+ * computer's import cap (50 MB); the relay caps a frame at 10 MB.
+ */
+export const PHONE_UPLOAD = { chunkBytes: 3 * 1024 * 1024, maxBytes: 50_000_000, idChars: 64, nameChars: 255, sessionIdChars: 128 } as const;
+
+/** Why an `attachment:upload` call is refused, or null. Shared shape with the Rust gate. */
+export function phoneUploadProblem(args: unknown[]): string | null {
+  if (args.length !== 6) return 'upload arguments';
+  const [chat, id, name, offset, total, chunk] = args;
+  if (typeof chat !== 'string' || !chat || chat.length > PHONE_UPLOAD.sessionIdChars) return 'chat id';
+  if (typeof id !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(id)) return 'upload id';
+  if (typeof name !== 'string' || !name.trim() || name.length > PHONE_UPLOAD.nameChars || /[\\/\u0000-\u001f\u007f]/.test(name)) return 'file name';
+  if (!Number.isSafeInteger(total) || (total as number) < 1 || (total as number) > PHONE_UPLOAD.maxBytes) return 'size';
+  if (!Number.isSafeInteger(offset) || (offset as number) < 0 || (offset as number) >= (total as number)) return 'offset';
+  if (typeof chunk !== 'string' || !chunk || chunk.length > Math.ceil(PHONE_UPLOAD.chunkBytes / 3) * 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(chunk)) return 'chunk';
+  return null;
+}
 
 /** `chat:queue` payload fields a phone may set (a plain string is text). */
 export const PHONE_QUEUE_KEYS = ['clientMessageId', 'images', 'skill', 'text'] as const;
@@ -1063,6 +1101,12 @@ export function screenPhoneCall(
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
       return {};
+    case 'session:cancelWatch':
+      // One watch of one chat (a clip's Cancel): the chat's Stop already ends them all.
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'watch id');
+      if (args.length > 2) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
     case 'session:photo':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'message id');
@@ -1147,6 +1191,7 @@ export function screenPhoneCall(
       }
       if (own(patch, 'mode')) chatMode(patch.mode, 'mode');
       if (own(patch, 'allowedMcpTools') && !isMcpToolList(patch.allowedMcpTools)) throw new PhoneAccessError('value-invalid', 'allowedMcpTools');
+      if (own(patch, 'knownRecipients') && !isRecipientList(patch.knownRecipients)) throw new PhoneAccessError('value-invalid', 'knownRecipients');
       if (own(patch, 'effort') && !(PHONE_EFFORT_LEVELS as readonly unknown[]).includes(patch.effort)) throw new PhoneAccessError('value-invalid', 'effort');
       for (const [key, allowed] of Object.entries(PHONE_OPTION_VALUES)) {
         if (own(patch, key) && !(allowed as readonly unknown[]).includes(patch[key])) throw new PhoneAccessError('value-invalid', key);
@@ -1164,6 +1209,11 @@ export function screenPhoneCall(
       }
       phoneClientMessageId(opts);
       return own(opts, 'skill') ? { skill: phoneSkill(opts.skill) } : {};
+    }
+    case 'attachment:upload': {
+      const problem = phoneUploadProblem(args);
+      if (problem) throw new PhoneAccessError('value-invalid', problem);
+      return {};
     }
     case 'chat:queue': {
       const item = args[1];
@@ -1282,6 +1332,7 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
     case 'workflow:run':
       return isObj(result) ? pick(result, PHONE_WORKFLOW_RUN_VIEW) : null;
     case 'task:runNow':
+    case 'session:cancelWatch':
       return null;
     case 'pr:sessionList':
       return phonePrsView(result);
@@ -1475,6 +1526,7 @@ export async function callFromPhone(
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
   if (channel === 'session:photo') callArgs = [args[0], args[1], args[2]];
+  if (channel === 'session:cancelWatch') callArgs = [args[0], args[1]];
   if ((PHONE_TERMINAL_CHANNELS as readonly string[]).includes(channel)) callArgs = phoneTerminalCallArgs(channel, args);
   if (channel === 'terminal:create') {
     // A new terminal starts in the chat's folder, as the desktop's does: the phone never names a path.
@@ -1597,6 +1649,7 @@ export function phoneAccessPolicy() {
       checkView: [...PHONE_CHECK_VIEW],
     },
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
+    upload: { ...PHONE_UPLOAD },
     stepUp: stepUpPolicy(),
   };
 }

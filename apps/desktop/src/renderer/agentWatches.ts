@@ -14,7 +14,7 @@ export const WatchSessionContext = createContext<string | undefined>(undefined);
 
 export interface WatchCall {
   action: 'create' | 'list' | 'cancel' | 'unknown';
-  kind?: 'timer' | 'pr';
+  kind?: AgentWatchView['kind'];
   url?: string;
   /** Timer delay or PR maximum wait, in seconds. */
   seconds?: number;
@@ -84,6 +84,12 @@ export interface WatchClock { text: string; tone: WatchTone; title: string; tick
  */
 export function watchClock(w: WatchCall, view: AgentWatchView | undefined, now: number): WatchClock | null {
   if (!view) return null;
+  // A clip has no clock to show: it wakes the chat when it ends, which takes minutes.
+  if (view.kind === 'clip' && view.status === 'active') {
+    return view.pending
+      ? { text: 'finished · waiting for the chat', tone: 'normal', title: 'The clip ended; the chat continues as soon as it is free.', ticking: true }
+      : { text: 'in progress', tone: 'normal', title: 'Made on this computer; the chat wakes when the clip is ready. Cancel, or the chat’s Stop, stops it.', ticking: true };
+  }
   const armedAt = w.seconds ? view.deadlineAt - w.seconds * 1000 : undefined;
   const at = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const since = armedAt ? ` Armed ${fmtSpan(now - armedAt)} ago.` : '';
@@ -115,6 +121,7 @@ export function watchClock(w: WatchCall, view: AgentWatchView | undefined, now: 
  * nothing to say.
  */
 export function watchProgress(view: AgentWatchView | undefined): string | null {
+  if (view?.kind === 'clip') return view.status === 'active' && !view.pending ? clipStage(view.clipStage) : null;
   if (!view || view.kind !== 'pr' || view.status !== 'active' || view.pending) return null;
   switch (view.checks) {
     case 'pending': return 'checks running';
@@ -123,6 +130,23 @@ export function watchProgress(view: AgentWatchView | undefined): string | null {
     case 'none': return 'no checks yet';
     default: return null;
   }
+}
+
+/** A clip's stage as the chip says it: the media job's own stages. */
+export function clipStage(stage: string | undefined): string | null {
+  if (!stage) return 'starting';
+  if (stage === 'waiting') return 'waiting for another picture or clip';
+  if (stage === 'loading') return 'loading the video model';
+  const step = /^step:(\d+)\/(\d+)$/.exec(stage);
+  if (step) return `step ${step[1]} of ${step[2]}`;
+  return 'starting';
+}
+
+/** The chip's name for a watch. */
+export function watchName(view: AgentWatchView): string {
+  if (view.kind === 'clip') return 'Making a clip';
+  if (view.kind === 'pr') return view.auto ? 'Watching until merge-ready' : 'PR watcher';
+  return 'Timer watcher';
 }
 
 /** A `[Agent watch <id>]` wake-up the host sent as a user turn. */

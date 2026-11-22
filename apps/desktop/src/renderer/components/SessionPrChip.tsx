@@ -2,6 +2,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PrInfo } from '@nekko-agent/shared';
 import { GfIcon, type GfIconName } from '../gentleface-icons.js';
+import { HoverTip } from './HoverTip.js';
+import { LinkTip } from './LinkTip.js';
 
 /**
  * The PR a chat is about, as a chip at the bottom right of its sidebar card:
@@ -86,6 +88,29 @@ export function primaryPr(prs: PrInfo[]): PrInfo | undefined {
 
 function prTitle(pr: PrInfo): string {
   return `${pr.owner}/${pr.repo}#${pr.number} · ${PR_STATUS_LABEL[prStatus(pr)]} · ${pr.title}`;
+}
+
+const CHECKS_WORDS: Record<PrInfo['checks'], { text: string; tone: string } | null> = {
+  passing: { text: 'Checks passing', tone: 'var(--success-text)' },
+  failing: { text: 'Checks failing', tone: 'var(--danger-text)' },
+  pending: { text: 'Checks running', tone: 'var(--ink-faint)' },
+  none: null,
+};
+
+/**
+ * A PR's hover tip: state, repo and number, title, and while it is still open
+ * its size and checks (a finished PR's checks no longer matter).
+ */
+export function PrTip({ pr }: { pr: PrInfo }) {
+  const status = prStatus(pr);
+  const live = status === 'open' || status === 'draft';
+  const checks = CHECKS_WORDS[pr.checks];
+  const meta = live ? <>
+    <span><span style={{ color: 'var(--success-text)' }}>+{pr.additions}</span> <span style={{ color: 'var(--danger-text)' }}>−{pr.deletions}</span></span>
+    <span>{pr.changedFiles} file{pr.changedFiles === 1 ? '' : 's'}</span>
+    {checks && <span style={{ color: checks.tone }}>{checks.text}</span>}
+  </> : null;
+  return <LinkTip glyph={<PrStatusIcon status={status} />} tone={prTone(pr)} state={PR_STATUS_LABEL[status]} reference={`${pr.owner}/${pr.repo} #${pr.number}`} title={pr.title} meta={meta} />;
 }
 
 const openPr = (url: string) => void window.nekko.openPath(url).catch(() => {});
@@ -218,11 +243,11 @@ export function SessionPrChip({ prs }: { prs: PrInfo[] }) {
       data-session-pr-chip
       data-pr-status={status}
     >
+      <HoverTip label={prTitle(pr)} content={<PrTip pr={pr} />}>
       <a
         href={pr.url}
         className="inline-flex items-center gap-0.5 rounded-sm font-medium tabular-nums hover:underline focus-visible:underline"
         style={{ color: prTone(pr) }}
-        title={prTitle(pr)}
         aria-label={`Pull request ${pr.number}, ${PR_STATUS_LABEL[status].toLowerCase()}`}
         draggable={false}
         {...isolate}
@@ -235,6 +260,7 @@ export function SessionPrChip({ prs }: { prs: PrInfo[] }) {
         <PrStatusIcon status={status} className="h-3 w-3" />
         #{pr.number}
       </a>
+      </HoverTip>
       {prs.length > 1 && <PrOverflow prs={prs} more={prs.length - 1} />}
     </span>
   );

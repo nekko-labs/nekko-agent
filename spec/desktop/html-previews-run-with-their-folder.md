@@ -15,7 +15,7 @@ Requested 2026-11-11: "when opening a design in the library, it doesn't load sin
 - **Load from internet**, a toggle above the preview, is off for every newly opened file. Off: the page loads only from its own folder (plus `data:`/`blob:`). On: it may also load from `https:` and connect to `https:`/`wss:`; never `http:`, so no other service on the computer is reachable either way. Switching it re-serves the page at a new address and releases the old one.
 - What is served: only files under the page's real folder (symlinks resolved; a link that leaves the folder is refused), never a hidden file or folder (`.env`, `.git/…`), never a secret-looking file (keys, `credentials`, `.npmrc`; the phone rule `phoneFilesSecret`), and only web types (HTML, CSS, JS/MJS/JSX/TSX, JSON/source maps, text/Markdown/CSV, images, fonts, MP4/WebM/MP3/WAV/OGG, WASM, glTF). Single files over 50 MB are refused. A directory serves its `index.html`.
 - A page saved directly in a disk root or the home folder is not served ("move it into a folder of its own") and falls back to the scriptless preview with that note.
-- Each served page has its own unguessable path; up to 32 are kept, oldest forgotten first, and a preview releases its page when it closes or switches file.
+- Each served page has its own unguessable path; up to 128 are kept (32 until 2026-11-23), oldest forgotten first, and a preview releases its page when it closes or switches file. Every reload (a save reaching the disk) serves the page again at a new address, so a page the server let go of comes back instead of a blank frame.
 - The frame is `sandbox="allow-scripts allow-forms allow-modals"`: an opaque origin, no popups, no top navigation, no app bridge, no access to the app's cookies or storage. Forms can't submit anywhere (`form-action 'none'`). The page gets in-memory `localStorage`/`sessionStorage` that forget on reload, since real storage is unavailable to an opaque origin.
 - Fallback: where the host can't serve the page, or the file is an `.svg`, the existing scriptless preview (with **Open interactive preview** on desktop) shows, with the reason when the server refused.
 
@@ -32,6 +32,33 @@ The page reads nothing outside its folder and reaches no network until the user 
 ## The design canvas's control script (2026-11-13)
 
 `[implemented, not yet released]` A page served for Library's design canvas (`serveHtmlPreview(path, { controls: true })`) gets one more inline script after the storage stand-in. It answers the frame directly above it, and nothing else, over `postMessage`: asked `probe`, `pause` or `play`, it replies with seven values (running or paused animations, media elements, `requestAnimationFrame` calls so far, whether it is paused, and the page's scroll width and height). Pausing pauses the document's animations and playing media and holds `requestAnimationFrame` callbacks; playing releases them. It reads no cookie, storage, location or content. A page served without `controls` (the file pane, chat cards) is unchanged. Details and the trust reasoning: [Library](library-and-first-visit-guide.md#designs-open-on-a-canvas-with-their-versions), [decision 0091](../../docs/decisions/0091-the-design-canvas-controls-a-served-design-over-postmessage.md).
+
+## Edit text in a running page (2026-11-14, #2755)
+
+Requested 2026-11-14: every Library file except designs should be editable, HTML pages included, in the code or by selecting an element.
+
+Implemented, not yet released:
+
+- **Edit text** sits beside **Load from internet** on a served page in the file pane, when the file can be edited (not a design opened from Library, not truncated, not an SVG). Switching it on serves the page again, offline, with the editor script, and a line says what to do: "Click text to change it · Enter saves · Esc cancels".
+- Hovering a piece of text (an element with no elements inside: a heading, paragraph, list item, button or link label) outlines it with a dashed line. Clicking it makes it editable in place, with a solid outline; the click does nothing else (a link does not follow, a button does not press). Enter or clicking elsewhere saves; Shift+Enter is a new line; Escape puts the old text back.
+- The change goes into the file's source as plain text in that element only (escaped, so typed `<` stays text), saved at once and kept as one undo step in **Source**. Formatting, attributes, scripts and the rest of the file are unchanged byte for byte. The page reloads once the save is on disk and stays in Edit text.
+- Text the file does not hold as plain text (written by the page's script, inside an element with other tags, or in an element written without its closing tag) is not changed: a note says to change it in Source.
+- The served page in the file pane now reloads when a save reaches the disk, not when the editor's text changes, so it never reloads an unsaved or half-written file.
+- How and why, and what it does not do: [decision 0099](../../docs/decisions/0101-library-edits-a-page-by-its-text-and-keeps-designs-view-only.md).
+
+Boundaries: the editor script is a separate `edit` serve option (the canvas's control script is unchanged and never edits). It reads and writes text only and posts only to its own viewer; the app takes a change only from that frame and only while Edit text is on, as four bounded fields (tag, old text, which one, new text; up to 20,000 characters each). The hover and editing outlines are drawn inside the page with a fixed colour, since the page cannot see the app's theme.
+
+Verified in the hidden, isolated `library-html-preview-sandbox.cjs` journey against the real preview server (32 checks: offered for a web page, served offline with the script, hover outline, click to edit, the file gets only that change, the page keeps the edit until the save lands and then reloads with it, still editable, script-written text refused with nothing written, the change in Source with undo) and unit tests for the source patch and the script. Not checked: a real click and typing in a visible window (the journey drives the page's own events), Windows, the Local Web UI in other browsers.
+
+## A design that isn't where its link says (2026-11-23, #3210)
+
+Requested 2026-11-23: "let's fix this for designs to always show." A design opened from a reply's chip by its bare name (`cloud-welcome-walkthrough-design-v3.html`) resolved to the chat folder, where it wasn't; the file pane showed an empty file and the preview "That page no longer exists". The preview server was fine.
+
+- When the file pane's read fails or comes back empty and the file's folder doesn't list it, it looks for the file, folder listings only: first the same place in the repo's main checkout when the path is inside a git worktree (removed after merging); then, for a page, picture or document, a file of the same name in the `nekko-designs/` folder (and one level of its subfolders) of the file's folder and of each project one level inside it (a chat folder is often the parent of many repos). The first hit opens, and a window on the Agent board is pointed at it for good.
+- When nothing is found, the pane says "<name> isn't here anymore", why in one line, and the path, instead of an empty editor that could save a new blank file.
+- A file that is listed but can't be read (too big, locked) keeps the pane's own behavior; nothing is looked for.
+
+Verified with `locateFile.test.ts` (bare name under a parent of repos, nested designs folder, removed worktree to main checkout and to its designs folder, nothing found, source files never looked up by name). The first hidden-Chromium check (#3211) used a stand-in disk whose read of a missing file threw; the engine (`crates/nekko-workspace/src/files.rs`) answers it with empty content instead, so the pane never looked in the real app. Fixed 2026-11-23 (#3212): an empty read is checked too, and the check was redone against a stand-in that answers like the engine (a missing file reads empty, a missing folder lists empty): on `main` the pane stayed blank; with the change it opens the design from `nekko-agent/nekko-designs/` and repoints the window. Not verified: the packaged app, the Local Web UI.
 
 ## Status and verification
 

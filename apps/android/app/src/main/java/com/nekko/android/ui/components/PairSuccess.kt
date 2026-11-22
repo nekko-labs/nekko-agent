@@ -225,14 +225,15 @@ private fun DeviceTile(icon: androidx.compose.ui.graphics.vector.ImageVector, li
 
 /**
  * Desktop's pixel cat face on its 32 x 32 grid, the iPhone's `PixelCat` drawn the same way:
- * brand plum, white line and eyes, light-plum mouth (spec/brand/colour-palette.md).
+ * Nekko's fixed colours: near-black face, pale line, white eyes, mouth #854F6C (spec/brand/colour-palette.md).
  */
 @Composable
 fun PixelCat(
     modifier: Modifier = Modifier,
     happy: Boolean = false,
-    fill: Color = Color(0xFF190019),
-    line: Color = Color.White,
+    fill: Color = Color(0xFF16161C),
+    line: Color = Color(0xFFF3E8EE),
+    eyes: Color = Color.White,
 ) {
     Canvas(modifier) {
         val u = size.width / 32f
@@ -242,7 +243,7 @@ fun PixelCat(
         }
         drawPath(outline, fill)
         drawPath(outline, line, style = Stroke(width = 2 * u, join = StrokeJoin.Miter))
-        fun px(x: Int, y: Int, w: Int, h: Int, c: Color = line) = drawRect(c, Offset(x * u, y * u), Size(w * u, h * u))
+        fun px(x: Int, y: Int, w: Int, h: Int, c: Color = eyes) = drawRect(c, Offset(x * u, y * u), Size(w * u, h * u))
         if (happy) {
             for (x in listOf(9, 19)) {
                 px(x, 15, 1, 2)
@@ -253,7 +254,7 @@ fun PixelCat(
             px(11, 15, 2, 3)
             px(20, 15, 2, 3)
         }
-        px(15, 20, 2, 1, Color(0xFFC99BB3))
+        px(15, 20, 2, 1, Color(0xFF854F6C))
     }
 }
 

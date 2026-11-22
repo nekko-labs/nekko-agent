@@ -11,7 +11,7 @@ vi.mock('react', async original => ({
 import { GfIcon } from './gentleface-icons.js';
 import { GENTLEFACE_MOTION } from './gentleface-motion-assets.js';
 
-function fixture(name: 'send' | 'stop' = 'send') {
+function fixture(name: 'send' | 'stop' | 'x' = 'send') {
   const svg = { pauseAnimations: vi.fn(), unpauseAnimations: vi.fn(), setCurrentTime: vi.fn() };
   const control = Object.assign(new EventTarget(), { matches: vi.fn(() => false) });
   const media = Object.assign(new EventTarget(), { matches: false });
@@ -105,5 +105,44 @@ describe('Gentleface SVG clock lifecycle (#1998)', () => {
     expect(f.svg.pauseAnimations).not.toHaveBeenCalled();
     expect(f.svg.setCurrentTime).not.toHaveBeenCalled();
     f.cleanup();
+  });
+
+  // The close glyph has the same line and solid art, so a swap shows nothing: it turns instead.
+  describe('the close glyph', () => {
+    const body = (f: ReturnType<typeof fixture>) => {
+      const svg = (f.element.props.children as ReactElement<{ className: string; dangerouslySetInnerHTML: { __html: string } }>[])[1];
+      expect(svg.props.className).toBe('gf-icon-motion');
+
+      return svg.props.dangerouslySetInnerHTML.__html;
+    };
+
+    it('animates the licensed path itself, a quarter turn that ends where it rests', () => {
+      const f = fixture('x');
+      const html = body(f);
+
+      expect(html).toContain('<path d="M11.5 2.997C11.636 2.997');
+      expect(html.match(/<path /g)).toHaveLength(1);
+      expect(html).toMatch(/type="rotate"[^>]*values="0 7\.5 7\.5;[^"]*;90 7\.5 7\.5"/);
+      f.cleanup();
+    });
+
+    it('plays once, then rests', () => {
+      const f = fixture('x');
+      f.control.dispatchEvent(new Event('pointerenter'));
+      expect(f.svg.unpauseAnimations).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(1000);
+      expect(f.svg.setCurrentTime).toHaveBeenLastCalledWith(0);
+      expect(vi.getTimerCount()).toBe(0);
+      f.cleanup();
+    });
+
+    it('stays still under reduced motion', () => {
+      const f = fixture('x');
+      f.media.matches = true;
+      f.control.dispatchEvent(new Event('pointerenter'));
+      f.control.dispatchEvent(new Event('focus'));
+      expect(f.svg.unpauseAnimations).not.toHaveBeenCalled();
+      f.cleanup();
+    });
   });
 });

@@ -143,6 +143,6 @@ describe('compact board and navigation spacing', () => {
     expect(cssRule(styles, '.wall-composer-split').height).toBe(cssValue('var(--pane-gap)'));
     expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe(cssValue('calc(-1 * var(--pane-gap))'));
     // The agent panel spans the windows, from offsets CommandCenterView measures.
-    expect(cssRule(board, ".wall-agent-workspace[data-tabs='left'] > .wall-agents-presence[data-orientation='vertical']", { media: 'min-width: 721px' })).toMatchObject({ 'margin-top': cssValue('var(--wall-panes-top, 0px)'), 'margin-bottom': cssValue('var(--wall-panes-bottom, 0px)') });
+    expect(cssRule(board, ".wall-agent-workspace[data-tabs='left'] > .wall-agents-presence", { media: 'min-width: 721px' })).toMatchObject({ 'margin-top': cssValue('var(--wall-panes-top, 0px)'), 'margin-bottom': cssValue('var(--wall-panes-bottom, 0px)') });
   });
 });

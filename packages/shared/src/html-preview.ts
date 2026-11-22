@@ -20,6 +20,11 @@ export interface HtmlPreviewOptions {
    * its size and pause or resume its motion over `postMessage`. Off by default.
    */
   controls?: boolean;
+  /**
+   * Add the text editor script: clicking a piece of text in the page makes it
+   * editable, and each change is posted up as a `PreviewTextEdit`. Off by default.
+   */
+  edit?: boolean;
 }
 
 /**
@@ -59,6 +64,20 @@ export interface PreviewWheel {
 }
 
 /**
+ * A piece of text the person changed by clicking it in a page served with
+ * `edit` (posted up as this message): an element of
+ * `tag` with no elements inside, which had `old` as its text and was the
+ * `occurrence`-th (from 0) such element with that text in the page.
+ */
+export interface PreviewTextEdit {
+  nekkoPreview: 'edit';
+  tag: string;
+  old: string;
+  occurrence: number;
+  text: string;
+}
+
+/**
  * Where the design's clickable parts are (links, buttons, fields, anything with a
  * pointer cursor), as `[x, y, width, height]` boxes in the page's own CSS pixels.
  */
@@ -71,6 +90,15 @@ export interface PreviewTargets {
 export interface PreviewHand {
   nekkoPreview: 'hand';
   down: boolean;
+}
+
+/**
+ * Ctrl/Cmd with Plus, Minus or 0 pressed inside the design: the canvas zooms
+ * in, out, or fits the design, as it does for the same keys outside it.
+ */
+export interface PreviewZoomKey {
+  nekkoPreview: 'zoomKey';
+  key: 'in' | 'out' | 'fit';
 }
 
 export interface HtmlPreviewServed {

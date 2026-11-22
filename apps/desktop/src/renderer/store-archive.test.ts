@@ -12,7 +12,7 @@ const session: Session = { id: 's_test', title: 'Test chat', createdAt: 1, updat
 
 beforeEach(() => {
   useStore.setState({
-    settings: { showTips: true, completionTipSeen: false } as never, completionTipSessionId: null,
+    settings: { showTips: true, completionTipSeen: false } as never, archiveTipSessionId: null,
     sessions: [summarizeSession(session)], activeSessionId: session.id,
     workspaces: [{ id: 'ws_test', anchor: { kind: 'chat', refId: session.id }, root: { id: 'pane_test', kind: 'chat', refId: session.id }, activePaneId: 'pane_test' }],
     activeWorkspaceId: 'ws_test', toasts: [],
@@ -88,8 +88,8 @@ describe('deleting an open chat', () => {
   });
 });
 
-describe('completing a workspace', () => {
-  it('reserves the first tip across concurrent successful completions', async () => {
+describe('archiving a workspace', () => {
+  it('reserves the first tip across concurrent successful archives', async () => {
     engine({ ...session, archivedAt: 123 });
     let finish!: (settings: Awaited<ReturnType<typeof window.nekko.updateSettings>>) => void;
     vi.mocked(window.nekko.updateSettings).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
@@ -99,13 +99,13 @@ describe('completing a workspace', () => {
     expect(window.nekko.updateSettings).toHaveBeenCalledOnce();
     finish({ ...useStore.getState().settings!, showTips: true, completionTipSeen: true });
     await first;
-    expect(useStore.getState().completionTipSessionId).toBe(session.id);
+    expect(useStore.getState().archiveTipSessionId).toBe(session.id);
   });
   it('keeps the tip eligible if saving the seen preference fails', async () => {
     engine({ ...session, archivedAt: 123 });
     vi.mocked(window.nekko.updateSettings).mockRejectedValueOnce(new Error('disk error'));
     await useStore.getState().archiveChat(session.id);
-    expect(useStore.getState().completionTipSessionId).toBeNull();
+    expect(useStore.getState().archiveTipSessionId).toBeNull();
     expect(useStore.getState().settings?.completionTipSeen).toBe(false);
     expect(useStore.getState().toasts.at(-1)?.kind).toBe('success');
   });
@@ -114,24 +114,24 @@ describe('completing a workspace', () => {
     useStore.setState({ settings: settings as never });
     await useStore.getState().archiveChat(session.id);
     expect(window.nekko.updateSettings).not.toHaveBeenCalled();
-    expect(useStore.getState().completionTipSessionId).toBeNull();
+    expect(useStore.getState().archiveTipSessionId).toBeNull();
   });
-  it('retains completed chats in the summaries used by Completed', async () => {
+  it('retains archived chats in the summaries used by Archived', async () => {
     engine({ ...session, archivedAt: 123 });
     await useStore.getState().archiveWorkspace('ws_test');
     expect(useStore.getState().workspaces).toEqual([]);
     expect(useStore.getState().sessions[0].archivedAt).toBe(123);
-    expect(useStore.getState().completionTipSessionId).toBe(session.id);
+    expect(useStore.getState().archiveTipSessionId).toBe(session.id);
     expect(window.nekko.updateSettings).toHaveBeenCalledWith({ completionTipSeen: true });
     expect(useStore.getState().toasts.at(-1)?.kind).toBe('success');
   });
 
-  it.each([session, null])('does not close or announce completion when the engine did not save it (%j)', async (saved) => {
+  it.each([session, null])('does not close or announce the archive when the engine did not save it (%j)', async (saved) => {
     engine(saved);
     await useStore.getState().archiveWorkspace('ws_test');
     expect(useStore.getState().workspaces).toHaveLength(1);
-    expect(useStore.getState().completionTipSessionId).toBeNull();
+    expect(useStore.getState().archiveTipSessionId).toBeNull();
     expect(window.nekko.updateSettings).not.toHaveBeenCalled();
-    expect(useStore.getState().toasts.at(-1)).toMatchObject({ kind: 'error', message: expect.stringContaining('engine did not save completion') });
+    expect(useStore.getState().toasts.at(-1)).toMatchObject({ kind: 'error', message: expect.stringContaining('engine did not save the archive') });
   });
 });

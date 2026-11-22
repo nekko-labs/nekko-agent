@@ -1,14 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
-import type { GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
-import { MODALITY_LABELS, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
+import type { EngineMemory, GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
+import { MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
-import { TrashIcon, WarningIcon } from '../../icons.js';
+import { notifyModelsChanged } from '../../modelCatalog.js';
+import { WarningIcon } from '../../icons.js';
 import { StatusDot } from '../primitives/index.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
 import { ImageGeneration } from './ImageGeneration.js';
+import { loadLocalModel } from './localModelShortcuts.js';
 import { gpuGuidance } from './modelFamilies.js';
+import { ModelRowActions, type ModelRowControl } from './ModelRowActions.js';
+import { localTypeLabel, paramsLabel } from './modelFacts.js';
 import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
 /**
@@ -58,18 +62,23 @@ export function ModelLibrary({
   models,
   canLoad,
   onChanged,
+  actions,
   query = '',
   autoloadIds,
   running,
   resident,
+  memory,
 }: {
   providerId: string;
   models: Array<LocalModel & { loaded: boolean; gpuFit?: GpuFit }>;
+  /** The GPU's size, so a model the busy GPU cannot hold now is not called too big. */
+  memory?: EngineMemory;
   /** The engine's resident list, for where each loaded model actually sits. */
   resident?: ResidentModel[];
   /** False until the engine binary exists: the list is real, running it is not. */
   canLoad: boolean;
   onChanged: () => void;
+  actions: ModelRowControl;
   /** Live filter from the shared search box (matches name, id, quant, folder). */
   query?: string;
   /** Ids marked to load when the engine starts. */
@@ -106,10 +115,7 @@ export function ModelLibrary({
     // A row's Load uses whatever this model was last saved with, and the planner's
     // own answer when it has never been configured. Opening the drawer is for
     // changing that, not for performing it.
-    const params = model.preset ? { ...model.preset, budgetFraction: undefined } : null;
-    const req = (params || model.modality === 'image'
-      ? window.nekko.runtimeLoad(providerId, model.id, params ?? {})
-      : autoLoad(providerId, model.id)).catch((e: Error) => ({ ok: false, message: e.message }));
+    const req = loadLocalModel(providerId, model);
     // The load is registered the moment the host picks the call up. Refreshing
     // now (and once a beat later, in case this read raced the registration)
     // puts the model in the "In memory" block while it is still streaming in,
@@ -120,13 +126,6 @@ export function ModelLibrary({
     clearTimeout(tick);
     setBusy(null);
     pushToast(res.ok ? 'success' : 'error', res.message ?? (res.ok ? 'Loaded.' : "Couldn't load it."));
-    onChanged();
-  };
-
-  const remove = async (model: LocalModel) => {
-    if (!window.confirm(`Delete ${model.name}? The file is removed from disk.`)) return;
-    const res = await window.nekko.engineDeleteModel(model.id);
-    pushToast(res.ok ? 'success' : 'error', res.message);
     onChanged();
   };
 
@@ -202,6 +201,22 @@ export function ModelLibrary({
   /** Residency, by model id: where a loaded model actually sits. */
   const residentById = useMemo(() => new Map((resident ?? []).map((r) => [r.id, r])), [resident]);
 
+  // Another surface (the Local models monitor's starred and recent rows) asked
+  // for a model that is not in memory: the In memory list cannot serve that, so
+  // this list unfolds the row's settings, shows every row, and scrolls to it.
+  const focus = useStore((s) => s.localModelFocus);
+  const clearFocus = useStore((s) => s.clearLocalModelFocus);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const target = focus ? models.find((m) => m.id === focus) : undefined;
+    if (!target || target.loaded) return;
+    setFilter('all');
+    setShown(Math.max(LIST_PAGE, models.length));
+    setOpen(target.id);
+    clearFocus();
+    requestAnimationFrame(() => rootRef.current?.querySelector(`[data-library-row="${CSS.escape(target.id)}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  }, [focus, models, clearFocus]);
+
   const runImport = async () => {
     const path = importPath.trim();
     if (!path) return;
@@ -211,11 +226,12 @@ export function ModelLibrary({
       setImportPath('');
       setImporting(false);
       onChanged();
+      notifyModelsChanged();
     }
   };
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div className="flex items-center justify-between">
         <p className="text-xs text-ink-faint">
           {models.length === 0
@@ -271,8 +287,8 @@ export function ModelLibrary({
 
       {models.length === 0 ? (
         <p className="mt-(--q-inline) text-xs text-ink-faint">
-          Nothing here yet. Download one of the picks for this machine above or a model from the list, open{' '}
-          <strong>Folders</strong> to point at a folder another app already fills, or add a GGUF you have.
+          Nothing here yet. Get one under <strong>Find new models</strong>, open <strong>Folders</strong> to point at a
+          folder another app already fills, or add a GGUF you have.
         </p>
       ) : visible.length === 0 ? (
         <p className="mt-3 text-xs text-ink-faint">
@@ -309,24 +325,22 @@ export function ModelLibrary({
     const live = residentById.get(m.id);
     // A model that cannot fill the GPU wears the warning on its row: it will
     // run, but not at the speed the card implies.
-    const fitWarn = m.gpuFit === 'partial' || m.gpuFit === 'wont';
     return (
-      <div key={m.id}>
+      <div key={m.id} data-library-row={m.id} className="scroll-mt-4">
         <div
           className="flex min-h-(--q-row) flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 text-xs transition-colors duration-(--dur-fast) hover:bg-(--q-wash)"
           style={{ opacity: unsupported ? 0.85 : 1, background: m.loaded ? 'var(--accent-soft)' : undefined }}
           data-quiet-row
         >
-          <div className="min-w-48 flex-1" title={m.path}>
+          <div className="min-w-0 flex-[1_1_12rem]" title={m.path}>
             <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
-            <p className="truncate text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
+            {actions.isDefault(m) && <span className="text-2xs text-accent">Default</span>}
+            <p className="text-xs text-ink-soft" data-model-facts>{[localTypeLabel(m), paramsLabel(m.name, m.parameterSize), m.sizeBytes > 0 && formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</p>
+            <p className="text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
               {[
-                gpuGuidance(m.sizeBytes, undefined, m),
+                gpuGuidance(m.sizeBytes, memory, m),
                 m.quantization,
-                m.parameterSize,
-                formatBytes(m.sizeBytes),
                 m.maxContext && `${formatTokens(m.maxContext)} max context`,
-                m.modality && m.modality !== 'chat' && MODALITY_LABELS[m.modality],
                 m.format === 'mlx' && 'MLX',
                 autoloadIds?.has(m.id) && 'loads on start',
                 m.gpuFit === 'cpu' && !unsupported && 'CPU only',
@@ -337,7 +351,7 @@ export function ModelLibrary({
             </p>
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1">
             {m.loaded ? (
               <span className="mr-1 inline-flex items-center gap-1.5 text-2xs text-ink-soft" title={live ? placementTitle(live) : undefined}>
                 <StatusDot color="var(--accent)" size={6} />
@@ -352,7 +366,7 @@ export function ModelLibrary({
               <span
                 className="mr-1 inline-flex items-center gap-1.5 text-2xs text-warning-text"
                 title={m.gpuFit === 'partial'
-                  ? 'Under its saved settings, part of it runs on the CPU rather than fully in VRAM. Open Settings to change that.'
+                  ? 'Beside what holds the GPU right now, and under its saved settings, part of it would run on the CPU rather than fully in VRAM. Unload other models, or open Settings to give it less context.'
                   : 'The planner says it will not fit on this machine, even partly offloaded to the CPU.'}
               >
                 <StatusDot tone="warning" size={6} />
@@ -398,20 +412,7 @@ export function ModelLibrary({
                 {busy === m.id ? 'Loading…' : 'Load'}
               </button>
             )}
-            {m.managed === false ? (
-              // The file belongs to whichever app downloaded it. Saying so
-              // beats a delete button that refuses after the click.
-              <span
-                className="px-2 text-2xs text-ink-faint"
-                title={`Delete this in ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'the app that downloaded it'}`}
-              >
-                borrowed
-              </span>
-            ) : (
-              <button className="btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11!" title="Delete this model" aria-label="Delete this model" onClick={() => void remove(m)}>
-                <TrashIcon className="h-3.5 w-3.5" />
-              </button>
-            )}
+            <ModelRowActions model={m} actions={actions} />
           </div>
         </div>
 
@@ -495,23 +496,4 @@ function modalityTitle(modality: ModelModality): string {
     default:
       return 'A chat model';
   }
-}
-
-/**
- * Load with the planner's own answer at a middling budget.
- *
- * A model nobody has configured still has to load sensibly, and asking the same
- * planner the drawer asks means the quick path and the considered path cannot
- * disagree.
- */
-async function autoLoad(providerId: string, modelId: string): Promise<{ ok: boolean; message?: string }> {
-  const auto = await window.nekko.runtimeAutoFit(providerId, modelId, 0.75).catch(() => null);
-  return window.nekko.runtimeLoad(providerId, modelId, {
-    contextTokens: auto?.request.contextTokens,
-    kvCacheDtype: auto?.request.kvCacheDtype,
-    gpuLayers:
-      auto?.plan.totalLayers && auto.request.gpuLayerFraction < 1
-        ? Math.round(auto.plan.totalLayers * auto.request.gpuLayerFraction)
-        : undefined,
-  });
 }

@@ -63,6 +63,30 @@ class WireTest {
         assertFalse(list.toString().contains("sk-"))
     }
 
+    @Test fun `providers carry the Claude account behind a subscription provider`() {
+        val list = PublicProvider.list(json("""[
+          {"id":"p1","kind":"claude-code","label":"Claude subscription · account-2","enabled":true,
+           "account":{"signedIn":true,"email":"philip@example.test","scope":"organization","name":"Nekko Labs","plan":"team"}},
+          {"id":"p2","kind":"claude-code","label":"Claude subscription","enabled":true,
+           "account":{"signedIn":true,"email":"philip@example.test","scope":"personal","name":"Personal"}},
+          {"id":"p3","kind":"claude-code","label":"Signed out","enabled":true,"account":{"signedIn":false}},
+          {"id":"p4","kind":"claude-code","label":"API login","enabled":true,"account":{"signedIn":true,"email":"  "}},
+          {"id":"p5","kind":"anthropic","label":"Claude API","enabled":true},
+          {"id":"p6","kind":"claude-code","label":"Odd","enabled":true,"account":"nope"}
+        ]"""))
+        assertEquals(ProviderAccount(true, "philip@example.test", "organization", "Nekko Labs", "team"), list[0].account)
+        assertTrue(list[0].account!!.organization)
+        assertEquals(ProviderAccount(true, "philip@example.test", "personal", "Personal", null), list[1].account)
+        assertFalse(list[1].account!!.organization)
+        assertEquals(ProviderAccount(false), list[2].account)
+        // A blank email is no email: an API-key login.
+        assertEquals(ProviderAccount(true), list[3].account)
+        assertNull(list[4].account)
+        assertNull(list[5].account)
+        // Older call sites still build a provider without an account.
+        assertEquals(PublicProvider("p5", "anthropic", "Claude API", true), list[4])
+    }
+
     @Test fun `summaries keep real top-level chats, completed ones too, newest first`() {
         val list = SessionSummary.visible(json("""[
           {"id":"a","title":"A","updatedAt":1},
@@ -100,12 +124,12 @@ class WireTest {
         assertEquals(listOf("General", "app", "site"), groups.map { it.name })
         // A chat filed under a folder the computer no longer has falls back to General, like the desktop.
         assertEquals(listOf("g1", "lost"), groups[0].active.map { it.id })
-        assertEquals(listOf("g2"), groups[0].completed.map { it.id })
+        assertEquals(listOf("g2"), groups[0].archived.map { it.id })
         // Dragged order first, then the most recent; completed by when they were completed.
         assertEquals(listOf("p3", "p2", "p1"), groups[1].active.map { it.id })
-        assertEquals(listOf("p5", "p4"), groups[1].completed.map { it.id })
+        assertEquals(listOf("p5", "p4"), groups[1].archived.map { it.id })
         // An empty folder is still listed; an empty General is not.
-        assertTrue(groups[2].active.isEmpty() && groups[2].completed.isEmpty())
+        assertTrue(groups[2].active.isEmpty() && groups[2].archived.isEmpty())
         assertEquals(listOf("w1"), ChatGroup.of(chats.filter { it.workspaceId == "w1" }, folders.take(1)).map { it.key })
     }
 
@@ -212,7 +236,7 @@ class WireTest {
         val empty = PcSettings.from(json("""{"defaultChatMode":"sideways","skipDeleteConfirmation":"yes"}"""))
         assertNull(empty.defaultChatMode)
         assertEquals(PcSettings.ChatMode.GUARDRAILS, empty.effectiveMode)
-        assertEquals(PcSettings.ChatAction.COMPLETE, empty.effectiveAction)
+        assertEquals(PcSettings.ChatAction.ARCHIVE, empty.effectiveAction)
         assertTrue(empty.confirmDelete)
     }
 

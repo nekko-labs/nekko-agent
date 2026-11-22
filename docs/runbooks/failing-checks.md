@@ -140,3 +140,15 @@ This improves recovery, not prevention. The no-queue, non-strict merge policy is
 unchanged: two independently green PRs can still have a semantic conflict when
 combined. Keep that limitation explicit; do not claim a fresh recovery check
 eliminates all future stale-base races.
+
+## Native iOS: quarantine and main runs
+
+`apps/ios/UITests/quarantine.txt` lists known-intermittent UI tests, each with its open
+issue. PRs, batches and main runs skip them; the nightly run still runs them, so their
+issues keep getting evidence. List a test only when the same code both passes and
+fails it; a test that fails every time is a regression to fix, never to list. Take its
+line out in the PR that fixes it.
+
+An admin merge skips `gate`, so the Native iOS run that follows it on `main` is the check
+it skipped. When that run is red, it comments on the merged PR: fix forward from there
+in a new PR, before the next iOS PR inherits the failure.

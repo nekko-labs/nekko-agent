@@ -34,14 +34,31 @@ struct NewChatFixture: View {
 struct ModelTabsFixture: View {
     @Environment(ComputersStore.self) private var store
     @State private var ready = false
+    /// `-uiTestClaudeAccounts`: two Claude accounts on one login instead.
+    private let accounts = ProcessInfo.processInfo.arguments.contains("-uiTestClaudeAccounts")
 
     var body: some View {
         // A ZStack, not a Group: an empty Group never appears, so its task would never run.
         ZStack {
             Color.clear
-            if ready { ModelPicker(selected: ("anthropic", "claude-opus-5-5")) { _, _ in } }
+            if ready { ModelPicker(selected: accounts ? ("personal", "opus") : ("anthropic", "claude-opus-5-5")) { _, _ in } }
         }
         .task {
+            if accounts {
+                // One Claude login with a personal plan and an organization seat (#2488), synthetic.
+                let account = { (scope: String, name: String, plan: String) -> JSONValue in
+                    ["signedIn": true, "email": "alex@example.test", "scope": .string(scope), "name": .string(name), "plan": .string(plan)]
+                }
+                store.seedModelsForUITest(providers: [
+                    ["id": "personal", "kind": "claude-code", "label": "Claude subscription", "enabled": true, "account": account("personal", "Personal", "max")],
+                    ["id": "acme", "kind": "claude-code", "label": "Claude subscription · account-2", "enabled": true, "account": account("organization", "Acme Inc", "team")],
+                ], models: [
+                    "personal": [["id": "opus", "name": "Claude Opus"], ["id": "sonnet", "name": "Claude Sonnet"]],
+                    "acme": [["id": "opus", "name": "Claude Opus"], ["id": "sonnet", "name": "Claude Sonnet"]],
+                ])
+                ready = true
+                return
+            }
             store.seedModelsForUITest(providers: [
                 ["id": "anthropic", "kind": "anthropic", "label": "Claude API", "enabled": true],
                 ["id": "ollama", "kind": "ollama", "label": "Ollama", "enabled": true],

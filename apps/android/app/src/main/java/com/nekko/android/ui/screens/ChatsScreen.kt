@@ -1,5 +1,23 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.material.icons.outlined.Image
+
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.ui.graphics.drawscope.Stroke
+
+import androidx.compose.ui.geometry.Size
+
+import androidx.compose.ui.geometry.Offset
+
+import androidx.compose.ui.draw.drawBehind
+
+import androidx.compose.foundation.layout.width
+
+import androidx.compose.foundation.layout.fillMaxHeight
+
+import androidx.compose.foundation.layout.IntrinsicSize
+
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalResources
@@ -74,6 +92,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Settings
@@ -110,7 +129,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -176,6 +194,8 @@ fun ChatsScreen(
     onPair: () -> Unit,
     onComputers: () -> Unit,
     onSettings: () -> Unit,
+    /** The phone's own git provider's pull requests (#2109). */
+    onPullRequests: () -> Unit = {},
     /** The Monitors row at the bottom of the list (the computer's hardware, running chats, what needs you). */
     onMonitors: (() -> Unit)? = null,
     /** Set when the list is one of an open folding phone's two panes: its header actions. */
@@ -219,11 +239,11 @@ fun ChatsScreen(
     var pulling by remember { mutableStateOf(false) }
     val active = s.active
     val computerName = active?.name ?: stringResource(R.string.chats_your_computer)
-    // Long-press on a chat: the computer's own action (Complete or Delete) for it.
+    // Long-press on a chat: the computer's own action (Archive or Delete) for it.
     var pressed by remember { mutableStateOf<SessionSummary?>(null) }
     var confirmDelete by remember { mutableStateOf<SessionSummary?>(null) }
     var actionError by remember { mutableStateOf<String?>(null) }
-    // Long-press on a completed chat: Restore it, or delete it for good.
+    // Long-press on an archived chat: Restore it, or delete it for good.
     var pressedDone by remember { mutableStateOf<SessionSummary?>(null) }
     // Groups showing all their chats; kept while a chat is open.
     var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
@@ -294,7 +314,7 @@ fun ChatsScreen(
     val needsYou = remember(all, view) {
         if (view.groupBy == ChatListView.GroupBy.STATUS) emptyList() else all.chats.filter { !it.archived && all.activity[it.id] == Activity.NEEDS_YOU }
     }
-    // Search: every word, any case or accent, in the title, first prompt or last reply, completed chats too.
+    // Search: every word, any case or accent, in the title, first prompt or last reply, archived chats too.
     var query by rememberSaveable { mutableStateOf("") }
     // Search chats, from the computer menu: a field under the top bar (the mode pill steps away) until closed.
     var searching by rememberSaveable { mutableStateOf(false) }
@@ -317,7 +337,7 @@ fun ChatsScreen(
         actionError = null
         onOwner(chat) { scope.launch {
             try {
-                if (delete) repo.deleteChat(chat.id) else repo.completeChat(chat.id)
+                if (delete) repo.deleteChat(chat.id) else repo.archiveChat(chat.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -336,6 +356,24 @@ fun ChatsScreen(
                 throw e
             } catch (e: Exception) {
                 actionError = e.message?.takeIf { it.isNotBlank() } ?: failed
+            }
+        }
+    }
+    // A chat's running sub-agents, under it (#2509), unless Card details hides them.
+    val subagentsOf: (SessionSummary) -> List<SessionSummary> = { c ->
+        if (!view.showSubagents || c.archived || ChatPlace.isPhoneChat(c.id)) emptyList() else all.subagents[c.id].orEmpty()
+    }
+    // A chat's row, then one row per sub-agent; each opens on its own computer.
+    val activeRow: @Composable (SessionSummary) -> Unit = { summary ->
+        val kids = subagentsOf(summary)
+        Column {
+            ChatRow(summary, all.activity[summary.id], onLongClick = { press(summary) }, onClick = { openChat(summary) },
+                waiting = outbox.waitingFor(summary.id).size, details = view,
+                prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary), place = placeOfRow(summary), placeIcons = view.showComputerIcons,
+                hasSubagents = kids.isNotEmpty())
+            kids.forEachIndexed { i, kid ->
+                SubagentRow(kid, all.activity[kid.id] ?: (if (kid.running) Activity.RUNNING else null), last = i == kids.lastIndex,
+                    providerKind = providerKindOf(kid), showModel = view.showModel) { openChat(kid) }
             }
         }
     }
@@ -368,7 +406,7 @@ fun ChatsScreen(
         AlertDialog(
             onDismissRequest = { pressedDone = null },
             title = { Text(plainText(chat.title).ifEmpty { newChat }, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            text = { Text(stringResource(R.string.chats_completed_on, all.place(chat.id)?.name ?: computerName)) },
+            text = { Text(stringResource(R.string.chats_archived_on, all.place(chat.id)?.name ?: computerName)) },
             confirmButton = {
                 TextButton(onClick = { pressedDone = null; restore(chat) }) { Text(stringResource(R.string.chats_restore), color = p.accent) }
             },
@@ -436,6 +474,7 @@ fun ChatsScreen(
                                 s, all, exits, compact = pane != null,
                                 onSearch = { searching = true },
                                 onComputers = onComputers,
+                                onPullRequests = onPullRequests,
                                 onFilter = { id ->
                                     setFilter(id.orEmpty())
                                     // A computer picked: it becomes the active one too, as on the iPhone.
@@ -536,11 +575,9 @@ fun ChatsScreen(
                                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                                     }
                                 }
-                                itemsIndexed(found, key = { _, it -> "found:${it.id}" }) { i, summary ->
-                                    if (i > 0) RowDivider(60.dp)
-                                    if (summary.archived) CompletedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
-                                    else ChatRow(summary, all.activity[summary.id], onLongClick = { press(summary) }, onClick = { openChat(summary) }, waiting = outbox.waitingFor(summary.id).size,
-                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary), place = placeOfRow(summary), placeIcons = view.showComputerIcons)
+                                itemsIndexed(found, key = { _, it -> "found:${it.id}" }) { _, summary ->
+                                    if (summary.archived) ArchivedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
+                                    else activeRow(summary)
                                 }
                             } else if (all.chats.isEmpty()) {
                                 item(key = "empty") {
@@ -560,12 +597,7 @@ fun ChatsScreen(
                             }
                             if (query.isBlank() && needsYou.isNotEmpty()) {
                                 item(key = "needs-you") { GroupHeader(stringResource(R.string.chats_needs_you), open = true, count = "${needsYou.size}", onToggle = null) }
-                                itemsIndexed(needsYou, key = { _, it -> "needs:${it.id}" }) { i, summary ->
-                                    if (i > 0) RowDivider(60.dp)
-                                    ChatRow(summary, all.activity[summary.id], onLongClick = { press(summary) }, onClick = { openChat(summary) },
-                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view,
-                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary), place = placeOfRow(summary), placeIcons = view.showComputerIcons)
-                                }
+                                itemsIndexed(needsYou, key = { _, it -> "needs:${it.id}" }) { _, summary -> activeRow(summary) }
                             }
                             // The desktop's agent sidebar as the view menu arranges it: by project (General, then each
                             // folder, in the order arranged here), status, date or none; the recent few, then Show more.
@@ -596,12 +628,9 @@ fun ChatsScreen(
                                         )
                                     }
                                 }
-                                itemsIndexed(if (showAll) g.chats else shown, key = { _, it -> "${g.key}:${it.id}" }) { i, summary ->
-                                    if (i > 0) RowDivider(60.dp)
-                                    if (summary.archived) CompletedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
-                                    else ChatRow(summary, all.activity[summary.id], onLongClick = { press(summary) }, onClick = { openChat(summary) },
-                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view,
-                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary), place = placeOfRow(summary), placeIcons = view.showComputerIcons)
+                                itemsIndexed(if (showAll) g.chats else shown, key = { _, it -> "${g.key}:${it.id}" }) { _, summary ->
+                                    if (summary.archived) ArchivedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
+                                    else activeRow(summary)
                                 }
                                 if (hidden > 0) {
                                     item(key = "more:${g.key}") {
@@ -662,6 +691,7 @@ private fun ComputerPill(
     compact: Boolean,
     onSearch: () -> Unit,
     onComputers: () -> Unit,
+    onPullRequests: () -> Unit,
     /** A place id to show only it, or null for every place. */
     onFilter: (String?) -> Unit,
 ) {
@@ -760,6 +790,12 @@ private fun ComputerPill(
                 modifier = Modifier.testTag("chats.menu.search"),
             )
             DropdownMenuItem(
+                text = { Text(stringResource(R.string.prs_menu)) },
+                leadingIcon = { Icon(androidx.compose.ui.res.painterResource(R.drawable.connector_github), contentDescription = null, modifier = Modifier.size(20.dp), tint = androidx.compose.material3.LocalContentColor.current) },
+                onClick = { close(); onPullRequests() },
+                modifier = Modifier.testTag("chats.menu.pullRequests"),
+            )
+            DropdownMenuItem(
                 text = { Text(stringResource(R.string.chats_computers)) },
                 leadingIcon = { Icon(Icons.Filled.Computer, contentDescription = null) },
                 onClick = { close(); onComputers() },
@@ -835,7 +871,7 @@ private fun ChatActionDialog(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     if (delete) stringResource(R.string.chats_action_delete_body, computer)
-                    else stringResource(R.string.chats_action_complete_body, computer),
+                    else stringResource(R.string.chats_action_archive_body, computer),
                 )
                 TextButton(onClick = onPin, modifier = Modifier.testTag("chats.pin")) {
                     Icon(Icons.Filled.PushPin, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -849,16 +885,25 @@ private fun ChatActionDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(stringResource(if (delete) R.string.chats_delete else R.string.chats_complete), color = if (delete) p.danger else p.accent)
+                Text(stringResource(if (delete) R.string.chats_delete else R.string.chats_archive), color = if (delete) p.danger else p.accent)
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.chats_cancel)) } },
     )
 }
 
+/**
+ * One chat in the list, in the quiet style (#2509, the iPhone's #2513, docs/design-system.md):
+ * our status glyph and the title over the full width, wrapping to a second line (#2417); then one
+ * line of the desktop card's facts: where it runs, an image chat's mark, the provider's mark and
+ * the model, how full the context is while it works, prompts waiting on the phone, and at its end
+ * the PR chip and when it last moved. No preview of the transcript and no Working / Needs you
+ * chip: the glyph says it once. Rows are kept apart by space, never a rule. [hasSubagents] runs
+ * the glyph column's tree line down into the sub-agent rows that follow.
+ */
 @Composable
 internal fun ChatRow(
-    s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0, showPreview: Boolean = true,
+    s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0,
     details: ChatListView = ChatListView.STANDARD,
     /** The state of the PRs the chat names (`pr:sessionList`), once the computer has said. */
     prs: List<PullRequest> = emptyList(),
@@ -867,74 +912,55 @@ internal fun ChatRow(
     /** Where it runs, when the list holds several places (#2108); null says nothing. */
     place: ChatPlace? = null,
     placeIcons: Boolean = true,
+    hasSubagents: Boolean = false,
 ) {
     val p = Nekko.palette
-    val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
+    val model = s.modelId?.takeIf { details.showModel && s.chatType != "image" }
+    val context = if (details.showContext && ChatCard.showsContext(s, activity)) ChatCard.context(s) else null
+    val prChip = details.showPullRequests && (prs.isNotEmpty() || s.prUrls.isNotEmpty())
+    // Each card detail hides only itself: the line stays while any of them shows.
+    val facts = place != null || s.chatType == "image" || model != null || context != null || waiting > 0 || prChip || details.showUpdated
     Row(
         Modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .combinedClickable(role = Role.Button, onLongClickLabel = stringResource(R.string.chats_chat_actions), onLongClick = onLongClick, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = if (hasSubagents) 0.dp else 6.dp)
+            .testTag("chats.row"),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // A glyph column says what the chat is doing before the title is read
-        // (the desktop's StatusIcon, as on the iPhone); the facts sit under the preview as chips.
-        Box(Modifier.padding(top = 2.dp).size(22.dp), contentAlignment = Alignment.Center) {
-            ChatStatusIcon(activity, waiting > 0, s.activeWatchCount)
+        Column(Modifier.width(22.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { ChatStatusIcon(activity, waiting > 0, s.activeWatchCount) }
+            // The tree line down to this chat's sub-agents, in the desktop's tree colour.
+            if (hasSubagents) Box(Modifier.padding(top = 2.dp).width(1.dp).weight(1f).background(p.ink.copy(alpha = 0.32f)))
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            // The desktop card's line: the provider's mark and the model, then how
-            // full the context is while the chat is in progress. An image chat's
-            // badge stands in for the chat model.
-            val model = s.modelId?.takeIf { details.showModel && s.chatType != "image" }
-            val context = if (details.showContext && ChatCard.showsContext(s, activity)) ChatCard.context(s) else null
-            // Readable titles (#2417, the iPhone's #2416): up to two lines and the row's full width,
-            // the time moved down to the model line. With no model line, the time stays beside the
-            // title rather than alone on a line of its own. Spaces and line breaks read as one space.
-            val timeBelow = model != null || context != null
-            val time: @Composable () -> Unit = { Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.testTag("chats.row.time")) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = stringResource(R.string.chats_pinned), tint = p.warning, modifier = Modifier.size(14.dp))
+        Column(Modifier.weight(1f).padding(bottom = if (hasSubagents) 4.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.heightIn(min = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = stringResource(R.string.chats_pinned), tint = p.inkSoft, modifier = Modifier.size(14.dp))
                 Text(
                     plainText(s.title).ifEmpty { stringResource(R.string.chats_new_chat) },
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
                     color = p.ink,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).testTag("chats.row.title"),
                 )
-                if (details.showUpdated && !timeBelow) time()
             }
-            if (s.chatType == "image") Text(stringResource(R.string.image_kind_image), style = MaterialTheme.typography.bodySmall, color = p.accent, modifier = Modifier.testTag("chats.row.image"))
-            if (timeBelow) {
+            if (facts) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    place?.let { PlaceChip(it, placeIcons) }
+                    if (s.chatType == "image") {
+                        val image = stringResource(R.string.image_kind_image)
+                        Icon(Icons.Outlined.Image, contentDescription = image, tint = p.inkSoft, modifier = Modifier.size(14.dp).testTag("chats.row.image"))
+                    }
                     model?.let { ModelFact(it, ChatCard.providerMark(providerKind, it)) }
                     context?.let { ContextFact(it) }
-                    if (details.showUpdated) {
-                        Spacer(Modifier.weight(1f))
-                        time()
-                    }
-                }
-            }
-            if (showPreview && preview.isNotEmpty()) {
-                Text(preview, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            val prChip = details.showPullRequests && (prs.isNotEmpty() || s.prUrls.isNotEmpty())
-            if (activity != null || waiting > 0 || prChip || place != null) {
-                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    when (activity) {
-                        Activity.NEEDS_YOU -> RowChip(stringResource(R.string.chats_needs_you), tone = AgentRows.Tone.WARN)
-                        Activity.RUNNING -> RowChip(stringResource(R.string.chats_working), accent = true)
-                        null -> Unit
-                    }
-                    place?.let { PlaceChip(it, placeIcons) }
                     // Prompts written offline for this chat, still in the outbox.
                     if (waiting > 0) {
                         val waitingDesc = if (waiting == 1) stringResource(R.string.chats_prompts_waiting_one) else stringResource(R.string.chats_prompts_waiting_other, waiting)
                         Row(
-                            Modifier.semantics(mergeDescendants = true) {
-                                contentDescription = waitingDesc
-                            },
+                            Modifier.semantics(mergeDescendants = true) { contentDescription = waitingDesc },
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
@@ -942,14 +968,65 @@ internal fun ChatRow(
                             Text(stringResource(R.string.chats_n_waiting, waiting), style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
                         }
                     }
-                    // The PR chip rides the end of the row: the card's bottom right, as on the desktop.
-                    if (prChip) {
-                        Spacer(Modifier.weight(1f))
-                        RowPrChip(prs, s.prUrls)
-                    }
+                    Spacer(Modifier.weight(1f))
+                    // The PR chip, then the time: the card's bottom right, as on the desktop.
+                    if (prChip) RowPrChip(prs, s.prUrls)
+                    if (details.showUpdated) Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, modifier = Modifier.testTag("chats.row.time"))
                 }
             }
         }
+    }
+}
+
+/**
+ * A sub-agent a chat spawned, one line under it as the desktop sidebar's `SubAgentRow` (#2509,
+ * the iPhone's ChatSubagentRow): the tree (a tee, or a corner for the [last]), our status glyph,
+ * its title, and at the end the model it runs on with its provider's mark. Tap opens its chat.
+ */
+@Composable
+internal fun SubagentRow(s: SessionSummary, activity: Activity?, last: Boolean, providerKind: String?, showModel: Boolean, onClick: () -> Unit) {
+    val p = Nekko.palette
+    val title = plainText(s.title).ifEmpty { stringResource(R.string.chats_subagent) }
+    val model = s.modelId?.takeIf { showModel }
+    val label = if (model != null) stringResource(R.string.chats_subagent_on, title, ChatCard.modelName(model)) else stringResource(R.string.chats_subagent_named, title)
+    val tree = p.ink.copy(alpha = 0.32f)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 40.dp)
+            // Its own height, so the tree column can reach from top to bottom.
+            .height(IntrinsicSize.Min)
+            .clickable(role = Role.Button, onClick = onClick)
+            // The tree hangs from the centre of the chat's glyph column above.
+            .padding(start = 16.dp + 10.5.dp, end = 16.dp)
+            // The tag before clearAndSetSemantics, which would clear one after it.
+            .testTag("chats.subagent")
+            .clearAndSetSemantics { contentDescription = label },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            Modifier.width(12.dp).fillMaxHeight().drawBehind {
+                val x = 0.5.dp.toPx()
+                val mid = size.height / 2
+                val stroke = 1.dp.toPx()
+                if (last) {
+                    // A rounded corner: down to the middle, then right.
+                    val r = 6.dp.toPx()
+                    drawLine(tree, Offset(x, 0f), Offset(x, mid - r), stroke)
+                    drawArc(tree, 180f, -90f, false, topLeft = Offset(x, mid - 2 * r), size = Size(2 * r, 2 * r), style = Stroke(stroke))
+                    drawLine(tree, Offset(x + r, mid), Offset(size.width, mid), stroke)
+                } else {
+                    drawLine(tree, Offset(x, 0f), Offset(x, size.height), stroke)
+                    drawLine(tree, Offset(x, mid), Offset(size.width, mid), stroke)
+                }
+            },
+        )
+        Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.graphicsLayer(scaleX = 0.8f, scaleY = 0.8f)) { ChatStatusIcon(activity, false, s.activeWatchCount) }
+        }
+        Text(title, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        model?.let { ModelFact(it, ChatCard.providerMark(providerKind, it)) }
     }
 }
 
@@ -1271,11 +1348,11 @@ private fun ChatListViewMenu(
                     choice(stringResource(R.string.chats_showcontext), view.showContext) { onChange(view.copy(showContext = !view.showContext)) }
                     choice(stringResource(R.string.chats_showpullrequests), view.showPullRequests) { onChange(view.copy(showPullRequests = !view.showPullRequests)) }
                     choice(stringResource(R.string.chats_showupdated), view.showUpdated) { onChange(view.copy(showUpdated = !view.showUpdated)) }
+                    choice(stringResource(R.string.chats_subagents), view.showSubagents) { onChange(view.copy(showSubagents = !view.showSubagents)) }
                 }
                 ViewPage.SHOW -> {
                     back(stringResource(R.string.chats_show))
-                    choice(stringResource(R.string.chats_previews), view.showPreviews) { onChange(view.copy(showPreviews = !view.showPreviews)) }
-                    choice(stringResource(R.string.chats_completed_chats), view.showCompleted) { onChange(view.copy(showCompleted = !view.showCompleted)) }
+                    choice(stringResource(R.string.chats_archived_chats), view.showArchived) { onChange(view.copy(showArchived = !view.showArchived)) }
                     choice(stringResource(R.string.chats_empty_groups), view.showEmptyGroups) { onChange(view.copy(showEmptyGroups = !view.showEmptyGroups)) }
                     if (places > 1) {
                         choice(stringResource(R.string.chats_group_computer), view.showComputer) { onChange(view.copy(showComputer = !view.showComputer)) }
@@ -1339,12 +1416,13 @@ private fun ReorderGroupsDialog(groups: List<Pair<String, String>>, onDismiss: (
 }
 
 /**
- * A completed chat: struck through and muted behind a check, dated by when it
- * was completed, as the desktop's Show completed list draws it. Tap reads it;
+ * An archived chat: the archive symbol in the faint ink, then the title (no strike-through:
+ * archived is not "done"), dated by when it was archived, as the desktop's Show archived list
+ * draws it. Tap reads it;
  * long-press offers Restore or Delete.
  */
 @Composable
-private fun CompletedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: () -> Unit) {
+private fun ArchivedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: () -> Unit) {
     val p = Nekko.palette
     Row(
         Modifier
@@ -1354,10 +1432,10 @@ private fun CompletedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: ()
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.chats_completed), tint = p.success, modifier = Modifier.size(14.dp))
+        Icon(Icons.Outlined.Archive, contentDescription = stringResource(R.string.chats_archived), tint = p.inkSoft, modifier = Modifier.size(14.dp))
         Text(
             plainText(s.title).ifEmpty { stringResource(R.string.chats_new_chat) },
-            style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.LineThrough),
+            style = MaterialTheme.typography.bodyMedium,
             color = p.inkFaint,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -1428,13 +1506,13 @@ internal fun savedListNote(
     template: String = "Saved list from %1\$s. It updates when %2\$s answers.",
 ): String = savedNote(template, savedAt, computer, now, zone)
 
-/** "Saved copy from 10:42. It updates when Mac answers.": a chat read from the phone's copy (OF-5). */
+/** "Updated last on 10:42": a chat read from the phone's copy (OF-5). */
 internal fun savedCopyNote(
     savedAt: Long,
     computer: String,
     now: Long = System.currentTimeMillis(),
     zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
-    template: String = "Saved copy from %1\$s. It updates when %2\$s answers.",
+    template: String = "Updated last on %1\$s",
 ): String = savedNote(template, savedAt, computer, now, zone)
 
 private fun savedNote(template: String, savedAt: Long, computer: String, now: Long, zone: java.time.ZoneId): String {
@@ -1474,7 +1552,7 @@ private fun PendingNewChatRow(item: OutboxItem, sending: Boolean, onDelete: () -
 @Composable
 private fun groupTitle(key: String, name: String): String = when (key) {
     ChatGroup.GENERAL -> stringResource(R.string.chats_group_general)
-    ChatSection.COMPLETED -> stringResource(R.string.chats_group_completed)
+    ChatSection.ARCHIVED -> stringResource(R.string.chats_group_archived)
     "all" -> stringResource(R.string.chats_group_all)
     "status:input" -> stringResource(R.string.chats_group_input)
     "status:draft" -> stringResource(R.string.chats_group_draft)

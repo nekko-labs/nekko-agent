@@ -27,8 +27,12 @@ export interface ContextItem {
   preview: string;
 }
 
+export type PromptProfileName = 'small' | 'medium' | 'large';
+
 export interface ContextBundle {
   items: ContextItem[];
+  /** Which system prompt profile the next reply uses, and why ("Small: 8k context"). */
+  promptProfile?: { profile: PromptProfileName; reason: string };
   totalTokens: number;
   /** Model context window for the headroom bar. */
   contextWindow?: number;

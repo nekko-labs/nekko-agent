@@ -75,6 +75,15 @@ pub struct Feed {
     pub image_tasks: Vec<ImageTask>,
     #[serde(default)]
     pub image_models: Vec<ImageModel>,
+    /// Seconds a picture or clip, measured on real hardware with the feed's own file.
+    #[serde(default)]
+    pub image_measured: Vec<ImageMeasured>,
+}
+
+/// A list's version, `YYYY-MM-DD.N`, in the order lists were made: the date, then the day's count.
+pub fn feed_version_key(version: &str) -> (String, u32) {
+    let (date, n) = version.split_once('.').unwrap_or((version, "0"));
+    (date.to_string(), n.parse().unwrap_or(0))
 }
 
 /// A picture task: a diffusion model that can do `capability`, at 1024x1024.
@@ -247,6 +256,20 @@ pub struct Measured {
     pub tokens_per_second: f64,
 }
 
+/// How long one picture (or clip) took on real hardware with the feed's own
+/// file, and what was asked for: time grows with the size and the steps.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageMeasured {
+    pub hardware: String,
+    pub model: String,
+    pub quant: String,
+    pub seconds: f64,
+    pub width: u32,
+    pub height: u32,
+    pub steps: u32,
+}
+
 /* ---------------------------------------------------------------- answer */
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -288,6 +311,27 @@ pub struct ImageChoice {
     /// preset): set it when installing, or the load runs out of VRAM.
     pub offload_to_cpu: bool,
     pub fit: Fit,
+    /// How long a picture (or clip) takes, when something measured it. Never estimated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<ImageTime>,
+}
+
+/// Seconds for one picture or clip. `measuredHere` is the median of this
+/// machine's own, at the sizes and steps they were made at; `measured` is one
+/// run on this class of hardware, at the size and steps given.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageTime {
+    pub seconds: f64,
+    pub basis: SpeedBasis,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub samples: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub steps: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -387,11 +431,34 @@ pub struct Choice {
     /// Budget left after loading it (negative when it does not fit).
     pub headroom_bytes: f64,
     pub context_tokens: f64,
+    /// The model's own longest context, when the feed records one.
+    pub max_context_tokens: Option<f64>,
+    /// The longest context (up to the model's own) that still fits the
+    /// budget beside these weights: what the rest of the memory buys.
+    pub fit_context_tokens: f64,
     pub placement: Placement,
     pub fit: Fit,
     pub speed: Option<Speed>,
     /// Slower than the task's minimum.
     pub too_slow: bool,
+    /// Every quant of this model on this machine, best first, so the UI can
+    /// show what each one needs. Empty inside `quants` itself.
+    pub quants: Vec<QuantFit>,
+}
+
+/// One quant of a recommended model: what it needs here and how it fits.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuantFit {
+    pub quant: String,
+    pub download_label: String,
+    /// Every file to download for this quant, as `Choice::files`.
+    pub files: Vec<String>,
+    pub download_bytes: f64,
+    /// Weights + KV cache at the task's context + compute buffers.
+    pub memory_bytes: f64,
+    pub fit_context_tokens: f64,
+    pub fit: Fit,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -479,6 +546,32 @@ pub fn overhead_bytes(g: &Geometry, context: f64) -> f64 {
     let per_token = g.layers.unwrap_or(32.0) * g.head_dim.unwrap_or(128.0) * 4.0;
     OVERHEAD_FLOOR_BYTES + per_token * context.min(GRAPH_CONTEXT_CAP)
 }
+
+/// Granularity of a context that fits: whole thousands of tokens, as people read them.
+const CONTEXT_STEP: f64 = 1024.0;
+
+/// The longest context, at most `cap` tokens, whose weights + KV cache +
+/// compute buffers stay within `budget`. Memory only grows with context, so a
+/// binary search over whole steps finds it.
+pub fn fit_context(weights: f64, model: &Model, budget: f64, cap: f64) -> f64 {
+    let need = |ctx: f64| weights + kv_bytes(&model.kv, ctx) + overhead_bytes(&model.geometry, ctx);
+    let steps = (cap / CONTEXT_STEP).floor();
+    if steps < 1.0 || need(CONTEXT_STEP) > budget {
+        return 0.0;
+    }
+    if need(cap) <= budget {
+        return cap;
+    }
+    let (mut lo, mut hi) = (1.0, steps);
+    while hi - lo > 1.0 {
+        let mid = ((lo + hi) / 2.0).floor();
+        if need(mid * CONTEXT_STEP) <= budget { lo = mid } else { hi = mid }
+    }
+    lo * CONTEXT_STEP
+}
+
+/// With no recorded maximum, a context that fits is counted up to this.
+const UNKNOWN_MAX_CONTEXT: f64 = 131072.0;
 
 /* -------------------------------------------------------------- evaluate */
 
@@ -582,10 +675,18 @@ fn choice(feed: &Feed, task: &Task, model: &Model, quant: &Quant, target: &Targe
         memory_bytes: memory.round(),
         headroom_bytes: (target.budget - memory).round(),
         context_tokens: context,
+        max_context_tokens: model.max_context,
+        fit_context_tokens: fit_context(
+            weights,
+            model,
+            target.budget,
+            model.max_context.unwrap_or(UNKNOWN_MAX_CONTEXT),
+        ),
         placement: target.placement,
         fit,
         speed,
         too_slow,
+        quants: Vec::new(),
     }
 }
 
@@ -649,7 +750,21 @@ fn options(feed: &Feed, task: &Task, target: &Target, local: &Local) -> Vec<Choi
         .filter(|m| !task.projector || m.projector.is_some())
         .filter_map(|m| {
             let all: Vec<Choice> = m.quants.iter().map(|q| choice(feed, task, m, q, target, local)).collect();
-            best_quant(&all).cloned()
+            best_quant(&all).cloned().map(|mut best| {
+                best.quants = all
+                    .iter()
+                    .map(|o| QuantFit {
+                        quant: o.quant.clone(),
+                        download_label: o.download_label.clone(),
+                        files: o.files.clone(),
+                        download_bytes: o.download_bytes,
+                        memory_bytes: o.memory_bytes,
+                        fit_context_tokens: o.fit_context_tokens,
+                        fit: o.fit,
+                    })
+                    .collect();
+                best
+            })
         })
         .collect()
 }
@@ -680,11 +795,13 @@ fn fit_for(memory: f64, budget: f64) -> Fit {
 /// the weights in RAM and brings each stage's into VRAM when it runs, so the
 /// GPU needs the largest file plus the working buffers, and RAM needs them all.
 fn image_choice(
+    feed: &Feed,
     task: &ImageTask,
     model: &ImageModel,
     quant: &ImageQuant,
     target: &Target,
     ram_budget: f64,
+    local: &Local,
 ) -> ImageChoice {
     let companions: f64 = model.companions.iter().map(|c| c.size_bytes).sum();
     let files = quant.size_bytes + companions;
@@ -715,19 +832,52 @@ fn image_choice(
         placement: target.placement,
         offload_to_cpu: offload,
         fit: fit_for(memory, target.budget),
+        time: image_time(feed, target, model, quant, local),
     }
+}
+
+/// This machine's own pictures with the file first, then a run on its class of hardware.
+fn image_time(
+    feed: &Feed,
+    target: &Target,
+    model: &ImageModel,
+    quant: &ImageQuant,
+    local: &Local,
+) -> Option<ImageTime> {
+    if let Some(here) = quant.files.first().and_then(|f| local.speeds.picture_seconds(f, &local.machine)) {
+        return Some(ImageTime {
+            seconds: here.seconds,
+            basis: SpeedBasis::MeasuredHere,
+            samples: Some(here.samples),
+            width: None,
+            height: None,
+            steps: None,
+        });
+    }
+    let class = target.class_id.as_ref()?;
+    let m =
+        feed.image_measured.iter().find(|m| &m.hardware == class && m.model == model.id && m.quant == quant.label)?;
+    Some(ImageTime {
+        seconds: m.seconds,
+        basis: SpeedBasis::Measured,
+        samples: None,
+        width: Some(m.width),
+        height: Some(m.height),
+        steps: Some(m.steps),
+    })
 }
 
 /// Each candidate at the quant to offer, quants being best first: one that
 /// fits with every file resident (comfortably, then tightly) before one that
 /// needs offloading, else the smallest.
-fn image_options(feed: &Feed, task: &ImageTask, target: &Target, ram_budget: f64) -> Vec<ImageChoice> {
+fn image_options(feed: &Feed, task: &ImageTask, target: &Target, ram_budget: f64, local: &Local) -> Vec<ImageChoice> {
     task.candidates
         .iter()
         .filter_map(|id| feed.image_models.iter().find(|m| &m.id == id))
         .filter(|m| m.capabilities.contains(&task.capability))
         .filter_map(|m| {
-            let all: Vec<ImageChoice> = m.quants.iter().map(|q| image_choice(task, m, q, target, ram_budget)).collect();
+            let all: Vec<ImageChoice> =
+                m.quants.iter().map(|q| image_choice(feed, task, m, q, target, ram_budget, local)).collect();
             let at = |fit: Fit, offload: bool| all.iter().find(|o| o.fit == fit && o.offload_to_cpu == offload);
             at(Fit::Fits, false)
                 .or_else(|| at(Fit::Tight, false))
@@ -786,11 +936,11 @@ pub fn recommend(profile: &HardwareProfile, feed: &Feed, local: &LocalSpeeds) ->
         .image_tasks
         .iter()
         .map(|task| {
-            let mut options = image_options(feed, task, main, cpu.budget);
+            let mut options = image_options(feed, task, main, cpu.budget, &local);
             let mut pick = image_pick(&options).filter(|p| !(task.gpu_only && p.placement == Placement::Cpu));
             // A discrete GPU too small for every candidate, even offloading: what runs from system RAM instead.
             if pick.is_none() && main.placement == Placement::Gpu && !task.gpu_only {
-                options = image_options(feed, task, &cpu, cpu.budget);
+                options = image_options(feed, task, &cpu, cpu.budget, &local);
                 pick = image_pick(&options);
             }
             ImageTaskPick {

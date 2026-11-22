@@ -31,9 +31,9 @@ class ChatListLayoutTest {
         assertEquals(1, s[1].doneCount)
     }
 
-    @Test fun `hides completed chats and empty folders`() {
+    @Test fun `hides archived chats and empty folders`() {
         val list = chats("""[{"id":"e","title":"E","updatedAt":8,"workspaceId":"w1","archivedAt":100}]""")
-        val v = ChatListView.STANDARD.copy(showCompleted = false, showEmptyGroups = false)
+        val v = ChatListView.STANDARD.copy(showArchived = false, showEmptyGroups = false)
         assertEquals(emptyList<String>(), ChatSections.make(list, folders, v, emptyMap(), now = now).map { it.name })
         assertEquals(listOf("App", "Empty"), ChatSections.make(list, folders, v.copy(showEmptyGroups = true), emptyMap(), now = now).map { it.name })
     }
@@ -65,14 +65,14 @@ class ChatListLayoutTest {
         val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.STATUS, showEmptyGroups = false)
         val status = ChatSections.make(list, emptyList(), v, mapOf("c" to Activity.NEEDS_YOU, "a" to Activity.RUNNING), now = now, zone = utc)
         // #2107: the iPhone's status groups; stopped chats with no watch and no count from the computer are Done.
-        assertEquals(listOf("Needs input", "Building", "Done", "Completed"), status.map { it.name })
+        assertEquals(listOf("Needs input", "Building", "Done", "Archived"), status.map { it.name })
         assertEquals(listOf(listOf("c"), listOf("a"), listOf("b", "d"), listOf("e")), status.map { s -> s.chats.map { it.id } })
 
         val date = ChatSections.make(list, emptyList(), v.copy(groupBy = ChatListView.GroupBy.DATE), emptyMap(), now = now, zone = utc)
-        assertEquals(listOf("Today", "Yesterday", "Previous 7 days", "Older", "Completed"), date.map { it.name })
+        assertEquals(listOf("Today", "Yesterday", "Previous 7 days", "Older", "Archived"), date.map { it.name })
 
         val none = ChatSections.make(list, emptyList(), v.copy(groupBy = ChatListView.GroupBy.NONE), emptyMap(), now = now)
-        assertEquals(listOf("All chats", "Completed"), none.map { it.name })
+        assertEquals(listOf("All chats", "Archived"), none.map { it.name })
     }
 
     @Test fun `shows up to eight recent chats and always the busy ones`() {
@@ -99,12 +99,12 @@ class ChatListLayoutTest {
     }
 
     @Test fun `saved views keep what is still valid`() {
-        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.DATE, showPreviews = false)
+        val v = ChatListView.STANDARD.copy(groupBy = ChatListView.GroupBy.DATE, showSubagents = false)
         assertEquals(v, ChatListView.parse(v.encoded()))
         val partial = ChatListView.parse("""{"groupBy":"status","sortBy":"created","showCompleted":false}""")
         assertEquals(ChatListView.GroupBy.STATUS, partial.groupBy)
         assertEquals("an unknown sort falls back", ChatListView.SortBy.MANUAL, partial.sortBy)
-        assertFalse(partial.showCompleted)
+        assertFalse(partial.showArchived)
         assertEquals(ChatListView.STANDARD, ChatListView.parse("nope"))
         assertEquals(ChatListView.STANDARD, ChatListView.parse(null))
     }
@@ -152,7 +152,7 @@ class ChatListLayoutTest {
         assertTrue(ChatSection("all", "All chats", emptyList(), 0, 0).isOpen(emptySet()))
     }
 
-    @Test fun `groups by computer, one group per place in its order, each with its own completed chats`() {
+    @Test fun `groups by computer, one group per place in its order, each with its own archived chats`() {
         val list = chats(
             """[{"id":"a","title":"A","updatedAt":5},
                {"id":"b","title":"B","updatedAt":9},
@@ -175,7 +175,7 @@ class ChatListLayoutTest {
 
         // One place only: one list, as Group by none.
         val one = ChatSections.make(list, emptyList(), v, emptyMap(), now = now, places = places.take(1), placeOf = { owners[it.id] })
-        assertEquals(listOf("All chats", "Completed"), one.map { it.name })
+        assertEquals(listOf("All chats", "Archived"), one.map { it.name })
     }
 
     @Test fun `the place on rows is a saved choice, on by default`() {
@@ -188,5 +188,16 @@ class ChatListLayoutTest {
         assertEquals("the phone's colour is never a computer's", 0x5b8defL, ComputerColors.computer(5))
         assertTrue(ChatPlace.isPhoneChat("phone:abc"))
         assertFalse(ChatPlace.isPhoneChat("abc"))
+    }
+
+    @Test fun `sub-agents sit under their parent, oldest first, completed ones left out`() {
+        val raw = Json.parseToJsonElement(
+            """[{"id":"p","title":"Ship it","updatedAt":9},
+               {"id":"k2","title":"Write the notes","updatedAt":8,"createdAt":5,"parentSessionId":"p","modelId":"gpt-5-mini"},
+               {"id":"k1","title":"Run the tests","updatedAt":3,"createdAt":2,"parentSessionId":"p","modelId":"claude-haiku-5-5"},
+               {"id":"k0","title":"Old one","updatedAt":1,"parentSessionId":"p","archivedAt":4}]""",
+        )
+        assertEquals(listOf("p"), SessionSummary.visible(raw).map { it.id })
+        assertEquals(mapOf("p" to listOf("k1", "k2")), SessionSummary.subagents(raw).mapValues { (_, v) -> v.map { it.id } })
     }
 }

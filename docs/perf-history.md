@@ -58,6 +58,53 @@ The next test-only common overlay persists the debug route and original app-owne
 [Run 42926857207](https://github.com/nekko-labs/nekko-agent/actions/runs/42926857207), common `84dc0b80`, same original app SHAs and iPhone 18 Pro/iOS 27.0 (24A434)/Xcode 27.1 (27A9275). Both native test builds succeeded. BEFORE: 357 protocol/request tests passed; UI test 59.943 seconds, two setup failures. AFTER: 389 protocol/request tests passed; UI test 31.421 seconds, one setup failure. **These UI test durations are not Allowed latency. No return time was measured on either leg.** BEFORE stayed busy after the real denial; AFTER queried a still-transparent row immediately after Continue appeared. Neither reached the Settings toggle or activation.
 
 The next distinct common harness adds bounded initial-row and completed-denial predicates with stop-on-failure guards, plus DEBUG-only logs of the real request/refresh await boundaries. These do not replace providers or alter authorization; the timed return region stays byte-identical, with logging cost included in its existing ten seconds. This is a setup/measurement repair, not a measured performance improvement. Native compilation/readiness/return and matched media are unverified. Original failures and the stale-process race hypothesis above are not erased.
+## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
+Area: GPU/memory
+Result: improvement expected; after number pending (measured once merged, see below)
+Conditions: Apple M1 Max (32-core GPU), macOS 27.2, built-in 3456x2234 ProMotion display; dev build (`npm run dev`), app in front and idle with no empty chat open (so no pixel wave). GPU share of Nekko Agent's GPU process from the driver's per-client `accumulatedGPUTime` (`ioreg -c IOAccelerator`), sampled every 2 s.
+
+| Metric | x-plum-dark, smooth fade | terminal theme (no glow) |
+|---|---|---|
+| GPU process, share of the GPU | 13.2-20.0% (steady ~15% over 90 s) | 0.7-5.2% (two 10-13% samples while the theme repainted) |
+
+Why: the selected window's glow (`agent-window-colour`, 24 s each way, forever) changed opacity on every display frame, so the window was recomposited at up to 120 Hz while the app was in front; `steps(48)` changes it about twice a second, in steps under 2% opacity. The after number on x-plum-dark with the stepped glow is still to be measured on the same machine once this lands. Source: #3136.
+
+## Stopping a chat reads cached summaries, not every chat file (#3120, 2026-11-20)
+Area: engine daemon
+Result: improvement (warm); regression on a cold cache
+Conditions: Windows 11 Pro, AMD Ryzen 9 9950X3D (32 logical cores); release `nekko-store` test build; a scratch test (not committed) wrote synthetic chats with one 1 MB text reply each to a temp data dir and timed the old lookup (`SessionStore::list_meta`) and the new one (`SessionStore::summaries`) three rounds in a row, in one process, so the OS file cache was warm after round 0.
+
+| Metric | Before (`list_meta`) | After (`summaries`) |
+|---|---|---|
+| 500 chats, round 0 | 229.7 ms | 1.480 s (cold summary cache) |
+| 500 chats, rounds 1-2 | 199.3 ms, 201.4 ms | 23.2 ms, 22.8 ms |
+| 2000 chats, round 0 | 1.004 s | 5.591 s (cold summary cache) |
+| 2000 chats, rounds 1-2 | 1.023 s, 1.086 s | 119.1 ms, 118.0 ms |
+
+Why: `chat:abort` looked for sub-agent chats by reading and parsing every chat file on each stop, and Archive stops twice. The summaries cache re-reads only changed files, and the chat list fills it when the app starts, so a stop normally takes the warm path; the first stop before any listing pays the cold cost once. Not measured: the felt time of Close or Archive in the running app, or Philip's real chat folder. Source: #3120.
+
+## Worktree list reads worktrees in parallel (#3080, 2026-11-20)
+Area: engine daemon
+Result: improvement
+Conditions: Windows 11 Pro, 32 logical cores; debug `nekkod` test build; the ignored test `list_timing_on_real_repositories` running the Settings > Git management listing over eight real, busy repositories (98 linked worktrees, 76 of them in one repository), read-only (`git worktree list`, `git status` with `GIT_OPTIONAL_LOCKS=0`, `git rev-list --count`), warm file cache, no chat owners; two runs each, alternating, same build.
+
+| Metric | 1 thread (one worktree at a time, as before) | 8 threads |
+|---|---|---|
+| Listing time, 98 worktrees | 15.42 s, 14.34 s | 4.15 s, 4.91 s |
+
+Why: the listing now covers every linked worktree, not only the chat-made ones, and each costs a `git status` and a `git rev-list`; those now run on up to 8 threads. A separate run at 4, 8 and 16 threads gave 5.15 s, 4.39 s / 4.42 s and 3.98 s / 4.62 s, so 8 was kept: past it the disk, not the thread count, sets the pace. Before this change the list showed only the one chat-made worktree on this machine, so there is no like-for-like "old list" time. Manual Remove now reads only the one worktree it removes, and the hourly sweep reads only chat-made ones. Source: #3080 (issue #3078).
+
+## Quitting shuts down agents' simulators (#3001, 2026-11-19)
+Area: engine daemon
+Result: regression (quit time, only while an agent's simulator is booted)
+Conditions: Apple M1 Max, macOS 27.2; debug `nekkod` started with `--config-stdin`, a scratch data dir and no engine, stopped by closing stdin 2 s after ready; time from closing stdin to exit. One simulator the user booted was running in every run. Same build for both rows.
+
+| Metric | No agent simulator booted | One agent simulator booted |
+|---|---|---|
+| Daemon quit time | 1.01 s, 0.92 s | 3.9 s (1 run) |
+
+Why: the daemon now runs `simctl shutdown` for each simulator an agent used before it exits, capped at 4 s; with none to stop it adds nothing beyond one `ps`. Not measured: a release build, an Android emulator, several devices at once (they stop in parallel). Source: #3001.
+
 ## Design canvas paints a drag without re-rendering (#2756, 2026-11-14)
 Area: renderer
 Result: improvement (main-thread work); no effect on frame pacing in this harness

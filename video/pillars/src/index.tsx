@@ -7,7 +7,7 @@
 // not boxes). They are illustrations, not screen recordings; the speed demo
 // replays the measured times from docs/benchmarks (2026-10-30, M5 Max).
 import React from 'react';
-import { AbsoluteFill, Composition, Easing, interpolate, registerRoot, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, Composition, Easing, Img, interpolate, registerRoot, staticFile, useCurrentFrame } from 'remotion';
 import { Check, Cat, Dot, FPS, FRAMES, In, MONO, SANS, THEMES, Th, clamp, fontCss, p, typed, useT } from './kit';
 import { Anywhere } from './anywhere';
 
@@ -379,7 +379,82 @@ function Fleet() {
   );
 }
 
-const SCENES = { local: Local, speed: Speed, privacy: Privacy, fleet: Fleet, anywhere: Anywhere } as const;
+// ─── 06 Photo ───────────────────────────────────────────────────────────────
+// Both pictures are real: FLUX.2 klein 4B on an RTX 3070 (2026-11-17), the
+// first at 1024x1024 in 16 s, the edit of it at 768x768 in 16.5 s.
+const PHOTO_PROMPT = 'A cosy desk at night, a warm lamp, a black cat asleep by the keyboard';
+const EDIT_PROMPT = 'Make it a snowy morning outside the window';
+/** A picture resolving over sampling steps: grain and blur fall away step by step. */
+function Resolving({ src, size, from, steps, dur }: { src: string; size: number; from: number; steps: number; dur: number }) {
+  const t = useT();
+  const f = useCurrentFrame();
+  const step = Math.min(steps, Math.max(0, Math.floor(((f - from) / dur) * steps) + 1));
+  const left = 1 - step / steps; // 1 = pure noise, 0 = finished
+  const settle = p(f, from + (dur * (step - 1)) / steps, from + (dur * (step - 1)) / steps + 6);
+  const noise = f < from ? 1 : Math.max(0, left + (1 / steps) * (1 - settle));
+  return (
+    <div style={{ position: 'relative', width: size, height: size, borderRadius: 12, overflow: 'hidden', background: t.surface2 }}>
+      <Img src={staticFile(src)} style={{ width: size, height: size, display: 'block', filter: `blur(${noise * 22}px) saturate(${1 - noise * 0.6})`, transform: `scale(${1 + noise * 0.08})` }} />
+      <svg width={size} height={size} style={{ position: 'absolute', inset: 0, opacity: noise * 0.9, mixBlendMode: 'overlay' }}>
+        <filter id={`grain-${src}`}><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed={step} /></filter>
+        <rect width="100%" height="100%" filter={`url(#grain-${src})`} />
+      </svg>
+    </div>
+  );
+}
+function Photo() {
+  const t = useT();
+  const f = useCurrentFrame();
+  const STEPS = 4, GEN = 70, GEN_DUR = 52;
+  const step = Math.min(STEPS, Math.max(1, Math.floor(((f - GEN) / GEN_DUR) * STEPS) + 1));
+  const made = f >= GEN + GEN_DUR;
+  const wipe = interpolate(f, [176, 204], [0, 100], { ...clamp, easing: Easing.inOut(Easing.cubic) });
+  return (
+    <>
+      <In at={4} style={{ position: 'absolute', left: 60, top: 52 }}><Label>Create</Label></In>
+      <In at={4}>
+        <AppWindow x={60} y={96} w={600} h={572} title="Photo">
+          {f >= 62 && (
+            <div style={{ position: 'absolute', left: 24, right: 24, top: 24, opacity: p(f, 62, 70) }}>
+              <div style={{ marginLeft: 'auto', width: 'fit-content', maxWidth: 470, background: t.surface2, borderRadius: 14, padding: '10px 16px', fontSize: 19, lineHeight: '27px' }}>{PHOTO_PROMPT}</div>
+              <div style={{ fontSize: 16, color: t.faint, marginTop: 16, display: 'flex', gap: 8 }}>
+                <span>FLUX.2 klein 4B · on this computer</span>
+                <span style={{ fontFamily: MONO, color: made ? t.faint : t.accent }}>{made ? '· 1024 × 1024' : `· step ${step}/${STEPS}`}</span>
+              </div>
+              <div style={{ marginTop: 10 }}><Resolving src="photo/desk-night.png" size={232} from={GEN} steps={STEPS} dur={GEN_DUR} /></div>
+            </div>
+          )}
+          <div style={{ position: 'absolute', left: 20, right: 20, bottom: 20 }}>
+            <Composer text={f > 14 && f < 62 ? typed(f, 14, 56, PHOTO_PROMPT) : ''} placeholder="Describe a picture…" model="FLUX.2 klein 4B · On this computer" caret={f > 14 && f < 62} />
+          </div>
+        </AppWindow>
+      </In>
+
+      <In at={132} style={{ position: 'absolute', left: 710, top: 52 }}><Label>Then edit it</Label></In>
+      <In at={136}>
+        <div style={{ position: 'absolute', left: 710, top: 96, width: 510 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 21, minHeight: 32 }}>
+            <span style={{ color: t.accent, fontWeight: 600 }}>Edit</span>
+            <span>{typed(f, 142, 172, EDIT_PROMPT)}{f < 176 && <span style={{ borderLeft: `2px solid ${t.accent}`, marginLeft: 2 }} />}</span>
+          </div>
+          <div style={{ position: 'relative', width: 440, height: 440, marginTop: 18, borderRadius: 14, overflow: 'hidden', border: `1px solid ${t.line}`, boxShadow: t.shadow }}>
+            <Img src={staticFile('photo/desk-night.png')} style={{ position: 'absolute', inset: 0, width: 440, height: 440 }} />
+            <Img src={staticFile('photo/desk-snow.png')} style={{ position: 'absolute', inset: 0, width: 440, height: 440, clipPath: `inset(0 ${100 - wipe}% 0 0)` }} />
+            {wipe > 0 && wipe < 100 && <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${wipe}%`, width: 2, background: t.accent, boxShadow: `0 0 12px ${t.accent}` }} />}
+          </div>
+        </div>
+      </In>
+      {f >= 208 && (
+        <div style={{ position: 'absolute', left: 710, top: 600, display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 21, lineHeight: '30px', opacity: p(f, 208, 218) }}>
+          <span style={{ marginTop: 6 }}><Check color={t.ok} /></span>
+          <span>Made on your graphics card.<br /><span style={{ color: t.soft }}>Nothing uploaded.</span></span>
+        </div>
+      )}
+    </>
+  );
+}
+
+const SCENES = { local: Local, speed: Speed, privacy: Privacy, fleet: Fleet, anywhere: Anywhere, photo: Photo } as const;
 
 registerRoot(() => (
   <>

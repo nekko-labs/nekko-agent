@@ -7,6 +7,7 @@ struct PermissionChecklistView: View {
     var finish: (() -> Void)?
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var palette
+    @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var phase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var permissions = PermissionChecklist()
@@ -112,12 +113,20 @@ struct PermissionChecklistView: View {
     }
 
     /// Blinks while waiting, cheers on a grant, looks startled at a denial.
-    /// Her face is decoration only; status text is the proof of access.
+    /// His face is decoration only; status text is the proof of access.
     private var mascot: some View {
         TimelineView(.animation(minimumInterval: 0.2, paused: reduceMotion || phase != .active)) { timeline in
             let frame = Int(timeline.date.timeIntervalSinceReferenceDate * 5) % 40
-            PixelCat(happy: mood == .cheer || allDone, shocked: mood == .oops, blink: mood == .idle && !allDone && frame == 14,
-                     fill: palette.surface2, line: palette.ink)
+            let blink = mood == .idle && !allDone && frame == 14
+            // Dark: Nekko's fixed colours (spec/brand/colour-palette.md). Light: he follows the theme.
+            Group {
+                if scheme == .dark {
+                    PixelCat(happy: mood == .cheer || allDone, shocked: mood == .oops, blink: blink)
+                } else {
+                    PixelCat(happy: mood == .cheer || allDone, shocked: mood == .oops, blink: blink,
+                             fill: palette.surface2, line: palette.ink, eyes: palette.ink)
+                }
+            }
                 .frame(width: 56, height: 56)
                 .offset(y: mood == .cheer && !reduceMotion ? -4 : 0)
                 .scaleEffect(mood == .oops && !reduceMotion ? 1.06 : 1)

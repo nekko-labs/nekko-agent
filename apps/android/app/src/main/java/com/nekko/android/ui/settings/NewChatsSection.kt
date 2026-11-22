@@ -49,7 +49,9 @@ import com.nekko.android.data.modelGroups
 import com.nekko.android.ui.components.ComputerIcon
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.SectionHeader
+import com.nekko.android.ui.screens.ProviderGroupTitle
 import com.nekko.android.ui.theme.Nekko
+import com.nekko.protocol.ProviderAccounts
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.CancellationException
 
@@ -121,7 +123,7 @@ internal fun modelDetail(c: ComputersState, pick: ModelPick?): String {
     if (pick == null) return stringResource(R.string.settings_same_as_default)
     val provider = c.providers.firstOrNull { it.id == pick.providerId }
     val name = c.models[pick.providerId]?.firstOrNull { it.id == pick.modelId }?.name ?: pick.modelId
-    return if (provider != null) "$name · ${provider.label}" else name
+    return if (provider != null) "$name · ${ProviderAccounts.shortName(provider)}" else name
 }
 
 @Composable
@@ -165,12 +167,7 @@ private fun ModelDialog(deps: SettingsDeps, c: ComputersState, current: ModelPic
                     !online -> Text(stringResource(R.string.settings_connect_to_choose), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(8.dp))
                     groups.isEmpty() -> Text(stringResource(R.string.settings_no_providers_on), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(8.dp))
                     else -> groups.forEach { g ->
-                        Text(
-                            g.provider.label,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = p.inkFaint,
-                            modifier = Modifier.padding(top = 10.dp, bottom = 2.dp, start = 8.dp),
-                        )
+                        ProviderGroupTitle(g.provider)
                         val list = g.models
                         when {
                             g.error != null -> Text(stringResource(R.string.settings_couldnt_list), style = MaterialTheme.typography.bodySmall, color = p.danger, modifier = Modifier.padding(start = 8.dp))

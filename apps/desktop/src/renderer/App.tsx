@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { navOrder, moveNav, sidebarViewVisible } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
+import { useModelCatalogVersion } from './modelCatalog.js';
 import { startLiveRuns } from './liveRuns.js';
 import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
@@ -16,6 +17,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
 import { RailBackdrop } from './components/RailBackdrop.js';
 import { AboutNekko } from './components/AboutNekko.js';
+import { WhatsNewSheet } from './components/WhatsNewSheet.js';
 import { FeedbackSheet, openFeedback } from './components/FeedbackSheet.js';
 import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
@@ -144,25 +146,28 @@ export function App() {
   // Ctrl/⌘ + Plus/Minus and Ctrl/⌘ + wheel step the text size; Ctrl/⌘+0 resets it.
   useEffect(() => startTextZoom(), []);
 
-  // Agents idle past Settings → Complete idle agents after (a month unless
-  // changed) are completed: the same reversible archive the window's X does.
+  // Agents idle past Settings → Archive idle agents after (a month unless
+  // changed) are archived: the same reversible archive the window's Archive does.
   // Waits for settings and the chat list so the user's choice is the one used.
   const sweepReady = useStore((s) => s.settingsLoaded && !!s.settings && s.sessions.length > 0);
-  const autoCompleteSetting = useStore((s) => s.settings?.autoCompleteAfterDays);
+  const autoArchiveSetting = useStore((s) => s.settings?.autoCompleteAfterDays);
   useEffect(() => {
     if (!sweepReady) return;
-    const sweep = () => void useStore.getState().autoCompleteIdle().catch(() => { /* retried next sweep */ });
+    const sweep = () => void useStore.getState().autoArchiveIdle().catch(() => { /* retried next sweep */ });
     sweep();
     const t = window.setInterval(sweep, 6 * 60 * 60 * 1000);
     return () => window.clearInterval(t);
-  }, [sweepReady, autoCompleteSetting]);
+  }, [sweepReady, autoArchiveSetting]);
 
-  // A background catalog check (Settings → Updates) can land a new provider
-  // model list mid-session: re-list so pickers show it immediately.
-  useEffect(
-    () => window.nekko.onModelsUpdated((e) => void useStore.getState().reloadModels(e.providerId)),
-    [],
-  );
+  // A background catalog check (Settings → Updates), a finished download or a
+  // provider change can land a new model list mid-session: re-list so pickers
+  // show it immediately (modelCatalog.ts).
+  const modelCatalog = useModelCatalogVersion();
+  useEffect(() => {
+    if (!modelCatalog) return;
+    const { activeProviderId, reloadModels } = useStore.getState();
+    if (activeProviderId) void reloadModels(activeProviderId).catch(() => {});
+  }, [modelCatalog]);
 
   useEffect(() => {
     // Restore the saved provider/model before catalog loading chooses a fallback.
@@ -269,6 +274,7 @@ export function App() {
       {/* The window's own title bar, in the desktop shell only. */}
       <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
       <ErrorBoundary label="About"><AboutNekko /></ErrorBoundary>
+      <ErrorBoundary label="What's new"><WhatsNewSheet /></ErrorBoundary>
       <ErrorBoundary label="Feedback"><FeedbackSheet /></ErrorBoundary>
 
       {!settingsLoaded ? (

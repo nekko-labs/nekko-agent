@@ -77,6 +77,13 @@ extension BeyondTests {
         try await m.setServer(["maxLoaded": 3])
         XCTAssertEqual(c.callsTo(MonitorChannels.engineSettings).last, [["maxLoaded": 3]])
         XCTAssertEqual(ModelServerSettings.from(["clientModelSettings": false])?.devicesChoose, false)
+        // Overload protection: on unless the computer says off, and the reserve it keeps is the computer's.
+        XCTAssertNil(m.engine?.server?.overloadGuard, "unset means on")
+        let guarded = ModelServerSettings.from(["overloadGuard": false, "overloadReserveMB": 1024])
+        XCTAssertEqual(guarded?.overloadGuard, false)
+        XCTAssertEqual(guarded?.overloadReserveMB, 1024)
+        try await m.setServer(["overloadGuard": false])
+        XCTAssertEqual(c.callsTo(MonitorChannels.engineSettings).last, [["overloadGuard": false]])
         XCTAssertNil(ModelServerSettings.from(nil), "an older computer sends none")
     }
 

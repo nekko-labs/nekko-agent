@@ -99,7 +99,7 @@ enum NativeFixtureRoute {
         let flags = ["-uiTestPermissionsSettings", "-uiTestNotificationStep", "-uiTestComputerSettingsEvidence", "-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
                      "-uiTestPreviews", "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
                      "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications",
-                     "-uiTestSecurityEvidence", "-uiTestRunSettings", "-uiTestStarAsk"]
+                     "-uiTestSecurityEvidence", "-uiTestRunSettings", "-uiTestStarAsk", "-uiTestQuietReconnectEvidence"]
         return flags.contains { ProcessInfo.processInfo.arguments.contains($0) }
         #else
         return false
@@ -155,6 +155,8 @@ private struct NativeAppContent: View {
             StarAskFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestFirstPromptIntro") {
             FirstPromptIntroFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestQuietReconnectEvidence") {
+            QuietReconnectEvidenceFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestConnectionStrip") {
             ConnectionStripFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") {

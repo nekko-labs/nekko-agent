@@ -4,10 +4,11 @@ import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import { rememberSplashColours } from './splash.js';
 import type { AppSettings, ComputerCatalog, ComputerStatus, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
-import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession } from '@nekko-agent/shared';
+import { AUTO_ARCHIVE_CHOICES, agentsToAutoArchive, autoArchiveDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { setPageZoom, syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
+import { ENGINE_PROVIDER_ID } from './components/engine/localModelShortcuts.js';
 import { putCachedSession } from './sessionCache.js';
 import { autoDismisses, overflowToasts, TOAST_EXIT_MS, TOAST_MS } from './toastQueue.js';
 import { loadLayout, maxIdSeq, pruneLayout, saveLayout } from './workspacePersist.js';
@@ -86,11 +87,12 @@ export function viewEnabled(view: View, settings: AppSettings | null | undefined
  * full-screen takeover on upgrade. A configured provider is the strongest
  * "setup already happened" signal we have, so the wizard auto-opens only on a
  * genuinely fresh install; everyone else can reach it from Settings → Replay
- * setup.
+ * setup. The built-in engine's entry doesn't count: nekkod saves it at every
+ * launch, before this first read, so a fresh install always has it.
  */
 export function shouldAutoOpenOnboarding(settings: AppSettings | null | undefined): boolean {
   if (!settings || settings.onboarding?.completedAt) return false;
-  return (settings.providers?.length ?? 0) === 0;
+  return !settings.providers?.some((p) => p.id !== ENGINE_PROVIDER_ID);
 }
 
 /** A message routed into a chat's composer from another surface (editor comment, design note). */
@@ -105,6 +107,8 @@ export interface Toast {
   id: string;
   kind: 'info' | 'error' | 'success';
   message: string;
+  /** How many times this same message arrived while it showed (absent means once). */
+  count?: number;
   /** Dismissed and playing its exit; removed once that ends. */
   leaving?: boolean;
 }
@@ -175,9 +179,11 @@ reserveIdSeq(wsSeq);
 const newWorkspaceId = () => `ws_${(++wsSeq).toString(36)}`;
 /** Makes toast ids unique even when several arrive in the same millisecond. */
 let toastSeq = 0;
+/** Pending auto-dismiss timers by toast id, so a repeated message can restart its own. */
+const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 interface UiState {
-  completionTipSessionId: string | null;
+  archiveTipSessionId: string | null;
   /** A workflow run to show when the Workflows view opens (a notification click). */
   ciRunnersFocus: boolean;
   workflowFocus: { workflowId: string; runId: string } | null;
@@ -211,6 +217,12 @@ interface UiState {
   settingsError: string | null;
   mascotMood: MascotMood;
   toasts: Toast[];
+  /**
+   * The one-time offer to keep repositories in the folder that already holds
+   * the user's (`suggested`), shown in the chat a folder was just added to.
+   */
+  repoFolderOffer: { sessionId: string; suggested: string } | null;
+  setRepoFolderOffer: (offer: { sessionId: string; suggested: string } | null) => void;
   paletteOpen: boolean;
   /**
    * The project folder new work is filed under. Named for the folder, not for
@@ -375,10 +387,10 @@ interface UiState {
   /** Archive one chat by id (and close any workspace showing it). */
   archiveChat: (sessionId: string) => Promise<void>;
   /**
-   * Complete agents idle past Settings → Complete idle agents after (default
-   * a month). Returns how many it completed. Quiet: one toast for the batch.
+   * Archive agents idle past Settings → Archive idle agents after (default
+   * a month). Returns how many it archived. Quiet: one toast for the batch.
    */
-  autoCompleteIdle: (now?: number) => Promise<number>;
+  autoArchiveIdle: (now?: number) => Promise<number>;
   /** Bring an archived chat back to the workspace list and open it. */
   restoreChat: (sessionId: string) => Promise<void>;
   /** Delete an archived chat for good. */
@@ -393,6 +405,13 @@ interface UiState {
    * with `keepLayout` added to the current layout (a chat just created).
    */
   focusChatOnWall: (sessionId: string, opts?: { keepLayout?: boolean }) => void;
+  /**
+   * A file a chat asked Library to open full screen (a design card's "Open in
+   * Library"), with the chat it came from. Consumed once by Library.
+   */
+  libraryRequest: { path: string; sessionId?: string } | null;
+  /** Go to Library with this file open full screen. */
+  openInLibrary: (path: string, sessionId?: string) => void;
   /** Bring a chat just created into focus: its Chat tab, or its window on the wall. */
   showNewChat: (sessionId: string) => void;
   /**
@@ -599,8 +618,8 @@ export function addCreatedSession(s: Session): void {
   useStore.setState((state) => ({ sessions: [summarizeSession(s), ...state.sessions.filter((x) => x.id !== s.id)] }));
 }
 
-// Reserve the first-completion tip while its persistent seen flag is being saved.
-let completionTipPending = false;
+// Reserve the first-archive tip while its persistent seen flag is being saved.
+let archiveTipPending = false;
 
 /** The faces loaded from the fonts folder, dropped on the next reload. */
 const loadedFontFaces: FontFace[] = [];
@@ -610,7 +629,7 @@ export const textScaleOf = (v: number | undefined): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(150, Math.max(80, Math.round(v))) : 100;
 
 export const useStore = create<UiState>((set, get) => ({
-  completionTipSessionId: null,
+  archiveTipSessionId: null,
   ciRunnersFocus: false,
   workflowFocus: null,
   memoryFocus: null,
@@ -646,6 +665,8 @@ export const useStore = create<UiState>((set, get) => ({
   settingsError: null,
   mascotMood: 'waving',
   toasts: [],
+  repoFolderOffer: null,
+  setRepoFolderOffer: (offer) => set({ repoFolderOffer: offer }),
   claudePlanSheet: false,
   addProviderKind: null,
   paletteOpen: false,
@@ -660,6 +681,8 @@ export const useStore = create<UiState>((set, get) => ({
   findSeed: null,
 
   focusChatOnWall: (sessionId, opts) => set({ focusRequest: { sessionId, keepLayout: opts?.keepLayout }, view: 'command' }),
+  libraryRequest: null,
+  openInLibrary: (path, sessionId) => set({ libraryRequest: { path, sessionId }, view: 'artifacts' }),
   showNewChat: (sessionId) => {
     // The wall is where chats live: a new chat must be the selected window
     // there, not one auto-added behind the current one.
@@ -672,11 +695,19 @@ export const useStore = create<UiState>((set, get) => ({
     set({ activeProjectId: id });
   },
   pushToast: (kind, message) => {
-    const id = `t_${Date.now().toString(36)}_${(toastSeq++).toString(36)}`;
-    set((s) => ({ toasts: [...s.toasts, { id, kind, message }] }));
+    // The same message again folds into the one already showing: it moves to
+    // the newest spot with a count instead of stacking a copy.
+    const same = get().toasts.find((t) => t.kind === kind && t.message === message && !t.leaving);
+    const id = same?.id ?? `t_${Date.now().toString(36)}_${(toastSeq++).toString(36)}`;
+    const toast: Toast = same ? { ...same, count: (same.count ?? 1) + 1 } : { id, kind, message };
+    set((s) => ({ toasts: [...s.toasts.filter((t) => t.id !== id), toast] }));
     // At most a few on screen: older ones leave as a new one arrives.
     for (const old of overflowToasts(get().toasts)) get().dismissToast(old);
-    if (autoDismisses(kind)) setTimeout(() => get().dismissToast(id), TOAST_MS);
+    if (autoDismisses(kind)) {
+      // A repeat restarts the timeout, so it stays 5 s from the latest arrival.
+      clearTimeout(toastTimers.get(id));
+      toastTimers.set(id, setTimeout(() => { toastTimers.delete(id); get().dismissToast(id); }, TOAST_MS));
+    }
   },
   dismissToast: (id) => {
     if (!get().toasts.some((t) => t.id === id && !t.leaving)) return;
@@ -874,6 +905,8 @@ export const useStore = create<UiState>((set, get) => ({
   reloadModels: async (providerId) => {
     if (get().activeProviderId !== providerId) return;
     const models = await window.nekko.listModels(providerId);
+    // An empty list reads as a failed listing: keep what is shown rather than unset the model.
+    if (!models.length || get().activeProviderId !== providerId) return;
     set({ models });
     // Same rule as selectProvider: a model the refreshed catalog dropped is
     // unset rather than left pointing at an id that will 400.
@@ -1267,8 +1300,8 @@ export const useStore = create<UiState>((set, get) => ({
     } catch { /* nothing running */ }
     try {
       const saved = await window.nekko.setSessionOptions(sessionId, { archivedAt: Date.now() });
-      if (!saved || !isArchived(saved)) throw new Error('The engine did not save completion. Restart with an updated engine and try again.');
-      // Only close the workspace once the engine confirms completion was saved.
+      if (!saved || !isArchived(saved)) throw new Error('The engine did not save the archive. Restart with an updated engine and try again.');
+      // Only close the workspace once the engine confirms the archive was saved.
       set((s) => {
         const workspaces = s.workspaces
           .filter((w) => !(w.anchor.kind === 'chat' && w.anchor.refId === sessionId))
@@ -1284,32 +1317,32 @@ export const useStore = create<UiState>((set, get) => ({
           activeSessionId: s.activeSessionId === sessionId ? null : s.activeSessionId,
         };
       });
-      if (!completionTipPending && get().settings?.showTips !== false && !get().settings?.completionTipSeen) {
-        completionTipPending = true;
+      if (!archiveTipPending && get().settings?.showTips !== false && !get().settings?.completionTipSeen) {
+        archiveTipPending = true;
         try {
           const settings = await window.nekko.updateSettings({ completionTipSeen: true });
-          set({ settings, completionTipSessionId: sessionId });
+          set({ settings, archiveTipSessionId: sessionId });
         } catch { /* Leave the tip eligible if its seen state could not be saved. */ }
-        finally { completionTipPending = false; }
+        finally { archiveTipPending = false; }
       }
-      get().pushToast('success', 'Chat completed. Find it under Show completed in the left panel until you delete it.');
+      get().pushToast('success', 'Chat archived. Find it under Show archived in the left panel until you delete it.');
     } catch (e) {
-      get().pushToast('error', `Could not complete the chat: ${(e as Error).message}`);
+      get().pushToast('error', `Could not archive the chat: ${(e as Error).message}`);
     }
     await get().refreshSessions();
   },
 
-  autoCompleteIdle: async (now = Date.now()) => {
-    const days = autoCompleteDays(get().settings?.autoCompleteAfterDays);
+  autoArchiveIdle: async (now = Date.now()) => {
+    const days = autoArchiveDays(get().settings?.autoCompleteAfterDays);
     if (!days) return 0;
     const [running, pending] = await Promise.all([
       window.nekko.runningSessions().catch(() => null),
       window.nekko.pendingInput().catch(() => null),
     ]);
-    // Without knowing what is running, completing anything could stop live work.
+    // Without knowing what is running, archiving anything could stop live work.
     if (!running || !pending) return 0;
     const busy = new Set([...running, ...Object.keys(pending)]);
-    const ids = agentsToAutoComplete(get().sessions, days, now, (id) => busy.has(id));
+    const ids = agentsToAutoArchive(get().sessions, days, now, (id) => busy.has(id));
     const done: string[] = [];
     for (const id of ids) {
       try {
@@ -1334,8 +1367,8 @@ export const useStore = create<UiState>((set, get) => ({
         activeSessionId: s.activeSessionId && gone.has(s.activeSessionId) ? null : s.activeSessionId,
       };
     });
-    const label = AUTO_COMPLETE_CHOICES.find((c) => c.days === days)?.label ?? `${days} days`;
-    get().pushToast('info', `Completed ${done.length} agent${done.length === 1 ? '' : 's'} idle for over ${label}. Find ${done.length === 1 ? 'it' : 'them'} under Show completed.`);
+    const label = AUTO_ARCHIVE_CHOICES.find((c) => c.days === days)?.label ?? `${days} days`;
+    get().pushToast('info', `Archived ${done.length} agent${done.length === 1 ? '' : 's'} idle for over ${label}. Find ${done.length === 1 ? 'it' : 'them'} under Show archived.`);
     await get().refreshSessions();
     return done.length;
   },

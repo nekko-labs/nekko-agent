@@ -29,7 +29,7 @@ const card = (status: 'working' | 'done' | 'idle' | 'input' | 'error' = 'working
   <WorkspaceCard workspace={null} session={chat} terminal={null} status={status} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} />,
 );
 
-describe('workspace card completion control', () => {
+describe('workspace card archive control', () => {
   it('groups row actions outside timestamp space with hover, keyboard and touch access', () => {
     const html = card('idle', { ...session, lastReplyAt: -60_000 } as SessionSummary);
     expect(html).toContain('agent-chip-actions');
@@ -40,13 +40,14 @@ describe('workspace card completion control', () => {
     expect(css).toContain('@media (hover: none), (pointer: coarse)');
   });
 
-  it('shows an X for completion, keeping the Complete name and retention title', () => {
+  it('shows the archive glyph, the Archive name and the retention title', () => {
     const html = card();
-    expect(html).toContain('aria-label="Complete Chat"');
-    expect(html).toContain('title="Complete this chat (kept until you delete it)"');
-    // The status may be a done check, but the action must remain an X.
-    const action = html.match(/<button[^>]*aria-label="Complete Chat"[^]*?<\/button>/)?.[0] ?? '';
-    expect(action).toContain('M18 6 6 18M6 6l12 12');
+    expect(html).toContain('aria-label="Archive Chat"');
+    expect(html).toContain('title="Archive this chat (kept until you delete it)"');
+    // The status may be a done check, but the action is the archive glyph: never an X or a check (#3021).
+    const action = html.match(/<button[^>]*aria-label="Archive Chat"[^]*?<\/button>/)?.[0] ?? '';
+    expect(action).toContain('data-gf-icon="archive"');
+    expect(action).not.toContain('M18 6 6 18M6 6l12 12');
     expect(action).not.toContain('M20 6 9 17l-5-5');
   });
 
@@ -148,6 +149,19 @@ describe('workspace card model line and attention', () => {
     }
   });
 
+  it('names the computer a synced chat belongs to, and this one on the rest, once another computer has a chat here (#3143)', () => {
+    const copy = { ...session, id: 's2', modelId: 'claude-opus-5-5', home: { deviceId: 'dev-laptop', device: 'Laptop' } } as SessionSummary;
+    const before = (state as { sessions?: SessionSummary[] }).sessions;
+    (state as { sessions?: SessionSummary[] }).sessions = [session as SessionSummary, copy];
+    try {
+      expect(render({ session: copy })).toMatch(/data-computer-chip="cloud:dev-laptop"[^>]*>Laptop</);
+      expect(render()).toMatch(/data-computer-chip="here"[^>]*>This (Mac|PC|computer)</);
+      expect(render({ session: copy, showComputer: false })).not.toContain('data-computer-chip');
+    } finally {
+      (state as { sessions?: SessionSummary[] }).sessions = before;
+    }
+  });
+
   it('marks only the selected chat for its background, independently of status', () => {
     for (const patch of [{}, { status: 'input' as const }, { status: 'error' as const }, { isActive: true }]) {
       const html = render(patch);
@@ -157,7 +171,8 @@ describe('workspace card model line and attention', () => {
       expect(html).not.toContain('border-color:');
     }
     expect(render({ status: 'input' })).toContain('var(--attention)');
-    expect(render({ isActive: true })).toContain('font-medium text-ink');
+    expect(render({ isActive: true })).toContain('font-semibold text-ink');
+    expect(render({ isActive: false })).toContain('font-semibold text-ink');
   });
 });
 
@@ -169,7 +184,7 @@ describe('workspace card rename', () => {
       <WorkspaceCard workspace={null} session={session} terminal={null} status={undefined} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} onRenameStart={() => {}} onRename={() => {}} />,
     );
     expect(chat).toContain('aria-label="Rename Chat"');
-    expect(chat.indexOf('aria-label="Rename Chat"')).toBeLessThan(chat.indexOf('aria-label="Complete Chat"'));
+    expect(chat.indexOf('aria-label="Rename Chat"')).toBeLessThan(chat.indexOf('aria-label="Archive Chat"'));
     const shell = renderToStaticMarkup(
       <WorkspaceCard workspace={null} session={null} terminal={terminal} status={undefined} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} onRenameStart={() => {}} onRename={() => {}} />,
     );
@@ -262,7 +277,7 @@ describe('independent card details', () => {
         expect(render()).toContain(marker);
         const html = render({ [key]: false });
         expect(html).not.toContain(marker);
-        expect(html).toContain('Complete Chat');
+        expect(html).toContain('Archive Chat');
         for (const [other, present] of Object.entries(facts)) if (key !== other) expect(html).toContain(present);
       }
       const titleOnly = render({ showModel: false, showContext: false, showGit: false, showSubagents: false });

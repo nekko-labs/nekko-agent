@@ -9,15 +9,15 @@ before you wait through the load. This is what the Models page shows you and why
 
 Open **Photo** to make pictures from a prompt. If you do not have a picture model yet, choose one of the models picked for your computer and press **Download and set up**. Nekko handles the model and its supporting files; they are not separate models you need to choose yourself. The image engine is also installed when needed. Downloads are shared with **Models → Downloads**, where you can check progress or cancel.
 
-You can also find **Create pictures** and **Edit photos** recommendations in Models, or filter the model library to **Pictures**. Open a downloaded model to see its setup checklist: model, supporting files and image engine. **Finish photo setup** installs missing parts. “Ready” requires both supporting files and the engine; a custom model without a known file set remains an advanced, unverified setup. A model that only edits is labeled accordingly.
+You can also find **Create pictures** and **Edit photos** recommendations in Models, or filter the model library to **Pictures**. Pictures and Video list the models Nekko has set up, which download with their supporting files and start. A search can find others: they wait behind **Show more from Hugging Face**, limited to well-known publishers, and may need extra files or not start. Open a downloaded model to see its setup checklist: model, supporting files and image engine. **Finish photo setup** installs missing parts. “Ready” requires both supporting files and the engine; a custom model without a known file set remains an advanced, unverified setup. A model that only edits is labeled accordingly.
 
-In a Photo chat, pick a model and a **Shape**: Square, Landscape, Portrait, Wide or Tall. Existing custom sizes stay unchanged. **Advanced** contains Steps, Prompt guidance (CFG) and Seed, with a short explanation and **Restore model defaults**. You do not need to adjust these to begin.
+A new Photo chat opens on a message box with **Model**, **Shape** and **Advanced** in its bottom bar. Shapes are named for where the picture goes: Square for icons and profile pictures, Wide (16:9) for YouTube thumbnails and backgrounds, Tall (9:16) for phone wallpapers and stories, Landscape (4:3) for photos and slides, and Portrait (3:4) for posters and prints. Existing custom sizes stay unchanged. With no picture model yet, the box walks you through three steps first: choose a model, download it, then describe your picture. **Advanced** contains Steps, Prompt guidance (CFG) and Seed, with a short explanation and **Restore model defaults**. You do not need to adjust these to begin.
 
 To edit, attach, paste or drop a photo and describe the change, or press **Edit** under a picture in the chat. Nekko offers an edit-capable model if the current model cannot edit. The source stays on the user message; the reply is a new image, not an overwrite. Model output may change details, so review it before relying on precise edits. Masks and selective retouching are not offered.
 
 On the iPhone, an image chat edits the same way: **+ → Photos to edit** (or Paste image), then describe the change, or tap **Edit** under a made picture (not under a clip). Up to four photos, scaled to 1,536 px on the long side. The edit runs on the computer and needs it online; if the chat's model can't edit photos, the computer says so in the chat.
 
-Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. Memory-fit estimates are not measured speed or output-quality guarantees.
+Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. After you have made three pictures with a model, Models shows how long one takes on your computer ("25 s a picture here"): the median of your recent ones, at the sizes you used. Memory-fit estimates are not measured speed or output-quality guarantees.
 
 ### Short video clips (experimental)
 
@@ -25,7 +25,29 @@ Nekko can make short clips on your computer with **Wan 2.2 TI2V 5B**. In **Model
 
 Choose it as the model in a Photo chat and describe the clip. Attach a photo to use it as the first frame. A clip is about two seconds (33 frames at 16 frames a second) in your chat's shape, or the photo's, at about 832×480. It appears in the chat as an animated picture, with its length beside it. The progress line shows the sampling steps, and **Stop** cancels the clip on the engine.
 
-This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) can be listed under **Models → Video** but are not supported yet.
+The agent in a chat on this computer can start a clip too (not in incognito or offline chats). It answers at once and the chat is free while the clip is made; when it is ready, the chat wakes with where the clip was saved, and the agent carries on. Stopping the chat, or cancelling the clip's watch, stops the clip.
+
+With **OpenRouter** as a provider, the agent can also make a clip with a cloud video model such as Veo, on your OpenRouter account. Before anything starts, Nekko asks you to pick the length, whether it has sound, and the resolution, with the price of each choice (the shortest, silent, lowest-resolution clip is suggested), then asks you to confirm the total, even in YOLO. A cloud clip cannot be stopped once it has started: stopping the chat stops the waiting, but the clip is still made, charged and saved. Its cost counts in the **Budget** monitor.
+
+### Vector graphics (SVG)
+
+For a logo, an icon or a flat illustration that has to scale or be edited, ask the agent for an SVG. There are three ways, and **Settings → Agents → Pictures** shows which you have under **Vector graphics (SVG)**:
+
+- **Recraft through OpenRouter (recommended).** With OpenRouter as a model provider, Nekko uses Recraft's vector model, the best there is for this: clean shapes you can edit. It asks first with its price (about $0.08 a picture), on your OpenRouter account.
+- **Traced on this computer (free).** Without OpenRouter, Nekko makes a flat-style picture with your local picture model and traces it into an SVG. Good enough for simple flat art; cruder than a real vector, and heavy on detailed pictures. The result says it is a trace.
+- **Written by the agent.** For a simple icon or a diagram, the agent can write the SVG code itself, with no picture model at all.
+
+Whichever way it comes, the SVG is checked first: scripts, event handlers and links to other sites are removed. The chat shows a preview, and the agent gets the SVG code. To use it in a site, ask the agent to save it in the project (for example `assets/logo.svg`) and reference it like any image, `<img src="assets/logo.svg" alt="…">`, or to paste the code inline so you can change its colours with CSS.
+
+### Pictures from any chat
+
+When your computer has a picture model ready, the agent in any chat on this computer can make and change pictures with it: ask for an illustration, an icon or a mock-up while you work. The picture appears in the chat and the agent can look at it to check the result. Ask it to save the picture in the project (for example `assets/hero.png`) and it saves a new file, asking first in the same way as for any other file it writes. Nothing leaves your computer and making a picture asks nothing.
+
+The agent uses the chat's picture model if you chose one, then the one in **Settings → Agents → Pictures** (Automatic by default), otherwise the first ready one that can do the job. Only one picture or clip is made at a time on your computer, so a second one waits. When a picture model has to push the chat's own model out of memory, it is unloaded again once the picture is done, and the chat's model loads again for the next reply. Sandbox chats do not have these tools.
+
+If you have added **OpenRouter** as a provider, the agent can also use its picture models (for example Nano Banana or FLUX): they are on your OpenRouter account and paid from your OpenRouter credit, not by Nekko. The agent uses one only when it is named: ask the agent for that model (the Settings picture list shows only this computer's models for now). Every paid picture asks first with its price, even in YOLO; approving allows paid pictures in that chat up to $1.00, after which it asks again. The prompt, and any picture being changed, is sent to OpenRouter and the model's provider. Offline and Local only chats never use them. What they cost (OpenRouter's own figure) counts in the **Budget** monitor's actual spend, with a **Paid pictures** line when there were some in the range.
+
+In a **Claude Agent** chat (Claude Code), the agent gets the same tools when Claude Code runs on an Anthropic API key or a cloud account: it sees the picture, and Nekko keeps the file in its own data folder and tells the agent where, so Claude Code can copy it into the project with its own tools. On a **Claude plan** these tools stay off for now: Anthropic has not yet approved Nekko's tools inside Claude Code on a plan. Until it does, make pictures in a Photo chat or in a chat on another model (a local model, ChatGPT, Gemini or OpenRouter). If you have Anthropic's own written approval, **Settings → Agents → Claude plan features** turns them on for your install.
 
 ## Your first local model
 
@@ -68,18 +90,23 @@ Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`
 the engine before it starts. If an engine still dies for a missing DLL, the error says so
 and links Microsoft's 25 MB redistributable.
 
-**Best for this machine.** The Models page opens on a pick per task (chat, coding, a
+**System models** is a separate section above the local library, even before you download a chat model. It holds the on-device speech engines for dictation. Selecting a speech engine here does not change your default chat model.
+
+**On this machine, or Find new models.** Under **Models**, the switch picks between the models you have and getting a new one from Hugging Face. Each installed row shows what it does, the parameter count when known, the disk size, and whether it fits on your GPU. A failed load shows a warning and its explanation. Use the **star** to put a model in your chat picker’s favorites, or the **check** to make a chat or vision model the default for new chats. The **trash** deletes files managed by Nekko that the engine can remove; files borrowed from another app stay untouched. When a family has more than one variant, choose the family and use the controls on the exact variant. Select a model for GPU and context details. Models currently in memory appear above the library under **Loaded models**. The agent server (for the CLI and MCP) is in **Settings > Server**.
+
+**Best for this machine.** Find new models opens on a pick per task (chat, coding, a
 small fast model for routing, embeddings, vision) made for this machine's GPU and memory.
-Each pick says what it costs before you download it: the memory it takes out of what the
-machine has for models, the download size, and the speed to expect at the start of a
-conversation. A speed with no `~` was measured with that file on that kind of hardware, a
+Each pick says what it costs before you download it: its parameters, the memory it takes out
+of what the machine has for models (a bar shows the weights and the context separately), the
+download size, how much context fits in what is left, and the speed to expect at the start
+of a conversation. **Quants** lists every build of that model with the same figures, so you
+can trade a little quality for a longer context, or the other way round. A speed with no `~` was measured with that file on that kind of hardware, a
 `~` speed is estimated from the hardware's memory bandwidth, and "rough" means the estimate
 was calibrated on a different kind of GPU. Once you have used a model, "here" marks the speed
 your own replies ran at (the median of the last 20), which then also decides whether it is fast
 enough to stay the pick. A GPU we have no figures for gets no speed rather than a guess. When nothing fits that is fast enough for a task, the pick is the fastest
 that fits and says so. The list comes with the app and works offline; **Check this
-machine again** re-reads the hardware after a change. Once you have models the block folds
-to one line. When a new GPU, or a newer version of the list, puts a better model within reach
+machine again** re-reads the hardware after a change. When a new GPU, or a newer version of the list, puts a better model within reach
 than the one you have for a task, a card above it says so ("A better coding model now fits
 your 16 GB GPU") with the model it would replace; **Not now** puts it away until the next
 change.
@@ -112,6 +139,15 @@ that says so.
 
 A paused background automation keeps no request open, so its model counts as idle: it
 goes on the idle timer, or sooner when a chat of yours needs the room.
+
+**From the Local models monitor.** The **Local models** monitor in the Monitors panel lists
+what is in memory, picture models included, each with **Unload** and **Settings**, and
+**Unload all** when more than one is loaded. Below that it offers up to four **Starred** and
+three **Recent** models that are not loaded, each with **Load** and **Settings**. Star a model
+with the star beside its name, here or in the model picker. Recent is the models this app
+saw in memory and the models your local chats used, newest first. **Load** uses the model's
+saved settings, or the recommended ones when it has none, and starts the engine if it is
+stopped.
 
 **Configuring a load.** A model's drawer leads with a **memory meter**: graphics memory
 (VRAM) and system memory (RAM) as two bars, each split into other apps, this model (its
@@ -208,6 +244,11 @@ that: `lms server start` and `lms server stop` are a real lifecycle, and `lms lo
 carries the context length and GPU share. It publishes no layer geometry anywhere, so
 its projections are partial (see below). Driving it needs the CLI on the same machine as
 the server, so a remote LM Studio can be read but not controlled.
+
+Nekko Agent never opens LM Studio just because you looked at it. When LM Studio is
+closed, its card on the Models page says so and offers **Open and test**, which starts
+its server and checks the connection. The only time Nekko Agent opens it by itself is
+when you send a message to one of its models while it is closed.
 
 **vLLM** is deliberately connect-existing only. It serves one model per process with
 everything fixed by the launch command, and it is Linux plus NVIDIA plus Python in

@@ -69,7 +69,7 @@ data class UsagePlace(
         fun computer(id: String, name: String, summary: UsageSummary?, providers: List<PublicProvider>, limits: Map<String, ProviderLimits>, readAt: Long?) =
             UsagePlace(
                 id = id, kind = Kind.COMPUTER, name = name, online = true, summary = summary, readAt = readAt,
-                plans = providers.filter { it.enabled }.mapNotNull { p -> limits[p.id]?.let { Plan(p.id, p.label, it) } },
+                plans = providers.filter { it.enabled }.mapNotNull { p -> limits[p.id]?.let { Plan(p.id, ProviderAccounts.shortName(p), it) } },
             )
     }
 }

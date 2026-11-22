@@ -44,6 +44,8 @@ object Channels {
     const val CHAT_GENERATE_IMAGE = "chat:generateImage"
     const val SESSION_PHOTO = "session:photo"
     const val CHAT_SEND = "chat:send"
+    /** A clip from the phone in pieces (#2777): (chatId, uploadId, name, offset, total, base64 chunk). */
+    const val ATTACHMENT_UPLOAD = "attachment:upload"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
     /** Stop the reply and start the queued prompt at an index. */
@@ -98,6 +100,8 @@ object Channels {
     const val CONTEXT_PREVIEW = "context:preview"
     /** A chat's durable `agent_watch`es ([AgentWatch]), for the watch rows' live chips. */
     const val SESSION_WATCHES = "session:watches"
+    /** Agent class: cancels one watch of one chat (a clip's Cancel); the chat's Stop ends them all. */
+    const val SESSION_CANCEL_WATCH = "session:cancelWatch"
     /** Agent class without a proof: unloading frees memory, and the next reply loads the model again. */
     const val MODEL_UNLOAD = "model:unload"
     const val MODEL_LOAD = "model:load"
@@ -150,7 +154,7 @@ object Channels {
         ENGINE_MODELS, CHAT_GENERATE_IMAGE, SESSION_PHOTO, SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, ACTIVITY_STATE, MACHINE_SUMMARY, SKILLS_RUNNABLE, TOOLS_LIST, CHANGES_LIST, AUDIT_READ, MONITOR_SUMMARY,
-        SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, SESSION_WATCHES, MODEL_UNLOAD,
+        SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, SESSION_WATCHES, SESSION_CANCEL_WATCH, MODEL_UNLOAD,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
         FILES_LIST, FILES_SEARCH, FILES_READ, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, LOGS_LIST, LOGS_READ, ARTIFACT_READ, PREVIEW_FETCH,
         PROVIDERS_SEAL_KEY, PROVIDERS_SAVE_SEALED, PROVIDERS_SET_ENABLED,
@@ -242,6 +246,8 @@ data class ChatMessage(
     val interrupted: Boolean = false,
     /** The computer's persisted measurements for the turn this reply ended; null when it recorded none. */
     val turnStats: TurnStats? = null,
+    /** A picture an image chat made (`generated`), for Edit under it (#2230). */
+    val generated: GeneratedPicture? = null,
 ) {
     val imageCount: Int get() = images.size
 
@@ -263,6 +269,7 @@ data class ChatMessage(
                 toolResult = ToolResult.from(o["toolResult"]),
                 interrupted = o.bool("interrupted"),
                 turnStats = TurnStats.from(o["turnStats"]),
+                generated = if (o.str("role") == "assistant") GeneratedPicture.from(o["generated"]) else null,
             )
         }
     }
@@ -300,6 +307,10 @@ data class Session(
     val disabledTools: List<String> = emptyList(),
     /** MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in this chat (decision 0054). */
     val allowedMcpTools: List<String> = emptyList(),
+    /** Recipients this chat has written to through an MCP tool (decision 0063): writing to one again does not ask. */
+    val knownRecipients: List<String> = emptyList(),
+    /** The agent's plan (`update_plan`), for the plan sheet over the composer (#2115). */
+    val agentPlan: List<PlanStep> = emptyList(),
 ) {
     /** Whether this chat can hand a follow-up to a sub-agent (`canOfferSubagent` in shared/orchestration.ts). */
     fun canOfferSubagent(strategy: String?): Boolean =
@@ -340,6 +351,8 @@ data class Session(
                 executionMode = o.str("executionMode"),
                 disabledTools = o["disabledTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 allowedMcpTools = o["allowedMcpTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
+                knownRecipients = o["knownRecipients"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
+                agentPlan = PlanStep.list(o["agentPlan"]),
             )
         }
     }
@@ -359,7 +372,7 @@ data class SessionSummary(
     val providerId: String? = null,
     /** The project folder the chat belongs to (`workspace:list` id); null for General. */
     val workspaceId: String? = null,
-    /** When the chat was completed (the desktop's archive); null while it is active. */
+    /** When the chat was archived; null while it is active. */
     val archivedAt: Long? = null,
     /** Manual position from the desktop sidebar's drag order; null when never dragged. */
     val order: Double? = null,
@@ -378,8 +391,10 @@ data class SessionSummary(
     val running: Boolean = false,
     /** What the chat's latest telling tool call says it is doing (`phase`: building, verifying, shipping…). */
     val phase: String? = null,
+    /** When it was made (ms), when the computer says; orders a chat's sub-agents oldest first. */
+    val createdAt: Long? = null,
 ) {
-    /** Real, top-level chats, active or completed: what the phone's list shows. */
+    /** Real, top-level chats, active or archived: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
 
     companion object {
@@ -410,6 +425,7 @@ data class SessionSummary(
                 exchangeCount = o.long("exchangeCount")?.takeIf { it >= 0 },
                 running = o["activeRun"].let { it != null && it !is JsonNull },
                 phase = o.str("phase"),
+                createdAt = o.long("createdAt"),
                 contextUsed = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
                 contextWindow = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )
@@ -422,6 +438,16 @@ data class SessionSummary(
         /** Every top-level chat, completed ones included, newest first. */
         fun visible(list: JsonElement?): List<SessionSummary> =
             list.arr()?.mapNotNull { from(it) }?.filter { it.isVisible }?.sortedByDescending { it.updatedAt } ?: emptyList()
+
+        /**
+         * The sub-agents each chat spawned and hasn't completed, oldest first, by their parent's id:
+         * the rows under a chat in the list (#2509, the iPhone's `subagents`, the desktop sidebar's
+         * `childrenOf`). From the same `sessions:summaries` answer [visible] reads.
+         */
+        fun subagents(list: JsonElement?): Map<String, List<SessionSummary>> =
+            list.arr()?.mapNotNull { from(it) }?.filter { !it.archived && it.parentSessionId != null }
+                ?.groupBy { it.parentSessionId!! }
+                ?.mapValues { (_, kids) -> kids.sortedBy { it.createdAt ?: it.updatedAt } } ?: emptyMap()
     }
 }
 
@@ -436,8 +462,8 @@ data class ChatGroup(
     val name: String,
     /** Active chats: dragged ones in their manual order first, then most recent. */
     val active: List<SessionSummary>,
-    /** Completed chats, most recently completed first. */
-    val completed: List<SessionSummary>,
+    /** Archived chats, most recently archived first. */
+    val archived: List<SessionSummary>,
 ) {
     companion object {
         const val GENERAL = "__none"
@@ -457,25 +483,69 @@ data class ChatGroup(
                         .thenBy { it.order ?: 0.0 }
                         .thenByDescending { it.updatedAt },
                 )
-                val completed = all.filter { it.archived }.sortedByDescending { it.archivedAt ?: 0L }
-                return ChatGroup(key, name, active, completed)
+                val archived = all.filter { it.archived }.sortedByDescending { it.archivedAt ?: 0L }
+                return ChatGroup(key, name, active, archived)
             }
             val general = group(GENERAL, "General")
             return buildList {
-                if (general.active.isNotEmpty() || general.completed.isNotEmpty()) add(general)
+                if (general.active.isNotEmpty() || general.archived.isNotEmpty()) add(general)
                 folders.forEach { add(group(it.id, it.name)) }
             }
         }
     }
 }
 
-/** A provider as the phone keeps it: never the API key, base URL or token reference. */
-data class PublicProvider(val id: String, val kind: String, val label: String, val enabled: Boolean) {
+/**
+ * A provider as the phone keeps it: never the API key, base URL or token reference.
+ * [account] is the Claude login behind a Claude subscription provider, when the
+ * computer reports one (shared/models.ts ProviderAccount); see [ProviderAccounts]
+ * for how it reads.
+ */
+data class PublicProvider(
+    val id: String,
+    val kind: String,
+    val label: String,
+    val enabled: Boolean,
+    val account: ProviderAccount? = null,
+) {
     companion object {
         fun list(e: JsonElement?): List<PublicProvider> = e.arr()?.mapNotNull { p ->
             val o = p.obj() ?: return@mapNotNull null
-            PublicProvider(o.str("id") ?: return@mapNotNull null, o.str("kind") ?: "", o.str("label") ?: o.str("id")!!, o.bool("enabled"))
+            PublicProvider(
+                o.str("id") ?: return@mapNotNull null,
+                o.str("kind") ?: "",
+                o.str("label") ?: o.str("id")!!,
+                o.bool("enabled"),
+                ProviderAccount.from(o["account"]),
+            )
         } ?: emptyList()
+    }
+}
+
+/**
+ * Which Claude login a Claude subscription provider is signed in as. One email can
+ * have a personal plan (Pro, Max) and an organization seat (Team, Enterprise), each
+ * its own provider on the computer.
+ */
+data class ProviderAccount(
+    val signedIn: Boolean,
+    /** Missing for an API-key login. */
+    val email: String? = null,
+    /** `personal` or `organization`; anything else is kept as sent. */
+    val scope: String? = null,
+    /** "Personal", or the organization's name. */
+    val name: String? = null,
+    /** `pro`, `max`, `team`, `enterprise`, as Claude Code printed it; may be missing. */
+    val plan: String? = null,
+) {
+    val organization: Boolean get() = scope == "organization"
+
+    companion object {
+        fun from(e: JsonElement?): ProviderAccount? {
+            val o = e.obj() ?: return null
+            fun text(k: String) = o.str(k)?.trim()?.takeIf { it.isNotEmpty() }
+            return ProviderAccount(o.bool("signedIn"), text("email"), text("scope"), text("name"), text("plan"))
+        }
     }
 }
 
@@ -503,7 +573,7 @@ data class RemoteDefaults(
 data class PcSettings(
     /** Tool policy for new chats: `ask`, `guardrails` or `yolo` (shared/chat.ts ChatMode). */
     val defaultChatMode: ChatMode? = null,
-    /** The chat's main action: complete (archive) or delete. Unset on the computer means complete. */
+    /** The chat's main action: archive (wire "complete") or delete. Unset on the computer means archive. */
     val chatPaneAction: ChatAction? = null,
     /** True when the computer deletes chats without asking first. Unset means it asks. */
     val skipDeleteConfirmation: Boolean? = null,
@@ -529,7 +599,8 @@ data class PcSettings(
     }
 
     enum class ChatAction(val wire: String) {
-        COMPLETE("complete"), DELETE("delete");
+        // The wire value stays "complete": the desktop and older builds read it.
+        ARCHIVE("complete"), DELETE("delete");
 
         companion object {
             fun of(s: String?) = entries.firstOrNull { it.wire == s }
@@ -538,7 +609,7 @@ data class PcSettings(
 
     /** What the computer actually does when a key is unset (shared/settings.ts defaults). */
     val effectiveMode: ChatMode get() = defaultChatMode ?: ChatMode.GUARDRAILS
-    val effectiveAction: ChatAction get() = chatPaneAction ?: ChatAction.COMPLETE
+    val effectiveAction: ChatAction get() = chatPaneAction ?: ChatAction.ARCHIVE
     val confirmDelete: Boolean get() = skipDeleteConfirmation != true
 
     companion object {
@@ -777,7 +848,13 @@ val COMPUTER_ICONS = listOf(
 
 data class AskOption(val label: String, val description: String?)
 data class AskQuestion(val id: String, val header: String, val question: String, val options: List<AskOption>, val multiSelect: Boolean)
-data class AskRequest(val callId: String, val questions: List<AskQuestion>, val askedAt: Long) {
+data class AskRequest(
+    val callId: String,
+    val questions: List<AskQuestion>,
+    val askedAt: Long,
+    /** A paid cloud clip's choice (#3038): the same questions, drawn as one card with a total. */
+    val clip: ClipOffer? = null,
+) {
     companion object {
         fun from(e: JsonElement?): AskRequest? {
             val o = e.obj() ?: return null
@@ -793,7 +870,7 @@ data class AskRequest(val callId: String, val questions: List<AskQuestion>, val 
                     multiSelect = qo.bool("multiSelect"),
                 )
             } ?: emptyList()
-            return AskRequest(o.str("callId") ?: return null, qs, o.long("askedAt") ?: 0)
+            return AskRequest(o.str("callId") ?: return null, qs, o.long("askedAt") ?: 0, ClipOffer.from(o["clip"]))
         }
     }
 }

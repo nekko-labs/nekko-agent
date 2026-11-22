@@ -383,7 +383,7 @@ struct ChatView: View {
                         Button { showAudit = true } label: { Label("Audit trail", systemImage: "checkmark.shield") }
                             .accessibilityIdentifier("chat.audit")
                         Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
-                        Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
+                        Button { act { try await store.archiveChat(sessionId) } } label: { Label("Archive", systemImage: "archivebox") }
                     }
                     .disabled(chat.savedAt != nil)
                     Button { Task { await pull.reload { await chat.reload() } } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
@@ -458,6 +458,10 @@ struct ChatView: View {
                     .font(.footnote).foregroundStyle(palette.inkSoft)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                     .accessibilityIdentifier("chat.savedCopy")
+            }
+            // Always there while the provider reports limits, quiet until they near (#2923).
+            if !chat.isImageChat && chat.savedAt == nil {
+                ComputerLimitLine(providerId: chat.providerId) { showModels = true }.padding(.horizontal, 4)
             }
             Composer(chat: chat, openTerminals: { showTerminals = true }, openFiles: { showFiles = true })
         }
@@ -833,8 +837,14 @@ struct BlockView: View {
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
                 }
-                .accessibilityElement(children: .combine)
+                // A text-only prompt is one leaf element that says everything it shows. A merged
+                // element can come out of the lazy transcript missing from the accessibility tree
+                // while its bubble is on screen (#2547: the first prompt, then the second, in the
+                // recordings of run 43282129948), which VoiceOver and XCTest then can't reach.
+                // A prompt with photos keeps its buttons as children.
+                .accessibilityElement(children: photos.contains(where: { !$0.isEmpty }) ? .combine : .ignore)
                 .accessibilityLabel(images > 0 ? "You: \(text), with \(images == 1 ? "1 image" : "\(images) images")" : "You: \(text)")
+                .accessibilityAddTraits(.isStaticText)
             }
         case .assistant(_, let text, let reasoning, let streaming, let interrupted):
             VStack(alignment: .leading, spacing: 6) {
@@ -1192,12 +1202,10 @@ struct Composer: View {
             if let blocked = chat.blocked {
                 Text(blocked).font(.caption).foregroundStyle(palette.warning)
             } else if let note = chat.offlineNote {
-                // On its own surface: over the bar's translucent material its contrast depended on what scrolled behind.
-                Label(note, systemImage: "tray.and.arrow.up").font(.caption).foregroundStyle(palette.ink)
+                Text(note).font(.caption).foregroundStyle(palette.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(palette.surface, in: RoundedRectangle(cornerRadius: 10))
                     .accessibilityIdentifier("chat.offlineNote")
             }
             if let refusal {
@@ -1662,7 +1670,7 @@ struct Composer: View {
                 return r.map { $0.message.isEmpty ? "Git refused it." : $0.message } ?? "Couldn’t merge \(VoiceRunner.label(pr))."
             },
             answer: { q, note in try await chat.answer(q.questions.map { AskAnswer(questionId: $0.id, labels: [], note: note) }) },
-            complete: { try await store.completeChat(chat.sessionId) },
+            archive: { try await store.archiveChat(chat.sessionId) },
             title: { chat.title })
     }
 

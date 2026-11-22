@@ -1,0 +1,67 @@
+/* Photo chat: the shape glyph, the composer menus and the first-model setup.
+   Quiet surfaces (docs/design-system.md): rows, no cards; plum only for the
+   chosen row, the current step and the one primary button. */
+
+.photo-shape-glyph { display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; }
+.photo-shape-glyph > span { display: block; border: 1.5px solid currentColor; border-radius: 3px; background: color-mix(in srgb, currentColor 28%, transparent); opacity: .85; }
+
+/* Popover: fades in, rises 4px and scales from .98 at its anchor. */
+.photo-menu { animation: photo-menu-in var(--dur-med) var(--ease-out) both; }
+@keyframes photo-menu-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .photo-menu { animation-name: photo-menu-fade; } }
+@keyframes photo-menu-fade { from { opacity: 0; } to { opacity: 1; } }
+.photo-menu-row { width: 100%; gap: 8px; text-align: left; }
+.photo-menu-row[aria-selected='true'] { color: var(--accent); }
+.photo-menu-row[aria-selected='true'] .photo-shape-glyph > span { opacity: 1; }
+.photo-menu-link { align-self: flex-start; margin: 4px 8px 2px; font-size: 12px; color: var(--accent); }
+@media (hover: hover) { .photo-menu-link:hover { text-decoration: underline; text-underline-offset: 2px; } }
+
+/* First-model setup: the message box's own content until a model is ready. */
+.photo-setup { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 720px; padding: 20px; text-align: left; animation: photo-setup-in var(--dur-med) var(--ease-out) both; }
+@keyframes photo-setup-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .photo-setup { animation-name: photo-menu-fade; } }
+
+.photo-setup-steps { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--ink-faint); }
+.photo-setup-steps li { display: flex; align-items: center; gap: 8px; }
+.photo-setup-steps li[data-state='current'] { color: var(--ink); font-weight: 500; }
+.photo-setup-steps li[data-state='done'] { color: var(--ink-soft); }
+.photo-setup-step-mark { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 999px; font-size: 11px; font-variant-numeric: tabular-nums; box-shadow: inset 0 0 0 1px var(--line); }
+.photo-setup-steps li[data-state='current'] .photo-setup-step-mark { color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.photo-setup-steps li[data-state='done'] .photo-setup-step-mark { color: var(--success); box-shadow: none; background: color-mix(in srgb, var(--success) 18%, transparent); }
+
+.photo-setup-head { display: flex; flex-direction: column; gap: 4px; }
+.photo-setup-head h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--ink); }
+.photo-setup-head p { margin: 0; font-size: 12px; color: var(--ink-faint); }
+
+.photo-setup-options { display: flex; flex-direction: column; gap: 4px; margin: 0 -8px; }
+.photo-setup-option { width: 100%; align-items: flex-start; gap: 12px; padding: 8px; text-align: left; border-radius: 10px; transition: background var(--dur-fast) var(--ease-out); }
+@media (hover: hover) { .photo-setup-option:hover:not(:disabled) { background: var(--q-wash); } }
+.photo-setup-option:disabled { cursor: default; }
+.photo-setup-option:disabled .photo-setup-option-title { color: var(--ink-faint); }
+.photo-setup-option:disabled .photo-setup-option-detail { color: var(--danger-text); }
+.photo-setup-radio { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--ink-faint); transition: box-shadow var(--dur-med) var(--ease-out); }
+.photo-setup-option[aria-checked='true'] .photo-setup-radio { box-shadow: inset 0 0 0 5px var(--accent); }
+.photo-setup-option-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 500; color: var(--ink); }
+.photo-setup-option[aria-checked='true'] .photo-setup-option-title { color: var(--accent); }
+.photo-setup-pick { font-size: 11px; font-weight: 500; color: var(--info); }
+.photo-setup-option-detail { font-size: 12px; color: var(--ink-soft); }
+.photo-setup-option-size { flex: none; margin-top: 2px; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+.photo-setup-fit { margin: -8px 0 0; font-size: 12px; color: var(--ink-soft); }
+.photo-setup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.photo-setup-link { font-size: 12px; color: var(--accent); }
+@media (hover: hover) { .photo-setup-link:hover { text-decoration: underline; text-underline-offset: 2px; } }
+.photo-setup-note { margin: -8px 0 0; font-size: 11px; color: var(--ink-faint); }
+.photo-setup-alert { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 12px; color: var(--danger-text); }
+.photo-setup-tasks { display: flex; flex-direction: column; gap: 16px; margin: 0; padding: 0; list-style: none; }
+
+/* While the setup shows, the message box holds only it: the editor and its
+   bar come back when the model is ready. */
+.composer[data-photo-setup-open] > :not([data-photo-setup-slot]) { display: none; }
+
+/* A narrow Photo window drops the captions ("Model", the ratio) before
+   anything clips; the menus still say them. */
+.composer:has([data-photo-model-trigger]) { container-type: inline-size; }
+@container (max-width: 560px) {
+  .composer-bar :is([data-photo-model-trigger], [data-photo-shape-trigger]) .ctl-menu-label { display: none; }
+}

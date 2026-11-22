@@ -79,6 +79,8 @@ const baseSettings = { providers: [] } as unknown as AppSettings;
 describe('shouldAutoOpenOnboarding', () => {
   it('opens on a genuinely fresh install and not once setup is done', () => {
     expect(shouldAutoOpenOnboarding(baseSettings)).toBe(true);
+    // nekkod saves the built-in engine's provider at every launch, so a fresh install has it.
+    expect(shouldAutoOpenOnboarding({ ...baseSettings, providers: [{ id: 'nekko-engine', kind: 'llamacpp' }] as AppSettings['providers'] })).toBe(true);
     expect(
       shouldAutoOpenOnboarding({
         ...baseSettings,

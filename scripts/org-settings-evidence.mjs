@@ -30,7 +30,7 @@ const css = await postcss([tailwind({ base: repo })]).process(readFileSync(join(
 writeFileSync(join(out, 'styled.css'), css.css);
 writeFileSync(join(out, 'index.html'), '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><link rel="stylesheet" href="styled.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>');
 
-const states = ['locked', 'setup', 'plan', 'invite', 'empty', 'full', 'missing-key', 'unavailable'];
+const states = ['locked', 'setup', 'plan', 'invite', 'empty', 'full', 'missing-key', 'unavailable', 'fleet', 'fleet-refused'];
 const sizes = [['desktop', 900], ['phone', 380]];
 const checks = [];
 const check = (name, passed) => { checks.push({ name, passed: !!passed }); if (!passed) console.error('FAILED', name); };
@@ -62,6 +62,30 @@ try {
           await sleep(500);
           check('full: switch calls fleet:setSharing off', await cdp.evaluate("JSON.stringify(window.__calls[0]) === JSON.stringify(['fleet:setSharing','org1',false])"));
           check('full: no Connect or Run button', await cdp.evaluate("![...document.querySelectorAll('button')].some((b) => /^(connect|run)$/i.test(b.textContent.trim()))"));
+        }
+        if ((state === 'fleet' || state === 'fleet-refused') && theme === 'light') {
+          const tag = `${state}-${sizeName}`;
+          check(`${tag}: one Open chat, on the ready computer`, await cdp.evaluate("(() => { const b = [...document.querySelectorAll('[data-testid=org-open-chat]')]; return b.length === 1 && b[0].closest('[data-testid=org-computer]').dataset.reach === 'ready'; })()"));
+          check(`${tag}: a reason on the online rows that can't open, none on offline or this computer`, await cdp.evaluate("[...document.querySelectorAll('[data-testid=org-computer]')].every((r) => !!r.querySelector('[data-testid=org-reach-note]') === (r.dataset.online === 'true' && ['other-account','no-remote'].includes(r.dataset.reach)))"));
+          // Hover the ready row: its action comes up from faint.
+          const at = await cdp.evaluate("(() => { const r = document.querySelector('[data-reach=ready]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()");
+          await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+          await sleep(400);
+          const hover = await cdp.evaluate("(() => { const r = document.querySelector('main').getBoundingClientRect(); return { x: 0, y: 0, width: innerWidth, height: Math.ceil(r.height) }; })()");
+          writeFileSync(join(out, `${tag}-hover.png`), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png', clip: { ...hover, scale: 1 }, captureBeyondViewport: true })).data, 'base64'));
+          await cdp.evaluate("document.querySelector('[data-testid=org-open-chat]').click()");
+          await sleep(120);
+          check(`${tag}: Connecting while it dials`, await cdp.evaluate("document.querySelector('[data-testid=org-open-chat]')?.textContent === 'Connecting…'"));
+          writeFileSync(join(out, `${tag}-connecting.png`), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png', clip: { ...hover, scale: 1 }, captureBeyondViewport: true })).data, 'base64'));
+          await sleep(700);
+          if (state === 'fleet') {
+            check(`${tag}: connects with no code, then starts a chat there`, await cdp.evaluate("JSON.stringify(window.__calls) === JSON.stringify([['computers:connectFleet','org1','f2'],['computers:createSession','f7e1f0a9c2b3']])"));
+          } else {
+            check(`${tag}: the refusal says why, on its row`, await cdp.evaluate("document.querySelector('[data-reach=ready] [data-testid=org-reach-note]')?.textContent === 'gomi stopped sharing with this organization.'"));
+            check(`${tag}: no chat after a refusal`, await cdp.evaluate("!window.__calls.some((c) => c[0] === 'computers:createSession')"));
+            const shot = await cdp.evaluate("(() => { const r = document.querySelector('main').getBoundingClientRect(); return { x: 0, y: 0, width: innerWidth, height: Math.ceil(r.height) }; })()");
+            writeFileSync(join(out, `${tag}-refused.png`), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png', clip: { ...shot, scale: 1 }, captureBeyondViewport: true })).data, 'base64'));
+          }
         }
       }
     }

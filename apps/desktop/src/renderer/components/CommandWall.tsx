@@ -1,6 +1,7 @@
 import { terminalPresentation } from './terminalActivity.js';
 import { computerIdOf } from '@nekko-agent/shared';
 import { ComputerChip } from './ComputerChip.js';
+import { syncedComputer } from '../syncedComputers.js';
 import { terminalExcerpt } from './terminalExcerpt.js';
 import { HOME, applyWallDrop, heldSize, sameTarget, wallDropTargetAt, type Rect, type WallDropTarget } from '../wallDrag.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -23,7 +24,6 @@ import {
   DEFAULT_ASPECT,
   NARROW_ROW_H,
   NARROW_WIDTH,
-  WALL_KINDS,
   addPane,
   addZone,
   clearZone,
@@ -70,6 +70,16 @@ export function workspaceCompanions(workspaces: Workspace[], sessionId: string):
     });
   return allPanes(workspace?.root ?? null).filter((p) =>
     p.kind === 'file' || p.kind === 'files' || p.kind === 'browser' || (p.kind === 'diff' && p.refId === sessionId));
+}
+
+/** A Files window's title: the folder's own name. */
+export function folderLabel(path: string): string {
+  return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path || 'Files';
+}
+
+/** A Browser window's title: the page's host and port, or Browser before it has one. */
+export function browserLabel(url: string): string {
+  try { const u = new URL(url); return u.host || 'Browser'; } catch { return 'Browser'; }
 }
 
 export function TerminalExcerpt({ terminalId }: { terminalId: string }) {
@@ -136,7 +146,7 @@ function CompanionResizer({ sessionId }: { sessionId: string }) {
 
 function CompanionBody({ pane }: { pane: WbPane }) {
   switch (pane.kind) {
-    case 'file': return <FilePane path={pane.refId} />;
+    case 'file': return <FilePane path={pane.refId} onMoved={(to) => useStore.getState().retargetPane(pane.id, to)} />;
     case 'files': return <ExplorerPane paneId={pane.id} root={pane.refId} />;
     case 'browser': return <BrowserPane url={pane.refId} />;
     case 'diff': return <DiffPane sessionId={pane.refId} />;
@@ -152,7 +162,7 @@ import { CREATE_OPTIONS } from './CreateMenu.js';
 import type { AgentWindowSelection } from './AgentWindowPicker.js';
 import { AgentLogsDrawer } from './AgentLogsDrawer.js';
 import { layoutWithLogsDrawer, overlayLogsDrawer, useWallLogs } from '../wallLogs.js';
-import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
+import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, FileIcon, FolderIcon, GlobeIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
 import { COMPANION_DEFAULT, clampCompanion, readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
@@ -162,7 +172,8 @@ import { Shown } from './ModeViews.js';
 
 
 /** The kinds the wall's compass offers, in order. */
-const WALL_ADDABLE: PaneKind[] = [...WALL_KINDS];
+/** What a window's split compass offers: the Browser and Files windows come from the Agents panel. */
+const WALL_ADDABLE: PaneKind[] = ['chat', 'terminal'];
 
 /** How many Focus heroes keep their composer mounted while parked. */
 export const WARM_COMPOSERS = 4;
@@ -787,6 +798,9 @@ export function CommandWall({
     if (pane.kind === 'chat') return sessionById.get(pane.refId)?.title ?? 'Chat';
     if (pane.kind === 'terminal') { const t = terminalById.get(pane.refId); return t ? terminalPresentation(t).title : 'Terminal'; }
     if (pane.kind === 'zone') return pane.zone ?? 'Zone';
+    if (pane.kind === 'files') return folderLabel(pane.refId);
+    if (pane.kind === 'file') return folderLabel(pane.refId);
+    if (pane.kind === 'browser') return browserLabel(pane.refId);
     return pane.kind === 'automations' ? 'Automations' : 'Insights';
   };
   const iconOf = (kind: PaneKind) => {
@@ -794,6 +808,9 @@ export function CommandWall({
     if (kind === 'terminal') return <TerminalIcon className={cls} />;
     if (kind === 'automations') return <BoltIcon className={cls} />;
     if (kind === 'insights') return <LayoutIcon className={cls} />;
+    if (kind === 'files') return <FolderIcon className={cls} />;
+    if (kind === 'file') return <FileIcon className={cls} />;
+    if (kind === 'browser') return <GlobeIcon className={cls} />;
     return <ChatIcon className={cls} />;
   };
 
@@ -802,6 +819,8 @@ export function CommandWall({
     const terminal = pane.kind === 'terminal' ? terminalById.get(pane.refId) : undefined;
     const project = projects.find((p) => p.id === (session?.workspaceId ?? terminal?.workspaceId));
     const computer = computers.find((c) => c.id === computerIdOf(session?.id));
+    // Another computer's chat synced here names that computer too (#3143).
+    const synced = !computer && session?.home ? syncedComputer(session.home, computers) : null;
     let status: { label: string; tone: string; live?: boolean } | null = null;
     let needsYou = false;
     let agentStatus: AgentStatus | undefined;
@@ -925,6 +944,7 @@ export function CommandWall({
               {/* The project only when there is more than one to tell apart:
                   on a one-project wall it is the same word on every strip. */}
               {computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} />}
+              {synced && <ComputerChip computer={synced} />}
               {project && projects.length > 1 && !density && <span className="chip hidden shrink-0 text-2xs sm:inline">{project.name}</span>}
             </>
           }
@@ -932,7 +952,7 @@ export function CommandWall({
           ringColor={flashing ? 'color-mix(in srgb, var(--accent) 60%, var(--line))' : undefined}
           stripStyle={needsYou ? { background: 'color-mix(in srgb, var(--warning) 10%, transparent)' } : undefined}
           addable={WALL_ADDABLE}
-          closeTitle={pane.kind === 'chat' ? 'Stop agent and watchers, then remove from the wall (chat is kept)' : 'Remove from the wall'}
+          closeTitle={pane.kind === 'chat' ? 'Close this agent (stops it; the chat stays in the Agents panel, not archived)' : 'Remove from the wall'}
           // Focus shows one window, so there is nowhere to move it to.
           locked={!tiled}
           onPickUp={pickable ? (e) => pickUp(e, pane, title) : undefined}
@@ -953,6 +973,9 @@ export function CommandWall({
             <div className="command-wall-primary">
            {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat || tiled} status={agentStatus ?? 'idle'} selected={selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
+            : pane.kind === 'files' ? <ExplorerPane key={pane.refId} paneId={pane.id} root={pane.refId} named />
+            : pane.kind === 'browser' ? <BrowserPane key={pane.refId} url={pane.refId} />
+            : pane.kind === 'file' ? <FilePane key={pane.refId} path={pane.refId} onMoved={(to) => useStore.getState().retargetPane(pane.id, to)} />
             : null}
            </div>
             {pane.kind === 'chat' && showCompanions && companions.length > 0 && <CompanionResizer sessionId={pane.refId} />}
@@ -1058,7 +1081,7 @@ export function CommandWall({
         <ContextAction disabled={allPanes(state.root).length < 2} onClick={() => {
           const id = zoneMenu.paneId;
           setZoneMenu(null);
-          // The agent in it is minimized, not stopped or completed.
+          // The agent in it is minimized, not stopped or archived.
           setState((s) => {
             const root = removePane(s.root, id);
             return { ...s, root, activeZone: s.activeZone === id ? allPanes(root)[0]?.id ?? null : s.activeZone };

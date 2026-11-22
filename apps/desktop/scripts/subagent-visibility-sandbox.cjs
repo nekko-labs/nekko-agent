@@ -64,7 +64,7 @@ app.whenReady().then(async () => {
     // the finite sheet entrance, without touching the live SVG SMIL ripple.
     await run(`(() => { const style = document.createElement('style'); style.textContent = '.plan-sheet { animation: none !important; }'; document.head.append(style); })()`);
     await shot('plan-focused');
-    await run(`document.querySelector('[data-plan-step-id="step_1"] .plan-sheet-step-toggle').click()`);
+    await run(`document.querySelector('[data-plan-step-id="step_1"] [data-plan-overflow]')?.click()`);
     await sleep(300);
     await shot('plan-chip-types');
     win.setContentSize(480, 900);

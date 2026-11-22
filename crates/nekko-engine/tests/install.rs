@@ -77,15 +77,15 @@ fn offers_the_builds_the_host_offers() {
 
 /// The pinned stable-diffusion.cpp release (`builds.rs`) and how upstream names
 /// its archives. Update both when updating the pin in `builds.rs`.
-const SD_RELEASE: &str = "master-1052-f5df5f8";
-const SD_ARCHIVE_TAG: &str = "master-f5df5f8";
+const SD_RELEASE: &str = "master-1056-9234ad8";
+const SD_ARCHIVE_TAG: &str = "master-9234ad8";
 
 #[test]
 fn diffusion_release_matches_published_asset_names() {
     // The pinned release's real asset list (gh api repos/leejet/stable-diffusion.cpp/releases/tags/<tag>).
     let names: Vec<String> = [
         "cudart-sd-bin-win-cu12-x64.zip".to_string(),
-        format!("sd-{SD_ARCHIVE_TAG}-bin-Darwin-macOS-26.6.2-arm64.zip"),
+        format!("sd-{SD_ARCHIVE_TAG}-bin-Darwin-macOS-26.7.2-arm64.zip"),
         format!("sd-{SD_ARCHIVE_TAG}-bin-Linux-Ubuntu-24.04-x86_64-rocm-10.1.0.zip"),
         format!("sd-{SD_ARCHIVE_TAG}-bin-Linux-Ubuntu-26.04-x86_64-vulkan.zip"),
         format!("sd-{SD_ARCHIVE_TAG}-bin-Linux-Ubuntu-26.04-x86_64.zip"),
@@ -110,7 +110,7 @@ fn diffusion_release_matches_published_asset_names() {
             .replace("Ubuntu-24.04-x86_64.zip", "Ubuntu-26.04-x86_64.zip")
             .replace("Ubuntu-24.04-x86_64-vulkan", "Ubuntu-26.04-x86_64-vulkan")
             .replace("rocm-6.4", "rocm-10.1.0")
-            .replace("macOS-15.6", "macOS-26.6.2");
+            .replace("macOS-15.6", "macOS-26.7.2");
         assert_eq!(builds::match_diffusion_asset(build, &names), Some(expected), "{c}");
         assert_eq!(json!(builds::match_diffusion_companion(build, &names)), c["companion"], "{c}");
     }

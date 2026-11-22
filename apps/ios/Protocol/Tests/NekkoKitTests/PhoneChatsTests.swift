@@ -8,16 +8,19 @@ final class FakePhoneHTTP: PhoneHTTP, @unchecked Sendable {
     let lock = NSLock()
     var requests: [PhoneRequest] = []
     var answers: [(Int, [String])] = []
+    /// Headers for the answer at the same position in `answers`; none when missing.
+    var headers: [[String: String]] = []
+    private var served = 0
     /// Stream this line, then wait to be cancelled.
     var hang = false
 
-    func send(_ request: PhoneRequest) async throws -> (status: Int, body: Data) {
-        let (status, lines) = next(request)
-        return (status, Data(lines.joined(separator: "\n").utf8))
+    func send(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], body: Data) {
+        let (status, h, lines) = next(request)
+        return (status, h, Data(lines.joined(separator: "\n").utf8))
     }
 
-    func lines(_ request: PhoneRequest) async throws -> (status: Int, lines: AsyncThrowingStream<String, Error>) {
-        let (status, lines) = next(request)
+    func lines(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], lines: AsyncThrowingStream<String, Error>) {
+        let (status, h, lines) = next(request)
         let hang = self.hang
         let stream = AsyncThrowingStream<String, Error> { c in
             let t = Task {
@@ -31,13 +34,17 @@ final class FakePhoneHTTP: PhoneHTTP, @unchecked Sendable {
             }
             c.onTermination = { _ in t.cancel() }
         }
-        return (status, stream)
+        return (status, h, stream)
     }
 
-    private func next(_ r: PhoneRequest) -> (Int, [String]) {
+    private func next(_ r: PhoneRequest) -> (Int, [String: String], [String]) {
         lock.lock(); defer { lock.unlock() }
         requests.append(r)
-        return answers.isEmpty ? (500, []) : answers.removeFirst()
+        let h = served < headers.count ? headers[served] : [:]
+        served += 1
+        guard !answers.isEmpty else { return (500, h, []) }
+        let (status, lines) = answers.removeFirst()
+        return (status, h, lines)
     }
 }
 
@@ -116,7 +123,7 @@ final class PhoneChatsTests: XCTestCase {
     }
 
     func testEveryDesktopCloudKindButTheComputerOnesIsOffered() async {
-        XCTAssertEqual(PhoneProviders.kinds.map(\.id), ["anthropic", "openai", "openrouter", "bedrock", "foundry", "vertex", "openai-compat"])
+        XCTAssertEqual(PhoneProviders.kinds.map(\.id), ["anthropic", "openai", "openrouter", "gemini", "ollama-cloud", "bedrock", "foundry", "vertex", "openai-compat"])
         XCTAssertTrue(PhoneProviders.kind("bedrock")!.catalog.allSatisfy { $0.id.hasPrefix("anthropic.") })
         XCTAssertFalse(PhoneProviders.kind("anthropic")!.listsModels == false)
     }
@@ -179,7 +186,7 @@ final class PhoneChatsTests: XCTestCase {
 
     func testModelsListsAndFailures() async {
         let anth = Data(#"{"data":[{"id":"claude-opus-5-5","display_name":"Claude Opus 5.5"}]}"#.utf8)
-        XCTAssertEqual(PhoneProviders.models(from: anth, kind: "anthropic"), [PhoneModel(id: "claude-opus-5-5", name: "Claude Opus 5.5")])
+        XCTAssertEqual(PhoneProviders.models(from: anth, kind: "anthropic"), [PhoneModel(id: "claude-opus-5-5", name: "Claude Opus 5.5", acceptsImages: true)])
         let openai = Data(#"{"data":[{"id":"text-embedding-3-large"},{"id":"gpt-5"},{"id":"whisper-1"},{"id":"gpt-5-mini"}]}"#.utf8)
         XCTAssertEqual(PhoneProviders.models(from: openai, kind: "openai").map(\.id), ["gpt-5-mini", "gpt-5"])
         let failed = PhoneProviders.failure(status: 401, body: Data(#"{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#.utf8))
@@ -267,7 +274,7 @@ final class PhoneChatsTests: XCTestCase {
         await s.settled(id)
         s.rename(id, to: "Trip")
         s.setPinned(id, true)
-        s.complete(id)
+        s.archive(id)
         XCTAssertEqual(s.summaries.first?.title, "Trip")
         XCTAssertTrue(s.summaries.first?.pinned == true)
         XCTAssertTrue(s.summaries.first?.archived == true)

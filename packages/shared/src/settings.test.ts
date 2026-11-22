@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MONITORS_DOCK, DEFAULT_WALL_LAYOUT, keepSecrets, withoutSecrets, type CommandWallSetting } from './settings.js';
+import { DEFAULT_MONITORS_DOCK, DEFAULT_WALL_LAYOUT, keepSecrets, updateChecks, withoutSecrets, type AppSettings, type CommandWallSetting } from './settings.js';
 
 describe('command wall settings schema', () => {
   it('allows legacy settings without the new optional fields', () => {
@@ -7,7 +7,7 @@ describe('command wall settings schema', () => {
     expect(legacy.layout).toBeUndefined();
   });
   it('exports reusable layout and dock defaults', () => {
-    expect(DEFAULT_WALL_LAYOUT).toEqual({ mode: 'grid', cols: 3, rows: 2, fixedGrid: false });
+    expect(DEFAULT_WALL_LAYOUT).toEqual({ mode: 'focus', cols: 3, rows: 2, fixedGrid: false });
     expect(DEFAULT_MONITORS_DOCK.side).toBe('right');
     expect(DEFAULT_MONITORS_DOCK.show).toBe(true);
     expect(DEFAULT_MONITORS_DOCK.minimized).toEqual({
@@ -47,5 +47,17 @@ describe('settings backups', () => {
   it('keeps a key the backup itself carries, and gives none to a provider this computer lacks', () => {
     const imported = { providers: [{ id: 'p1', apiKey: 'sk-new' }, { id: 'p3' }] };
     expect(keepSecrets(imported, settings).providers).toEqual([{ id: 'p1', apiKey: 'sk-new' }, { id: 'p3' }]);
+  });
+});
+
+describe('updateChecks', () => {
+  const base = {} as AppSettings;
+
+  it("opens What's new after an update by default", () => {
+    expect(updateChecks(base).whatsNew).toBe(true);
+  });
+
+  it('keeps the switch off once turned off', () => {
+    expect(updateChecks({ ...base, updates: { whatsNew: false } }).whatsNew).toBe(false);
   });
 });

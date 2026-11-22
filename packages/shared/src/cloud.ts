@@ -29,6 +29,9 @@ export interface SyncDevice {
   thisDevice: boolean;
 }
 
+/** A kind of record Settings > Nekko Cloud > Sync can turn off on one computer (#3089). */
+export type SyncKind = 'chats' | 'library';
+
 export interface CloudStatus {
   signedIn: boolean;
   account: {
@@ -36,8 +39,10 @@ export interface CloudStatus {
     /** A Nekko team account, which may switch unreleased Cloud features (decision 0092). */
     staff?: boolean;
     /** Unreleased Cloud features switched on for this account. */
-    features?: { billing?: boolean };
+    features?: { billing?: boolean; libraryCloud?: boolean };
   } | null;
+  /** Library sync (#2748); null unless the account's plan syncs and the `library-cloud` switch is on for it. */
+  library?: LibrarySyncStatus | null;
   /** A browser sign-in (GitHub, Google, Apple) is waiting for its callback. */
   oauthPending: boolean;
   /** Where this device's keys live ("macOS Keychain"…). */
@@ -45,7 +50,8 @@ export interface CloudStatus {
   sync: {
     phase: SyncPhase;
     enabled: boolean;
-    includeLocalOnly: boolean;
+    /** What syncs on this computer, kind by kind; every kind is on unless turned off (#3089). Absent from older engines. */
+    kinds?: Record<SyncKind, boolean>;
     recoveryConfirmed: boolean;
     keyEpoch: number | null;
     lastSyncAt: number | null;
@@ -65,6 +71,60 @@ export interface CloudStatus {
     devices: SyncDevice[];
     usage: { bytes: number; limit: number } | null;
   };
+}
+
+/**
+ * One Library file's sync state. `off`: sync is not on for this computer.
+ * `pending`: new or changed, waiting for the next sync (about a minute at
+ * most). `syncing`: uploading now. `synced`: backed up as of the last sync.
+ * `tooLarge`: over 8 MB. `unreadable`: could not be read. `noRoom`: the plan's
+ * storage is full.
+ */
+export type LibraryFileSync = 'off' | 'pending' | 'syncing' | 'synced' | 'tooLarge' | 'unreadable' | 'noRoom';
+
+/** A file Library lists here, as `librarySync` reports it. */
+export interface LibrarySyncFile {
+  path: string;
+  title: string;
+  /** Library's kind: doc, web, design, diagram, data, office or image. */
+  kind: string;
+  /** The chat it came from (its title), or the project of a designs-folder file. */
+  chat: string;
+  /**
+   * A small thumbnail for the file, as a data URL (base64 PNG or WebP, capped
+   * at ~200 KB). The engine embeds it in the sealed record so another computer
+   * can show it before the full file is opened (#3044).
+   */
+  thumbnailData?: string;
+}
+
+/** Another computer's Library file, copied here read-only. */
+export interface LibraryRemoteFile {
+  id: string;
+  deviceId: string;
+  /** That computer's name. */
+  device: string;
+  /** The copy on this computer, or the original path for thumb-only records (over 8 MB). */
+  path: string;
+  /** Where it is on the other computer. */
+  originalPath: string;
+  title: string;
+  kind: string;
+  chat: string;
+  modifiedAt: number;
+  size: number;
+  /** The file's small thumbnail from the sealed record (#3044), as a data URL. */
+  thumbnailData?: string;
+  /** True when only a thumbnail record was pushed (the file was over 8 MB and skipped). */
+  thumbOnly?: boolean;
+}
+
+export interface LibrarySyncStatus {
+  /** Sync is on for this computer (its keys are held and Sync this computer is on). */
+  on: boolean;
+  /** Per path listed here. */
+  files: Record<string, LibraryFileSync>;
+  remote: LibraryRemoteFile[];
 }
 
 export type CloudOAuthProvider = 'github' | 'google' | 'apple';
@@ -176,7 +236,19 @@ export interface FleetComputerView {
   /** Checked against this account's own record of the device. */
   verified: boolean;
   ownerEmail?: string;
+  /** Whether this desktop can open a chat on it (decision 0102). Absent from an older engine. */
+  reach?: FleetReach;
 }
+
+/**
+ * - `ready`: one of your own computers, with remote access on: it can be opened here.
+ * - `you`: this computer.
+ * - `other-account`: another member's computer: listed, not openable.
+ * - `unverified`: its key isn't the one your account record lists.
+ * - `no-remote`: remote access is off there, or its build is older.
+ * - `locked`: it uses an account key this computer doesn't hold yet.
+ */
+export type FleetReach = 'ready' | 'you' | 'other-account' | 'unverified' | 'no-remote' | 'locked';
 
 /** `fleet:list`. `error` is plain text for the person; `rejected` counts descriptors that failed to decrypt. */
 export interface FleetList {

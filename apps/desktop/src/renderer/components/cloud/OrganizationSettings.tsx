@@ -5,9 +5,11 @@ import { SettingRow, SettingsSection } from '../SettingsSection.js';
 import { StatusDot } from '../primitives/index.js';
 import { Toggle } from '../primitives/Toggle.js';
 import {
-  FLEET_POLL_MS, canManage, loadFleet, loadOrgs, lastSeen, orgErrorText, orgGate, osLabel, roleLabel, roleSentence,
-  setSharing, sortComputers, splitModels, validEmail, type OrgGate, type OrgSnapshot,
+  FLEET_POLL_MS, canManage, canOpen, loadFleet, loadOrgs, lastSeen, openOnComputer, orgErrorText, orgGate, osLabel, reachNote,
+  roleLabel, roleSentence, setSharing, sortComputers, splitModels, validEmail, type OrgGate, type OrgSnapshot,
 } from './orgModel.js';
+import { addCreatedSession, useStore } from '../../store.js';
+import { putCachedSession } from '../../sessionCache.js';
 import './cloud.css';
 
 /** Cloud status events can arrive every second while syncing; the lists need no more than this. */
@@ -21,6 +23,8 @@ export interface OrgHandlers {
   onRevokeInvite(inviteId: string): void;
   onRemoveMember(member: OrgMember): void;
   onSetSharing(on: boolean): void;
+  /** Open a chat on one of your own listed computers. Resolves when it is open; rejects with what to do. */
+  onOpenChat?: (c: FleetComputerView) => Promise<void>;
   onGoToSync(): void;
   /** Absent while plans and billing are switched off (#2724). */
   onSeePlans?: () => void;
@@ -44,14 +48,14 @@ export interface OrgViewProps extends OrgHandlers {
   now?: number;
 }
 
-/** Settings > Phone pairing > Organization: share this computer with a team and see the team's computers. */
+/** Settings > Nekko Cloud > Fleet management: your organization, whether this computer is shared with it, and its computers. */
 export function OrganizationView(p: OrgViewProps) {
   // Signed out: nothing new. Sign in under Sync first.
   if (p.gate === 'signed-out') return null;
   const org = p.detail;
   return (
-    <SettingsSection id="organization" title="Organization" aria-label="Organization" data-testid="org-settings"
-      help="Share your computers with a team. Your chats are never shared.">
+    <SettingsSection id="organization" title="Fleet management" aria-label="Fleet management" data-testid="org-settings"
+      help="Your organization's computers, and whether this one is shared with it. Your chats are never shared.">
       {p.gate === 'needs-plan' && (
         <div className="sync-row mt-(--q-inline)" data-testid="org-needs-plan">
           <p className="text-sm text-ink-soft">Organizations are part of Nekko Cloud Pro and Team.</p>
@@ -145,7 +149,7 @@ function OrgBody(p: OrgViewProps & { org: OrgDetail }) {
 
       {org.hasKey ? (
         <SettingRow title={`Share this computer with ${org.name}`}
-          detail={`Lists this computer and its local models for members of ${org.name}. Your chats are not uploaded, and nobody can run anything on it yet.`}
+          detail={`Lists this computer and its local models for members of ${org.name}. With Remote access on, your own other computers can open chats on it. Your chats are not uploaded.`}
           control={<Toggle label={`Share this computer with ${org.name}`} value={org.sharing} disabled={!!p.busy} onChange={p.onSetSharing} />}
           data-testid="org-share" />
       ) : null}
@@ -173,18 +177,35 @@ function Computers(p: OrgViewProps & { org: OrgDetail }) {
       ) : list.length === 0 ? (
         <p className="text-sm text-ink-soft" data-testid="org-empty">No computers shared with {org.name} yet.</p>
       ) : (
-        <ul>{list.map((c) => <ComputerRow key={c.deviceId} c={c} now={p.now} />)}</ul>
+        <ul>{list.map((c) => <ComputerRow key={c.deviceId} c={c} now={p.now} onOpenChat={p.onOpenChat} />)}</ul>
       )}
       {p.fleetError && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text" data-testid="org-fleet-error">{p.fleetError}</p>}
     </div>
   );
 }
 
-function ComputerRow({ c, now }: { c: FleetComputerView; now?: number }) {
+function ComputerRow({ c, now, onOpenChat }: { c: FleetComputerView; now?: number; onOpenChat?: (c: FleetComputerView) => Promise<void> }) {
   const [open, setOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [failed, setFailed] = useState('');
   const { shown, hidden } = splitModels(c.models, open);
+  const openable = !!onOpenChat && canOpen(c);
+  const note = failed || reachNote(c);
+  const start = async () => {
+    if (!onOpenChat || opening) return;
+    setOpening(true);
+    setFailed('');
+    try {
+      await onOpenChat(c);
+    } catch (e) {
+      setFailed(orgErrorText(e));
+    } finally {
+      setOpening(false);
+    }
+  };
   return (
     <li className="flex min-h-(--q-row) items-start justify-between gap-4 py-(--q-inline)" data-testid="org-computer" data-online={c.online} data-you={c.you}
+      data-reach={c.reach ?? ''} data-quiet-row={openable ? '' : undefined}
       title={c.ownerEmail ? `${c.name}, ${c.ownerEmail}` : undefined}>
       <div className="flex min-w-0 items-start gap-2">
         <span className="mt-0.5"><OsIcon os={c.os} /></span>
@@ -198,12 +219,21 @@ function ComputerRow({ c, now }: { c: FleetComputerView; now?: number }) {
             {hidden > 0 && <> <button type="button" className="text-ink-soft underline-offset-2 hover:underline" onClick={() => setOpen(true)} data-testid="org-more-models">+{hidden} more</button></>}
             {open && c.models.length > 3 && <> <button type="button" className="text-ink-soft underline-offset-2 hover:underline" onClick={() => setOpen(false)}>Show less</button></>}
           </div>
+          {note && <div role={failed ? 'alert' : undefined} className={`mt-(--q-tight) text-xs ${failed ? 'text-danger-text' : 'text-ink-faint'}`} data-testid="org-reach-note">{note}</div>}
         </div>
       </div>
-      <span className={`mt-0.5 inline-flex shrink-0 items-center gap-1.5 text-xs ${c.online ? 'text-ink-soft' : 'text-ink-faint'}`} data-testid="org-presence">
-        <StatusDot tone={c.online ? 'success' : 'neutral'} size={7} />
-        {c.online ? 'Online' : lastSeen(c.seenAt, now)}
-      </span>
+      <div className="mt-0.5 flex shrink-0 items-center gap-3">
+        <span className={`inline-flex items-center gap-1.5 text-xs ${c.online ? 'text-ink-soft' : 'text-ink-faint'}`} data-testid="org-presence">
+          <StatusDot tone={c.online ? 'success' : 'neutral'} size={7} />
+          {c.online ? 'Online' : lastSeen(c.seenAt, now)}
+        </span>
+        {openable && (
+          <button type="button" className="btn btn-ghost quiet-row-action -my-1 py-1! text-xs!" disabled={opening} aria-busy={opening}
+            aria-label={`Open a chat on ${c.name}`} onClick={() => void start()} data-testid="org-open-chat">
+            {opening ? 'Connecting…' : 'Open chat'}
+          </button>
+        )}
+      </div>
     </li>
   );
 }
@@ -357,9 +387,18 @@ export function OrganizationSettings() {
       if (window.confirm(msg)) void act('remove', () => window.nekko.orgRemoveMember(detail!.id, m.userId));
     },
     onSetSharing: (on) => void act('share', () => setSharing(window.nekko, detail!.id, on)),
+    onOpenChat: async (c) => {
+      const s = await openOnComputer(window.nekko, detail!.id, c.deviceId);
+      // As a new chat from the toolbar: cached and listed before its window opens, safe from a stale refresh.
+      putCachedSession(s);
+      addCreatedSession(s);
+      const store = useStore.getState();
+      store.openChatPane(s.id);
+      store.setView('command');
+    },
     onGoToSync: () => document.getElementById('sync')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     // Upgrade lives under the account in Sync.
-    onSeePlans: status?.account?.features?.billing ? () => document.getElementById('sync')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined,
+    onSeePlans: status?.account?.features?.billing ? () => document.getElementById('cloud-account')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined,
   };
 
   return (

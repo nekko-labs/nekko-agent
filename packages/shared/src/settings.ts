@@ -94,7 +94,7 @@ export interface MonitorsDock {
   /** Independent minimization state for each monitor. */
   minimized: Record<MonitorKey, boolean>;
 }
-export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2, fixedGrid: false };
+export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'focus', cols: 3, rows: 2, fixedGrid: false };
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   side: 'right', show: true, simpleShow: false,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13 and an
@@ -110,8 +110,8 @@ export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
 export interface CommandWallSetting {
   /** Agent tab placement, independent of window layout. */
   tabs?: 'top' | 'left' | 'hidden';
-  /** The Agents tab's panel of agent cards: shown or closed, a column or a row. */
-  agentPanel?: { show: boolean; orientation: 'vertical' | 'horizontal' };
+  /** The Agents tab's panel of agent cards: shown or closed. */
+  agentPanel?: { show: boolean };
   layout?: WallLayout;
   dock?: MonitorsDock;
   hero?: string | null;
@@ -139,7 +139,8 @@ export interface CommandWallSetting {
  * The background refresh checks under Settings → Updates, one toggle each.
  * These are metadata refreshes only: a check may swap a provider's model list
  * or the skills shelf, never downloads or installs anything (app updates keep
- * their own download/install flow).
+ * their own download/install flow). `whatsNew` is not a check: it is whether
+ * the What's new sheet opens by itself after an update.
  */
 export interface UpdateCheckSettings {
   /** New app versions (desktop: GitHub releases; web: server version). */
@@ -148,19 +149,22 @@ export interface UpdateCheckSettings {
   modelLists?: boolean;
   /** Refresh the skills marketplace catalog. */
   skills?: boolean;
+  /** Open the What's new sheet once on the first launch on a newer line ("Show after updates"). */
+  whatsNew?: boolean;
 }
 
 /**
  * Resolve the effective per-check flags. `app` falls back to the legacy
  * `autoUpdate` field so existing installs keep their choice; `modelLists`
  * defaults on since it only queries providers the user already configured;
- * `skills` defaults off (opt-in network refresh).
+ * `skills` defaults off (opt-in network refresh); `whatsNew` defaults on.
  */
 export function updateChecks(s: AppSettings): Required<UpdateCheckSettings> {
   return {
     app: s.updates?.app ?? s.autoUpdate ?? false,
     modelLists: s.updates?.modelLists ?? true,
     skills: s.updates?.skills ?? false,
+    whatsNew: s.updates?.whatsNew ?? true,
   };
 }
 
@@ -205,8 +209,16 @@ export interface AppNotice {
 }
 
 export interface AppSettings {
+  /** Start each Agents-panel subagent list expanded; otherwise show two. */
+  expandSubagents?: boolean;
   /** Fusion's ranking policy; permission remains per-chat. */
   fusion?: import('./fusion.js').FusionSettings;
+  /**
+   * The local picture model a chat's agent uses (`generate_image`,
+   * `edit_image`) when neither the call nor the chat names one. Absent:
+   * Automatic, the chat's Photo model, else the first ready one.
+   */
+  agentPictureModel?: string;
   /**
    * Default off. The user has Anthropic's own permission to use the
    * approval-gated features (scheduled runs, Nekko tools, the context note,
@@ -221,6 +233,14 @@ export interface AppSettings {
   voice?: import('./voice.js').VoiceSettings;
   /** User-authored additions to the built-in system instructions. */
   systemInstructions?: string;
+  /** System prompt sizing (decision 0095). Keys: `<providerId>::<modelId>` and `<providerId>`; a missing key or `auto` is automatic. */
+  promptProfiles?: {
+    auto?: boolean;
+    models?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
+    providers?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
+    /** Additive system guidance for the exact `<providerId>::<modelId>` route. */
+    modelInstructions?: Record<string, string>;
+  };
   /** Server-side instructions applied to every user turn. Empty disables them. */
   turnWrapper?: string;
   /** User-provided background/preferences, sent to the selected chat provider. */
@@ -268,6 +288,8 @@ export interface AppSettings {
   defaultWorkspaceIds?: string[];
   /** Where repositories added to a chat's environment are cloned. Unset: `~/nekko-repos`. */
   repoCloneDir?: string;
+  /** The one-time offer to use the folder holding the user's repositories as `repoCloneDir` was made (answered either way). */
+  repoCloneDirOffered?: boolean;
   connectors: ConnectorConfig[];
   defaultProviderId?: string;
   defaultModelId?: string;
@@ -316,6 +338,7 @@ export interface AppSettings {
 
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
+  /** The one-time "where your archived chat went" tip was shown. Old key name, kept so it is not shown again. */
   completionTipSeen?: boolean;
   /** The "Send your first prompt" intro has been shown (or skipped) on the first ever new chat. */
   firstPromptIntroSeen?: boolean;
@@ -352,11 +375,15 @@ export interface AppSettings {
   /** Display name shared with paired devices; blank uses the system hostname. */
   machineName?: string;
   phoneChanges?: boolean;
-  /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
+  /**
+   * Chat pane's top-right action. Undefined or 'complete' means Archive, not Delete.
+   * The stored value keeps its old name so older builds and the phones still read it.
+   */
   chatPaneAction?: 'complete' | 'delete';
   /**
-   * Complete agents untouched for this many days (7, 14, 30, 90), or 0 for
-   * never. Undefined means the default, 30 (`AUTO_COMPLETE_DEFAULT_DAYS`).
+   * Archive agents untouched for this many days (7, 14, 30, 90), or 0 for
+   * never. Undefined means the default, 30 (`AUTO_ARCHIVE_DEFAULT_DAYS`).
+   * The key keeps its old name so saved settings carry over.
    */
   autoCompleteAfterDays?: number;
   /** Path to the shell new terminals launch by default (undefined = auto-detect). */
@@ -408,6 +435,14 @@ export interface AppSettings {
   automationRunPolicy?: import('./tasks.js').AutomationRunPolicy | null;
   /** Minutes without input before the user counts as away (default 5). */
   automationIdleMinutes?: number;
+  /**
+   * Shut down a booted simulator an agent used once no agent has touched it
+   * for this many minutes and it is nearly idle (#2814). Unset or 0 is never.
+   * A simulator no agent used (one you booted) is never shut down.
+   */
+  simulatorAutoShutdownMinutes?: number | null;
+  /** Open the chat's Simulator panel when its agent starts using a simulator (default on). */
+  simulatorPanelAutoOpen?: boolean;
   /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
    * the event as JSON on stdin (see crates/nekko-tools/src/hooks.rs).
@@ -627,6 +662,9 @@ export interface UsageSummary {
     modelIds?: string[];
     /** Absent on a day with no attributed records. */
     attribution?: UsageAttribution;
+    /** Paid cloud pictures that day (`kind: "picture"` usage lines), and what they cost; absent on a day with none. */
+    pictures?: number;
+    pictureCost?: number;
   }>;
   /** True if any recorded usage came from a subscription provider. */
   hasSubscriptionUsage?: boolean;

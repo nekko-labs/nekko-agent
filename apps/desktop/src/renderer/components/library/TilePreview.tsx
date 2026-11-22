@@ -4,7 +4,7 @@ import type { ArtifactKind } from '../../artifactsIndex.js';
 import { SERVED_PREVIEW_SANDBOX } from '../ArtifactPreview.js';
 import { ArtifactPreview } from './ArtifactPreview.js';
 import { FRAME } from './designCanvasView.js';
-import { thumbnailCache, thumbnailKind } from './thumbnailCache.js';
+import { captureAndStoreHtmlThumbnail, loadThumbnailWithDisk, thumbnailKind } from './thumbnailCache.js';
 
 /** How long a page runs before its motion is held, so a fade-in has landed. */
 const SETTLE_MS = 1200;
@@ -33,13 +33,15 @@ function useSeen(ref: React.RefObject<HTMLElement | null>): boolean {
  * network), cannot be clicked or focused, and is served only once its tile is
  * near the screen. It is released when the tile goes.
  */
-export function TilePreview({ kind, path, ext, revision, className = '', mover }: {
+export function TilePreview({ kind, path, ext, revision, className = '', mover, badge }: {
   kind: ArtifactKind;
   path: string;
   ext: string;
   revision?: string | number;
   className?: string;
   mover?: string;
+  /** Drawn over the preview's top-right corner (Library's sync state). */
+  badge?: React.ReactNode;
 }) {
   const box = useRef<HTMLSpanElement>(null);
   const seen = useSeen(box);
@@ -47,10 +49,7 @@ export function TilePreview({ kind, path, ext, revision, className = '', mover }
   const pictureKind = thumbnailKind(path);
   const canRead = !!pictureKind && typeof window !== 'undefined' && !!window.nekko?.readFile;
   const [served, setServed] = useState<HtmlPreviewServed | null>(null);
-  const [picture, setPicture] = useState<{ path: string; revision?: string | number; url: string } | null>(() => {
-    const url = thumbnailCache.peek(path, revision);
-    return url ? { path, revision, url } : null;
-  });
+  const [picture, setPicture] = useState<{ path: string; revision?: string | number; url: string } | null>(() => null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [width, setWidth] = useState(0);
@@ -69,10 +68,20 @@ export function TilePreview({ kind, path, ext, revision, className = '', mover }
     return () => { live = false; if (id) void window.nekko.releaseHtmlPreview?.(id).catch(() => {}); };
   }, [seen, html, path]);
 
+  // For HTML designs: check disk cache first, so rows see the thumbnail straight away on repeat visits.
+  useEffect(() => {
+    if (!seen || !html || !window.nekko?.libraryThumbGet || revision === undefined) return;
+    let live = true;
+    window.nekko.libraryThumbGet(path, revision).then((cached) => {
+      if (live && cached) setPicture({ path, revision, url: cached });
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [seen, html, path, revision]);
+
   useEffect(() => {
     if (!seen || !canRead) return;
     let live = true;
-    thumbnailCache.load(path, revision).then((url) => {
+    loadThumbnailWithDisk(path, revision).then((url) => {
       if (live) setPicture(url ? { path, revision, url } : null);
     });
     return () => { live = false; };
@@ -95,7 +104,16 @@ export function TilePreview({ kind, path, ext, revision, className = '', mover }
   const settle = () => {
     clearTimeout(timer.current);
     // A moving design costs nothing once held; the canvas lets it play.
-    timer.current = setTimeout(() => { frame.current?.contentWindow?.postMessage({ nekkoPreview: 'pause' }, '*'); setReady(true); }, SETTLE_MS);
+    timer.current = setTimeout(() => {
+      frame.current?.contentWindow?.postMessage({ nekkoPreview: 'pause' }, '*');
+      setReady(true);
+      // After the tile has settled, capture a thumbnail for future visits (non-blocking).
+      if (served && revision !== undefined) {
+        void captureAndStoreHtmlThumbnail(path, revision, served.url).then((png) => {
+          if (png) setPicture(p => (p?.path === path && p?.revision === revision ? p : { path, revision, url: png }));
+        });
+      }
+    }, SETTLE_MS);
   };
 
   const pictureUrl = picture?.path === path && picture.revision === revision ? picture.url : '';
@@ -110,6 +128,7 @@ export function TilePreview({ kind, path, ext, revision, className = '', mover }
           className="library-live-frame" data-ready={ready || undefined}
           style={{ width: FRAME.width, height: Math.ceil(height / scale), transform: `scale(${scale})` }} />
       )}
+      {badge}
     </span>
   );
 }

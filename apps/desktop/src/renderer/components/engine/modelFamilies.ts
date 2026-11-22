@@ -1,4 +1,4 @@
-import { modelModality, type CatalogModel, type EngineMemory, type GpuFit, type LocalModel } from '@nekko-agent/shared';
+import { modelModality, type CatalogModel, type EngineMemory, type GpuFit, type ImageRecommendedOption, type LocalModel, type Recommendations } from '@nekko-agent/shared';
 
 export type LibraryModel = LocalModel & { loaded: boolean; gpuFit?: GpuFit };
 export interface ModelFamily {
@@ -36,7 +36,16 @@ export function groupModelFamilies(local: LibraryModel[], catalog: CatalogModel[
 
 export function gpuGuidance(sizeBytes: number | undefined, memory?: EngineMemory, model?: LibraryModel): string {
   if (model?.gpuFit === 'cpu' || memory?.kind === 'ram') return 'CPU only';
-  if (model?.gpuFit === 'wont' || model?.gpuFit === 'partial') return 'Too big';
+  if (model?.gpuFit === 'wont') return 'Too big';
+  if (model?.gpuFit === 'partial') {
+    // The planner measures against what is free now, so "partial" also means
+    // a GPU that other models or apps are holding: that is not "too big".
+    const layers = model.layers ?? 0;
+    const capped = model.preset?.gpuLayers != null && layers > 0 && model.preset.gpuLayers < layers;
+    if (capped) return 'Part on CPU by its settings';
+    if (!sizeBytes || !memory?.budgetBytes) return 'Not enough free GPU memory';
+    return sizeBytes * 1.2 <= memory.budgetBytes ? 'Fits on a free GPU' : 'Too big';
+  }
   if (model?.gpuFit === 'full') {
     return model.maxContext && model.preset?.contextTokens && model.preset.contextTokens < model.maxContext
       ? 'Fits on GPU, but limited context size' : 'Fits on GPU';
@@ -53,19 +62,86 @@ export type FamilyKind = 'chat' | 'image' | 'video';
 /** Video diffusion families (sd.cpp runs Wan, LTX and HunyuanVideo). */
 const VIDEO_NAME = /(?:^|[ /_.-])(?:wan[-_ ]?\d|ltx[-_ ]?(?:v|video|\d)|hunyuan[-_ ]?video|cogvideo|mochi[-_ ]?\d|text-to-video|image-to-video)/i;
 
+/** The task a repo declares on Hugging Face, when its name does not say what it makes. */
+const VIDEO_TASK = /^(?:text|image|video)-to-video$/;
+const IMAGE_TASK = /^(?:text|image|image-text)-to-image$/;
+
 /**
- * Which filter a family belongs under. Video is checked first: a Wan file on
- * disk is classified `image` (the engine runs it on its picture runtime), but
- * what it makes is video.
+ * Video is checked first: a Wan file on disk is classified `image` (the engine
+ * runs it on its picture runtime), but what it makes is video.
  */
-export function familyKind(f: ModelFamily): FamilyKind {
-  const names = [f.name, ...f.local.flatMap(m => [m.name, m.id, m.architecture ?? '']), ...f.catalog.flatMap(m => [m.id, m.name, m.baseModel ?? ''])];
-  const tags = f.catalog.flatMap(m => m.tags);
-  if (tags.includes('video') || names.some(n => VIDEO_NAME.test(n))) return 'video';
-  if (
-    tags.includes('image') ||
-    f.local.some(m => m.modality === 'image') ||
-    names.some(n => modelModality({ name: n }) === 'image')
-  ) return 'image';
+function kindOf(names: string[], tags: string[], tasks: string[], imageOnDisk: boolean): FamilyKind {
+  if (tags.includes('video') || tasks.some(t => VIDEO_TASK.test(t)) || names.some(n => VIDEO_NAME.test(n))) return 'video';
+  if (tags.includes('image') || tasks.some(t => IMAGE_TASK.test(t)) || imageOnDisk || names.some(n => modelModality({ name: n }) === 'image')) return 'image';
   return 'chat';
+}
+
+/** Which filter a family belongs under. */
+export function familyKind(f: ModelFamily): FamilyKind {
+  return kindOf(
+    [f.name, ...f.local.flatMap(m => [m.name, m.id, m.architecture ?? '']), ...f.catalog.flatMap(m => [m.id, m.name, m.baseModel ?? ''])],
+    f.catalog.flatMap(m => m.tags),
+    f.catalog.map(m => m.pipelineTag ?? ''),
+    f.local.some(m => m.modality === 'image'),
+  );
+}
+
+/** What one repository makes, before it is grouped into a family. */
+export function catalogKind(m: CatalogModel): FamilyKind {
+  return kindOf([m.id, m.name, m.baseModel ?? ''], m.tags, [m.pipelineTag ?? ''], false);
+}
+
+/**
+ * The picture and video models Nekko has set up: the recommendation list's
+ * candidates, each a pinned repository whose supporting files are known and
+ * tested. One per repository, whichever task named it first.
+ */
+export function setUpPictureModels(recs: Pick<Recommendations, 'imageTasks'> | null | undefined): ImageRecommendedOption[] {
+  const byRepo = new Map<string, ImageRecommendedOption>();
+  for (const t of recs?.imageTasks ?? []) for (const o of [...(t.pick ? [t.pick] : []), ...t.options]) if (!byRepo.has(o.repo)) byRepo.set(o.repo, o);
+  return [...byRepo.values()];
+}
+
+/**
+ * A picture or video repository Nekko has not set up is only offered when a
+ * publisher known for working conversions made it and enough people fetch it.
+ * Hugging Face search returns every GGUF that matches a word, most of them
+ * remixes that need files Nekko does not know how to fetch.
+ */
+export const MORE_MIN_DOWNLOADS = 10_000;
+export const MORE_PUBLISHERS = new Set(['leejet', 'city96', 'quantstack', 'unsloth', 'second-state', 'gpustack', 'calcuis', 'bullerwins']);
+
+/**
+ * Sorts a search into what the list shows and what waits behind "Show more".
+ *
+ * Chat repositories are untouched. A picture or video repository is `listed`
+ * when Nekko has set it up or one of its files is already on this machine,
+ * `more` when it passes the publisher and download bar, and dropped otherwise.
+ * With `withPicks`, the set-up models are listed whether or not the search
+ * returned them, so Pictures and Video have something to show before a search.
+ */
+export function shelveCatalog(
+  catalog: CatalogModel[],
+  picks: ImageRecommendedOption[],
+  local: Pick<LocalModel, 'sourceRepo'>[],
+  withPicks: boolean,
+): { listed: CatalogModel[]; more: CatalogModel[] } {
+  const setUp = new Set(picks.map(p => p.repo));
+  const onDisk = new Set(local.map(m => m.sourceRepo));
+  const found = new Set(catalog.map(m => m.id));
+  // Set-up repositories lead, so a family offers the tested one first.
+  const listed: CatalogModel[] = catalog.filter(m => setUp.has(m.id));
+  if (withPicks) {
+    for (const p of picks) {
+      if (found.has(p.repo)) continue;
+      listed.push({ id: p.repo, name: p.name, owner: p.owner, tags: [p.capabilities.includes('video') ? 'video' : 'image'], quants: [{ label: p.quant, file: p.files[0] ?? '', sizeBytes: p.weightsBytes }], license: p.license });
+    }
+  }
+  const more: CatalogModel[] = [];
+  for (const m of catalog) {
+    if (setUp.has(m.id)) continue;
+    if (catalogKind(m) === 'chat' || onDisk.has(m.id)) listed.push(m);
+    else if (MORE_PUBLISHERS.has(m.id.split('/')[0].toLowerCase()) && (m.downloads ?? 0) >= MORE_MIN_DOWNLOADS) more.push(m);
+  }
+  return { listed, more };
 }

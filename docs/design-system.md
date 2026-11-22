@@ -2,6 +2,8 @@
 
 How Nekko Agent looks and moves, and the rules every screen follows. Every UI change reads this first. The tokens live in `apps/desktop/src/renderer/styles.css` (listed in [TASKS.md](../TASKS.md#design-system--uiux)); this page is how a screen is put together from them. Why: [decision 0071](decisions/0071-quiet-surfaces.md) and [decision 0075](decisions/0075-quiet-design-system.md).
 
+The public version, to share and to try in both colourways, is [nekkoagent.com/design-system](https://nekkoagent.com/design-system), with this page as [Markdown](https://nekkoagent.com/design-system.md) and the tokens as [JSON](https://nekkoagent.com/design-system.json) for agents. `scripts/build-design-system.mjs` builds all three at deploy time from this page, the tokens in `styles.css` and the template in `scripts/design-system/page.html`, so the principles, checklist and values follow on their own; a change to the page's other copy goes into the template in the same PR.
+
 ## Principles
 
 1. **Space before lines.** Gaps and type separate things. A border is the last resort.
@@ -23,6 +25,7 @@ Reach for these in order and stop at the first that works:
 ## Surfaces
 
 - A page is one surface (`--paper`). A popover or menu is one floating surface (`--surface`, `--shadow-float`). Nothing inside either gets a card, a border or a tinted tile.
+- A tooltip is a small popover: the same surface, shadow and faint edge, 10px corners. Use `HoverTip` (with `content` for something richer, like `PrTip`) or a plain `title`, which `TitleTips` draws in the same style. Never style a tooltip of your own.
 - Allowed objects, because they are things rather than grouping: text fields, the composer, code blocks, a dragged item (`--shadow-lift`), workbench panels, a destructive confirmation.
 
 ## Spacing: 8 and 20
@@ -95,6 +98,7 @@ Every action answers with motion: short, decelerating, never bouncing. One curve
 | Expand, add a row | Height opens, content fades in | 200ms |
 | Remove a row | Fades, then the gap closes | 160ms |
 | Popover, menu | Fades in, rises 4px, scales from 0.98 at its anchor | 200ms in, 150ms out |
+| Tooltip | Fades in, moves 4px out from its anchor, scales from 0.98; none when sliding between tips | 200ms in, gone at once |
 | Status change | Word crossfades, glyph changes | 200ms |
 | Meter, theme | Width or colour eases to the new value | `--dur-slow` 260ms |
 | Toast | Rises 8px and fades in; fades out after 4s | 200ms |
@@ -109,6 +113,8 @@ Move 8px at most. Animate `opacity` and `transform`, never blur, bounce or overs
 - **Buttons**: slim. 28 tall, 12 of padding each side, 14/500 label, 8 radius. Never pad a `.btn` taller. One primary per view. Secondary is a neutral wash (`.btn` / `.btn-ghost`), not an outline. Destructive is words in `--danger-text` until the confirmation.
 - **Tabs** (`QuietTabs`): the label in `--ink-soft`, the selected one in `--ink` on a wash pill that slides.
 - **Fields** (`quiet-field`): no border at rest, a faint wash, the `--ring` halo and an accent edge on focus.
+- **Switches** (`Toggle`, `quiet-switch`): one size everywhere, a 36x20 track and a 16px knob, faint off and accent on. Never draw a switch of your own: render `Toggle`, or put `quiet-switch` on a checkbox input or an `aria-hidden` span with `data-on`.
+- **Empty list**: one faint line that says what is missing and where to add it. No illustration or dashed card inside a panel.
 - **Removal**: anything that removes or reverts offers Undo in a toast instead of a confirm dialog, unless it cannot be undone.
 
 ## Copy
@@ -119,7 +125,7 @@ Move 8px at most. Animate `opacity` and `transform`, never blur, bounce or overs
 
 ## Building blocks
 
-Use these instead of re-declaring markup (`components/primitives/`): `Group`, `Row`, `QuietTabs`, `Rule`, `StatusDot`, `Toggle`, `StatusIcon`, `WallMascot`, and the Gentleface icons. CSS utilities: `quiet-row`, `quiet-tab`, `quiet-field`, `quiet-rule`, `quiet-group-label`.
+Use these instead of re-declaring markup (`components/primitives/`): `Group`, `Row`, `QuietTabs`, `Rule`, `StatusDot`, `Toggle`, `StatusIcon`, `WallMascot`, and the Gentleface icons. CSS utilities: `quiet-row`, `quiet-tab`, `quiet-field`, `quiet-rule`, `quiet-group-label`, `quiet-switch`.
 
 ## Checklist for a screen
 

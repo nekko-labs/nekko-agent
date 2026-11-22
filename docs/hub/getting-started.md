@@ -4,7 +4,7 @@ Nekko Agent is AI help on your computer, for coding and everyday work. It reads,
 
 ## Who we are
 
-Nekko Agent is made by [Nekko Labs](https://nekkolabs.com). We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
+Nekko Agent is made by [Nekko Labs](https://nekkolabs.com), and its name comes from neko, Japanese for cat. We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
 
 We care about three things:
 
@@ -38,6 +38,16 @@ The first time it opens, Nekko says hi and asks a few quick questions, all of th
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
+## A new ChatGPT model is missing
+
+The ChatGPT connection lists models returned by your signed-in account's Codex catalog, not every model announced for the OpenAI API. OpenAI can filter that catalog by your plan, rollout and the client version Nekko reports. Keep Nekko updated; installing a newer Codex CLI separately does not update Nekko's catalog request. After updating and restarting Nekko, reopen the model picker. During normal use, successful catalogs can be cached for up to five minutes.
+
+OpenAI now documents [GPT-6.2 Astra](https://developers.openai.com/api/docs/models/gpt-6.2-astra), model ID `gpt-6.2-astra`. New source builds request the catalog as Codex `0.171.0`, but the model appears only when your account's catalog includes it. The discovery change has synthetic provider-test coverage, not live entitlement verification. Nekko does not automatically switch existing chats to a new model.
+
+## Returning to Agents
+
+On desktop and the Local Web UI, the top of the Settings page shows an **← Agents / Settings** breadcrumb. Click **Agents** to return directly to your agents. Other pages keep their existing navigation.
+
 ## Typing in a new agent window
 
 A new chat greets you with a welcome phrase, such as “What’s next?” or “It’s building time.”, and a small pixel Nekko peeking beside it, looking toward the heading. Each chat keeps its own greeting rather than rotating while you work. Morning and late-night chats can also get a time-appropriate hello. Type your request in the composer below. The very first time, a short **Send your first prompt** intro opens over it: three looping demos (start with a question, add your files, send). **Skip**, the ✕, Escape or a click outside closes it, and it does not open again. It stays closed for anyone who turned off contextual tips. The iPhone and iPad app shows its own version the first time you start a chat on a computer: the same three steps, shown on the phone's new-chat screen (type or say it, add photos and a folder, tap Start). Tap **Skip**, **Get started**, or swipe the sheet down to close it. The Android app shows the same three steps over your first New chat, drawn on Android's screens: type or say it, pick a folder and add photos, then tap Send. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. In Nekko and Indigo, the selected window instead keeps a soft plum gradient into the full conversation, with a gentle violet/rose color crossfade; in Dynamic View only the active agent has that gradient, even while other agents are working. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Agent chat rows in the left panel stay flat, without a tile background or border; the title, status and keyboard focus outline identify the relevant chat. The composer's effort gauge is borderless, and **Suggestions** appears on its own row below the model/action controls when there are suggestions to show. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
@@ -46,7 +56,7 @@ Opening an agent composer puts the caret after any restored draft once a usable 
 
 ## Returning to the latest message
 
-When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in completed chats, without waiting for another reply. The pill disappears when you reach the bottom.
+When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in archived chats, without waiting for another reply. The pill disappears when you reach the bottom.
 
 ## Recovering file edits
 
@@ -72,7 +82,7 @@ Open **Custom colors** to adjust the accent and secondary color with the wheel o
 
 ## Following tool activity
 
-The agent's plan sits on top of the message box as a card. Each step shows its title, one line of detail, and chips for what that step produced: the PRs the agent opened (with their CI status) and the files or previews it linked. Finished steps shrink to their title; hover the card to see their details. **Change plan** tells the agent what to do differently.
+The agent's plan sits just above the message box. Each step shows its task title without a subtext line. Related task, sub-agent, PR, CI, file and preview chips sit to the right of the title when they fit. A **+N** chip counts the remaining chips; click it, or focus it and press Enter or Space, to expand only that row. Click the count again to fold it back. The leading status mark keeps reported check details in its tooltip and opens safe evidence links when available. The Plan header folds the whole plan to the current task. To change the plan, tell the agent in chat.
 
 Chat tool calls use icons for what the agent is doing: reading files, searching, editing, running checks, Git, web access or planning. Shell execution, including Python, uses the same terminal artwork as the current-work indicator. Transcript icons stay still; expand a tool row to read its output. Unknown tools keep the generic tool icon.
 
@@ -199,7 +209,7 @@ The composer shows the model title without a subscription suffix. Open its menu 
 
 **Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog. On a Claude subscription, the choices are the ones Claude Code takes, and it applies the closest level a model has.
 
-In new and ongoing chats, prompt-writing **Suggestions** appear on the far right of the **Mode** row (Detailed only by default). The **Environment** picker (the folder button) always sits immediately to the right of **+**, in both Simple and Detailed. It lists the chat's local **Folders** and its **Repositories**. Open it to choose or add a folder, set defaults, or remove a folder or repository from this chat without revoking its saved access. **Add repository…** lists the repositories your connected GitHub or GitLab account can reach; pick one and Nekko uses the copy already on your computer when it finds one (in your saved folders or the usual code folders such as `~/code` or `~/Developer`). Otherwise it clones it into your repositories folder: the first time, it asks where repositories should sync (`~/nekko-repos` or a folder you choose), and **Settings > General > Repositories folder** changes it later. In a **sandbox** chat, a repository that is not on your computer goes into the sandbox instead: it shows as **In the sandbox** and is cloned straight into the sandbox when you set it up, never into your folders. With no git provider connected, **Connect repositories** opens Connectors. **+ → Repository** opens the same list. The clone uses the connector's token only for that download; later pulls and pushes use your own git sign-in. Folders no longer live inside Mode. While a reply runs, the picker stays visible and becomes editable again when the reply finishes.
+In new and ongoing chats, prompt-writing **Suggestions** appear on the far right of the **Mode** row (Detailed only by default). The **Environment** picker (the folder button) always sits immediately to the right of **+**, in both Simple and Detailed. It lists the chat's local **Folders** and its **Repositories**. Open it to choose or add a folder, set defaults, or remove a folder or repository from this chat without revoking its saved access. **Add repository…** lists the repositories your connected GitHub or GitLab account can reach; pick one and Nekko uses the copy already on your computer when it finds one (in your saved folders or the usual code folders such as `~/code` or `~/Developer`). Otherwise it clones it into your repositories folder: the first time, it asks where repositories should sync (the folder that already holds your repositories when Nekko knows one, otherwise `~/nekko-repos`, or a folder you choose), and **Settings > General > Repositories folder** changes it later. Before that, the first time you add a folder that sits in (or is) a folder holding several repositories, such as `~/code`, the chat asks once whether to keep your repositories there: **Use this folder** or **No thanks**. In a **sandbox** chat, a repository that is not on your computer goes into the sandbox instead: it shows as **In the sandbox** and is cloned straight into the sandbox when you set it up, never into your folders. With no git provider connected, **Connect repositories** opens Connectors. **+ → Repository** opens the same list. The clone uses the connector's token only for that download; later pulls and pushes use your own git sign-in. Folders no longer live inside Mode. While a reply runs, the picker stays visible and becomes editable again when the reply finishes.
 
 When you ask the agent to change a project or repository that is not in the chat's environment, it asks before guessing: it can search this computer for it (and then offer **Use this folder** for what it found), let you **choose the folder**, or **add it from GitHub or GitLab** right in the question. Whatever you add joins the environment and the agent carries on there. Model selection and reasoning effort stay in their dedicated composer controls, not in the **Mode** panel. Saved modes remain compatible with their existing model and effort preferences.
 
@@ -215,6 +225,14 @@ where Auto routing is not supported, such as a fixed-model workflow step.
 The iPhone and Android apps' model lists have **All**, **Cloud** and **Local** at
 the top too (they offer no Auto, so no Fusion).
 
+### See what's new in this version
+
+**What's new** lists the few changes in your version worth knowing about, each with the pull request that made it. **Show more** lists the rest, which scroll inside the sheet, and **See every change** opens your version's section of the [What's new](https://nekkoagent.com/whatsnew) page on this site. The list ships with the app, so it opens without a connection.
+
+Open it from **Settings → Updates → What's new**, from **About Nekko Agent**, by typing "what's new" in the command palette (Ctrl/Cmd+K), or from the **What's new** pill in the title bar right after an update. The ✕ on that pill dismisses it without opening the list.
+
+It also opens by itself once, on the first launch after an update to a new release line (0.10 to 0.11; not for a nightly or patch build within a line). If an agent is working, it waits until none is. To stop that, turn off **Show after updates** at the bottom of the list, or **Settings → Updates → Show what's new after updates**; both are the same switch.
+
 ### Search everything (Ctrl/Cmd+K)
 
 Press **Ctrl+K** (**⌘K** on macOS) to search the whole app from one box: commands, Settings pages, individual settings, chats, the messages inside them and the files your chats made. The best matches come first, and message matches always come after the rest. The chips under the box show how many results each type has; click one, or press **Tab** (Shift+Tab to go back), to show only Commands, Settings, Chats, Messages or Artifacts.
@@ -227,15 +245,19 @@ The selected agent has a tinted background across its row, so you can spot the c
 
 By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. A card whose agent opened a pull request shows it as a chip at its bottom right, with the PR icon in the colour of its state: green when open, gray for a draft, purple when merged, red when closed. With several PRs it shows the most current one and **+N**; hover the count to see them all, and click a PR to open it. Use the sliders button to group by project, date or computer instead.
 
-In the vertical Agents panel, the group heading stays at the top of the list while you scroll its agents, then yields to the next group. The horizontal row keeps its usual sideways scrolling.
+The group heading stays at the top of the list while you scroll its agents, then yields to the next group.
+
+### Switching what the Agents panel lists
+
+A row of icons at the top of the Agents panel picks which kind of window it lists: **Agents**, **Terminals**, **Photos and videos** and **Files**. Click an icon, or use the arrow keys once it has focus; hover an icon for its name. Agents shows the agent cards described above. Terminals and Photos and videos show just those. Files is a file browser: under **Open** are the files already open in your agent windows, and under **Folders** your connected folders and repositories, which unfold in place. Choose **Add folder…** below the list to connect another folder, or click the **×** beside a folder to disconnect it from Nekko and its chats without deleting anything on disk. Pick a file to open it in a window on the wall, where you can edit and save it (Ctrl/Cmd+S). The panel remembers your choice.
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Animations > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 
-Each group initially shows up to **20 agent rows**. Choose **Show more (N)** below a group to show its full list in one click; other groups stay limited. Completed lists also start at 20 when opened. Hidden cards are not loaded into the panel until needed, while group counts and search still cover all your chats. Opening an agent outside the first 20 brings its row into the last visible slot. Changing the grouping resets these expanded lists.
+Each group initially shows up to **20 agent rows**. Choose **Show more (N)** below a group to show its full list in one click; other groups stay limited. Archived lists also start at 20 when opened. Hidden cards are not loaded into the panel until needed, while group counts and search still cover all your chats. Opening an agent outside the first 20 brings its row into the last visible slot. Changing the grouping resets these expanded lists.
 
 ### Delegated agents in the Agents panel
 
-Delegated subagents appear as compact rows beneath their parent, joined to its card by a tree line, each led by its status (a rocket while it works, a check when done). This works in Claude chats too, where a subagent's chat is a live copy you can read but not write to. The plan above the composer also shows each subagent as a live card along its bottom: its status, its task on one line, and what it is doing right now; click a card to open that subagent. A subagent's chat opens under a banner naming the chat that spawned it; click the name to go back to it. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. On desktop and Local Web UI, suggested actions below the reply have a **This chat / Subagent** sliding selector. Typed follow-ups use the normal composer Send/Enter path; the old duplicate routing-button row is removed. You can also ask for delegation in your own message. Native phone controls are unchanged. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
+Delegated subagents appear as compact rows beneath their parent, joined to its card by a tree line, each led by its status (a rocket while it works, a check when done). This works in Claude chats too, where a subagent's chat is a live copy you can read but not write to. The plan above the composer also shows each subagent as a live card along its bottom: its status, its task on one line, and what it is doing right now; click a card to open that subagent. A subagent's chat opens under a banner naming the chat that spawned it; click the name to go back to it. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. A chat stays in Building while its subagents work, even after its own reply has finished (a Claude chat ends its turn while background subagents run on), and under that reply it says **Waiting on N sub-agents** with one row per working subagent and what it is doing; click a row to open it. On desktop and Local Web UI, suggested actions below the reply have a **This chat / Subagent** sliding selector. Typed follow-ups use the normal composer Send/Enter path; the old duplicate routing-button row is removed. You can also ask for delegation in your own message. Native phone controls are unchanged. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
 
 A turn's working steps fold into one work group whose header says what the agent did, by purpose: for example *Read guidance, looked through the code, edited 3 files*. Hover or keyboard-focus the header to read the complete summary and each purpose group with its number of calls. Click the header to open the steps. Inside it, adjacent calls with one purpose are one row that states the goal, such as *Read the project's guidance · AGENTS.md, CLAUDE.md* or *Ran the tests · passed*. When a call gave its own description (Claude Code's commands do), that description is the goal. Click a group to see its individual calls. A call waiting for your approval, a question for you, and a lone call stay rows of their own. A group with a failed call says *1 failed* and stays open.
 
@@ -259,11 +281,11 @@ Click a file link to open the file in a window beside the chat. Code is coloured
 
 ### Agent panel shortcuts
 
-Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
+Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video chats are listed under their own icons at the top of the panel.
 
 The Agent Board header also has a single **+**: hover or click it for the same three choices. Both menus use a neutral light/dark background and highlight the hovered or keyboard-focused row in your primary color. The shortcut appears beside every choice:
 
-Immediately to its right, **View** brings together **Single agent** (one focused chat), **Multi-agent** (tiled chats), **Snap to grid**, desktop screen/desktop controls, and **Simple / Detailed** radio rows. The colorful **Customize** button opens **Settings > Customize**. On desktop, screen details stay tucked away behind **Use more than one screen**. Selecting it opens connected secondary screens and reveals their individual controls; clearing it closes those secondary windows, never the main window. Choose **Prioritize main screen first** or **Balanced** for where new agents open. With just one connected screen, you can reveal the placement preference without opening another window. Cmd/Ctrl+Shift+1 and +2 still switch the two views. Snap to grid is available in free-form Multi-agent view; it keeps windows evenly spaced and attracts dividers only when they are within 3% of a grid boundary. The menu scrolls on smaller windows. The two illustrated layout cards preview one chat or chats side by side; the toolbar icon reflects your selection. Under **Screens**, select an additional display to open or close its Nekko window. A single display shows its connected status instead. **Open new agents** lets you **Spread across screens** (empty screens first, then the one with the fewest agents) or **Prefer main screen**. With only one screen, that preference applies when you connect more displays. These desktop-only controls are not shown in the Local Web UI.
+Immediately to its right, **View** brings together **Single agent** (one focused chat, where a new install starts), **Multi-agent** (tiled chats), **Snap to grid**, desktop screen/desktop controls, and a **Detailed interface** switch (off is Simple). Under the switch, **See the example in settings** opens a live preview of what Simple hides. The colorful **Customize** button opens **Settings > Customize**. On desktop, screen details stay tucked away behind **Use more than one screen**. Selecting it opens connected secondary screens and reveals their individual controls; clearing it closes those secondary windows, never the main window. Cmd/Ctrl+Shift+1 and +2 still switch the two views. Snap to grid is available in free-form Multi-agent view; it keeps windows evenly spaced and attracts dividers only when they are within 3% of a grid boundary. The menu scrolls on smaller windows. The two illustrated layout cards preview one chat or chats side by side; the toolbar icon reflects your selection. Under **Screens**, select an additional display to open or close its Nekko window. Where new agents open is in **Settings > Customize > Open new agents**: **Prioritize main screen first** or **Balanced** (the screen with the fewest agents first), and, once you have turned on another desktop, whether Nekko **Switches you there** or **Opens when you get there**. These desktop-only controls are not shown in the Local Web UI.
 
 
 | Action | macOS | Windows/Linux |
@@ -282,9 +304,9 @@ In the horizontal Agents row, the controls sit in a compact two-column strip bes
 
 ### Stopping agents and their watchers
 
-Completing or closing an agent stops its active work and cancels pending durable
+Archiving or closing an agent stops its active work and cancels pending durable
 watches, including watches owned by delegated descendants. The chat is retained
-when completed. Minimize only hides a window and deliberately lets work continue.
+when archived. Minimize only hides a window and deliberately lets work continue.
 In Dynamic View the board is laid out in zones: places that each hold one agent.
 It starts with two side by side. New agents wait in the Agents list instead of
 opening on the board. Click a zone to make it the active one (it gets a heavier
@@ -293,13 +315,13 @@ agent from the list straight into a zone. Clicking an agent that is already on
 the board just switches to its zone. Each zone has a colour, shown as a small
 square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips. You can also choose **+ > Add agent zone** in the board toolbar to add and select an empty right-hand column without creating an agent or switching views.
 Press a zone's name bar and move the pointer to start dragging it; a click without movement only selects the zone and does not lift it. Hold Shift at a board edge to span the
-whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
+whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or archiving
 an agent leaves its zone in place, dotted, until you fill it.
 The composer's borderless action switches from Send to a Stop icon while the agent runs with an empty draft. Type a follow-up and it becomes Send again, queuing the message without interrupting the agent. Clear the draft to get Stop back. To schedule work, open **+ > Automate**; Automate no longer takes up a separate place on the composer.
 In Dynamic View (including Fixed grid), a window also minimizes automatically
 when its agent finishes a successful reply. Errors and requests for input stay
 visible, and Focused View keeps finished replies open. Select the chat in the
-Agents list to restore a minimized window; this does not mark it Complete.
+Agents list to restore a minimized window; this does not archive it.
 Stop cannot undo tokens already consumed. A later intentional run can arm new
 watches; a failed delegation should explain its failure and continue directly
 when safe, never silently switch provider or model.
@@ -338,7 +360,7 @@ and wake-up details wrap the same way on desktop and the Local Web UI.
 
 ### Resizing the side panels
 
-Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Under its totals, Budget shows where the tokens went for the range: **Sent by you** versus **Background** (watch wake-ups, automations, automatic continues), **Main chats** versus **Subagents**, and **Cache reads** versus **New input**. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
+Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 248px wide and can be narrowed to 220px. Under its totals, Budget shows where the tokens went for the range: **Sent by you** versus **Background** (watch wake-ups, automations, automatic continues), **Main chats** versus **Subagents**, and **Cache reads** versus **New input**. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
 
 ### Customize your experience
 

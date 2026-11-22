@@ -33,14 +33,15 @@ final class NewChatChoicesTests: XCTestCase {
         let app = launch()
         let effort = app.buttons["newChat.effort"]
         XCTAssertTrue(effort.waitForExistence(timeout: 10))
-        XCTAssertTrue(effort.label.contains("Medium"))
+        // Label "Effort", value the level: the word can shrink to its gauge on a narrow phone.
+        XCTAssertEqual(effort.value as? String, "Medium")
         attach(app, "iphone-new-chat-after")
         effort.tap()
         XCTAssertFalse(app.buttons["Computer default"].exists)
         XCTAssertTrue(app.buttons["Medium (Recommended)"].waitForExistence(timeout: 3))
         attach(app, "iphone-effort-after")
         option("Low", in: app).tap()
-        XCTAssertTrue(effort.label.contains("Low"))
+        XCTAssertEqual(effort.value as? String, "Low")
         effort.tap()
         XCTAssertTrue(app.buttons["Medium (Recommended)"].exists, "Saving Low must not move Recommended")
         option("Low", in: app).tap()
@@ -88,8 +89,19 @@ final class NewChatChoicesTests: XCTestCase {
         }
         attach(app, "automatic-new-chat")
         computer.tap()
+        let macbook = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "MacBook")).firstMatch
+        XCTAssertTrue(macbook.waitForExistence(timeout: 3))
         attach(app, "automatic-run-on-menu")
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "MacBook")).firstMatch.tap()
+        let rename = app.buttons["newChat.computer.rename"]
+        if rename.waitForExistence(timeout: 1) {
+            rename.tap()
+            XCTAssertTrue(app.staticTexts["Only this iPhone sees this name. Leave it empty to use the computer’s own name."].waitForExistence(timeout: 3))
+            attach(app, "automatic-rename-alert")
+            app.buttons["Cancel"].tap()
+            computer.tap()
+            XCTAssertTrue(macbook.waitForExistence(timeout: 3))
+        }
+        macbook.tap()
         XCTAssertFalse(computer.label.contains("Auto"))
         XCTAssertFalse(app.staticTexts["newChat.auto"].exists)
         attach(app, "automatic-manual-macbook")

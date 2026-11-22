@@ -83,7 +83,15 @@ function reveal(range: Range, root: HTMLElement) {
   sc.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 }
 
-export function SettingsSearch({ root }: { root: React.RefObject<HTMLElement | null> }) {
+/**
+ * `onOpenChange` hears when the box opens and closes, with the element of the
+ * match last shown on close, so a paged Settings can show every page while
+ * searching and land on that match's page afterwards.
+ */
+export function SettingsSearch({ root, onOpenChange }: { root: React.RefObject<HTMLElement | null>; onOpenChange?: (open: boolean, match: HTMLElement | null) => void }) {
+  const lastMatch = useRef<HTMLElement | null>(null);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   /** The query actually searched: follows `query` after the typing pause. */
@@ -97,13 +105,18 @@ export function SettingsSearch({ root }: { root: React.RefObject<HTMLElement | n
 
   const clear = () => { const api = highlightApi(); api?.registry.delete(ALL); api?.registry.delete(CURRENT); };
 
-  const close = useCallback(() => { setOpen(false); setQuery(''); setApplied(''); setTotal(0); clear(); }, []);
+  const close = useCallback(() => {
+    setOpen(false); setQuery(''); setApplied(''); setTotal(0); clear();
+    onOpenChangeRef.current?.(false, lastMatch.current);
+    lastMatch.current = null;
+  }, []);
 
   const openBox = useCallback(() => {
     const r = anchor.current?.getBoundingClientRect();
     // Centre the bar on the row and keep it on screen even if the rail is partly scrolled out of view.
     if (r) setPos({ top: Math.max(8 + r.height / 2, r.top + r.height / 2), left: r.left, width: r.width });
     setOpen(true);
+    onOpenChangeRef.current?.(true, null);
     // Already open (Ctrl+F again): put the caret back in the box with the query selected.
     input.current?.focus();
     input.current?.select();
@@ -141,6 +154,7 @@ export function SettingsSearch({ root }: { root: React.RefObject<HTMLElement | n
       api.registry.set(ALL, new api.Highlight(...ranges));
       api.registry.set(CURRENT, new api.Highlight(ranges[idx]));
     }
+    lastMatch.current = ranges[idx].startContainer.parentElement;
     reveal(ranges[idx], root.current);
   }, [open, applied, current, root]);
 

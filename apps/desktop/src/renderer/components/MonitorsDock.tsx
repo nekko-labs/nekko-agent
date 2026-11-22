@@ -1,7 +1,7 @@
 import { monitorPickup } from './monitorPickup.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SubscriptionLimits, SystemStats, UsageSlice, UsageSummary } from '@nekko-agent/shared';
-import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
+import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, MODALITY_LABELS, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
@@ -12,12 +12,15 @@ import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { MonitorComputerSwitch, useMonitors, useResourceSample, useWatchedComputer } from './ResourceMonitor.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
-import { ServerIcon, MoneyIcon, SlidersIcon, CloseIcon, MinimizeIcon, CubeIcon, PanelIcon } from '../icons.js';
-import { GfBarChartHorizontalIcon, GfBoltIcon } from '../gentleface-icons.js';
+import { ServerIcon, MoneyIcon, SlidersIcon, CubeIcon, PanelIcon, StarIcon } from '../icons.js';
+import { ENGINE_PROVIDER_ID, loadLocalModel, localModelShortcuts, noteLocalModelsUsed, readRecentLocalModels } from './engine/localModelShortcuts.js';
+import { nextFavoriteModels } from './agent-console/modelPickerInteractions.js';
+import { GfBarChartHorizontalIcon, GfBeachIcon, GfBoltIcon, GfCloseIcon, GfMinusIcon, GfPlayCircleIcon, SettingsIcon } from '../gentleface-icons.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import { HoverTip } from './HoverTip.js';
 import './monitorsDock.css';
+import { SimulatorRows } from './Simulators.js';
 import type { OAuthStatus } from '@nekko-agent/shared';
 import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
@@ -41,7 +44,8 @@ export interface MonitorsDockProps {
   onOpenModels: () => void;
 }
 
-const DEFAULT_DOCK_WIDTH = 276;
+const DEFAULT_DOCK_WIDTH = 248;
+const MIN_DOCK_WIDTH = 220;
 
 /**
  * The dock's show/hide button: an icon (the agent panel's pill, mirrored), with
@@ -146,7 +150,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
   // A width drag measures its room once and writes --dock-width straight onto
   // the dock; state takes the final width on release.
   const drag = useRef<{ x: number; width: number; room: number; last?: number } | null>(null);
-  const size = (value: number) => { const next = Math.max(260, Math.min(600, value)); setWidth(Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next); };
+  const size = (value: number) => { const next = Math.max(MIN_DOCK_WIDTH, Math.min(600, value)); setWidth(Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next); };
   const [collapsing, setCollapsing] = useState<MonitorKey | null>(null);
   const dockRef = useRef<HTMLElement>(null);
   const focusMonitor = useRef<{ key: MonitorKey; minimized: boolean } | null>(null);
@@ -224,12 +228,12 @@ export function MonitorsDock(props: MonitorsDockProps) {
     <>
     {collapsed}
     <aside data-panel-open={dock.show} inert={!dock.show} aria-hidden={!dock.show} ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
-      {(dock.side === 'left' || dock.side === 'right') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="vertical" aria-valuemin={260} aria-valuemax={600} aria-valuenow={width} title="Drag to resize monitors; double-click to reset"
+      {(dock.side === 'left' || dock.side === 'right') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="vertical" aria-valuemin={MIN_DOCK_WIDTH} aria-valuemax={600} aria-valuenow={width} title="Drag to resize monitors; double-click to reset"
         onPointerDown={(e) => { drag.current = { x: e.clientX, width, room: (e.currentTarget.parentElement?.parentElement?.clientWidth ?? 1000) - 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => {
           const d = drag.current;
           if (!d) return;
-          const next = Math.max(260, Math.min(600, Math.min(d.room, d.width + (e.clientX - d.x) * (dock.side === 'left' ? 1 : -1))));
+          const next = Math.max(MIN_DOCK_WIDTH, Math.min(600, Math.min(d.room, d.width + (e.clientX - d.x) * (dock.side === 'left' ? 1 : -1))));
           d.last = Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next;
           dockRef.current?.style.setProperty('--dock-width', `${d.last}px`);
         }}
@@ -325,9 +329,9 @@ export function MonitorsDock(props: MonitorsDockProps) {
               e.preventDefault(); e.stopPropagation();
               const target = expandedMonitors[expandedMonitors.findIndex(m => m.key === p.key) + (e.key === 'ArrowDown' ? 1 : -1)];
               if (target) reorder(p.key, target.key);
-            }}><span aria-hidden="true" title="Drag to reorder" className="text-ink-faint">⠿</span><span className="monitors-dock__monitor-icon">{React.createElement(MONITOR_ICONS[p.key], { className: 'monitors-dock__icon' })}</span><h2>{p.label}</h2><button type="button" title={`Minimize ${p.label}`} aria-label={`Minimize ${p.label} monitor`} aria-expanded={true} disabled={collapsing !== null} onClick={() => minimize(p.key, true)}><MinimizeIcon className="monitors-dock__icon" /></button><button type="button" title={`Remove ${p.label}`} aria-label={`Remove ${p.label} monitor`} onClick={() => toggleMonitor(p.key, false)}><CloseIcon className="monitors-dock__icon" /></button></header>
+            }}><span aria-hidden="true" title="Drag to reorder" className="text-ink-faint">⠿</span><span className="monitors-dock__monitor-icon">{React.createElement(MONITOR_ICONS[p.key], { className: 'monitors-dock__icon' })}</span><h2>{p.label}</h2><button type="button" title={`Minimize ${p.label}`} aria-label={`Minimize ${p.label} monitor`} aria-expanded={true} disabled={collapsing !== null} onClick={() => minimize(p.key, true)}><GfMinusIcon className="monitors-dock__icon" /></button><button type="button" title={`Remove ${p.label}`} aria-label={`Remove ${p.label} monitor`} onClick={() => toggleMonitor(p.key, false)}><GfCloseIcon className="monitors-dock__icon" /></button></header>
           <ResizableMonitorBody label={p.label}>
-            {p.key === 'automations' && <AutomationsPane tasks={props.tasks} running={props.running} now={props.now} onOpen={props.onOpenChat} />}
+            {p.key === 'automations' && <div className="monitors-dock__app"><AutomationsPane tasks={props.tasks} running={props.running} now={props.now} onOpen={props.onOpenChat} /></div>}
             {p.key === 'utilization' && <Utilization providers={props.providers} usage={props.usage} now={props.now} onOpenModels={props.onOpenModels} />}
             {p.key === 'budget' && <Budget usage={props.usage} sessions={props.sessions} providers={props.providers} now={props.now} />}
             {p.key === 'hardware' && <Hardware providers={props.providers} />}
@@ -627,6 +631,7 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
     <dl className="monitors-dock__breakdown" aria-label={`Budget breakdown, ${BUDGET_RANGE_LABEL[range].toLowerCase()}`}>
       <div data-row="local"><dt>Local models</dt><dd>{avoided ? formatUSD(avoided.local) : 'Unavailable'}{ranged?.localTokens != null && <small>{ranged.localTokens.toLocaleString()} tokens</small>}</dd></div>
       <div data-row="subscription"><dt>Subscriptions</dt><dd>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</dd></div>
+      {ranged && ranged.pictures > 0 && <div data-row="pictures"><dt>Paid pictures</dt><dd>{formatUSD(ranged.pictureCost)}<small>{ranged.pictures === 1 ? '1 picture' : `${ranged.pictures.toLocaleString()} pictures`}</small></dd></div>}
       <div data-row="top"><dt>Top paid agent</dt><dd>{topTitle ? <><span className="monitors-dock__breakdown-name" title={topTitle}>{topTitle}</span>{formatUSD(top![1])}</> : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</dd></div>
       <div data-row="tokens"><dt>Tokens</dt><dd title={ranged ? `${ranged.input.toLocaleString()} in · ${ranged.output.toLocaleString()} out` : undefined}>{ranged ? `${compact(ranged.input)} in · ${compact(ranged.output)} out` : 'Unavailable'}</dd></div>
     </dl>
@@ -677,20 +682,22 @@ export function hardwareRows(monitors: Record<MonitorKind, boolean>, system: Sys
 
 const TEMP_COLOR = { ok: 'var(--ink-faint)', warn: 'var(--warning)', hot: 'var(--danger)' } as const;
 
-/** The built-in Model Server's provider id (`PROVIDER_ID` in EngineSection). */
-const ENGINE_PROVIDER_ID = 'nekko-engine';
-
 /** How often the Local models monitor re-reads the engine, matching the chat's model dock. */
 const LOCAL_MODELS_POLL_MS = 6000;
 
 /**
- * What the local engine holds in memory and where each model runs, with a jump
- * to that model's own settings on Model Server. Read-only by design: GPU offload,
- * context and KV cache are load-time settings with a reload behind them, and they
- * belong on the page that explains what changing them costs.
+ * What the local engine holds in memory and where each model runs, with
+ * Unload on every model (picture models included: one fills the GPU) and a
+ * jump to its own settings on Model Server. Below that, a few starred and
+ * recent models with Load and Settings, so the next one is a click away.
+ * GPU offload, context and KV cache themselves stay on Model Server, which
+ * explains what changing them costs.
  */
 export function LocalModels({ initial }: { initial?: { status: EngineStatus | null; models: LocalModel[] } } = {}) {
   const computer = useWatchedComputer();
+  const favorites = useStore((s) => s.settings?.favoriteModels);
+  const chats = useStore((s) => s.sessions);
+  const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<EngineStatus | null>(initial?.status ?? null);
   const [models, setModels] = useState<LocalModel[]>(initial?.models ?? []);
   const [read, setRead] = useState(Boolean(initial));
@@ -728,21 +735,71 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
   const resident = status?.resident ?? [];
   const installed = Boolean((status as { installed?: boolean } | null)?.installed ?? status?.install?.binPath);
   const openServer = () => store().setView('modelserver');
+  const library = new Map(models.map((m) => [m.id, m]));
+  // What this computer holds counts as used, so it is in Recent once it unloads.
+  useEffect(() => {
+    if (computer || !status?.running || !status.resident.length) return;
+    noteLocalModelsUsed(status.resident.map((r) => ({ id: r.id, at: r.lastUsedAt ?? Date.now() })));
+  }, [computer, status]);
+  const act = async (id: string, verb: string, run: () => Promise<{ ok: boolean; message?: string }>) => {
+    setBusy(id);
+    const res = await run().catch((e: Error) => ({ ok: false, message: e.message }));
+    setBusy(null);
+    if (!res.ok) store().pushToast('error', res.message || `Couldn't ${verb} it.`);
+    setTick((n) => n + 1);
+  };
+  const unload = (id: string) => act(id, 'unload', () => window.nekko.unloadModel(ENGINE_PROVIDER_ID, id));
+  const unloadAll = () => act('*', 'unload them', async () => {
+    const results = await Promise.all(resident.map((r) => window.nekko.unloadModel(ENGINE_PROVIDER_ID, r.id).catch((e: Error) => ({ ok: false, message: e.message }))));
+    return results.find((r) => !r.ok) ?? { ok: true };
+  });
+  const load = (m: LocalModel) => {
+    noteLocalModelsUsed([{ id: m.id, at: Date.now() }]);
+    return act(m.id, 'load', () => loadLocalModel(ENGINE_PROVIDER_ID, m));
+  };
+  const toggleStar = async (id: string) => {
+    await window.nekko.updateSettings({ favoriteModels: nextFavoriteModels(favorites, `${ENGINE_PROVIDER_ID}::${id}`) }).catch(() => null);
+    void store().refreshSettings(false);
+  };
+  const starredSet = new Set(favorites ?? []);
+  const star = (id: string, name: string) => {
+    const on = starredSet.has(`${ENGINE_PROVIDER_ID}::${id}`);
+    return <button type="button" className="monitors-dock__star" data-local-model-star={id} aria-pressed={on} aria-label={on ? `Unstar ${name}` : `Star ${name}`} title={on ? 'Starred: offered here when it is not loaded' : 'Star it to keep it offered here'} onClick={() => void toggleStar(id)}><StarIcon className="h-3 w-3" filled={on} /></button>;
+  };
+  const kind = (m: LocalModel | undefined) => m?.modality && m.modality !== 'chat' ? MODALITY_LABELS[m.modality] : null;
+  const shortcuts: { starred: LocalModel[]; recent: LocalModel[] } = computer || !installed ? { starred: [], recent: [] } : localModelShortcuts({ models, resident: resident.map((r) => r.id), favorites, seen: readRecentLocalModels(), chats: chats ?? [] });
+  // A cog with a tooltip: the row's name already says whose settings they are.
+  const settingsButton = (id: string, name: string, modality: LocalModel['modality'] | undefined) =>
+    <button type="button" className="monitors-dock__icon-action" data-local-model-settings={id} aria-label={`Open ${name} settings`} title={modality === 'image' ? 'Picture settings' : 'Settings: GPU offload, context and memory'} onClick={() => store().openLocalModelSettings(id)}><SettingsIcon className="monitors-dock__icon" /></button>;
+  const shortcutRow = (m: LocalModel) => <div className="monitors-dock__local-model" key={m.id} data-local-model-shortcut={m.id}>
+    <div className="monitors-dock__metric-row">
+      {star(m.id, m.name)}
+      <strong className="monitors-dock__provider-name" title={m.name}>{m.name}</strong>
+      {settingsButton(m.id, m.name, m.modality)}
+      {busy === m.id
+        ? <span className="monitors-dock__busy" role="status">Loading…</span>
+        : <button type="button" className="monitors-dock__icon-action" data-local-model-load={m.id} aria-label={`Load ${m.name}`} title="Load" onClick={() => void load(m)}><GfPlayCircleIcon className="monitors-dock__icon" /></button>}
+    </div>
+    <p className="monitors-dock__note">{[kind(m), m.parameterSize, m.quantization, formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</p>
+  </div>;
   if (!read) return <div className="monitors-dock__metrics monitors-dock__local-models"><p className="monitors-dock__note">{computer ? 'Reading that computer\'s engine…' : 'Reading the local engine…'}</p></div>;
   return <div className="monitors-dock__metrics monitors-dock__local-models">
+    {installed && <p className="monitors-dock__local-group-label">Running</p>}
     {!installed ? <p>No local engine installed.</p>
-      : !status?.running ? <p>The model server is stopped.</p>
-      : resident.length === 0 ? <p>No local model is loaded.</p>
+      : !status?.running ? <p className="monitors-dock__note">The model server is stopped.</p>
+      : resident.length === 0 ? <p className="monitors-dock__local-idle" data-local-models-idle data-icon-hover><GfBeachIcon className="monitors-dock__icon" />No models are currently loaded.</p>
       : resident.map((r) => {
         const split = r.loadedOn === 'gpu+cpu' || r.loadedOn === 'cpu';
+        const model = library.get(r.id);
         const name = names.get(r.id) ?? r.id;
         const bytes = r.vramBytes ?? r.sizeBytes;
-        const rest = [r.contextLength ? `${formatTokens(r.contextLength)} context` : null, bytes ? formatBytes(bytes) : null].filter((x): x is string => Boolean(x));
+        const rest = [kind(model), r.contextLength ? `${formatTokens(r.contextLength)} context` : null, bytes ? formatBytes(bytes) : null].filter((x): x is string => Boolean(x));
         return <div className="monitors-dock__local-model" key={r.id} data-local-model={r.id}>
           <div className="monitors-dock__metric-row">
+            {!computer && model && star(r.id, name)}
             <strong className="monitors-dock__provider-name" title={name}>{name}</strong>
-            {!computer && <button type="button" className="monitors-dock__text-button" data-local-model-settings={r.id} title={`Open ${name}'s GPU offload, context and memory settings`} aria-label={`Open ${name} settings`} onClick={() => store().openLocalModelSettings(r.id)}>Settings</button>}
-            {computer && <button type="button" className="monitors-dock__text-button" data-local-model-unload={r.id} aria-label={`Unload ${name}`} onClick={() => change('model:unload', [ENGINE_PROVIDER_ID, r.id])}>Unload</button>}
+            {!computer && settingsButton(r.id, name, model?.modality)}
+            <button type="button" className="monitors-dock__text-button" data-local-model-unload={r.id} aria-label={`Unload ${name}`} disabled={busy === r.id || busy === '*'} onClick={() => computer ? change('model:unload', [ENGINE_PROVIDER_ID, r.id]) : void unload(r.id)}>{busy === r.id ? 'Unloading…' : 'Unload'}</button>
           </div>
           <p className="monitors-dock__note">
             {r.loadedOn && <span title={placementTitle(r)} style={split ? { color: 'var(--warning)' } : undefined}>{placementLabel(r)}</span>}
@@ -751,6 +808,9 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
           </p>
         </div>;
       })}
+    {!computer && status?.running && resident.length > 1 && <button type="button" className="monitors-dock__text-button" data-local-models-unload-all disabled={busy !== null} onClick={() => void unloadAll()}>{busy === '*' ? 'Unloading…' : 'Unload all'}</button>}
+    {shortcuts.starred.length > 0 && <div className="monitors-dock__local-group" data-local-models-group="starred"><p className="monitors-dock__local-group-label">Starred</p>{shortcuts.starred.map(shortcutRow)}</div>}
+    {shortcuts.recent.length > 0 && <div className="monitors-dock__local-group" data-local-models-group="recent"><p className="monitors-dock__local-group-label">Recent</p>{shortcuts.recent.map(shortcutRow)}</div>}
     {computer && installed && status?.running && server && <ComputerModelServer id={computer} server={server} resident={resident.map((r) => r.id)} change={change} />}
     {/* The Model Server page and a model's settings are this computer's. */}
     {!computer && <button type="button" className="monitors-dock__text-button" onClick={openServer}>{installed ? 'Open Model Server' : 'Set up a local model'}</button>}
@@ -802,6 +862,8 @@ function Hardware({ providers }: { providers: ProviderConfig[] }) {
   const monitors = useMonitors();
   const { system, gpu } = useResourceSample();
   const rows = hardwareRows(monitors, system, gpu);
+  // Simulators run on this computer only: a connected computer's are not read.
+  const watched = useWatchedComputer();
   return <div className="monitors-dock__metrics monitors-dock__hardware">
     {rows.map((row) => <div className="monitors-dock__meter" key={row.label}>
       <div className="monitors-dock__meter-head"><strong>{row.label}</strong>{formatTemperature(row.temp) && <span className="monitors-dock__temp" data-temp-tone={temperatureTone(row.temp!)} style={{ color: TEMP_COLOR[temperatureTone(row.temp!)] }} aria-label={`${row.label} temperature ${formatTemperature(row.temp)}`} title="Sensor temperature"><ThermometerGlyph />{formatTemperature(row.temp)}</span>}</div>
@@ -809,6 +871,7 @@ function Hardware({ providers }: { providers: ProviderConfig[] }) {
         {row.value != null && <span style={{ width: `${Math.max(0, Math.min(100, row.value))}%`, background: row.color }} />}
       </div><span className="monitors-dock__reading">{row.text}</span>
     </div>)}
+    {!watched && <SimulatorRows />}
   </div>;
 }
 

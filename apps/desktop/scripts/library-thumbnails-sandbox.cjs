@@ -82,8 +82,8 @@ app.whenReady().then(async () => {
       await check(`document.querySelectorAll('[data-live-preview="document"]').length === 3 && Object.entries(layoutFixture.reads).filter(([p]) => !p.includes('unreadable')).every(([, n]) => n === 1)`, 'return-to-library-reuses-cache');
       const rowPath = await run(`document.querySelector('[data-artifact-row]').title`);
       await run(`document.querySelector('[data-artifact-row]').click()`); await sleep(500);
-      await check(`!!document.querySelector('[aria-label="Close preview"]')`, 'row-opens-source-preview');
-      await run(`document.querySelector('[aria-label="Close preview"]').click()`); await sleep(500);
+      await check(`!!document.querySelector('[data-library-back]')`, 'row-opens-source-preview');
+      await run(`document.querySelector('[data-library-back]').click()`); await sleep(500);
       report.openedPath = rowPath;
       await radio('Images'); await sleep(700);
       await check(`document.querySelectorAll('[data-live-preview="image"] img').length === 2 && [...document.querySelectorAll('[data-live-preview="image"] img')].every(img => img.complete && img.naturalWidth <= 640 && img.src.startsWith('data:image/webp'))`, 'raster-and-svg-resized-to-webp');
@@ -94,7 +94,8 @@ app.whenReady().then(async () => {
       await radio('Documents');
       const previousReads = await run('({...layoutFixture.reads})');
       await run(`(async () => { const f = layoutFixture, s = f.records[0]; s.updatedAt++; f.putCachedSession(s); await f.store.getState().refreshSessions(); })()`); await sleep(700);
-      await check(`layoutFixture.reads['/work/reports/library-guide.markdown'] === ${previousReads['/work/reports/library-guide.markdown'] + 1} && document.querySelectorAll('[data-live-preview="document"]').length === 3`, 'chat-revision-invalidates-document-cache');
+      // A thumbnail is keyed to when its chat last wrote or linked the file (#3043), so a chat that changes without touching it reuses the cached picture.
+      await check(`layoutFixture.reads['/work/reports/library-guide.markdown'] === ${previousReads['/work/reports/library-guide.markdown']} && document.querySelectorAll('[data-live-preview="document"]').length === 3`, 'unrelated-chat-change-reuses-document-cache');
     }
     await run(`layoutFixture.store.setState({ settings: { ...layoutFixture.store.getState().settings, theme: 'light' } }); layoutFixture.store.getState().applyTheme()`); await sleep(400); await shot('light-cards');
     win.setContentSize(430, 932); await sleep(500); await shot('narrow-list');

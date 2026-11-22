@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.hoisted(() => { Object.assign(globalThis, { window: {}, localStorage: { getItem: () => null } }); });
 import type { WorkspaceFolder } from '@nekko-agent/shared';
 import { useStore } from './store.js';
-import { addFolderToChat, addRepoToChat, RepoFolderNeeded, shouldAutoFile, withExcluded, withIncluded, withoutPrimary, withPrimary } from './sessionFolders.js';
+import { addFolderToChat, addRepoToChat, answerRepoFolderOffer, offerRepoFolder, RepoFolderNeeded, shouldAutoFile, withExcluded, withIncluded, withoutPrimary, withPrimary } from './sessionFolders.js';
 
 const folder = (id: string, path = `/code/${id}`): WorkspaceFolder => ({ id, name: id, path, addedAt: 0 });
 
@@ -93,6 +93,43 @@ describe('adding a folder to a chat', () => {
     expect(api.removeWorkspace).not.toHaveBeenCalled();
     expect(api.setSessionWorkspace).toHaveBeenCalledWith('s', 'a');
     expect(api.setSessionSupportingWorkspaces).toHaveBeenCalledWith('s', ['b']);
+  });
+
+  describe('offering the folder that holds the repositories as the repositories folder', () => {
+    afterEach(() => { useStore.setState({ repoFolderOffer: null }); });
+    const settle = () => new Promise((r) => setTimeout(r, 0));
+
+    it('offers it in the chat the folder was added to', async () => {
+      const api = { ...setup('/code/b', [folder('a'), folder('b')]), suggestRepoFolder: vi.fn(async () => ({ suggested: '/code' })) };
+      (globalThis as any).window.nekko = api;
+      useStore.setState({ settings: { ...(prev.settings as any), repoCloneDir: undefined, repoCloneDirOffered: undefined } });
+      await addFolderToChat('s', { workspaceId: 'a' }, 'include');
+      await settle();
+      expect(api.suggestRepoFolder).toHaveBeenCalledWith('/code/b');
+      expect(useStore.getState().repoFolderOffer).toEqual({ sessionId: 's', suggested: '/code' });
+    });
+
+    it('never asks once a folder is chosen or the offer was answered', async () => {
+      for (const s of [{ repoCloneDir: '/clones' }, { repoCloneDirOffered: true }]) {
+        const suggestRepoFolder = vi.fn(async () => ({ suggested: '/code' }));
+        (globalThis as any).window.nekko = { suggestRepoFolder };
+        useStore.setState({ settings: { ...(prev.settings as any), ...s } });
+        await offerRepoFolder('s', '/code/b');
+        expect(suggestRepoFolder).not.toHaveBeenCalled();
+        expect(useStore.getState().repoFolderOffer).toBeNull();
+      }
+    });
+
+    it('either answer ends the offer for good', async () => {
+      const updateSettings = vi.fn(async () => ({}));
+      (globalThis as any).window.nekko = { updateSettings };
+      useStore.setState({ repoFolderOffer: { sessionId: 's', suggested: '/code' }, refreshSettings: vi.fn(async () => {}) });
+      await answerRepoFolderOffer('/code');
+      expect(updateSettings).toHaveBeenLastCalledWith({ repoCloneDir: '/code', repoCloneDirOffered: true });
+      await answerRepoFolderOffer(null);
+      expect(updateSettings).toHaveBeenLastCalledWith({ repoCloneDirOffered: true });
+      expect(useStore.getState().repoFolderOffer).toBeNull();
+    });
   });
 
   it('asks for the repositories folder instead of adding anything when the daemon needs one (#2561)', async () => {

@@ -243,7 +243,7 @@ final class WireTests: XCTestCase {
         XCTAssertEqual(groups.map(\.name), ["General", "App", "Empty"])
         XCTAssertEqual(groups[0].active.map(\.id), ["a", "g"])
         XCTAssertEqual(groups[1].active.map(\.id), ["c", "b", "d"])
-        XCTAssertEqual(groups[1].completed.map(\.id), ["e"])
+        XCTAssertEqual(groups[1].archived.map(\.id), ["e"])
         XCTAssertTrue(groups[2].active.isEmpty)
     }
 

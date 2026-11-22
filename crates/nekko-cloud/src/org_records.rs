@@ -7,8 +7,11 @@
 //!   reaches the other devices of the same account.
 //! - the fleet descriptor (sealed under the org keyring, see
 //!   `nekko_sync::seal_descriptor`): what a computer shares with the members of
-//!   an org. Never a local URL, port, path, token or room secret, and never a
-//!   cloud provider's model.
+//!   an org. Never a local URL, port, path, token or room secret in the part
+//!   the org key opens, and never a cloud provider's model. How to reach the
+//!   computer's relay agent rides inside it as `connect`, sealed a second time
+//!   under the **account** keyring (`nekko_sync::seal_connect`, decision 0102),
+//!   so only the publishing account's own unlocked devices can read it.
 
 use nekko_sync::{Keyring, b64_decode, b64_encode};
 use serde_json::{Value, json};
@@ -93,6 +96,27 @@ fn clip(s: &str, max: usize) -> String {
     s.chars().filter(|c| !c.is_control()).take(max).collect::<String>().trim().to_string()
 }
 
+/// How to reach this computer's relay agent, as plaintext before it is sealed
+/// under the account keyring of epoch `key_id`. Holds the room secret, so its
+/// `Debug` says nothing.
+#[derive(Clone, PartialEq)]
+pub struct ConnectFacts {
+    pub key_id: u32,
+    pub plain: Vec<u8>,
+}
+
+impl std::fmt::Debug for ConnectFacts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ConnectFacts(epoch {}, ..)", self.key_id)
+    }
+}
+
+/// The largest sealed connect block a descriptor carries (base64url).
+pub const MAX_CONNECT_BLOB: usize = 4096;
+
+/// Room kept free in the descriptor for the sealed connect block.
+const CONNECT_ROOM: usize = MAX_CONNECT_BLOB / 2;
+
 /// Everything a descriptor says about this computer, apart from when it was made.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HostFacts {
@@ -105,10 +129,13 @@ pub struct HostFacts {
     pub models: Vec<LocalModel>,
     /// base64url of this device's P-256 public key.
     pub host_key: String,
+    /// How its own account's devices reach it, when remote access is on.
+    pub connect: Option<ConnectFacts>,
 }
 
 impl HostFacts {
     fn body(&self, published_at: Option<&str>) -> Value {
+        let budget = if self.connect.is_some() { MAX_PLAINTEXT - CONNECT_ROOM } else { MAX_PLAINTEXT };
         let mut models: Vec<&LocalModel> = self.models.iter().collect();
         models.sort_by(|a, b| a.id.cmp(&b.id));
         models.dedup_by(|a, b| a.id == b.id);
@@ -139,7 +166,7 @@ impl HostFacts {
             v["publishedAt"] = json!(at);
         }
         // Fewer models rather than a descriptor the API would refuse.
-        while serde_json::to_vec(&v).map_or(0, |b| b.len()) > MAX_PLAINTEXT {
+        while serde_json::to_vec(&v).map_or(0, |b| b.len()) > budget {
             match v["models"].as_array_mut() {
                 Some(m) if !m.is_empty() => {
                     m.pop();
@@ -150,15 +177,24 @@ impl HostFacts {
         v
     }
 
-    /// The descriptor's plaintext JSON.
-    pub fn plaintext(&self, published_at: &str) -> Vec<u8> {
-        serde_json::to_vec(&self.body(Some(published_at))).unwrap_or_default()
+    /// The descriptor's plaintext JSON. `connect` is the sealed connect block
+    /// and its account key epoch, made for this revision.
+    pub fn plaintext(&self, published_at: &str, connect: Option<(u32, &str)>) -> Vec<u8> {
+        let mut v = self.body(Some(published_at));
+        if let Some((key_id, blob)) = connect.filter(|(_, b)| b.len() <= MAX_CONNECT_BLOB) {
+            v["connect"] = json!({ "keyId": key_id, "blob": blob });
+        }
+        serde_json::to_vec(&v).unwrap_or_default()
     }
 
     /// A digest of everything but the time: it changes when the name, the
-    /// models, the app version or the key does, and only then.
+    /// models, the app version, the key or how to reach it does, and only then.
     pub fn digest(&self) -> String {
-        let h = Sha256::digest(serde_json::to_vec(&self.body(None)).unwrap_or_default());
+        let mut v = self.body(None);
+        if let Some(c) = &self.connect {
+            v["connect"] = json!({ "keyId": c.key_id, "digest": b64_encode(&Sha256::digest(&c.plain)) });
+        }
+        let h = Sha256::digest(serde_json::to_vec(&v).unwrap_or_default());
         b64_encode(&h)
     }
 }
@@ -184,6 +220,8 @@ pub struct Descriptor {
     pub models: Vec<LocalModel>,
     pub host_key: String,
     pub published_at: String,
+    /// The sealed connect block and the account key epoch it is sealed under.
+    pub connect: Option<(u32, String)>,
 }
 
 impl Descriptor {
@@ -225,6 +263,13 @@ impl Descriptor {
             models,
             host_key,
             published_at: s("publishedAt", 40).unwrap_or_default(),
+            // Optional, and an older reader ignores it: v1 still.
+            connect: v["connect"]["keyId"]
+                .as_u64()
+                .and_then(|k| u32::try_from(k).ok())
+                .filter(|k| *k >= 1)
+                .zip(v["connect"]["blob"].as_str().filter(|b| !b.is_empty() && b.len() <= MAX_CONNECT_BLOB))
+                .map(|(k, b)| (k, b.to_string())),
         })
     }
 }
@@ -249,6 +294,7 @@ mod tests {
                 LocalModel { id: "a".into(), label: "Alpha".into(), runtime: "mlx".into(), size_bytes: None },
             ],
             host_key: b64_encode(&[4u8; 65]),
+            connect: None,
         }
     }
 
@@ -284,7 +330,7 @@ mod tests {
     #[test]
     fn a_descriptor_round_trips_with_models_sorted_and_no_secrets_shape() {
         let f = facts();
-        let plain = f.plaintext("2026-11-11T10:00:00Z");
+        let plain = f.plaintext("2026-11-11T10:00:00Z", None);
         let d = Descriptor::parse(&plain).unwrap();
         assert_eq!((d.name.as_str(), d.os.as_str(), d.account_id.as_str()), ("Desk", "windows", "acct-1"));
         assert_eq!(d.models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["a", "b"]);
@@ -316,7 +362,7 @@ mod tests {
         f.models = (0..500)
             .map(|i| LocalModel { id: format!("m{i}"), label: "l".repeat(900), runtime: "x".into(), size_bytes: None })
             .collect();
-        let plain = f.plaintext("2026-11-11T10:00:00Z");
+        let plain = f.plaintext("2026-11-11T10:00:00Z", None);
         assert!(plain.len() <= MAX_PLAINTEXT, "{} bytes", plain.len());
         let d = Descriptor::parse(&plain).unwrap();
         assert_eq!(d.name.chars().count(), 80);
@@ -326,7 +372,7 @@ mod tests {
 
     #[test]
     fn a_descriptor_refuses_bad_shapes() {
-        let good: Value = serde_json::from_slice(&facts().plaintext("t")).unwrap();
+        let good: Value = serde_json::from_slice(&facts().plaintext("t", None)).unwrap();
         for (k, bad) in [
             ("v", json!(2)),
             ("os", json!("plan9")),
@@ -340,5 +386,40 @@ mod tests {
             assert!(Descriptor::parse(&serde_json::to_vec(&v).unwrap()).is_none(), "{k}");
         }
         assert!(Descriptor::parse(b"[]").is_none());
+    }
+
+    #[test]
+    fn a_connect_block_rides_along_changes_the_digest_and_old_readers_ignore_it() {
+        let mut f = facts();
+        let without = f.digest();
+        f.connect = Some(ConnectFacts { key_id: 3, plain: b"{\"room\":\"r\"}".to_vec() });
+        let with = f.digest();
+        assert_ne!(with, without, "turning remote access on republishes");
+        f.connect = Some(ConnectFacts { key_id: 3, plain: b"{\"room\":\"s\"}".to_vec() });
+        assert_ne!(f.digest(), with, "a new room republishes");
+        assert!(!format!("{:?}", f).contains("room"), "Debug never shows the block");
+
+        let plain = f.plaintext("t", Some((3, "c2VhbGVk")));
+        let d = Descriptor::parse(&plain).unwrap();
+        assert_eq!(d.connect, Some((3, "c2VhbGVk".to_string())));
+        // An old descriptor has none; a bad one is dropped, the rest still reads.
+        assert_eq!(Descriptor::parse(&facts().plaintext("t", None)).unwrap().connect, None);
+        let mut v: Value = serde_json::from_slice(&plain).unwrap();
+        v["connect"] = json!({ "keyId": 0, "blob": "x" });
+        assert_eq!(Descriptor::parse(&serde_json::to_vec(&v).unwrap()).unwrap().connect, None);
+        v["connect"] = json!({ "keyId": 1, "blob": "x".repeat(MAX_CONNECT_BLOB + 1) });
+        assert_eq!(Descriptor::parse(&serde_json::to_vec(&v).unwrap()).unwrap().connect, None);
+    }
+
+    #[test]
+    fn a_descriptor_with_a_connect_block_stays_bounded() {
+        let mut f = facts();
+        f.models = (0..500)
+            .map(|i| LocalModel { id: format!("m{i}"), label: "l".repeat(900), runtime: "x".into(), size_bytes: None })
+            .collect();
+        f.connect = Some(ConnectFacts { key_id: 1, plain: vec![b'x'; 900] });
+        let blob = "b".repeat(MAX_CONNECT_BLOB / 2);
+        let plain = f.plaintext("2026-11-11T10:00:00Z", Some((1, &blob)));
+        assert!(plain.len() <= MAX_PLAINTEXT, "{} bytes", plain.len());
     }
 }

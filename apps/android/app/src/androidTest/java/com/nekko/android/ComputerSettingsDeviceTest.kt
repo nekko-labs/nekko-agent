@@ -2,6 +2,7 @@ package com.nekko.android
 
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -16,6 +17,7 @@ import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.Remote
 import com.nekko.android.data.SecureStore
 import com.nekko.android.ui.screens.ComputerScreen
+import com.nekko.android.ui.screens.ComputersScreen
 import com.nekko.android.ui.theme.NekkoTheme
 import com.nekko.protocol.Channels
 import com.nekko.protocol.RelayConfig
@@ -74,6 +76,55 @@ class ComputerSettingsDeviceTest {
     private fun scrollTo(tag: String) {
         compose.onNode(hasTestTag("computer.scroll")).performScrollToNode(hasTestTag(tag))
         compose.waitForIdle()
+    }
+
+    private fun pairedRepo(): Pair<ComputersRepository, String> {
+        val repo = ComputersRepository(
+            store = object : SecureStore {
+                private val map = HashMap<String, String>()
+                override suspend fun get(key: String) = map[key]
+                override suspend fun set(key: String, value: String?) { if (value == null) map.remove(key) else map[key] = value }
+            },
+            remotes = { config, _ -> remote(config) },
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+            deviceName = { "Pixel" },
+            deriveKey = { _, _ -> ByteArray(32) },
+        )
+        val id = runBlocking {
+            val id = repo.pair(testPairing())
+            repo.rename(id, "Studio Mac")
+            repo.load()
+            id
+        }
+        return repo to id
+    }
+
+    private fun checkRenameHint() {
+        if (InstrumentationRegistry.getArguments().getString("baseline") != "1") {
+            compose.onNode(hasText("Only this phone sees this name. Leave it empty to use the computer’s own name.")).assertExists()
+        }
+    }
+
+    @Test fun computerPageRenameDialog() {
+        val (repo, id) = pairedRepo()
+        compose.setContent { NekkoTheme(dark = false) { ComputerScreen(repo, id, onBack = {}, onProviders = {}) } }
+        compose.waitUntil(10_000) { repo.state.value.computers.any { it.id == id } }
+        compose.onNodeWithTag("computer.edit").performClick()
+        compose.onNode(hasText("Rename")).performClick()
+        compose.waitForIdle()
+        checkRenameHint()
+        shot("rename-detail")
+    }
+
+    @Test fun computersListRenameDialog() {
+        val (repo, id) = pairedRepo()
+        compose.setContent { NekkoTheme(dark = false) { ComputersScreen(repo, onBack = {}, onPair = {}) } }
+        compose.waitUntil(10_000) { repo.state.value.computers.any { it.id == id } }
+        compose.onNode(hasContentDescription("More options for Studio Mac")).performClick()
+        compose.onNode(hasText("Rename")).performClick()
+        compose.waitForIdle()
+        checkRenameHint()
+        shot("rename-list")
     }
 
     @Test fun modelsFilterAndConnectionSwitch() {

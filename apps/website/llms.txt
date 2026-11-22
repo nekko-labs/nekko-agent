@@ -1,6 +1,6 @@
 # Nekko Agent
 
-> Nekko Agent is open-source, local-first AI help for coding and everyday work, plus a local model server. Run models on your computer or use supported online providers; work with project files, tools and scheduled tasks under explicit permissions. Free, MIT licensed, by Nekko Labs.
+> Nekko Agent is open-source, local-first AI help for coding and everyday work, plus a local model server. Run models on your computer or use supported online providers; work with project files, tools and scheduled tasks under explicit permissions. Free, MIT licensed, by Nekko Labs. The name Nekko comes from neko, Japanese for cat.
 
 ## Start with the user's task
 
@@ -8,6 +8,7 @@
 - [Feature guide as Markdown](https://nekkoagent.com/docs/features.md): the same content without HTML.
 - [Docs for AI agents](https://nekkoagent.com/docs/for-agents): how to find, cite and use capabilities; separate product guidance from contributor instructions.
 - [Complete documentation](https://nekkoagent.com/llms-full.txt): every published guide in one Markdown file.
+- [What's new](https://nekkoagent.com/whatsnew): the highlights of each release line, with the pull request and author of each.
 - [Current releases](https://github.com/nekko-labs/nekko-agent/releases): verify that a source feature is included in the user's installed version. Do not treat main-branch implementation as a released installer.
 
 ## Capabilities and boundaries
@@ -37,6 +38,7 @@
 - [Website](https://nekkoagent.com/)
 - [Source repository](https://github.com/nekko-labs/nekko-agent)
 - [Feature specifications](https://github.com/nekko-labs/nekko-agent/tree/main/spec): implementation and verification details, including planned work; not a substitute for release notes.
+- [Design system](https://nekkoagent.com/design-system): quiet surfaces, the design system behind Nekko Agent, in two colourways (Light Nekko and Dusk). MIT licensed. Read it as [Markdown](https://nekkoagent.com/design-system.md) (rules, checklist and every token) or take the tokens as [JSON](https://nekkoagent.com/design-system.json) when building an interface in this style.
 - [Privacy policy](https://nekkoagent.com/privacy)
 - [Nekko Labs](https://nekkolabs.com/)
 
@@ -52,6 +54,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Getting started](https://nekkoagent.com/docs/index.md): What Nekko Agent is, who makes it, and how to install it or run it from source.
 - [Features by task](https://nekkoagent.com/docs/features.md): Find Nekko Agent features for local AI coding, file recovery, batch edits, memory, approvals, automation and MCP, with setup guides and limits.
 - [Walkthrough](https://nekkoagent.com/docs/walkthrough.md): A picture-by-picture tour of the app.
+- [What's new](https://nekkoagent.com/docs/whats-new.md): Where to find the highlights of each Nekko Agent release and the full release notes.
 
 ### Using Nekko Agent
 
@@ -61,6 +64,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Simple and Detailed](https://nekkoagent.com/docs/simple-and-expert.md): Switch between the everyday app and every control, and choose what Simple shows.
 - [Fonts and text](https://nekkoagent.com/docs/fonts-and-text.md): Text size, the interface and code fonts, and adding your own fonts.
 - [Browser automation](https://nekkoagent.com/docs/browser-automation.md): Chat-owned browser actions, security boundaries and native driver migration status.
+- [Simulators in use](https://nekkoagent.com/docs/simulators.md): See which chat is using each booted iOS simulator or Android emulator, what it costs in CPU, watch its screen, and shut it down.
 - [Connections](https://nekkoagent.com/docs/connections.md): Switch off every network connection at once or one by one, and see how often each one is used.
 - [Usage and crash reports](https://nekkoagent.com/docs/usage-reports.md): Opt in to anonymous usage and crash reports, what they contain, and how to see each send.
 - [Voice](https://nekkoagent.com/docs/voice.md): Tap the mic once and talk: dictation that stays on, "Nekko" commands, and speech that never leaves your computer.

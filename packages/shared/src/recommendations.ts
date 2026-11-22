@@ -73,12 +73,32 @@ export interface RecommendedOption {
   /** Budget left after loading it. */
   headroomBytes: number;
   contextTokens: number;
+  /** The model's own longest context, when the feed records one. */
+  maxContextTokens?: number | null;
+  /** The longest context (up to the model's own) that still fits the budget beside these weights. */
+  fitContextTokens?: number;
+  /** Every quant of this model on this machine, best first: what each one needs here. */
+  quants?: RecommendedQuant[];
   placement: RecommendationPlacement;
   fit: RecommendationFit;
   /** Decode tokens/s at the start of a conversation; absent where unknown or not what the task waits on. */
   speed: { tokensPerSecond: number; basis: SpeedBasis; /** Replies a `measuredHere` figure is the median of. */ samples?: number } | null;
   /** Slower than the task's minimum. */
   tooSlow: boolean;
+}
+
+/** One quant of a recommended model, as `RecommendedOption.quants` lists it. */
+export interface RecommendedQuant {
+  quant: string;
+  /** The label `engineDownloadModel(repo, label)` takes. */
+  downloadLabel: string;
+  /** Every file to download for this quant. */
+  files: string[];
+  downloadBytes: number;
+  /** Weights + KV cache at the task's context + compute buffers. */
+  memoryBytes: number;
+  fitContextTokens: number;
+  fit: RecommendationFit;
 }
 
 export interface TaskRecommendation {
@@ -94,6 +114,8 @@ export interface TaskRecommendation {
 
 export interface Recommendations {
   feedVersion: string;
+  /** `update`: a signed list newer than the one this version shipped, fetched with an update check. */
+  feedSource?: 'bundled' | 'update';
   hardware: {
     /** The device the budget is measured against; `null` on a CPU-only machine. */
     device: string | null;
@@ -148,6 +170,23 @@ export interface ImageRecommendedOption {
   /** Fits only with the model's `offloadToCpu` preset on: set it when installing. */
   offloadToCpu: boolean;
   fit: RecommendationFit;
+  /** How long one picture or clip takes, when something measured it. Never an estimate. */
+  time?: ImageTime;
+}
+
+/**
+ * Seconds for one picture or clip.
+ * - `measuredHere`: the median of this machine's own, at the sizes and steps they were made at.
+ * - `measured`: one run on this class of hardware, at `width` x `height` and `steps`.
+ */
+export interface ImageTime {
+  seconds: number;
+  basis: 'measuredHere' | 'measured';
+  /** Pictures a `measuredHere` figure is the median of. */
+  samples?: number;
+  width?: number;
+  height?: number;
+  steps?: number;
 }
 
 export interface ImageTaskRecommendation {

@@ -14,11 +14,11 @@ After pairing your first computer, the permissions checklist explains what Nekko
 
 Denied access can be restored in system Settings. If Settings opens its home page, find Nekko Agent there (under **Apps** on newer iOS versions). Device restrictions or missing hardware may prevent a feature. Photo and file pickers need no blanket library or storage permission. Allowing microphone or speech access here does not start recording. You can revisit the checklist at any time.
 
-## Pending answers and approvals on iPhone
+## Pending answers and approvals on iPhone and Android
 
 If your computer is reconnecting, you can still submit an answer or a one-time **Allow** or **Deny** response inside its chat. It appears as a pending response message with its request identifier and stays on your phone when you leave the chat or restart the app.
 
-The phone tries again when connected, but only while the exact original question or tool call is still pending on that computer. **Retry** tries delivery again; **Cancel** removes an unsent response and lets you answer the original request again if it is still waiting. A response already sending cannot be recalled. After confirmation it reads **Sent**.
+The phone tries again when connected, but only while the exact original question or tool call is still pending on that computer. **Retry** tries delivery again; **Cancel** removes an unsent response and lets you answer the original request again if it is still waiting. A response already sending cannot be recalled. After confirmation it reads **Sent** (on Android the message then leaves the message box; the chat shows the result).
 
 If the request changed or was answered elsewhere, the message says **No longer pending** instead of applying your answer to a different action. If the connection dropped after the computer accepted it, the phone may not be able to confirm delivery; a missing request is not treated as proof that this phone sent it. **Always allow this tool** changes, voice actions, and responses from Monitors still need a live connection.
 
@@ -30,7 +30,7 @@ The primary Home Screen icon follows iOS icon appearance: the light version keep
 
 ## Reconnecting and reading replies on iPhone and iPad
 
-When a paired computer is unavailable, New chat separates its reconnecting status from the drafting hint. You can write your message and choose Send while waiting; the queued text stays on this device until the computer reconnects. Drafting without choosing Send does not queue a message. Image chats and supporting folders that require confirmation retain their specific reconnect instructions.
+When a paired computer is unavailable, New chat says that prompts you send wait on this iPhone or Android phone. You can write your message and choose Send while waiting; the queued text stays on this device until the computer reconnects. Drafting without choosing Send does not queue or send a message. Image chats and supporting folders that require confirmation retain their specific reconnect instructions.
 
 On iOS 18 and later, an open computer chat follows the measured growth of the reply while you are at the end. Scroll into history to stop following, then tap **Jump to latest** to resume. iOS 17 retains the previous scrolling implementation. The reconnect ellipsis stays still with Reduce Motion enabled.
 
@@ -53,6 +53,8 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 **Its Model Server from here.** While the Monitors panel watches a connected computer, Local models can load a model there, unload one or all, and set how many stay loaded, when an idle one unloads and whether a chat may load one, unless that Model Server keeps its own model settings.
 
 **Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
+
+**Your own computers, with no link.** When your computers share themselves with your organization in Nekko Cloud (Settings, Phone pairing, Organization), any of them signed in to the same account and unlocked can open a chat on another without a pairing link. In the organization's Computers list, hover one of your own online computers and choose **Open chat**. It connects with your account's keys, adds the computer to Settings, Computers (as *Opened from your organization*) and opens a new chat there. The other computer needs **Remote access** on; otherwise its row says so. A teammate's computer is listed but can't be opened. Nothing is paired and nothing is saved: the link ends when you restart, sign out or lock, and the other computer cuts it within 15 seconds if it stops sharing, signs out, or your account removes this device. The same rules apply as for any connected computer above.
 
 **Keeping a computer awake for its agents.** A run you start on another computer stops when that computer falls asleep. On the computer that runs the agents, turn on *Keep this computer awake while agents run* (Settings, Computers). While any agent runs there it won't go to sleep on its own, and once the last one finishes it sleeps as usual. Closing the lid still sleeps it.
 
@@ -109,10 +111,13 @@ fresh QR from the phone. You do not need to revoke it first, and your other phon
 iPhone and Android update the existing computer when its identity key is unchanged, even after a
 relay address changes, keeping its nickname and saved data.
 
-**Computer name** in the same settings card starts with your computer's system name. Enter a name
-and click **Save name**, or clear it to use the system name again. The phone learns it when it
-connects or refreshes. You can still use **Rename** on the phone for a nickname just on that phone;
-that nickname is kept when the computer's shared name changes or you pair it again.
+**Computer name** in the same settings card starts with your computer's system name: the name in
+**System Settings → General → About** on a Mac (such as "Philip's MacBook Pro"), the pretty hostname
+on Linux, and the PC's name on Windows. Enter a name and click **Save name**, or clear it to use the
+system name again. The phone learns it when it connects or refreshes. You can still use **Rename**
+on the phone for a nickname just on that phone (on the iPhone it is also in the New chat device
+menu); that nickname is kept when the computer's shared name changes or you pair it again. Clear the
+nickname to go back to the computer's own name.
 
 A full reset or **Sign out all phones** changes the computer's identity key as well as its pairing
 credentials. For safety the phone does not merge different keys just because their names match.
@@ -149,9 +154,13 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Chats on this phone (Android, in progress for [#2414](https://github.com/nekko-labs/nekko-agent/issues/2414)).**
 > From Chats, choose **This phone**, even with no paired computer or provider. Add a provider there:
-> Claude API, OpenAI, OpenRouter, Claude in Amazon Bedrock (Mantle Messages), Claude in Microsoft
-> Foundry, Claude on Vertex AI, or an HTTPS OpenAI-compatible API. Supply your own API key or access
-> token (optional for compatible APIs), choose a model and start a streamed text conversation.
+> Claude API, OpenAI, OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock (Mantle
+> Messages), Claude in Microsoft Foundry, Claude on Vertex AI, or an HTTPS OpenAI-compatible API.
+> OpenRouter is one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude
+> API, OpenAI, Gemini and Ollama Cloud, tap **Open** to reach the key page, copy a key, come back and
+> tap **Paste**; Nekko checks it and connects. A wrong key is turned down before anything is saved.
+> For the others, supply your own API key or access token (optional for compatible APIs). Then
+> choose a model and start a streamed text conversation.
 > Test, replace the key, disable/re-enable or remove a provider; Stop cancels a reply and Retry
 > replaces its last attempt. Fixed-catalog Test requests can incur a small provider charge.
 > Keys and local transcripts are sealed with Android Keystore-backed encryption. Requests go
@@ -180,7 +189,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > every desktop preset (Nebula, Terminal, Nord, Solar, Lilac, Lavender, Ember, Spooky, Winter and the
 > experimental families). In October, **Spooky** also switches the app icon to a limited fall
 > version; iOS confirms the change, and the usual icon comes back with any other theme or after
-> Halloween. The iPhone app speaks the desktop's languages (English, Spanish, French, German,
+> Halloween. On Android the icon switches the next time you leave the app, and its launcher icon
+> also has a dark version (a solid plum tile with a pink cat) when the phone is in dark mode.
+> The iPhone app speaks the desktop's languages (English, Spanish, French, German,
 > Portuguese, Japanese and Chinese): it follows the iPhone's language, and **Settings → Appearance →
 > Language** opens iOS Settings to pick one for Nekko Agent alone.
 >
@@ -229,14 +240,31 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > its name. **View → Group by → Computer** puts a heading over each computer's chats, and
 > **View → Show** turns the computer's name and icon off.
 >
+> **Settings on the iPhone** (iPhone): your Nekko Cloud account is the first row, like the Apple Account in iOS Settings; tap it to sign in or open sync. **Computers** come second, each computer a row you tap for its page, with a plus to add one. **Models on This iPhone** lists your providers the same way.
+>
 > **Chats on this iPhone** (iPhone): the phone can run chats itself, with no computer, on a cloud
 > model provider. Add one in **Settings → Models on this iPhone**: the Claude API, OpenAI,
-> OpenRouter, Claude in Amazon Bedrock, Claude in Microsoft Foundry, Claude on Vertex AI, or any
-> OpenAI-compatible server over https, with your own key. The key stays in this iPhone's Keychain
+> OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock, Claude in Microsoft Foundry,
+> Claude on Vertex AI, or any OpenAI-compatible server over https, with your own key. Each provider
+> shows its own logo, the same marks the desktop uses. Tap a provider's button to add it; each
+> provider you have is a row that opens its page (on or off, Test, New key, Remove). Choosing the
+> Claude API first shows its options: an API key works, while the Claude subscription is dimmed,
+> because Anthropic doesn't allow it from a phone. OpenRouter is
+> one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude API, OpenAI,
+> Gemini and Ollama Cloud, tap **Open** to reach the key page, copy a key, come back and tap
+> **Paste**; Nekko checks it and connects. The key stays in this iPhone's Keychain
 > and goes only to that provider; it is never sent to your computer, the relay or Nekko Cloud.
 > Then pick **This iPhone** under **New chat → Run on**. These chats sit in the same list as your
 > computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
 > and ChatGPT subscriptions and local model servers still need a computer.
+>
+> **Model on device** (iPhone): New chat shows the model and where it runs on one line, such as
+> *gpt-6.1-sol · OpenAI ⟶ This iPhone*. Tap the model to change it, or the device to choose
+> another computer or This iPhone. Until you send your first message, New chat also shows **Nekko
+> can do more with these**: pair a computer, add a folder, connect a git provider and connect a
+> task tool. Each row opens its setup and ticks when it's done. Later, while no computer, folder or
+> git provider is connected, one line offers **Connect**. Close either with **×** (and **Undo** if
+> you change your mind); it stays closed on this iPhone.
 >
 > **Connectors** (iPhone): **Settings → Connectors** (or **Connectors** in the chat list's menu)
 > connects this iPhone to a git provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) and to
@@ -244,6 +272,16 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > iPhone's Keychain and goes only to its own service; your computers keep their own connectors.
 > Connect checks the token first and says who it signed in as. Each service is shown with its own
 > logo.
+>
+> **Connectors** (Android): the same page under **Settings → Connectors**, with the same services and
+> logos. Each token is sealed on the phone by its keystore and goes only to its own service over
+> https. With more than one git provider connected, **Pull requests from** picks the one Pull
+> requests lists.
+>
+> **Pull requests** (Android): in the chat list's menu, as on the iPhone: **Mine** and **Projects**,
+> filters, **Add a repository**, and the same one-tap prompts. A prompt opens New chat on the
+> computer whose folder holds the repository, with the words filled in; nothing is sent until
+> **Start**.
 >
 > **Pull requests** (iPhone): in the chat list's menu. **Mine** lists the open pull requests to
 > review, opened by you and assigned to you on the selected git provider; **Projects** lists the
@@ -327,7 +365,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > you or is pinned always shows), then **Show N more**. Tap a group's name to fold it. The
 > **view** button beside New chat arranges the list as the desktop's Agents panel does: **Group
 > by** project, status, date or none; **Sort by** manual, last updated or name; **Show**
-> previews, completed chats and empty groups; and **Reset to defaults**. Grouped by project,
+> previews, archived chats and empty groups; and **Reset to defaults**. Grouped by project,
 > touch and hold a group's name to drag it to a new place, or use **Reorder groups…** in the same
 > menu. The order is kept on the iPhone.
 >
@@ -388,7 +426,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Your computer's settings from the phone** (Android): **Settings → On <computer>** changes three
 > of the computer's own settings: the chat mode for new chats (Always ask, Ask when it matters or No restrictions; switching to
-> No restrictions shows the No restrictions warning first), what a long-press on a chat does (Complete, which moves it to Completed, or
+> No restrictions shows the No restrictions warning first), what a long-press on a chat does (Archive, which moves it to Archived, or
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list offers that action, plus **Pin** (or **Unpin**)
 > and **Rename**; a pinned chat shows a pin beside its time.
@@ -434,7 +472,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Read offline** (iPhone and Android): the phone keeps each computer's chat list
 > and the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
 > newest messages). Opening the app or a chat shows them at once, and while the computer can't be
-> reached they stay readable under **Saved list from 10:42** and **Saved copy from 10:42**. When the
+> reached they stay readable under **Saved list from 10:42** and **Updated last on 10:42**. When the
 > computer answers, the live list and chat replace them in place. A saved chat can't be changed
 > (model, tool policy, rename, complete) until the computer is back, but what you send waits as
 > above. Photos are never kept, only how many a message had. Both are on unless you turn them off
@@ -456,7 +494,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
 >   puts its text in place of the `/`.
-> - **Search:** finds completed chats too, and shows every match in each group.
+> - **Search:** finds archived chats too, and shows every match in each group.
 > - **On Android** the queue's Edit and Remove, the fork (touch and hold a message, then **Edit in a
 >   new chat** or **Fork from here**), saved prompts in `/` and under **+**, and **Search chats** at
 >   the top of the chat list work the same way, and **Settings → Automations** and **Settings → Usage
@@ -520,21 +558,21 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >   days are folded under each place until you tap them.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
-> computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
+> computer, archived ones included, in the same groups as the desktop's agent sidebar: **General**
 > first, then one group per project folder. Groups start folded, as on the iPhone, with a count of
 > their chats; tap a group's name to open it, and again to fold it. The phone remembers each group's
 > choice, also after you leave the list or restart the app (it isn't synced to your computer).
 > Grouped by status, the list uses the iPhone's groups (Needs input, Draft, Building, Verifying,
 > Watching, Done), and a group with a chat running or watching shows the cat with a green dot in
 > its heading. Search shows every match whatever is folded. Each group lists its
-> active chats, then **Show completed (N)**, which opens the chats completed there (struck through,
-> newest first). Tap a completed chat to read it; its message box is replaced by **Restore**, and a
-> long-press on it offers Restore or Delete. Completing or restoring a chat on the computer shows up
+> active chats, then **Show archived (N)**, which opens the chats archived there (led by the archive glyph,
+> newest first). Tap an archived chat to read it; its message box is replaced by **Restore**, and a
+> long-press on it offers Restore or Delete. Archiving or restoring a chat on the computer shows up
 > on the phone the next time the list refreshes: when a reply finishes, when you pull down, or when
 > you come back to the app.
 >
 > **Photos and dictation** (Android): the **+** on the left of a chat's message box opens **Dictate**,
-> **Image from files** (the phone's photo picker; Nekko only sees the photos you pick) and **Take
+> **Photos and videos** (the phone's photo picker; Nekko only sees what you pick) and **Take
 > photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails
 > inside the message box that you can remove. Adding or removing a photo saves the draft at once, so
 > reopening the app brings back its text and photos. They are scaled to 1600 px and sent end-to-end
@@ -542,6 +580,12 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > The photos stay in the message's bubble on the phone too, as small previews the computer makes
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
+>
+> **Videos** (Android): pick up to 2 videos in the same picker. Each goes to the computer at once,
+> with its progress in the message box, and is attached to the chat as a file; **Send** waits until it
+> has arrived. A video larger than 50 MB is turned down on the phone before anything is sent. Videos
+> need the computer connected: they never wait on the phone like a message does. Once attached, a
+> video stays among the chat's attached files on the computer.
 >
 > **Dictation** (Android): tap **+ → Dictate** and speak as long as you like; tap ■ when you're done.
 > At each pause the words said so far are turned into text and typed into the message box while you
@@ -594,6 +638,14 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > the chat through the lock. Without push (not built yet), these only arrive while the phone is still
 > connected. If Android restricts Nekko in the background, Settings says so and opens the app's
 > system page.
+>
+> **In the car (Android Auto):** while the phone is on Android Auto, a finished reply is read aloud
+> there: the chat's name and the first 200 or so characters of its reply, in plain words. Say
+> **Reply** and dictate an answer; Android Auto reads it back and asks before sending it to that chat.
+> It waits on the phone while the computer is offline, and goes only to a chat on the computer the
+> phone is connected to. Off the car, notifications stay as above, without the reply. Approvals,
+> Stop and the chat list aren't in the car on Android: Android Auto only takes Reply and Mark as read
+> from an app like this.
 
 The phone clients are native apps: SwiftUI in `apps/ios` and Kotlin/Jetpack Compose in
 `apps/android`. They drive chats on your computer over the encrypted relay. The former
@@ -651,7 +703,7 @@ Your computer decides what a paired phone may ask for, whatever the phone app do
 phone app is not the boundary, your computer is. A phone can use your chats and nothing that
 changes how the computer itself is set up:
 
-- **Allowed:** list, open, start, fork, complete and delete chats; send, queue, edit or remove
+- **Allowed:** list, open, start, fork, archive and delete chats; send, queue, edit or remove
   queued, and stop messages; answer approvals and the agent's questions; pick a model from the
   computer's providers and a folder from its list; voice status and transcription; read a chat's
   pull requests, the computer's automations, its usage and plan limits, and run an automation now;
@@ -671,7 +723,7 @@ changes how the computer itself is set up:
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
-- **Settings a phone may change:** the chat mode for new chats (Always ask, Ask when it matters or No restrictions), what the chat pane's top-right button does (Complete or Delete),
+- **Settings a phone may change:** the chat mode for new chats (Always ask, Ask when it matters or No restrictions), what the chat pane's top-right button does (Archive or Delete),
   whether deleting asks first, and voice on/off and its language. An update that touches any other
   setting is refused as a whole: nothing in it is applied.
 - **Settings a phone can read:** only the theme and accents, the default and starred models, your
@@ -729,7 +781,7 @@ changes how the computer itself is set up:
   needs *Change* but no signature, like stopping a run: it frees memory and the next reply that
   uses the model loads it again. Loading, downloading, deleting models and the Model Server's
   settings stay on the computer.
-- **One chat's options:** a phone can change a chat's model, effort, title, pin and tags, complete it, and
+- **One chat's options:** a phone can change a chat's model, effort, title, pin and tags, archive it, and
   switch it between Always ask, Ask when it matters and No restrictions, always allow an MCP tool in it (**Always allow this
   tool** on an approval, iPhone), but not its tools, isolation or offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
   default for new chats) to a mode with fewer approvals, Always ask to Ask when it matters or anything to No restrictions, or
@@ -861,6 +913,13 @@ on. Without Tailscale on this computer the option links to Tailscale and stays o
   only to Tailscale names); it moves between the other routes the same way.
   Switch **Also on this Wi-Fi** off to keep the relay on the tailnet only; pair the phone again
   after changing it. Phones paired before this keep the one route until they scan a new code.
+
+**After pairing over Tailscale** (iPhone and Android), the phone shows **Set up Tailscale**: is
+Tailscale on on this phone (with **Open Tailscale**), does the computer answer, and how to keep it
+working away from home. That last step is VPN On Demand in Tailscale on the iPhone, and Tailscale's
+**Always-on VPN** in Android's VPN settings (**Open VPN settings**); Android doesn't tell apps which
+VPN is always on, so the phone can't tick that one. The first two steps tick themselves as they
+come true. Open the guide again from **Settings → Connection** (Android: **Tailscale setup guide**).
 
 On the iPhone, **Settings → Connection** shows the route in use (on Android, **Settings →
 Connection status**, with the other routes). **Check routes** (iPhone and Android) looks up,

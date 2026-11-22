@@ -1,4 +1,4 @@
-import { AUTO_COMPLETE_CHOICES, autoCompleteDays, promptCachingEnabled, telemetryChoice, type AppSettings } from '@nekko-agent/shared';
+import { AUTO_ARCHIVE_CHOICES, autoArchiveDays, promptCachingEnabled, telemetryChoice, type AppSettings } from '@nekko-agent/shared';
 import { LANGUAGES } from './i18n.js';
 import { textScaleOf, useStore } from './store.js';
 import { TEXT_SCALES } from './textScale.js';
@@ -29,7 +29,7 @@ export interface SettingEntry {
   id: string;
   label: string;
   /** The Settings group (`settings-<group>` on the page) it lives in. */
-  group: 'support' | 'general' | 'customize' | 'agents' | 'safety' | 'tools' | 'system';
+  group: 'profile' | 'support' | 'cloud' | 'general' | 'customize' | 'agents' | 'safety' | 'tools' | 'system';
   /** Extra words people search for that the label does not say. */
   keywords?: string;
   control: SettingControl;
@@ -49,8 +49,8 @@ export const SETTINGS_INDEX: SettingEntry[] = [
   })),
   { id: 'background-animation', label: 'Background animation', group: 'customize', keywords: 'appearance pixel wave power', control: toggle((s) => s.backgroundAnimation !== false, (v) => ({ backgroundAnimation: v })) },
   { id: 'language', label: 'Language', group: 'general', keywords: 'locale translation', control: { kind: 'select', options: [{ value: '', label: 'System default' }, ...LANGUAGES.map((l) => ({ value: l.code, label: l.label }))], get: (s) => s.language ?? '', set: (v) => ({ language: v || undefined }) } },
-  { id: 'chat-pane-action', label: 'Chat pane top-right action', group: 'general', keywords: 'complete delete close x', control: { kind: 'select', options: [{ value: 'complete', label: 'Complete' }, { value: 'delete', label: 'Delete' }], get: (s) => s.chatPaneAction ?? 'complete', set: (v) => ({ chatPaneAction: v === 'delete' ? 'delete' : 'complete' }) } },
-  { id: 'auto-complete', label: 'Complete idle agents after', group: 'general', keywords: 'archive inactive', control: { kind: 'select', options: AUTO_COMPLETE_CHOICES.map((c) => ({ value: String(c.days), label: c.label })), get: (s) => String(autoCompleteDays(s.autoCompleteAfterDays)), set: (v) => ({ autoCompleteAfterDays: Number(v) }) } },
+  { id: 'chat-pane-action', label: 'Chat pane top-right action', group: 'general', keywords: 'archive complete delete close x', control: { kind: 'select', options: [{ value: 'complete', label: 'Archive' }, { value: 'delete', label: 'Delete' }], get: (s) => s.chatPaneAction ?? 'complete', set: (v) => ({ chatPaneAction: v === 'delete' ? 'delete' : 'complete' }) } },
+  { id: 'auto-archive', label: 'Archive idle agents after', group: 'general', keywords: 'archive complete inactive', control: { kind: 'select', options: AUTO_ARCHIVE_CHOICES.map((c) => ({ value: String(c.days), label: c.label })), get: (s) => String(autoArchiveDays(s.autoCompleteAfterDays)), set: (v) => ({ autoCompleteAfterDays: Number(v) }) } },
   { id: 'tips', label: 'Show tips', group: 'general', control: toggle((s) => s.showTips !== false, (v) => ({ showTips: v })) },
   { id: 'warn-before-yolo', label: 'Warn before No restrictions', group: 'safety', keywords: 'yolo no restrictions warning approvals safety', control: toggle((s) => s.skipYoloWarning !== true, (v) => ({ skipYoloWarning: !v })) },
   { id: 'confirm-deletions', label: 'Confirm deletions', group: 'general', keywords: 'delete prompt', control: toggle((s) => s.skipDeleteConfirmation !== true, (v) => ({ skipDeleteConfirmation: !v })) },
@@ -75,21 +75,38 @@ export const SETTINGS_INDEX: SettingEntry[] = [
 
 /** Each Settings group with the sections it holds, so searching "hooks" or "guardrails" can jump there. */
 export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: string }> = [
+  { group: 'profile', label: 'Profile', keywords: 'about you name email what you do role work profile account me' },
   { group: 'support', label: 'Help out the Nekko Team', keywords: 'support star starred github improve usage crash reports telemetry privacy' },
-  { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history chats complete idle delete confirm desktop behavior close window tray low memory language tips setup wizard' },
-  { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access sync' },
-  { group: 'customize', label: 'Customize', keywords: 'view appearance theme agents wall customization fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
-  { group: 'agents', label: 'Agents', keywords: 'agent loop hooks spec-driven development orchestration delegation routes automations' },
+  { group: 'cloud', label: 'Nekko Cloud', keywords: 'account sign in sign out plan billing sync chats library devices recovery key fleet management organization team share computers delete account' },
+  { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history chats archive complete idle delete confirm desktop behavior close window tray low memory language tips setup wizard' },
+    { group: 'customize', label: 'Appearance', keywords: 'customize view theme agents wall fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer screens desktops monitors new agents placement balanced main screen' },
+  { group: 'agents', label: 'Agents', keywords: 'agent loop system prompt wrapper customization prompt size profiles hooks spec-driven development orchestration delegation routes automations' },
   { group: 'safety', label: 'Safety', keywords: 'chat modes default mode no restrictions yolo ask security step-up sandbox guardrails permissions' },
-  { group: 'connections', label: 'Connections', keywords: 'network activity log' },
+  { group: 'connections', label: 'Connections', keywords: 'network activity log all connections off' },
+  { group: 'phone', label: 'Phone and computers', keywords: 'phone pairing qr mobile iphone remote access relay tailscale computers fleet devices' },
   { group: 'tools', label: 'Tools', keywords: 'git management project management pull requests terminal shell mcp servers' },
   { group: 'system', label: 'System', keywords: 'updates developer experimental backup data privacy' },
 ];
 
-/** Open Settings scrolled to one group (the page mounts on the next frame). */
-export function openSettingsGroup(group: string) {
+/** Fired when openSettingsGroup() leaves a target for a Settings page already on screen. */
+export const SETTINGS_TARGET_EVENT = 'nekko:settings-target';
+let settingsTarget: string | null = null;
+
+/** The group or section openSettingsGroup() asked for, once: Settings reads it when it mounts or hears the event. */
+export function takeSettingsTarget() {
+  const target = settingsTarget;
+  settingsTarget = null;
+  return target;
+}
+
+/**
+ * Open Settings on the page holding `target`: a group id (`customize`) or any
+ * `settings-<target>` anchor inside one (`simple`, `computers`), scrolled to it.
+ */
+export function openSettingsGroup(target: string) {
+  settingsTarget = target;
   useStore.getState().setView('settings');
-  requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(`settings-${group}`)?.scrollIntoView({ block: 'start' })));
+  window.dispatchEvent(new Event(SETTINGS_TARGET_EVENT));
 }
 
 const hits = (hay: string, query: string) => {

@@ -349,6 +349,26 @@ jobs:
             gh release upload "$RELEASE_TAG" "${sigs[@]}" --clobber
           fi
 
+      # Publish the list this release ships for apps already installed: signed
+      # into model-feed.json and uploaded beside the update feed, where their
+      # daemons fetch it on each update check and recommend from it when it is
+      # newer than their own (crates/nekkod/src/model_feed.rs). One platform is
+      # enough: the list is the same on all three. While the built-in key is
+      # the placeholder nothing is published, since no app would accept it.
+      - name: Sign the model list
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEKKO_RELEASE_SIGNING_KEY: ${{ secrets.NEKKO_RELEASE_SIGNING_KEY }}
+          NEKKO_RELEASE_KEY_ROTATION: ${{ vars.NEKKO_RELEASE_KEY_ROTATION }}
+        run: |
+          set -euo pipefail
+          out=$(node scripts/sign-model-feed.mjs apps/desktop/release)
+          if [ -n "$out" ]; then
+            gh release upload "$RELEASE_TAG" "$out" --clobber
+          fi
+
       # Only nekko-vm may create VMs (apps/desktop/scripts/sign-mac.cjs): it must
       # carry the virtualization entitlement and nothing else in the app may.
       # Only the main executable may carry a restricted entitlement, and only

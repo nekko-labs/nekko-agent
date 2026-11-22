@@ -44,23 +44,42 @@ app.whenReady().then(async () => {
       await capture(`dock-${theme}`);
       await check(`${theme}: dock renders`, "!!document.querySelector('.monitors-dock')");
       if (!base) {
-        await check(`${theme}: local models monitor lists both resident models`, "(()=>{const m=document.querySelector('[data-monitor=\"localModels\"]');return !!m&&m.innerText.includes('Qwen3 8B')&&m.innerText.includes('Gemma 3 27B')})()");
+        await check(`${theme}: lists the chat and the picture model`, "(()=>{const m=document.querySelector('[data-monitor=\"localModels\"]');return !!m&&m.innerText.includes('Gemma 3 27B')&&m.innerText.includes('FLUX.1 schnell')})()");
         await check(`${theme}: split placement is called out`, "document.querySelector('[data-monitor=\"localModels\"]').innerText.includes('38/62')");
+        await check(`${theme}: every loaded model has Unload, the picture model too`, "!!document.querySelector('[data-local-model-unload=\"gemma3-27b-q4\"]')&&!!document.querySelector('[data-local-model-unload=\"flux1-schnell-q4\"]')");
+        await check(`${theme}: Unload all for two models`, "!!document.querySelector('[data-local-models-unload-all]')");
+        await check(`${theme}: starred Qwen offers Load and Settings`, "!!document.querySelector('[data-local-models-group=\"starred\"] [data-local-model-load=\"qwen3-8b-q4\"]')&&!!document.querySelector('[data-local-models-group=\"starred\"] [data-local-model-settings=\"qwen3-8b-q4\"]')");
+        await check(`${theme}: recent Phi offers Load`, "!!document.querySelector('[data-local-models-group=\"recent\"] [data-local-model-load=\"phi4-mini-q4\"]')");
       }
     }
     if (!base) {
       await run("integration.reset({empty:true})"); await sleep(1500);
       await capture('dock-empty-dark');
       await check('empty: says nothing is loaded', "document.querySelector('[data-monitor=\"localModels\"]')?.innerText.includes('No local model is loaded')");
-      // The point of the feature: one click from the panel to that model's own settings.
+      // Unload the picture model from the dock: its row goes, the chat model stays.
       await run("integration.reset()"); await sleep(1500);
-      await run("document.querySelector('[data-local-model-settings=\"gemma3-27b-q4\"]').click()"); await sleep(2500);
+      await run("document.querySelector('[data-local-model-unload=\"flux1-schnell-q4\"]').click()"); await sleep(1500);
+      await check('unload: the picture model leaves memory', "!document.querySelector('[data-local-model=\"flux1-schnell-q4\"]')&&!!document.querySelector('[data-local-model=\"gemma3-27b-q4\"]')");
+      await check('unload: it is offered under Recent', "!!document.querySelector('[data-local-models-group=\"recent\"] [data-local-model-load=\"flux1-schnell-q4\"]')");
+      await capture('after-unload');
+      // Load a starred model from the dock.
+      await run("document.querySelector('[data-local-model-load=\"qwen3-8b-q4\"]').click()"); await sleep(1500);
+      await check('load: the starred model is in memory', "!!document.querySelector('[data-local-model=\"qwen3-8b-q4\"]')");
+      // One click from the panel to a loaded model's own settings.
+      await run("integration.reset()"); await sleep(1500);
+      await run("document.querySelector('[data-local-model=\"gemma3-27b-q4\"] [data-local-model-settings]').click()"); await sleep(2500);
       await check('click: navigates to Model Server', "integration.state().view==='modelserver'");
       await check('click: opens the clicked model drawer', "!!document.querySelector('[data-resident-row=\"gemma3-27b-q4\"] [data-engine-load-drawer]')");
-      await check('click: other model stays folded', "!document.querySelector('[data-resident-row=\"qwen3-8b-q4\"] [data-engine-load-drawer]')");
       await check('click: drawer is scrolled into view', "(()=>{const r=document.querySelector('[data-resident-row=\"gemma3-27b-q4\"]').getBoundingClientRect();return r.top>=0&&r.top<innerHeight})()");
       await check('click: request consumed', "integration.state().localModelFocus===null");
       await capture('settings-opened');
+      // A starred model that is not loaded opens in the library instead.
+      await run("integration.reset()"); await sleep(1500);
+      await run("document.querySelector('[data-local-models-group=\"starred\"] [data-local-model-settings=\"qwen3-8b-q4\"]').click()"); await sleep(2500);
+      await check('starred settings: navigates to Model Server', "integration.state().view==='modelserver'");
+      await check('starred settings: opens its library drawer', "!!document.querySelector('[data-library-row=\"qwen3-8b-q4\"] [data-engine-load-drawer]')");
+      await check('starred settings: request consumed', "integration.state().localModelFocus===null");
+      await capture('starred-settings-opened');
     }
   } catch (e) { report.errors.push(String(e && e.stack || e)); }
   fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report, null, 2));

@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
   // Only fixed, known selectors and reset presets reach the page: they are
   // looked up by name there, never interpolated into the evaluated source.
   const SELECTORS = { panel: '[data-agent-panel]', budget: '.monitors-dock__budget', empty: '[data-wall-empty]' };
-  const PRESETS = { plain: {}, empty: { empty: true }, horizontal: { horizontal: true }, dock: { dock: true }, spooky: { empty: true, preset: 'autumn' } };
+  const PRESETS = { plain: {}, empty: { empty: true }, dock: { dock: true }, spooky: { empty: true, preset: 'autumn' } };
   const rectOf = async (key, pad = 16) => {
     if (!(key in SELECTORS) || !Number.isInteger(pad)) throw Error('unknown selector');
     await run(`window.__sel=${JSON.stringify(Object.values(SELECTORS))}`);
@@ -64,7 +64,7 @@ app.whenReady().then(async () => {
       await check(`empty wall shows the illustration (${t})`, "!!document.querySelector('[data-wall-empty] .wall-empty-art[data-variant=default]')");
       await check(`empty illustration is centred in the wall (${t})`, "(()=>{const a=document.querySelector('.wall-empty-art')?.getBoundingClientRect();const w=document.querySelector('.command-wall-layout').getBoundingClientRect();if(!a)return false;return Math.abs((a.left+a.right)/2-(w.left+w.right)/2)<24 && a.top>w.top+40})()");
       await capture(`empty-${t}`);
-      // 2. Vertical agent panel header and frame.
+      // 2. Agent panel header and frame.
       await reset(); await theme(t);
       await check(`vertical panel has no ring (${t})`, "getComputedStyle(document.querySelector('[data-agent-panel]'),'::after').content==='none'");
       await check(`hide uses the panel icon, not an X (${t})`, "!!document.querySelector('[aria-label=\"Hide the agent panel\"]') && !document.querySelector('[aria-label=\"Close the agent panel\"]')");
@@ -76,16 +76,12 @@ app.whenReady().then(async () => {
       await sleep(400);
       await check(`plus menu is topmost over the wall (${t})`, "(()=>{const m=document.querySelector('[data-new-agent-menu]');if(!m)return false;const r=m.getBoundingClientRect();return [[r.left+20,r.top+20],[r.right-20,r.bottom-20],[r.right-20,r.top+20]].every(([x,y])=>m.contains(document.elementFromPoint(x,y)))})()");
       await capture(`plus-menu-${t}`, { x: 0, y: 0, width: 900, height: 560 });
-      // 4. Horizontal panel.
-      await reset('horizontal'); await theme(t);
-      await check(`horizontal panel has no ring (${t})`, "(()=>{const p=document.querySelector('[data-agent-panel]');return p?.dataset.orientation==='horizontal'&&getComputedStyle(p,'::after').content==='none'})()");
-      await capture(`panel-horizontal-${t}`, await rectOf('panel', 12));
-      // 5. Add window: centred directly below the wall, above the composer.
+      // 4. Add window: centred directly below the wall, above the composer.
       await reset(); await theme(t);
       await check(`add window centred under the wall, above the composer (${t})`, "(()=>{const b=document.querySelector('[data-wall-add-button]')?.getBoundingClientRect();const w=document.querySelector('.command-wall-layout').getBoundingClientRect();const c=document.querySelector('[data-wall-composer]').getBoundingClientRect();if(!b)return false;return Math.abs((b.left+b.right)/2-(w.left+w.right)/2)<4&&b.top>=w.bottom-1&&b.bottom<=c.top+1})()");
       await check(`no elbow arrow (${t})`, "!document.querySelector('.wall-add-arrow')");
       await capture(`wall-${t}`);
-      // 6. Budget panel range filters.
+      // 5. Budget panel range filters.
       await reset('dock'); await theme(t); await sleep(400);
       await check(`budget has the Insights range filter (${t})`, "(()=>{const g=document.querySelector('[aria-label=\"Budget time range\"]');return !!g&&[...g.querySelectorAll('button')].map(b=>b.textContent).join()==='today,1wk,1m,6m,1y,all-time'})()");
       await capture(`budget-1m-${t}`, await rectOf('budget', 12));

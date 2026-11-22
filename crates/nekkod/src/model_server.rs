@@ -143,6 +143,11 @@ impl Env for Surroundings {
         let machine = self.machine.clone();
         Box::pin(async move { machine.gpu_stats_fresh().await.map(|s| s.to_value()) })
     }
+    fn ram_headroom(&self) -> BoxFuture<Option<f64>> {
+        Box::pin(async {
+            tokio::task::spawn_blocking(|| nekko_machine::memory::headroom() as f64).await.ok().filter(|b| *b > 0.0)
+        })
+    }
     fn flags(&self, bin: String) -> BoxFuture<Arc<HashSet<String>>> {
         // Read once per binary: the engine is installed once and kept. A build
         // we cannot ask knows none of the newer flags.
@@ -216,6 +221,8 @@ pub struct Server {
     machine: Arc<nekko_machine::Machine>,
     engine: Arc<crate::engine::Engine>,
     client: reqwest::Client,
+    /// One local picture or clip at a time on this computer ([`Server::media_job`]).
+    media: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl Server {
@@ -236,7 +243,57 @@ impl Server {
             flags: Arc::default(),
         });
         let model = ModelServer::new(env, Arc::new(Processes(engine.clone())), true);
-        Arc::new(Self { model, library, installs, machine, engine, client: reqwest::Client::new() })
+        Arc::new(Self {
+            model,
+            library,
+            installs,
+            machine,
+            engine,
+            client: reqwest::Client::new(),
+            media: Arc::default(),
+        })
+    }
+
+    /// One local picture (or clip, with `video`), the way every caller makes
+    /// one: Photo and Video chats, and the agents' media tools.
+    ///
+    /// - **One at a time on this computer.** A diffusion model already fills
+    ///   the GPU, and two picture models at once would double the memory. A
+    ///   job that has to wait hears `waiting` first; dropping the future (a
+    ///   stopped turn) leaves the queue.
+    /// - **Swap back.** When loading the media model unloaded a model that was
+    ///   loaded before (usually the chat's own model, idle during a tool call),
+    ///   the media model is unloaded once the job ends, however it ends, so the
+    ///   chat's model can load again. Otherwise it stays for its idle timeout.
+    pub async fn media_job(
+        &self,
+        request: &Value,
+        video: bool,
+        on_stage: &mut (dyn FnMut(&str) + Send),
+    ) -> Result<Value, String> {
+        let turn = match self.media.clone().try_lock_owned() {
+            Ok(g) => g,
+            Err(_) => {
+                on_stage("waiting");
+                self.media.clone().lock_owned().await
+            }
+        };
+        let id = request.get("modelId").map(nekko_js::display).unwrap_or_default();
+        let release = SwapBack {
+            model: self.model.clone(),
+            media: self.media.clone(),
+            before: self.model.loaded_ids(),
+            id,
+            armed: true,
+        };
+        let result = if video {
+            self.generate_video_with(request, on_stage).await
+        } else {
+            self.generate_image_with(request, on_stage).await
+        };
+        release.finish().await;
+        drop(turn);
+        result
     }
 
     /// Loading is the moment a user expects the engine up, so it starts it (`load`).
@@ -270,9 +327,10 @@ impl Server {
         Value::Object(m)
     }
 
-    /// One image from a loaded (or loadable) image model (`generateImage`).
+    /// One image from a loaded (or loadable) image model (`generateImage`),
+    /// in the same queue as every other picture.
     async fn generate_image(&self, request: &Value) -> Result<Value, String> {
-        self.generate_image_with(request, &mut |_| {}).await
+        self.media_job(request, false, &mut |_| {}).await
     }
 
     /// `generateImage(request, onStage)`: `on_stage` hears `loading` when the
@@ -308,9 +366,11 @@ impl Server {
         if let Some(key) = nekko_js::truthy_str(settings.get("apiKey")) {
             req = req.header("authorization", format!("Bearer {key}"));
         }
+        let clock = std::time::Instant::now();
         let res = req.send().await.map_err(|_| "fetch failed".to_string())?;
         let status = res.status();
         let result: Value = res.json().await.map_err(|e| e.to_string())?;
+        let ms = clock.elapsed().as_secs_f64() * 1000.0;
         if !status.is_success() || result.get("data").and_then(Value::as_array).is_none_or(Vec::is_empty) {
             return Err(result
                 .get("error")
@@ -319,7 +379,64 @@ impl Server {
                 .map(nekko_js::display)
                 .unwrap_or_else(|| format!("Image generation failed (HTTP {}).", status.as_u16())));
         }
+        // An edit reads its pictures first and takes longer: only a picture from words is timed.
+        if request.get("refImages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            self.timed(&model, ms).await;
+        }
         Ok(result)
+    }
+
+    /// Keep how long the picture or clip took against the model's file, for
+    /// the recommendations' "here" figure. The model was loaded before the clock started.
+    async fn timed(&self, model: &Value, ms: f64) {
+        if let Some(path) = model.get("path").and_then(Value::as_str) {
+            self.machine.record_picture(path, ms).await;
+        }
+    }
+
+    /// The local picture models an agent can use now (`media_models`): image
+    /// models in the library (not video ones) whose companion files are all
+    /// on disk, or that need none: `{ id, name, capabilities, defaults }`.
+    /// Whether stable-diffusion.cpp is installed is checked when one loads,
+    /// not here: this runs before every chat turn and stays to file reads.
+    pub async fn ready_media_models(&self) -> Vec<Value> {
+        self.ready_models(false).await
+    }
+
+    /// The local video models an agent can use now (`generate_video`): as
+    /// [`Server::ready_media_models`], only those whose set makes clips.
+    pub async fn ready_video_models(&self) -> Vec<Value> {
+        self.ready_models(true).await
+    }
+
+    async fn ready_models(&self, video: bool) -> Vec<Value> {
+        let Ok(rows) = self.library.list().await else { return Vec::new() };
+        let dir = self.library.models_dir();
+        tokio::task::spawn_blocking(move || {
+            rows.into_iter()
+                .filter(nekko_remote::phone_image::eligible)
+                .filter_map(|m| {
+                    let id = m.get("id").map(nekko_js::display).unwrap_or_default();
+                    let beside = acquire::companions_beside(&m, &[nekko_engine::folders::companions_dir(&dir, &id)]);
+                    let status =
+                        acquire::image_companion_status(&m, &acquire::image_companions_dir(&dir), &beside, false);
+                    let (capabilities, defaults) = if status.is_null() {
+                        (json!(["create"]), json!({}))
+                    } else if status["ready"] == true {
+                        (status["capabilities"].clone(), status["defaults"].clone())
+                    } else {
+                        return None;
+                    };
+                    if capabilities.as_array().is_some_and(|c| c.iter().any(|x| x == "video")) != video {
+                        return None;
+                    }
+                    let name = m.get("name").filter(|n| n.is_string()).unwrap_or(&m["id"]).clone();
+                    Some(json!({ "id": id, "name": name, "capabilities": capabilities, "defaults": defaults }))
+                })
+                .collect()
+        })
+        .await
+        .unwrap_or_default()
     }
 
     /// What the library's model can do, from its companion set (`create`,
@@ -365,6 +482,7 @@ impl Server {
         let _busy = child.begin();
         let base = format!("http://127.0.0.1:{}", child.port);
         on_stage("generating");
+        let clock = std::time::Instant::now();
         let res = self
             .client
             .post(format!("{base}/sdcpp/v1/vid_gen"))
@@ -423,6 +541,7 @@ impl Server {
                     if result.get("b64_json").and_then(Value::as_str).is_none_or(str::is_empty) {
                         return Err("The video model finished without a clip.".into());
                     }
+                    self.timed(&model, clock.elapsed().as_secs_f64() * 1000.0).await;
                     return Ok(result);
                 }
                 "failed" | "cancelled" => {
@@ -510,6 +629,46 @@ fn sd_error(v: &Value) -> Option<String> {
     v.get("error").and_then(|e| e.get("message")).and_then(Value::as_str).map(str::to_string)
 }
 
+/// Unloads a media model that displaced a model loaded before it
+/// ([`Server::media_job`]): at once when the job ends, or, when a stopped turn
+/// drops the job, in a task that first waits its turn in the media queue.
+struct SwapBack {
+    model: Arc<ModelServer>,
+    media: Arc<tokio::sync::Mutex<()>>,
+    before: Vec<String>,
+    id: String,
+    armed: bool,
+}
+
+/// Whether loading `id` pushed out a model loaded before it.
+fn displaced(before: &[String], id: &str, now: &[String]) -> bool {
+    !before.iter().any(|b| b == id) && before.iter().any(|b| b != id && !now.contains(b))
+}
+
+impl SwapBack {
+    async fn finish(mut self) {
+        self.armed = false;
+        if displaced(&self.before, &self.id, &self.model.loaded_ids()) {
+            self.model.unload(&self.id).await;
+        }
+    }
+}
+
+impl Drop for SwapBack {
+    fn drop(&mut self) {
+        if !self.armed || !displaced(&self.before, &self.id, &self.model.loaded_ids()) {
+            return;
+        }
+        let (model, media, id) = (self.model.clone(), self.media.clone(), std::mem::take(&mut self.id));
+        if let Ok(rt) = tokio::runtime::Handle::try_current() {
+            rt.spawn(async move {
+                let _turn = media.lock().await;
+                model.unload(&id).await;
+            });
+        }
+    }
+}
+
 /// Cancels a clip's job on its server unless disarmed: a stopped turn drops
 /// the future that owns it, and the job should not keep the GPU busy for minutes.
 struct CancelJob {
@@ -529,5 +688,30 @@ impl Drop for CancelJob {
                 let _ = client.post(url).timeout(Duration::from_secs(10)).send().await;
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod media_tests {
+    use super::displaced;
+
+    fn ids(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn a_media_model_that_pushed_the_chat_model_out_is_swapped_back() {
+        assert!(displaced(&ids(&["chat"]), "zimage", &ids(&["zimage"])));
+    }
+
+    #[test]
+    fn a_media_model_that_fit_beside_the_chat_model_stays() {
+        assert!(!displaced(&ids(&["chat"]), "zimage", &ids(&["chat", "zimage"])));
+        assert!(!displaced(&[], "zimage", &ids(&["zimage"])));
+    }
+
+    #[test]
+    fn a_media_model_already_loaded_before_the_job_stays() {
+        assert!(!displaced(&ids(&["zimage", "chat"]), "zimage", &ids(&["zimage"])));
     }
 }

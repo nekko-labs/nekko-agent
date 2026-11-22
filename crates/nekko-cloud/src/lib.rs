@@ -26,7 +26,9 @@
 //! Merging is per chat, newest `updatedAt` wins; a chat a turn is running in
 //! is never overwritten (its local copy is newer by the time it saves).
 
+mod fleet_link;
 mod http;
+pub mod library;
 mod org_records;
 mod orgs;
 pub mod records;
@@ -34,6 +36,7 @@ pub mod state;
 pub use nekko_vault as vault;
 
 use http::{Api, HttpError, Supabase};
+use library::{LIBRARY, LibraryRecord};
 use nekko_store::SessionStore;
 use nekko_sync::{
     DeviceKey, JoinCode, Keyring, Recipient, RecoveryKey, b64_decode, b64_encode, epoch_proof, fingerprint, object_id,
@@ -41,7 +44,7 @@ use nekko_sync::{
 };
 use records::{AccountRecord, ChatRecord, Skip, TrustedDevice};
 use serde_json::{Value, json};
-use state::{Account, State, Synced};
+use state::{Account, LibrarySynced, State, Synced};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -49,6 +52,7 @@ use std::time::Duration;
 use vault::Vault;
 use zeroize::Zeroize;
 
+pub use fleet_link::{ConnectInfo, FleetAdmitted, FleetTarget, HelloBinding};
 pub use http::client;
 pub use org_records::LocalModel;
 pub use orgs::{HEARTBEAT, HostInfo, ModelFuture};
@@ -75,8 +79,9 @@ pub const CHANNELS: &[&str] = &[
     "sync:revoke",
     "sync:now",
     "sync:setEnabled",
-    "sync:setIncludeLocalOnly",
+    "sync:setKind",
     "sync:deleteAll",
+    "library:sync",
     "org:list",
     "org:create",
     "org:get",
@@ -98,6 +103,26 @@ pub const EVENT: &str = "cloud:status";
 pub const OAUTH_PROVIDERS: &[&str] = &["github", "google", "apple"];
 
 const PUSH_BATCH: usize = 50;
+/// Plaintext per push request; a chat bigger than this goes alone. Base64 of a full batch, or of
+/// one chat at `records::MAX_CHAT_BYTES`, stays under the 24 MiB push body Nekko Cloud accepts.
+const PUSH_BYTES: usize = 6 << 20;
+
+/// Split queued records (their plaintext sizes, in order) into push requests.
+fn push_batches(sizes: &[usize]) -> Vec<std::ops::Range<usize>> {
+    let mut out = Vec::new();
+    let (mut start, mut bytes) = (0, 0);
+    for (i, &n) in sizes.iter().enumerate() {
+        if i > start && (i - start == PUSH_BATCH || bytes + n > PUSH_BYTES) {
+            out.push(start..i);
+            (start, bytes) = (i, 0);
+        }
+        bytes += n;
+    }
+    if start < sizes.len() {
+        out.push(start..sizes.len());
+    }
+    out
+}
 const PULL_PAGE: u32 = 200;
 const OAUTH_TTL: Duration = Duration::from_secs(10 * 60);
 
@@ -131,6 +156,15 @@ struct Live {
     orgs: Option<Vec<Value>>,
     /// How sharing with each org is going.
     shares: BTreeMap<String, orgs::ShareLive>,
+    /// Computers of this account that can be reached, from the last fleet
+    /// lists (`org/device`), with how to reach them (decision 0102).
+    fleet_targets: BTreeMap<String, fleet_link::FleetTarget>,
+    /// A fleet HELLO named a device or epoch this computer hadn't heard of: reading the account again.
+    fleet_catching_up: bool,
+    /// Library files the last pass could not sync, per path, and why (`tooLarge`, `unreadable`).
+    library_skipped: BTreeMap<String, &'static str>,
+    /// Library files being pushed right now.
+    library_sending: BTreeSet<String>,
 }
 
 pub struct Cloud {
@@ -272,13 +306,45 @@ impl Cloud {
                 }
                 Ok(self.changed())
             }
-            "sync:setIncludeLocalOnly" => {
-                let on = args.first().and_then(Value::as_bool).unwrap_or(false);
-                self.edit(|s| s.include_local_only = on)?;
-                self.kick();
+            // One kind of record (`chats`, `library`) on or off for this computer (#3089).
+            "sync:setKind" => {
+                let kind = arg(args, 0);
+                let on = args.get(1).and_then(Value::as_bool).unwrap_or(false);
+                let mut known = false;
+                self.edit(|s| known = s.set_kind(&kind, on))?;
+                if !known {
+                    return Err("Unknown kind of sync.".into());
+                }
+                if on && self.ready() {
+                    self.kick();
+                }
                 Ok(self.changed())
             }
             "sync:deleteAll" => self.delete_all().await,
+            // The files Library lists on this computer (#2748). Kept only while Library sync is
+            // available to this account; a new or changed file starts a sync at once.
+            "library:sync" => {
+                if !self.library_available() {
+                    return Ok(self.status());
+                }
+                let files = library::files_from_app(args.first().unwrap_or(&Value::Null));
+                let mut fresh = false;
+                self.edit(|s| {
+                    for f in files {
+                        if s.library_files.len() >= library::MAX_FILES && !s.library_files.contains_key(&f.path) {
+                            continue;
+                        }
+                        if s.library_files.get(&f.path) != Some(&f) {
+                            fresh = true;
+                            s.library_files.insert(f.path.clone(), f);
+                        }
+                    }
+                })?;
+                if fresh && self.ready() && lock(&self.state).kind_on("library") {
+                    self.kick();
+                }
+                Ok(self.changed())
+            }
             c if c.starts_with("org:") || c.starts_with("fleet:") => self.route_org(c, args).await,
             _ => Err(format!("unknown channel {channel}")),
         }
@@ -364,6 +430,16 @@ impl Cloud {
         s.enabled && s.account.as_ref().is_some_and(|a| a.can_sync) && self.vault.get("token").is_some()
     }
 
+    /// Library sync is open to this account: a plan that syncs and the `library-cloud` switch.
+    fn library_available(&self) -> bool {
+        lock(&self.state).account.as_ref().is_some_and(|a| a.can_sync && a.library_cloud)
+    }
+
+    /// Where other computers' Library files are copied.
+    fn library_dir(&self) -> PathBuf {
+        self.dir.join("library")
+    }
+
     fn kick(self: &Arc<Self>) {
         let me = self.clone();
         tokio::spawn(async move {
@@ -431,19 +507,69 @@ impl Cloud {
         let my_fingerprint = self.device_key().map(|k| fingerprint(&k.public()));
         // Shown only on this device while it waits: the user types it on a device that syncs.
         let join_code = if phase == "awaiting-approval" { self.vault.get("join-code") } else { None };
+        // Library sync (#2748): each listed file's state, and other computers' files. Null when it
+        // isn't open to this account, so the app shows no trace of it.
+        let library = if s.account.as_ref().is_some_and(|a| a.can_sync && a.library_cloud) {
+            let key = s.key_id.unwrap_or(0);
+            let on = has_keys && s.enabled && s.kind_on("library");
+            let files: serde_json::Map<String, Value> = s
+                .library_files
+                .keys()
+                .map(|p| {
+                    let state = if !on {
+                        "off"
+                    } else if live.library_sending.contains(p) {
+                        "syncing"
+                    } else if let Some(why) = live.library_skipped.get(p) {
+                        why
+                    } else if s.library.get(p).is_some_and(|k| !k.deleted && k.key_id == key) {
+                        "synced"
+                    } else {
+                        "pending"
+                    };
+                    (p.clone(), json!(state))
+                })
+                .collect();
+            let remote: Vec<Value> = s
+                .library_remote
+                .iter()
+                // Include files with a local copy, and thumb-only files that have a thumbnail.
+                .filter(|(_, f)| !f.copy.is_empty() || (f.thumb_only && !f.thumbnail_data.is_empty()))
+                .map(|(id, f)| {
+                    // Thumb-only files have no local copy; expose the original path instead.
+                    let path = if f.thumb_only { f.path.clone() } else { f.copy.clone() };
+                    let mut obj = json!({
+                        "id": id, "deviceId": f.device_id, "device": f.device, "path": path, "originalPath": f.path,
+                        "title": f.title, "kind": f.kind, "chat": f.chat, "modifiedAt": f.modified_at, "size": f.size,
+                    });
+                    if !f.thumbnail_data.is_empty() {
+                        obj["thumbnailData"] = json!(f.thumbnail_data);
+                    }
+                    if f.thumb_only {
+                        obj["thumbOnly"] = json!(true);
+                    }
+                    obj
+                })
+                .collect();
+            json!({ "on": on, "files": files, "remote": remote })
+        } else {
+            Value::Null
+        };
         json!({
             "signedIn": signed_in,
             "account": s.account.as_ref().map(|a| json!({
                 "email": a.email, "plan": a.plan, "canSync": a.can_sync,
-                "staff": a.staff, "features": { "billing": a.billing },
+                "staff": a.staff, "features": { "billing": a.billing, "libraryCloud": a.library_cloud },
             })),
+            "library": library,
             "oauthPending": live.oauth.is_some(),
             "keysStoredIn": self.vault.kind(),
             "orgs": orgs::orgs_summary(&s, &live),
             "sync": {
                 "phase": phase,
                 "enabled": s.enabled,
-                "includeLocalOnly": s.include_local_only,
+                // What syncs on this computer, kind by kind (#3089).
+                "kinds": { "chats": s.kind_on("chats"), "library": s.kind_on("library") },
                 "recoveryConfirmed": s.recovery_confirmed,
                 "keyEpoch": s.key_id,
                 "lastSyncAt": s.last_sync_at,
@@ -630,6 +756,8 @@ impl Cloud {
             let mut live = lock(&self.live);
             live.remote = None;
             live.orgs = None;
+            // How to reach this account's computers goes with the sign-in.
+            live.fleet_targets.clear();
         }
         Ok(self.changed())
     }
@@ -688,6 +816,8 @@ impl Cloud {
         self.vault.delete("join-code");
         self.forget_org_keys();
         lock(&self.live).proven = None;
+        // Other computers' Library files were copies of synced data: they go with the keys.
+        let _ = std::fs::remove_dir_all(self.library_dir());
     }
 
     // ------------------------------------------------------------ keys, devices
@@ -1308,7 +1438,9 @@ impl Cloud {
                 continue;
             }
             self.prove(token, self.key_id()).await?;
-            if !self.push(token).await? {
+            let chats_again = self.push(token).await?;
+            let library_again = self.push_library(token).await?;
+            if !chats_again && !library_again {
                 return Ok(());
             }
         }
@@ -1319,25 +1451,50 @@ impl Cloud {
 
     /// Pull and apply everything new. False when it stopped at a record under
     /// a newer key epoch than this device holds (it stays unread until then).
+    /// A record whose kind is off here is passed over unapplied (`State::kinds_off`).
+    /// A kind turned back on mid-pull moves the cursor back: the pull notices
+    /// (`State::rewinds`) and carries on from there rather than past it.
     async fn pull(&self, token: &str) -> Result<bool, String> {
         let account_id = self.account_id()?;
-        loop {
-            let since = lock(&self.state).cursor;
+        'pages: loop {
+            let (since, rewinds) = {
+                let s = lock(&self.state);
+                (s.cursor, s.rewinds)
+            };
             let page =
                 self.api.get(token, &format!("/v1/sync/pull?since={since}&limit={PULL_PAGE}")).await.map_err(e)?;
             let objects = page["objects"].as_array().cloned().unwrap_or_default();
             let held = self.key_id();
+            // Moves the cursor on, unless a kind came back on since this page began.
+            let advance = |to: u64| -> Result<bool, String> {
+                let mut rewound = false;
+                self.edit(|s| {
+                    if s.rewinds == rewinds {
+                        s.cursor = s.cursor.max(to);
+                    } else {
+                        rewound = true;
+                    }
+                })?;
+                Ok(!rewound)
+            };
             for o in &objects {
                 if o["keyId"].as_u64().is_some_and(|k| k > u64::from(held)) {
                     return Ok(false);
                 }
-                self.apply(&account_id, o)?;
-                if let Some(seq) = o["seq"].as_u64() {
-                    self.edit(|s| s.cursor = s.cursor.max(seq))?;
+                let skip = lock(&self.state).skips_collection(o["collection"].as_str().unwrap_or(""));
+                if !skip {
+                    self.apply(&account_id, o)?;
+                }
+                if let Some(seq) = o["seq"].as_u64()
+                    && !advance(seq)?
+                {
+                    continue 'pages;
                 }
             }
             let next = page["next"].as_u64().unwrap_or(since);
-            self.edit(|s| s.cursor = s.cursor.max(next))?;
+            if !advance(next)? {
+                continue 'pages;
+            }
             if page["more"].as_bool() != Some(true) || objects.is_empty() {
                 return Ok(true);
             }
@@ -1404,26 +1561,65 @@ impl Cloud {
                 let local = self.sessions.get(&id);
                 let busy = (self.busy)(&id);
                 match rec {
-                    ChatRecord::Chat(chat) => {
+                    ChatRecord::Chat(mut chat) => {
                         let theirs = records::updated_at(&chat);
-                        let newer = local.as_ref().is_none_or(|l| theirs > records::updated_at(l));
-                        let same = local.as_ref().is_some_and(|l| theirs == records::updated_at(l));
-                        if newer && !busy && self.sessions.put_synced(&chat).is_ok() {
+                        let me = lock(&self.state).device_id.clone().unwrap_or_default();
+                        // Whose chat it is (#3143): another computer's, this one's, or not said
+                        // (a record from before records named their computer).
+                        let named = records::home_of(&chat).is_some();
+                        let foreign = records::home_of(&chat).is_some_and(|h| h != me);
+                        let take = if foreign {
+                            // A copy removed here stays removed.
+                            let removed = lock(&self.state).chats.get(&id).is_some_and(|k| k.foreign && k.deleted);
+                            // Its computer's copy wins, unless this computer carried on a chat
+                            // nobody had claimed yet: then this one claims it with its newer copy.
+                            !removed
+                                && local
+                                    .as_ref()
+                                    .is_none_or(|l| records::home_of(l).is_some() || theirs >= records::updated_at(l))
+                        } else {
+                            local.as_ref().is_none_or(|l| theirs > records::updated_at(l))
+                        };
+                        let same = !foreign && local.as_ref().is_some_and(|l| theirs == records::updated_at(l));
+                        if foreign {
+                            // How the copy is arranged here is this computer's.
+                            if let (Some(l), Some(o)) = (&local, chat.as_object_mut()) {
+                                for key in records::KEPT_HERE {
+                                    match l.get(key) {
+                                        Some(v) => o.insert(key.into(), v.clone()),
+                                        None => o.remove(key),
+                                    };
+                                }
+                            }
+                        } else if let Some(o) = chat.as_object_mut() {
+                            // This computer's own chat: the file says nothing about a home.
+                            o.remove(records::HOME);
+                        }
+                        if take && !busy && self.sessions.put_synced(&chat).is_ok() {
                             lock(&self.live).pulled += 1;
                         }
-                        let synced =
-                            Synced { updated_at: theirs, digest: records::digest(&plain), deleted: false, key_id: kid };
+                        let synced = Synced {
+                            updated_at: theirs,
+                            digest: records::digest(&plain),
+                            deleted: false,
+                            key_id: kid,
+                            homed: named,
+                            foreign,
+                        };
                         self.edit(|s| {
                             s.revisions.insert(oid.into(), rev);
                             // Only when we took it (or already had it); otherwise our newer copy still needs pushing.
-                            if (newer && !busy) || same {
+                            if (take && !busy) || same {
                                 s.chats.insert(id.clone(), synced);
                             }
                         })?;
                     }
                     ChatRecord::Deleted { at } => {
+                        let foreign = local.as_ref().is_some_and(|l| {
+                            records::home_of(l).is_some_and(|h| Some(h) != lock(&self.state).device_id.as_deref())
+                        });
                         if let Some(l) = &local
-                            && records::updated_at(l) <= at
+                            && (foreign || records::updated_at(l) <= at)
                             && !busy
                         {
                             let _ = self.sessions.delete(&id);
@@ -1432,71 +1628,191 @@ impl Cloud {
                             s.revisions.insert(oid.into(), rev);
                             s.chats.insert(
                                 id.clone(),
-                                Synced { updated_at: at, digest: String::new(), deleted: true, key_id: kid },
+                                Synced {
+                                    updated_at: at,
+                                    digest: String::new(),
+                                    deleted: true,
+                                    key_id: kid,
+                                    homed: true,
+                                    foreign,
+                                },
                             );
                         })?;
                     }
                 }
             }
+            LIBRARY => self.apply_library(&keyring, account_id, kid, oid, rev, blob)?,
             _ => {}
         }
         Ok(())
     }
 
+    /// Another computer's Library file: a read-only copy under `<data>/cloud/library/<folder key>/`,
+    /// replaced by each newer revision and removed by its tombstone. This computer's own records only
+    /// move the revision on. A record that doesn't open, or isn't the one filed under its own
+    /// computer and path, is ignored. Applied whatever the switch says, so nothing pulled is lost.
+    fn apply_library(
+        &self,
+        keyring: &Keyring,
+        account_id: &str,
+        kid: u32,
+        oid: &str,
+        rev: u64,
+        blob: &str,
+    ) -> Result<(), String> {
+        let Ok(plain) = open_record(keyring, account_id, kid, LIBRARY, oid, rev, blob) else { return Ok(()) };
+        let Some(rec) = library::parse(&plain) else { return Ok(()) };
+        if object_id(keyring, LIBRARY, &rec.local_id()).as_deref() != Ok(oid) {
+            return Ok(());
+        }
+        let mine = lock(&self.state).device_id.clone().unwrap_or_default();
+        let from = match &rec {
+            LibraryRecord::File(f, _) => f.device_id.clone(),
+            LibraryRecord::Deleted { device_id, .. } => device_id.clone(),
+        };
+        if from == mine {
+            return self.edit(|s| {
+                s.revisions.insert(oid.into(), rev);
+            });
+        }
+        // The copy this record replaces, if any, goes first (and its folder, once empty).
+        if let Some(old) = lock(&self.state).library_remote.get(oid).map(|f| PathBuf::from(&f.copy)) {
+            let _ = std::fs::remove_file(&old);
+            if let Some(dir) = old.parent() {
+                let _ = std::fs::remove_dir(dir);
+            }
+        }
+        match rec {
+            LibraryRecord::File(mut f, data) => {
+                if f.thumb_only {
+                    // Thumb-only record (#3044): the file was too large on the other computer.
+                    // Store the metadata and thumbnail but write nothing to disk.
+                    lock(&self.live).pulled += 1;
+                    return self.edit(|s| {
+                        s.revisions.insert(oid.into(), rev);
+                        s.library_remote.insert(oid.into(), f);
+                    });
+                }
+                // Files from one folder on one computer share a folder here, so a design's
+                // numbered versions still read as one design.
+                let folder = self.library_dir().join(library::folder_key(&f.device_id, &f.path));
+                let copy = folder.join(library::safe_name(&f.path));
+                let written = std::fs::create_dir_all(&folder).and_then(|_| std::fs::write(&copy, &data)).is_ok();
+                if written {
+                    f.copy = copy.to_string_lossy().into_owned();
+                    lock(&self.live).pulled += 1;
+                }
+                self.edit(|s| {
+                    s.revisions.insert(oid.into(), rev);
+                    if written {
+                        s.library_remote.insert(oid.into(), f);
+                    } else {
+                        s.library_remote.remove(oid);
+                    }
+                })
+            }
+            LibraryRecord::Deleted { .. } => self.edit(|s| {
+                s.revisions.insert(oid.into(), rev);
+                s.library_remote.remove(oid);
+            }),
+        }
+    }
+
     /// Push what changed here, and anything last written under an older
-    /// epoch. True when a conflict needs another pass.
+    /// epoch. True when a conflict needs another pass. Nothing while Chats is
+    /// off here: chats changed or deleted meanwhile go up once it is back on.
     async fn push(&self, token: &str) -> Result<bool, String> {
+        if !lock(&self.state).kind_on("chats") {
+            lock(&self.live).skipped.clear();
+            return Ok(false);
+        }
         let account_id = self.account_id()?;
         let key_id = self.key_id();
         let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
         let st = lock(&self.state).clone();
         let mut queue: Vec<(String, Vec<u8>, Synced)> = Vec::new();
         let mut skipped: BTreeMap<&'static str, usize> = BTreeMap::new();
+        let me = st.device_id.clone().ok_or("This device isn't registered for sync.")?;
         let summaries = self.sessions.summaries();
         let here: BTreeSet<String> = summaries.iter().filter_map(|s| s["id"].as_str().map(String::from)).collect();
         for s in &summaries {
             let Some(id) = s["id"].as_str() else { continue };
             let updated = s["updatedAt"].as_f64().unwrap_or(0.0);
+            // Another computer's chat: only that computer changes it (#3143). This computer pushes
+            // its copy, as it is and still naming that computer, only to carry it into a newer key
+            // epoch, so a chat of a removed computer stays readable to the computers left.
+            let foreign = records::home_of(s).is_some_and(|h| h != me);
+            if foreign && st.chats.get(id).is_none_or(|k| k.deleted || !k.foreign || k.key_id == key_id) {
+                continue;
+            }
             let known = st.chats.get(id).filter(|k| k.key_id == key_id);
-            if known.is_some_and(|k| !k.deleted && k.updated_at == updated) {
+            if known.is_some_and(|k| !k.deleted && k.homed && k.updated_at == updated) {
                 continue;
             }
             let Some(chat) = self.sessions.get(id) else { continue };
-            match records::chat_plaintext(&chat, st.include_local_only) {
+            match records::chat_plaintext(&chat, &me, &st.device_label) {
                 Ok(plain) => {
                     let digest = records::digest(&plain);
                     if known.is_some_and(|k| k.digest == digest) {
                         continue;
                     }
-                    queue.push((id.to_string(), plain, Synced { updated_at: updated, digest, deleted: false, key_id }));
+                    queue.push((
+                        id.to_string(),
+                        plain,
+                        Synced { updated_at: updated, digest, deleted: false, key_id, homed: true, foreign },
+                    ));
                 }
                 Err(skip) => {
                     *skipped
                         .entry(match skip {
                             Skip::Incognito => "incognito",
-                            Skip::LocalOnly => "localOnly",
+                            Skip::SyncOff => "syncOff",
                             Skip::TooLarge => "tooLarge",
                         })
                         .or_default() += 1;
                 }
             }
         }
-        // Chats deleted here since they were synced.
+        // Chats deleted here since they were synced. Another computer's copy removed here is only
+        // forgotten here: its computer still has it, and a newer copy isn't taken again.
+        let mut removed_copies = Vec::new();
         for (id, k) in &st.chats {
             if !k.deleted && !here.contains(id) {
+                if k.foreign {
+                    removed_copies.push(id.clone());
+                    continue;
+                }
                 let at = nekko_js::now_ms_f64();
                 queue.push((
                     id.clone(),
                     records::tombstone(at),
-                    Synced { updated_at: at, digest: String::new(), deleted: true, key_id },
+                    Synced {
+                        updated_at: at,
+                        digest: String::new(),
+                        deleted: true,
+                        key_id,
+                        homed: true,
+                        foreign: false,
+                    },
                 ));
             }
+        }
+        if !removed_copies.is_empty() {
+            self.edit(|s| {
+                for id in &removed_copies {
+                    if let Some(k) = s.chats.get_mut(id) {
+                        k.deleted = true;
+                    }
+                }
+            })?;
         }
         lock(&self.live).skipped = skipped;
         let total = queue.len();
         let mut again = false;
         let mut done = 0;
-        for batch in queue.chunks(PUSH_BATCH) {
+        let sizes: Vec<usize> = queue.iter().map(|(_, plain, _)| plain.len()).collect();
+        for range in push_batches(&sizes) {
+            let batch = &queue[range];
             self.set_progress(Some((done, total)));
             let mut objects = Vec::new();
             let mut meta = Vec::new();
@@ -1540,6 +1856,279 @@ impl Cloud {
         }
         Ok(again)
     }
+
+    /// Push the Library files that are new or changed here, and a tombstone for each synced
+    /// one gone from disk (#2748). Files are read a request at a time, never all at once. A file
+    /// over `MAX_FILE_BYTES` or that can't be read is skipped and says why; a full plan stops
+    /// the Library push without failing the sync. True when a conflict needs another pass.
+    async fn push_library(&self, token: &str) -> Result<bool, String> {
+        let st = lock(&self.state).clone();
+        let device_id = st.device_id.clone().unwrap_or_default();
+        if !st.account.as_ref().is_some_and(|a| a.library_cloud) || device_id.is_empty() || !st.kind_on("library") {
+            lock(&self.live).library_skipped.clear();
+            return Ok(false);
+        }
+        let account_id = self.account_id()?;
+        let key_id = self.key_id();
+        let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
+
+        enum Work {
+            File {
+                path: String,
+                size: u64,
+                modified: f64,
+            },
+            /// A file over 8 MB: push only a thumbnail record (#3044).
+            Thumb {
+                path: String,
+                size: u64,
+                modified: f64,
+            },
+            Gone {
+                path: String,
+            },
+        }
+        let mut work = Vec::new();
+        let mut skipped: BTreeMap<String, &'static str> = BTreeMap::new();
+        let mut gone_from_list = Vec::new();
+        // Everything listed, and everything still synced that might have been deleted since.
+        let paths: BTreeSet<&String> =
+            st.library_files.keys().chain(st.library.iter().filter(|(_, k)| !k.deleted).map(|(p, _)| p)).collect();
+        for path in paths {
+            let synced = st.library.get(path).filter(|k| !k.deleted);
+            match std::fs::metadata(path) {
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                    gone_from_list.push(path.clone());
+                    if synced.is_some() {
+                        work.push(Work::Gone { path: path.clone() });
+                    }
+                }
+                Ok(m) if m.is_file() => {
+                    if !st.library_files.contains_key(path) {
+                        continue; // synced once, no longer listed, still there: left as it is
+                    }
+                    let size = m.len();
+                    let modified = m
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map_or(0.0, |d| d.as_millis() as f64);
+                    if size > library::MAX_FILE_BYTES {
+                        skipped.insert(path.clone(), "tooLarge");
+                        // Even for oversized files, sync a thumbnail record if one is available (#3044).
+                        let thumb = st.library_files.get(path).map(|f| f.thumbnail_data.as_str()).unwrap_or("");
+                        if !thumb.is_empty() {
+                            let thumb_digest = records::digest(thumb.as_bytes());
+                            if synced.is_none_or(|k| k.key_id != key_id || k.thumbnail_digest != thumb_digest) {
+                                work.push(Work::Thumb { path: path.clone(), size, modified });
+                            }
+                        }
+                    } else if !synced.is_some_and(|k| {
+                        k.key_id == key_id
+                            && k.size == size
+                            && k.modified_at == modified
+                            && k.thumbnail_digest
+                                == st
+                                    .library_files
+                                    .get(path)
+                                    .map(|f| {
+                                        if f.thumbnail_data.is_empty() {
+                                            String::new()
+                                        } else {
+                                            records::digest(f.thumbnail_data.as_bytes())
+                                        }
+                                    })
+                                    .unwrap_or_default()
+                    }) {
+                        work.push(Work::File { path: path.clone(), size, modified });
+                    }
+                }
+                _ => {
+                    skipped.insert(path.clone(), "unreadable");
+                }
+            }
+        }
+        if !gone_from_list.is_empty() {
+            self.edit(|s| {
+                for p in &gone_from_list {
+                    s.library_files.remove(p);
+                }
+            })?;
+        }
+
+        let total = work.len();
+        let mut again = false;
+        let mut done = 0;
+        let mut items = work.into_iter().peekable();
+        while items.peek().is_some() {
+            // One request: up to PUSH_BATCH records and PUSH_BYTES of plaintext (a big file goes alone).
+            let mut objects = Vec::new();
+            let mut meta: Vec<(String, String, u64, u64, LibrarySynced)> = Vec::new();
+            let mut bytes = 0usize;
+            while let Some(next) = items.peek() {
+                let estimate = match next {
+                    Work::File { size, .. } => (*size as usize) * 4 / 3 + 1024,
+                    Work::Thumb { .. } | Work::Gone { .. } => 512,
+                };
+                if !objects.is_empty() && (objects.len() == PUSH_BATCH || bytes + estimate > PUSH_BYTES) {
+                    break;
+                }
+                let Some(item) = items.next() else { break };
+                done += 1;
+                let (path, plain, synced) = match item {
+                    Work::Gone { path } => {
+                        let at = nekko_js::now_ms_f64();
+                        let plain = library::tombstone(&device_id, &path, at);
+                        (
+                            path,
+                            plain,
+                            LibrarySynced {
+                                modified_at: at,
+                                size: 0,
+                                digest: String::new(),
+                                deleted: true,
+                                key_id,
+                                thumbnail_digest: String::new(),
+                            },
+                        )
+                    }
+                    Work::Thumb { path, size, modified } => {
+                        // Thumb-only record for a file over 8 MB (#3044).
+                        let Some(f) = st.library_files.get(&path) else { continue };
+                        if f.thumbnail_data.is_empty() {
+                            continue;
+                        }
+                        let thumbnail_digest = records::digest(f.thumbnail_data.as_bytes());
+                        let plain = library::thumb_plaintext(&device_id, &st.device_label, f, modified, size);
+                        let synced = LibrarySynced {
+                            modified_at: modified,
+                            size,
+                            digest: String::new(),
+                            deleted: false,
+                            key_id,
+                            thumbnail_digest,
+                        };
+                        (path, plain, synced)
+                    }
+                    Work::File { path, size, modified } => {
+                        let Some(f) = st.library_files.get(&path) else { continue };
+                        let Ok(data) = std::fs::read(&path) else {
+                            skipped.insert(path, "unreadable");
+                            continue;
+                        };
+                        if data.len() as u64 > library::MAX_FILE_BYTES {
+                            skipped.insert(path, "tooLarge");
+                            continue;
+                        }
+                        // The content, metadata, and thumbnail: a file saved again unchanged (and
+                        // whose thumbnail hasn't changed) is only noted, not uploaded.
+                        let what = serde_json::to_vec(&json!([f.title, f.kind, f.chat])).unwrap_or_default();
+                        let digest = records::digest(&[what, data.clone()].concat());
+                        let thumbnail_digest = if f.thumbnail_data.is_empty() {
+                            String::new()
+                        } else {
+                            records::digest(f.thumbnail_data.as_bytes())
+                        };
+                        let synced = LibrarySynced {
+                            modified_at: modified,
+                            size,
+                            digest,
+                            deleted: false,
+                            key_id,
+                            thumbnail_digest,
+                        };
+                        if st.library.get(&path).is_some_and(|k| {
+                            !k.deleted
+                                && k.key_id == key_id
+                                && k.digest == synced.digest
+                                && k.thumbnail_digest == synced.thumbnail_digest
+                        }) {
+                            self.edit(|s| {
+                                s.library.insert(path.clone(), synced.clone());
+                            })?;
+                            continue;
+                        }
+                        let plain = library::file_plaintext(&device_id, &st.device_label, f, modified, &data);
+                        (path, plain, synced)
+                    }
+                };
+                let local = library::local_id(&device_id, &path);
+                let oid = object_id(&keyring, LIBRARY, &local).map_err(|err| err.to_string())?;
+                let seen = lock(&self.state).revisions.get(&oid).copied().unwrap_or(0);
+                let revision = seen + 1;
+                let blob = seal_record(&keyring, &account_id, key_id, LIBRARY, &oid, revision, &plain)
+                    .map_err(|err| err.to_string())?;
+                bytes += plain.len();
+                objects.push(json!({ "collection": LIBRARY, "objectId": oid, "revision": revision, "keyId": key_id, "blob": blob }));
+                meta.push((path, oid, revision, seen, synced));
+            }
+            if objects.is_empty() {
+                continue;
+            }
+            lock(&self.live).library_sending = meta.iter().map(|(p, ..)| p.clone()).collect();
+            self.set_progress(Some((done - meta.len(), total)));
+            let sent =
+                self.api.send(token, reqwest::Method::POST, "/v1/sync/push", Some(json!({ "objects": objects }))).await;
+            lock(&self.live).library_sending.clear();
+            let res = match sent {
+                Ok(res) => res,
+                // The plan's storage is full: these and the rest wait, and the chats still sync.
+                Err(err) if err.status == 413 => {
+                    for (path, ..) in &meta {
+                        skipped.insert(path.clone(), "noRoom");
+                    }
+                    for rest in items {
+                        if let Work::File { path, .. } = rest {
+                            skipped.insert(path, "noRoom");
+                        }
+                    }
+                    break;
+                }
+                Err(err) => {
+                    lock(&self.live).library_skipped = skipped;
+                    return Err(e(err));
+                }
+            };
+            let results = res["results"].as_array().cloned().unwrap_or_default();
+            for ((path, oid, revision, seen, synced), r) in meta.into_iter().zip(results) {
+                match r["status"].as_str() {
+                    Some("ok") => {
+                        lock(&self.live).pushed += 1;
+                        self.edit(|s| {
+                            s.revisions.insert(oid, revision);
+                            s.library.insert(path, synced);
+                        })?;
+                    }
+                    Some("conflict") => {
+                        if r["revision"].as_u64().unwrap_or(0) < seen {
+                            lock(&self.live).library_skipped = skipped;
+                            return Err("Nekko Cloud sent an older copy of a Library file than this device has seen. Nothing more was synced.".into());
+                        }
+                        again = true;
+                    }
+                    Some("stale-key") => again = true,
+                    _ => {}
+                }
+            }
+        }
+        lock(&self.live).library_skipped = skipped;
+        Ok(again)
+    }
 }
 
 const REMOVED: &str = "This device was removed from sync on another device.";
+
+#[cfg(test)]
+mod push_batch_tests {
+    use super::*;
+
+    #[test]
+    fn batches_cap_count_and_bytes_and_send_a_big_chat_alone() {
+        assert_eq!(push_batches(&[]), Vec::<std::ops::Range<usize>>::new());
+        assert_eq!(push_batches(&vec![10; 120]), vec![0..50, 50..100, 100..120]);
+        let mb = 1 << 20;
+        assert_eq!(push_batches(&[2 * mb, 3 * mb, 2 * mb, 15 * mb, mb]), vec![0..2, 2..3, 3..4, 4..5]);
+        // Never an empty request, whatever the sizes.
+        assert!(push_batches(&[20 * mb, 20 * mb]).iter().all(|r| !r.is_empty()));
+    }
+}

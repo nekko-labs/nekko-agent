@@ -347,6 +347,9 @@ struct Shared {
     /// The data folder the chat's audit trail is written in; `None` until the
     /// chat is loaded, and for an incognito chat.
     audit_to: Mutex<Option<PathBuf>>,
+    /// Where the chat is in the agent loop (`nekko_store::loop_phase`), as the
+    /// forwarder last saw it, for `chat:activity`.
+    phase: Arc<Mutex<Option<&'static str>>>,
 }
 
 /// What an unattended turn tracks: its tool access (`toolAccess`,
@@ -468,6 +471,8 @@ pub struct Turns {
     /// The router (`routes::route`), for a tool that asks another service
     /// (`delegation_targets` lists a provider's models).
     dispatch: OnceLock<crate::automation::Dispatcher>,
+    /// The model server, for the picture tools (media_tools.rs).
+    media: Option<Arc<crate::model_server::Server>>,
 }
 
 /// Admits the next queued prompt of a chain the daemon admitted itself
@@ -523,6 +528,7 @@ impl Turns {
             preparer: OnceLock::new(),
             background: OnceLock::new(),
             dispatch: OnceLock::new(),
+            media: None,
         }
     }
 
@@ -547,6 +553,12 @@ impl Turns {
     }
 
     /// The desktop bridge (`config.browserBridge`).
+    /// The model server, so a chat's agent can make pictures with its local models.
+    pub fn with_media(mut self, server: Arc<crate::model_server::Server>) -> Self {
+        self.media = Some(server);
+        self
+    }
+
     pub fn with_bridge(mut self, bridge: Option<(String, String)>) -> Self {
         self.bridge = bridge.map(|(url, token)| Arc::new(nekko_web::browser::HttpBridge::new(url, token)));
         self
@@ -619,6 +631,18 @@ impl Turns {
         ids
     }
 
+    /// Each running turn's chat and where it is in the agent loop, for
+    /// `chat:activity`. A chat with two turns (a wake-up) is listed once.
+    pub fn running_phases(&self) -> Vec<(String, Option<&'static str>)> {
+        let mut out: Vec<(String, Option<&'static str>)> = Vec::new();
+        for s in lock(&self.running).values() {
+            if !out.iter().any(|(id, _)| id == &s.session_id) {
+                out.push((s.session_id.clone(), *lock(&s.phase)));
+            }
+        }
+        out
+    }
+
     /// `turn:abort`: stop a turn by id; true when there was one.
     pub fn abort(&self, turn_id: &str) -> bool {
         let Some(shared) = lock(&self.running).get(turn_id).cloned() else { return false };
@@ -666,6 +690,17 @@ impl Turns {
     /// The approval prompt: the live policy first (the user can allow the
     /// rest of the turn while it waits), then park and ask.
     async fn request_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value) -> bool {
+        self.ask_approval(shared, call, reason, severity, false).await
+    }
+
+    /// A call that spends the user's money (a paid cloud picture): asked in
+    /// every mode, YOLO included (decided 2026-11-19), and denied outright in
+    /// an unattended run, whatever its tool policy allows.
+    async fn request_spend_approval(&self, shared: &Shared, call: &Value, reason: &str) -> bool {
+        self.ask_approval(shared, call, reason, &json!("high"), true).await
+    }
+
+    async fn ask_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value, spend: bool) -> bool {
         let call_id = str_at(call, "id").unwrap_or_default().to_string();
         // The audit trail keeps what was asked and who answered, never the
         // reason (it quotes addresses and recipients).
@@ -675,11 +710,11 @@ impl Turns {
                 "answer": answer, "by": by,
             }))
         };
-        if shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
+        if !spend && shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
             note("approved", json!({ "via": "workflow policy" }));
             return true;
         }
-        if self.live_mode(shared).await == "yolo" {
+        if !spend && self.live_mode(shared).await == "yolo" {
             note("approved", json!({ "via": "yolo" }));
             return true;
         }
@@ -881,6 +916,50 @@ impl Turns {
                 Err(e) => fail(&e.to_string()),
             });
         }
+        if name == crate::media_tools::VIDEO_TOOL {
+            if !(self.claude_allows(&provider, "nekko_tools").await
+                && self.claude_allows(&provider, "unattended_runs").await)
+            {
+                return Some(fail(
+                    "Nekko's clip tool is not available for this Claude sign-in: on a Claude plan it waits for Anthropic's approval (Settings > Agents > Claude plan features).",
+                ));
+            }
+            let Some(server) = &self.media else { return Some(fail("Clips are not available here.")) };
+            let kept = self.data_dir.join("agent-pictures").join(&entry.session_id);
+            let frame = match crate::media_tools::bridge_frame(&input, &entry.roots, &kept) {
+                Ok(f) => f,
+                Err(e) => return Some(fail(&e)),
+            };
+            let clip = crate::media_tools::Clip {
+                session_id: &entry.session_id,
+                input: &input,
+                first_frame: frame,
+                project_path: None,
+                kept,
+            };
+            return Some(match crate::media_tools::start_clip(server.clone(), self.watches.clone(), clip).await {
+                Ok(text) => json!({ "ok": true, "text": text }),
+                Err(e) => fail(&e),
+            });
+        }
+        if crate::harness::BRIDGE_MEDIA.contains(&name) {
+            if !self.claude_allows(&provider, "nekko_tools").await {
+                return Some(fail(
+                    "Nekko's picture tools are not available for this Claude sign-in: on a Claude plan they wait for Anthropic's approval (Settings > Agents > Claude plan features).",
+                ));
+            }
+            let Some(server) = &self.media else { return Some(fail("Picture tools are not available here.")) };
+            let full = {
+                let (store, id) = (self.store.clone(), entry.session_id.clone());
+                tokio::task::spawn_blocking(move || store.get(&id)).await.ok().flatten().unwrap_or(session)
+            };
+            let default = settings.get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            let saved = self.data_dir.join("agent-pictures").join(&entry.session_id);
+            return Some(
+                crate::media_tools::run_bridge(server, name, &input, &full, default.as_deref(), &entry.roots, &saved)
+                    .await,
+            );
+        }
         if name != crate::harness::BRIDGE_WATCH {
             return Some(fail("Unknown Nekko tool."));
         }
@@ -971,6 +1050,7 @@ impl Turns {
             active: std::sync::atomic::AtomicBool::new(!claude_code),
             turn_id: turn_id.clone(),
             audit_to: Mutex::new(None),
+            phase: Arc::default(),
         });
         {
             let mut running = lock(&self.running);
@@ -1228,7 +1308,32 @@ impl Turns {
             _ => json!([]),
         };
         // The turn's composition: tools, context from disk, the system prompt.
+        // Picture tools only where they can work: a local (not sandbox, not
+        // Claude Code) chat on a computer with a picture model ready.
+        // A cloud picture model can serve too: an enabled OpenRouter provider
+        // (no network read here), in a chat that may reach the cloud.
+        let cloud_pictures = !crate::connections::offline(&loaded)
+            && str_at(&loaded, "models") != Some("local")
+            && settings.get("providers").and_then(Value::as_array).is_some_and(|ps| {
+                ps.iter().any(|p| str_at(p, "kind") == Some("openrouter") && p.get("enabled") != Some(&json!(false)))
+            });
+        let media = !sandbox
+            && !claude_code
+            && !js::truthy(opts.get("noTools"))
+            && match &self.media {
+                Some(server) => cloud_pictures || !server.ready_media_models().await.is_empty(),
+                None => false,
+            };
+        let video = !sandbox
+            && !claude_code
+            && !js::truthy(opts.get("noTools"))
+            && match &self.media {
+                Some(server) => cloud_pictures || !server.ready_video_models().await.is_empty(),
+                None => false,
+            };
         let tool_input = json!({
+            "media": media,
+            "video": video,
             "session": loaded,
             "offline": crate::connections::offline(&loaded),
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
@@ -1268,8 +1373,8 @@ impl Turns {
             facts.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default()
         };
         let data_dir = Some(self.data_dir.clone());
-        let block = if sandbox {
-            nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput::default()))
+        let parts = if sandbox {
+            ContextParts::default()
         } else {
             let (loaded, opts, facts, workspaces) = (loaded.clone(), opts.clone(), facts.clone(), workspaces.clone());
             tokio::task::spawn_blocking(move || context_block(&loaded, &opts, &facts, &workspaces, data_dir.as_deref()))
@@ -1296,7 +1401,7 @@ impl Turns {
             "sandbox": sandbox,
             "executionMode": execution_mode,
             "worktreeNotices": notices,
-            "contextBlock": block,
+            "contextBlock": &parts.stable,
             "platform": facts.get("platform").cloned().unwrap_or(json!(std::env::consts::OS)),
             "workMode": loaded.get("workMode").cloned().unwrap_or(Value::Null),
             "promptProfile": facts.pointer("/promptProfile/profile").cloned().unwrap_or(Value::Null),
@@ -1309,9 +1414,11 @@ impl Turns {
         // The user's input, saved before the reply starts. A wake-up has none.
         let wake = spec.get("wake") == Some(&Value::Bool(true));
         let mut session_value = loaded;
+        let messages_before = session_value.get("messages").and_then(Value::as_array).map_or(0, Vec::len);
         if !wake {
             turn::apply_turn_input(&mut session_value, opts, nekko_js::now_ms());
         }
+        keep_turn_context(&mut session_value, messages_before, parts);
         let session = Arc::new(Mutex::new(session_value));
         let queued = spec.get("queued").filter(|q| !q.is_null()).cloned();
         if let Some(q) = queued {
@@ -1346,11 +1453,24 @@ impl Turns {
         };
 
         // On disk while the turn runs, so a restart knows it was cut off.
+        // `afterMessageId` is the last message before the turn's own (its
+        // prompt, or for a wake-up the end of the turn before it), where a
+        // window stops the saved transcript while it draws the live reply.
         if let Some(obj) = lock(&session).as_object_mut() {
-            obj.insert("activeRun".into(), json!({ "startedAt": nekko_js::now_ms() }));
+            let mut run = json!({ "startedAt": nekko_js::now_ms() });
+            if let Some(id) =
+                obj.get("messages").and_then(Value::as_array).and_then(|m| m.last()).and_then(|m| m.get("id"))
+            {
+                run["afterMessageId"] = id.clone();
+            }
+            obj.insert("activeRun".into(), run);
             obj.remove("turnFailure");
         }
         persist(&store, &session, incognito).await;
+        // A wake-up saved no prompt, so nothing has told the windows a turn began.
+        if wake && !incognito {
+            say(json!({ "type": "session_meta", "sessionId": session_id }));
+        }
 
         let turn_from = lock(&session).get("messages").and_then(Value::as_array).map_or(0, Vec::len);
         let started_at = nekko_js::now_ms();
@@ -1377,6 +1497,7 @@ impl Turns {
                 started_at,
                 last_error: shared.last_error.clone(),
                 latest: shared.latest.clone(),
+                phase: shared.phase.clone(),
             },
         ));
 
@@ -1685,7 +1806,10 @@ impl Turns {
         let wanted = Wanted {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
-            model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+            // A chat saved on a family alias runs on that family's newest model.
+            model: str_at(opts, "modelId")
+                .filter(|m| !js::trim(m).is_empty())
+                .map(nekko_agent::providers::claude_code::concrete_model_id),
             // `normal` means no choice was made: Claude Code's own setting stands.
             effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
@@ -1726,6 +1850,25 @@ impl Turns {
         let title_session = lock(session).clone();
         if !incognito && self.claude_title_allowed(provider, &title_session).await {
             tools.push(crate::harness::BRIDGE_TITLE.to_string());
+        }
+        // The picture tools, where a picture model is ready on this computer.
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && let Some(server) = &self.media
+            && !server.ready_media_models().await.is_empty()
+        {
+            tools.extend(crate::harness::BRIDGE_MEDIA.iter().map(|t| t.to_string()));
+        }
+        // A clip wakes the chat later: it also needs the wake-up allowed, as the watch does.
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && self.claude_allows(provider, "unattended_runs").await
+            && let Some(server) = &self.media
+            && !server.ready_video_models().await.is_empty()
+        {
+            tools.push(crate::media_tools::VIDEO_TOOL.to_string());
         }
         // A child launched with other Nekko tools is relaunched (a provider
         // switch, or the policy changed), so its bridge lists the right ones.
@@ -1847,6 +1990,12 @@ impl Turns {
         let mut seen: Option<String> = None;
         let mut model: Option<String> = None;
         let mut compacted = false;
+        // Claude Code's shell commands in the chat's command log, the Logs
+        // drawer (#3067). An incognito chat leaves nothing on disk.
+        let mut shell_log = crate::claude_command_log::ShellLog::default();
+        let log_folder =
+            crate::spawn::workspace_ids(&lock(session)).first().and_then(Value::as_str).map(str::to_string);
+        let chat_secrets = self.secrets.for_chat(&session_id);
         let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {
             Mapped::Message(mut message) => {
                 if let Some(compaction) = message.get_mut("compaction") {
@@ -1855,7 +2004,13 @@ impl Turns {
                 }
                 history.push(message)
             }
-            Mapped::Event(event) => send(event, &history),
+            Mapped::Event(event) => {
+                if !incognito && let Some(text) = shell_log.text(&event) {
+                    let text = nekko_tools::sanitize_for_terminal(&chat_secrets.redact(&text));
+                    self.agent_logs.append(&session_id, log_folder.as_deref(), &text);
+                }
+                send(event, &history)
+            }
             Mapped::Init(init) => {
                 seen = Some(init.session_id);
                 model = init.model.or(model.take());
@@ -2285,29 +2440,57 @@ fn is_checkpoint(e: &Value) -> bool {
     matches!(str_at(e, "type"), Some("step" | "steered" | "tool_result" | "done" | "error"))
 }
 
-/// The context block a turn sends: attached files, project guidance (at the
-/// chat's `guidance` level) and memory (at its `memory` scope) from disk, the host's connector and index snippets, and the chat's
-/// include and pin choices.
+/// A turn's context, split so the system prompt's prefix stays byte-stable.
+#[derive(Default)]
+struct ContextParts {
+    /// For the system prompt: project guidance, the chat's attached files and
+    /// its memory frame. Changes only when the user changes one of them.
+    stable: String,
+    /// For this turn's user message (`turnContext`): what this turn alone
+    /// brought (its own attachments and the guides they pull in, connector and
+    /// index snippets found for its text) and memory saved since the frame.
+    tail: String,
+    /// The chat's `memoryFrame` once this turn's tail is saved (`Null`: none).
+    frame: Value,
+    /// The frame is new: store it even on a turn that saves no message.
+    fresh_frame: bool,
+}
+
+/// The context a turn sends: attached files, project guidance (at the chat's
+/// `guidance` level) and memory (at its `memory` scope) from disk, the host's
+/// connector and index snippets, and the chat's include and pin choices.
+/// What is fixed for the chat goes to the system prompt; what this turn alone
+/// brought rides on its message, so a local model's KV cache stays valid.
 fn context_block(
     session: &Value,
     opts: &Value,
     facts: &Value,
     workspaces: &[Value],
     data_dir: Option<&std::path::Path>,
-) -> String {
+) -> ContextParts {
     let strings = |v: Option<&Value>| -> Vec<String> {
         v.and_then(Value::as_array)
             .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
             .unwrap_or_default()
     };
-    let mut attached = strings(session.get("attachedPaths"));
-    attached.extend(strings(opts.get("attachedPaths")));
+    let chat_attached = strings(session.get("attachedPaths"));
+    let turn_attached: Vec<String> =
+        strings(opts.get("attachedPaths")).into_iter().filter(|p| !chat_attached.contains(p)).collect();
+    let mut all_attached = chat_attached.clone();
+    all_attached.extend(turn_attached.iter().cloned());
     let paths: Vec<String> = workspaces.iter().filter_map(|w| str_at(w, "path").map(str::to_string)).collect();
-    let guidance = nekko_context::project_guidance(
-        &paths,
-        &attached,
-        nekko_context::Guidance::from_value(session.get("guidance")),
-    );
+    let level = || nekko_context::Guidance::from_value(session.get("guidance"));
+    let guidance = nekko_context::project_guidance(&paths, &chat_attached, level());
+    // Guides only this turn's attachments pull in go with them, to the tail.
+    let (turn_guidelines, turn_indexes) = if turn_attached.is_empty() {
+        (Vec::new(), Vec::new())
+    } else {
+        let all = nekko_context::project_guidance(&paths, &all_attached, level());
+        (
+            all.guidelines.into_iter().filter(|g| !guidance.guidelines.contains(g)).collect(),
+            all.indexes.into_iter().filter(|i| !guidance.indexes.contains(i)).collect(),
+        )
+    };
     let scope = nekko_context::MemoryScope::of_session(session);
     let mut memory = Vec::new();
     if let Some(dir) = data_dir.filter(|_| scope.project()) {
@@ -2323,6 +2506,7 @@ fn context_block(
             }
         }
     }
+    let frame = nekko_context::memory_frame(session.get("memoryFrame"), scope, &memory);
     let triple = |v: &Value, a: &str, b: &str, c: &str| -> (String, String, String) {
         let s = |k: &str| v.get(k).map(js::display).unwrap_or_default();
         (s(a), s(b), s(c))
@@ -2338,18 +2522,61 @@ fn context_block(
         .map(|a| a.iter().map(|s| triple(s, "relPath", "path", "body")).collect())
         .unwrap_or_default();
     let prefs = session.get("contextPrefs");
-    let bundle = nekko_context::assemble(nekko_context::AssembleInput {
-        attached: nekko_context::collect_attached(&attached),
+    let excluded: HashSet<String> = strings(prefs.and_then(|p| p.get("excluded"))).into_iter().collect();
+    let pinned: HashSet<String> = strings(prefs.and_then(|p| p.get("pinned"))).into_iter().collect();
+    let stable = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
+        attached: nekko_context::collect_attached(&chat_attached),
         guidelines: guidance.guidelines,
         rule_indexes: guidance.indexes,
-        memory,
+        memory: frame.notes.clone(),
+        excluded: excluded.clone(),
+        pinned: pinned.clone(),
+        ..Default::default()
+    }));
+    let turn = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
+        attached: nekko_context::collect_attached(&turn_attached),
+        guidelines: turn_guidelines,
+        rule_indexes: turn_indexes,
         connector_snippets: connector,
         index_snippets: index,
-        excluded: strings(prefs.and_then(|p| p.get("excluded"))).into_iter().collect(),
-        pinned: strings(prefs.and_then(|p| p.get("pinned"))).into_iter().collect(),
+        excluded: excluded.clone(),
+        pinned,
         ..Default::default()
-    });
-    nekko_context::render_block(&bundle)
+    }));
+    let memory_changes = nekko_context::render_memory_changes(&frame, &excluded);
+    let tail =
+        [turn, memory_changes].into_iter().filter(|t| !t.trim().is_empty()).collect::<Vec<_>>().join("\n\n---\n\n");
+    ContextParts { stable, tail, frame: frame.value, fresh_frame: frame.fresh }
+}
+
+/// After the turn's input is applied: a new user message keeps this turn's
+/// context (`turnContext`), sent with it on every later turn, and the chat
+/// keeps the memory frame that context was measured against. A turn that
+/// saved no message (a wake-up, a resume, a regenerate) keeps what the last
+/// message already carries and announces nothing, so nothing is said twice.
+fn keep_turn_context(session: &mut Value, messages_before: usize, parts: ContextParts) {
+    let Some(s) = session.as_object_mut() else { return };
+    let messages = s.get_mut("messages").and_then(Value::as_array_mut);
+    let new_message = messages
+        .filter(|m| m.len() > messages_before)
+        .and_then(|m| m.last_mut())
+        .filter(|m| str_at(m, "role") == Some("user"));
+    let saved = match new_message {
+        Some(m) => {
+            if !parts.tail.trim().is_empty()
+                && let Some(o) = m.as_object_mut()
+            {
+                o.insert("turnContext".into(), json!(parts.tail));
+            }
+            true
+        }
+        None => false,
+    };
+    if parts.frame.is_null() {
+        s.remove("memoryFrame");
+    } else if saved || parts.fresh_frame {
+        s.insert("memoryFrame".into(), parts.frame);
+    }
 }
 
 /// A chat's fields but its transcript, for a reader that never looks at it.
@@ -2466,6 +2693,8 @@ struct Forward {
     /// first checkpoint that finds it; one that finds it taken saves the chat
     /// as it stands, which already has that newer transcript.
     latest: Arc<Mutex<Option<Vec<Value>>>>,
+    /// [`Shared::phase`]: kept current as the chat moves along the loop.
+    phase: Arc<Mutex<Option<&'static str>>>,
 }
 
 /// The turn's events, in order. A checkpoint is saved before the UI is told
@@ -2482,6 +2711,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     // When the chat's deferred checkpoint save is due to be written.
     let mut save_due: Option<tokio::time::Instant> = None;
     let mut phase = lock(&f.session).get("messages").and_then(Value::as_array).and_then(|m| nekko_store::loop_phase(m));
+    *lock(&f.phase) = phase;
     loop {
         let due = deltas.due();
         let out = tokio::select! {
@@ -2499,6 +2729,10 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 continue;
             }
         };
+        if let Some(Out::Event(e) | Out::Loop(e, _)) = &out {
+            // Which chat is using which simulator (simulators.rs).
+            crate::simulators::observe(&f.session_id, e);
+        }
         let (event, snapshot) = match out {
             None | Some(Out::End) => break,
             Some(Out::Event(e)) => {
@@ -2559,6 +2793,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         let moved = next.is_some() && next != phase;
         if moved {
             phase = next;
+            *lock(&f.phase) = phase;
         }
         if is_checkpoint(&event) {
             // Saves land in order.
@@ -2743,6 +2978,192 @@ struct TurnTools {
     /// Whether this chat has read untrusted content, and the addresses it
     /// was shown (the egress gate, decision 0054).
     taint: Mutex<crate::taint::Taint>,
+}
+
+/// How often a cloud clip's state is read, after a first look soon after it starts.
+const CLOUD_CLIP_FIRST_LOOK: Duration = Duration::from_secs(2);
+const CLOUD_CLIP_POLL: Duration = Duration::from_secs(20);
+/// How long a cloud clip is waited for before the chat is told it did not come.
+const CLOUD_CLIP_LIMIT: Duration = Duration::from_secs(60 * 60);
+
+/// A started cloud clip, followed in the background until OpenRouter says it
+/// ended: kept (and copied to the approved project path) when made, its cost
+/// recorded either way, the chat woken through its `clip` watch. A cancelled
+/// watch (the chat's Stop) is not woken, but the clip is still kept.
+struct CloudClipJob {
+    dispatch: crate::automation::Dispatcher,
+    watches: Arc<crate::watches::Watches>,
+    accounts: Arc<Accounts>,
+    session_id: String,
+    watch: String,
+    job: String,
+    model: String,
+    label: String,
+    price: f64,
+    kept: PathBuf,
+    project: Option<String>,
+}
+
+impl CloudClipJob {
+    async fn run(self) {
+        let started = std::time::Instant::now();
+        let mut wait = CLOUD_CLIP_FIRST_LOOK;
+        let news = loop {
+            tokio::time::sleep(wait).await;
+            wait = CLOUD_CLIP_POLL;
+            if started.elapsed() > CLOUD_CLIP_LIMIT {
+                break format!("The clip did not arrive within an hour ({}); it may still be charged.", self.label);
+            }
+            let Ok(state) = (self.dispatch)("media:cloudVideoPoll".into(), vec![json!({ "jobId": self.job })]).await
+            else {
+                continue;
+            };
+            let cost = state["costUsd"].as_f64();
+            match state["status"].as_str().unwrap_or_default() {
+                "completed" => {
+                    self.record(cost.unwrap_or(self.price));
+                    break match self.keep().await {
+                        Ok(paths) => format!("The clip is ready ({}): {}.", self.label, paths.join(" and ")),
+                        Err(e) => format!("The clip was made but could not be kept: {e}"),
+                    };
+                }
+                status @ ("failed" | "cancelled" | "expired") => {
+                    if let Some(c) = cost.filter(|c| *c > 0.0) {
+                        self.record(c);
+                    }
+                    let why = state["error"].as_str().map(|e| format!(": {e}")).unwrap_or_default();
+                    break format!("The clip {status} on OpenRouter ({}){why}.", self.label);
+                }
+                _ => {}
+            }
+        };
+        self.watches.clip_finished(&self.watch, &news).await;
+    }
+
+    fn record(&self, cost: f64) {
+        let (provider, model) = crate::cloud_media::parse_cloud_id(&self.model).unwrap_or(("", &self.model));
+        self.accounts.usage_line(&json!({
+            "ts": nekko_js::now_ms(), "providerId": provider, "modelId": model, "sessionId": self.session_id,
+            "inputTokens": 0, "outputTokens": 0, "local": false, "kind": "video", "costUsd": cost,
+        }));
+    }
+
+    async fn keep(&self) -> Result<Vec<String>, String> {
+        use base64::Engine as _;
+        let file = (self.dispatch)("media:cloudVideoFetch".into(), vec![json!({ "jobId": self.job })]).await?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(file["b64"].as_str().unwrap_or_default())
+            .map_err(|_| "the clip could not be read")?;
+        std::fs::create_dir_all(&self.kept).map_err(|e| e.to_string())?;
+        let kept = self.kept.join(format!("clip-{}.mp4", nekko_js::now_ms()));
+        std::fs::write(&kept, &bytes).map_err(|e| e.to_string())?;
+        let mut paths = vec![kept.to_string_lossy().to_string()];
+        if let Some(p) = &self.project {
+            if let Some(parent) = std::path::Path::new(p).parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            match std::fs::write(p, &bytes) {
+                Ok(()) => paths.push(p.clone()),
+                Err(e) => paths.push(format!("(not saved to {p}: {e})")),
+            }
+        }
+        Ok(paths)
+    }
+}
+
+/// How much a chat may spend on paid pictures each time the user allows it.
+const PICTURE_ALLOWANCE_USD: f64 = 1.0;
+
+/// A chat's paid cloud pictures (media_tools::CloudSide), through the
+/// daemon's `media:cloud*` channels, which keep the OpenRouter key. The
+/// chat's allowance is `pictureSpend: { allowedUsd, spentUsd }` on the chat.
+struct ChatCloud<'a> {
+    tools: &'a TurnTools,
+    call: &'a Value,
+}
+
+type CloudFut<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
+impl ChatCloud<'_> {
+    fn spending(&self) -> (f64, f64) {
+        let s = lock(&self.tools.session);
+        let num = |k: &str| s.pointer(&format!("/pictureSpend/{k}")).and_then(Value::as_f64).unwrap_or(0.0);
+        (num("allowedUsd"), num("spentUsd"))
+    }
+
+    async fn set_spending(&self, allowed: f64, spent: f64) {
+        if let Some(obj) = lock(&self.tools.session).as_object_mut() {
+            obj.insert("pictureSpend".into(), json!({ "allowedUsd": allowed, "spentUsd": spent }));
+        }
+        persist(&self.tools.store, &self.tools.session, self.tools.incognito).await;
+    }
+}
+
+impl crate::media_tools::CloudSide for ChatCloud<'_> {
+    fn models(&self) -> CloudFut<'_, Vec<Value>> {
+        Box::pin(async move {
+            let Some(d) = self.tools.turns.dispatch.get() else { return Vec::new() };
+            match d("media:cloudModels".into(), vec![]).await {
+                Ok(Value::Array(list)) => list,
+                _ => Vec::new(),
+            }
+        })
+    }
+
+    fn video_models(&self) -> CloudFut<'_, Vec<Value>> {
+        Box::pin(async move {
+            let Some(d) = self.tools.turns.dispatch.get() else { return Vec::new() };
+            match d("media:cloudVideoModels".into(), vec![]).await {
+                Ok(Value::Array(list)) => list,
+                _ => Vec::new(),
+            }
+        })
+    }
+
+    fn image(&self, request: Value) -> CloudFut<'_, Result<Value, String>> {
+        Box::pin(async move {
+            let d = self.tools.turns.dispatch.get().ok_or("Cloud pictures are not available here.")?;
+            d("media:cloudImage".into(), vec![request]).await
+        })
+    }
+
+    fn spend<'a>(&'a self, price: f64, what: &'a str) -> CloudFut<'a, Result<(), String>> {
+        Box::pin(async move {
+            let (allowed, spent) = self.spending();
+            // Within what the user already allowed in this chat: no question.
+            if spent + price <= allowed + 1e-9 {
+                return Ok(());
+            }
+            let input = self.call.get("input").cloned().unwrap_or(Value::Null);
+            let kinds = crate::dlp::in_input(&input, &self.tools.private_terms().await);
+            let carries = if kinds.is_empty() {
+                String::new()
+            } else {
+                format!(" The prompt carries {}.", crate::dlp::describe(&kinds))
+            };
+            let reason = format!(
+                "{what}{carries} Approve to allow paid pictures in this chat up to ${PICTURE_ALLOWANCE_USD:.2} from now (spent here so far: ${spent:.2}); past that, it asks again."
+            );
+            if !self.tools.turns.request_spend_approval(&self.tools.shared, self.call, &reason).await {
+                return Err("The paid picture was not approved, so nothing was charged.".into());
+            }
+            self.set_spending(spent + PICTURE_ALLOWANCE_USD, spent).await;
+            Ok(())
+        })
+    }
+
+    fn spent<'a>(&'a self, cost: f64, model: &'a str) -> CloudFut<'a, ()> {
+        Box::pin(async move {
+            let (allowed, spent) = self.spending();
+            self.set_spending(allowed, spent + cost).await;
+            let (provider, model_id) = crate::cloud_media::parse_cloud_id(model).unwrap_or(("", model));
+            self.tools.turns.accounts.usage_line(&json!({
+                "ts": nekko_js::now_ms(), "providerId": provider, "modelId": model_id,
+                "sessionId": self.tools.shared.session_id, "inputTokens": 0, "outputTokens": 0,
+                "local": false, "kind": "picture", "costUsd": cost,
+            }));
+        })
+    }
 }
 
 /// Why a call in a tainted chat asks (decision 0054).
@@ -2963,7 +3384,7 @@ impl TurnTools {
         match name {
             "set_chat_title" => return Ok(self.set_title(id, &input).await),
             "remember" => return Ok(self.remember(call, id, &input).await),
-            "complete_session" => return Ok(self.complete(id, &input).await),
+            "complete_session" => return Ok(self.archive(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             turn::secret::REQUEST_SECRET => return Ok(self.request_secret(call).await),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
@@ -3014,6 +3435,94 @@ impl TurnTools {
         if name == "agent_watch" {
             let watches = self.turns.watches.clone();
             return Ok(self.agent_watch(&watches, call).await);
+        }
+        if name == crate::media_tools::VIDEO_TOOL {
+            let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
+                return Ok(error(id, "Clips are not available in this chat."));
+            };
+            // Fusion picks the clip model when the call names none (decided 2026-11-19).
+            let mut input = input.clone();
+            let mut route = None;
+            if input.get("model").and_then(Value::as_str).is_none_or(str::is_empty)
+                && let Some(strategy) = self.fusion_strategy()
+            {
+                let local = server.ready_video_models().await;
+                let cloud = match self.turns.dispatch.get() {
+                    Some(d) if !self.local_only() => match d("media:cloudVideoModels".into(), vec![]).await {
+                        Ok(Value::Array(list)) => list,
+                        _ => Vec::new(),
+                    },
+                    _ => Vec::new(),
+                };
+                if let Some((m, why)) = crate::media_tools::fusion_clip_pick(&local, &cloud, &strategy) {
+                    input["model"] = m["id"].clone();
+                    route = Some(why);
+                }
+            }
+            let routed = |mut v: Value| {
+                if let (Some(why), Some(out)) = (&route, v.get("output").and_then(Value::as_str)) {
+                    v["output"] = json!(format!("{why} {out}"));
+                }
+                v
+            };
+            if input
+                .get("model")
+                .and_then(Value::as_str)
+                .is_some_and(|m| crate::cloud_media::parse_cloud_id(m).is_some())
+            {
+                return Ok(routed(self.cloud_clip(id, call, &input, ctx).await));
+            }
+            let session = lock(&self.session).clone();
+            let frame = match crate::media_tools::native_frame(&input, &session, ctx) {
+                Ok(f) => f,
+                Err(e) => return Ok(error(id, e)),
+            };
+            // A project copy is approved now, while this turn can still ask.
+            let project = match input.get("path").and_then(Value::as_str).filter(|p| !p.trim().is_empty()) {
+                Some(p) if !p.to_lowercase().ends_with(".webp") => {
+                    return Ok(error(id, "The path must end in .webp (the clip is an animated WebP)."));
+                }
+                Some(p) => {
+                    let tc = ToolCall { id: id.to_string(), name: name.to_string(), input: input.clone() };
+                    match nekko_tools::approve_new_file(&tc, ctx, Some(&json!(p))).await {
+                        Ok(p) => Some(p),
+                        Err(e) => return Ok(error(id, e)),
+                    }
+                }
+                None => None,
+            };
+            let clip = crate::media_tools::Clip {
+                session_id: &self.shared.session_id,
+                input: &input,
+                first_frame: frame,
+                project_path: project,
+                kept: self.turns.data_dir.join("agent-pictures").join(&self.shared.session_id),
+            };
+            return Ok(routed(
+                match crate::media_tools::start_clip(server.clone(), self.turns.watches.clone(), clip).await {
+                    Ok(text) => result(id, text),
+                    Err(e) => error(id, e),
+                },
+            ));
+        }
+        if crate::media_tools::TOOLS.contains(&name) {
+            let (Some(server), Some(ctx)) = (self.turns.media.as_ref(), self.native.as_ref()) else {
+                return Ok(error(id, "Picture tools are not available in this chat."));
+            };
+            let session = lock(&self.session).clone();
+            let default =
+                self.turns.settings.get().get("agentPictureModel").and_then(Value::as_str).map(str::to_string);
+            // Paid cloud pictures: never in an offline or Local only chat.
+            let local_only = crate::connections::offline(&session) || str_at(&session, "models") == Some("local");
+            let side = ChatCloud { tools: self, call };
+            let cloud = (!local_only && self.turns.dispatch.get().is_some())
+                .then_some(&side as &dyn crate::media_tools::CloudSide);
+            let fusion = self.fusion_strategy();
+            return Ok(crate::media_tools::run(
+                server,
+                crate::media_tools::Call { call, session, ctx, default, cloud, fusion },
+            )
+            .await);
         }
         if let Some(ctx) = &self.native
             && (name == "browser" || name == "capture")
@@ -3479,9 +3988,22 @@ impl TurnTools {
                 return error(id, "Call not approved by user.");
             }
             // The approval showed these recipients: they are known in this chat now.
+            // The list is read again, not taken from before the wait: the user may
+            // have taken a recipient back while this call waited, and must not see
+            // it come back.
             if !fresh.is_empty() {
-                let mut all = known;
-                all.extend(fresh);
+                let now = self.disk().await;
+                let mut all: Vec<String> = now
+                    .as_ref()
+                    .and_then(|s| s.get("knownRecipients"))
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                    .unwrap_or_default();
+                for f in fresh {
+                    if !all.contains(&f) {
+                        all.push(f);
+                    }
+                }
                 let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
                 let _ =
                     tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "knownRecipients": all }))).await;
@@ -3560,18 +4082,18 @@ impl TurnTools {
         }
     }
 
-    async fn complete(&self, id: &str, input: &Value) -> Value {
+    async fn archive(&self, id: &str, input: &Value) -> Value {
         if input.as_object().is_some_and(|o| !o.is_empty()) {
-            return error(id, "complete_session takes no arguments and only completes the current chat.");
+            return error(id, "complete_session takes no arguments and only archives the current chat.");
         }
         let Some(disk) = self.disk().await else {
-            return error(id, "Session not found; completion was not saved.");
+            return error(id, "Session not found; the archive was not saved.");
         };
         let at = disk.get("archivedAt").filter(|v| !v.is_null()).cloned().unwrap_or(json!(nekko_js::now_ms()));
         let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
         let saved = tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "archivedAt": at }))).await.ok();
         let Some(Ok(Some(saved))) = saved else {
-            return error(id, "Session not found; completion was not saved.");
+            return error(id, "Session not found; the archive was not saved.");
         };
         if let Some(obj) = lock(&self.session).as_object_mut() {
             obj.insert("archivedAt".into(), saved.get("archivedAt").cloned().unwrap_or(Value::Null));
@@ -3579,7 +4101,7 @@ impl TurnTools {
         self.meta();
         result(
             id,
-            "This session is marked completed (archived). Messages are retained under the app\u{2019}s archive retention policy. You can restore it from completed chats.",
+            "This chat is archived. It is kept until the user deletes it, and they can restore it from Archived chats.",
         )
     }
 
@@ -3604,6 +4126,178 @@ impl TurnTools {
 
     /// `askUser`: park the turn on a question until it is answered, the turn
     /// stops, or (with an unattended limit set) nobody answers in time.
+    /// A paid clip on the user's OpenRouter provider (`generate_video` naming a
+    /// cloud model; decided 2026-11-19): the user picks length, audio and
+    /// resolution on a question card with each answer's price, then confirms
+    /// the total, in every mode, YOLO included. The clip is made in the
+    /// background and wakes the chat through a `clip` watch. It cannot be
+    /// stopped once started, so a Stop only ends the waiting: the clip is still
+    /// kept when it arrives, and its cost recorded.
+    async fn cloud_clip(&self, id: &str, call: &Value, input: &Value, ctx: &ToolContext) -> Value {
+        let session = lock(&self.session).clone();
+        if crate::connections::offline(&session) || str_at(&session, "models") == Some("local") || self.incognito {
+            return error(id, "Paid cloud clips are not available in an offline, Local only or incognito chat.");
+        }
+        let Some(d) = self.turns.dispatch.get().cloned() else {
+            return error(id, "Cloud clips are not available here.");
+        };
+        let asked = input.get("model").and_then(Value::as_str).unwrap_or_default();
+        let models = match d("media:cloudVideoModels".into(), vec![]).await {
+            Ok(Value::Array(list)) => list,
+            _ => Vec::new(),
+        };
+        let Some(model) = models.into_iter().find(|m| m["id"] == asked) else {
+            return error(id, format!("{asked} is not a priced video model on the user's OpenRouter provider."));
+        };
+        let prompt = input.get("prompt").and_then(Value::as_str).map(str::trim).unwrap_or_default().to_string();
+        if prompt.is_empty() {
+            return error(id, "Describe the clip first (prompt).");
+        }
+        let frame = match crate::media_tools::native_frame(input, &session, ctx) {
+            Ok(f) => f,
+            Err(e) => return error(id, e),
+        };
+        if frame.is_some() && model["firstFrame"] != true {
+            return error(id, "This video model cannot start from a picture.");
+        }
+        // The choice, priced answer by answer, on the chat's own question card.
+        let suggested = crate::media_tools::ClipChoice::suggested(&model, input);
+        let card = crate::media_tools::clip_questions(&model, &suggested);
+        // The card also carries every combination's price, so a client that
+        // knows it (the desktop's clip picker) shows a live total and confirms
+        // it with the answers; one that does not shows the plain questions.
+        let (choice, answers) = if card["questions"].as_array().is_some_and(|q| !q.is_empty()) {
+            let ask = json!({ "id": format!("{id}-clip"), "name": "ask_user", "input": card });
+            let clip = json!({
+                "model": model["name"], "via": "OpenRouter", "sendsPicture": frame.is_some(),
+                "prices": crate::media_tools::clip_prices(&model, &card, &suggested),
+            });
+            match self.ask_answers(&ask, Some(clip)).await {
+                Some(answers) => (crate::media_tools::clip_answer(&card, &answers, &suggested), answers),
+                None => return error(id, "No clip was chosen, so nothing was started or charged."),
+            }
+        } else {
+            (suggested, json!([]))
+        };
+        let Some(price) = choice.price(&model) else {
+            return error(id, "That clip has no published price, so it was not started.");
+        };
+        let name = model["name"].as_str().unwrap_or_default().to_string();
+        let frame_note = if frame.is_some() { " The prompt and the first picture" } else { " The prompt" };
+        let reason = format!(
+            "Make a {} clip with {name} through OpenRouter for ${price:.2}, on your OpenRouter account. Once started it cannot be stopped and is charged even if you stop the chat; the clip is still kept.{frame_note} leave this computer for OpenRouter and the model's provider.",
+            choice.describe()
+        );
+        // The picker's "Make clip · $2.40" is the confirmation when its total is
+        // exactly this price; otherwise the total is confirmed on its own.
+        if !crate::media_tools::confirmed_total(&answers, price)
+            && !self.turns.request_spend_approval(&self.shared, call, &reason).await
+        {
+            return error(id, "The paid clip was not approved, so nothing was started or charged.");
+        }
+        // A project copy is approved now, while this turn can still ask.
+        let project = match input.get("path").and_then(Value::as_str).filter(|p| !p.trim().is_empty()) {
+            Some(p) if !p.to_lowercase().ends_with(".mp4") => {
+                return error(id, "The path must end in .mp4 (a cloud clip is an MP4).");
+            }
+            Some(p) => {
+                let tc = ToolCall { id: id.to_string(), name: "generate_video".into(), input: input.clone() };
+                match nekko_tools::approve_new_file(&tc, ctx, Some(&json!(p))).await {
+                    Ok(p) => Some(p),
+                    Err(e) => return error(id, e),
+                }
+            }
+            None => None,
+        };
+        let mut start = json!({ "id": asked, "prompt": prompt, "duration": choice.duration, "audio": choice.audio });
+        if let Some(r) = &choice.resolution {
+            start["resolution"] = json!(r);
+        }
+        if let Some(f) = &frame {
+            start["firstFrame"] = json!(f);
+        }
+        let job = match d("media:cloudVideoStart".into(), vec![start]).await {
+            Ok(v) => v["jobId"].as_str().unwrap_or_default().to_string(),
+            Err(e) => return error(id, format!("The clip could not be started: {e}")),
+        };
+        let then = input.get("then").and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty());
+        let then = then.unwrap_or("Show the user the clip and continue the task.");
+        let watch =
+            match self.turns.watches.arm_clip(&self.shared.session_id, then, nekko_loop::Cancel::default()).await {
+                Ok(w) => w,
+                Err(e) => {
+                    return error(
+                        id,
+                        format!("The clip was started on OpenRouter but its wake-up could not be armed: {e}"),
+                    );
+                }
+            };
+        let job_task = CloudClipJob {
+            dispatch: d,
+            watches: self.turns.watches.clone(),
+            accounts: self.turns.accounts.clone(),
+            session_id: self.shared.session_id.clone(),
+            watch: watch.clone(),
+            job,
+            model: asked.to_string(),
+            label: format!("{name}, {}", choice.describe()),
+            price,
+            kept: self.turns.data_dir.join("agent-pictures").join(&self.shared.session_id),
+            project,
+        };
+        tokio::spawn(job_task.run());
+        result(
+            id,
+            format!(
+                "Started a {} clip with {name} through OpenRouter (${price:.2}). It takes minutes; watch {watch} wakes this chat with the clip when it is ready. It cannot be stopped. Tell the user and end your turn now.",
+                choice.describe()
+            ),
+        )
+    }
+
+    /// The chat's Fusion strategy when the chat is in Fusion (`fusionEnabled`
+    /// in shared/fusion.ts: Auto with provider switching, not offline or
+    /// incognito), from `settings.fusion.strategy`, Balanced by default.
+    fn fusion_strategy(&self) -> Option<String> {
+        let s = lock(&self.session).clone();
+        let on = s.get("autoModel") == Some(&Value::Bool(true))
+            && s.get("autoProviderSwitch") == Some(&Value::Bool(true))
+            && !js::truthy(s.get("offline"))
+            && !js::truthy(s.get("incognito"));
+        on.then(|| {
+            let settings = self.turns.settings.get();
+            let strategy = settings.pointer("/fusion/strategy").and_then(Value::as_str).unwrap_or("balanced");
+            let known = ["balanced", "economical", "quality", "local-first", "capacity"];
+            (if known.contains(&strategy) { strategy } else { "balanced" }).to_string()
+        })
+    }
+
+    /// An offline or Local only chat: no cloud media.
+    fn local_only(&self) -> bool {
+        let s = lock(&self.session);
+        crate::connections::offline(&s) || str_at(&s, "models") == Some("local")
+    }
+
+    /// Ask the chat's question card and wait for the answers; `None` when it
+    /// was cancelled or nobody answered (an unattended run).
+    async fn ask_answers(&self, call: &Value, clip: Option<Value>) -> Option<Value> {
+        if self.shared.unattended.is_on() {
+            return None;
+        }
+        let call_id = str_at(call, "id").unwrap_or_default().to_string();
+        let mut request =
+            turn::parse_ask_request(&call_id, call.get("input").unwrap_or(&Value::Null), nekko_js::now_ms()).ok()?;
+        if let Some(c) = clip {
+            request["clip"] = c;
+        }
+        let session_id = self.shared.session_id.clone();
+        let rx = self.turns.pending.park_question(&session_id, &request);
+        self.shared.emit(json!({ "type": "question", "sessionId": session_id, "request": request }));
+        let answers = rx.await.unwrap_or(json!([]));
+        self.shared.emit(json!({ "type": "question_resolved", "sessionId": session_id, "callId": call_id }));
+        answers.as_array().is_some_and(|a| !a.is_empty()).then_some(answers)
+    }
+
     async fn ask(&self, call: &Value) -> String {
         let c = turn::catalog::catalog();
         let call_id = str_at(call, "id").unwrap_or_default().to_string();

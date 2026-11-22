@@ -218,6 +218,7 @@ app.whenReady().then(async () => {
       await click('[data-design-source]'); await sleep(1500);
       await check(`!document.querySelector('[data-design-canvas]') && !!document.querySelector('[data-served-preview]') && !!document.querySelector('[data-design-back]')`, 'source-opens-the-file-pane');
       await check(`JSON.stringify(layoutFixture.asked.at(-1)) === ${js(JSON.stringify({ p: file('checkout-design.html'), internet: false, controls: false }))}`, 'file-pane-page-has-no-viewer-script');
+      await check(`!!document.querySelector('[data-file-read-only]') && !document.querySelector('[data-preview-edit]') && !document.querySelector('[aria-label="Undo (Ctrl+Z)"]')`, 'a-design-opens-view-only');
       await shot('design-source');
       await click('[data-design-back]'); await sleep(1500);
       await check(`!!document.querySelector('[data-design-canvas] iframe')`, 'canvas-comes-back');
@@ -251,6 +252,21 @@ app.whenReady().then(async () => {
       // Double-click on the space around the design zooms in there; with Shift, back out.
       await run(`(() => { const c = document.querySelector('[data-design-canvas]').getBoundingClientRect(); document.querySelector('[data-design-canvas]').dispatchEvent(new MouseEvent('dblclick', { clientX: c.left + c.width / 2, clientY: c.bottom - 20, bubbles: true })); })()`); await sleep(250);
       await check(`${zoom} > ${fittedStill}`, 'double-click-zooms-in');
+      await click('[data-design-zoom]'); await sleep(200);
+      // Ctrl with + and 0 zoom and fit the design, not the app's text size, even with a button focused
+      // (the zoom button was just clicked) and from inside the design.
+      const appZoom = `[window.devicePixelRatio, document.documentElement.style.zoom].join('|')`;
+      const appBefore = await run(appZoom);
+      const ctrlKey = (key, where = `document.activeElement || document.body`) => `(${where}).dispatchEvent(new KeyboardEvent('keydown', { key: ${js(key)}, ctrlKey: true, bubbles: true, cancelable: true }))`;
+      await run(ctrlKey('=', `document.querySelector('[data-design-zoom]')`)); await sleep(250);
+      await check(`${zoom} > ${fittedStill} && ${appZoom} === ${js(appBefore)}`, 'ctrl-plus-zooms-the-design-not-the-app');
+      await run(ctrlKey('0')); await sleep(250);
+      await check(`${zoom} === ${fittedStill} && ${appZoom} === ${js(appBefore)}`, 'ctrl-zero-fits-the-design-not-the-app');
+      await inDesign(ctrlKey('=', 'document.body')); await sleep(250);
+      await check(`${zoom} > ${fittedStill} && ${appZoom} === ${js(appBefore)}`, 'ctrl-plus-in-the-design-zooms-the-design');
+      await shot('design-ctrl-zoomed');
+      await inDesign(ctrlKey('-', 'document.body')); await inDesign(ctrlKey('-', 'document.body')); await sleep(250);
+      await check(`${zoom} < ${fittedStill}`, 'ctrl-minus-in-the-design-zooms-out');
       await click('[data-design-zoom]'); await sleep(200);
       await click('[data-design-highlight]'); await sleep(200);
       await check(`!document.querySelector('[data-design-targets]') && document.querySelector('[data-design-highlight]').getAttribute('aria-pressed') === 'false'`, 'highlight-turns-off');

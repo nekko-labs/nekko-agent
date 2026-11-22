@@ -5,7 +5,7 @@ import Foundation
 /// `navigate` carries the desktop view id ("settings"), `go` a desktop or screen
 /// target ("desktop:2", "desktop:-1", "screen:3"); the app decides what they do on a phone.
 public enum VoiceIntent: Equatable, Sendable {
-    case dictation(String), newSession, completeSession, navigate(String), go(String), erase, clear, send, status, ship
+    case dictation(String), newSession, archiveSession, navigate(String), go(String), erase, clear, send, status, ship
     case openChat(query: String, text: String)
     case pick(Int), yes, no, unknown(String)
 }
@@ -24,7 +24,7 @@ private func matches(_ re: NSRegularExpression, _ s: String) -> Bool { groups(re
 private let wake = rx(#"^ne[ck][ck]?o\b[\s,:.!?-]*"#)
 private let wakeOnly = rx(#"^ne[ck][ck]?o\b[\s,:.!?-]*$"#)
 private let newSession = rx(#"^(?:(?:create|start|open)(?: a)? new (?:session|chat|agent)|new (?:agent )?(?:session|chat|agent)|let's (?:make|start|create) a new (?:change|session|chat|task))$"#)
-private let completeSession = rx(#"^(?:complete|finish|archive) (?:this|the current) (?:session|chat|agent)$"#)
+private let archiveSession = rx(#"^(?:complete|finish|archive) (?:this|the current) (?:session|chat|agent)$"#)
 private let erase = rx(#"^(?:erase|scratch|cancel|undo) that$"#)
 private let clear = rx(#"^clear(?: everything| all| it)?$"#)
 private let send = rx(#"^send(?: it| that)?$"#)
@@ -60,7 +60,7 @@ public func parseVoiceIntent(_ text: String) -> VoiceIntent {
     let command = strip(trailingPunct, spoken).trimmingCharacters(in: .whitespacesAndNewlines)
 
     if matches(newSession, command) { return .newSession }
-    if matches(completeSession, command) { return .completeSession }
+    if matches(archiveSession, command) { return .archiveSession }
     if matches(erase, command) { return .erase }
     if matches(clear, command) { return .clear }
     if matches(send, command) { return .send }

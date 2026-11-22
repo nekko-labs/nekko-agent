@@ -28,21 +28,38 @@ struct URLSessionPhoneHTTP: PhoneHTTP {
         return URLSession(configuration: c, delegate: Boundary(), delegateQueue: nil)
     }
 
-    func send(_ request: PhoneRequest) async throws -> (status: Int, body: Data) {
+    func send(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], body: Data) {
         let req = try Self.urlRequest(request)
         let session = Self.session()
         defer { session.invalidateAndCancel() }
         let (bytes, response) = try await session.bytes(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        // A failed answer is read only as far as its error code.
+        let cap = (200..<300).contains(status) ? 2_000_000 : PhoneProviders.errorBodyBytes
         var data = Data()
         for try await byte in bytes {
             try Task.checkCancellation()
-            guard data.count < 2_000_000 else { throw URLError(.dataLengthExceedsMaximum) }
+            guard data.count < cap else {
+                if cap == 2_000_000 { throw URLError(.dataLengthExceedsMaximum) }
+                break
+            }
             data.append(byte)
         }
-        return ((response as? HTTPURLResponse)?.statusCode ?? 0, data)
+        return (status, Self.headers(response), data)
     }
 
-    func lines(_ request: PhoneRequest) async throws -> (status: Int, lines: AsyncThrowingStream<String, Error>) {
+    /// The answer's headers, names lowercased.
+    static func headers(_ response: URLResponse) -> [String: String] {
+        guard let http = response as? HTTPURLResponse else { return [:] }
+        var out: [String: String] = [:]
+        for (k, v) in http.allHeaderFields {
+            guard let k = k as? String, let v = v as? String else { continue }
+            out[k.lowercased()] = v
+        }
+        return out
+    }
+
+    func lines(_ request: PhoneRequest) async throws -> (status: Int, headers: [String: String], lines: AsyncThrowingStream<String, Error>) {
         let req = try Self.urlRequest(request)
         let session = Self.session()
         let bytes: URLSession.AsyncBytes
@@ -50,6 +67,7 @@ struct URLSessionPhoneHTTP: PhoneHTTP {
         do { (bytes, response) = try await session.bytes(for: req) }
         catch { session.invalidateAndCancel(); throw error }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let headers = Self.headers(response)
         if (200..<300).contains(status) && response.mimeType?.lowercased() != "text/event-stream" {
             session.invalidateAndCancel()
             throw URLError(.cannotParseResponse)
@@ -88,7 +106,7 @@ struct URLSessionPhoneHTTP: PhoneHTTP {
             }
         }
         continuation.onTermination = { _ in task.cancel(); session.invalidateAndCancel() }
-        return (status, stream)
+        return (status, headers, stream)
     }
 
     static func urlRequest(_ r: PhoneRequest) throws -> URLRequest {

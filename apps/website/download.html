@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en" data-theme="white">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Download Nekko Agent</title>
+    <meta
+      name="description"
+      content="Download Nekko Agent for Windows, macOS or Linux. Free, open source, local-first AI agent by NekkoLabs."
+    />
+    <link rel="canonical" href="https://nekkoagent.com/download" />
+    <meta name="robots" content="noindex,follow" />
+    <meta name="theme-color" content="#fbf6f8" />
+    <script>(function(){var t=null;try{t=localStorage.getItem('nekko-theme');}catch(e){}if(t!=='white'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'white';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='white'?'#fbf6f8':'#0c0c11';})();</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
+    <link rel="stylesheet" href="styles.css?v=18" />
+    <link rel="stylesheet" href="fonts.css?v=1" />
+    <style>
+      /* A tiny landing meant to disappear in a blink: we fire analytics, pick
+         the right asset and redirect. Only visible if the redirect fails or
+         the visitor is on a phone. */
+      .dl-redirect {
+        min-height: 100vh;
+        display: flex; align-items: center; justify-content: center;
+        padding: 40px 20px;
+      }
+      .dl-redirect-inner { text-align: center; max-width: 520px; }
+      .dl-redirect h1 { font-size: 28px; margin: 0 0 12px; }
+      .dl-redirect p { color: var(--ink); opacity: 0.8; margin: 8px 0; line-height: 1.55; }
+      .dl-redirect .dl-target {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13px; opacity: 0.7; word-break: break-all;
+      }
+      .dl-redirect .dl-actions { margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    </style>
+    <script defer src="analytics.js?v=2"></script>
+  </head>
+  <body>
+    <main class="dl-redirect">
+      <div class="dl-redirect-inner">
+        <h1 id="dlHeading">Starting your download...</h1>
+        <p id="dlSub">Picking the right build for your machine.</p>
+        <p class="dl-target" id="dlTarget"></p>
+        <div class="dl-actions">
+          <a class="btn btn-primary" id="dlFallback" href="https://github.com/nekko-labs/nekko-agent/releases/latest" data-cta="direct-download-fallback">All downloads</a>
+          <a class="btn btn-ghost" href="/#download" data-cta="direct-download-pick-manually">Pick manually</a>
+        </div>
+        <p class="micro" style="margin-top: 20px; opacity: 0.6;">On a phone? Install Nekko Agent on your computer first, then pair this phone from the app.</p>
+      </div>
+    </main>
+
+    <script>
+      // nekkoagent.com/download: short, shareable URL that detects the visitor's
+      // OS, reports the hit to PostHog (via analytics.js on this page), and
+      // redirects to the correct installer asset. Falls through to the GitHub
+      // Releases page if detection or the release manifest comes up empty.
+      (function () {
+        var RELEASES = 'https://github.com/nekko-labs/nekko-agent/releases/latest';
+        // Mirrors BUILDS in site.js. Keep the two in step when adding a platform.
+        var BUILDS = [
+          { os: 'win', fmt: '.exe', arch: 'x64', match: /-x64\.exe$/i, pick: true },
+          { os: 'mac', fmt: '.dmg', arch: 'arm64', match: /-arm64\.dmg$/i, pick: true },
+          { os: 'mac', fmt: '.dmg', arch: 'x64', match: /-x64\.dmg$/i, pick: true },
+          { os: 'linux', fmt: '.AppImage', arch: 'x64', match: /\.AppImage$/i, pick: true },
+        ];
+
+        var ua = navigator.userAgent;
+        var uaPlat = (navigator.userAgentData && navigator.userAgentData.platform) || '';
+        var touchMac = /Mac/.test(ua) && navigator.maxTouchPoints > 1; // iPadOS lies
+        var mobile = /Android/i.test(ua) || /iPhone|iPad|iPod/i.test(ua) || touchMac;
+        var os = null;
+        if (!mobile) {
+          if (/Win/i.test(uaPlat) || /Windows/i.test(ua)) os = 'win';
+          else if (/mac/i.test(uaPlat) || /Mac OS X/i.test(ua)) os = 'mac';
+          else if (/linux/i.test(uaPlat) || /Linux|X11|CrOS/i.test(ua)) os = 'linux';
+        }
+        var arch = os === 'mac' ? 'arm64' : 'x64';
+        // Mac arch refinement: WebGL renderer usually tells us Apple Silicon vs Intel.
+        if (os === 'mac') {
+          try {
+            var gl = document.createElement('canvas').getContext('webgl');
+            var dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
+            var r = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+            if (/Intel|AMD|Radeon/i.test(r)) arch = 'x64';
+            else if (/Apple\s?(M\d|GPU)/i.test(r)) arch = 'arm64';
+          } catch (_) {}
+        }
+
+        function pickBuild() {
+          if (!os) return null;
+          var forOs = BUILDS.filter(function (b) { return b.pick && b.os === os; });
+          return forOs.find(function (b) { return b.arch === arch; }) || forOs[0] || null;
+        }
+
+        function track(target) {
+          // analytics.js is deferred, so PostHog may not be ready yet. Queue the
+          // event until it is; drop it if the loader hasn't arrived in 1200ms so
+          // the redirect still lands quickly.
+          var props = {
+            os: os || 'unknown',
+            arch: arch,
+            fmt: target && target.fmt ? target.fmt : null,
+            mobile: !!mobile,
+            url: target && target.url ? target.url : RELEASES,
+            source: 'direct-download-url',
+          };
+          return new Promise(function (resolve) {
+            var done = false;
+            function fire() {
+              if (done) return; done = true;
+              try {
+                if (window.posthog && typeof window.posthog.capture === 'function') {
+                  window.posthog.capture('download_start', props);
+                }
+              } catch (_) {}
+              resolve();
+            }
+            var waited = 0;
+            var tick = setInterval(function () {
+              waited += 50;
+              if (window.posthog && typeof window.posthog.capture === 'function') {
+                clearInterval(tick); fire();
+              } else if (waited >= 1200) {
+                clearInterval(tick); fire();
+              }
+            }, 50);
+          });
+        }
+
+        var headingEl = document.getElementById('dlHeading');
+        var subEl = document.getElementById('dlSub');
+        var targetEl = document.getElementById('dlTarget');
+        var fallbackEl = document.getElementById('dlFallback');
+
+        var osLabel = { win: 'Windows', mac: 'macOS', linux: 'Linux' };
+        var build = pickBuild();
+
+        // Mobile or unknown desktop: don't redirect, show the manual picker.
+        if (!build) {
+          headingEl.textContent = mobile ? 'Download Nekko Agent on your computer' : 'Download Nekko Agent';
+          subEl.textContent = mobile
+            ? "Nekko Agent runs on Windows, macOS and Linux. Install it on your computer, then pair this phone from the app."
+            : "We couldn't detect your platform. Pick a build below.";
+          track(null);
+          return;
+        }
+
+        var label = osLabel[build.os] + (build.arch === 'arm64' ? ' (Apple Silicon)' : build.os === 'mac' ? ' (Intel)' : '');
+        subEl.textContent = 'Downloading the ' + label + ' installer.';
+
+        fetch('/release.json', { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; })
+          .then(function (rel) {
+            var assets = (rel && rel.assets) || null;
+            var url = RELEASES;
+            if (assets) {
+              var hit = Object.keys(assets).find(function (name) { return build.match.test(name); });
+              if (hit) url = assets[hit];
+            }
+            targetEl.textContent = url;
+            fallbackEl.href = url;
+            fallbackEl.textContent = 'Click here if your download did not start';
+            return track({ fmt: build.fmt, url: url }).then(function () {
+              // Replace so the back button returns to wherever they came from,
+              // not to this intermediate page.
+              window.location.replace(url);
+            });
+          });
+      })();
+    </script>
+  </body>
+</html>

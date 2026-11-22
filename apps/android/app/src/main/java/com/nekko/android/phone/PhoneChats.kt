@@ -25,6 +25,9 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         val usage: com.nekko.protocol.PhoneUsageLedger = com.nekko.protocol.PhoneUsageLedger(),
         /** How this phone's models talk (Customize, #2426); from their next reply. */
         val tone: com.nekko.protocol.PhoneTone = com.nekko.protocol.PhoneTone.STANDARD,
+        /** OpenRouter's browser sign-in, while it runs (#2852). */
+        val signIn: SignIn? = null,
+        val signInError: String? = null,
     )
     private val mutable = MutableStateFlow(State())
     val state = mutable.asStateFlow()
@@ -65,9 +68,81 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     private suspend fun saveChats() = secrets.set(chatsSlot, json.encodeToString(ListSerializer(PhoneChat.serializer()), mutable.value.chats))
     private suspend fun saveUsage() = secrets.set(usageSlot, mutable.value.usage.json().toString())
 
-    suspend fun add(kind: String, label: String, url: String?, key: String?, workspace: String? = null): String = lock.withLock {
-        ready()
+    /**
+     * Keep a provider only once it works (#2852, the iPhone's #2853/#2855): its models load, and
+     * where that list answers anyone (OpenRouter, Ollama Cloud), a request a bad key is refused on.
+     * A wrong key is turned down here, with the provider's reason; nothing is saved.
+     */
+    suspend fun connect(kind: String, label: String, url: String?, key: String?, workspace: String? = null): String {
         val p = PhoneProviders.make(id(), kind, label, url, key, workspace)
+        val models = verifyKey(p, key)
+        return keep(p, key).also { id -> synchronized(gate) { mutable.update { it.copy(models = it.models + (id to models)) } } }
+    }
+
+    /** Keep a provider as given, unchecked (tests and restores). */
+    suspend fun add(kind: String, label: String, url: String?, key: String?, workspace: String? = null): String =
+        keep(PhoneProviders.make(id(), kind, label, url, key, workspace), key)
+
+    private suspend fun verifyKey(p: PhoneProvider, key: String?): List<PhoneModel> {
+        val models = PhoneProviders.modelsRequest(p, key)?.let { PhoneProviders.models(http.send(it), p.kind) } ?: PhoneProviders.kind(p.kind)!!.catalog
+        require(models.isNotEmpty()) { "The provider listed no models." }
+        // OpenAI lists models for a key with no credit: its probe is a tiny chat with the default model.
+        val probe = PhoneProviders.keyCheckRequest(p, key, PhoneProviders.defaultModel(models)?.id) ?: return models
+        try {
+            http.send(probe)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val m = e.message.orEmpty()
+            // OpenAI's probe is a real chat, so any refusal fails it.
+            if (p.kind == "openai" && e is ProviderRefusal) throw IllegalArgumentException(m)
+            // Otherwise only a refusal of the key counts; an unknown model (Ollama's probe) means the key passed.
+            if ("(401)" in m || "(403)" in m) throw IllegalArgumentException(m)
+            if (m.startsWith("Could not reach")) throw IllegalArgumentException("Could not reach the provider to check the key. Try again.")
+        }
+        return models
+    }
+
+    /** OpenRouter's sign-in answers with a code; swap it for the API key it stands for. */
+    suspend fun openRouterKey(code: String, verifier: String): String {
+        val body = try { http.send(PhoneProviders.openRouterKeyRequest(code, verifier)) } catch (e: CancellationException) { throw e } catch (_: Exception) { throw IllegalArgumentException(PhoneProviders.SIGN_IN_FAILED) }
+        return PhoneProviders.openRouterKey(body) ?: throw IllegalArgumentException(PhoneProviders.SIGN_IN_FAILED)
+    }
+
+    /** The sign-in under way: its verifier waits here until the browser comes back with a code. */
+    private var signInVerifier: String? = null
+
+    /** Start OpenRouter's sign-in: the page to open in the browser. */
+    fun startOpenRouterSignIn(): String {
+        val v = PhoneProviders.pkceVerifier()
+        synchronized(gate) { signInVerifier = v; mutable.update { it.copy(signIn = SignIn.WAITING, signInError = null) } }
+        return PhoneProviders.openRouterAuthorizeUrl(PhoneProviders.pkceChallenge(v))
+    }
+
+    /** The browser came back to `nekko-agent://openrouter-key`: swap the code, check the key, keep the provider. */
+    suspend fun finishOpenRouterSignIn(callback: String) {
+        val verifier = synchronized(gate) { signInVerifier.also { signInVerifier = null } } ?: return
+        val code = PhoneProviders.openRouterCode(callback)
+        synchronized(gate) { mutable.update { it.copy(signIn = SignIn.ADDING, signInError = null) } }
+        try {
+            if (code == null) throw IllegalArgumentException(PhoneProviders.SIGN_IN_FAILED)
+            val kind = PhoneProviders.kind("openrouter")!!
+            connect(kind.id, kind.label, null, openRouterKey(code, verifier))
+            synchronized(gate) { mutable.update { it.copy(signIn = SignIn.DONE) } }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            synchronized(gate) { mutable.update { it.copy(signIn = null, signInError = e.message ?: PhoneProviders.SIGN_IN_FAILED) } }
+        }
+    }
+
+    /** The person left the sign-in (Cancel, or back without approving). */
+    fun clearSignIn() = synchronized(gate) { signInVerifier = null; mutable.update { it.copy(signIn = null, signInError = null) } }
+
+    enum class SignIn { WAITING, ADDING, DONE }
+
+    private suspend fun keep(p: PhoneProvider, key: String?): String = lock.withLock {
+        ready()
         secrets.set(keySlot(p.id), key?.trim()?.ifEmpty { null })
         synchronized(gate) { mutable.update { it.copy(providers = it.providers + p) } }
         saveProviders(); p.id
@@ -208,8 +283,14 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         tasks[chatId]?.cancel()
         updateLast(chatId, null) { if (it.error == STREAMING) it.copy(error = "Stopped.") else it }
     }
-    fun send(chatId: String, text: String, retry: Boolean = false) = synchronized(gate) {
-        if (!mutable.value.ready || tasks.containsKey(chatId) || (!retry && text.isBlank())) return@synchronized
+    /** Whether a model takes photos. Unknown counts as yes: a model that can't says so in its reply. */
+    fun acceptsImages(providerId: String, modelId: String): Boolean =
+        mutable.value.models[providerId]?.firstOrNull { it.id == modelId }?.acceptsImages ?: true
+
+    /** Send text, photos (image data URLs) or both; [retry] asks again for the last reply. */
+    fun send(chatId: String, text: String, retry: Boolean = false, images: List<String> = emptyList()) = synchronized(gate) {
+        val photos = images.filter { PhoneProviders.imagePart(it) != null }.take(PhoneProviders.MAX_IMAGES)
+        if (!mutable.value.ready || tasks.containsKey(chatId) || (!retry && text.isBlank() && photos.isEmpty())) return@synchronized
         val attempt = id()
         lateinit var task: Job
         task = scope.launch(start = CoroutineStart.LAZY) {
@@ -229,10 +310,10 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                         val messages = if (retry) {
                             if (old.messages.lastOrNull()?.role != "assistant" || old.messages.dropLast(1).lastOrNull()?.role != "user") return@prepare null
                             old.messages.dropLast(1)
-                        } else old.messages + PhoneMessage(id(), "user", text.trim(), now())
+                        } else old.messages + PhoneMessage(id(), "user", text.trim(), now(), images = photos.ifEmpty { null })
                         val req = PhoneProviders.chatRequest(p, key, old.modelId, messages, system = mutable.value.tone.systemPrompt)
                         ranOn = Triple(p.id, p.label, old.modelId)
-                        val next = old.copy(title = if (old.messages.isEmpty()) text.trim().lineSequence().first().take(60) else old.title, updatedAt = now(), messages = messages + PhoneMessage(attempt, "assistant", "", now(), STREAMING))
+                        val next = old.copy(title = if (old.messages.isEmpty()) text.trim().lineSequence().first().take(60).ifEmpty { if (photos.isEmpty()) old.title else "Photo" } else old.title, updatedAt = now(), messages = messages + PhoneMessage(attempt, "assistant", "", now(), STREAMING))
                         mutable.update { s -> s.copy(chats = s.chats.map { if (it.id == chatId) next else it }, running = s.running + chatId, errors = s.errors - chatId) }
                         started = true
                         req
@@ -259,9 +340,11 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                 }
             } catch (e: CancellationException) {
                 synchronized(gate) { if (started) updateLast(chatId, attempt) { it.copy(error = "Stopped.") } }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                // A refusal is already in our own words (no credit, rate limited and so on).
+                val why = if (e is ProviderRefusal) e.message.orEmpty() else "Reply failed. Check the provider and connection, then retry."
                 synchronized(gate) {
-                    if (started) updateLast(chatId, attempt) { it.copy(error = if (task.isActive) "Reply failed. Check the provider and connection, then retry." else "Stopped.") }
+                    if (started) updateLast(chatId, attempt) { it.copy(error = if (task.isActive) why else "Stopped.") }
                 }
             } finally {
                 withContext(NonCancellable) {

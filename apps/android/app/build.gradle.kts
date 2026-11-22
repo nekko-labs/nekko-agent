@@ -24,7 +24,7 @@ android {
         // (scripts/nightly-version.mjs, docs/decisions/0055); a local build
         // keeps these defaults.
         versionCode = providers.gradleProperty("nekkoVersionCode").orElse("1").get().toInt()
-        versionName = providers.gradleProperty("nekkoVersionName").orElse("0.9.8").get()
+        versionName = providers.gradleProperty("nekkoVersionName").orElse("0.10.1004").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -70,6 +70,7 @@ dependencies {
     implementation(project(":protocol"))
     // OkHttpTransport's constructor exposes OkHttpClient, so the app needs it on its compile classpath.
     implementation(libs.okhttp)
+    implementation(libs.androidx.car.app)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

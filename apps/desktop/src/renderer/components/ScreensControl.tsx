@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import type { WallLayoutMode } from '@nekko-agent/shared';
 import { displaysBridge, prefersReducedMotion, rememberOpenerMode, useDisplays, type DesktopInfo, type DisplayInfo, type DisplayPlacement, type DisplaysState, type SpacesMode } from '../displays.js';
 import { useStore } from '../store.js';
+import { SettingsSection } from './SettingsSection.js';
 import './screenCardControls.css';
 
 /** Two screens side by side: the toolbar button's glyph. */
@@ -86,9 +87,9 @@ function ScreenTile({ display, scale, busy, onToggle }: { display: DisplayInfo; 
  * The Dynamic toolbar's Screens button: hover (or click, or focus) opens a
  * dropdown like the grid-size picker, with every connected screen in a row.
  * Turning a screen on opens a full Nekko window there that swipes in from the
- * left; turning it off shrinks it into the right edge. Below a divider, the
- * view options choose where new agent windows open. A window switched on
- * opens in `mode`, the opener's Focused or Dynamic.
+ * left; turning it off shrinks it into the right edge. Where new agent
+ * windows open is under Settings (`OpenNewAgentsSettings`). A window switched
+ * on opens in `mode`, the opener's Focused or Dynamic.
  */
 export function ScreensControl({ mode = 'grid', embedded = false }: { mode?: WallLayoutMode; embedded?: boolean }) {
   const [state, setState] = useDisplays();
@@ -131,10 +132,6 @@ export function ScreensControl({ mode = 'grid', embedded = false }: { mode?: Wal
         throw e;
       } finally { setBusy(false); }
     }}
-    onPlacement={async (p) => {
-      try { setState(await displaysBridge!.setPlacement(p)); }
-      catch (e) { useStore.getState().pushToast('error', `Could not save the view option: ${(e as Error).message}`); }
-    }}
     onToggleDesktop={async (d, spacesMode) => {
       setBusy(true);
       try {
@@ -143,15 +140,62 @@ export function ScreensControl({ mode = 'grid', embedded = false }: { mode?: Wal
         setState(await displaysBridge!.toggleDesktop(d.id, !d.enabled));
       } catch (e) { useStore.getState().pushToast('error', `Could not change desktops: ${(e as Error).message}`); }
       finally { setBusy(false); }
-    }}
-    onSpacesMode={async (m) => {
-      try { setState(await displaysBridge!.setSpacesMode(m)); }
-      catch (e) { useStore.getState().pushToast('error', `Could not save the desktop option: ${(e as Error).message}`); }
     }} />;
 }
 
+/**
+ * Settings > Customize > Open new agents: where new agent windows open across
+ * screens and, once a desktop mode is chosen, how another desktop is reached.
+ */
+export function OpenNewAgentsSettings() {
+  const [state, setState] = useDisplays();
+  // Only the desktop shell has screens to spread over.
+  if (!displaysBridge || !state) return null;
+  return <SettingsSection id="open-new-agents" title="Open new agents" help={state.displays.length < 2 && !state.spaces ? 'For when you connect more screens.' : undefined}>
+    <OpenNewAgentsOptions state={state}
+      onPlacement={async (p) => {
+        try { setState(await displaysBridge!.setPlacement(p)); }
+        catch (e) { useStore.getState().pushToast('error', `Could not save the view option: ${(e as Error).message}`); }
+      }}
+      onSpacesMode={async (m) => {
+        try { setState(await displaysBridge!.setSpacesMode(m)); }
+        catch (e) { useStore.getState().pushToast('error', `Could not save the desktop option: ${(e as Error).message}`); }
+      }} />
+  </SettingsSection>;
+}
+
+/** The choices' markup, separate so it renders without the desktop bridge (tests, fixtures). */
+export function OpenNewAgentsOptions({ state, onPlacement, onSpacesMode }: {
+  state: DisplaysState;
+  onPlacement: (placement: DisplayPlacement) => void;
+  onSpacesMode: (mode: Exclude<SpacesMode, 'ask'>) => void;
+}) {
+  const spaces = state.spaces;
+  // Once the desktop mode is chosen it is a second group of options.
+  const spacesChosen = !!spaces && spaces.mode !== 'ask';
+  return <>
+    {/* Two separate choices: each gets a group label, and a group gap between them. */}
+    {spacesChosen && <p className="quiet-group-label screens-group-label mt-(--q-group)">Across screens</p>}
+    <div role="radiogroup" aria-label="Where new agent windows open" className="screens-options mt-(--q-inline)">
+      {PLACEMENT_OPTIONS.map((o) => <label key={o.key} className="screens-option">
+        <input type="radio" name="screens-placement" checked={state.placement === o.key} onChange={() => onPlacement(o.key)} />
+        <span><strong>{o.label}</strong><span>{o.hint}</span></span>
+      </label>)}
+    </div>
+    {spacesChosen && <div className="screens-group" data-spaces-group>
+      <p className="quiet-group-label screens-group-label">On another desktop</p>
+      <div role="radiogroup" aria-label="How a desktop is reached" className="screens-options">
+        {SPACES_OPTIONS.map((o) => <label key={o.key} className="screens-option">
+          <input type="radio" name="screens-spaces-mode" checked={spaces.mode === o.key} onChange={() => onSpacesMode(o.key)} />
+          <span><strong>{o.label}</strong><span>{o.hint}</span></span>
+        </label>)}
+      </div>
+    </div>}
+  </>;
+}
+
 /** The control's markup, separate so it renders without the desktop bridge (tests, fixtures). */
-export function ScreensMenu({ embedded = false, state, open, busy = false, rootRef, onHover, onToggleOpen, onToggle, onUseMultiple, onPlacement, onToggleDesktop, onSpacesMode, asking: initialAsking = null }: {
+export function ScreensMenu({ embedded = false, state, open, busy = false, rootRef, onHover, onToggleOpen, onToggle, onUseMultiple, onToggleDesktop, asking: initialAsking = null }: {
   embedded?: boolean;
   state: DisplaysState;
   open: boolean;
@@ -160,11 +204,9 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
   onHover?: (over: boolean) => void;
   onToggleOpen?: () => void;
   onToggle: (display: DisplayInfo) => void;
-  onPlacement: (placement: DisplayPlacement) => void;
   onUseMultiple?: (enabled: boolean) => Promise<void>;
   /** `mode`: chosen in the permission explainer just now, saved before the toggle. */
   onToggleDesktop?: (desktop: DesktopInfo, mode?: Exclude<SpacesMode, 'ask'>) => void;
-  onSpacesMode?: (mode: Exclude<SpacesMode, 'ask'>) => void;
   /** The desktop whose explainer is open (fixtures and tests start with one). */
   asking?: string | null;
 }) {
@@ -176,8 +218,6 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
   });
   const expanded = useMultiple || state.displays.some(d => !d.main && d.enabled);
   const spaces = state.spaces;
-  // Once the desktop mode is chosen it is a second group of options under "Open new agents".
-  const spacesChosen = !!spaces && spaces.mode !== 'ask';
   const mainDisplay = state.displays.find((d) => d.main) ?? state.displays[0];
   const deskW = 64, deskH = Math.max(36, Math.round(deskW * (mainDisplay ? mainDisplay.bounds.height / mainDisplay.bounds.width : 0.625)));
   const askingDesktop = spaces?.desktops.find((d) => d.id === asking);
@@ -237,28 +277,6 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
         </div>}
         {spaces.mode === 'switch' && !spaces.access && <p className="screens-picker__note">Accessibility is off for Nekko in System Settings, so desktop windows open when you get there.</p>}
       </>}
-      <div className="screens-reveal" data-expanded={expanded || !!spaces} inert={!expanded && !spaces} aria-hidden={!expanded && !spaces}><div className="screens-reveal__content">
-      <hr className="screens-picker__divider" />
-      <p className="screens-picker__title">Open new agents</p>
-      {embedded && state.displays.length < 2 && !spaces && <p className="screens-picker__note screens-placement-note">For when you connect more screens.</p>}
-      {/* Two separate choices: each gets a group label, and a group gap between them. */}
-      {spacesChosen && <p className="quiet-group-label screens-group-label">Across screens</p>}
-      <div role="radiogroup" aria-label="Where new agent windows open" className="screens-options">
-        {PLACEMENT_OPTIONS.map((o) => <label key={o.key} className="screens-option">
-          <input type="radio" name="screens-placement" checked={state.placement === o.key} onChange={() => onPlacement(o.key)} />
-          <span><strong>{o.label}</strong><span>{o.hint}</span></span>
-        </label>)}
-      </div>
-      </div></div>
-      {spacesChosen && <div className="screens-group" data-spaces-group>
-        <p className="quiet-group-label screens-group-label">On another desktop</p>
-        <div role="radiogroup" aria-label="How a desktop is reached" className="screens-options">
-          {SPACES_OPTIONS.map((o) => <label key={o.key} className="screens-option">
-            <input type="radio" name="screens-spaces-mode" checked={spaces.mode === o.key} onChange={() => onSpacesMode?.(o.key)} />
-            <span><strong>{o.label}</strong><span>{o.hint}</span></span>
-          </label>)}
-        </div>
-      </div>}
     </div>}
   </div>;
 }

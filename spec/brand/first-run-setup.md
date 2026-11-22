@@ -6,7 +6,7 @@ split-from: SPEC.md (2026-10-22)
 
 # First-run setup (planned onboarding wizard)
 
-The first launch opens a calm, full-screen setup wizard over the app; every step can be skipped (a per-step **Skip**, plus **Skip setup**), and it never auto-shows again once dismissed (Settings can replay it). It opens with **Welcome** and four questions about the person, then the setup steps:
+The first launch opens a calm, full-screen setup wizard over the app; every step can be skipped (a per-step **Skip**, plus **Skip setup**), and it never auto-shows again once dismissed (Settings can replay it). It opens itself only when setup was never finished and no provider is saved; the built-in engine's own entry (`nekko-engine`, which nekkod saves at every launch) does not count, so a fresh install always gets it. Before 2026-11-20 that entry did count, and fresh installs skipped setup entirely. It opens with **Welcome** and four questions about the person, then the setup steps:
 
 - **Welcome.** Nekko hops in, waves and says "Hi!" between pixel sparkles: "Hi, I'm Nekko." The drawing is the newest pixel cat (the peeking cat's face, no mouth) in the theme's own surface and ink. Reduced motion shows the last frame. The button reads **Let's go**.
 - **What should I call you?** One field. Saved as `userName`; the chat welcome becomes "What should we work on, <name>?" and the Done step says "Nice to meet you, <name>!". Enter moves on.
@@ -35,6 +35,6 @@ Verification: focused mode/store/markup/contrast tests, desktop typecheck and pr
 
 ## Answers stay editable
 
-Settings → General → **About you** edits the name and the email (a changed address joins the update list the same way; clearing it removes it from this computer). **Replay setup** reopens the whole wizard. While setup is open, the Agents board's "Agents now live in zones" intro waits until it closes instead of covering it, and the board reloads its Monitors panel choice when setup closes.
+Settings → Profile → **About you** edits the name and the email (a changed address joins the update list the same way; clearing it removes it from this computer). **Replay setup** reopens the whole wizard. While setup is open, the Agents board's "Agents now live in zones" intro waits until it closes instead of covering it, and the board reloads its Monitors panel choice when setup closes.
 
 Verification (2026-11-07): renderer tests for the answers, the step order and the Minimal choices; nekkod tests for the signup body and route; Nekko Cloud tests for the app-list confirmation email; the real wizard walked step by step in a hidden, network-blocked Electron capture (`onboarding-evidence-sandbox.cjs`), which checked the bad-email stop, the saved answers, the Monitors write and the single theme row. The welcome motion was recorded in headless Chromium. Not verified: a real send to the hosted Nekko Cloud, and Windows/Linux packaged builds.

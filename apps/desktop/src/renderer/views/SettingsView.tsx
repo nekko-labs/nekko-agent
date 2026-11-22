@@ -1,18 +1,20 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AboutYouSection } from './AboutYouSettings.js';
 import { allowModeChange } from '../components/YoloWarning.js';
-import { CHAT_MODE_ICON } from '../gentleface-icons.js';
-import { CHAT_MODE_LABEL, AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
+import { CHAT_MODE_ICON, GfServerIcon, SettingsIcon } from '../gentleface-icons.js';
+import { CHAT_MODE_LABEL, AUTO_ARCHIVE_CHOICES, AUTO_ARCHIVE_DEFAULT_DAYS, autoArchiveDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
+import { PromptProfilesSettings } from '../components/PromptProfilesSettings.js';
 import { QuietTabs, StatusDot } from '../components/primitives/index.js';
 import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
+import { openWhatsNew } from '../whatsNew.js';
 import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { CloudIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, UserIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -22,9 +24,9 @@ import { OrganizationSettings } from '../components/cloud/OrganizationSettings.j
 import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
 import { UsageReportsSection } from '../components/UsageReports.js';
 import { GitHubStarSupport } from '../components/GitHubStarSupport.js';
-import { EXPERIMENTAL_FLAGS, saveSettings } from '../settingsIndex.js';
-import { zoomOf } from '../textScale.js';
+import { EXPERIMENTAL_FLAGS, saveSettings, SETTINGS_TARGET_EVENT, takeSettingsTarget } from '../settingsIndex.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
+import { PictureModelSettings } from '../components/PictureModelSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
 import { hasAppChrome } from '../chrome.js';
@@ -32,6 +34,7 @@ import { ServiceLoadState } from '../components/ServiceLoadState.js';
 import { ServiceManagement } from '../components/ServiceManagement.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
+import { AgentsBreadcrumb } from '../components/AgentsBreadcrumb.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { AnimationsSection, DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
@@ -41,7 +44,10 @@ import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEver
 import { StyleSection } from './StyleSection.js';
 import { openCustomize } from '../components/CustomizeExperience.js';
 import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
+import { OpenNewAgentsSettings } from '../components/ScreensControl.js';
 import { useExpertMode, useShown } from '../simpleMode.js';
+import { forwardWheelToContent } from '../railWheel.js';
+import { AgentServerSection } from '../components/server/AgentServerSection.js';
 import { ChoiceList, SettingRow, SettingsLabel, SettingsSection } from '../components/SettingsSection.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
@@ -59,26 +65,48 @@ const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
   { value: 'yolo', label: CHAT_MODE_LABEL.yolo, desc: 'Run everything without confirming (deny rules still block).' },
 ];
 
-/** Help out the team sits first; General and Phone pairing remain adjacent. */
+/**
+ * You first (Profile), then helping the team, then your Nekko Cloud account.
+ * The rest sit under two rail labels: how Nekko Agent works, then privacy and
+ * the devices it reaches. Each group is its own page.
+ */
 export const SETTINGS_GROUPS = [
+  { id: 'profile', label: 'Profile', icon: UserIcon },
   { id: 'support', label: 'Help out the Nekko Team', icon: WandIcon },
-  { id: 'general', label: 'General', icon: SunIcon },
-  { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
-  { id: 'computers', label: 'Computers', icon: ComputerIcon },
-  { id: 'customize', label: 'Customize', icon: SlidersIcon },
-  { id: 'agents', label: 'Agents', icon: RobotIcon },
-  { id: 'safety', label: 'Safety', icon: ShieldIcon },
-  { id: 'connections', label: 'Connections', icon: GlobeIcon },
-  { id: 'tools', label: 'Tools', icon: WrenchIcon },
-  { id: 'system', label: 'System', icon: GearIcon },
+  { id: 'cloud', label: 'Nekko Cloud', icon: CloudIcon },
+  { id: 'general', label: 'General', icon: SunIcon, section: 'Nekko Agent' },
+  { id: 'customize', label: 'Appearance', icon: SlidersIcon, section: 'Nekko Agent' },
+  { id: 'agents', label: 'Agents', icon: RobotIcon, section: 'Nekko Agent' },
+  { id: 'tools', label: 'Tools', icon: WrenchIcon, section: 'Nekko Agent' },
+  { id: 'safety', label: 'Safety', icon: ShieldIcon, section: 'Privacy and devices' },
+  { id: 'connections', label: 'Connections', icon: GlobeIcon, section: 'Privacy and devices' },
+  { id: 'phone', label: 'Phone and computers', icon: PhoneIcon, section: 'Privacy and devices' },
+  { id: 'system', label: 'System', icon: SettingsIcon, section: 'Privacy and devices' },
 ] as const;
-type SettingsGroupId = (typeof SETTINGS_GROUPS)[number]['id'];
+/** The rail label a group sits under, if any (the first three have none). */
+export const groupSection = (g: (typeof SETTINGS_GROUPS)[number]): string | undefined => ('section' in g ? g.section : undefined);
+/**
+ * Server sits in the rail's top block, after Connectors, and leads the page:
+ * the agent server is how other programs reach this app, so it is found where
+ * the app's own connections are, not on the Models page it used to share.
+ */
+export const SERVER_GROUP = { id: 'server', label: 'Server', icon: GfServerIcon } as const;
+type SettingsGroupId = (typeof SETTINGS_GROUPS)[number]['id'] | typeof SERVER_GROUP.id;
+const GROUP_IDS = new Set<string>([SERVER_GROUP.id, ...SETTINGS_GROUPS.map((g) => g.id)]);
 
-function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.ReactNode }) {
-  const label = SETTINGS_GROUPS.find((g) => g.id === id)!.label;
+/** Which group is on screen; `all` while searching, so a search reaches every page. */
+const PageContext = createContext<{ active: SettingsGroupId; all: boolean }>({ active: SETTINGS_GROUPS[0].id, all: true });
+
+/** The page you were on, kept for the next time Settings opens. */
+let lastPage: SettingsGroupId = SETTINGS_GROUPS[0].id;
+
+function SettingsGroup({ id, label, children }: { id: SettingsGroupId; label?: string; children: React.ReactNode }) {
+  const page = useContext(PageContext);
+  const title = label ?? [SERVER_GROUP, ...SETTINGS_GROUPS].find((g) => g.id === id)!.label;
+  // Every group stays mounted, only hidden: deep links, anchors and search find it by id.
   return (
-    <div id={`settings-${id}`} data-settings-group={id} className="settings-group" aria-labelledby={`settings-${id}-title`} role="region">
-      <h2 id={`settings-${id}-title`} className="settings-group-title">{label}</h2>
+    <div id={`settings-${id}`} data-settings-group={id} className="settings-group" aria-labelledby={`settings-${id}-title`} role="region" hidden={!page.all && page.active !== id}>
+      <h2 id={`settings-${id}-title`} className="settings-group-title">{title}</h2>
       {children}
     </div>
   );
@@ -86,7 +114,7 @@ function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.
 
 /**
  * Developer settings in Simple mode: folded behind one row rather than gone,
- * so they stay one click away (Settings > Customize > Simple mode, Advanced settings).
+ * so they stay one click away (Settings > Appearance > Simple mode, Advanced settings).
  */
 function AdvancedFold({ children }: { children: React.ReactNode }) {
   const shown = useShown('set-tools');
@@ -100,20 +128,14 @@ function AdvancedFold({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The group whose top has passed the top of the scroller (the last one once scrolled to the bottom). */
+/** While searching (every group shown): the group whose top has passed the top of the scroller, or the last one at the bottom. */
 export function activeGroup(scroller: HTMLElement): SettingsGroupId {
   const groups = [...scroller.querySelectorAll<HTMLElement>('[data-settings-group]')];
-  if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return (groups.at(-1)?.dataset.settingsGroup ?? 'support') as SettingsGroupId;
+  if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return (groups.at(-1)?.dataset.settingsGroup ?? SETTINGS_GROUPS[0].id) as SettingsGroupId;
   const top = scroller.getBoundingClientRect().top + 24;
-  let cur: string = 'support';
+  let cur: string = groups[0]?.dataset.settingsGroup ?? SETTINGS_GROUPS[0].id;
   for (const g of groups) if (g.getBoundingClientRect().top <= top) cur = g.dataset.settingsGroup!;
   return cur as SettingsGroupId;
-}
-
-/** The `scrollTop` that brings `target` to the top of `scroller`, or as near as the page's end allows. */
-export function scrollTopFor(scroller: HTMLElement, target: HTMLElement): number {
-  const distance = (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / zoomOf(scroller);
-  return Math.min(scroller.scrollTop + distance, scroller.scrollHeight - scroller.clientHeight);
 }
 
 export function SettingsView() {
@@ -122,39 +144,50 @@ export function SettingsView() {
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState<SettingsGroupId>('support');
+  const [active, setActiveState] = useState<SettingsGroupId>(lastPage);
+  const setActive = (id: SettingsGroupId) => { lastPage = id; setActiveState(id); };
+  const [searching, setSearching] = useState(false);
   // Simple says nothing about computers until one is connected; Detailed is where the first one is paired.
   const [expert] = useExpertMode();
   const hasComputers = useStore((s) => s.computers.length > 0);
   const computersPage = expert || hasComputers;
-  const jumping = useRef(0);
-  // Section spy: it measures the page, so at most once a frame, not per scroll event.
-  const spyFrame = useRef(0);
-  const onScroll = () => {
-    if (spyFrame.current) return;
-    spyFrame.current = requestAnimationFrame(() => {
-      spyFrame.current = 0;
-      if (scrollRef.current && !jumping.current) setActive(activeGroup(scrollRef.current));
-    });
-  };
+  const phoneLabel = computersPage ? undefined : 'Phone pairing';
   const goTo = (id: SettingsGroupId) => {
     setActive(id);
     const scroller = scrollRef.current;
-    const target = document.getElementById(`settings-${id}`);
-    if (!scroller || !target) return;
-    const from = scroller.scrollTop;
-    const to = scrollTopFor(scroller, target);
-    cancelAnimationFrame(jumping.current);
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { scroller.scrollTop = to; return; }
-    // Native smooth scroll takes ~500ms over a long page; this lands in 200ms with an ease-out.
-    const start = performance.now();
-    const step = (t: number) => {
-      const p = Math.min(1, (t - start) / 200);
-      scroller.scrollTop = from + (to - from) * (1 - (1 - p) ** 3);
-      jumping.current = p < 1 ? requestAnimationFrame(step) : 0;
-    };
-    jumping.current = requestAnimationFrame(step);
+    if (!scroller) return;
+    // While searching every page is shown, so jump to the group; otherwise its page starts at the top.
+    if (searching) document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start' });
+    else scroller.scrollTop = 0;
   };
+  /** Show the page holding `el` (a section, row or group) and bring `el` into view. */
+  const showElement = (el: HTMLElement | null, block: ScrollLogicalPosition = 'start') => {
+    const group = el?.closest<HTMLElement>('[data-settings-group]')?.dataset.settingsGroup;
+    if (!el || !group || !GROUP_IDS.has(group)) return false;
+    setActive(group as SettingsGroupId);
+    requestAnimationFrame(() => el.scrollIntoView({ block }));
+    return true;
+  };
+  const onSearchOpen = (open: boolean, match: HTMLElement | null) => {
+    setSearching(open);
+    if (open || !scrollRef.current) return;
+    // Closing keeps you where the search took you: that match's page, scrolled to it.
+    if (!showElement(match, 'center')) setActive(activeGroup(scrollRef.current));
+  };
+  const hasSettings = !!settings;
+  // openSettingsGroup(): open on the page that holds the target, now or once settings load.
+  useEffect(() => {
+    if (!hasSettings) return;
+    const open = () => {
+      const target = takeSettingsTarget();
+      if (!target) return;
+      if (!showElement(document.getElementById(`settings-${target}`)) && GROUP_IDS.has(target)) setActive(target as SettingsGroupId);
+    };
+    open();
+    window.addEventListener(SETTINGS_TARGET_EVENT, open);
+    return () => window.removeEventListener(SETTINGS_TARGET_EVENT, open);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSettings]);
   const reload = useCallback(() => refreshSettings(false), [refreshSettings]);
 
   useEffect(() => { void reload(); }, [reload]);
@@ -185,7 +218,7 @@ export function SettingsView() {
   if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
-    <div className="settings-panel">
+    <div className="settings-panel" onWheel={(e) => forwardWheelToContent(e, scrollRef.current)}>
       <aside className="settings-rail">
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
         <div aria-label="Skills and connectors" className="settings-shortcuts">
@@ -195,29 +228,49 @@ export function SettingsView() {
               <Icon className="h-4 w-4 shrink-0" />{label}<span aria-hidden="true" className="ml-auto text-ink-faint">↗</span>
             </button>
           ))}
+          <button type="button" className="settings-nav-item" aria-current={active === SERVER_GROUP.id ? 'page' : undefined} onClick={() => goTo(SERVER_GROUP.id)}>
+            <SERVER_GROUP.icon className="h-4 w-4 shrink-0" />{SERVER_GROUP.label}
+          </button>
         </div>
-        <SettingsSearch root={pageRef} />
+        <SettingsSearch root={pageRef} onOpenChange={onSearchOpen} />
         <nav aria-label="Settings sections" className="settings-nav">
-          {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              className="settings-nav-item"
-              aria-current={active === g.id ? 'true' : undefined}
-              onClick={() => goTo(g.id)}
-            >
-              <g.icon className="h-4 w-4 shrink-0" />{g.label}
-            </button>
-          ))}
+          {SETTINGS_GROUPS.map((g, i) => {
+            const section = groupSection(g);
+            return (
+              <React.Fragment key={g.id}>
+                {section && section !== (i > 0 ? groupSection(SETTINGS_GROUPS[i - 1]) : undefined) && <div className="settings-nav-label">{section}</div>}
+                <button
+                  type="button"
+                  className="settings-nav-item"
+                  aria-current={active === g.id ? 'page' : undefined}
+                  onClick={() => goTo(g.id)}
+                >
+                  <g.icon className="h-4 w-4 shrink-0" />{g.id === 'phone' ? phoneLabel ?? g.label : g.label}
+                </button>
+              </React.Fragment>
+            );
+          })}
         </nav>
       </aside>
-      <div ref={scrollRef} className="settings-content" onScroll={onScroll}>
-        <div ref={pageRef} className="settings-page" data-presenter-exempt>
+      <div ref={scrollRef} className="settings-content">
+        <PageContext.Provider value={{ active, all: searching }}>
+        <div ref={pageRef} className="settings-page" data-settings-paged={searching ? undefined : ''} data-presenter-exempt>
+          <AgentsBreadcrumb />
           {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
           <div className="min-w-0">
+            <SettingsGroup id="server">
+              <ErrorBoundary label="Agent server"><AgentServerSection /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="profile">
+              <AboutYouSection settings={settings} update={update} />
+            </SettingsGroup>
             <SettingsGroup id="support">
               <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="GitHub support"><GitHubStarSupport /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="cloud">
+              {/* Account first; Sync, Fleet management and the danger zone appear once signed in. */}
+              <ErrorBoundary label="Nekko Cloud"><SyncSettings fleet={<ErrorBoundary label="Fleet management"><OrganizationSettings /></ErrorBoundary>} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="general">
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
@@ -225,22 +278,23 @@ export function SettingsView() {
                 <SettingRow
                   htmlFor="chat-pane-action"
                   title="Chat pane top-right action"
-                  detail="Complete keeps the chat under Completed until you delete it."
+                  detail="Archive keeps the chat under Archived until you delete it."
                   control={
-                    <select id="chat-pane-action" className="quiet-field w-[180px] py-1" value={settings.chatPaneAction ?? 'complete'} onChange={(e) => update({ chatPaneAction: e.target.value === 'delete' ? 'delete' : 'complete' })}>
-                      <option value="complete">Complete (default)</option>
+                    <select id="chat-pane-action" className="quiet-field w-[180px] py-1" value={settings.chatPaneAction === 'delete' ? 'delete' : 'complete'} onChange={(e) => update({ chatPaneAction: e.target.value === 'delete' ? 'delete' : 'complete' })}>
+                      {/* Stored as 'complete' for older builds and the phones; it means Archive. */}
+                      <option value="complete">Archive (default)</option>
                       <option value="delete">Delete</option>
                     </select>
                   }
                 />
                 <SettingRow
-                  htmlFor="auto-complete-after"
-                  title="Complete idle agents after"
-                  detail="Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show completed."
+                  htmlFor="auto-archive-after"
+                  title="Archive idle agents after"
+                  detail="Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show archived."
                   control={
-                    <select id="auto-complete-after" className="quiet-field w-[180px] py-1" value={autoCompleteDays(settings.autoCompleteAfterDays)} onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}>
-                      {AUTO_COMPLETE_CHOICES.map((c) => (
-                        <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_COMPLETE_DEFAULT_DAYS ? ' (default)' : ''}</option>
+                    <select id="auto-archive-after" className="quiet-field w-[180px] py-1" value={autoArchiveDays(settings.autoCompleteAfterDays)} onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}>
+                      {AUTO_ARCHIVE_CHOICES.map((c) => (
+                        <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_ARCHIVE_DEFAULT_DAYS ? ' (default)' : ''}</option>
                       ))}
                     </select>
                   }
@@ -268,7 +322,7 @@ export function SettingsView() {
                 />
               </SettingsSection>
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
-              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
+              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('cloud')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
               <section className="card mt-5 p-5" data-repo-folder>
                 <h2 className="font-semibold">Repositories folder</h2>
                 <p className="mt-1 text-xs text-ink-soft">Where a repository added to a chat is cloned when no copy is already on this computer. Repositories already added stay where they are.</p>
@@ -280,20 +334,16 @@ export function SettingsView() {
                 </div>
               </section>
             </SettingsGroup>
-            <SettingsGroup id="phone">
+            <SettingsGroup id="phone" label={phoneLabel}>
               {/* Remote access (relay) */}
               <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
-              {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
-              <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
-              <ErrorBoundary label="Organization"><OrganizationSettings /></ErrorBoundary>
+              {/* settings-computers: the old group's anchor, so links to it still land here. */}
+              {computersPage && <div id="settings-computers">
+                <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
+              </div>}
             </SettingsGroup>
-            {computersPage && <SettingsGroup id="computers">
-              <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
-            </SettingsGroup>}
             <SettingsGroup id="customize">
-              {/* Personal: how Nekko addresses you belongs with the rest of personalization (#2102). */}
-              <AboutYouSection settings={settings} update={update} />
-              <SettingsSection id="appearance" title={tr('settings.appearance')}>
+              <SettingsSection id="appearance" title="Theme">
                 <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
                 <SettingRow
                   title="Background animation"
@@ -323,6 +373,7 @@ export function SettingsView() {
                   }} />}
                 />
               </SettingsSection>
+              <ErrorBoundary label="Open new agents"><OpenNewAgentsSettings /></ErrorBoundary>
               <SettingsSection id="view-settings" title="View settings" help="Optional sidebar shortcuts. Skills and Connectors are always at the top of Settings.">
                 {(['skills', 'connectors'] as const).map((view) => (
                   <SettingRow key={view} title={`Show ${tr(`nav.${view}`)} in sidebar`} control={<Toggle aria-label={`Show ${view === 'skills' ? 'Skills' : 'Connectors'} in sidebar`} on={settings.sidebarViews?.[view] === true} onChange={(v) => update({ sidebarViews: { ...settings.sidebarViews, [view]: v } })} />} />
@@ -331,11 +382,13 @@ export function SettingsView() {
               <div id="settings-simple">
                 <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
               </div>
-              <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
               <FunSection settings={settings} update={update} />
             </SettingsGroup>
             <SettingsGroup id="agents">
               <ErrorBoundary label="Agent loop"><AgentLoopSection settings={settings} update={update} /></ErrorBoundary>
+              {/* The system prompt shapes how agents answer, so it lives with them, not with Appearance. */}
+              <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="System prompt size"><PromptProfilesSettings settings={settings} update={update} /></ErrorBoundary>
               <SettingsSection id="spec-driven" title="Spec-driven development" help="The default workflow for building a spec and tasks from a conversation. Each chat can override it in the Context panel.">
                 <ChoiceList
                   label="Spec-driven development"
@@ -379,6 +432,7 @@ export function SettingsView() {
                   );
                 })}
               </SettingsSection>
+              <SettingsSection id="agent-pictures" title="Pictures" help="Agents in chats on this computer can make and edit pictures with its picture models, or with paid cloud models on your OpenRouter account, which ask first."><div className="mt-(--q-inline)"><ErrorBoundary label="Pictures"><PictureModelSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
               <SettingsSection id="delegation-routes" title="Delegation routes"><div className="mt-(--q-inline)"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></div></SettingsSection>
               <ErrorBoundary label="Hooks"><HooksSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>
@@ -454,6 +508,7 @@ export function SettingsView() {
             <p className="mt-(--q-section) text-center text-2xs text-ink-faint">Nekko Agent · open source · MIT</p>
           </div>
         </div>
+        </PageContext.Provider>
       </div>
     </div>
   );
@@ -900,6 +955,65 @@ export function PullRequestsSection({ settings, update }: { settings: AppSetting
   );
 }
 
+const folderName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+
+/** Worktrees by repository, in the host's order; within one, chat-made before those made outside Nekko. */
+export function groupWorktrees(list: ChatWorktreeInfo[]): { sourceRoot: string; label: string; rows: ChatWorktreeInfo[] }[] {
+  const groups = new Map<string, { sourceRoot: string; label: string; rows: ChatWorktreeInfo[] }>();
+  for (const w of list) {
+    const key = w.sourceRoot.replace(/\\/g, '/').toLowerCase();
+    const g = groups.get(key) ?? { sourceRoot: w.sourceRoot, label: w.projectName || folderName(w.sourceRoot), rows: [] };
+    g.rows.push(w);
+    groups.set(key, g);
+  }
+  return [...groups.values()].map((g) => ({ ...g, rows: [...g.rows.filter((w) => w.madeByChat !== false), ...g.rows.filter((w) => w.madeByChat === false)] }));
+}
+
+/** Why Remove is unavailable, in words, or '' when it is. */
+export function worktreeBlocked(w: ChatWorktreeInfo): string {
+  if (w.locked) return `Locked${w.lockedReason ? ` (${w.lockedReason})` : ''}. Unlock it with git worktree unlock first.`;
+  if (w.running) return 'Stop the chat first.';
+  if (w.dirtyCount) return 'Has uncommitted changes.';
+  return '';
+}
+
+export function WorktreeGroups({ worktrees, busy, onRemove }: { worktrees: ChatWorktreeInfo[]; busy: string | null; onRemove: (w: ChatWorktreeInfo) => void }) {
+  return (
+    <>
+      {groupWorktrees(worktrees).map((g, i) => (
+        <div key={g.sourceRoot} className={i ? 'mt-(--q-group)' : undefined}>
+          <div className="mb-(--q-tight) truncate px-3 text-xs text-ink-faint" title={g.sourceRoot}>{g.label}</div>
+          {g.rows.map((w) => {
+            const blocked = worktreeBlocked(w);
+            const outside = w.madeByChat === false;
+            const detail = [
+              w.locked && 'locked',
+              outside && 'Made outside Nekko',
+              w.branch ?? 'detached',
+              w.dirtyCount ? `${w.dirtyCount} uncommitted` : 'clean',
+              w.unmergedCount ? `${w.unmergedCount} unmerged commit${w.unmergedCount === 1 ? '' : 's'}` : 'no new commits',
+            ].filter(Boolean).join(' · ');
+            return (
+              <div key={w.root} className="quiet-row min-h-(--q-row) justify-between gap-4" data-quiet-row>
+                <div className="min-w-0">
+                  <div className={`truncate text-sm font-medium${w.locked ? ' text-ink-faint' : ''}`} title={w.root}>
+                    {outside ? folderName(w.root) : (w.sessionTitle ?? <span className="text-ink-faint">Deleted chat</span>)}
+                    {w.running && <span className="ml-2 text-xs font-normal text-ink-faint">running</span>}
+                  </div>
+                  <div className="mt-(--q-tight) truncate font-mono text-2xs text-ink-faint" title={w.root}>{detail}</div>
+                </div>
+                <button className="btn btn-ghost quiet-row-action shrink-0 py-1 text-xs text-danger-text" disabled={!!blocked || busy === w.root} title={blocked || 'Remove this worktree folder'} onClick={() => onRemove(w)}>
+                  {busy === w.root ? 'Removing...' : 'Remove'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function GitManagementSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   const [worktrees, setWorktrees] = useState<ChatWorktreeInfo[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -918,9 +1032,11 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
     setMessage(null);
     try {
       const { branchDeleted } = await window.nekko.removeChatWorktree(w.root);
-      setMessage(branchDeleted
-        ? `Removed the worktree and its merged branch ${w.branch}.`
-        : `Removed the worktree. Branch ${w.branch} was kept because it has commits not on the main checkout; the chat picks it back up if continued.`);
+      setMessage(!w.branch
+        ? 'Removed the worktree.'
+        : branchDeleted
+          ? `Removed the worktree and its merged branch ${w.branch}.`
+          : `Removed the worktree. Branch ${w.branch} was kept because it has commits not on the main checkout${w.madeByChat === false ? '.' : '; the chat picks it back up if continued.'}`);
     } catch (e) {
       setMessage(String((e as Error).message ?? e));
     } finally {
@@ -970,27 +1086,14 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
 
       <div>
         <div className="mt-(--q-group) mb-(--q-heading) flex items-center justify-between gap-3">
-          <span className="quiet-group-label">Chat worktrees</span>
+          <span className="quiet-group-label">Worktrees</span>
           <button className="btn btn-ghost py-1 text-xs" onClick={refresh}>Refresh</button>
         </div>
-        <p className="text-xs text-ink-faint">Worktrees are kept when a chat is completed or deleted. Removing one frees the folder: Git refuses if it has uncommitted changes, and its branch is deleted only once merged.</p>
+        <p className="text-xs text-ink-faint">Every worktree of your projects' repositories. Removing one frees the folder: Git refuses if it has uncommitted changes, and its branch is deleted only once merged. Only chat worktrees are removed automatically.</p>
         <div className="-mx-3 mt-(--q-inline)">
           {worktrees === null && <p className="px-3 text-xs text-ink-faint">Loading...</p>}
-          {worktrees?.length === 0 && <p className="px-3 text-xs text-ink-faint">No chat worktrees.</p>}
-          {worktrees?.map((w) => {
-            const blocked = w.running ? 'Stop the chat first.' : w.dirtyCount ? 'Has uncommitted changes.' : '';
-            return (
-              <div key={w.root} className="quiet-row min-h-(--q-row) justify-between gap-4" data-quiet-row>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{w.sessionTitle ?? <span className="text-ink-faint">Deleted chat</span>}{w.running && <span className="ml-2 text-xs font-normal text-ink-faint">running</span>}</div>
-                  <div className="mt-(--q-tight) truncate font-mono text-2xs text-ink-faint" title={w.root}>{w.branch ?? 'detached'} · {w.dirtyCount ? `${w.dirtyCount} uncommitted` : 'clean'} · {w.unmergedCount ? `${w.unmergedCount} unmerged commit${w.unmergedCount === 1 ? '' : 's'}` : 'no new commits'}</div>
-                </div>
-                <button className="btn btn-ghost quiet-row-action shrink-0 py-1 text-xs text-danger-text" disabled={!!blocked || busy === w.root} title={blocked || 'Remove this worktree folder'} onClick={() => void remove(w)}>
-                  {busy === w.root ? 'Removing...' : 'Remove'}
-                </button>
-              </div>
-            );
-          })}
+          {worktrees?.length === 0 && <p className="px-3 text-xs text-ink-faint">No worktrees in your projects.</p>}
+          {worktrees && <WorktreeGroups worktrees={worktrees} busy={busy} onRemove={(w) => void remove(w)} />}
         </div>
         {message && <p role="status" className="mt-(--q-inline) text-xs text-ink-soft">{message}</p>}
       </div>
@@ -1002,7 +1105,6 @@ function CustomizationSection({ settings, update }: { settings: AppSettings; upd
   return (
     <SettingsSection id="customization" title="Customization" help="Sent to the selected provider on every chat turn, so leave secrets out. Edits save when you leave a field.">
       {([
-        { key: 'aboutUser', label: 'About you', hint: 'Your name, role, experience, goals, language, and communication preferences.', fallback: '' },
         { key: 'systemInstructions', label: 'System prompt', hint: 'Additional standing instructions for how Nekko should work with you.', fallback: '' },
         { key: 'turnWrapper', label: 'Server prompt wrapper', hint: 'Applied server-side to each user turn without altering the saved user message. Titles and plans use app tools when available.', fallback: DEFAULT_TURN_WRAPPER },
       ] as const).map((field) => (
@@ -1130,7 +1232,7 @@ function GuardrailsSection({
   );
 }
 
-function UpdatesSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+export function UpdatesSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   const updater = useUpdater();
   const [licensesOpen, setLicensesOpen] = useState(false);
   const { app: info, info: status, stage } = updater;
@@ -1182,6 +1284,7 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
         <button className="btn btn-ghost py-1 text-xs" onClick={() => void updater.check(true)} disabled={stage === 'checking' || stage === 'downloading' || stage === 'installing'}>
           {stage === 'checking' ? 'Checking…' : 'Check now'}
         </button>
+        <button className="btn btn-ghost py-1 text-xs" onClick={openWhatsNew} data-testid="settings-whats-new">What's new</button>
         {stage === 'available' && (isWeb ? (
           <button className="btn btn-primary py-1 text-xs" onClick={() => void updater.install()}>Refresh now</button>
         ) : (
@@ -1208,6 +1311,7 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
           </span>
         </div>
       )}
+      <SettingRow title="Show what's new after updates" detail="Once for each new release line, such as 0.11." control={<Toggle aria-label="Show what's new after updates" on={checks.whatsNew} onChange={(v) => void setCheck('whatsNew', v)} />} />
       <SettingsLabel>In the background</SettingsLabel>
       <SettingRow title="Provider model lists" detail="Re-read each provider's catalog so new models appear without an app release." control={<Toggle aria-label="Provider model lists" on={checks.modelLists} onChange={(v) => void setCheck('modelLists', v)} />} />
       <SettingRow title="Skills catalog" detail="Refresh the skills marketplace shelf." control={<Toggle aria-label="Skills catalog" on={checks.skills} onChange={(v) => void setCheck('skills', v)} />} />
@@ -1222,22 +1326,13 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
   );
 }
 
+/**
+ * Settings' call shape (`on`, aria props) for the app's one switch. It wears
+ * `.quiet-switch`, the same look as `primitives/Toggle`, so Settings and
+ * Automations draw the same slider.
+ */
 export function Toggle({ on, onChange, ...aria }: { on: boolean; onChange: (v: boolean) => void } & Pick<React.AriaAttributes, 'aria-label' | 'aria-describedby'>) {
-  return (
-    <button
-      role="switch"
-      {...aria}
-      aria-checked={on}
-      onClick={() => onChange(!on)}
-      className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors"
-      style={{ background: on ? 'var(--accent)' : 'var(--line)' }}
-    >
-      <span
-        className="inline-block h-5 w-5 rounded-full bg-white shadow-(--shadow-sm) transition-transform"
-        style={{ transform: on ? 'translateX(22px)' : 'translateX(2px)' }}
-      />
-    </button>
-  );
+  return <button type="button" role="switch" {...aria} aria-checked={on} className="quiet-switch" onClick={() => onChange(!on)} />;
 }
 
 /**

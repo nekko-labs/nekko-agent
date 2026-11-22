@@ -133,6 +133,17 @@ export const IpcChannels = {
   /** Whether someone is using this computer (input, a chat they started), for background work and New chat's machine pick. */
   activityState: 'activity:state',
   systemStats: 'system:stats',
+  /** The web pages served on this computer (dev servers), for the Agents panel's Browsers view (#2824). Local only. */
+  serversList: 'servers:list',
+  /** Booted iOS simulators and Android emulators, their CPU and the chat that last used each (#2814). */
+  simulatorsState: 'simulators:state',
+  /** Shut a booted simulator down; iOS can be booted again (`simulators:boot`) as the Undo. */
+  simulatorsShutdown: 'simulators:shutdown',
+  simulatorsBoot: 'simulators:boot',
+  /** Bring Simulator.app forward on a device. */
+  simulatorsOpen: 'simulators:open',
+  /** A screenshot of a device's screen, read on demand for the chat's Simulator panel. */
+  simulatorsScreenshot: 'simulators:screenshot',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
   monitorSummary: 'monitor:summary',
 
@@ -168,6 +179,8 @@ export const IpcChannels = {
   chatProvideSecret: 'chat:provideSecret',
   chatPending: 'chat:pending',
   chatRunning: 'chat:running',
+  /** Working chats by agent-loop phase, for the `npm run dev` status line. */
+  chatActivity: 'chat:activity',
 
   terminalsList: 'terminals:list',
   terminalShells: 'terminal:shells',
@@ -189,6 +202,7 @@ export const IpcChannels = {
   contextPreview: 'context:preview',
   contextToggle: 'context:toggle',
   contextSetPrefs: 'context:setPrefs',
+  contextPromptProfiles: 'context:promptProfiles',
   sessionSetAttachments: 'session:setAttachments',
   specBuild: 'spec:build',
   specBuildDoc: 'spec:buildDoc',
@@ -223,6 +237,7 @@ export const IpcChannels = {
   reposList: 'repos:list',
   reposClone: 'repos:clone',
   reposSetSandbox: 'repos:setSandbox',
+  reposSuggestFolder: 'repos:suggestFolder',
   workspaceRemove: 'workspace:remove',
   workspaceIndex: 'workspace:index',
   workspaceIndexStatus: 'workspace:indexStatus',
@@ -254,6 +269,8 @@ export const IpcChannels = {
   /** What Privacy Shield would hide from a cloud model in a chat and its draft. */
   privacyPreview: 'privacy:preview',
   attachmentImport: 'attachment:import',
+  /** A phone's clip, in pieces (#2777); the daemon answers it. */
+  attachmentUpload: 'attachment:upload',
   imageFetch: 'image:fetch',
 
   changesList: 'changes:list',
@@ -417,6 +434,7 @@ export const IpcChannels = {
   computersSetIcon: 'computers:setIcon',
   computersCreateSession: 'computers:createSession',
   computersStats: 'computers:stats',
+  computersConnectFleet: 'computers:connectFleet',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -497,8 +515,10 @@ export const IpcChannels = {
   syncRevoke: 'sync:revoke',
   syncNow: 'sync:now',
   syncSetEnabled: 'sync:setEnabled',
-  syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
+  syncSetKind: 'sync:setKind',
   syncDeleteAll: 'sync:deleteAll',
+  // The files Library lists on this computer, for Library sync (crates/nekko-cloud, #2748).
+  librarySync: 'library:sync',
   // Nekko Cloud organizations and the shared computer fleet (crates/nekko-cloud).
   orgList: 'org:list',
   orgCreate: 'org:create',
@@ -548,6 +568,8 @@ export const IpcEvents = {
   tasksUpdated: 'tasks:updated',
   /** `BackgroundState` changed: a background turn started, ended, paused or resumed. */
   backgroundUpdated: 'background:updated',
+  /** Booted simulators changed, or a chat started on one (`SimulatorsUpdated`). */
+  simulatorsUpdated: 'simulators:updated',
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
   /** The image builder's `ImageView`, after any change. */
@@ -661,8 +683,15 @@ export interface NekkoApi {
   syncRevoke(deviceId: string): Promise<import('./cloud.js').CloudStatus>;
   syncNow(): Promise<import('./cloud.js').CloudStatus>;
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
-  syncSetIncludeLocalOnly(on: boolean): Promise<import('./cloud.js').CloudStatus>;
+  /** Turn one kind of record (Chats, Library) on or off for this computer's sync (#3089). */
+  syncSetKind(kind: import('./cloud.js').SyncKind, on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
+  /**
+   * Tell the engine which files Library lists here, so they sync to Nekko Cloud
+   * when Library sync is open to the account (`status.library` is not null).
+   * Merged with what it already knows; a file leaves only when it is gone from disk.
+   */
+  librarySync(files: import('./cloud.js').LibrarySyncFile[]): Promise<import('./cloud.js').CloudStatus>;
   /** Organizations you belong to and invites waiting for you. */
   orgList(): Promise<import('./cloud.js').OrgList>;
   /** Create an organization (needs an unlocked account on Pro or Team); this device creates its key. */
@@ -884,6 +913,14 @@ export interface NekkoApi {
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
   getSystemStats(): Promise<import('./monitor.js').SystemStats | null>;
+  /** The web pages served on this computer (`servers:list`). Absent where the host cannot look. */
+  serversList?(): Promise<import('./servers.js').ServedSites>;
+  /** Booted simulators and emulators (`simulators:state`). Absent where the host has none to show. */
+  simulatorsState?(): Promise<import('./simulators.js').SimulatorsState>;
+  simulatorsShutdown?(id: string): Promise<{ ok: boolean; canUndo: boolean }>;
+  simulatorsBoot?(id: string): Promise<{ ok: boolean }>;
+  simulatorsOpen?(id: string): Promise<{ ok: boolean }>;
+  simulatorsScreenshot?(id: string): Promise<import('./simulators.js').SimulatorShot>;
 
   listSessions(): Promise<Session[]>;
   /** Earliest deadline of this chat's active durable watches, or null. */
@@ -1000,6 +1037,8 @@ export interface NekkoApi {
   previewContext(sessionId: string, attachedPaths: string[]): Promise<ContextBundle>;
   toggleContextItem(sessionId: string, itemId: string, included: boolean, pinned: boolean): Promise<ContextBundle>;
   setContextPrefs(sessionId: string, prefs: import('./chat.js').ContextPrefs): Promise<void>;
+  /** The built-in system prompt text of each profile (decision 0095). */
+  promptProfileTexts(): Promise<Record<import('./context.js').PromptProfileName, string>>;
 
   /** Build/refresh the primary spec doc in the chat's workspace from the conversation. */
   buildSpec(sessionId: string): Promise<{ ok: boolean; path?: string; message?: string }>;
@@ -1015,16 +1054,16 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
   clearSessions(scope: import('./chat.js').ChatClearScope): Promise<number>;
-  /** Compatibility no-op: completed history is retained indefinitely. */
+  /** Compatibility no-op: archived history is retained indefinitely. */
   purgeExpiredArchives(): Promise<number>;
-  /** All local chat JSON and command-log bytes; count is completed chats only. Symlinks are not followed. */
+  /** All local chat JSON and command-log bytes; count is archived chats only. Symlinks are not followed. */
   getHistoryUsage(): Promise<{ bytes: number; count: number }>;
-  /** Delete completed chats in the selected updatedAt range; returns how many were removed. */
+  /** Delete archived chats in the selected updatedAt range; returns how many were removed. */
   clearHistory(range: 'today' | 'last-week' | 'older-2-weeks' | 'older-1-month' | 'older-6-months'): Promise<number>;
   /** A new chat with this one's conversation before `beforeMessageId` (all of it when omitted). */
   forkSession(id: string, beforeMessageId?: string): Promise<Session | null>;
@@ -1072,6 +1111,12 @@ export interface NekkoApi {
   cloneRepo(repo: Pick<import('./workspace.js').RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>, opts?: { sessionId?: string }): Promise<import('./workspace.js').RepoCloneResult>;
   /** A sandbox chat's sandbox repositories, before the sandbox is set up (#2561). */
   setSandboxRepos(sessionId: string, repos: import('./chat.js').SandboxRepo[]): Promise<Session>;
+  /**
+   * After `path` is added: the folder to offer as the repositories folder (it,
+   * or its parent, holds several repositories), or null. Null once a
+   * repositories folder is chosen or the offer was made.
+   */
+  suggestRepoFolder(path: string): Promise<{ suggested: string } | null>;
   indexWorkspace(id: string): Promise<IndexStatus>;
   getIndexStatus(id: string): Promise<IndexStatus | null>;
   searchWorkspace(id: string, query: string): Promise<SearchHit[]>;
@@ -1102,6 +1147,19 @@ export interface NekkoApi {
   serveHtmlPreview?(path: string, options: import('./html-preview.js').HtmlPreviewOptions): Promise<import('./html-preview.js').HtmlPreviewServed>;
   /** Stop serving a page `serveHtmlPreview` returned. */
   releaseHtmlPreview?(id: string): Promise<void>;
+  /**
+   * Read a Library thumbnail from the on-disk cache (main/libraryThumbnails.ts, #3043).
+   * Returns a data URL (`data:image/webp;base64,...`) or null when not cached.
+   */
+  libraryThumbGet?(path: string, revision: string | number): Promise<string | null>;
+  /** Write a Library thumbnail to the on-disk cache. `data` is a data URL. */
+  libraryThumbPut?(path: string, revision: string | number, data: string): Promise<void>;
+  /**
+   * Render a served HTML URL in a hidden off-screen window and return a PNG
+   * data URL (or null when the page did not produce a frame). The URL must be
+   * on `http://127.0.0.1`.
+   */
+  libraryThumbCapture?(url: string): Promise<string | null>;
   /** Write text to a file (in-app editor save). */
   writeFile(path: string, content: string): Promise<void>;
   /** List a directory's immediate entries (file explorer). */
@@ -1356,6 +1414,12 @@ export interface NekkoApi {
   computerModelServer(id: string, channel: 'model:load' | 'model:unload' | 'engine:unloadAll' | 'engine:settings', args?: unknown[]): Promise<unknown>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
+  /**
+   * Connect to one of your own computers from an organization's list, with no
+   * pairing (decision 0102). Answers its row in the Computers list; rejects
+   * with what to do next.
+   */
+  connectFleetComputer(orgId: string, deviceId: string): Promise<import('./computers.js').ComputerStatus>;
   /** Set the icon in that machine's own settings; empty removes it. */
   setComputerIcon(id: string, icon: string): Promise<import('./computers.js').ComputerStatus[]>;
   /** Its providers and folders; null when it has never answered. */
@@ -1493,6 +1557,8 @@ export interface NekkoApi {
   /** Fires when the automation-task list changes (created/updated/fired/deleted). */
   onTasksUpdated(cb: (tasks: AutomationTask[]) => void): () => void;
   onBackgroundUpdated(cb: (state: import('./background.js').BackgroundState) => void): () => void;
+  /** Booted simulators changed, or a chat started on one. */
+  onSimulatorsUpdated?(cb: (e: import('./simulators.js').SimulatorsUpdated) => void): () => void;
   /** Fires when any training/goal run changes (experiments, hints, status). */
   onTrainingUpdated(cb: (runs: TrainingRun[]) => void): () => void;
   /** Fires when a workflow is edited or any run advances a step. */

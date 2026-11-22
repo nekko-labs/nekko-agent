@@ -46,10 +46,11 @@ app.whenReady().then(async () => {
       await capture(`fresh-m5max-${theme}`);
       await check(`${theme}: models page renders`, toModels);
       if (!base) {
-        await check(`${theme}: open on a fresh install`, "document.querySelector('[data-recommendations]')?.open===true");
+        await check(`${theme}: a fresh install opens on Find new models, picks first`, "document.querySelector('[data-models-mode]')?.dataset.modelsMode==='find' && !!document.querySelector('[data-recommendations]')");
         await check(`${theme}: one row per task`, "document.querySelectorAll('[data-recommendation]').length===5");
       }
     }
+    await run("document.documentElement.dataset.theme='dark'");
     if (!base) {
       await fresh('m5max-here'); await sleep(1500); await run(toModels); await sleep(500);
       await capture('m5max-measured-here-dark');
@@ -61,7 +62,7 @@ app.whenReady().then(async () => {
       await fresh('rtx4080upgrade', [{ id: 'chat/' + upgradeHave.split('/').pop(), name: 'Qwen3.5 4B', path: upgradeHave, format: 'gguf', sizeBytes: 2.7e9, quantization: 'Q4_K_M', loaded: false, readable: true }]);
       await sleep(1500); await run(toModels); await sleep(500);
       await capture('rtx4080-upgrade-nudge-dark');
-      await check('upgrade: one card over the folded block', "!!document.querySelector('[data-upgrade-nudges]') && document.querySelector('[data-recommendations]').open===false");
+      await check('upgrade: said on the models on this machine, picks left to Find', "document.querySelector('[data-models-mode]')?.dataset.modelsMode==='installed' && !!document.querySelector('[data-upgrade-nudges]') && !document.querySelector('[data-recommendations]')");
       await check('upgrade: titled for the new GPU', "document.querySelector('[data-upgrade-nudges]').innerText.includes('Better models now fit your 16 GB GPU')");
       await run("[...document.querySelectorAll('[data-upgrade-nudges] button')].find(b=>b.textContent.trim()==='Not now').click()"); await sleep(400);
       await check('upgrade: Not now dismisses it', "!document.querySelector('[data-upgrade-nudges]') && integration.dismissed.length===1");
@@ -72,19 +73,29 @@ app.whenReady().then(async () => {
       await check('cpu: rough speeds are labelled', "document.querySelector('[data-recommendation=\"chat\"] [data-speed-basis=\"estimatedBorrowed\"]')?.textContent.includes('rough')");
       await check('cpu: below-target tasks say so', "document.querySelector('[data-recommendation=\"code\"]').innerText.includes('Slower than the 25 tok/s')");
     }
-    // A machine that already has the routing pick: folded, and the row says Downloaded.
+    // A machine that already has the routing pick, and a file whose last load failed.
     const routerFile = await run("integration.data.rtx4060.tasks.find(t=>t.task==='router').pick.files[0]");
-    const have = [{ id: 'unsloth/Qwen3.5-2B-GGUF/' + routerFile, name: 'Qwen3.5 2B', path: '/fixture/models/chat/' + routerFile, format: 'gguf', sizeBytes: 2e9, quantization: 'Q8_0', loaded: false, readable: true }];
+    const have = [
+      { id: 'unsloth/Qwen3.5-2B-GGUF/' + routerFile, name: 'Qwen3.5 2B', path: '/fixture/models/chat/' + routerFile, format: 'gguf', sizeBytes: 2e9, quantization: 'Q8_0', parameterSize: '2B', loaded: false, readable: true },
+      { id: 'Ckpt_Q38.gguf', name: 'Ckpt_Q38', path: '/fixture/models/Ckpt_Q38.gguf', format: 'gguf', sizeBytes: 3.9e9, quantization: 'Q8_0', parameterSize: '1.4B', maxContext: 262144, modality: 'vision', hasProjector: true, loaded: false, readable: true, lastLoadError: "The file doesn't match what llama.cpp expects (a tensor is missing or unexpected). Re-download it, or pick a different build of the model." },
+    ];
     await fresh('rtx4060', have); await sleep(1500); await run(toModels); await sleep(500);
-    await capture('rtx4060-with-a-model-folded-dark');
+    await capture('rtx4060-on-this-machine-dark');
     if (!base) {
-      await check('rtx4060: folded once there are models', "document.querySelector('[data-recommendations]')?.open===false");
-      await run("document.querySelector('[data-recommendations] summary').click()"); await sleep(400);
-      await capture('rtx4060-with-a-model-opened-dark');
+      await check('rtx4060: opens on the models on this machine once there are some', "document.querySelector('[data-models-mode]')?.dataset.modelsMode==='installed' && !document.querySelector('[data-recommendations]')");
+      await check('failed load: a warning, not a check', "(()=>{const r=document.querySelector('[data-model-family=\"ckpt\"]');return !!r && !!r.querySelector('[data-family-problem]') && r.innerText.includes('Last load failed') && !r.querySelector('[aria-label=\"Downloaded\"]')})()");
+      await run("document.querySelector('[data-models-mode-option=\"find\"]').click()"); await sleep(600); await run(toModels); await sleep(300);
+      await capture('rtx4060-find-new-models-dark');
+      await check('rtx4060: Find new models leads with the picks', "!!document.querySelector('[data-recommendations]')");
       await check('rtx4060: the downloaded pick is marked', "document.querySelector('[data-recommendation=\"router\"]').innerText.includes('Downloaded')");
-      await run("document.querySelector('[data-recommendation=\"chat\"] button').click()"); await sleep(600);
+      await check('rtx4060: each pick says what fits', "document.querySelectorAll('[data-recommendation] [data-context-fit]').length>=4");
+      await run("document.querySelector('[data-recommendation=\"chat\"] [data-quants-toggle]').click()"); await sleep(500);
+      await check('quants: the table opens with the pick marked', "(()=>{const t=document.querySelector('[data-recommendation=\"chat\"] [data-quant-table]');return !!t && t.querySelectorAll('tbody tr').length>1 && t.innerText.includes('pick')})()");
+      await capture('rtx4060-quants-open-dark');
+      await run("document.querySelector('[data-recommendation=\"chat\"] [data-quants-toggle]').click()"); await sleep(400);
+      await run("[...document.querySelector('[data-recommendation=\"chat\"]').querySelectorAll('button')].find(b=>b.textContent.trim()==='Download').click()"); await sleep(600);
       await check('download: queued with the catalog label', "integration.downloads.at(-1)==='unsloth/Qwen3.5-9B-GGUF Q4_K_M'");
-      await check('download: the row says so', "document.querySelector('[data-recommendation=\"chat\"]').innerText.includes('Queued')");
+      await check('download: the row says so', "/Queued|Downloading/.test(document.querySelector('[data-recommendation=\"chat\"]').innerText)");
       await run(toModels); await sleep(300);
       await capture('rtx4060-download-queued-dark');
     }

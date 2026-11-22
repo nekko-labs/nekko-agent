@@ -17,6 +17,21 @@ describe('live composer watchers', () => {
     expect(html).toContain('Cancel watcher');
     expect(html).toContain('left');
   });
+  it('names a clip and shows how far it got, with no countdown', () => {
+    __setAgentWatches('clip-chips', [{ ...watch, id: 'clip', kind: 'clip' as const, clipStage: 'step:3/20' }]);
+    const html = renderToStaticMarkup(<ActiveWatchChips sessionId="clip-chips" />);
+    expect(html).toContain('Making a clip');
+    expect(html).toContain('step 3 of 20');
+    expect(html).toContain('in progress');
+    expect(html).toContain('Cancel clip');
+    expect(html).not.toContain('left');
+    __setAgentWatches('clip-wait', [{ ...watch, id: 'clip', kind: 'clip' as const, clipStage: 'waiting' }]);
+    expect(renderToStaticMarkup(<ActiveWatchChips sessionId="clip-wait" />)).toContain('waiting for another picture or clip');
+    __setAgentWatches('clip-done', [{ ...watch, id: 'clip', kind: 'clip' as const, pending: true }]);
+    const done = renderToStaticMarkup(<ActiveWatchChips sessionId="clip-done" />);
+    expect(done).toContain('finished · waiting for the chat');
+    expect(done).not.toContain('data-watch-progress');
+  });
   it('does not present completed watches as active', () => {
     __setAgentWatches('done-chips', [{ ...watch, status: 'done' }]);
     expect(renderToStaticMarkup(<ActiveWatchChips sessionId="done-chips" />)).toBe('');

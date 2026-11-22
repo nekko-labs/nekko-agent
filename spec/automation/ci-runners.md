@@ -13,7 +13,7 @@ The Automations panel shows the connected computer's CI runner cards above sched
 chat automations, even when no chat automation exists. Each card uses the same live
 runner subscription and controls as Scheduled Tasks: runner on/off and settings,
 VM slots with their actual names and live logs, and Queued and In progress job
-groups (Completed stays on the CI runners page since #2601). Queued jobs offer Accept now/Decline/Undo; running jobs keep their
+groups (Completed sits behind one row since 2026-11-15; it was page-only from #2601). Queued jobs offer Start now/Skip/Undo; running jobs keep their
 cancel/re-run confirmation; completed entries retain provider links and logs. Empty
 slots never invent a VM identity or log action. The existing daemon controls remain
 the authority; this adds no direct VM shell, console window, or per-VM stop API.
@@ -33,6 +33,33 @@ confirmation. In the Automations panel the runner is compact: idle slots without
 VM, the facts line, **Completed** and **Connect to a workflow** are left out (they
 stay on the CI runners page), and a waiting runner shows only its first reason.
 
+**Panel shows only what is happening now** `[implemented 2026-11-12; unit tests and hidden renderer capture at 1000px and 390px against synthetic data]`.
+Philip asked (2026-11-12) to fit more into the panel and show only what is relevant
+(the contextual-relevance rule). The compact runner is now one line (state dot, name,
+state, switch) and then one flat list with no **Slots**, **Queued** or **In progress**
+labels: a running job (without "Working on", with its step and meter), a queued job,
+and a VM that is starting or being deleted. A VM ready for a job is a count beside the
+state ("Running · 1 idle"), not a row, and no VM name is shown in the panel. Row actions
+and the settings gear appear on hover or focus and, until then, are clipped to no width
+(still reachable by Tab), so names are not cut for buttons nobody sees. On touch they
+always show. The CI runners page is unchanged.
+
+**Queued and completed in the panel** `[implemented 2026-11-15; unit tests and hidden renderer capture at 390px against synthetic data]`.
+Philip asked (2026-11-15) for queued jobs with their actions and a way to inspect finished
+jobs from the panel. A queued job's **Start now** and **Skip** (renamed from Accept now and
+Decline, on the page too) are always shown, not only on hover, because the job is a decision
+waiting on the user. Below the list, **Completed · N jobs** (N is the runner's recent list)
+opens the same completed rows as the page; each opens to its steps, job log and VM log. A
+runner error ends with an **Open settings** link to the runner's settings sheet.
+
+**An idle runner names its last job** `[implemented 2026-11-15; unit tests and hidden renderer capture at 390px against synthetic data]`.
+Philip asked (2026-11-15) for the runners to show their PR and the CI action they serve, in the
+Automations panel and on the CI runners page. Running and queued jobs already carried both in
+their rows. A runner with nothing running or queued (Waiting, Ready, Off) now shows one faint
+line under its header: **Last job**, the workflow and job linked to the job on GitHub, and
+**PR #N** linked to the pull request when the job had one. The repo is in its tooltip. It is
+the newest line of the runner's recent list, so a daemon that sends no recent jobs shows nothing.
+
 **View CI runners** opens Automations, reveals its CI section for that visit,
 and scrolls/focuses it after runner data loads. The panel shows a short empty state
 instead of the setup wizard. Loading and service failures are explicit; unsupported
@@ -45,6 +72,29 @@ wrap at narrow widths. Verified with synthetic runner data in hidden macOS Elect
 at 1000px and 390px and focused tests. Live provider/VM actions and native mobile
 surfaces are not exercised by this change. No credentials or host data enter the
 fixture, and no new network or runner permissions are granted.
+
+## Repository-only TurnDetails diagnostic `[implemented; native execution unverified]`
+
+Issue #2995 adds an opt-in input to the existing Native iOS workflow for a later
+matched-environment investigation, not a new product UI or a passing batch status.
+Only approved `main`/`ci/ios-batch` dispatches on the existing owner-Mac runner are
+accepted; hosted fallback, moving app/harness refs and mixed batch/evidence inputs
+fail closed. Exact SDK/runtime pins and the complete eight-test TurnDetails class
+are required, with only its test file overlaid and no changed production/assertions.
+Pins, host/locale context, raw xcresult and layout/screenshot attachments remain
+available on failure; cleanup touches only the created simulator. Raw artifacts
+are not automatically published and may contain fixture data. Runner access rules
+and the default four-shard suite are unchanged. Local behavioral controls cover
+validation, verdict preservation and cleanup. The first authorized owner execution
+(run 44448793600) reached macOS 27.2 / Xcode 27.2 build 27B52 and the required runtime,
+but failed on missing XcodeGen before simulator creation or any native test (#3016).
+The diagnostic now provisions XcodeGen using the ordinary suite's `brew install
+xcodegen` convention and checks the executable before package tests/generation;
+bootstrap output and errors remain in the retained-failure boundary. Local negative
+controls cover installation and PATH-check failures without creating a simulator.
+Corrected native execution, exercised simulator cleanup, font/locale equivalence
+and matched acceptance of #2990 are still **unverified**.
+See the [dispatch runbook](../../docs/runbooks/ci-runner-pilot.md#focused-turndetails-diagnostic-opt-in-native-execution-unverified).
 
 ## What it is for `[planned]`
 
@@ -342,7 +392,7 @@ Asked for by Philip (2026-11-06): the slot's bar was unclear (it measured elapse
 - **Progress.** A running job's progress is its finished steps over all its steps, from GitHub's jobs API (`steps`), shown as "Step 8 of 12: Build and test iOS · 58%" with a bar for the percent. nekkod asks GitHub for the job again every 15 s while it runs. GitHub reports nothing finer, and GitLab reports no steps, so a GitLab job (or one not yet set up) shows no bar rather than a made-up one.
 - **Live log.** **Live log** on a running job reads the VM's console every 3 s through `runner:liveLog` (runner id, VM name), which serves the last 64 KB of `vms/<name>/console.log` only for a VM in that runner's slots. GitHub's API serves a job's log only once it ends, so the guest supplies the live output: `nekko-runner-boot.sh` follows each page the runner writes under `_diag/pages` (step output, secrets already masked by the runner) onto the console, read as the runner user and never through a symlink, so root never reads a file for the job. GitLab's `run-single` already prints its output there. Needs an image with the current scripts.
 - **Re-run and Cancel.** On a running job, **Cancel** cancels the run (GitHub can only cancel a whole run; GitLab cancels the job) and **Re-run** cancels it and queues a re-run, retried every 60 s for up to 30 min until GitHub has the run finished. Both ask first. A completed job with a job id has **Re-run** too. An owner's re-run is not limited to once per job like a lost job's automatic one.
-- **Queue.** nekkod lists the jobs waiting for this runner's labels (GitHub's queued runs, GitLab's pending jobs) every 30 s whenever the runner is on, not only when it could start a VM, so the owner sees what waits while the mode holds. With Linux slots set, the Linux jobs (the Linux labels) are listed too, in the same group; accepting one starts a Linux VM. **Decline** keeps the runner from starting a VM for that job (it no longer counts toward the queue); GitHub may still hand it to a VM this Mac already has ready, because a runner cannot refuse a job. **Accept now** starts a VM for it at once, judged as if the runner were in **Runner first**: the mode's activity rules and keep-ready count no longer hold it, the battery floor is Runner first's 50%, and the VM keeps Runner first's rules while its job runs. The hard limits (memory, heat, disk, Low Power Mode, a pending security update, memory headroom, Apple's 2 VM cap) and the owner's own conditions (schedule, trusted networks, hotspots, VPN, only on power) still hold; `acceptWhy` names the one in the way and the button says it. GitHub gives the VM whichever matching job is first in line. **Undo** takes back either. Declines and accepts live in memory and end when the job leaves the queue.
+- **Queue.** nekkod lists the jobs waiting for this runner's labels (GitHub's queued runs, GitLab's pending jobs) every 30 s whenever the runner is on, not only when it could start a VM, so the owner sees what waits while the mode holds. With Linux slots set, the Linux jobs (the Linux labels) are listed too, in the same group; accepting one starts a Linux VM. **Skip** (called Decline until 2026-11-15) keeps the runner from starting a VM for that job (it no longer counts toward the queue); GitHub may still hand it to a VM this Mac already has ready, because a runner cannot refuse a job. **Start now** (called Accept now until 2026-11-15) starts a VM for it at once, judged as if the runner were in **Runner first**: the mode's activity rules and keep-ready count no longer hold it, the battery floor is Runner first's 50%, and the VM keeps Runner first's rules while its job runs. The hard limits (memory, heat, disk, Low Power Mode, a pending security update, memory headroom, Apple's 2 VM cap) and the owner's own conditions (schedule, trusted networks, hotspots, VPN, only on power) still hold; `acceptWhy` names the one in the way and the button says it. GitHub gives the VM whichever matching job is first in line. **Undo** takes back either. Declines and accepts live in memory and end when the job leaves the queue.
 - **Channel.** `runner:job` (runner id, action, repo, job id) with `decline`, `accept` or `undo` for a job in the view's `queue`, `cancel` or `restart` for a slot's running job, and `rerun` for a job in the recent list; any other job is refused. Accepts, declines and re-runs are applied on the supervisor's next tick. The view gains `queue` (each with `createdAt`, `declined`, `accepted`), `acceptWhy`, and per slot `vm` and `boosted`; a job gains `steps` (`done`, `total`, `current`).
 
 ## Phases `[planned]`

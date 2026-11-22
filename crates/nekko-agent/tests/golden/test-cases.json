@@ -26,8 +26,8 @@
   { "name": "anthropic-no-key", "provider": "anthropic", "patch": { "apiKey": "" }, "responses": {} },
   { "name": "anthropic-sub", "provider": "anthropic-sub", "responses": {} },
   { "name": "anthropic-sub-signed-out", "provider": "anthropic-sub", "patch": { "apiKey": "" }, "responses": {} },
-  { "name": "chatgpt-ok", "provider": "chatgpt", "responses": { "https://chatgpt.com/backend-api/codex/models?client_version=0.160.0": { "status": 200, "body": "{\"models\":[]}" } } },
-  { "name": "chatgpt-401", "provider": "chatgpt", "responses": { "https://chatgpt.com/backend-api/codex/models?client_version=0.160.0": { "status": 401, "body": "{\"detail\":\"Unauthorized\"}" } } },
+  { "name": "chatgpt-ok", "provider": "chatgpt", "responses": { "https://chatgpt.com/backend-api/codex/models?client_version=0.171.0": { "status": 200, "body": "{\"models\":[]}" } } },
+  { "name": "chatgpt-401", "provider": "chatgpt", "responses": { "https://chatgpt.com/backend-api/codex/models?client_version=0.171.0": { "status": 401, "body": "{\"detail\":\"Unauthorized\"}" } } },
   { "name": "chatgpt-unreachable", "provider": "chatgpt", "responses": {} },
   { "name": "chatgpt-no-account", "provider": "chatgpt-no-account", "responses": {} },
   { "name": "chatgpt-signed-out", "provider": "chatgpt-custom-dup", "responses": {} }

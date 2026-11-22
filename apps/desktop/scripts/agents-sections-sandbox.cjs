@@ -25,25 +25,20 @@ app.whenReady().then(async () => {
     await run("document.querySelector('.zones-intro button[aria-label=Close]')?.click()");
     for (const theme of ['dark', 'light']) {
       await run(`document.documentElement.dataset.theme = '${theme}'`);
-      for (const orientation of ['vertical', 'horizontal']) {
-        win.setContentSize(1440, 900); await sleep(300);
-        await run(`document.querySelector('button[aria-label="Show agents in a ${orientation === 'vertical' ? 'column' : 'row'}"]')?.click()`); await sleep(400);
-        for (const width of [1440, 760]) {
-          win.setContentSize(width, 900); await sleep(450);
-          await check(`document.querySelector('[data-agent-panel][data-orientation="${orientation}"]') !== null`, `${theme}/${orientation}/${width}: real Agents panel mounted`);
-          const layout = await run(`(() => { const groups = [...document.querySelectorAll('.agent-panel-group')]; return groups.map(e => { const s = getComputedStyle(e), r = e.getBoundingClientRect(); return {key:e.dataset.agentGroup, x:r.x, y:r.y, width:r.width, height:r.height, marginTop:s.marginTop, paddingTop:s.paddingTop, paddingLeft:s.paddingLeft, before:getComputedStyle(e, '::before').backgroundColor}; }); })()`);
-          report.layouts.push({theme, orientation, width, groups:layout});
-          if (!process.env.NEKKO_BEFORE) {
-            await check(`(() => { const g = document.querySelectorAll('.agent-panel-group'); return g.length > 1 && getComputedStyle(g[1], '::before').content === '\"\"'; })()`, `${theme}/${orientation}/${width}: divider drawn only between groups`);
-            await check(`getComputedStyle(document.querySelector('.agent-panel-group'), '::before').content === 'none'`, `${theme}/${orientation}/${width}: no leading divider`);
-          }
-          const file = path.join(out, `${theme}-${orientation}-${width}.png`);
-          fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file);
+      for (const width of [1440, 760]) {
+        win.setContentSize(width, 900); await sleep(450);
+        await check(`document.querySelector('[data-agent-panel]') !== null`, `${theme}/${width}: real Agents panel mounted`);
+        const layout = await run(`(() => { const groups = [...document.querySelectorAll('.agent-panel-group')]; return groups.map(e => { const s = getComputedStyle(e), r = e.getBoundingClientRect(); return {key:e.dataset.agentGroup, x:r.x, y:r.y, width:r.width, height:r.height, marginTop:s.marginTop, paddingTop:s.paddingTop, paddingLeft:s.paddingLeft, before:getComputedStyle(e, '::before').backgroundColor}; }); })()`);
+        report.layouts.push({theme, width, groups:layout});
+        if (!process.env.NEKKO_BEFORE) {
+          await check(`(() => { const g = document.querySelectorAll('.agent-panel-group'); return g.length > 1 && getComputedStyle(g[1], '::before').content === '\"\"'; })()`, `${theme}/${width}: divider drawn only between groups`);
+          await check(`getComputedStyle(document.querySelector('.agent-panel-group'), '::before').content === 'none'`, `${theme}/${width}: no leading divider`);
         }
+        const file = path.join(out, `${theme}-${width}.png`);
+        fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file);
       }
     }
-    win.setContentSize(1440, 900);
-    await run("document.querySelector('button[aria-label=\"Show agents in a column\"]')?.click()"); await sleep(400);
+    win.setContentSize(1440, 900); await sleep(400);
     const first = '[data-sidebar-group]';
     await run(`document.querySelector('${first}').click()`); await sleep(300);
     await check(`document.querySelector('${first}').getAttribute('aria-expanded') === 'false'`, 'Group still collapses');

@@ -47,6 +47,31 @@ fn configured(settings: &Value, group: &str, key: &str) -> Option<PromptProfile>
         .and_then(PromptProfile::parse)
 }
 
+/// Additions for the exact admitted route, independent of its size profile.
+/// Only the first `::` separates the provider from the model (model IDs may
+/// contain it). Never fall back to a provider, model family, or bare model ID.
+pub fn model_instructions<'a>(
+    settings: &'a Value,
+    provider_id: &str,
+    provider_kind: &str,
+    model_id: &str,
+) -> Option<&'a str> {
+    if provider_id.is_empty()
+        || provider_id.contains("::")
+        || provider_id.ends_with(':')
+        || model_id.is_empty()
+        || provider_kind == "claude-code"
+    {
+        return None;
+    }
+    settings
+        .pointer("/promptProfiles/modelInstructions")?
+        .get(format!("{provider_id}::{model_id}"))?
+        .as_str()
+        .map(nekko_js::trim)
+        .filter(|text| !text.is_empty())
+}
+
 pub fn resolve(
     settings: &Value,
     provider_id: &str,
@@ -130,6 +155,42 @@ mod tests {
         assert_eq!(c.profile, PromptProfile::Small);
         assert_eq!(c.reason, "Small: 8k context");
         assert_eq!(auto_pick("llamacpp", "llama-3.3-70b", Some(16_000.0)), PromptProfile::Large);
+    }
+
+    #[test]
+    fn instructions_match_the_exact_route_only_and_never_set_the_profile() {
+        let settings = serde_json::json!({"promptProfiles": {
+            "auto": true,
+            "providers": {"local": "medium"},
+            "models": {"local::vendor/model::4b": "large"},
+            "modelInstructions": {
+                "local::vendor/model::4b": "  Cite file paths. \n",
+                "local::blank": " \n ",
+                "local::invalid": ["not text"],
+                "local": "not a provider-wide overlay"
+            }
+        }});
+        let instructions = |p, k, m| model_instructions(&settings, p, k, m);
+        assert_eq!(instructions("local", "ollama", "vendor/model::4b"), Some("Cite file paths."));
+        for (p, k, m) in [
+            ("other", "ollama", "vendor/model::4b"),
+            ("local", "ollama", "vendor/model"),
+            ("local", "ollama", "Vendor/model::4b"),
+            ("local::vendor/model", "ollama", "4b"),
+            ("local", "ollama", "blank"),
+            ("local", "ollama", "invalid"),
+            ("local", "ollama", ""),
+            ("", "ollama", "vendor/model::4b"),
+            ("local", "claude-code", "vendor/model::4b"),
+        ] {
+            assert_eq!(instructions(p, k, m), None, "{p} {k} {m}");
+        }
+        assert_eq!(resolve(&settings, "local", "ollama", "vendor/model::4b", None).reason, "Large: set for this model");
+        assert_eq!(resolve(&settings, "local", "ollama", "blank", None).reason, "Medium: set for this provider");
+        let fallback = resolve(&settings, "other", "ollama", "vendor/model::4b", None);
+        let mut no_overlays = settings.clone();
+        no_overlays["promptProfiles"].as_object_mut().unwrap().remove("modelInstructions");
+        assert_eq!(fallback.to_json(), resolve(&no_overlays, "other", "ollama", "vendor/model::4b", None).to_json());
     }
 
     #[test]

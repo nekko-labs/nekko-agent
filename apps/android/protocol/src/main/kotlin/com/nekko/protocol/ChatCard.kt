@@ -99,7 +99,7 @@ object ChatCard {
 
     /**
      * Context matters while the chat is in progress: running, waiting on you, or
-     * idle with a watch armed. A finished or completed chat has no context
+     * idle with a watch armed. A finished or archived chat has no context
      * pressure left, so its card leaves the gauge off.
      */
     fun showsContext(s: SessionSummary, activity: Activity?): Boolean =

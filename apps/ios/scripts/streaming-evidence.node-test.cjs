@@ -45,7 +45,7 @@ test('reconnect punctuation changes opacity, never its text or width', () => {
   assert.match(notice, /Text\("\."\).opacity/);
   assert.match(notice, /paused: reduceMotion \|\| phase != .active/);
   assert.match(notice, /accessibilityLabel\("\\\(name\) is reconnecting\.\.\."\)/);
-  assert.match(notice, /Draft your message now and it will send when \\\(name\) reconnects/);
+  assert.match(notice, /Prompts you send wait on this iPhone\./);
 });
 
 test('measured growth targets the content edge, not a lazy sentinel', () => {

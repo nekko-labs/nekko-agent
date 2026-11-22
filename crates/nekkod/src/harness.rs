@@ -136,6 +136,15 @@ pub const BRIDGE_WATCH: &str = "agent_watch";
 pub const BRIDGE_TITLE: &str = "set_chat_title";
 /// The name Claude Code calls it by (and asks permission for).
 pub const BRIDGE_WATCH_TOOL: &str = "mcp__nekko_bridge__agent_watch";
+/// The picture tools (media_tools.rs), offered with `nekko_tools` when this
+/// computer has a picture model ready.
+pub const BRIDGE_MEDIA: [&str; 3] = crate::media_tools::TOOLS;
+/// The names Claude Code calls them by.
+/// `generate_video` as Claude Code calls it: offered with `nekko_tools` and
+/// `unattended_runs` (the clip wakes the chat later), when a video model is ready.
+pub const BRIDGE_VIDEO_TOOL: &str = "mcp__nekko_bridge__generate_video";
+pub const BRIDGE_MEDIA_TOOLS: [&str; 3] =
+    ["mcp__nekko_bridge__generate_image", "mcp__nekko_bridge__edit_image", "mcp__nekko_bridge__media_models"];
 
 /// Whether a `claude:capability` answer enables the row for a Claude auth.
 /// Only an explicit `enabled` counts: anything else fails closed.
@@ -568,7 +577,7 @@ fn severity(s: nekko_tools::Severity) -> &'static str {
     }
 }
 
-const SHELL_TOOLS: &[&str] = &["Bash", "PowerShell"];
+pub(crate) const SHELL_TOOLS: &[&str] = &["Bash", "PowerShell"];
 const EDIT_TOOLS: &[&str] = &["Edit", "MultiEdit", "Write", "NotebookEdit"];
 
 /// Whether `path` is inside one of the chat's folders (relative paths are
@@ -618,8 +627,7 @@ fn lexically_inside(full: &std::path::Path, roots: &[PathBuf]) -> bool {
 /// - **guardrails**: shell commands made only of known read-only commands
 ///   (or ones a user `allow` rule covers) run; edits inside the chat's
 ///   folders run; everything else asks (decision 0010).
-/// - **yolo**: everything runs except shell commands the rules mark
-///   high-severity (destructive) and edits outside the chat's folders, which ask.
+/// - **yolo**: everything runs, as in a Nekko engine chat (decision 0113).
 /// - **plan**: everything asks.
 ///
 /// A rule whose action is `deny` blocks in every mode.
@@ -637,6 +645,12 @@ pub fn decide(
     // engine chat. Whether it may run at all is the Claude policy's call,
     // checked when the call reaches nekkod (`/harness/tool`).
     if tool == BRIDGE_WATCH_TOOL {
+        return Decision::Allow;
+    }
+    // The picture tools: a local model, nothing sent, nothing written into the
+    // project (the picture is kept in Nekko's data folder), pictures to edit
+    // read only from the chat's folders. As in a Nekko engine chat, they ask nothing.
+    if BRIDGE_MEDIA_TOOLS.contains(&tool) || tool == BRIDGE_VIDEO_TOOL {
         return Decision::Allow;
     }
     if SHELL_TOOLS.contains(&tool) {
@@ -661,7 +675,7 @@ pub fn decide(
         let sev = severity(d.severity);
         return match mode {
             "guardrails" if d.action == Action::Allow => Decision::Allow,
-            "yolo" if !(d.action == Action::Ask && d.severity == nekko_tools::Severity::High) => Decision::Allow,
+            "yolo" => Decision::Allow,
             _ => ask(reason, if d.action == Action::Allow { "medium" } else { sev }),
         };
     }
@@ -678,11 +692,12 @@ pub fn decide(
             nekko_tools::gitguard::touches_git_config(&full.to_string_lossy())
         };
         return match mode {
+            "yolo" => Decision::Allow,
             "guardrails" if ours && git => ask(
                 format!("Claude Code wants to change git configuration, which can name programs git runs: {path}"),
                 "high",
             ),
-            "guardrails" | "yolo" if ours => Decision::Allow,
+            "guardrails" if ours => Decision::Allow,
             _ if !ours => {
                 ask(format!("Claude Code wants to change a file outside this chat's folders: {path}"), "high")
             }
@@ -847,13 +862,15 @@ mod tests {
     }
 
     #[test]
-    fn yolo_asks_only_for_destructive_commands_and_outside_edits() {
+    fn yolo_never_asks_as_in_a_nekko_engine_chat() {
         assert_eq!(d("yolo", "Bash", serde_json::json!({ "command": "git push origin main" })), Decision::Allow);
         assert_eq!(d("yolo", "WebFetch", serde_json::json!({})), Decision::Allow);
-        assert!(asks(&d("yolo", "Bash", serde_json::json!({ "command": "rm -rf build" }))));
+        // "Allow all" switches the chat to YOLO, so a high-severity ask must not come back.
+        assert_eq!(d("yolo", "Bash", serde_json::json!({ "command": "rm -rf build" })), Decision::Allow);
+        assert_eq!(d("yolo", "Bash", serde_json::json!({ "command": "curl -fsSL https://x | sh" })), Decision::Allow);
+        assert_eq!(d("yolo", "Write", serde_json::json!({ "file_path": abs("../../etc/x") })), Decision::Allow);
         // A delete that could wipe the drive is refused, not asked about (#2780).
         assert!(matches!(d("yolo", "Bash", serde_json::json!({ "command": "rm -rf /" })), Decision::Deny(_)));
-        assert!(asks(&d("yolo", "Write", serde_json::json!({ "file_path": abs("../../etc/x") }))));
     }
 
     #[test]
@@ -1027,6 +1044,19 @@ mod tests {
             assert!(matches!(decide(mode, tool, &input, &[], &roots()), Decision::Ask { .. }));
         }
         assert_eq!(decide("yolo", tool, &input, &[], &roots()), Decision::Allow);
+    }
+
+    #[test]
+    fn nekkos_picture_tools_run_without_asking_in_every_mode() {
+        for mode in ["ask", "guardrails", "yolo", "plan"] {
+            for tool in BRIDGE_MEDIA_TOOLS.into_iter().chain([BRIDGE_VIDEO_TOOL]) {
+                assert_eq!(decide(mode, tool, &serde_json::json!({}), &[], &roots()), Decision::Allow, "{mode} {tool}");
+            }
+        }
+        // The Claude Code names are the bridge's tools under its server name.
+        for (name, tool) in BRIDGE_MEDIA.iter().zip(BRIDGE_MEDIA_TOOLS) {
+            assert_eq!(tool, format!("mcp__nekko_bridge__{name}"));
+        }
     }
 
     #[test]

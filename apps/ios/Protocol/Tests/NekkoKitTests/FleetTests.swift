@@ -387,7 +387,7 @@ final class FleetTests: XCTestCase {
         connections.last?.online()
         await settle()
 
-        try await s.completeChat("aaaa1", on: a)
+        try await s.archiveChat("aaaa1", on: a)
         XCTAssertEqual(ca.callsTo(Channels.sessionSetOptions).count, 1)
         XCTAssertEqual(s.chats(on: a).first { $0.id == "aaaa1" }?.archived, true)
         try await s.setPinned("aaaa2", true, on: a)

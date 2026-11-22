@@ -54,11 +54,11 @@ final class PermissionChecklistUITests: XCTestCase {
     func testSettingsEntryReusesChecklistWithoutOnboardingCTA() {
         let app = launch(settings: true, dark: true)
         let link = app.buttons["settings.permissions"]
-        XCTAssertTrue(link.waitForExistence(timeout: 15))
-        for _ in 0..<5 {
-            if link.isHittable { break }
-            app.swipeUp()
-        }
+        // Settings is a List, which builds only the rows on screen, and the row sits
+        // below the fold since the profile and computer rows moved to the top (#2947).
+        XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 15))
+        for _ in 0..<10 where !(link.exists && link.isHittable) { app.swipeUp() }
+        XCTAssertTrue(link.waitForExistence(timeout: 5))
         link.tap()
         open("notifications", in: app)
         XCTAssertTrue(app.buttons["permissions.action.notifications"].waitForExistence(timeout: 10))
@@ -128,6 +128,9 @@ final class PermissionChecklistUITests: XCTestCase {
         wait(for: [enabled], timeout: 5)
         // iOS may terminate the app when permissions change in Settings.
         // Re-launch if it is no longer running so the permission recovery completes.
+        // On CI iOS ends the app for the grant, up to 4s after the toggle; checking
+        // earlier sends activate() to a dying app (#3062). Returns at once once ended.
+        _ = app.wait(for: .notRunning, timeout: 10)
         if app.state == .notRunning {
             app.launch()
         } else {

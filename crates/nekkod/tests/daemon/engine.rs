@@ -3,7 +3,7 @@
 use crate::common::*;
 
 /// A GGUF header with enough geometry for the planner (`gguf-fixture.ts`).
-fn tiny_gguf(arch: &str, name: &str) -> Vec<u8> {
+pub(crate) fn tiny_gguf(arch: &str, name: &str) -> Vec<u8> {
     let s = |v: &str| {
         let mut b = (v.len() as u64).to_le_bytes().to_vec();
         b.extend_from_slice(v.as_bytes());
@@ -311,13 +311,13 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
 /// system's own tar (bsdtar on Windows and macOS writes zip from the name).
 fn engine_archive(dir: &std::path::Path) -> (String, &'static str, Vec<u8>) {
     let (build, name, exe) = if cfg!(windows) {
-        ("win-x64-cpu", "llama-b12167-bin-win-cpu-x64.zip", "llama-server.exe")
+        ("win-x64-cpu", "llama-b12412-bin-win-cpu-x64.zip", "llama-server.exe")
     } else if cfg!(target_os = "macos") {
-        ("macos-arm64-metal", "llama-b12167-bin-macos-arm64.tar.gz", "llama-server")
+        ("macos-arm64-metal", "llama-b12412-bin-macos-arm64.tar.gz", "llama-server")
     } else if cfg!(target_arch = "aarch64") {
-        ("linux-arm64-cpu", "llama-b12167-bin-ubuntu-arm64.tar.gz", "llama-server")
+        ("linux-arm64-cpu", "llama-b12412-bin-ubuntu-arm64.tar.gz", "llama-server")
     } else {
-        ("linux-x64-cpu", "llama-b12167-bin-ubuntu-x64.tar.gz", "llama-server")
+        ("linux-x64-cpu", "llama-b12412-bin-ubuntu-x64.tar.gz", "llama-server")
     };
     let src = dir.join("archive-src/build/bin");
     std::fs::create_dir_all(&src).unwrap();
@@ -354,11 +354,11 @@ async fn fake_github(name: &'static str, archive: Vec<u8>) -> u16 {
     let port = listener.local_addr().unwrap().port();
     let digest: String = sha2::Sha256::digest(&archive).iter().map(|b| format!("{b:02x}")).collect();
     let release = json!({
-        "tag_name": "b12167",
+        "tag_name": "b12412",
         "assets": [{ "name": name, "browser_download_url": format!("http://127.0.0.1:{port}/dl/{name}"), "size": archive.len(), "digest": format!("sha256:{digest}") }],
     });
     let app = axum::Router::new()
-        .route("/repos/ggml-org/llama.cpp/releases/tags/b12167", get(move || async move { axum::Json(release) }))
+        .route("/repos/ggml-org/llama.cpp/releases/tags/b12412", get(move || async move { axum::Json(release) }))
         .route(&format!("/dl/{name}"), get(move || async move { archive }));
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -380,12 +380,12 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, preview) = post(d.port, "engine:installPreview", json!(["llama", build]), Some(TOKEN)).await;
     assert_eq!(
         (preview["version"].clone(), preview["files"][0]["name"].clone()),
-        (json!("b12167"), json!(name)),
+        (json!("b12412"), json!(name)),
         "{preview}"
     );
     let (status, started) = post(d.port, "engine:install", json!([build, "llama"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
-    assert_eq!(started["message"], "Downloading llama.cpp b12167.", "{started}");
+    assert_eq!(started["message"], "Downloading llama.cpp b12412.", "{started}");
     let job =
         job_until(d.port, started["jobId"].as_str().unwrap(), |j| j["state"] == "done" || j["state"] == "failed").await;
     assert_eq!(job["state"], "done", "{job}");
@@ -395,7 +395,7 @@ async fn installs_and_removes_the_engine_itself() {
     assert!(!data.join("engine").join(&build).join(name).exists(), "the archive is gone once unpacked");
     let record: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("engine/engine.json")).unwrap()).unwrap();
-    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12167")));
+    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12412")));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -405,7 +405,7 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, detected) = post(d.port, "engine:detect", json!(["llama"]), Some(TOKEN)).await;
     assert_eq!(
         (detected["source"].clone(), detected["version"].clone()),
-        (json!("managed"), json!("b12167")),
+        (json!("managed"), json!("b12412")),
         "{detected}"
     );
     assert!(
@@ -441,7 +441,7 @@ async fn installs_and_removes_the_engine_itself() {
 }
 
 /// The stand-in `llama-server`, built beside this test if `cargo test` did not build examples.
-fn fake_llama() -> std::path::PathBuf {
+pub(crate) fn fake_llama() -> std::path::PathBuf {
     let exe = format!("fake_llama_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
     let path = deps.parent().unwrap().join("examples").join(exe);
@@ -601,7 +601,570 @@ async fn runs_the_model_server_itself() {
 }
 
 /// The stand-in `sd-server`, built beside this test if `cargo test` did not build examples.
-fn fake_sd() -> std::path::PathBuf {
+/// A chat's agent starts a clip (`generate_video`): the call returns at once,
+/// the clip is made through the media queue and kept beside the chat, and its
+/// `clip` watch holds the news that wakes the chat.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chats_agent_starts_a_clip_and_its_watch_gets_the_news() {
+    let data = std::env::temp_dir().join(format!("nekkod-clip-tool-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let model = data.join("models/image/QuantStack_Wan2.2-TI2V-5B-GGUF/Wan2.2-TI2V-5B-Q4_K_M.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("wan2", "Wan2.2 TI2V 5B")).unwrap();
+    let shared = data.join("models/.companions/image");
+    std::fs::create_dir_all(&shared).unwrap();
+    for f in ["vae-wan2.2.safetensors", "t5xxl-umt5-xxl-q8_0.gguf"] {
+        std::fs::write(shared.join(f), "x").unwrap();
+    }
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": free_port(), "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let workspace = data.join("project");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat = json!({ "id": "s_film", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_film.json"), chat.to_string()).unwrap();
+    let d = start_with_env(&data, json!({}), &[]);
+    let events = record_events(d.port);
+    boot_settled(&data);
+    let rig = TurnRig { data: data.clone(), workspace: workspace.clone(), d, events };
+
+    let script = vec![
+        call_tool("c_clip", "generate_video", json!({ "prompt": "waves rolling in", "path": "media/waves.webp" })),
+        say_text("started it"),
+    ];
+    let model = scripted_model(script).await;
+    let spec = turn_spec(&rig, &model, "turn_film", "s_film", json!({ "text": "Make a clip of the sea" }));
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_film", "s_film").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let first = model.requests.lock().unwrap()[0].clone();
+    let tools: Vec<String> = first["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    assert!(tools.contains(&"generate_video".to_string()), "{tools:?}");
+    assert!(!tools.contains(&"generate_image".to_string()), "a video model is not a picture model: {tools:?}");
+
+    // The call answered before the clip existed.
+    let saved = saved_session(&rig, "s_film");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_clip")
+        .map(|m| m["toolResult"].clone())
+        .expect("the clip tool's result");
+    let output = result["output"].as_str().unwrap();
+    assert!(output.starts_with("Started a 832x480 clip with "), "{output}");
+    assert!(output.contains("wakes this chat"), "{output}");
+
+    // The clip lands beside the chat and in the project, and its watch holds the news.
+    let news = until("the clip watch's news", Duration::from_secs(60), || {
+        let path = data.join("agent-watches.json");
+        async move {
+            let all: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
+            let w = all.iter().find(|w| w["kind"] == "clip" && w["sessionId"] == "s_film")?.clone();
+            let text = w["pending"]
+                .as_str()
+                .map(str::to_string)
+                .or_else(|| (w["status"] != "active").then(|| w.to_string()))?;
+            Some(text)
+        }
+    })
+    .await;
+    assert!(news.starts_with("The clip is ready (Wan2.2 TI2V 5B, 832x480): "), "{news}");
+    assert!(news.contains("media/waves.webp"), "{news}");
+    let kept: Vec<_> = std::fs::read_dir(data.join("agent-pictures/s_film")).unwrap().collect();
+    assert_eq!(kept.len(), 1);
+    assert!(workspace.join("media/waves.webp").is_file());
+    post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+}
+
+/// A stand-in OpenRouter: one picture model priced per picture, and the
+/// requests it got, so a test sees the key and body that reached it.
+async fn fake_openrouter(seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>) -> u16 {
+    use axum::extract::Path;
+    use axum::http::HeaderMap;
+    use axum::routing::{get, post};
+    let models = json!({ "data": [{ "id": "acme/pic", "name": "Acme Pic",
+        "architecture": { "input_modalities": ["text", "image"], "output_modalities": ["image"] } }] });
+    let endpoints = json!({ "data": { "endpoints": [{ "pricing": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.03 }] }] } });
+    let app = axum::Router::new()
+        .route("/api/v1/images/models", get(move || async move { axum::Json(models) }))
+        .route(
+            "/api/v1/images/models/{*rest}",
+            get(move |Path(rest): Path<String>| {
+                let endpoints = endpoints.clone();
+                async move { if rest == "acme/pic/endpoints" { axum::Json(endpoints) } else { axum::Json(json!({})) } }
+            }),
+        )
+        .route(
+            "/api/v1/images",
+            post(move |headers: HeaderMap, axum::Json(body): axum::Json<Value>| {
+                let seen = seen.clone();
+                async move {
+                    let auth = headers.get("authorization").and_then(|v| v.to_str().ok()).unwrap_or_default().to_string();
+                    seen.lock().unwrap().push(json!({ "auth": auth, "body": body }));
+                    axum::Json(json!({ "data": [{ "b64_json": "UElD", "media_type": "image/png" }], "usage": { "cost": 0.031 } }))
+                }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+/// A paid cloud picture through the user's OpenRouter provider: asked for with
+/// its price even in YOLO, made with the user's key, its cost recorded, and a
+/// second picture within the chat's allowance not asked again.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_paid_cloud_picture_asks_with_its_price_even_in_yolo() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter(seen.clone()).await;
+    let chat = json!({ "id": "s_cloud", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("cloud-picture", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model = scripted_model(vec![
+        call_tool("c_pic1", "generate_image", json!({ "prompt": "a red kite", "model": "openrouter:p_or:acme/pic" })),
+        call_tool("c_pic2", "generate_image", json!({ "prompt": "a blue kite", "model": "openrouter:p_or:acme/pic" })),
+        say_text("made them"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_cloud", "s_cloud", json!({ "text": "Two kites" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(&rig, json!({ "providers": [scripted.clone(), openrouter.clone()] })).await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+
+    // YOLO does not wave a charge through: the first picture asks, with its price.
+    let asked = wait_pending(rig.d.port, "s_cloud", "approval", "c_pic1").await;
+    let reason = asked["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("Make 1 picture with Acme Pic through OpenRouter for $0.030"), "{reason}");
+    assert!(reason.contains("up to $1.00"), "{reason}");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cloud", "c_pic1", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_cloud", "s_cloud").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let saved = saved_session(&rig, "s_cloud");
+    let result = |id: &str| {
+        saved["messages"].as_array().unwrap().iter().find(|m| m["toolResult"]["toolCallId"] == id).unwrap()["toolResult"].clone()
+    };
+    for id in ["c_pic1", "c_pic2"] {
+        let r = result(id);
+        assert!(
+            r["output"]
+                .as_str()
+                .unwrap()
+                .starts_with("Made the picture with Acme Pic through OpenRouter (cost $0.031)."),
+            "{r}"
+        );
+        assert_eq!(r["images"][0], "data:image/png;base64,UElD");
+    }
+    // The second, within the allowance, did not ask; both were charged and counted.
+    assert_eq!(saved["pictureSpend"]["allowedUsd"], 1.0);
+    assert!((saved["pictureSpend"]["spentUsd"].as_f64().unwrap() - 0.062).abs() < 1e-9, "{}", saved["pictureSpend"]);
+    let calls = seen.lock().unwrap().clone();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0]["auth"], "Bearer sk-or-test");
+    assert_eq!((calls[0]["body"]["model"].clone(), calls[0]["body"]["n"].clone()), (json!("acme/pic"), json!(1)));
+    assert_eq!(calls[0]["body"]["aspect_ratio"], "1:1");
+    let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap_or_default();
+    let pictures = usage.lines().filter(|l| l.contains("\"kind\":\"picture\"")).count();
+    assert_eq!(pictures, 2, "{usage}");
+}
+
+/// A stand-in OpenRouter for clips: Veo 3.1 priced per second, a job that is
+/// done at the first look, and the bodies it was sent.
+async fn fake_openrouter_video(seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>) -> u16 {
+    use axum::routing::{get, post};
+    let models = json!({ "data": [{ "id": "google/veo-3.1", "name": "Veo 3.1", "supported_durations": [4, 6, 8],
+        "supported_resolutions": ["720p", "1080p"], "supported_frame_images": ["first_frame"], "generate_audio": true,
+        "pricing_skus": { "duration_seconds_without_audio": "0.20", "duration_seconds_with_audio": "0.40" } }] });
+    let app = axum::Router::new()
+        .route("/api/v1/videos/models", get(move || async move { axum::Json(models) }))
+        .route(
+            "/api/v1/videos",
+            post(move |axum::Json(body): axum::Json<Value>| {
+                let seen = seen.clone();
+                async move {
+                    seen.lock().unwrap().push(body);
+                    (axum::http::StatusCode::ACCEPTED, axum::Json(json!({ "id": "job1", "status": "pending" })))
+                }
+            }),
+        )
+        .route(
+            "/api/v1/videos/job1",
+            get(|| async { axum::Json(json!({ "id": "job1", "status": "completed", "usage": { "cost": 2.35 } })) }),
+        )
+        .route("/api/v1/videos/job1/content", get(|| async { ([("content-type", "video/mp4")], b"MP4DATA".to_vec()) }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+/// A paid cloud clip: the user picks its length and audio on a priced question
+/// card, confirms the total even in YOLO, and the chat's clip watch gets the
+/// clip, which is kept with its cost recorded.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_paid_cloud_clip_is_chosen_with_prices_then_confirmed() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter_video(seen.clone()).await;
+    let chat = json!({ "id": "s_veo", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("cloud-clip", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model = scripted_model(vec![
+        call_tool(
+            "c_veo",
+            "generate_video",
+            json!({ "prompt": "waves at dusk", "model": "openrouter:p_or:google/veo-3.1" }),
+        ),
+        say_text("started"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_veo", "s_veo", json!({ "text": "A clip of the sea" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(&rig, json!({ "providers": [scripted.clone(), openrouter.clone()] })).await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+
+    // First the choice, every answer priced, the cheapest suggested first.
+    let card = wait_pending(rig.d.port, "s_veo", "question", "c_veo-clip").await;
+    let questions = card["questions"].as_array().unwrap();
+    assert_eq!(questions[0]["options"][0], json!({ "label": "4 seconds", "description": "$0.80 (suggested)" }));
+    assert_eq!(questions[1]["options"][1]["label"], "With audio");
+    let answers =
+        json!([{ "questionId": "q1", "labels": ["6 seconds"] }, { "questionId": "q2", "labels": ["With audio"] }]);
+    let (status, body) = post(rig.d.port, "chat:answer", json!(["s_veo", "c_veo-clip", answers]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    // Then the total, even in YOLO, saying it cannot be stopped.
+    let asked = wait_pending(rig.d.port, "s_veo", "approval", "c_veo").await;
+    let reason = asked["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("Make a 6 s, with audio, 720p clip with Veo 3.1 through OpenRouter for $2.40"), "{reason}");
+    assert!(reason.contains("cannot be stopped"), "{reason}");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_veo", "c_veo", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_veo", "s_veo").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_veo");
+    let started = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_veo")
+        .unwrap()["toolResult"]
+        .clone();
+    assert!(
+        started["output"]
+            .as_str()
+            .unwrap()
+            .starts_with("Started a 6 s, with audio, 720p clip with Veo 3.1 through OpenRouter ($2.40)."),
+        "{started}"
+    );
+    let sent = seen.lock().unwrap().clone();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(
+        (
+            sent[0]["model"].clone(),
+            sent[0]["duration"].clone(),
+            sent[0]["generate_audio"].clone(),
+            sent[0]["resolution"].clone()
+        ),
+        (json!("google/veo-3.1"), json!(6), json!(true), json!("720p"))
+    );
+
+    // The clip arrives: kept beside the chat, its cost recorded, the watch told.
+    let data = rig.data.clone();
+    let news = until("the cloud clip's news", Duration::from_secs(30), || {
+        let path = data.join("agent-watches.json");
+        async move {
+            let all: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
+            let w = all.iter().find(|w| w["kind"] == "clip" && w["sessionId"] == "s_veo")?.clone();
+            w["pending"].as_str().map(str::to_string).or_else(|| (w["status"] != "active").then(|| w.to_string()))
+        }
+    })
+    .await;
+    assert!(news.starts_with("The clip is ready (Veo 3.1, 6 s, with audio, 720p): "), "{news}");
+    let kept: Vec<_> =
+        std::fs::read_dir(rig.data.join("agent-pictures/s_veo")).unwrap().map(|e| e.unwrap().path()).collect();
+    assert_eq!(kept.len(), 1);
+    assert_eq!(std::fs::read(&kept[0]).unwrap(), b"MP4DATA");
+    let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap_or_default();
+    assert!(usage.lines().any(|l| l.contains("\"kind\":\"video\"") && l.contains("\"costUsd\":2.35")), "{usage}");
+}
+
+/// The desktop's clip picker confirms the total with its answers: the clip
+/// starts with no second approval. The card carries every combination's price.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cloud_clip_confirmed_in_the_picker_needs_no_second_approval() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter_video(seen.clone()).await;
+    let chat = json!({ "id": "s_pick", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("clip-picker", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model = scripted_model(vec![
+        call_tool("c_pick", "generate_video", json!({ "prompt": "waves", "model": "openrouter:p_or:google/veo-3.1" })),
+        say_text("started"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_pick", "s_pick", json!({ "text": "A clip" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(&rig, json!({ "providers": [scripted.clone(), openrouter.clone()] })).await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let card = wait_pending(rig.d.port, "s_pick", "question", "c_pick-clip").await;
+    assert_eq!(card["clip"]["model"], "Veo 3.1");
+    assert_eq!(card["clip"]["prices"]["8 seconds|With audio|1080p"], json!(3.2));
+    let answers = json!([{ "questionId": "q1", "labels": ["8 seconds"] }, { "questionId": "q2", "labels": ["With audio"] },
+        { "questionId": "q3", "labels": ["1080p"] }, { "questionId": "total", "labels": ["3.20"] }]);
+    let (status, body) = post(rig.d.port, "chat:answer", json!(["s_pick", "c_pick-clip", answers]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_pick", "s_pick").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let sent = seen.lock().unwrap().clone();
+    assert_eq!((sent[0]["duration"].clone(), sent[0]["resolution"].clone()), (json!(8), json!("1080p")));
+}
+
+/// A stand-in OpenRouter with Recraft's vector model: an SVG that carries a script.
+async fn fake_openrouter_vector(seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>) -> u16 {
+    use axum::extract::Path;
+    use axum::routing::{get, post};
+    let models = json!({ "data": [{ "id": "recraft/recraft-v4.1-vector", "name": "Recraft V4.1 Vector",
+        "architecture": { "input_modalities": ["text"], "output_modalities": ["image"] } }] });
+    let endpoints = json!({ "data": { "endpoints": [{ "pricing": [{ "billable": "output_image", "unit": "image", "cost_usd": "0.08" }] }] } });
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" onload="steal()"><script>steal()</script><circle cx="12" cy="12" r="10" fill="#ff5a36"/></svg>"##;
+    let b64 = {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode(svg)
+    };
+    let app = axum::Router::new()
+        .route("/api/v1/images/models", get(move || async move { axum::Json(models) }))
+        .route(
+            "/api/v1/images/models/{*rest}",
+            get(move |Path(_rest): Path<String>| {
+                let endpoints = endpoints.clone();
+                async move { axum::Json(endpoints) }
+            }),
+        )
+        .route(
+            "/api/v1/images",
+            post(move |axum::Json(body): axum::Json<Value>| {
+                let (seen, b64) = (seen.clone(), b64.clone());
+                async move {
+                    seen.lock().unwrap().push(body);
+                    axum::Json(json!({ "data": [{ "b64_json": b64, "media_type": "image/svg+xml" }], "usage": { "cost": 0.08 } }))
+                }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+/// A vector picture: with format svg and no model the user's Recraft is used,
+/// asked with its price; the SVG comes back made safe, with its code for the
+/// agent and a PNG preview, and is saved in the project.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_vector_picture_comes_from_recraft_made_safe() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter_vector(seen.clone()).await;
+    let chat = json!({ "id": "s_svg", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("vector-picture", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model = scripted_model(vec![
+        call_tool(
+            "c_logo",
+            "generate_image",
+            json!({ "prompt": "a round orange logo", "format": "svg", "path": "brand/logo.svg" }),
+        ),
+        say_text("done"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_svg", "s_svg", json!({ "text": "A logo" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(&rig, json!({ "providers": [scripted.clone(), openrouter.clone()] })).await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let asked = wait_pending(rig.d.port, "s_svg", "approval", "c_logo").await;
+    let reason = asked["reason"].as_str().unwrap_or_default();
+    assert!(
+        reason.contains("Make 1 vector picture (SVG) with Recraft V4.1 Vector through OpenRouter for $0.080"),
+        "{reason}"
+    );
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_svg", "c_logo", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_svg", "s_svg").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let sent = seen.lock().unwrap().clone();
+    assert_eq!(
+        (sent[0]["model"].clone(), sent[0]["output_format"].clone()),
+        (json!("recraft/recraft-v4.1-vector"), json!("svg"))
+    );
+    let saved = saved_session(&rig, "s_svg");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_logo")
+        .unwrap()["toolResult"]
+        .clone();
+    let output = result["output"].as_str().unwrap();
+    assert!(
+        output.starts_with("Made a vector picture (SVG) with Recraft V4.1 Vector through OpenRouter (cost $0.080)."),
+        "{output}"
+    );
+    assert!(output.contains("```svg") && output.contains("<circle"), "{output}");
+    assert!(!output.contains("steal"), "the script and handler are gone: {output}");
+    assert!(output.contains("Saved to "), "{output}");
+    assert!(
+        result["images"][0].as_str().unwrap().starts_with("data:image/png;base64,"),
+        "the chat shows a PNG preview"
+    );
+    let file = std::fs::read_to_string(rig.workspace.join("brand/logo.svg")).unwrap();
+    assert!(file.contains("<circle") && !file.contains("steal"), "{file}");
+}
+
+/// A vector picture with no cloud vector model: the local picture model makes
+/// a flat picture and it is traced to a safe SVG, said to be a trace.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_vector_picture_without_recraft_is_traced_from_a_local_picture() {
+    let data = std::env::temp_dir().join(format!("nekkod-trace-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let model = data.join("models/image/acme_sd/tiny-sd.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("sd1", "Tiny SD")).unwrap();
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": free_port(), "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let workspace = data.join("project");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat = json!({ "id": "s_trace", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_trace.json"), chat.to_string()).unwrap();
+    let d = start_with_env(&data, json!({}), &[]);
+    let events = record_events(d.port);
+    boot_settled(&data);
+    let rig = TurnRig { data: data.clone(), workspace: workspace.clone(), d, events };
+    let script = vec![
+        call_tool(
+            "c_icon",
+            "generate_image",
+            json!({ "prompt": "a blue square icon", "format": "svg", "size": "256x256", "path": "icons/square.svg" }),
+        ),
+        say_text("traced"),
+    ];
+    let model = scripted_model(script).await;
+    let spec = turn_spec(&rig, &model, "turn_trace", "s_trace", json!({ "text": "An icon" }));
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_trace", "s_trace").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_trace");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_icon")
+        .unwrap()["toolResult"]
+        .clone();
+    let output = result["output"].as_str().unwrap();
+    assert!(
+        output.starts_with("Traced a vector picture (SVG) from a picture made with Tiny SD on this computer (free)."),
+        "{output}"
+    );
+    assert!(output.contains("Recraft through the user's OpenRouter is better"), "{output}");
+    assert!(output.contains("```svg\n<svg") && output.contains("<path"), "{output}");
+    assert!(result["images"][0].as_str().unwrap().starts_with("data:image/png;base64,"));
+    let file = std::fs::read_to_string(workspace.join("icons/square.svg")).unwrap();
+    assert!(file.starts_with("<svg") && file.contains("<path"), "{file}");
+    post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+}
+
+/// A chat in Fusion that names no picture model: Fusion picks one by its
+/// strategy, says so in the result, and a paid pick still asks with its price.
+#[tokio::test(flavor = "multi_thread")]
+async fn fusion_picks_the_picture_model_and_says_why() {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let or_port = fake_openrouter(seen.clone()).await;
+    let chat = json!({ "id": "s_fuse", "title": "New chat", "workspaceId": "w1", "mode": "yolo", "autoModel": true,
+        "autoProviderSwitch": true, "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("fusion-picture", chat);
+    let openrouter = json!({ "id": "p_or", "kind": "openrouter", "label": "OpenRouter", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{or_port}/api/v1"), "apiKey": "sk-or-test" });
+    let model =
+        scripted_model(vec![call_tool("c_fuse", "generate_image", json!({ "prompt": "a kite" })), say_text("made it")])
+            .await;
+    let mut spec = turn_spec(&rig, &model, "turn_fuse", "s_fuse", json!({ "text": "A kite" }));
+    let scripted = spec["settings"]["providers"][0].clone();
+    write_settings(
+        &rig,
+        json!({ "providers": [scripted.clone(), openrouter.clone()], "fusion": { "strategy": "quality" } }),
+    )
+    .await;
+    spec["settings"]["providers"] = json!([scripted, openrouter]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    // The paid pick still asks, even in YOLO.
+    wait_pending(rig.d.port, "s_fuse", "approval", "c_fuse").await;
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_fuse", "c_fuse", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_fuse", "s_fuse").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_fuse");
+    let output = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_fuse")
+        .unwrap()["toolResult"]["output"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(output.starts_with("Fusion (Quality first) chose Acme Pic through OpenRouter ($0.030 a picture, asked first). Made the picture with Acme Pic"), "{output}");
+}
+
+pub(crate) fn fake_sd() -> std::path::PathBuf {
     let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
     let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
     let path = deps.parent().unwrap().join("examples").join(exe);
@@ -643,6 +1206,8 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     .unwrap();
     let session = json!({ "id": "s_img", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
+    let other = json!({ "id": "s_img2", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_img2.json"), other.to_string()).unwrap();
     let d = start_with_env(&data, json!({}), &[]);
     let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
     let row = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").cloned().expect("an image row");
@@ -670,6 +1235,11 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     assert_eq!(drawn, fake_base64(expected.as_bytes()), "{reply}");
     assert_eq!(reply["generated"]["seed"], 42);
     assert_eq!(reply["generated"]["modelId"], json!(id));
+    // How long the picture took is kept against the model's file, for the recommendations.
+    let measured: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("measured-speeds.json")).unwrap()).unwrap();
+    let samples = measured["pictures"]["tiny-sd.gguf"]["samples"].as_array().expect("a timed picture");
+    assert!(samples.len() == 1 && samples[0].as_f64().unwrap() > 0.0, "{measured}");
     let (_, photo) = post(d.port, "session:photo", json!(["s_img", reply["id"], 0]), Some(TOKEN)).await;
     assert_eq!(photo, image, "the actual generated assistant attachment is readable without image:fetch");
 
@@ -704,11 +1274,34 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
         running.as_array().is_some_and(|r| r.contains(&json!("s_img"))).then_some(())
     })
     .await;
+    // One picture at a time on this computer: another chat's picture waits, and says so.
+    let queued = json!({ "sessionId": "s_img2", "prompt": "a red kite", "params": params });
+    let waiting = tokio::spawn(async move { post(port2, "chat:generateImage", json!([queued]), Some(TOKEN)).await });
+    let mut label = String::new();
+    while let Some(ev) = next_json(&mut events, Duration::from_secs(10)).await {
+        let p = &ev["payload"];
+        if ev["channel"] == "agent:event" && p["sessionId"] == "s_img2" && p["type"] == "image_status" {
+            label = p["label"].as_str().unwrap_or_default().to_string();
+            if label.starts_with("Waiting") {
+                break;
+            }
+        }
+    }
+    assert_eq!(label, "Waiting for another picture or clip on this computer to finish");
+    assert!(!waiting.is_finished(), "the second picture waits for the first");
     let started = Instant::now();
     post(d.port, "chat:abort", json!(["s_img"]), Some(TOKEN)).await;
     let (status, _) = running.await.unwrap();
     assert_eq!(status, 200);
     assert!(started.elapsed() < Duration::from_secs(5));
+    // The stop frees the queue: the waiting picture is made.
+    let (status, _) = waiting.await.unwrap();
+    assert_eq!(status, 200);
+    assert!(started.elapsed() < Duration::from_secs(10), "it did not wait out the stopped picture");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img2.json")).unwrap()).unwrap();
+    let made = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    assert!(made["images"][0].as_str().is_some(), "{made}");
     let saved: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
     let last = saved["messages"].as_array().unwrap().last().unwrap().clone();
@@ -751,6 +1344,88 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
     drop(d);
     std::fs::remove_dir_all(root).ok();
+}
+
+/// A chat's agent makes a picture with the computer's local image model
+/// (`generate_image`, media_tools.rs): offered because a picture model is
+/// ready, drawn through the media queue, shown in the tool's result and saved
+/// in the project where the agent asked.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chats_agent_makes_a_picture_with_the_local_image_model() {
+    let data = std::env::temp_dir().join(format!("nekkod-media-tool-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let model = data.join("models/image/acme_sd/tiny-sd.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("sd1", "Tiny SD")).unwrap();
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": free_port(), "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let workspace = data.join("project");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat = json!({ "id": "s_art", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_art.json"), chat.to_string()).unwrap();
+    let d = start_with_env(&data, json!({}), &[]);
+    let events = record_events(d.port);
+    boot_settled(&data);
+    let rig = TurnRig { data: data.clone(), workspace: workspace.clone(), d, events };
+
+    let script = vec![
+        call_tool(
+            "c_img",
+            "generate_image",
+            json!({ "prompt": "a red kite", "size": "512x512", "path": "art/kite.png" }),
+        ),
+        say_text("made it"),
+    ];
+    let model = scripted_model(script).await;
+    let spec = turn_spec(&rig, &model, "turn_art", "s_art", json!({ "text": "Draw a kite for the page" }));
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (_, end) = turn_record(&rig, "turn_art", "s_art").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    // Offered: a picture model is ready on this computer.
+    let first = model.requests.lock().unwrap()[0].clone();
+    let tools: Vec<String> = first["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    for t in ["generate_image", "edit_image", "media_models"] {
+        assert!(tools.contains(&t.to_string()), "{t} missing from {tools:?}");
+    }
+
+    // The picture is the tool's result (the chat shows it, the model sees it) and a new project file.
+    let saved = saved_session(&rig, "s_art");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["toolResult"]["toolCallId"] == "c_img")
+        .map(|m| m["toolResult"].clone())
+        .expect("the picture tool's result");
+    assert!(result.get("isError").is_none(), "{result}");
+    let output = result["output"].as_str().unwrap();
+    assert!(output.starts_with("Made the picture with Tiny SD (512x512) on this computer."), "{output}");
+    assert!(output.contains("Saved to "), "{output}");
+    let image = result["images"][0].as_str().expect("the picture in the result");
+    let drawn = image.strip_prefix("data:image/png;base64,").unwrap();
+    let file = std::fs::read(workspace.join("art/kite.png")).expect("saved in the project");
+    assert_eq!(fake_base64(&file), drawn, "the saved file is the picture shown");
+    let text = String::from_utf8_lossy(&file).to_string();
+    assert!(text.starts_with("a red kite\n") && text.ends_with("|512x512"), "{text}");
+    post(rig.d.port, "engine:stop", json!([]), Some(TOKEN)).await;
 }
 
 fn fake_base64(bytes: &[u8]) -> String {

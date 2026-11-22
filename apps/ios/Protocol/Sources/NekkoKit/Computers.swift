@@ -685,11 +685,12 @@ public final class ComputersStore {
         return id
     }
 
+    /// An empty name hands naming back to the computer, which renames it on the next connect.
     public func rename(_ id: String, to name: String) {
         let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
-        guard !trimmed.isEmpty, let i = computers.firstIndex(where: { $0.id == id }) else { return }
-        computers[i].name = trimmed
-        computers[i].nameIsCustom = true
+        guard let i = computers.firstIndex(where: { $0.id == id }) else { return }
+        if !trimmed.isEmpty { computers[i].name = trimmed }
+        computers[i].nameIsCustom = !trimmed.isEmpty
         saveIndex()
     }
 
@@ -954,7 +955,7 @@ public final class ComputersStore {
     }
 
     /// App came to the foreground: reconnect now rather than after the backoff,
-    /// and re-read the list (chats completed or started meanwhile send no event).
+    /// and re-read the list (chats archived or started meanwhile send no event).
     public func nudge() {
         resume()
         client?.nudge()
@@ -1360,8 +1361,8 @@ public final class ComputersStore {
 
     // Each takes the chat's computer (`on`): nil is the active one, another is reached through its fleet link.
 
-    /// Complete a chat (the desktop's archive): nothing is deleted.
-    public func completeChat(_ sessionId: String, on computer: String? = nil) async throws {
+    /// Archive a chat: nothing is deleted.
+    public func archiveChat(_ sessionId: String, on computer: String? = nil) async throws {
         let at = now()
         _ = try await caller(computer).call(Channels.sessionSetOptions, [.string(sessionId), ["archivedAt": .int(at)]])
         edit(sessionId, on: computer) { $0.archived = true; $0.archivedAt = at }

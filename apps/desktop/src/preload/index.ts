@@ -22,7 +22,7 @@ import type {
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
-import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents } from '@nekko-agent/shared';
+import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, LIBRARY_THUMBNAIL_CHANNELS } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
 import { heldWhileHidden, pageHidden } from './hiddenReads.js';
@@ -124,8 +124,9 @@ const api: NekkoApi = {
   syncRevoke: (deviceId) => inv(IpcChannels.syncRevoke, deviceId),
   syncNow: () => inv(IpcChannels.syncNow),
   syncSetEnabled: (on) => inv(IpcChannels.syncSetEnabled, on),
-  syncSetIncludeLocalOnly: (on) => inv(IpcChannels.syncSetIncludeLocalOnly, on),
+  syncSetKind: (kind, on) => inv(IpcChannels.syncSetKind, kind, on),
   syncDeleteAll: () => inv(IpcChannels.syncDeleteAll),
+  librarySync: (files) => inv(IpcChannels.librarySync, files),
   orgList: () => inv(IpcChannels.orgList),
   orgCreate: (name) => inv(IpcChannels.orgCreate, name),
   orgGet: (orgId) => inv(IpcChannels.orgGet, orgId),
@@ -190,6 +191,12 @@ const api: NekkoApi = {
   machineDismissNudge: (task) => inv(IpcChannels.machineDismissNudge, task ?? null),
   getGpuStats: heldWhileHidden(() => inv(IpcChannels.gpuStats), pageHidden),
   getSystemStats: () => inv(IpcChannels.systemStats),
+  serversList: () => inv(IpcChannels.serversList),
+  simulatorsState: () => inv(IpcChannels.simulatorsState),
+  simulatorsShutdown: (id) => inv(IpcChannels.simulatorsShutdown, id),
+  simulatorsBoot: (id) => inv(IpcChannels.simulatorsBoot, id),
+  simulatorsOpen: (id) => inv(IpcChannels.simulatorsOpen, id),
+  simulatorsScreenshot: (id) => inv(IpcChannels.simulatorsScreenshot, id),
 
   listSessions: () => inv(IpcChannels.sessionsList),
   nextAgentWatchAt: (sessionId) => inv(IpcChannels.sessionNextWatch, sessionId),
@@ -238,6 +245,7 @@ const api: NekkoApi = {
   toggleContextItem: (sessionId, itemId, included, pinned) =>
     inv(IpcChannels.contextToggle, sessionId, itemId, included, pinned),
   setContextPrefs: (sessionId, prefs) => inv(IpcChannels.contextSetPrefs, sessionId, prefs),
+  promptProfileTexts: () => inv(IpcChannels.contextPromptProfiles),
 
   buildSpec: (sessionId) => inv(IpcChannels.specBuild, sessionId),
   buildSpecDoc: (sessionId, docId, workspaceId) => inv(IpcChannels.specBuildDoc, sessionId, docId, workspaceId),
@@ -289,6 +297,7 @@ const api: NekkoApi = {
   listRepos: (query) => inv(IpcChannels.reposList, query ?? ''),
   cloneRepo: (repo, opts) => inv(IpcChannels.reposClone, repo, opts ?? {}),
   setSandboxRepos: (id, repos) => inv(IpcChannels.reposSetSandbox, id, repos),
+  suggestRepoFolder: (path) => inv(IpcChannels.reposSuggestFolder, path),
   indexWorkspace: (id) => inv(IpcChannels.workspaceIndex, id),
   getIndexStatus: (id) => inv(IpcChannels.workspaceIndexStatus, id),
   searchWorkspace: (id, query) => inv(IpcChannels.workspaceSearch, id, query),
@@ -301,6 +310,10 @@ const api: NekkoApi = {
   // The main process serves these on loopback, not the engine (main/htmlPreview.ts).
   serveHtmlPreview: (path, options) => ipcRenderer.invoke(HTML_PREVIEW_CHANNELS.serve, path, options),
   releaseHtmlPreview: (id) => ipcRenderer.invoke(HTML_PREVIEW_CHANNELS.release, id),
+  // On-disk Library thumbnail cache (main/libraryThumbnails.ts, #3043).
+  libraryThumbGet: (path, revision) => ipcRenderer.invoke(LIBRARY_THUMBNAIL_CHANNELS.get, path, revision),
+  libraryThumbPut: (path, revision, data) => ipcRenderer.invoke(LIBRARY_THUMBNAIL_CHANNELS.put, path, revision, data),
+  libraryThumbCapture: (url) => ipcRenderer.invoke(LIBRARY_THUMBNAIL_CHANNELS.capture, url),
   writeFile: (path, content) => inv(IpcChannels.fileWrite, path, content),
   listDir: (path) => inv(IpcChannels.dirList, path),
   listScopedFiles: (root, relPath) => inv(IpcChannels.filesList, root, relPath),
@@ -463,6 +476,7 @@ const api: NekkoApi = {
   computerRead: (id, channel, args = []) => inv(IpcChannels.computersCall, id, channel, args),
   computerModelServer: (id, channel, args = []) => inv(IpcChannels.computersCall, id, channel, args),
   createSessionOn: (computerId, workspaceId) => inv(IpcChannels.computersCreateSession, computerId, workspaceId),
+  connectFleetComputer: (orgId, deviceId) => inv(IpcChannels.computersConnectFleet, orgId, deviceId),
   computerCatalog: (id) => inv(IpcChannels.computersCatalog, id),
   listRemoteDevices: () => inv(IpcChannels.remoteDevices),
   revokeRemoteDevice: (deviceId) => inv(IpcChannels.remoteRevoke, deviceId),
@@ -563,6 +577,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, tasks: import('@nekko-agent/shared').AutomationTask[]) => cb(tasks);
     bus.on(IpcEvents.tasksUpdated, listener);
     return () => bus.removeListener(IpcEvents.tasksUpdated, listener);
+  },
+  onSimulatorsUpdated: (cb) => {
+    const listener = (_: unknown, e: import('@nekko-agent/shared').SimulatorsUpdated) => cb(e ?? {});
+    bus.on(IpcEvents.simulatorsUpdated, listener);
+    return () => bus.removeListener(IpcEvents.simulatorsUpdated, listener);
   },
   onBackgroundUpdated: (cb) => {
     const listener = (_: unknown, state: import('@nekko-agent/shared').BackgroundState) => cb(state);

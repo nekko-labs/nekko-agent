@@ -332,6 +332,83 @@ struct ToolsList: View {
     }
 }
 
+/// What a chat no longer asks about: the MCP tools the user chose "Always
+/// allow this tool" for (decision 0054) and the recipients it has written to
+/// (decision 0063), each with a remove button. Removing one makes the next call
+/// ask again, in this chat only. A change asks for Face ID: the computer signs it.
+struct ChatGrantsList: View {
+    /// Read in `body`, so the list follows the chat as it reloads.
+    let tools: () -> [String]
+    let recipients: () -> [String]
+    let revokeTool: (String) async throws -> Void
+    let forgetRecipient: (String) async throws -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+    @State private var error: String?
+    @State private var busy: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.danger)
+                }
+                if !tools().isEmpty {
+                    Section("Always allowed tools") {
+                        ForEach(tools(), id: \.self) { tool in
+                            row(ChatModel.mcpToolLabel(tool), id: "grants.tool.\(tool)",
+                                remove: String(localized: "Ask again before \(ChatModel.mcpToolLabel(tool))")) { try await revokeTool(tool) }
+                        }
+                    }
+                }
+                if !recipients().isEmpty {
+                    Section("Known recipients") {
+                        ForEach(recipients(), id: \.self) { r in
+                            row(r, id: "grants.recipient.\(r)",
+                                remove: String(localized: "Ask again before writing to \(r)")) { try await forgetRecipient(r) }
+                        }
+                    }
+                }
+                Section {
+                    Text("Removing one makes the next call ask again, in this chat only.")
+                        .font(.caption).foregroundStyle(palette.inkSoft)
+                }
+            }
+            .navigationTitle("Allowed without asking")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .onChange(of: tools().isEmpty && recipients().isEmpty) { _, empty in if empty { dismiss() } }
+        }
+    }
+
+    private func row(_ label: String, id: String, remove: String, action: @escaping () async throws -> Void) -> some View {
+        HStack(spacing: 8) {
+            Text(label).font(.subheadline).foregroundStyle(palette.ink).lineLimit(2)
+            Spacer(minLength: 8)
+            if busy == id {
+                ProgressView()
+            } else {
+                Button(role: .destructive) {
+                    error = nil
+                    busy = id
+                    Task {
+                        do { try await action() } catch { self.error = error.localizedDescription }
+                        busy = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill").font(.title3).foregroundStyle(palette.inkFaint)
+                }
+                .buttonStyle(.plain)
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel(remove)
+                .accessibilityIdentifier(id + ".remove")
+                .disabled(busy != nil)
+            }
+        }
+        .frame(minHeight: 44)
+    }
+}
+
 /// The chat's model, and its effort on a slider with one stop per level: a
 /// small dropdown under the composer's control.
 struct ModelEffortPanel: View {
@@ -341,6 +418,7 @@ struct ModelEffortPanel: View {
     @Environment(\.palette) private var palette
     @State private var picking = false
     @State private var choosingTools = false
+    @State private var choosingGrants = false
     @State private var error: String?
     @State private var busy: Effort?
 
@@ -407,6 +485,22 @@ struct ModelEffortPanel: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("run.disabledTools")
             }
+            // What this chat stopped asking about (decisions 0054, 0063), whatever the
+            // controls shown: taking one back is a safety action, not a run setting.
+            if chat.hasGrants {
+                Divider()
+                Button { choosingGrants = true } label: {
+                    HStack {
+                        Text("Allowed without asking").foregroundStyle(palette.ink)
+                        Spacer(minLength: 8)
+                        Text("\(chat.allowedMcpTools.count + chat.knownRecipients.count)").font(.subheadline).foregroundStyle(palette.inkSoft)
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                    }
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("run.grants")
+            }
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.danger)
             }
@@ -422,6 +516,11 @@ struct ModelEffortPanel: View {
         }
         .sheet(isPresented: $choosingTools) {
             ToolsList(load: { try await chat.tools() }, disabled: { chat.disabledTools }, set: { try await chat.setTool($0, on: $1) })
+        }
+        .sheet(isPresented: $choosingGrants) {
+            ChatGrantsList(tools: { chat.allowedMcpTools }, recipients: { chat.knownRecipients },
+                           revokeTool: { try await chat.revokeAlwaysAllowed($0) },
+                           forgetRecipient: { try await chat.forgetRecipient($0) })
         }
         .task { await store.loadAllModels() }
     }
@@ -1088,6 +1187,11 @@ struct ModelServerControls: View {
             .accessibilityIdentifier("monitor.idleTtl")
             Toggle("Load when a chat asks", isOn: Binding(get: { server.jitLoad ?? true }, set: { on in run { try await set(["jitLoad": .bool(on)]) } }))
                 .accessibilityIdentifier("monitor.jitLoad")
+            Toggle(isOn: Binding(get: { server.overloadGuard ?? true }, set: { on in run { try await set(["overloadGuard": .bool(on)]) } })) {
+                Text("Overload protection")
+                Text("Stops a load before it leaves less than \(server.overloadReserveMB ?? ModelServerSettings.overloadReserveDefaultMB) MB of memory free.")
+            }
+            .accessibilityIdentifier("monitor.overloadGuard")
         }
         .disabled(busy || !server.devicesChoose)
     }

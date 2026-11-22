@@ -196,7 +196,7 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
   const sidebarState = () => cdp.evaluate(`(() => ({
     groups: [...document.querySelectorAll('button[data-sidebar-group]')].map((h) => h.textContent.trim() + ':' + h.getAttribute('aria-expanded')),
     cards: [...document.querySelectorAll('div[role="button"]')].map((c) => c.getAttribute('title')).filter(Boolean),
-    completed: [...document.querySelectorAll('[data-completed-row]')].length,
+    archived: [...document.querySelectorAll('[data-archived-row]')].length,
   }))()`);
 
   await waitFor(`!!document.querySelector('nav button[aria-label="Agents"]')`, 'the app shell');

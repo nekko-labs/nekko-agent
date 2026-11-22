@@ -5,12 +5,13 @@ import { App } from './App.js';
 import { ensureNekko } from './web-client.js';
 import { CloudLogin, cloudAuthRequired } from './components/CloudLogin.js';
 import { UpdateProvider } from './components/UpdateBanner.js';
+import { TitleTips } from './components/TitleTips.js';
 // The website's two fonts, bundled so the app never fetches them (--font-sans, --font-mono).
 import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
 import './styles.css';
 import { useStore } from './store.js';
-import { fadeInReloadCover, pageWasReloaded, playReloadCover, playSplash } from './splash.js';
+import { fadeInReloadCover, playReloadCover } from './splash.js';
 import { transcriptsLoaded } from './sessionCache.js';
 import { windowChrome } from './chrome.js';
 import { isScreenWindow } from './displays.js';
@@ -23,9 +24,10 @@ if (presenter) startPresenterMode(presenter);
 // Resolve the system preference before mounting even the loading or login UI.
 useStore.getState().applyTheme();
 
-// The startup splash plays over the app and lifts once settings, providers and
-// the open chats have loaded, so it opens onto the real app rather than a
-// half-loaded one. A reload gets the quiet cover instead of the launch splash.
+// A quiet cover in the app's own background holds over the app and lifts once
+// settings, providers and the open chats have loaded, so it opens onto the real
+// app rather than a half-loaded one. A launch and a reload get the same cover:
+// the zooming splash left a theme-coloured frame over the app on launch.
 // A very long chat doesn't get to hold it up: past this it fills in on screen.
 const TRANSCRIPT_WAIT_MS = 1000;
 if (!isScreenWindow) {
@@ -34,8 +36,7 @@ if (!isScreenWindow) {
     if (appLoaded(useStore.getState())) return resolve();
     const stop = useStore.subscribe((s) => { if (appLoaded(s)) { stop(); requestAnimationFrame(() => resolve()); } });
   }).then(() => Promise.race([transcriptsLoaded(), new Promise((r) => setTimeout(r, TRANSCRIPT_WAIT_MS))]));
-  if (pageWasReloaded()) playReloadCover(loaded);
-  else playSplash(loaded);
+  playReloadCover(loaded);
   windowChrome?.onPageReloading(fadeInReloadCover);
 }
 
@@ -59,6 +60,7 @@ function startApp(root: ReturnType<typeof createRoot>) {
     <React.StrictMode>
       <UpdateProvider>
         <App />
+        <TitleTips />
       </UpdateProvider>
     </React.StrictMode>,
   );

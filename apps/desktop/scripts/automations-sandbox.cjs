@@ -66,6 +66,23 @@ app.whenReady().then(async () => {
         await check(`${theme}: the held task says it waits`, "document.querySelector('[data-task-row=\"t1\"] [data-task-state]')?.textContent==='waiting for you to be away'");
         await check(`${theme}: a capped task run says so`, "document.querySelector('[data-task-row=\"t2\"]').innerText.includes('low priority · waited 2 hr')");
       }
+      for (const scene of ['pane-empty', 'pane-paused', 'switches']) { await show(scene, theme); await capture(`automations-${scene}-${theme}`); }
+      if (!base) {
+        await show('pane-empty', theme);
+        await check(`${theme}: an empty pane is one line, no illustration`, "!!document.querySelector('[data-automations-empty]') && !document.querySelector('[data-scene] svg[viewBox=\"0 0 160 96\"]')");
+        await show('pane', theme);
+        await check(`${theme}: at rest the state word sits flush right`, "(()=>{const r=document.querySelector('[data-task-row=\"t2\"]');const w=r.querySelector('[data-task-state]').getBoundingClientRect();return r.getBoundingClientRect().right-w.right<=16&&getComputedStyle(r.querySelector('[data-task-actions]')).display==='none'})()");
+        // The hidden window never has focus, so hover the row with a synthetic pointer instead.
+        const at = await run("(()=>{const b=document.querySelector('[data-task-row=\"t2\"]').getBoundingClientRect();return {x:Math.round(b.left+b.width/2),y:Math.round(b.top+b.height/2)}})()");
+        win.webContents.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y }); await sleep(300);
+        await capture(`automations-pane-hover-${theme}`);
+        await check(`${theme}: on hover the actions take the state word's place`, "(()=>{const r=document.querySelector('[data-task-row=\"t2\"]');return getComputedStyle(r.querySelector('[data-task-actions]')).display==='flex'&&getComputedStyle(r.querySelector('[data-task-state]')).display==='none'})()");
+        win.webContents.sendInputEvent({ type: 'mouseMove', x: 1270, y: 890 }); await sleep(150);
+        await show('pane-paused', theme);
+        await check(`${theme}: paused is one quiet line`, "document.querySelector('[data-automations-paused]')?.textContent.startsWith('All automations are paused')");
+        await show('switches', theme);
+        await check(`${theme}: every switch draws the same`, "(()=>{const s=[...document.querySelectorAll('[data-switches] [role=switch]')];return s.length===4&&s.every(e=>e.classList.contains('quiet-switch')&&e.getBoundingClientRect().width===36&&e.getBoundingClientRect().height===20)})()");
+      }
       await show('modal', theme);
       await capture(`automate-modal-${theme}`);
       if (!base) await check(`${theme}: the Automate modal offers when it runs`, "!!document.querySelector('[data-run-policy]')");

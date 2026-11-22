@@ -168,6 +168,16 @@ class ComputersRepository(
         now = now,
     )
 
+    /**
+     * Answers and one-time approvals written while the computer was away, bound to the request
+     * they answer and sent only if it still waits unchanged (decision 0081, #2497).
+     */
+    val responses = PendingResponses(
+        files = offlineFiles,
+        connection = { client.takeIf { _state.value.conn == RelayState.ONLINE } },
+        newId = newId,
+    )
+
     init {
         // A chat started offline now exists, and a delivered prompt changed its chat: read the list again.
         outbox.onDelivered = { _, _ -> scheduleSummaries() }
@@ -421,9 +431,11 @@ class ComputersRepository(
         return id
     }
 
+    /** A blank name hands naming back to the computer, which renames it on the next connect. */
     suspend fun rename(id: String, name: String) = lock.withLock {
+        val trimmed = name.trim().take(40)
         val next = _state.value.computers.map { c ->
-            if (c.id == id) c.copy(name = name.trim().take(40).ifEmpty { c.name }, nameIsCustom = true) else c
+            if (c.id == id) c.copy(name = trimmed.ifEmpty { c.name }, nameIsCustom = trimmed.isNotEmpty()) else c
         }
         saveIndex(next)
         _state.update { it.copy(computers = next) }
@@ -439,6 +451,7 @@ class ComputersRepository(
             if (_state.value.activeId == id) {
                 drafts.load(null)
                 outbox.load(null)
+                responses.load(null)
                 transcripts.load(null)
             }
             offlineFiles?.remove(id)
@@ -474,6 +487,7 @@ class ComputersRepository(
         if (drafts.computerId != id) {
             drafts.load(id)
             outbox.load(id)
+            responses.load(id)
         }
         if (transcripts.computerId != id) transcripts.load(id)
         if (loggedComputer != id) {
@@ -484,7 +498,7 @@ class ComputersRepository(
         _state.update {
             it.copy(
                 activeId = id, conn = RelayState.CONNECTING, denied = null, connDetail = null,
-                summaries = emptyList(), summariesLoaded = false, providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(), attention = AttentionState(),
+                summaries = emptyList(), subagents = emptyMap(), summariesLoaded = false, providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(), attention = AttentionState(),
                 // Another computer, or the same one later: its settings are unknown until it answers.
                 pcSettings = PcSettings(),
                 quitFromPhone = false,
@@ -500,7 +514,7 @@ class ComputersRepository(
         if (taken != null && peer != null) {
             _state.update {
                 it.copy(
-                    conn = taken.client.status.value.state, summaries = peer.summaries, workspaces = peer.workspaces,
+                    conn = taken.client.status.value.state, summaries = peer.summaries, subagents = peer.subagents, workspaces = peer.workspaces,
                     activity = peer.activity, savedListAt = peer.savedAt,
                 )
             }
@@ -539,7 +553,9 @@ class ComputersRepository(
                     logStatus(s.state, s.detail, s.denied)
                     if (s.state == RelayState.ONLINE) scope.launch {
                         refresh()
-                        // Back in reach: what was written offline goes now, in order.
+                        // Back in reach: answers and approvals first (each checked against what still
+                        // waits), then what was written offline, in order.
+                        responses.flush()
                         outbox.flush()
                     }
                 }
@@ -633,7 +649,7 @@ class ComputersRepository(
         client = null
         changeCalls = null
         val peer = Peer(
-            conn = s.conn, detail = s.connDetail, denied = s.denied, summaries = s.summaries, activity = s.activity,
+            conn = s.conn, detail = s.connDetail, denied = s.denied, summaries = s.summaries, subagents = s.subagents, activity = s.activity,
             workspaces = s.workspaces, loaded = liveList, savedAt = s.savedListAt,
         )
         _state.update { it.copy(conn = RelayState.IDLE, route = null) }
@@ -649,6 +665,8 @@ class ComputersRepository(
         val folders: List<WorkspaceFolder>?,
         val pending: Map<String, PendingInput>?,
         val info: AppInfo?,
+        /** Running sub-agents by parent id (#2509); null when the list wasn't read. */
+        val subagents: Map<String, List<SessionSummary>>?,
     )
 
     private class PeerLink(val client: Remote) {
@@ -743,16 +761,18 @@ class ComputersRepository(
         var ticket: Long? = null
         updatePeer(id) { p -> p.attention.beginSnapshot().let { a -> ticket = a.version; p.copy(attention = a) } }
         val r = coroutineScope {
-            val summaries = async { orNull { SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES)) } }
+            val chats = async { orNull { c.call(Channels.SESSIONS_SUMMARIES) } }
             val folders = async { orNull { WorkspaceFolder.list(c.call(Channels.WORKSPACE_LIST)) } }
             val pending = async { readPending(c) }
             val info = async { orNull { AppInfo.from(c.call(Channels.APP_INFO)) } }
-            PeerRead(summaries.await(), folders.await(), pending.await(), info.await())
+            val raw = chats.await()
+            PeerRead(raw?.let { SessionSummary.visible(it) }, folders.await(), pending.await(), info.await(), raw?.let { SessionSummary.subagents(it) })
         }
         if (links[id] !== link) return
         updatePeer(id) { p ->
             var n = p
             r.summaries?.let { n = n.copy(summaries = it, loaded = true, savedAt = null) }
+            r.subagents?.let { n = n.copy(subagents = it) }
             r.folders?.let { n = n.copy(workspaces = it) }
             // What waits on the user when the link (re)connects, and what no longer
             // does: the event that ended a wait reaches only a connected phone.
@@ -778,10 +798,10 @@ class ComputersRepository(
                 delay(summariesDebounceMs)
                 if (links[id] !== link) return@launch
                 link.summariesDirty = false
-                val list = orNull { SessionSummary.visible(link.client.call(Channels.SESSIONS_SUMMARIES)) }
+                val raw = orNull { link.client.call(Channels.SESSIONS_SUMMARIES) }
                 if (links[id] !== link) return@launch
-                if (list != null) {
-                    updatePeer(id) { it.copy(summaries = list, loaded = true, savedAt = null) }
+                if (raw != null) {
+                    updatePeer(id) { it.copy(summaries = SessionSummary.visible(raw), subagents = SessionSummary.subagents(raw), loaded = true, savedAt = null) }
                     savePeerList(id)
                 }
             } while (isActive && links[id] === link && link.summariesDirty)
@@ -1068,8 +1088,8 @@ class ComputersRepository(
         }
     }
 
-    /** Complete a chat (the desktop's archive): it moves under its group's Completed, nothing is deleted. */
-    suspend fun completeChat(sessionId: String) {
+    /** Archive a chat: it moves under its group's Archived, nothing is deleted. */
+    suspend fun archiveChat(sessionId: String) {
         val at = now()
         remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("archivedAt", at) })
         setArchived(sessionId, at)
@@ -1161,7 +1181,7 @@ class ComputersRepository(
         _state.update { it.copy(summariesLoading = true, lastError = null) }
         try {
             val r = coroutineScope {
-                val summaries = async { SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES)) }
+                val chats = async { c.call(Channels.SESSIONS_SUMMARIES) }
                 // Only the public projections: providers and settings carry secrets.
                 val providers = async { PublicProvider.list(c.call(Channels.PROVIDERS_LIST)) }
                 // Only public projections leave this block: settings carry secrets.
@@ -1172,12 +1192,13 @@ class ComputersRepository(
                 val pending = async { refreshAttention(c, link) }
                 val (defaults, appearance, pcSettings) = settings.await()
                 pending.await()
-                Refresh(summaries.await(), providers.await(), defaults, appearance, pcSettings, workspaces.await(), info.await())
+                val raw = chats.await()
+                Refresh(SessionSummary.visible(raw), providers.await(), defaults, appearance, pcSettings, workspaces.await(), info.await(), SessionSummary.subagents(raw))
             }
             if (client !== c) return
             _state.update { s ->
                 s.copy(
-                    summaries = r.summaries, providers = r.providers, defaults = r.defaults, appearance = r.appearance, pcSettings = r.pcSettings,
+                    summaries = r.summaries, subagents = r.subagents ?: emptyMap(), providers = r.providers, defaults = r.defaults, appearance = r.appearance, pcSettings = r.pcSettings,
                     workspaces = r.workspaces, summariesLoading = false, summariesLoaded = true, savedListAt = null,
                     imageGeneration = r.info?.imageGeneration == true,
                 )
@@ -1378,10 +1399,10 @@ class ComputersRepository(
                 // Notifications during the debounce are covered by this call.
                 summariesDirty = false
                 try {
-                    val list = SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES))
+                    val raw = c.call(Channels.SESSIONS_SUMMARIES)
                     ensureActive()
                     if (client !== c) return@launch
-                    _state.update { it.copy(summaries = list) }
+                    _state.update { it.copy(summaries = SessionSummary.visible(raw), subagents = SessionSummary.subagents(raw)) }
                     saveList()
                 } catch (e: CancellationException) {
                     throw e
@@ -1446,6 +1467,8 @@ class ComputersRepository(
         val pcSettings: PcSettings,
         val workspaces: List<WorkspaceFolder>,
         val info: AppInfo?,
+        /** Running sub-agents by parent id (#2509); null when the list wasn't read. */
+        val subagents: Map<String, List<SessionSummary>>?,
     )
 
     companion object {

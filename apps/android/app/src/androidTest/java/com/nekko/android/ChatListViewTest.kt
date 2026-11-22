@@ -7,6 +7,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -43,6 +44,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
@@ -70,7 +72,11 @@ class ChatListViewTest {
             """{"id":"a$i","title":"App task ${i + 1}","updatedAt":${now - i * day / 2},"workspaceId":"w1","lastReplyText":"Reply ${i + 1} in App."}"""
         }
         // exchangeCount, activeWatchCount and activeRun feed the status groups (#2107).
-        return """[{"id":"g1","title":"Plan the week","updatedAt":${now - 2 * day},"lastReplyText":"Three goals for Monday.","exchangeCount":2},
+        // #2509: two sub-agents under "Plan the week", oldest first, each with its model; a completed one stays out.
+        return """[{"id":"g1","title":"Plan the week","updatedAt":${now - 2 * day},"lastReplyText":"Three goals for Monday.","exchangeCount":2,"modelId":"claude-sonnet-5-5"},
+            {"id":"k1","title":"Check the calendar","updatedAt":${now - day},"createdAt":${now - 2 * day},"parentSessionId":"g1","modelId":"claude-haiku-5-5"},
+            {"id":"k2","title":"Draft Monday's agenda","updatedAt":${now - day},"createdAt":${now - day},"parentSessionId":"g1","modelId":"gpt-5-mini","activeRun":{"id":"r"}},
+            {"id":"k0","title":"An old helper","updatedAt":${now - 3 * day},"parentSessionId":"g1","archivedAt":${now - 2 * day}},
             {"id":"w9","title":"Ship the release","updatedAt":${now - day / 2},"workspaceId":"w2","exchangeCount":6,"activeWatchCount":1,"lastReplyText":"Watching PR #555."},
             {"id":"n0","title":"Notes for later","updatedAt":${now - day / 3},"exchangeCount":0},
             {"id":"t1","title":"Release checklist\n- Fix the flaky sign-in test on the release branch before Friday's build","updatedAt":${now - day / 5},"exchangeCount":2,"modelId":"claude-sonnet-5-5","lastReplyText":"The sign-in test is stable now."},
@@ -98,7 +104,7 @@ class ChatListViewTest {
         override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) = answer(channel)
     }
 
-    private fun show(): ComputersRepository {
+    private fun show(onOpen: (String) -> Unit = {}): ComputersRepository {
         val repo = ComputersRepository(
             store = object : SecureStore {
                 private val map = HashMap<String, String>()
@@ -118,7 +124,7 @@ class ChatListViewTest {
         compose.setContent {
             NekkoTheme(dark = false) {
                 key(screenPrefs) {
-                    ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {}, phonePrefs = screenPrefs)
+                    ChatsScreen(repo, onOpenChat = onOpen, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {}, phonePrefs = screenPrefs)
                 }
             }
         }
@@ -157,7 +163,7 @@ class ChatListViewTest {
         shot("4-reordered")
     }
 
-    @Test fun groupByDateAndHidePreviews() {
+    @Test fun groupByDateAndHideSubagents() {
         show()
         // One level (#2449): Group by shows its value and opens its choices in place; no Reset at the defaults.
         compose.onNodeWithTag("chats.view").performClick()
@@ -173,12 +179,18 @@ class ChatListViewTest {
         compose.onNodeWithTag("chats.view").performClick()
         settle()
         compose.onNodeWithText("Date", useUnmergedTree = true).assertExists()
+        // #2509: no Previews any more; Card details hides the sub-agents.
         compose.onNodeWithTag("chats.view.show").performClick()
         settle()
-        compose.onNodeWithText("Previews").performClick()
-        settle()
-        compose.onNodeWithText("Completed chats").assertExists()
+        compose.onNodeWithText("Previews").assertDoesNotExist()
+        compose.onNodeWithText("Archived chats").assertExists()
         shot("2c-show")
+        compose.onNodeWithTag("chats.view.back").performClick()
+        settle()
+        compose.onNodeWithTag("chats.view.cardDetails").performClick()
+        settle()
+        compose.onNodeWithText("Sub-agents").performClick()
+        settle()
         compose.onNodeWithTag("chats.view.back").performClick()
         settle()
         compose.onNodeWithTag("chats.view.reset").assertExists()
@@ -186,9 +198,10 @@ class ChatListViewTest {
         Espresso.pressBack()
         settle()
         assertEquals(ChatListView.GroupBy.DATE, prefs.get(ChatListPrefs.VIEW).groupBy)
-        assertEquals(false, prefs.get(ChatListPrefs.VIEW).showPreviews)
+        assertEquals(false, prefs.get(ChatListPrefs.VIEW).showSubagents)
         compose.onNodeWithText("TODAY", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("The page is drafted.", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Check the calendar", useUnmergedTree = true).assertDoesNotExist()
         shot("5-by-date")
         // Reset to defaults brings the list back as it was.
         compose.onNodeWithTag("chats.view").performClick()
@@ -316,7 +329,8 @@ class ChatListViewTest {
         // General holds chats from both computers and the phone, each row naming its place.
         compose.onNodeWithText("Back up the photos", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Quick question", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("Office PC", useUnmergedTree = true).assertExists()
+        // The connection row (#2633) names the computers too, so "Office PC" shows more than once.
+        assertTrue(compose.onAllNodes(hasText("Office PC"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithText("This phone", useUnmergedTree = true).assertExists()
         shot("9-all-computers")
 
@@ -348,6 +362,23 @@ class ChatListViewTest {
         compose.onNodeWithText("Back up the photos", useUnmergedTree = true).assertExists()
         assertEquals(officeId, prefs.get(ChatListPrefs.FILTER))
         shot("12-office-only")
+    }
+
+    /** #2509: quiet rows, no previews, sub-agents under their chat with their models; one opens its own chat. */
+    @Test fun quietRowsWithSubagents() {
+        var openedChat: String? = null
+        show { openedChat = it }
+        // No preview under a title, and the sub-agents under "Plan the week", oldest first.
+        compose.onNodeWithText("Three goals for Monday.", useUnmergedTree = true).assertDoesNotExist()
+        val kids = compose.onAllNodes(hasTestTag("chats.subagent"), useUnmergedTree = true).fetchSemanticsNodes()
+        assertEquals(2, kids.size)
+        compose.onNode(hasContentDescription("Sub-agent Check the calendar, on Haiku 5.5"), useUnmergedTree = true).assertExists()
+        compose.onNode(hasContentDescription("Sub-agent Draft Monday's agenda, on", substring = true), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("An old helper", useUnmergedTree = true).assertDoesNotExist()
+        shot("9-quiet-rows")
+        compose.onNode(hasContentDescription("Sub-agent Check the calendar, on Haiku 5.5"), useUnmergedTree = true).performClick()
+        settle()
+        assertEquals("k1", openedChat)
     }
 
     private fun settle() {

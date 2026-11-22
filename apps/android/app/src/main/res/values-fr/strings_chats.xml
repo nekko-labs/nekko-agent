@@ -60,7 +60,7 @@
     <string name="chats_restore_failed">Impossible de restaurer cette discussion.</string>
     <string name="chats_change_failed">Impossible de modifier cette discussion.</string>
     <string name="chats_rename_failed">Impossible de renommer cette discussion.</string>
-    <string name="chats_completed_on">Terminée sur %1$s. Restaurez-la dans les discussions actives, ou supprimez-la définitivement.</string>
+    <string name="chats_archived_on">Archivée sur %1$s. Restaurez-la dans les discussions actives, ou supprimez-la définitivement.</string>
     <string name="chats_restore">Restaurer</string>
     <string name="chats_delete">Supprimer</string>
     <string name="chats_delete_title">Supprimer cette discussion ?</string>
@@ -78,11 +78,11 @@
     <string name="chats_needs_you">Besoin de vous</string>
     <string name="chats_no_active_agents">Aucun agent actif</string>
     <string name="chats_action_delete_body">La supprimer de %1$s. Vous pouvez changer cette action dans Paramètres.</string>
-    <string name="chats_action_complete_body">La déplacer dans Terminées sur %1$s. Rien n’est supprimé ; vous pouvez changer cette action dans Paramètres.</string>
+    <string name="chats_action_archive_body">La déplacer dans Archivées sur %1$s. Rien n’est supprimé ; vous pouvez changer cette action dans Paramètres.</string>
     <string name="chats_pin">Épingler</string>
     <string name="chats_unpin">Désépingler</string>
     <string name="chats_rename">Renommer</string>
-    <string name="chats_complete">Terminer</string>
+    <string name="chats_archive">Archiver</string>
     <string name="chats_chat_actions">Actions de la discussion</string>
     <string name="chats_pinned">Épinglée</string>
     <string name="chats_working">En cours</string>
@@ -111,8 +111,7 @@
     <string name="chats_oldest_first">Plus anciens d’abord</string>
     <string name="chats_newest_first">Plus récents d’abord</string>
     <string name="chats_show">Afficher</string>
-    <string name="chats_previews">Aperçus</string>
-    <string name="chats_completed_chats">Discussions terminées</string>
+    <string name="chats_archived_chats">Discussions archivées</string>
     <string name="chats_empty_groups">Groupes vides</string>
     <string name="chats_reorder_groups_menu">Réorganiser les groupes…</string>
     <string name="chats_reset_defaults">Rétablir les valeurs par défaut</string>
@@ -128,11 +127,11 @@
     <string name="chats_order_kept">L’ordre est conservé sur ce téléphone.</string>
     <string name="chats_done">OK</string>
     <string name="chats_restore_or_delete">Restaurer ou supprimer</string>
-    <string name="chats_completed">Terminée</string>
+    <string name="chats_archived">Archivée</string>
     <string name="chats_welcome_body">Pilotez Nekko Agent sur votre ordinateur d’ici : lancez des discussions, suivez les exécutions et approuvez ce qu’il veut faire.</string>
     <string name="chats_welcome_scan">Scannez le QR dans Paramètres → Accès à distance sur votre ordinateur.</string>
     <string name="chats_saved_list_note">Liste enregistrée de %1$s. Elle se met à jour quand %2$s répond.</string>
-    <string name="chats_saved_copy_note">Copie enregistrée de %1$s. Elle se met à jour quand %2$s répond.</string>
+    <string name="chats_saved_copy_note">Dernière mise à jour le %1$s</string>
     <string name="chats_pending_new_chat">Nouvelle discussion, démarre quand votre ordinateur est de retour</string>
     <string name="chats_delete_waiting_chat">Supprimer la discussion en attente</string>
     <string name="chats_edit_in_new_chat">Modifier dans une nouvelle discussion</string>
@@ -147,13 +146,13 @@
     <string name="chats_terminals">Terminaux</string>
     <string name="chats_chat_mode">Mode de la discussion</string>
     <string name="chats_change_this_failed">Impossible de modifier cette discussion.</string>
-    <string name="chats_complete_this_failed">Impossible de terminer cette discussion.</string>
+    <string name="chats_archive_this_failed">Impossible d’archiver cette discussion.</string>
     <string name="chats_chat_empty">Demandez quelque chose à votre ordinateur. Il peut utiliser ses dossiers, outils et modèles.</string>
     <string name="chats_omitted_one">1 message précédent est sur l’ordinateur.</string>
     <string name="chats_omitted_other">%1$d messages précédents sont sur l’ordinateur.</string>
     <string name="chats_tokens_per_second">%1$s tokens/s</string>
     <string name="chats_restore_this_failed">Impossible de restaurer cette discussion.</string>
-    <string name="chats_completed_bar">Cette discussion est terminée. Restaurez-la pour continuer.</string>
+    <string name="chats_archived_bar">Cette discussion est archivée. Restaurez-la pour continuer.</string>
     <string name="chats_restoring">Restauration…</string>
     <string name="chats_no_camera">Aucune app d’appareil photo sur ce téléphone.</string>
     <string name="chats_connect_failed">Impossible de se connecter à cet ordinateur.</string>
@@ -185,6 +184,10 @@
     <string name="chats_no_providers">Aucun fournisseur de modèles n’est activé dans Nekko Agent sur votre ordinateur. Ajoutez-en ou activez-en un dans ses réglages Modèles.</string>
     <string name="chats_search_models">Rechercher des modèles</string>
     <string name="chats_starred">Favoris</string>
+    <string name="chats_account_signed_out">Déconnecté</string>
+    <string name="chats_account_personal_plan">Forfait personnel</string>
+    <string name="chats_account_organization">Organisation</string>
+    <string name="chats_account_switcher">Compte Claude</string>
     <string name="chats_model_source">Source du modèle</string>
     <string name="chats_scope_all">Tous</string>
     <string name="chats_scope_cloud">Cloud</string>
@@ -221,7 +224,7 @@
     <string name="chats_report_issue">Signaler un problème</string>
     <string name="chats_dismiss_note">Fermer la note</string>
     <string name="chats_group_general">Général</string>
-    <string name="chats_group_completed">Terminées</string>
+    <string name="chats_group_archived">Archivées</string>
     <string name="chats_group_all">Toutes les discussions</string>
     <string name="chats_group_today">Aujourd’hui</string>
     <string name="chats_group_yesterday">Hier</string>
@@ -262,5 +265,14 @@
     <!-- New chat while the computer is away (#2475), the iPhone's two lines. -->
     <string name="chats_reconnecting">%1$s se reconnecte</string>
     <string name="chats_reconnecting_label">%1$s se reconnecte…</string>
-    <string name="chats_reconnect_draft">Rédigez votre message maintenant, il partira quand %1$s sera reconnecté</string>
+    <string name="chats_reconnect_draft">Les prompts que vous envoyez attendent sur ce téléphone.</string>
+    <!-- Sub-agents under their chat (#2509). -->
+    <string name="chats_subagents">Sous-agents</string>
+    <string name="chats_subagent">Sous-agent</string>
+    <string name="chats_subagent_named">Sous-agent %1$s</string>
+    <string name="chats_subagent_on">Sous-agent %1$s, avec %2$s</string>
+    <!-- New chat as a composer (#2459). -->
+    <string name="chats_photo_unreadable">Impossible de lire cette image.</string>
+    <string name="chats_choose_model">Choisir un modèle</string>
+    <string name="chats_starts_on">Démarre sur %1$s</string>
 </resources>

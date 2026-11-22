@@ -198,6 +198,20 @@ export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phas
   return phase === 'verifying' || phase === 'shipping' ? 'status:verifying' : 'status:building';
 }
 
+type ChatStatus = 'working' | 'input' | 'error' | 'done' | 'idle' | undefined;
+
+/**
+ * A chat's status with its sub-agents', which have no card of their own: one
+ * waiting on you makes the chat wait on you, and one working keeps an idle
+ * chat working. A Claude Agent chat ends its turn while the sub-agents it
+ * started in the background run on, and it is not done until they report back.
+ */
+export function statusWithSubagents(own: ChatStatus, kids: ReadonlyArray<ChatStatus>): ChatStatus {
+  if (kids.includes('input')) return 'input';
+  if (own && own !== 'done' && own !== 'idle') return own;
+  return kids.includes('working') ? 'working' : own;
+}
+
 export type GroupActivityKind = 'building' | 'verifying' | 'watching';
 
 /**
@@ -234,4 +248,35 @@ export function dateGroupOf(at: number, now: number): string {
   if (at >= today - 7 * day) return 'date:week';
   if (at >= today - 30 * day) return 'date:month';
   return 'date:older';
+}
+
+/**
+ * Which kind of window the Agents panel lists, picked in the switcher at its
+ * top. Agents is the agent cards; Terminals and Photos and videos are those
+ * cards on their own. Browsers lists the pages served on this computer and
+ * Files the connected folders, each opening a window of its own with no agent
+ * needed (#2824), then the agents, whose Browser or Files drawer a row opens.
+ * Remembered per window, like the view.
+ */
+export type AgentPanelShows = 'agents' | 'terminals' | 'media' | 'files';
+
+export const AGENT_PANEL_SHOWS: ReadonlyArray<{ id: AgentPanelShows; label: string }> = [
+  { id: 'agents', label: 'Agents' },
+  { id: 'terminals', label: 'Terminals' },
+  { id: 'media', label: 'Photos and videos' },
+  { id: 'files', label: 'Files' },
+];
+
+export const AGENT_PANEL_SHOWS_KEY = 'nekko.agentPanelShows';
+
+export function parseAgentPanelShows(raw: string | null): AgentPanelShows {
+  return AGENT_PANEL_SHOWS.find((s) => s.id === raw)?.id ?? 'agents';
+}
+
+export function readAgentPanelShows(): AgentPanelShows {
+  try { return parseAgentPanelShows(localStorage.getItem(AGENT_PANEL_SHOWS_KEY)); } catch { return 'agents'; }
+}
+
+export function saveAgentPanelShows(shows: AgentPanelShows): void {
+  try { localStorage.setItem(AGENT_PANEL_SHOWS_KEY, shows); } catch { /* private mode */ }
 }

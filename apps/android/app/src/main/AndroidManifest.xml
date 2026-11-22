@@ -52,6 +52,10 @@
         android:usesCleartextTraffic="false"
         tools:targetApi="36">
 
+        <!-- Android Auto (#2782): a messaging app through its notifications, nothing drawn on the car's screen. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
         <!-- Download the scanner module at install time instead of on first scan. -->
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
@@ -66,14 +70,6 @@
             <!-- Folding, unfolding and rotating don't recreate the activity: the panes move
                  (PanesHost) and both chats keep their scroll position and message box text. -->
 
-            <!-- Long-press the launcher icon: New chat (res/xml/shortcuts.xml). -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- Pairing QR opened from the system camera: nekko-agent-pair:?relay=… -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -94,6 +90,40 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <!-- The launcher entry, as two aliases of MainActivity so the icon can change (#2118):
+             the usual one, and the Spooky theme's in October (SpookyIcon.kt). Exactly one is
+             enabled. Long-press the icon: New chat (res/xml/shortcuts.xml). -->
+        <activity-alias
+            android:name=".LauncherDefault"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherSpooky"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_launcher_spooky"
+            android:roundIcon="@mipmap/ic_launcher_spooky">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Composer → + → Take photo: the camera app writes one shot into the app's cache
              (camera_photos.xml); it is read into memory and deleted at once. No CAMERA permission. -->
@@ -129,6 +159,10 @@
                 android:value="true" />
         </service>
 
+        <!-- Android Auto's Reply and Mark as read on a chat's car notification (connection/CarReplyReceiver.kt). -->
+        <receiver
+            android:name=".connection.CarReplyReceiver"
+            android:exported="false" />
         <!-- The approval notification's Deny (connection/DenyReceiver.kt). -->
         <receiver
             android:name=".connection.DenyReceiver"

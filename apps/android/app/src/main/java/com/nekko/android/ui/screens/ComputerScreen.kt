@@ -104,6 +104,7 @@ import com.nekko.protocol.COMPUTER_ICONS
 import com.nekko.protocol.MachineSummary
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.Pairing
+import com.nekko.protocol.ProviderAccounts
 import com.nekko.protocol.RelayRoute
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.CancellationException
@@ -242,7 +243,7 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                             // Each model under the provider it was listed for, so its kind is never guessed.
                             val shown = s.providers.filter { it.enabled && modelScope.includes(it) }.flatMap { s.models[it.id].orEmpty() }
                             if (shown.isEmpty()) Text(stringResource(R.string.computer_no_models_in_group), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(vertical = 8.dp))
-                            shown.forEach { info -> ModelRow(info, info.loaded || info.id in m.loadedIds, s.providers.firstOrNull { it.id == info.providerId }?.label, s.defaults.defaultModelId == info.id) }
+                            shown.forEach { info -> ModelRow(info, info.loaded || info.id in m.loadedIds, s.providers.firstOrNull { it.id == info.providerId }?.let(ProviderAccounts::shortName), s.defaults.defaultModelId == info.id) }
                         }
                     }
                 }
@@ -317,9 +318,17 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
         AlertDialog(
             onDismissRequest = { renaming = false },
             title = { Text(stringResource(R.string.settings_rename_computer)) },
-            text = { OutlinedTextField(value = name, onValueChange = { name = it.take(40) }, singleLine = true, label = { Text(stringResource(R.string.settings_name)) }) },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(40) },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.settings_name)) },
+                    supportingText = { Text(stringResource(R.string.settings_rename_computer_hint)) },
+                )
+            },
             confirmButton = {
-                TextButton(onClick = { scope.launch { repo.rename(c.id, name) }; renaming = false }, enabled = name.isNotBlank()) { Text(stringResource(R.string.settings_save)) }
+                TextButton(onClick = { scope.launch { repo.rename(c.id, name) }; renaming = false }) { Text(stringResource(R.string.settings_save)) }
             },
             dismissButton = { TextButton(onClick = { renaming = false }) { Text(stringResource(R.string.settings_cancel)) } },
         )

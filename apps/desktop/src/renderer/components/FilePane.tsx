@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LineComment } from '@nekko-agent/shared';
+import type { LineComment, PreviewTextEdit } from '@nekko-agent/shared';
+import { applyTextEdit } from './htmlTextEdit.js';
 import { Markdown } from './Markdown.js';
 import { ArtifactPreview, MermaidDiagram } from './ArtifactPreview.js';
 import { FileTypeIcon } from '../fileIcons.js';
@@ -8,6 +9,8 @@ import { useStore } from '../store.js';
 import { MiddleTruncate } from './primitives/MiddleTruncate.js';
 import type { HLJSApi } from 'highlight.js';
 import { detectLanguage, HIGHLIGHT_MAX_CHARS, highlightHtml, languageName, loadHighlighter } from '../codeHighlight.js';
+import { SlideToggle } from './library/SlideToggle.js';
+import { fileListed, locateMovedFile } from '../locateFile.js';
 
 /** Fixed editor line height (px) so the comment gutter aligns row-for-row. */
 const LINE_H = 20;
@@ -18,6 +21,29 @@ const COALESCE_MS = 600;
 /** Cap on the undo history, so a long editing session can't grow unbounded. */
 const HISTORY_LIMIT = 200;
 const AUTOSAVE_KEY = 'nekko.editor.autoSave';
+const MD_WIDTH_KEY = 'nekko.md.width';
+
+/** Width of the Markdown reading column. Narrow preserves the original column; Wide is the default. */
+type MdWidth = 'narrow' | 'wide' | 'full';
+
+const MD_WIDTH_OPTIONS: ReadonlyArray<{ id: MdWidth; label: string }> = [
+  { id: 'narrow', label: 'Narrow' },
+  { id: 'wide', label: 'Wide' },
+  { id: 'full', label: 'Full' },
+];
+
+const MD_WIDTH_CLASS: Record<MdWidth, string> = {
+  narrow: 'mx-auto max-w-3xl px-6 py-5',
+  wide: 'mx-auto max-w-5xl px-6 py-5',
+  full: 'w-full px-6 py-5',
+};
+
+function readMdWidthPref(): MdWidth {
+  if (typeof window === 'undefined') return 'wide';
+  const v = window.localStorage.getItem(MD_WIDTH_KEY);
+  if (v === 'narrow' || v === 'wide' || v === 'full') return v;
+  return 'wide';
+}
 
 /** The last save, and what triggered it, for the toolbar's status. */
 export interface SaveNote {
@@ -58,11 +84,51 @@ function readAutoSavePref(): boolean {
  * it) or Run now (send it). Deliberately not a full IDE, just enough to read,
  * tweak, and steer changes without leaving Nekko Agent.
  */
-export function FilePane({ path }: { path: string }) {
+export function FilePane({ path, readOnly = false, onMoved }: {
+  path: string;
+  /** Show the file without any way to change it (Library's designs, which change by a new version instead). */
+  readOnly?: boolean;
+  /** The file was found somewhere else (its worktree was removed, or a link guessed the wrong folder): point the window there. */
+  onMoved?: (to: string) => void;
+}) {
+  // A file that can't be read is looked for (#3210): the main checkout of a removed worktree, or a designs
+  // folder nearby for a page named by its bare name. Only after a failed read, so opening a file costs nothing extra.
+  const [where, setWhere] = useState<{ asked: string; path: string; missing: boolean }>({ asked: path, path, missing: false });
+  const moved = useRef(onMoved);
+  moved.current = onMoved;
+  const current = where.asked === path ? where : { asked: path, path, missing: false };
+  useEffect(() => { setWhere({ asked: path, path, missing: false }); }, [path]);
+  const unreadable = useCallback((tried: string) => {
+    const listDir = typeof window !== 'undefined' ? window.nekko?.listDir : undefined;
+    if (!listDir) return;
+    void (async () => {
+      const ls = (p: string) => listDir(p);
+      // Still listed: it is there but unreadable (too big, locked), so the pane's own empty state stands.
+      if ((await fileListed(tried, ls)) !== false) return;
+      const found = await locateMovedFile(tried, ls);
+      setWhere((w) => (w.path !== tried ? w : found ? { ...w, path: found } : { ...w, missing: true }));
+      if (found) moved.current?.(found);
+    })();
+  }, []);
+  if (current.missing) return <MissingFile path={current.path} />;
   // File panes are independent host documents, not owned by the globally focused chat.
-  return <HostFilePane path={path} />;
+  return <HostFilePane key={current.path} path={current.path} readOnly={readOnly} onUnreadable={unreadable} />;
 }
-function HostFilePane({ path }: { path: string }) {
+
+/** A file that is gone and could not be found anywhere near: said plainly, never shown as an empty file. */
+function MissingFile({ path }: { path: string }) {
+  const name = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-(--q-tight) p-(--q-pad) text-center" role="status" data-file-missing>
+      <FileTypeIcon name={name} size={20} />
+      <p className="mt-(--q-inline) text-sm font-medium text-ink">{name} isn't here anymore</p>
+      <p className="max-w-md text-xs text-ink-faint">It was moved or deleted, and there's no copy of it in a designs folder nearby.</p>
+      <MiddleTruncate className="max-w-md font-mono text-xs text-ink-faint" text={path} />
+    </div>
+  );
+}
+
+function HostFilePane({ path, readOnly, onUnreadable }: { path: string; readOnly: boolean; onUnreadable?: (path: string) => void }) {
   const isMd = /\.(md|markdown)$/i.test(path);
   const isHtml = /\.(html?|svg)$/i.test(path);
   const isMermaid = /\.(mmd|mermaid)$/i.test(path);
@@ -83,6 +149,7 @@ function HostFilePane({ path }: { path: string }) {
   const [hljs, setHljs] = useState<HLJSApi | null>(null);
   const [language, setLanguage] = useState<string | null>(null);
   const [autoSave, setAutoSave] = useState(readAutoSavePref);
+  const [mdWidth, setMdWidth] = useState<MdWidth>(readMdWidthPref);
   const [preview, setPreview] = useState(canPreview); // markdown defaults to rendered
   const [comments, setComments] = useState<LineComment[]>([]);
   const [activeLine, setActiveLine] = useState<number | null>(null);
@@ -115,13 +182,16 @@ function HostFilePane({ path }: { path: string }) {
     setLanguage(null);
     window.nekko.readFile(path).then((f) => {
       if (!live) return;
+      // The engine answers a missing file with empty content, not an error (#3212): an empty read is
+      // checked too, and the wrapper only acts when the folder doesn't list the file.
+      if (!f.content && !f.binary && !f.imageDataUrl) onUnreadable?.(path);
       setContent(f.content);
       setImage(f.imageDataUrl ?? '');
       setBinary(f.binary);
       setTruncated(f.truncated);
       setDirty(false);
       setLoaded(true);
-    }).catch(() => { if (live) { setLoaded(true); setBinary(false); } });
+    }).catch(() => { if (live) { setLoaded(true); setBinary(false); onUnreadable?.(path); } });
     window.nekko.listComments(path).then((c) => { if (live) setComments(c); }).catch(() => {});
     return () => { live = false; };
   }, [path]);
@@ -198,6 +268,11 @@ function HostFilePane({ path }: { path: string }) {
       if (next) save('auto');
       return next;
     });
+  };
+
+  const changeMdWidth = (w: MdWidth) => {
+    setMdWidth(w);
+    try { window.localStorage.setItem(MD_WIDTH_KEY, w); } catch { /* best effort */ }
   };
 
   const syncDepth = () =>
@@ -292,7 +367,7 @@ function HostFilePane({ path }: { path: string }) {
     if (mod && key === 'z' && !e.shiftKey) { e.preventDefault(); step('undo'); return; }
     if (mod && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); step('redo'); return; }
     // Tab indents instead of leaving the editor, which is what a code pane owes you.
-    if (e.key === 'Tab' && !truncated) {
+    if (e.key === 'Tab' && !truncated && !readOnly) {
       e.preventDefault();
       const el = taRef.current;
       if (!el) return;
@@ -333,7 +408,17 @@ function HostFilePane({ path }: { path: string }) {
   };
 
   const showGutter = loaded && !binary && !(isMd && preview);
-  const editable = loaded && !binary && !truncated;
+  const editable = loaded && !binary && !truncated && !readOnly;
+
+  /** A piece of text changed in the running page: made in the source as one undo step, and saved at once. */
+  const textEdit = (change: PreviewTextEdit) => {
+    if (!editable) return;
+    const next = applyTextEdit(latest.current.content, change);
+    if (next === null) { pushToast('error', 'That text could not be found as plain text in the file. Change it in Source.'); return; }
+    edit(next);
+    latest.current = { ...latest.current, content: next, dirty: true };
+    void write(next, 'manual');
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden outline-hidden" style={{ background: 'var(--paper)' }} tabIndex={-1} onKeyDown={onPaneKeyDown}>
@@ -350,6 +435,9 @@ function HostFilePane({ path }: { path: string }) {
           </span>
         )}
         {editable && <SaveState dirty={dirty} saving={saving} saved={saved} autoSave={autoSave} />}
+        {readOnly && loaded && (
+          <span className="shrink-0 text-2xs text-ink-faint" data-file-read-only title="Designs are kept as versions: ask an agent for a new version to change one">View only</span>
+        )}
 
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {editable && (
@@ -400,6 +488,15 @@ function HostFilePane({ path }: { path: string }) {
               link.click();
               setTimeout(() => URL.revokeObjectURL(url), 1000);
             }} title="Download a copy of this file">Download</button>
+          )}
+          {isMd && preview && (
+            <SlideToggle
+              options={MD_WIDTH_OPTIONS}
+              value={mdWidth}
+              onChange={changeMdWidth}
+              label="Markdown column width"
+              className="shrink-0"
+            />
           )}
           {canPreview && (
             <button className="chip chip-action text-2xs" onClick={() => setPreview((p) => !p)} title={preview ? 'Edit source' : 'Preview artifact'}>
@@ -458,11 +555,11 @@ function HostFilePane({ path }: { path: string }) {
           ) : binary ? (
             <p className="p-4 text-xs text-ink-faint">Binary file, can't display as text.</p>
           ) : isHtml && preview ? (
-            <ArtifactPreview source={content} title={name} path={path} />
+            <ArtifactPreview source={content} title={name} path={path} reloadKey={saved?.at ?? 0} onTextEdit={editable && !/\.svg$/i.test(path) ? textEdit : undefined} />
           ) : isMermaid && preview ? (
             <MermaidDiagram code={content} />
           ) : isMd && preview ? (
-            <div className="mx-auto max-w-3xl px-6 py-5"><Markdown text={content} doc basePath={dir} /></div>
+            <div className={MD_WIDTH_CLASS[mdWidth]}><Markdown text={content} doc basePath={dir} /></div>
           ) : (
             <div className="relative h-full w-full overflow-hidden">
               {highlighted != null && (
@@ -479,8 +576,8 @@ function HostFilePane({ path }: { path: string }) {
                 spellCheck={false}
                 wrap="off"
                 value={content}
-                readOnly={truncated}
-                aria-label={`Edit ${name}`}
+                readOnly={truncated || readOnly}
+                aria-label={readOnly ? `View ${name}` : `Edit ${name}`}
                 data-language={language ?? 'plaintext'}
                 onScroll={onEditorScroll}
                 onKeyDown={onKeyDown}

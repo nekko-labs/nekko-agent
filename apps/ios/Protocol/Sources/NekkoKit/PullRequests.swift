@@ -414,7 +414,7 @@ public final class PullRequestsModel {
                 mine = try await fetch(PullRequestsAPI.mine(c, token: token), c, role: .authored)
             case .projects:
                 if repos.isEmpty, let r = PullRequestsAPI.repos(c, token: token) {
-                    let (status, body) = try await connectors.http.send(r)
+                    let (status, _, body) = try await connectors.http.send(r)
                     guard (200..<300).contains(status) else { throw ConnectError(message: PhoneConnectors.failure(label: c.label, status: status, body: body)) }
                     repos = PullRequestsAPI.parseRepos(kind: c.kind, body: body)
                 }
@@ -435,7 +435,7 @@ public final class PullRequestsModel {
         let http = connectors.http
         var lists: [[PhonePullRequest]] = []
         for (i, request) in requests.enumerated() {
-            let (status, body) = try await http.send(request)
+            let (status, _, body) = try await http.send(request)
             guard (200..<300).contains(status) else { throw ConnectError(message: PhoneConnectors.failure(label: c.label, status: status, body: body)) }
             if c.kind == "github", let e = PullRequestsAPI.graphQLError(body) { throw ConnectError(message: "\(c.label): \(e)") }
             // GitLab's three lists are mine, assigned and to review, in that order.

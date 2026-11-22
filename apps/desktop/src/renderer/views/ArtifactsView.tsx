@@ -9,16 +9,20 @@ import { prefersReducedMotion } from '../displays.js';
 import { FilePane } from '../components/FilePane.js';
 import { LibraryArtwork, LibraryIntro, libraryIntroSeen, dismissLibraryIntro } from '../components/LibraryIntro.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
-import { LibraryFileIcon } from '../components/library/LibraryFileIcon.js';
+import { LibraryFileThumbnail } from '../components/library/LibraryFileThumbnail.js';
 import { DesignCanvas } from '../components/library/DesignCanvas.js';
 import { TilePreview } from '../components/library/TilePreview.js';
+import { LibrarySyncGlyph, LibrarySyncSummary, useLibrarySync } from '../components/library/LibrarySync.js';
+import { fileComputer, fileSync, groupByComputer, remoteEntries } from '../components/library/librarySyncState.js';
 import {
-  LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryLayout, orderForProfile, saveCollapsedKinds, saveLibraryLayout,
-  type LibraryLayout,
+  LIBRARY_LAYOUTS, PREVIEW_LIMIT, loadCollapsedKinds, loadLibraryGroupBy, loadLibraryLayout, loadLibraryShowComputer, orderForProfile,
+  saveCollapsedKinds, saveLibraryGroupBy, saveLibraryLayout, saveLibraryShowComputer,
+  type LibraryGroupBy, type LibraryLayout,
 } from '../components/library/libraryPrefs.js';
-import { ChevronDownIcon, ChevronIcon, ExternalIcon, FocusLayoutIcon } from '../icons.js';
+import { thisComputerName } from '../components/ComputerChip.js';
+import { ChevronDownIcon, ChevronIcon, ExternalIcon, FocusLayoutIcon, PanelLeftIcon } from '../icons.js';
 import {
-  ARTIFACT_KINDS, artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns,
+  artifactCandidates, folderDesigns, groupArtifacts, groupDesignVersions, helperCandidates, libraryEntryFor, mergeArtifacts, movedPaths, presentPaths, readProjectDesignFolders, relocate, sessionArtifacts, withFolderDesigns,
   type ArtifactEntry, type ArtifactKind,
 } from '../artifactsIndex.js';
 
@@ -32,14 +36,24 @@ const when = (at: number) => {
   const d = new Date(at);
   return at <= 0 || Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
-/** Where a file came from: its chat, or for a design found in a project's designs folder, that project. */
-const cameFrom = (e: ArtifactEntry) => (e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
-const fromAndWhen = (e: ArtifactEntry) => [cameFrom(e), when(e.at), e.versions && `${e.versions.length} versions`].filter(Boolean).join(' · ');
+/**
+ * Where a file came from: its chat, the project for a design found in its designs folder, or
+ * another computer. With its computer named already (on the line, or as the group's heading),
+ * another computer's file names the chat it came from there instead.
+ */
+const cameFrom = (e: ArtifactEntry, computerNamed = false) => (e.source === 'cloud'
+  ? computerNamed ? e.sessionTitle || 'Synced file' : `From ${e.device}`
+  : e.sessionId ? e.sessionTitle : `${e.sessionTitle} designs folder`);
+/** The file's computer, when files from more than one are listed and the line names it (#3144). */
+const computerName = (e: ArtifactEntry) => fileComputer(e) ?? thisComputerName();
+const fromAndWhen = (e: ArtifactEntry, computer: boolean, computerNamed: boolean) =>
+  [computer && computerName(e), cameFrom(e, computerNamed), when(e.at), e.versions && `${e.versions.length} versions`].filter(Boolean).join(' · ');
 /** A design the canvas can show: an HTML page. Images and the rest open in the file pane. */
 const isHtml = (path: string) => /\.html?$/i.test(path);
 const extOf = (filename: string) => (filename.includes('.') ? filename.split('.').pop() ?? '' : '');
 
-type Group = { kind: (typeof ARTIFACT_KINDS)[number]; items: ArtifactEntry[] };
+/** A group on screen: one kind, or one computer's files when Library groups by computer (#3144). */
+type ViewGroup = { id: string; label: string; items: ArtifactEntry[]; kind?: ArtifactKind };
 type Show = 'all' | ArtifactKind;
 
 /**
@@ -87,6 +101,10 @@ const LAYOUT_ICONS: Record<LibraryLayout, React.ReactNode> = {
   large: <g fill="currentColor">{[2, 8.6].flatMap((y) => [2, 8.6].map((x) => <rect key={`${x}-${y}`} x={x} y={y} width="5.4" height="5.4" rx="1.2" />))}</g>,
   cards: <><rect x="2" y="2.5" width="12" height="11" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M2 9h12M4.5 11.2h5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></>,
 };
+const GROUP_BY_OPTIONS: ReadonlyArray<SlideOption<LibraryGroupBy>> = [
+  { id: 'kind', label: 'Group by kind', content: 'Kind' },
+  { id: 'computer', label: 'Group by computer', content: 'Computer' },
+];
 const LAYOUT_OPTIONS: ReadonlyArray<SlideOption<LibraryLayout>> = LIBRARY_LAYOUTS.map((l) => ({
   id: l.id,
   label: l.label,
@@ -95,7 +113,7 @@ const LAYOUT_OPTIONS: ReadonlyArray<SlideOption<LibraryLayout>> = LIBRARY_LAYOUT
 
 /** A group's heading: folds the group under All, names the kind and its count otherwise. */
 function GroupHeading({ group, collapsible, collapsed, onToggle, more, large = false, mover }: {
-  group: Group;
+  group: ViewGroup;
   collapsible: boolean;
   collapsed: boolean;
   onToggle: () => void;
@@ -106,7 +124,7 @@ function GroupHeading({ group, collapsible, collapsed, onToggle, more, large = f
 }) {
   const inner = <>
     {collapsible && <ChevronDownIcon className="library-chevron h-3.5 w-3.5 text-ink-faint" />}
-    <span>{group.kind.label}</span>
+    <span>{group.label}</span>
     <span className="rounded-full bg-surface-2 px-2 text-2xs font-normal tabular-nums text-ink-faint">{group.items.length}</span>
   </>;
   const cls = `flex min-w-0 items-center gap-2 font-semibold text-ink ${large ? 'text-sm' : 'text-xs'}`;
@@ -139,32 +157,52 @@ export function ArtifactsView() {
     focusChatOnWall: s.focusChatOnWall,
     profile: s.settings?.workProfile,
   })));
-  const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen());
+  // A chat's "Open in Library" goes straight to its file: the first-visit guide waits for a visit of its own.
+  const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen() && !useStore.getState().libraryRequest);
   const closeIntro = () => { dismissLibraryIntro(); setShowIntro(false); };
+  // The list from the previous visit: shown immediately for a zero-layout-shift
+  // repeat visit, then kept as the floor while new batches arrive (#3043).
+  const [storedIndex] = useState<ArtifactEntry[] | null>(() => {
+    try {
+      const raw = localStorage.getItem('library:index:v1');
+      return raw ? (JSON.parse(raw) as ArtifactEntry[]) : null;
+    } catch { return null; }
+  });
+  // Accumulates the full live scan; starts null and grows batch by batch.
   const [fromChats, setFromChats] = useState<ArtifactEntry[] | null>(null);
   // The designs sitting in each project's designs folder, whoever put them there.
   const [fromFolders, setFromFolders] = useState<ArtifactEntry[] | null>(null);
   // Every candidate chat has been read, so an empty index really means no files yet.
   const [chatsRead, setChatsRead] = useState(false);
+  // Every chat has been read at least once this visit; a later re-read (a chat changed) keeps showing the list.
+  const [readOnce, setReadOnce] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ArtifactEntry | null>(null);
   // Which version of the picked design is open (its newest when null), and whether its file is shown instead of the canvas.
   const [version, setVersion] = useState<string | null>(null);
   const [asFile, setAsFile] = useState(false);
-  const [includeCompleted, setIncludeCompleted] = useState(true);
+  // The open file fills Library, with the list and the sliders put away.
+  const [full, setFull] = useState(false);
+  // A file a chat opened here that Library had not listed yet: swapped for its listed entry once it is.
+  const unlisted = useRef<{ path: string; origin?: { id: string; title: string } } | null>(null);
+  const [includeArchived, setIncludeArchived] = useState(true);
   const [show, setShow] = useState<Show>('all');
   const [layout, setLayout] = useState<LibraryLayout>(loadLibraryLayout);
-  const [collapsed, setCollapsed] = useState<Set<ArtifactKind>>(loadCollapsedKinds);
+  const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsedKinds);
+  const [groupBy, setGroupBy] = useState<LibraryGroupBy>(loadLibraryGroupBy);
+  const [showComputer, setShowComputer] = useState(loadLibraryShowComputer);
 
   useEffect(() => { void refreshSessions(); }, [refreshSessions]);
 
   // Transcripts are read a few at a time from the newest chat back; cached
   // ones paint at once. Only paths are kept, never file contents.
   const candidates = useMemo(
-    () => artifactCandidates(sessions.filter((s: SessionSummary) => includeCompleted || !s.archivedAt)),
-    [sessions, includeCompleted],
+    () => artifactCandidates(sessions.filter((s: SessionSummary) => includeArchived || !s.archivedAt)),
+    [sessions, includeArchived],
   );
-  const key = candidates.map((s) => `${s.id}:${s.updatedAt}`).join('|');
+  // A helper agent a chat started (a design agent, say) wrote files that are the chat's.
+  const helpers = useMemo(() => helperCandidates(sessions, candidates), [sessions, candidates]);
+  const key = [...candidates, ...helpers].map((s) => `${s.id}:${s.updatedAt}`).join('|');
   useEffect(() => {
     let live = true;
     setChatsRead(false);
@@ -178,58 +216,109 @@ export function ArtifactsView() {
         }));
         if (!live) return;
         lists.push(...batch);
-        setFromChats(mergeArtifacts(lists));
       }
-      if (live && candidates.length === 0) setFromChats([]);
-      if (live) setChatsRead(true);
+      for (let i = 0; i < helpers.length; i += 6) {
+        const batch = await Promise.all(helpers.slice(i, i + 6).map(async (summary) => {
+          const cached = getCachedSession(summary.id);
+          const full = cached && cached.updatedAt >= summary.updatedAt ? cached : await loadSession(summary.id).catch(() => null);
+          return full ? sessionArtifacts(full, basePathOf(full, workspaces), { id: summary.parent.id, title: summary.parent.title }) : [];
+        }));
+        if (!live) return;
+        lists.push(...batch);
+      }
+      // The list changes once, when every chat has been read: the one already shown stays until then, so nothing drops out mid-read.
+      if (live) { setFromChats(mergeArtifacts(lists)); setChatsRead(true); setReadOnce(true); }
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, workspaces]);
 
+  // Persist the most recent full index so the next visit paints at once (#3043).
+  useEffect(() => {
+    if (!chatsRead || fromChats === null) return;
+    try { localStorage.setItem('library:index:v1', JSON.stringify(fromChats)); } catch { /* storage unavailable */ }
+  }, [chatsRead, fromChats]);
+
   // Only the folders' listings are read (names, no contents), again whenever a chat changes.
   const folders = workspaces.map((w) => `${w.id}:${w.path}`).join('|');
   useEffect(() => {
     let live = true;
-    Promise.all(workspaces.map(async (w) => folderDesigns(w.name, await readDesignsFolder((path) => window.nekko.listDir(path), w.path))))
-      .then((lists) => { if (live) setFromFolders(lists.flat()); });
+    // Each folder's own designs folder, and those of the repos one level inside it.
+    Promise.all(workspaces.map((w) => readProjectDesignFolders((path) => window.nekko.listDir(path), w)))
+      .then((lists) => { if (live) setFromFolders(lists.flat().flatMap((f) => folderDesigns(f.project, f.files))); });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folders, key]);
 
+  // What to display: the last complete read of every chat, or before the first one finishes, the index stored last visit.
+  const displayedFromChats = fromChats ?? storedIndex;
+
   const merged = useMemo(
-    () => (fromChats || fromFolders ? withFolderDesigns(fromChats ?? [], fromFolders ?? []) : null),
-    [fromChats, fromFolders],
+    () => (displayedFromChats || fromFolders ? withFolderDesigns(displayedFromChats ?? [], fromFolders ?? []) : null),
+    [displayedFromChats, fromFolders],
   );
   // Which of those files are still on disk: a chat can name a file it never wrote, or one deleted since.
   // A file shows until its folder has been listed.
-  const [presence, setPresence] = useState<{ checked: Set<string>; present: Set<string> } | null>(null);
+  // A file gone from a removed git worktree is followed to the repo's main checkout.
+  const [presence, setPresence] = useState<{ checked: Set<string>; present: Set<string>; moved: Map<string, string> } | null>(null);
   const paths = merged?.filter((e) => e.source !== 'folder').map((e) => e.path).join('\n') ?? '';
   useEffect(() => {
     if (!paths || !window.nekko?.listDir) return;
     let live = true;
     const list = paths.split('\n');
-    presentPaths((path) => window.nekko.listDir(path), list).then((present) => {
-      if (live) setPresence({ checked: new Set(list.map((p) => p.toLowerCase())), present });
+    const listDir = (path: string) => window.nekko.listDir(path);
+    presentPaths(listDir, list).then(async (present) => {
+      const moved = await movedPaths(listDir, list);
+      if (live) setPresence({ checked: new Set(list.map((p) => p.toLowerCase())), present, moved });
     });
     return () => { live = false; };
   }, [paths]);
   const entries = useMemo(() => {
     if (!merged) return null;
-    const gone = (e: ArtifactEntry) => !!presence && presence.checked.has(e.path.toLowerCase()) && !presence.present.has(e.path.toLowerCase());
-    return groupDesignVersions(merged.filter((e) => !gone(e)));
+    const gone = (e: ArtifactEntry) => !!presence && presence.checked.has(e.path.toLowerCase()) && !presence.present.has(e.path.toLowerCase()) && !presence.moved.has(e.path.toLowerCase());
+    return groupDesignVersions(relocate(merged.filter((e) => !gone(e)), presence?.moved ?? new Map()));
   }, [merged, presence]);
   const indexed = chatsRead && fromFolders !== null;
 
+  // Library on Nekko Cloud (#2748): the engine is told this computer's files and backs them up;
+  // other computers' files join the list as read-only copies. Nothing shows unless it is open to the account.
+  // `getRevision` gives each entry the same revision token that LibraryFileThumbnail uses, so the
+  // engine receives the correct cached thumbnail for every file (#3044).
+  // We use e.at (the message timestamp that produced/linked the file) so that sending a new message
+  // in a chat does not invalidate all its files' thumbnails.
+  const getRevision = (e: ArtifactEntry) => e.at;
+  const library = useLibrarySync(entries, getRevision);
+  const remote = useMemo(() => groupDesignVersions(remoteEntries(library?.remote ?? [])), [library?.remote]);
+  // Map of path -> thumbnail data URL for remote files that sent a thumbnail from their computer (#3044).
+  const remoteThumbs = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of (library?.remote ?? [])) {
+      if (r.thumbnailData) m.set(r.path.replaceAll('\\', '/'), r.thumbnailData);
+    }
+    return m;
+  }, [library?.remote]);
+  const everything = useMemo(() => (entries && remote.length ? [...entries, ...remote] : entries), [entries, remote]);
+
   // The kinds that have files lead the slider; the setup answer's kind comes first.
-  const kinds = useMemo(() => orderForProfile(groupArtifacts(entries ?? []), profile), [entries, profile]);
-  const groups = useMemo(() => orderForProfile(groupArtifacts(entries ?? [], query), profile), [entries, query, profile]);
-  const total = entries?.length ?? 0;
+  const kinds = useMemo(() => orderForProfile(groupArtifacts(everything ?? []), profile), [everything, profile]);
+  const groups = useMemo(() => orderForProfile(groupArtifacts(everything ?? [], query), profile), [everything, query, profile]);
+  const total = everything?.length ?? 0;
   // A kind whose last file left (a chat was archived away) falls back to All.
   const current: Show = show === 'all' || kinds.some((g) => g.kind.id === show) ? show : 'all';
   const all = current === 'all';
-  const shown = all ? groups : groups.filter((g) => g.kind.id === current);
-  const isFolded = (kind: ArtifactKind) => all && collapsed.has(kind);
+  const ofKind = all ? groups : groups.filter((g) => g.kind.id === current);
+  // Files from another computer (#3144): each file can name its computer, and Library can group by computer.
+  const manyComputers = remote.length > 0;
+  const byComputer = manyComputers && groupBy === 'computer';
+  const lineNamesComputer = manyComputers && showComputer && !byComputer;
+  const computerNamed = lineNamesComputer || byComputer;
+  const shown: ViewGroup[] = byComputer
+    ? groupByComputer(ofKind.flatMap((g) => g.items), thisComputerName())
+    : ofKind.map((g) => ({ id: g.kind.id, label: g.kind.label, items: g.items, kind: g.kind.id }));
+  // Computer groups fold under one kind too: there is no "See all" to stand in for them.
+  const foldable = all || byComputer;
+  const isFolded = (id: string) => foldable && collapsed.has(id);
+  const meta = (e: ArtifactEntry) => fromAndWhen(e, lineNamesComputer, computerNamed);
   const listWide = layout === 'list' && !selected;
   const browsing = !selected && layout !== 'list' && shown.length > 0;
 
@@ -249,14 +338,45 @@ export function ArtifactsView() {
   // Moving between the preview layouts leaves the list alone; anything touching List, or the kind shown, changes it.
   const pickLayout = (next: LibraryLayout) => { if (next !== layout) transition(() => { setLayout(next); saveLibraryLayout(next); }, next === 'list' || layout === 'list'); };
   const pickShow = (next: Show) => { if (next !== current) transition(() => setShow(next), true); };
-  const toggle = (kind: ArtifactKind) => setCollapsed((prev) => {
+  const toggle = (id: string) => setCollapsed((prev) => {
     const next = new Set(prev);
-    if (!next.delete(kind)) next.add(kind);
+    if (!next.delete(id)) next.add(id);
     saveCollapsedKinds(next);
     return next;
   });
   // In List the list gives way to the preview, so the change is animated; elsewhere it is a swap.
-  const pick = (e: ArtifactEntry | null) => { setSelected(e); setVersion(null); setAsFile(false); };
+  const pick = (e: ArtifactEntry | null) => { unlisted.current = null; setSelected(e); setVersion(null); setAsFile(false); setFull(false); };
+
+  // "Open in Library" from a chat: that file, full screen. It opens at once, from
+  // the path alone if Library has not listed it yet, and becomes its listed entry
+  // (with its other versions) once the list has it.
+  const libraryRequest = useStore((s) => s.libraryRequest);
+  useEffect(() => {
+    if (!libraryRequest) return;
+    useStore.setState({ libraryRequest: null });
+    const chat = libraryRequest.sessionId ? sessions.find((s) => s.id === libraryRequest.sessionId) : undefined;
+    const origin = libraryRequest.sessionId ? { id: libraryRequest.sessionId, title: chat?.title ?? 'Chat' } : undefined;
+    const found = libraryEntryFor(everything, libraryRequest.path, origin);
+    unlisted.current = found.listed ? null : { path: found.entry.path, origin };
+    setShowIntro(false);
+    setSelected(found.entry);
+    setVersion(found.version);
+    setAsFile(false);
+    setFull(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryRequest]);
+  useEffect(() => {
+    // Picking another file (or going back) clears it, so while it is set the chat's file is still the one open.
+    const want = unlisted.current;
+    if (!want) return;
+    const found = libraryEntryFor(everything, want.path, want.origin);
+    if (!found.listed) return;
+    unlisted.current = null;
+    setSelected(found.entry);
+    // The list stands for a design by its newest version: keep the one the chat named open.
+    setVersion(found.version ?? (found.entry.path === want.path ? null : want.path));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [everything]);
   const select = (e: ArtifactEntry | null) => (layout === 'list' ? transition(() => pick(e), true) : pick(e));
   // Back to Library from a file: Escape outside a field, or the mouse's back button.
   const back = useRef(() => {});
@@ -277,20 +397,25 @@ export function ArtifactsView() {
   const openPath = selected ? version ?? selected.path : '';
   const onCanvas = !!selected && selected.kind === 'design' && isHtml(openPath);
 
-  const revisions = new Map(sessions.map((s) => [s.id, s.updatedAt]));
   const row = (e: ArtifactEntry) => {
     const active = selected?.path === e.path;
+    // Use the file's own message timestamp as the revision key (#3043).
+    // The chat's updatedAt would invalidate all thumbnails on every new message;
+    // e.at is the timestamp of the message that produced/linked this specific file.
+    const revision = e.at;
     return (
       <div key={e.path} role="listitem" className={`group rounded-lg ${active ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
         <button type="button" data-artifact-row className="flex w-full min-w-0 items-center gap-3 px-2 py-1 text-left" onClick={() => select(e)} title={e.path}>
-          <LibraryFileIcon kind={e.kind} className="h-7 w-7 shrink-0 rounded-md" />
+          <LibraryFileThumbnail kind={e.kind} path={e.path} revision={revision} thumbnailData={e.source === 'cloud' ? remoteThumbs.get(e.path) : undefined} className="h-7 w-7 shrink-0 rounded-md" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
-            {!listWide && <span className="block truncate text-2xs text-ink-faint">{fromAndWhen(e)}</span>}
+            {!listWide && <span className="block truncate text-2xs text-ink-faint">{meta(e)}</span>}
           </span>
+          {sync(e)}
           {listWide && <>
             <span className="hidden w-48 truncate font-mono text-2xs text-ink-faint lg:block">{e.filename}</span>
-            <span className="hidden w-56 truncate text-2xs text-ink-faint sm:block">{cameFrom(e)}</span>
+            {lineNamesComputer && <span className="hidden w-32 truncate text-2xs text-ink-faint sm:block" data-library-computer>{computerName(e)}</span>}
+            <span className="hidden w-56 truncate text-2xs text-ink-faint sm:block">{cameFrom(e, computerNamed)}</span>
             <span className="w-16 shrink-0 text-right text-2xs tabular-nums text-ink-faint">{when(e.at)}</span>
           </>}
         </button>
@@ -298,15 +423,20 @@ export function ArtifactsView() {
     );
   };
 
+  // A file's cloud: at the end of its row, and in its preview's top-right corner.
+  function sync(e: ArtifactEntry) {
+    const state = fileSync(library, e);
+    return state ? <LibrarySyncGlyph state={state} device={e.device} /> : null;
+  }
   const tile = (e: ArtifactEntry) => {
     const n = idOf(e.path);
     return (
     <div key={e.path} role="listitem" className="library-tile" data-library-tile>
       <button type="button" className="library-tile-main" onClick={() => select(e)} title={e.path}>
-        <TilePreview revision={revisions.get(e.sessionId) ?? e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} />
+        <TilePreview revision={e.at} kind={e.kind} path={e.path} ext={extOf(e.filename)} className="library-tile-preview" mover={`library-preview-${n}`} badge={sync(e)} />
         <span className="library-tile-label" data-library-mover={`library-label-${n}`} data-library-mover-class="library-label">
           <span className="library-tile-title">{e.title}</span>
-          <span className="library-tile-meta">{fromAndWhen(e)}</span>
+          <span className="library-tile-meta">{meta(e)}</span>
         </span>
       </button>
       {layout === 'cards' && (
@@ -325,9 +455,47 @@ export function ArtifactsView() {
     );
   };
 
+  // The skeleton holds until there is a whole list to show: on a first visit
+  // (nothing stored) until every chat has been read, so the list never grows
+  // batch by batch under the pointer; on a repeat visit the stored index
+  // fills it at once, so it never shows.
+  const loading = storedIndex === null ? !readOnce : displayedFromChats === null;
   // No files at all yet: the illustrated placeholder fills the page in every layout.
   const noFiles = indexed && total === 0;
   const empty = query && entries && shown.length === 0 ? 'Nothing matches.' : null;
+
+  /** Pulsing placeholder rows and tiles shown before the first list is known (#3043). */
+  const listSkeleton = (
+    <div className="px-2 pb-3 pt-1" aria-hidden="true">
+      <div className="mb-2 h-4 w-20 animate-pulse rounded-md bg-surface-2 opacity-60" />
+      {Array.from({ length: 8 }, (_, i) => (
+        <div key={i} className="mb-1 flex items-center gap-3 rounded-lg px-2 py-1">
+          <div className="h-7 w-7 shrink-0 animate-pulse rounded-md bg-surface-2 opacity-60" style={{ animationDelay: `${i * 60}ms` }} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="h-3 w-3/4 animate-pulse rounded-sm bg-surface-2 opacity-60" style={{ animationDelay: `${i * 60 + 20}ms` }} />
+            <div className="h-2.5 w-1/2 animate-pulse rounded-sm bg-surface-2 opacity-50" style={{ animationDelay: `${i * 60 + 40}ms` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const tileSkeleton = (
+    <div className="px-5 pb-8 pt-2" aria-hidden="true">
+      <div className="mb-3 h-4 w-24 animate-pulse rounded-md bg-surface-2 opacity-60" />
+      <div className="library-tiles">
+        {Array.from({ length: 12 }, (_, i) => (
+          <div key={i} className="library-tile">
+            <div className="library-tile-preview animate-pulse bg-surface-2 opacity-60" style={{ animationDelay: `${i * 50}ms` }} />
+            <div className="mt-2 space-y-1 px-1">
+              <div className="h-3 w-4/5 animate-pulse rounded-sm bg-surface-2 opacity-60" style={{ animationDelay: `${i * 50 + 20}ms` }} />
+              <div className="h-2.5 w-3/5 animate-pulse rounded-sm bg-surface-2 opacity-50" style={{ animationDelay: `${i * 50 + 35}ms` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   const placeholder = (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center" data-library-empty>
@@ -339,8 +507,8 @@ export function ArtifactsView() {
       <p className="mt-2 max-w-sm rounded-xl border border-line bg-surface-2 px-3 py-2 text-xs text-ink-soft">
         Try asking an agent: “Create a one-page report and link the file in your reply.”
       </p>
-      {!includeCompleted && (
-        <button type="button" className="btn btn-ghost mt-1 text-xs" onClick={() => setIncludeCompleted(true)}>Include completed chats</button>
+      {!includeArchived && (
+        <button type="button" className="btn btn-ghost mt-1 text-xs" onClick={() => setIncludeArchived(true)}>Include archived chats</button>
       )}
     </div>
   );
@@ -348,34 +516,49 @@ export function ArtifactsView() {
   return (
     <div className="flex h-full min-h-0 flex-col" data-artifacts-view data-library-layout={layout}>
       {showIntro && <LibraryIntro onClose={closeIntro} />}
-      <header className={`${selected ? 'hidden md:flex' : 'flex'} min-w-0 items-center gap-3 border-b border-line px-4 py-2`}>
+      <header className={`${full ? 'hidden' : selected ? 'hidden md:flex' : 'flex'} min-w-0 items-center gap-3 border-b border-line px-4 py-2`}>
         {!hasAppChrome && <h1 className="view-title shrink-0">Library</h1>}
         {!noFiles && (
           <div className="library-types min-w-0 overflow-x-auto">
             <SlideToggle label="Show" options={typeOptions} value={current} onChange={pickShow} transitionName="library-show" />
           </div>
         )}
-        <span className="ml-auto shrink-0 text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
+        <span className="ml-auto" />
+        {everything && <LibrarySyncSummary library={library} entries={everything} />}
+        <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : loading ? '' : 'Reading chats…'}</span>
         <button type="button" className="btn btn-ghost shrink-0 px-3 py-1 text-xs" onClick={() => setShowIntro(true)}>Library guide</button>
         {!noFiles && <SlideToggle label="Layout" options={LAYOUT_OPTIONS} value={layout} onChange={pickLayout} iconOnly className="hidden shrink-0 md:inline-flex" transitionName="library-layout" />}
       </header>
 
-      {noFiles ? placeholder : <div className="flex min-h-0 flex-1">
-        <aside className={`library-list ${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col ${listWide ? '' : 'md:w-[340px] md:border-r md:border-line'}`}>
+      {noFiles && !selected ? placeholder : <div className="flex min-h-0 flex-1">
+        <aside className={`library-list ${full ? 'hidden' : selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col ${listWide ? '' : 'md:w-[340px] md:border-r md:border-line'}`}>
           <div className={`space-y-2 px-3 pb-2 pt-3 ${listWide ? 'md:px-5' : ''}`}>
             <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter Library" value={query} onChange={(e) => setQuery(e.target.value)} />
-            <label className="flex items-center gap-2 text-2xs text-ink-faint">
-              <input type="checkbox" checked={includeCompleted} onChange={(e) => setIncludeCompleted(e.target.checked)} /> Include completed chats
-            </label>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <label className="flex items-center gap-2 text-2xs text-ink-faint">
+                <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} /> Include archived chats
+              </label>
+              {/* Only once Library holds another computer's files (#3144). */}
+              {manyComputers && <>
+                <label className="flex items-center gap-2 text-2xs text-ink-faint" data-library-show-computer>
+                  <input type="checkbox" checked={showComputer && !byComputer} disabled={byComputer}
+                    onChange={(e) => { setShowComputer(e.target.checked); saveLibraryShowComputer(e.target.checked); }} /> Show computer
+                </label>
+                <SlideToggle label="Group by" options={GROUP_BY_OPTIONS} value={groupBy} className="library-group-by ms-auto"
+                  onChange={(next) => transition(() => { setGroupBy(next); saveLibraryGroupBy(next); }, true)} />
+              </>}
+            </div>
           </div>
           <div className={`min-h-0 flex-1 overflow-y-auto px-2 pb-3 ${listWide ? 'md:px-4' : ''}`} role="list" aria-label="Library files">
-            {empty && <p className="px-3 py-2 text-xs text-ink-faint">{empty}</p>}
-            {shown.map((g) => (
-              <section key={g.kind.id} className="mb-1" data-artifact-kind={g.kind.id} aria-label={g.kind.label}>
-                <GroupHeading group={g} collapsible={all} collapsed={isFolded(g.kind.id)} onToggle={() => toggle(g.kind.id)} />
-                <Fold open={!isFolded(g.kind.id)}>{g.items.map(row)}</Fold>
-              </section>
-            ))}
+            {loading ? listSkeleton : <>
+              {empty && <p className="px-3 py-2 text-xs text-ink-faint">{empty}</p>}
+              {shown.map((g) => (
+                <section key={g.id} className="mb-1" data-artifact-kind={g.kind} data-library-computer-group={g.kind ? undefined : g.id} aria-label={g.label}>
+                  <GroupHeading group={g} collapsible={foldable} collapsed={isFolded(g.id)} onToggle={() => toggle(g.id)} />
+                  <Fold open={!isFolded(g.id)}>{g.items.map(row)}</Fold>
+                </section>
+              ))}
+            </>}
           </div>
         </aside>
 
@@ -391,6 +574,11 @@ export function ArtifactsView() {
                   <p className="truncate text-sm font-semibold">{selected.title}</p>
                   <p className="truncate font-mono text-2xs text-ink-faint" title={openPath}>{openPath}</p>
                 </div>
+                {/* Narrow windows already give the file the whole width. */}
+                <button type="button" className="btn btn-ghost hidden shrink-0 gap-2 py-1 text-xs md:inline-flex" data-library-full aria-pressed={full}
+                  onClick={() => setFull((on) => !on)} title={full ? 'Show the Library list beside the file' : 'Give the file the whole of Library'}>
+                  <PanelLeftIcon className="h-3.5 w-3.5" /> {full ? 'Show list' : 'Full screen'}
+                </button>
                 {selected.sessionId && (
                   <button type="button" className="btn btn-primary gap-2 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Single agent view`}>
                     <FocusLayoutIcon className="h-3.5 w-3.5" /> Open chat
@@ -404,21 +592,28 @@ export function ArtifactsView() {
               <div className="min-h-0 flex-1 overflow-hidden" key={onCanvas && !asFile ? `canvas:${selected.path}` : `file:${openPath}`}>
                 {onCanvas && !asFile
                   ? <DesignCanvas path={openPath} title={selected.title} versions={selected.versions} onVersion={setVersion} onSource={() => setAsFile(true)} />
-                  : <FilePane path={openPath} />}
+                  // A design changes by a new version beside it, never in place, so it opens view-only.
+                  // Another computer's file is a copy: it changes there, never here.
+                  : <FilePane path={openPath} readOnly={selected.kind === 'design' || selected.source === 'cloud'} />}
               </div>
             </>
+          ) : loading ? (
+            <div className="min-h-0 flex-1 overflow-y-auto" aria-busy="true">{tileSkeleton}</div>
           ) : browsing ? (
             <div className="library-canvas min-h-0 flex-1 overflow-y-auto px-5 pb-8" data-library-canvas>
               {shown.map((g) => {
-                const limit = all ? PREVIEW_LIMIT[layout as keyof typeof PREVIEW_LIMIT] : Infinity;
-                const more = all && g.items.length > limit
-                  ? <button type="button" className="ml-auto shrink-0 rounded-md px-1 text-2xs font-medium text-accent hover:underline" onClick={() => pickShow(g.kind.id)}>See all {g.items.length}</button>
+                // A kind's previews stop at a limit under All, with "See all" opening that kind; a computer's show every file.
+                const kind = g.kind;
+                const limit = all && kind ? PREVIEW_LIMIT[layout as keyof typeof PREVIEW_LIMIT] : Infinity;
+                const more = kind && all && g.items.length > limit
+                  ? <button type="button" className="ml-auto shrink-0 rounded-md px-1 text-2xs font-medium text-accent hover:underline" onClick={() => pickShow(kind)}>See all {g.items.length}</button>
                   : undefined;
+                const key = g.id.replace(/[^a-z0-9-]/gi, '-');
                 return (
-                  <section key={g.kind.id} data-library-group={g.kind.id} aria-label={g.kind.label}>
-                    <GroupHeading group={g} collapsible={all} collapsed={isFolded(g.kind.id)} onToggle={() => toggle(g.kind.id)} more={more} large mover={`library-head-${g.kind.id}`} />
-                    <Fold open={!isFolded(g.kind.id)}>
-                      <div className="library-tiles" role="list" aria-label={`${g.kind.label} previews`}>{g.items.slice(0, limit).map(tile)}</div>
+                  <section key={g.id} data-library-group={g.kind ?? g.id} aria-label={g.label}>
+                    <GroupHeading group={g} collapsible={foldable} collapsed={isFolded(g.id)} onToggle={() => toggle(g.id)} more={more} large mover={`library-head-${key}`} />
+                    <Fold open={!isFolded(g.id)}>
+                      <div className="library-tiles" role="list" aria-label={`${g.label} previews`}>{g.items.slice(0, limit).map(tile)}</div>
                     </Fold>
                   </section>
                 );

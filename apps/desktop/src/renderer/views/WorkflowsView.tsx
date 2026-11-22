@@ -1,5 +1,5 @@
 import { GfServerIcon, WorkflowIcon } from '../gentleface-icons.js';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   SkillDef,
   Workflow,
@@ -29,6 +29,7 @@ import {
 import { useStore } from '../store.js';
 import { Badge, EmptyHint, StatusDot, Toggle } from '../components/primitives/index.js';
 import { WorkflowCanvas } from '../components/WorkflowCanvas.js';
+import { AutomationsPausedLine } from '../components/AutomationsPane.js';
 import { WorkflowEditor, type WorkflowSeed } from '../components/WorkflowEditor.js';
 import { TemplateGallery, TemplateSetup, templateSeed } from '../components/TemplateGallery.js';
 import { FirstWorkflowWizard } from '../components/FirstWorkflowWizard.js';
@@ -38,6 +39,7 @@ import { STATUS } from '../tokens.js';
 import { hasAppChrome } from '../chrome.js';
 import { CiRunnersView, watchRunnerPresence, type RunnerPresence } from './CiRunnersView.js';
 import { useShown } from '../simpleMode.js';
+import { forwardWheelToContent } from '../railWheel.js';
 
 /**
  * The Automations tab's Scheduled tasks section (code name: workflows): automation modelled on GitHub Actions, where a step can be
@@ -102,6 +104,7 @@ export function WorkflowsView() {
   const paused = useStore((s) => s.settings?.automationsPaused === true);
   const ciRunnersFocus = useStore((s) => s.ciRunnersFocus);
   // The sub-navigation's page: the task list, or this Mac's CI runners.
+  const contentRef = useRef<HTMLDivElement>(null);
   const [section, setSection] = useState<'tasks' | 'ci'>(ciRunnersFocus ? 'ci' : 'tasks');
   const [runners, setRunners] = useState<RunnerPresence>('none');
   const workflowFocus = useStore((s) => s.workflowFocus);
@@ -212,7 +215,7 @@ export function WorkflowsView() {
   const ciShown = ciRelevant || section === 'ci';
   const page = ciShown ? section : 'tasks';
   return (
-    <div className="automations-layout">
+    <div className="automations-layout" onWheel={(e) => forwardWheelToContent(e, contentRef.current)}>
       {/* Automations' sections, then the scheduled tasks list's filters */}
       <aside className="automations-rail">
         {!hasAppChrome && <h1 className="view-title">Automations</h1>}
@@ -318,7 +321,7 @@ export function WorkflowsView() {
       </aside>
 
       {/* List */}
-      <div className="automations-content">
+      <div ref={contentRef} className="automations-content">
         {page === 'ci' ? <div className="mx-auto max-w-5xl"><CiRunnersView /></div> : !loaded ? <p className="p-4 text-sm text-ink-soft" role="status">{loadFailed ? 'Could not load scheduled tasks. Reopen this tab to try again.' : 'Loading scheduled tasks…'}</p> : workflows.length === 0 ? (<>
           <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
         </>) : <div className="mx-auto max-w-5xl">
@@ -345,20 +348,7 @@ export function WorkflowsView() {
             by hand, on a schedule, or when something happens.
           </p>
 
-          {paused && (
-            <div
-              className="mt-2 flex items-center gap-3 rounded-xl border px-3 py-2 text-xs"
-              style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}
-              role="status"
-              data-automations-paused
-            >
-              <span className="min-w-0 flex-1">
-                <strong className="font-semibold">Automations are paused.</strong> Schedules, events and polls won't start
-                any task. Run still works.
-              </span>
-              <button className="btn btn-outline py-1! text-xs" onClick={() => void togglePaused(false)}>Resume</button>
-            </div>
-          )}
+          {paused && <AutomationsPausedLine className="mt-2" onResume={() => void togglePaused(false)} />}
 
           <details className="mt-2 rounded-xl border px-3 py-2 text-xs text-ink-soft" style={{ borderColor: 'var(--line)' }} open={workflows.length === 0}>
             <summary className="cursor-pointer font-medium text-ink-faint">How scheduled tasks work</summary>

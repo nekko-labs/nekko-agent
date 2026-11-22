@@ -15,6 +15,8 @@ Below the table, **How Nekko works with Claude** draws the option you picked: wi
 
 In a chat that runs on Claude Code, each finished reply starts with a left-aligned **Claude Code** speaker header and a circular **CC** avatar: the text below it is what your own Claude Code wrote, shown as it wrote it. This is separate from the Done and token-statistics footer. A reply from any other provider in the same chat (after you switch models, or one a local model answered) has no label. The desktop app and the Local Web UI show it; the iPhone and Android apps do not yet.
 
+The terminal commands Claude Code runs in such a chat (its Bash and PowerShell tools) also appear in the chat window's **Logs**, each as `$ <command>` followed by its output. Claude Code hands over a command's output only when the command ends, so it appears all at once rather than line by line.
+
 When you pick Claude, Nekko first checks whether Claude Code is installed (it runs `claude --version` and `claude auth status`). If it isn't, **Install Claude Code** opens a terminal inside Nekko and runs Anthropic's own installer (`curl -fsSL https://claude.ai/install.sh | bash`, or `irm https://claude.ai/install.ps1 | iex` on Windows). If it isn't signed in, **Connect** opens Claude Code in that terminal so you can type `/login`. Once it's connected, the panel says so in green, with the account and plan it uses.
 
 ### Fable on a Claude plan
@@ -76,7 +78,7 @@ If port 1455 is busy, the ChatGPT sign-in switches to manual mode: after you aut
 
 You can also import a sign-in you already did with the Codex CLI: `codex login` writes `~/.codex/auth.json`, and the app can read it and import the same token shape.
 
-If a subscription session expires, the provider card shows the expiry and a "Re-authenticate" button to sign in again.
+If a subscription session expires, the provider card shows the expiry and a **Sign in again** button. A reply that fails because the sign-in expired says **Sign-in expired** and has **Sign in again** right in the notice, so you can sign in without leaving the chat and then press **Retry**. A refused API key gets **Fix in Models** there instead.
 
 ## Security
 

@@ -28,6 +28,7 @@ pub const CHANNELS: &[&str] = &[
     "computers:setIcon",
     "computers:createSession",
     "computers:stats",
+    "computers:connectFleet",
 ];
 
 /// The event a window refreshes on: a link's state changed, or the list did.
@@ -53,6 +54,10 @@ pub struct Paired {
     pub alts: Vec<String>,
     pub paired_at: f64,
     pub color: u32,
+    /// Reached through this org's fleet with the account's keys (decision
+    /// 0102), not paired: kept in memory only, never in `computers.json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fleet: Option<String>,
 }
 
 /// What opens the link, kept in the OS key store under the computer's id.
@@ -120,6 +125,8 @@ pub struct Computers {
     ctx: std::sync::OnceLock<crate::routes::Ctx>,
     /// Where those providers point: this run's listener and its token.
     tunnel: std::sync::OnceLock<(u16, Arc<str>)>,
+    /// Nekko Cloud, for computers of this account found in an org's fleet.
+    cloud: std::sync::OnceLock<Arc<nekko_cloud::Cloud>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -235,6 +242,7 @@ impl Computers {
             refresh: Mutex::default(),
             ctx: std::sync::OnceLock::new(),
             tunnel: std::sync::OnceLock::new(),
+            cloud: std::sync::OnceLock::new(),
         })
     }
 
@@ -316,7 +324,9 @@ impl Computers {
     }
 
     fn save(&self) -> Result<(), String> {
-        let text = serde_json::to_vec_pretty(&*lock(&self.list)).map_err(|e| e.to_string())?;
+        // A fleet link lives as long as the account allows it: never saved.
+        let kept: Vec<Paired> = lock(&self.list).iter().filter(|p| p.fleet.is_none()).cloned().collect();
+        let text = serde_json::to_vec_pretty(&kept).map_err(|e| e.to_string())?;
         nekko_remote::service::write_json_atomic(&self.file, &serde_json::from_slice(&text).unwrap_or(Value::Null))
             .map_err(|e| e.to_string())
     }
@@ -333,6 +343,7 @@ impl Computers {
             name: this_name(),
             key,
             pair_code: None,
+            fleet: None,
         })
     }
 
@@ -439,7 +450,11 @@ impl Computers {
     }
 
     /// What survives a restart, without the chats a person marked incognito.
+    /// Nothing for a fleet link: it doesn't survive a restart.
     fn keep(&self, id: &str) {
+        if lock(&self.list).iter().any(|p| p.id == id && p.fleet.is_some()) {
+            return;
+        }
         let path = self.dir.join("computers").join(id).join("seen.json");
         let value = {
             let seen = lock(&self.seen);
@@ -597,6 +612,7 @@ impl Computers {
             name: this_name(),
             key,
             pair_code: Some(code),
+            fleet: None,
         };
         let (tx, _events) = tokio::sync::mpsc::unbounded_channel();
         let client = Client::start(cfg.clone(), tx);
@@ -618,20 +634,136 @@ impl Computers {
         client.stop();
 
         let id = random_hex(4)?;
-        let name = info.get("hostname").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or(&host);
+        let name = ["computerName", "hostname"]
+            .iter()
+            .find_map(|k| info.get(*k).and_then(Value::as_str).filter(|n| !n.trim().is_empty()))
+            .unwrap_or(&host);
         let name: String = name.chars().take(60).collect();
         let platform = info.get("platform").and_then(Value::as_str).map(str::to_string);
         let at = nekko_remote::system_clock()();
         let secrets = Secrets { room, secret, host_key, device_id, device_key: key_text };
         self.vault.set(&id, &serde_json::to_string(&secrets).map_err(|e| e.to_string())?)?;
         let color = lock(&self.list).len() as u32;
-        let paired = Paired { id: id.clone(), name, platform, relay_url, alts, paired_at: at, color };
+        let paired = Paired { id: id.clone(), name, platform, relay_url, alts, paired_at: at, color, fleet: None };
         lock(&self.list).push(paired.clone());
         self.save()?;
         self.open(&id, Config { pair_code: None, ..cfg });
         self.sync_providers().await;
         self.hub.publish(UPDATED, json!({}), false);
         Ok(status_value(&paired, None))
+    }
+
+    /// Nekko Cloud, for fleet links (fleet.rs).
+    pub fn set_cloud(&self, cloud: Arc<nekko_cloud::Cloud>) {
+        let _ = self.cloud.set(cloud);
+    }
+
+    /// Open a chat link to a computer of this account listed in an org's fleet
+    /// (decision 0102): no code, the account's keys prove who this is. Kept in
+    /// memory only, like any link it is listed here and its Model Server is
+    /// offered to chats. Asking again for one already linked answers its row.
+    async fn connect_fleet(self: &Arc<Self>, org_id: &str, device_id: &str) -> Result<Value, String> {
+        let cloud = self.cloud.get().ok_or("Nekko Cloud isn't available here.")?.clone();
+        let id = fleet_link_id(device_id);
+        if let Some(row) = self.row(&id) {
+            return Ok(row);
+        }
+        let target = cloud
+            .fleet_target(org_id, device_id)
+            .ok_or("That computer can't be reached from here. Open the organization's Computers list again.")?;
+        let account_device = cloud.fleet_device().ok_or("Unlock your account on this computer first.")?;
+        let routes: Vec<String> = target
+            .connect
+            .routes
+            .iter()
+            .filter(|u| nekko_remote::route::relay_url_problem(u).is_none())
+            .cloned()
+            .collect();
+        let relay_url = routes.first().cloned().ok_or("That computer's relay address can't be used from here.")?;
+        let (key, _) = new_key()?;
+        let cfg = Config {
+            routes: ordered_routes(&relay_url, &routes[1..]),
+            room: target.connect.room.clone(),
+            secret: target.connect.secret.clone(),
+            host_key: target.connect.host_key.clone(),
+            device_id: nekko_remote::fleet::link_device_id(&account_device),
+            name: this_name(),
+            key,
+            pair_code: None,
+            fleet: Some(crate::fleet::signer(cloud.clone(), org_id.to_string())),
+        };
+        let name = target.name.clone();
+        let mut state = self.try_fleet(&cfg).await;
+        // The computer may not have heard of this device or key epoch yet: it
+        // catches up when it refuses, so one more try after a moment.
+        if matches!(&state, State::Denied(r) if r == "fleet-device" || r == "fleet-epoch") {
+            tokio::time::sleep(FLEET_RETRY).await;
+            state = self.try_fleet(&cfg).await;
+        }
+        if state != State::Online {
+            return Err(fleet_refusal(&state, &name));
+        }
+        let platform = Some(
+            match target.os.as_str() {
+                "windows" => "win32",
+                "macos" => "darwin",
+                _ => "linux",
+            }
+            .to_string(),
+        );
+        let color = lock(&self.list).len() as u32;
+        let at = nekko_remote::system_clock()();
+        let paired = Paired {
+            id: id.clone(),
+            name,
+            platform,
+            relay_url,
+            alts: routes[1..].to_vec(),
+            paired_at: at,
+            color,
+            fleet: Some(org_id.to_string()),
+        };
+        lock(&self.list).push(paired.clone());
+        self.open(&id, cfg);
+        self.sync_providers().await;
+        self.hub.publish(UPDATED, json!({}), false);
+        Ok(status_value(&paired, None))
+    }
+
+    /// One fleet dial, until it is in or refused.
+    async fn try_fleet(&self, cfg: &Config) -> State {
+        let (tx, _events) = tokio::sync::mpsc::unbounded_channel();
+        let client = Client::start(cfg.clone(), tx);
+        let mut rx = client.watch();
+        let settled = rx.wait_for(|s| matches!(s.state, State::Online | State::Denied(_) | State::Stale));
+        let reached = tokio::time::timeout(PAIR_LIMIT, settled).await.is_ok();
+        let state = if reached { client.status().state } else { State::Offline };
+        client.stop();
+        state
+    }
+
+    fn row(&self, id: &str) -> Option<Value> {
+        let all = self.list();
+        all.as_array()?.iter().find(|r| r["id"] == id).cloned()
+    }
+
+    /// Drop every fleet link once this desktop is signed out or locked: what
+    /// opened them is gone, so they go too (fleet.rs runs this).
+    pub async fn drop_fleet_unless_ready(self: &Arc<Self>) {
+        let ready = match self.cloud.get() {
+            Some(c) => {
+                let c = c.clone();
+                tokio::task::spawn_blocking(move || c.fleet_ready()).await.unwrap_or(false)
+            }
+            None => false,
+        };
+        if ready {
+            return;
+        }
+        let ids: Vec<String> = lock(&self.list).iter().filter(|p| p.fleet.is_some()).map(|p| p.id.clone()).collect();
+        for id in ids {
+            let _ = self.forget(&id).await;
+        }
     }
 
     /// Stop using a computer, and sign out of it while it can still hear.
@@ -679,6 +811,10 @@ impl Computers {
                 self.edit(id, |p| p.color = color)
             }
             "computers:forget" => self.forget(id).await,
+            "computers:connectFleet" => {
+                let device = arg(1).as_str().unwrap_or_default();
+                self.connect_fleet(id, device).await
+            }
             "computers:call" => {
                 let channel = arg(1).as_str().ok_or("A channel is required.")?;
                 self.client(id)?.call(channel, arg(2).clone()).await.map_err(|e| e.to_string())
@@ -706,9 +842,35 @@ impl Computers {
     }
 }
 
+/// How long before the one retry of a fleet link the computer refused for
+/// not knowing this device or key epoch yet (it catches up meanwhile).
+const FLEET_RETRY: Duration = Duration::from_secs(3);
+
+/// A fleet link's id here: `f` and the first 11 hex digits of the account device id.
+fn fleet_link_id(device_id: &str) -> String {
+    let hex: String = device_id.chars().filter(char::is_ascii_hexdigit).take(11).collect();
+    format!("f{}", hex.to_lowercase())
+}
+
+/// The sentence for a fleet link that didn't open.
+fn fleet_refusal(state: &State, name: &str) -> String {
+    match state {
+        State::Denied(r) if r == "update-required" => format!("Update Nekko Agent on {name}."),
+        State::Denied(r) if r == "fleet-off" => format!("{name} stopped sharing with this organization."),
+        State::Denied(r) if r == "fleet-locked" => format!("{name} is signed out of Nekko Cloud or locked."),
+        State::Denied(r) if r == "fleet-epoch" || r == "fleet-device" => {
+            format!("{name} doesn't trust this computer yet. Try again in a minute.")
+        }
+        State::Denied(r) if r == "fleet-account" => format!("{name} belongs to another account."),
+        State::Denied(_) => format!("{name} refused this computer."),
+        State::Stale => format!("{name}'s remote access changed. Open the Computers list again."),
+        _ => format!("Could not reach {name}."),
+    }
+}
+
 /// What the other computer calls this one.
 fn this_name() -> String {
-    gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string()
+    crate::host_name::friendly_host_name()
 }
 
 #[cfg(test)]
@@ -729,6 +891,7 @@ mod tests {
             alts: vec!["ws://192.168.1.20:4400".into()],
             paired_at: 5.0,
             color: 0,
+            fleet: None,
         }
     }
 
@@ -802,5 +965,31 @@ mod tests {
     fn the_state_a_window_reads() {
         assert_eq!(state_text(&State::Denied("update-required".into())), "update");
         assert_eq!(state_text(&State::Denied("kicked".into())), "denied");
+    }
+
+    #[test]
+    fn a_fleet_link_is_listed_but_never_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        let c = computers(dir.path());
+        lock(&c.list).push(paired("ab12cd34"));
+        lock(&c.list).push(Paired { fleet: Some("org".into()), ..paired(&fleet_link_id("7e1f0a9c-2b3d-4e5f")) });
+        c.save().unwrap();
+        let saved = std::fs::read_to_string(dir.path().join("computers.json")).unwrap();
+        assert!(saved.contains("ab12cd34") && !saved.contains("f7e1f0a9c2b3") && !saved.contains("fleet"), "{saved}");
+        let listed = c.list();
+        assert_eq!(listed.as_array().unwrap().len(), 2);
+        assert_eq!(listed[1]["fleet"], "org", "the window can tell a fleet link from a paired one");
+        // Restarted: only the paired one comes back.
+        let again = computers(dir.path());
+        assert_eq!(again.list().as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn fleet_link_ids_and_refusals_read_well() {
+        assert_eq!(fleet_link_id("7e1f0a9c-2b3d-4e5f-8a6b-9c0d1e2f3a4b"), "f7e1f0a9c2b3");
+        let r = |reason: &str| fleet_refusal(&State::Denied(reason.into()), "gomi");
+        assert_eq!(r("fleet-off"), "gomi stopped sharing with this organization.");
+        assert_eq!(r("fleet-device"), "gomi doesn't trust this computer yet. Try again in a minute.");
+        assert_eq!(r("update-required"), "Update Nekko Agent on gomi.");
     }
 }

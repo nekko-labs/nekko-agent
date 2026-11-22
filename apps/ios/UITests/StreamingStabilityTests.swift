@@ -82,7 +82,7 @@ final class StreamingStabilityTests: XCTestCase {
             }
             XCTAssertTrue(title.exists)
             XCTAssertEqual(title.label, "Gomi is reconnecting...")
-            XCTAssertTrue(app.staticTexts["Draft your message now and it will send when Gomi reconnects"].exists)
+            XCTAssertTrue(app.staticTexts["Prompts you send wait on this iPhone."].exists)
             XCTAssertEqual(note.frame.width, before.width, accuracy: 0.5)
             XCTAssertEqual(note.frame.height, before.height, accuracy: 0.5)
         }

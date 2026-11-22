@@ -320,7 +320,7 @@ private fun actionTag(a: Action): String = when (a) {
 }
 
 /** Android lets an app open another: the Tailscale app if it is installed, else its Play Store page. */
-private fun openTailscale(context: Context) {
+internal fun openTailscale(context: Context) {
     val launch = context.packageManager.getLaunchIntentForPackage(TAILSCALE_PACKAGE)
     val intent = launch ?: Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$TAILSCALE_PACKAGE"))
     try {

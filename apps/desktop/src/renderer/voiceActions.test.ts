@@ -138,14 +138,14 @@ describe('runVoiceIntent', () => {
     expect(store.state.pushToast.mock.calls).toEqual([['success', 'Switched to desktop 2'], ['success', 'Switched to the next desktop']]);
   });
   it('chat commands need a focused chat', async () => {
-    for (const kind of ['erase', 'clear', 'send', 'ship', 'status', 'complete-session'] as const) expect(await runVoiceIntent({ kind }, null, null)).toBeNull();
+    for (const kind of ['erase', 'clear', 'send', 'ship', 'status', 'archive-session'] as const) expect(await runVoiceIntent({ kind }, null, null)).toBeNull();
     expect(store.state.pushToast.mock.calls.every(([kind, text]: string[]) => kind === 'error' && text === 'Open a chat first')).toBe(true);
     expect(store.state.pushToast).toHaveBeenCalledTimes(6);
     expect(store.state.archiveChat).not.toHaveBeenCalled();
   });
-  it('confirms before completing a chat; yes runs it, no drops it', async () => {
+  it('confirms before archiving a chat; yes runs it, no drops it', async () => {
     const t = target();
-    const pending = await runVoiceIntent({ kind: 'complete-session' }, t, null);
+    const pending = await runVoiceIntent({ kind: 'archive-session' }, t, null);
     expect(pending?.message).toMatch(/Say 'Nekko, yes' or tap Confirm\.$/);
     expect(store.state.archiveChat).not.toHaveBeenCalled();
     expect(await runVoiceIntent({ kind: 'no' }, t, pending)).toBeNull();
@@ -153,7 +153,7 @@ describe('runVoiceIntent', () => {
     expect(store.state.archiveChat).not.toHaveBeenCalled();
     expect(await runVoiceIntent({ kind: 'yes' }, t, pending)).toBeNull();
     expect(store.state.archiveChat).toHaveBeenCalledWith('s1');
-    expect(store.state.pushToast).toHaveBeenLastCalledWith('success', 'Completed Auth');
+    expect(store.state.pushToast).toHaveBeenLastCalledWith('success', 'Archived Auth');
   });
   it('ship with an open PR confirms naming it, then merges through the PR action', async () => {
     store.state.prsBySession = { s1: [pr()] };
@@ -241,7 +241,7 @@ describe('runVoiceIntent', () => {
   });
   it('a pending confirm survives dictation and ignores a pick', async () => {
     const t = target();
-    const pending = await runVoiceIntent({ kind: 'complete-session' }, t, null);
+    const pending = await runVoiceIntent({ kind: 'archive-session' }, t, null);
     expect(await runVoiceIntent({ kind: 'dictation', text: 'hm' }, t, pending)).toBe(pending);
     expect(await runVoiceIntent({ kind: 'pick', n: 1 }, t, pending)).toBe(pending);
   });

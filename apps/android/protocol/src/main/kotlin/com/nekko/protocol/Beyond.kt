@@ -111,7 +111,7 @@ data class SavedPrompt(val id: String, val name: String, val body: String) {
 object ChatSearch {
     /**
      * Chats whose title, first prompt or last reply holds every word of
-     * [query], ignoring case and accents. Completed chats included.
+     * [query], ignoring case and accents. Archived chats included.
      */
     fun matches(chats: List<SessionSummary>, query: String): List<SessionSummary> {
         val words = fold(query).split(Regex("\\s+")).filter { it.isNotEmpty() }

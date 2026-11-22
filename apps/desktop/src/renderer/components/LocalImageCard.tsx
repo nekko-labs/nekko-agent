@@ -1,6 +1,7 @@
 import React from 'react';
 import { localImageData, localImagePath } from '../localImages.js';
 import { useStore } from '../store.js';
+import { inDesignPlace } from '../artifactsIndex.js';
 import { MarkdownSandbox, MarkdownSession } from './Markdown.js';
 
 export function LocalImageCard({ src, title, basePath, sessionId: origin }: { src: string; title: string; basePath?: string; sessionId?: string }) {
@@ -27,6 +28,8 @@ export function LocalImageCard({ src, title, basePath, sessionId: origin }: { sr
       <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-ink" style={{ color: 'var(--ink)' }}>{title}</span><span className="block truncate text-2xs text-ink-soft" style={{ color: 'var(--ink-soft)' }}>{src.split(/[\\/]/).pop()}</span></span>
       <button type="button" disabled={sandbox || !target} className="shrink-0 text-xs underline disabled:opacity-50" title={target ? `Open ${target}` : src}
         onClick={() => { if (!sandbox && target) useStore.getState().openFilePane(target, sessionId); }}>Open source ↗</button>
+      {target && inDesignPlace(target) && <button type="button" disabled={sandbox} className="shrink-0 text-xs underline disabled:opacity-50" data-open-in-library
+        title={`Open ${target} in Library, full screen`} onClick={() => { if (!sandbox) useStore.getState().openInLibrary(target, sessionId); }}>Open in Library</button>}
     </span>
   </span>;
 }

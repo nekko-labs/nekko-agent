@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The computer's chats, grouped like the desktop's sidebar (General, then
 /// each project folder) or as the view menu says, with Working / Needs you
-/// badges, search, swipe to complete / delete, and the computer switcher in the title.
+/// badges, search, swipe to archive / delete, and the computer switcher in the title.
 struct ChatsView: View {
     @Binding var path: [Route]
     /// iPad (regular width): the split view's selected chat. Nil on iPhone, where rows push.
@@ -332,7 +332,7 @@ struct ChatsView: View {
                         .accessibilityIdentifier("chats.view.showSubagents")
                 }
                 Menu("Show") {
-                    Toggle("Completed chats", isOn: bind(\.showCompleted)).menuActionDismissBehavior(.disabled)
+                    Toggle("Archived chats", isOn: bind(\.showArchived)).menuActionDismissBehavior(.disabled)
                     Toggle("Always show groups", isOn: bind(\.showEmptyGroups)).menuActionDismissBehavior(.disabled)
                         .accessibilityIdentifier("chats.view.showEmptyGroups")
                     if places.count > 1 {
@@ -428,7 +428,7 @@ struct ChatsView: View {
         dropTarget = nil
     }
 
-    /// Every word of the search, in the title, first prompt or last reply; completed chats too.
+    /// Every word of the search, in the title, first prompt or last reply; archived chats too.
     private var filtered: [SessionSummary] { ChatSearch.matches(listSummaries, query) }
 
     // MARK: The computers in view (2026-11-04)
@@ -516,8 +516,8 @@ struct ChatsView: View {
         if PhoneProviders.isPhoneChat(s.id) { phone.delete(s.id) } else { act { try await store.deleteChat(s.id, on: owner(s)) } }
     }
 
-    private func complete(_ s: SessionSummary) {
-        if PhoneProviders.isPhoneChat(s.id) { phone.complete(s.id) } else { act { try await store.completeChat(s.id, on: owner(s)) } }
+    private func archive(_ s: SessionSummary) {
+        if PhoneProviders.isPhoneChat(s.id) { phone.archive(s.id) } else { act { try await store.archiveChat(s.id, on: owner(s)) } }
     }
 
     private func restore(_ s: SessionSummary) {
@@ -528,11 +528,11 @@ struct ChatsView: View {
         if PhoneProviders.isPhoneChat(s.id) { phone.setPinned(s.id, !s.pinned) } else { act { try await store.setPinned(s.id, !s.pinned, on: owner(s)) } }
     }
 
-    /// "3 active · 12 done", as the desktop's group headings count.
+    /// "3 active · 12 archived", as the desktop's group headings count.
     private func counts(_ g: ChatSection) -> String {
         var parts: [String] = []
         if g.activeCount > 0 { parts.append(g.activeCount == 1 ? String(localized: "1 active") : String(localized: "\(g.activeCount) active")) }
-        if g.doneCount > 0 { parts.append(String(localized: "\(g.doneCount) done")) }
+        if g.archivedCount > 0 { parts.append(String(localized: "\(g.archivedCount) archived")) }
         return parts.joined(separator: " · ")
     }
 
@@ -545,7 +545,7 @@ struct ChatsView: View {
         return chats.joined(separator: ",") + "|\(store.conn)|\(store.peers.values.filter { $0.conn == .online }.count)|\(tick)"
     }
 
-    /// The sub-agents listed under a chat: those it spawned and has not completed,
+    /// The sub-agents listed under a chat: those it spawned and has not archived,
     /// while the chat itself is active and the view shows them (the desktop sidebar's rule).
     private func subagents(of s: SessionSummary) -> [SessionSummary] {
         guard view.showSubagents, !s.archived, !PhoneProviders.isPhoneChat(s.id) else { return [] }
@@ -599,7 +599,7 @@ struct ChatsView: View {
             } else if store.pcSettings.effectiveAction == .delete && !PhoneProviders.isPhoneChat(s.id) {
                 Button(role: .destructive) { askDelete(s) } label: { Label("Delete", systemImage: "trash") }
             } else {
-                Button { complete(s) } label: { Label("Complete", systemImage: "checkmark.circle") }
+                Button { archive(s) } label: { Label("Archive", systemImage: "archivebox") }
                     .tint(palette.success)
             }
         }
@@ -614,7 +614,7 @@ struct ChatsView: View {
             if s.archived {
                 Button { restore(s) } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
             } else {
-                Button { complete(s) } label: { Label("Complete", systemImage: "checkmark.circle") }
+                Button { archive(s) } label: { Label("Archive", systemImage: "archivebox") }
             }
             Button(role: .destructive) { askDelete(s) } label: { Label("Delete", systemImage: "trash") }
         }
@@ -666,7 +666,7 @@ struct ChatRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(spacing: 0) {
-                ChatStatusIcon(activity: activity, completed: summary.archived, waiting: waiting > 0, activeWatchCount: summary.activeWatchCount)
+                ChatStatusIcon(activity: activity, archived: summary.archived, waiting: waiting > 0, activeWatchCount: summary.activeWatchCount)
                     .frame(width: 22, height: 22)
                 if hasSubagents { SubagentTrunk().frame(maxHeight: .infinity) }
             }
@@ -1311,7 +1311,7 @@ enum SavedListNote {
 
     /// A chat read from the phone's saved copy (OF-5).
     static func copy(savedAt ms: Int64, computer: String, now: Date = .now, calendar: Calendar = .current) -> String {
-        "Saved copy from \(when(ms, now: now, calendar: calendar)). It updates when \(computer) answers."
+        "Updated last on \(when(ms, now: now, calendar: calendar))"
     }
 
     private static func when(_ ms: Int64, now: Date, calendar: Calendar) -> String {

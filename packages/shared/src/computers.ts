@@ -17,6 +17,12 @@ export interface PairedComputer {
   pairedAt: number;
   /** An index into the computer palette. */
   color: number;
+  /**
+   * Reached through this organization's computer list with your account's
+   * keys, not paired (decision 0102). Kept in memory only: gone after a
+   * restart or when you sign out or lock.
+   */
+  fleet?: string;
 }
 
 export type ComputerState =
@@ -58,6 +64,22 @@ export interface ComputerCatalog {
 
 /** One of these per computer. None is a status color: those mean working, warning, needs input and error. */
 export const COMPUTER_COLORS = ['#5b8def', '#a57cf0', '#2fb7b1', '#e26fb4', '#7f8cf5', '#8aa0b8'] as const;
+
+/**
+ * The computer a chat synced through Nekko Cloud belongs to, as its sealed record names it
+ * (#3143): its sync device id and the name it syncs under ("MacBook Pro").
+ */
+export interface ChatHome {
+  deviceId: string;
+  device: string;
+}
+
+/** A synced computer's place in the palette: the same on every computer, from its device id. */
+export function syncedComputerColor(deviceId: string): number {
+  let h = 0;
+  for (let i = 0; i < deviceId.length; i++) h = (h * 31 + deviceId.charCodeAt(i)) >>> 0;
+  return h % COMPUTER_COLORS.length;
+}
 
 export function computerColor(c: { color: number }): string {
   return COMPUTER_COLORS[c.color % COMPUTER_COLORS.length];

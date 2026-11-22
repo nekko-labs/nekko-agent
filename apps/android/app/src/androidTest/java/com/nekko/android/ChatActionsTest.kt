@@ -48,7 +48,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The chat's ⋮ (Chat mode, Rename, Pin, Complete) and the chat list's long-press (Pin, Rename),
+ * The chat's ⋮ (Chat mode, Rename, Pin, Archive) and the chat list's long-press (Pin, Rename),
  * over a real [ComputersRepository] whose computer is a fake keeping the chat's title, pin and
  * mode as `session:setOptions` left them. Each step is a whole-screen screenshot under the
  * app's external files (`evidence/`), named by device.

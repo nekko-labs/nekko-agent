@@ -43,9 +43,9 @@ object ImageAttachments {
      * not an image Android can read. ImageDecoder applies the EXIF rotation, so
      * a portrait camera shot stays upright.
      */
-    suspend fun encode(resolver: ContentResolver, uri: Uri): Pair<String, ImageBitmap> = withContext(Dispatchers.IO) {
+    suspend fun encode(resolver: ContentResolver, uri: Uri, maxSide: Int = MAX_SIDE): Pair<String, ImageBitmap> = withContext(Dispatchers.IO) {
         val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver, uri)) { decoder, info, _ ->
-            val (w, h) = fit(info.size.width, info.size.height)
+            val (w, h) = fit(info.size.width, info.size.height, maxSide)
             decoder.setTargetSize(w, h)
             // Software bitmaps can be compressed; hardware ones can't.
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
@@ -54,6 +54,23 @@ object ImageAttachments {
         check(bitmap.compress(Bitmap.CompressFormat.JPEG, QUALITY, out)) { "Couldn’t read that image." }
         val (pw, ph) = fit(bitmap.width, bitmap.height, PREVIEW_SIDE)
         // scale() returns the same bitmap when it is already small enough; only free a separate full-size one.
+        val preview = bitmap.scale(pw, ph)
+        if (preview !== bitmap) bitmap.recycle()
+        dataUrl(out.toByteArray()) to preview.asImageBitmap()
+    }
+
+    /**
+     * A picture the computer sent (a made picture to edit, #2230), as a photo to attach: scaled so
+     * its longest side is at most [maxSide], as a JPEG data URL, with its thumbnail.
+     */
+    suspend fun refit(dataUrl: String, maxSide: Int): Pair<String, ImageBitmap> = withContext(Dispatchers.IO) {
+        val bytes = Base64.getMimeDecoder().decode(dataUrl.substringAfter(','))
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: error("Couldn’t read that picture.")
+        val (w, h) = fit(decoded.width, decoded.height, maxSide)
+        val bitmap = if (w == decoded.width && h == decoded.height) decoded else decoded.scale(w, h).also { decoded.recycle() }
+        val out = ByteArrayOutputStream()
+        check(bitmap.compress(Bitmap.CompressFormat.JPEG, QUALITY, out)) { "Couldn’t read that picture." }
+        val (pw, ph) = fit(bitmap.width, bitmap.height, PREVIEW_SIDE)
         val preview = bitmap.scale(pw, ph)
         if (preview !== bitmap) bitmap.recycle()
         dataUrl(out.toByteArray()) to preview.asImageBitmap()

@@ -24,7 +24,16 @@ A feed built offline and shipped with the app (`crates/nekko-machine/src/model-f
 
 The client never searches, scrapes or benchmarks anything to make a recommendation. Community benchmarks may inform the editorial source; they are not read at runtime.
 
-**Online refresh** (planned, not built): a newer feed signed and published beside the release's update feed, verified and kept in the data directory the way the Claude policy override is (`crates/nekkod/src/claude_policy.rs`), falling back to the bundled snapshot. See [decision 0002](../../docs/decisions/0002-bundled-model-feed-with-measured-calibration.md).
+**Online refresh** `[implemented 2026-11-18 (#2916): daemon and release step unit-tested with test keys, and a list signed by the release script verified by the daemon; no real release key exists, so no release publishes a list and no user gets one today]`. A release can carry a newer `model-feed.json` beside its update feed file, signed with the release signing key. On each update check nekkod fetches it, verifies it and recommends from it, the way the Claude policy override is handled (`crates/nekkod/src/model_feed.rs`). See [decision 0002](../../docs/decisions/0002-bundled-model-feed-with-measured-calibration.md).
+
+- **Used only when** the signature verifies, the list's format is the one this daemon reads, its version is newer than the built-in list's, and its serial is above the last one applied. Anything else leaves the list in use as it was. While the release key is the all-zero placeholder, every signed list is refused.
+- **Kept** in the data directory (`model-feed.signed.json`) and verified again at each start. After an app update whose built-in list is the newer one, the saved one is no longer used.
+- **What it can bring without a release:** chat models, new quants or repositories of a picture family the engine already knows, a different order of candidates, and measured picture times per hardware class.
+- **What it cannot:** a picture or video family whose text encoder and VAE the engine does not name (`acquire.rs`). Such a model is left out of the list and off its tasks, since it would download and not start.
+- **Boundary:** the list names Hugging Face repositories and files only. Where a download comes from stays the engine's, and an unsigned or altered list is never read.
+- **Published by the release:** `scripts/sign-model-feed.mjs` signs the list the release ships and the release workflow uploads it as `model-feed.json` beside the update feed, once, from the Linux job. Its serial follows the list's version (`YYYY-MM-DD.N`). While the built-in key is the placeholder nothing is published, since no app would accept it; once a real key is built in, a missing or mismatched secret fails the release. A list between releases is the same file signed and uploaded to the latest release by hand: there is no workflow for it yet.
+- **Said in Models:** Best for this machine ends with "From an updated model list (version), newer than the one this version shipped." when the list came from an update check, and "From the model list shipped with this version (version)." otherwise (`feedSource` on `machine:recommendations`).
+- **Still to do:** a real release signing key; a workflow to publish a list between releases.
 
 ## Picking `[implemented, unit-tested over six reference machines]`
 
@@ -50,6 +59,15 @@ The engine router hears how fast each local chat or completion reply decoded: ll
 ## On the Models page `[implemented 2026-10-23; renderer-verified in an isolated fixture, not yet in the packaged app]`
 
 **Best for this machine** sits above the library and search (`RecommendedModels.tsx`). Its summary line names what the picks were made for: the device, the backend and the memory available to models ("NVIDIA GeForce RTX 4060 · Vulkan · 7.0 GB of GPU memory for models"; "No GPU found · CPU only · 12.0 GB of RAM for models"). Each task's row has the model and quant, a fit chip (fits, tight fit) whose tooltip gives the headroom, the memory it takes of the budget, the download size, the speed, and **Download**, which queues the exact quant (its weights and, for vision, its projector) through `engine:downloadModel`. A pick whose weights file is already in the library reads **Downloaded** instead. Speeds read `62 tok/s` (measured), `~117 tok/s` (estimated) or `~28 tok/s, rough` (efficiency borrowed from another backend), each with a tooltip saying which; a GPU outside the table shows "speed unknown"; embeddings show none. A task below its speed target says "Slower than the 25 tok/s this task wants; the fastest that fits here". The block is open on a machine with no models and folded to its summary ("5 picks") once there are some, decided once so it never folds under the reader; **Check this machine again** probes the profile afresh. If the daemon cannot answer, the block is absent and the rest of the page works as before. Upgrade nudges are below.
+
+**Updated 2026-11-20** `[implemented; unit- and daemon-tested, renderer-verified in the isolated fixture]`. Best for this machine now leads **Find new models** (the Models page's second half) as plain rows, always open, and is not shown on On this machine; it is gone once a search starts. Each row adds what the user asked to see before a download:
+
+- **Parameters**, read from the model's name ("27B parameters", "30B parameters, 3B active" for a mixture of experts, "4B effective parameters" for Gemma's E models), left out when the name does not say.
+- **A memory meter** against the budget: the weights in the accent colour, then the context and working buffers in Petrol, with "18.3 GB of 30.8 GB at 16k context".
+- **The context that fits**: "Context: Up to 88k fits in this GPU · 256k max", or "All of it fits" when the model's whole window does. The daemon answers it per quant (`fitContextTokens`: the longest context, in whole thousands and at most the model's own `maxContextTokens`, whose weights + KV cache + buffers stay within the budget, by the same memory formula as the pick).
+- **Quants** opens a table of every quant of that model (`quants` on each option): its weights, its memory at the task's context, the context that fits, and its fit (Fits, Tight, Too big), the pick highlighted, each with its own Download (none for Too big; Downloaded for one already in the library).
+
+The fit is a dot and a word now, not a filled chip, and Download is a quiet accent button, so a page of picks has no stack of primaries.
 
 ## Upgrade nudges `[implemented 2026-10-23; unit-, daemon- and renderer-tested]`
 

@@ -362,10 +362,27 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
     send_with(ctx, adm, opts, None).await
 }
 
+/// The computer a chat synced from another computer belongs to, or `None` for this computer's
+/// own chats (their files name no home: nekko-cloud strips it from this computer's records).
+async fn synced_home(ctx: &Ctx, session_id: &str) -> Option<String> {
+    let store = ctx.sessions.clone();
+    let id = session_id.to_string();
+    let meta = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok()??;
+    let home = meta.get("home")?;
+    home.get("deviceId").and_then(Value::as_str).filter(|id| !id.is_empty())?;
+    let device = home.get("device").and_then(Value::as_str).filter(|d| !d.trim().is_empty());
+    Some(device.unwrap_or("another computer").to_string())
+}
+
 /// `sendChat(opts, ..., queued)`: admit and drive a turn and its chain; with
 /// `queued`, the turn runs that queue entry and claims it.
 async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Value>) -> Result<Value, String> {
     let session_id = s(&opts, "sessionId").to_string();
+    // Another computer's chat, synced here through Nekko Cloud, is a read-only copy (#3143): it
+    // carries on only on the computer it belongs to, or here as a fork.
+    if let Some(device) = synced_home(ctx, &session_id).await {
+        return Err(format!("This chat belongs to {device}. Continue it here to reply on this computer."));
+    }
     let pending = adm.begin(&session_id)?;
     let attended = !crate::claude_policy::is_unattended(&opts);
     let _attended = attended.then(|| adm.begin_attended());
@@ -489,6 +506,9 @@ async fn admit(
     let Some(provider) = provider.filter(|p| nekko_js::truthy(p.get("enabled"))) else {
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
+    // Using an LM Studio model is the one time a closed LM Studio is opened;
+    // the Models page only asks (#2961).
+    ctx.runtimes.open_for_turn(&provider).await;
     // A scheduled task, workflow, goal step, watch or auto-continue on Claude
     // Code needs `unattended_runs` for its auth (claude_policy.rs). Its auth
     // comes from `claude auth status`, read once if nothing has read it yet.
@@ -703,7 +723,6 @@ async fn admit(
         &settings,
         &[
             "systemInstructions",
-            "promptProfiles",
             "turnWrapper",
             "aboutUser",
             "orchestration",
@@ -716,6 +735,12 @@ async fn admit(
             "privacyTerms",
         ],
     );
+    // Carry only the selected overlay; other models' instructions are not turn inputs.
+    if !sandbox
+        && let Some(text) = crate::prompt_profile::model_instructions(&settings, s(&provider, "id"), kind, model_id)
+    {
+        spec_settings["modelSystemInstructions"] = json!(text);
+    }
     spec_settings["providers"] = Value::Array(providers);
     let mut spec = json!({
         "turnId": turn_id,

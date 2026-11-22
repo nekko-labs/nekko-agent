@@ -1,6 +1,7 @@
 import { terminalPresentation, terminalPrUrl } from './terminalActivity.js';
 import { ComputerChip, useComputerOf } from './ComputerChip.js';
-import React, { memo, useRef, useState } from 'react';
+import { syncedComputer, syncedHomes } from '../syncedComputers.js';
+import React, { memo, useMemo, useRef, useState } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { getSessionWorkspaceIds, guessContextWindow, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
@@ -8,10 +9,10 @@ import { useShown } from '../simpleMode.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
-  BranchIcon, CheckIcon, CloseIcon, CompactIcon, PencilIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
+  ArchiveIcon, BranchIcon, CheckIcon, CloseIcon, CompactIcon, PencilIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
   WarningIcon, WorktreeIcon,
 } from '../icons.js';
-import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
+import { ARCHIVE_ROW_ATTR, archiveWithExit } from '../archiveExit.js';
 import { useCompactionStore } from '../compactionStatus.js';
 import { fillTone } from './contextTone.js';
 import { SessionPrChip } from './SessionPrChip.js';
@@ -230,8 +231,13 @@ function WorkspaceCardImpl({
   const liveCtxEstimate = useStore((s) => (session ? s.sessionCtxEstimate[session.id] : undefined));
   const compacting = useCompactionStore((s) => (session ? s.bySession[session.id]?.state === 'running' : false));
   const computer = useComputerOf(session?.id);
-  // Once a second computer is connected, every chat card names where it runs, this one included.
-  const anyComputer = useStore((s) => s.computers.length > 0);
+  // Another computer's chat synced here through Nekko Cloud names that computer (#3143).
+  const allComputers = useStore((s) => s.computers);
+  const home = session?.home;
+  const syncedHome = useMemo(() => (home && !computer ? syncedComputer(home, allComputers) : null), [home, computer, allComputers]);
+  // Once a second computer is connected, or a chat here is another computer's, every chat card
+  // names the computer it belongs to, this one included.
+  const anyComputer = useStore((s) => s.computers.length > 0 || syncedHomes(s.sessions).length > 0);
   const computersShown = useShown('computers', { computers: anyComputer });
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
   const provider = (remoteProviders ?? providers).find((p) => p.id === session?.providerId);
@@ -323,7 +329,7 @@ function WorkspaceCardImpl({
         {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
-          : <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
+          : <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
             {title}
           </span>}
         {/* A title-only card has no room for both: its PR says more than the time. */}
@@ -348,20 +354,19 @@ function WorkspaceCardImpl({
             deleting and then the chat was nowhere to be found. Archived chats
             stay readable until explicitly deleted. A shell has nothing to keep, so it closes. */}
         <button
-          className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink"
-          title={isChat ? 'Complete this chat (kept until you delete it)' : 'Close this agent'}
-          aria-label={isChat ? `Complete ${title}` : `Close ${title}`}
+          className="flex shrink-0 items-center rounded-sm p-0.5 text-ink-faint hover:text-ink"
+          title={isChat ? 'Archive this chat (kept until you delete it)' : 'Close this agent'}
+          aria-label={isChat ? `Archive ${title}` : `Close ${title}`}
           onClick={async (e) => {
             e.stopPropagation();
             if (!session) return void onClose();
-            await completeWithExit(e.currentTarget.closest<HTMLElement>(`[${COMPLETION_ROW_ATTR}]`), async () => {
+            await archiveWithExit(e.currentTarget.closest<HTMLElement>(`[${ARCHIVE_ROW_ATTR}]`), async () => {
               await onClose();
               return useStore.getState().sessions.some((s) => s.id === session.id && s.archivedAt);
             });
           }}
         >
-          <CloseIcon className={isChat ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
-
+          {isChat ? <ArchiveIcon className="h-3.5 w-3.5" /> : <CloseIcon className="h-3 w-3" />}
         </button>
         </span>
       </div>
@@ -373,7 +378,7 @@ function WorkspaceCardImpl({
           context window is. The provider's name is in the tooltip. */}
       {showMetadata && <>
       {modelLine && <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
-        {computerShown && <ComputerChip computer={computer} dim={!!computer && computer.state !== 'online'} showIcon={showComputerIcons} />}
+        {computerShown && <ComputerChip computer={computer ?? syncedHome} dim={!!computer && computer.state !== 'online'} showIcon={showComputerIcons} />}
         {computerShown && showModel && <span aria-hidden>·</span>}
         {showModel && <Fact
           grow

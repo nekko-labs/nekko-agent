@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage, SessionSummary } from '@nekko-agent/shared';
-import { artifactCandidates, artifactKind, designVersion, folderDesigns, groupArtifacts, groupDesignVersions, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
+import { artifactCandidates, artifactKind, inDesignPlace, designVersion, folderDesigns, groupArtifacts, groupDesignVersions, libraryEntryFor, mergeArtifacts, presentPaths, readDesignsFolder, sessionArtifacts, withFolderDesigns } from './artifactsIndex.js';
 
 const msg = (id: string, content: string, createdAt: number, extra: Partial<ChatMessage> = {}): ChatMessage => ({ id, role: 'assistant', content, createdAt, ...extra });
 const write = (path: string) => ({ id: path, name: 'write_file', input: { path, content: 'x' } });
@@ -8,23 +8,29 @@ const write = (path: string) => ({ id: path, name: 'write_file', input: { path, 
 const claudeWrite = (file_path: string) => ({ id: file_path, name: 'Write', input: { file_path, content: 'x' }, executedBy: 'claude-code' as const });
 
 describe('artifacts index', () => {
-  it('sorts files into kinds, with design folders winning for pages and images', () => {
+  it('sorts files into kinds, with design folders winning for pages but never for pictures', () => {
     expect(artifactKind('C:/p/reports/audit.md')).toBe('doc');
     expect(artifactKind('/p/reports/dash.html')).toBe('web');
     expect(artifactKind('/p/nekko-designs/login/index.html')).toBe('design');
-    expect(artifactKind('/p/nekko-designs/hero.svg')).toBe('design');
+    // A design's picture is an Image (#3145).
+    expect(artifactKind('/p/nekko-designs/hero.svg')).toBe('image');
+    expect(artifactKind('/p/mockups/home.png')).toBe('image');
+    expect(inDesignPlace('/p/nekko-designs/hero.svg')).toBe(true);
+    expect(inDesignPlace('/p/reports/dash.html')).toBe(false);
     expect(artifactKind('/p/docs/flow.mmd')).toBe('diagram');
     expect(artifactKind('/p/out.csv')).toBe('data');
     expect(artifactKind('/p/plan.xlsx')).toBe('office');
     expect(artifactKind('/p/src/index.ts')).toBeNull();
   });
 
-  it('files a page or image as a design when its own name says so, wherever it sits', () => {
+  it('files a page as a design when its own name says so, wherever it sits', () => {
     for (const path of [
       '/p/reports/ios-connection-strip-design.html', '/p/.scratch/provider-import-mockup.html', '/p/reports/library-layouts/prototype.html',
-      '/tmp/agent-plan-concepts.html', '/p/out/checkout_wireframe.png', '/p/reports/Login Mock-up.svg', '/p/docs/onboarding.canvas.html',
+      '/tmp/agent-plan-concepts.html', '/p/docs/onboarding.canvas.html',
     ]) expect(artifactKind(path), path).toBe('design');
-    // The word has to stand alone in the name, and only pages and images are designs.
+    // A picture named as a design is still an Image.
+    for (const path of ['/p/out/checkout_wireframe.png', '/p/reports/Login Mock-up.svg']) expect(artifactKind(path), path).toBe('image');
+    // The word has to stand alone in the name, and only pages are designs.
     expect(artifactKind('/p/reports/redesigned-dashboard.html')).toBe('web');
     expect(artifactKind('/p/reports/mockingbird.png')).toBe('image');
     expect(artifactKind('/p/reports/ci-runners-p4-design.md')).toBe('doc');
@@ -73,14 +79,18 @@ describe('artifacts index', () => {
       ['C:/proj/nekko-designs/login.html', 'Login'], ['C:/proj/nekko-designs/checkout/index.html', 'Checkout'], ['C:/proj/nekko-designs/hero.svg', 'Hero'],
     ]);
     expect(folder[0]).toEqual({ path: 'C:/proj/nekko-designs/login.html', title: 'Login', filename: 'login.html', kind: 'design', sessionId: '', sessionTitle: 'Shop', at: 0, source: 'folder' });
+    // The folder's picture joins Library as an Image.
+    expect(folder[2]).toMatchObject({ filename: 'hero.svg', kind: 'image' });
 
     const chat = sessionArtifacts({ id: 's1', title: 'Login page', messages: [msg('a', '', 7, { toolCalls: [write('nekko-designs/Login.html')] })] }, 'C:/proj');
     const all = withFolderDesigns(chat, [...folder, ...folder]);
     expect(all.map((e) => [e.path, e.sessionId])).toEqual([
       ['C:/proj/nekko-designs/Login.html', 's1'], ['C:/proj/nekko-designs/checkout/index.html', ''], ['C:/proj/nekko-designs/hero.svg', ''],
     ]);
-    // Chat-made designs lead their group; folder-only ones follow in the folder's order.
-    expect(groupArtifacts(all)[0].items.map((e) => e.filename)).toEqual(['Login.html', 'index.html', 'hero.svg']);
+    // Chat-made designs lead their group; folder-only ones follow in the folder's order. The picture is under Images.
+    const groups = groupArtifacts(all);
+    expect(groups.find((g) => g.kind.id === 'design')?.items.map((e) => e.filename)).toEqual(['Login.html', 'index.html']);
+    expect(groups.find((g) => g.kind.id === 'image')?.items.map((e) => e.filename)).toEqual(['hero.svg']);
     expect(groupArtifacts(all, 'shop').flatMap((g) => g.items.map((e) => e.filename))).toEqual(['index.html', 'hero.svg']);
   });
 
@@ -205,5 +215,25 @@ describe('presentPaths', () => {
     const present = await presentPaths(async () => { throw new Error('refused'); }, ['/locked/a.html', '/locked/b.png']);
     expect([...present].sort()).toEqual(['/locked/a.html', '/locked/b.png']);
     expect([...await presentPaths(async () => null as unknown as [], ['/odd/a.html'])]).toEqual(['/odd/a.html']);
+  });
+});
+
+describe('Open in Library', () => {
+  const design = { path: 'C:/p/nekko-designs/checkout-design-v2.html', title: 'Checkout design', filename: 'checkout-design-v2.html', kind: 'design' as const, sessionId: 's', sessionTitle: 'Checkout', at: 5, source: 'written' as const,
+    versions: [{ version: 1, path: 'C:/p/nekko-designs/checkout-design.html' }, { version: 2, path: 'C:/p/nekko-designs/checkout-design-v2.html' }] };
+
+  it('finds the listed design, by any slash and case', () => {
+    expect(libraryEntryFor([design], 'C:\\p\\nekko-designs\\Checkout-Design-v2.html')).toEqual({ entry: design, version: null, listed: true });
+  });
+
+  it('opens an older version the chat named on its design, with that version picked', () => {
+    expect(libraryEntryFor([design], 'C:/p/nekko-designs/checkout-design.html')).toEqual({ entry: design, version: 'C:/p/nekko-designs/checkout-design.html', listed: true });
+  });
+
+  it('opens a design Library has not listed yet from its path, under the chat it came from', () => {
+    const found = libraryEntryFor(null, 'C:\\p\\nekko-designs\\login-mockup.html', { id: 'c', title: 'Login' });
+    expect(found.listed).toBe(false);
+    expect(found.version).toBeNull();
+    expect(found.entry).toMatchObject({ path: 'C:/p/nekko-designs/login-mockup.html', title: 'Login mockup', filename: 'login-mockup.html', kind: 'design', sessionId: 'c', sessionTitle: 'Login' });
   });
 });

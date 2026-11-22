@@ -195,7 +195,7 @@ export function ExpertMonitor() {
         <div ref={pop} style={style} className="card fixed z-[100] overflow-y-auto p-3 shadow-(--shadow-float)" role="dialog" aria-label="Monitor" data-expert-monitor-sheet>
           <div className="mb-2 text-xs font-semibold text-ink">Hardware</div>
           <div className="mb-3 grid grid-cols-4 gap-3">{dials.map((d) => <RingDial key={d.label} {...d} size={60} />)}</div>
-          <div className="mb-1 text-xs font-semibold text-ink">Loaded models</div>
+          <div className="mb-1 text-xs font-semibold text-ink">Local models</div>
           {host ? <p className="text-xs text-ink-soft">{host.loaded} on {host.name}</p> : <LocalModels />}
         </div>,
         document.body,

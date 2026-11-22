@@ -6,6 +6,7 @@ function load(name: string): Promise<unknown> {
   switch (name) {
     case 'command-center': return import('../scripts/command-center-fixture');
     case 'chat-finder': return import('./scenarios/chat-finder');
+    case 'whats-new': return import('./scenarios/whats-new');
     default: return Promise.reject(new Error(`Unknown e2e scenario "${name}"`));
   }
 }

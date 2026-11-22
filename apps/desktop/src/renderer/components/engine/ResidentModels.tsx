@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import type { EngineSettings, LoadingModel, LocalModel, ResidentModel } from '@nekko-agent/shared';
+import { OVERLOAD_RESERVE_MB_DEFAULT, type EngineMemory, type EngineSettings, type LoadingModel, type LocalModel, type ResidentModel } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
+import { ImageGeneration } from './ImageGeneration.js';
+import { StatusDot } from '../primitives/index.js';
+import { GfBeachIcon } from '../../gentleface-icons.js';
+import { vramFill } from './loadingVram.js';
 
 /**
  * The models actually in memory right now.
@@ -12,6 +16,10 @@ import { EngineLoadDrawer } from './EngineLoadDrawer.js';
  * machine it holds, how long until each is evicted, and the two verbs that
  * change that (unload, keep). It sits above the library because it is the
  * answer to "what is running" rather than "what do I have".
+ *
+ * Since the Models page rework it leads the local section as plain rows under
+ * "Running now", above the library, with one meter for how much of the
+ * machine's model memory they hold together.
  */
 
 /** Countdown text is live for a minute-scale value; five seconds is enough. */
@@ -23,9 +31,12 @@ export function ResidentModels({
   loading = [],
   models,
   settings,
+  memory,
   onChanged,
 }: {
   providerId: string;
+  /** The model memory budget, for the meter; none on a machine the engine cannot measure. */
+  memory?: EngineMemory;
   resident: ResidentModel[];
   /** Loads still streaming in: they belong here before they count as resident. */
   loading?: LoadingModel[];
@@ -87,31 +98,54 @@ export function ResidentModels({
   };
 
   return (
-    <div className="rounded-xl border p-3" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-xs font-semibold">In memory</p>
-        <p className="text-2xs text-ink-faint">
-          {[
-            resident.length === 0
-              ? 'nothing loaded'
-              : `${resident.length} of ${Math.max(1, settings.maxLoaded)} slot${Math.max(1, settings.maxLoaded) === 1 ? '' : 's'}` +
-                (totalBytes > 0 ? ` · ${formatBytes(totalBytes)}` : ''),
-            loadingRows.length ? `${loadingRows.length} loading` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
+    <div className="min-w-0" data-running-models>
+      {/* A section of its own, at the library's heading size: what is in
+          memory is the first thing this page answers. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="text-base font-semibold">Loaded models</h2>
+        {(resident.length > 0 || loadingRows.length > 0) && (
+          <p className="text-xs text-ink-faint">
+            {[
+              resident.length > 0
+                ? `${resident.length} of ${Math.max(1, settings.maxLoaded)} slot${Math.max(1, settings.maxLoaded) === 1 ? '' : 's'}` +
+                  (totalBytes > 0 ? ` · ${formatBytes(totalBytes)}${memory?.budgetBytes ? ` of ${formatBytes(memory.budgetBytes)}` : ''}` : '')
+                : null,
+              loadingRows.length ? `${loadingRows.length} loading` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
       </div>
 
+      {totalBytes > 0 && memory?.budgetBytes ? (
+        <span className="mt-(--q-heading) block h-2 overflow-hidden rounded-full bg-surface-2" role="meter" aria-label="Model memory in use" aria-valuemin={0} aria-valuemax={memory.budgetBytes} aria-valuenow={totalBytes}>
+          <span className="block h-full rounded-full bg-accent transition-[width] duration-(--dur-slow) ease-(--ease-out)" style={{ width: `${Math.min(100, (totalBytes / memory.budgetBytes) * 100)}%` }} />
+        </span>
+      ) : null}
       {resident.length === 0 && loadingRows.length === 0 ? (
-        <p className="mt-1 text-xs text-ink-faint">
-          Load a model below, or let one load itself when a request arrives
-          {settings.jitLoad ? '' : ' (load-on-demand is off)'}.
-        </p>
+        <div className="mt-(--q-heading) flex items-center gap-3 py-(--q-inline)" data-icon-hover data-loaded-empty>
+          <GfBeachIcon className="h-6 w-6 shrink-0 text-ink-soft" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">No models loaded</p>
+            <p className="mt-(--q-tight) text-xs text-ink-faint">
+              {settings.jitLoad
+                ? 'Load one below, or one loads itself when a request arrives.'
+                : 'Load one below. Load on demand is off.'}
+            </p>
+          </div>
+        </div>
       ) : (
-        <div className="mt-2 space-y-1">
+        <div className="mt-(--q-tight)">
           {loadingRows.map((l) => (
-            <LoadingRow key={l.id} load={l} name={byId.get(l.id)?.name ?? l.id} elapsedMs={now - l.startedAt} />
+            <LoadingRow
+              key={l.id}
+              load={l}
+              name={byId.get(l.id)?.name ?? l.id}
+              elapsedMs={now - l.startedAt}
+              reserveBytes={settings.overloadGuard === false ? null : (settings.overloadReserveMB ?? OVERLOAD_RESERVE_MB_DEFAULT) * 1024 ** 2}
+              unified={memory?.kind === 'unified'}
+            />
           ))}
           {resident.map((r) => {
             const model = byId.get(r.id);
@@ -128,19 +162,18 @@ export function ResidentModels({
                   else rowRefs.current.delete(r.id);
                 }}
               >
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--line)' }}>
+              <div className="-mx-2 flex min-h-(--q-row) flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-(--q-inline) transition-colors duration-(--dur-fast) hover:bg-(--q-wash)" data-quiet-row>
+                <StatusDot tone="success" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--success)' }} />
-                    <span className="truncate font-medium">{model?.name ?? r.id}</span>
-                    {model?.modality && model.modality !== 'chat' && (
-                      <span className="chip shrink-0 text-2xs">{model.modality === 'vision' ? 'vision' : model.modality}</span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-2xs text-ink-faint">
+                  <p className="flex min-w-0 items-baseline gap-2">
+                    <span className="truncate text-sm font-medium">{model?.name ?? r.id}</span>
+                    {model?.quantization && <span className="shrink-0 text-xs text-ink-faint">{model.quantization}</span>}
+                  </p>
+                  <p className="mt-(--q-tight) text-xs text-ink-faint">
                     {[
                       formatBytes(r.vramBytes ?? r.sizeBytes ?? 0),
-                      r.contextLength ? `${formatTokens(r.contextLength)} context` : undefined,
+                      r.contextLength ? `${formatTokens(r.contextLength)}${model?.maxContext ? ` of ${formatTokens(model.maxContext)}` : ''} context` : undefined,
+                      model?.modality && model.modality !== 'chat' ? model.modality : undefined,
                       idleFor > 20_000 ? `idle ${formatAge(idleFor)}` : 'in use',
                       evictIn !== undefined ? `unloads in ${formatAge(Math.max(0, evictIn))}` : 'stays loaded',
                     ]
@@ -153,8 +186,7 @@ export function ResidentModels({
                       running model: all-GPU is fast, partly CPU much less so. */}
                   {r.loadedOn && (
                     <span
-                      className="text-2xs text-ink-faint"
-                      style={r.loadedOn !== 'gpu' ? { color: 'var(--warning)' } : undefined}
+                      className={`text-xs ${r.loadedOn !== 'gpu' ? 'text-warning-text' : 'text-ink-faint'}`}
                       title={placementTitle(r)}
                     >
                       {placementLabel(r)}
@@ -162,8 +194,8 @@ export function ResidentModels({
                   )}
                   {model && (
                     <button
-                      className="rounded-full border px-2 py-1 text-2xs hover:border-[var(--accent)]"
-                      style={{ borderColor: open === r.id ? 'var(--accent)' : 'var(--line)' }}
+                      className={`btn btn-ghost py-1 text-xs ${open === r.id ? 'text-accent' : ''}`}
+                      aria-expanded={open === r.id}
                       title="Adjust this model's settings and reload it"
                       onClick={() => { setJumped(null); setOpen(open === r.id ? null : r.id); }}
                     >
@@ -171,8 +203,7 @@ export function ResidentModels({
                     </button>
                   )}
                   <button
-                    className="rounded-full border px-2 py-1 text-2xs"
-                    style={{ borderColor: 'var(--line)' }}
+                    className="btn btn-ghost py-1 text-xs"
                     disabled={busy === r.id}
                     title={
                       kept
@@ -184,19 +215,21 @@ export function ResidentModels({
                     {kept ? 'Use idle limit' : 'Keep loaded'}
                   </button>
                   <button
-                    className="rounded-full border px-2 py-1 text-2xs"
-                    style={{ borderColor: 'var(--line)' }}
+                    className="btn btn-ghost py-1 text-xs"
                     disabled={busy === r.id}
                     onClick={() => void unload(r.id)}
                   >
-                    {busy === r.id ? 'unloading…' : 'Unload'}
+                    {busy === r.id ? 'Unloading…' : 'Unload'}
                   </button>
                 </div>
               </div>
               {/* The model's own settings, one click from the row that says it
                   is loaded. The drawer folds shut the same way it opens, and
                   its primary verb reloads with whatever was changed. */}
-              {open === r.id && model && (
+              {/* A picture model's settings are its companion files and defaults,
+                  not a context window or GPU layers. */}
+              {open === r.id && model?.modality === 'image' && <ImageGeneration model={model} onChanged={onChanged} />}
+              {open === r.id && model && model.modality !== 'image' && (
                 <EngineLoadDrawer
                   providerId={providerId}
                   model={{ ...model, loaded: true }}
@@ -233,24 +266,37 @@ function formatAge(ms: number): string {
  * mark when it cannot (a CPU load, or a machine with no GPU probe), which is
  * more honest than a number that cannot be known.
  */
-function LoadingRow({ load, name, elapsedMs }: { load: LoadingModel; name: string; elapsedMs: number }) {
+function LoadingRow({
+  load,
+  name,
+  elapsedMs,
+  reserveBytes,
+  unified,
+}: {
+  load: LoadingModel;
+  name: string;
+  elapsedMs: number;
+  /** Overload protection's floor, or null when it is off. */
+  reserveBytes: number | null;
+  /** Apple Silicon: the GPU's memory is the machine's. */
+  unified: boolean;
+}) {
   const pct = load.progress === undefined ? null : Math.round(load.progress * 100);
+  const vram = load.phase === 'loading' && load.vram ? load.vram : null;
   return (
-    <div className="rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--line)' }}>
-      <div className="flex items-center gap-2">
-        <span
-          className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
-          style={{ background: 'var(--accent)' }}
-        />
-        <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+    <div className="-mx-2 rounded-lg px-2 py-(--q-inline) text-xs" data-quiet-row data-loading-row>
+      <div className="flex items-center gap-3">
+        <StatusDot color="var(--accent)" pulse />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
         <span className="shrink-0 font-mono text-2xs text-ink-faint">
           {load.phase === 'queued' ? 'queued' : pct === null ? 'loading' : `${pct}%`}
         </span>
       </div>
-      {load.phase === 'loading' && (
+      {vram ? (
+        <VramFillMeter vram={vram} name={name} reserveBytes={reserveBytes} unified={unified} />
+      ) : load.phase === 'loading' && (
         <div
-          className="mt-1 h-1.5 w-full overflow-hidden rounded-full"
-          style={{ background: 'color-mix(in srgb, var(--ink-faint) 15%, transparent)' }}
+          className="mt-(--q-tight) ml-5 h-1.5 overflow-hidden rounded-full bg-surface-2"
           role="progressbar"
           aria-valuenow={pct ?? undefined}
           aria-label={`Loading ${name}`}
@@ -265,11 +311,70 @@ function LoadingRow({ load, name, elapsedMs }: { load: LoadingModel; name: strin
           />
         </div>
       )}
-      <p className="mt-1 text-2xs text-ink-faint">
-        {load.phase === 'queued'
-          ? 'Loads run one at a time; this starts when the one ahead of it finishes.'
-          : `Reading the file into memory · ${formatAge(elapsedMs)} so far`}
-      </p>
+      {!vram && (
+        <p className="mt-(--q-tight) ml-5 text-xs text-ink-faint">
+          {load.phase === 'queued'
+            ? 'Loads run one at a time; this starts when the one ahead of it finishes.'
+            : `Reading the file into memory · ${formatAge(elapsedMs)} so far`}
+        </p>
+      )}
     </div>
+  );
+}
+
+/**
+ * The graphics memory a load is filling, on the card's own scale: what
+ * everything else held when it began (faint), what this model has taken
+ * (accent), what it still needs (accent, light), and the tick where overload
+ * protection's reserve starts. When what it needs runs into the reserve or
+ * past the card, the still-needed part turns to a warning and the line says so.
+ */
+function VramFillMeter({
+  vram,
+  name,
+  reserveBytes,
+  unified,
+}: {
+  vram: NonNullable<LoadingModel['vram']>;
+  name: string;
+  reserveBytes: number | null;
+  unified: boolean;
+}) {
+  const v = vramFill(vram, reserveBytes);
+  const what = unified ? 'memory' : 'graphics memory';
+  const warn = v.over !== 'none';
+  const seg = 'block h-full transition-[width] duration-(--dur-slow) ease-(--ease-out)';
+  return (
+    <>
+      <div
+        className="relative mt-(--q-tight) ml-5 flex h-2 overflow-hidden rounded-full bg-surface-2"
+        role="meter"
+        aria-label={`${name} filling ${what}`}
+        aria-valuemin={0}
+        aria-valuemax={v.totalBytes}
+        aria-valuenow={v.totalBytes - v.freeBytes}
+        data-vram-fill={v.over}
+      >
+        <span className={seg} style={{ width: `${v.othersPct}%`, background: 'var(--ink-faint)', opacity: 0.45 }} />
+        <span className={seg} style={{ width: `${v.landedPct}%`, background: 'var(--accent)' }} />
+        <span className={seg} style={{ width: `${v.remainingPct}%`, background: warn ? 'var(--warning)' : 'var(--accent)', opacity: 0.35 }} />
+        {v.reservePct !== null && (
+          <span
+            className="absolute inset-y-0 w-px"
+            style={{ left: `${v.reservePct}%`, background: 'var(--danger)' }}
+            title={`Overload protection keeps the last ${formatBytes(reserveBytes ?? 0)} free`}
+            aria-hidden
+          />
+        )}
+      </div>
+      <p className={`mt-(--q-tight) ml-5 text-xs ${warn ? 'text-warning-text' : 'text-ink-faint'}`}>
+        {!warn
+          ? `${formatBytes(v.landedBytes)} of about ${formatBytes(v.needBytes)} in · ${formatBytes(v.freeBytes)} of ${formatBytes(v.totalBytes)} ${what} free`
+          : `Needs about ${formatBytes(v.needBytes)} ${v.over === 'full' ? 'with only' : 'of the'} ${formatBytes(vram.beforeBytes)} of ${what} free. ` +
+            (reserveBytes === null
+              ? 'The rest spills into slower memory.'
+              : `Overload protection stops it if less than ${formatBytes(reserveBytes)} is left.`)}
+      </p>
+    </>
   );
 }

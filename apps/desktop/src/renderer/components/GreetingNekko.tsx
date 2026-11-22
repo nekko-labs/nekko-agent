@@ -106,17 +106,19 @@ export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string;
           below the edge and be cut off there, not paint over the composer. */}
       <svg data-part="peek-face" y="-12" width="32" height="37" viewBox="0 -12 32 37" overflow="hidden">
         <g data-part="peek-head">
-          <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="var(--surface)" stroke="var(--ink)" strokeWidth="2" />
+          <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="var(--nekko-face, var(--surface))" stroke="var(--nekko-line, var(--ink))" strokeWidth="2" />
           {face === 'alert' ? <g data-nekko-face="alert">
-            <path d="M10 14H14V15H10Z M10 17H14V18H10Z M10 15H11V17H10Z M13 15H14V17H13Z M19 14H23V15H19Z M19 17H23V18H19Z M19 15H20V17H19Z M22 15H23V17H22Z M15 22H17V24H15Z" fill="var(--ink)" />
+            <path d="M10 14H14V15H10Z M10 17H14V18H10Z M10 15H11V17H10Z M13 15H14V17H13Z M19 14H23V15H19Z M19 17H23V18H19Z M19 15H20V17H19Z M22 15H23V17H22Z M15 22H17V24H15Z" fill="var(--nekko-eyes, var(--ink))" />
             <path d="M29 -7H32V-2H29Z M29 -1H32V2H29Z" fill="var(--warning)" />
-          </g> : face === 'smile' ? <g data-nekko-face="smile" fill="var(--ink)">
+          </g> : face === 'smile' ? <g data-nekko-face="smile" fill="var(--nekko-eyes, var(--ink))">
             <path d={happyEyes} />
-          </g> : laugh ? <g data-nekko-laugh fill="var(--ink)">
+          </g> : laugh ? <g data-nekko-laugh fill="var(--nekko-eyes, var(--ink))">
             <path d={`${happyEyes} M14 20H19V22H18V23H15V22H14Z`} />
-          </g> : <g data-nekko-look transform={`translate(${look.x} ${look.y})`} fill="var(--ink)">
+          </g> : <g data-nekko-look transform={`translate(${look.x} ${look.y})`} fill="var(--nekko-eyes, var(--ink))">
             <path d="M11 15H13V18H11Z M20 15H22V18H20Z" />
           </g>}
+          {/* His mouth: drawn only where a theme sets --nekko-mouth (every dark theme). */}
+          {face !== 'alert' && !laugh && <path data-part="peek-mouth" d="M15 20H17V21H15Z" fill="var(--nekko-mouth, transparent)" />}
           {/* Same hat art as NekkoAvatar, on the peek face's identical 32px grid. */}
           {hat && <SeasonalHatArt hat={hat} />}
         </g>
@@ -124,9 +126,9 @@ export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string;
       {/* The outer group carries the show/hide motion; the inner one keeps the
           mirror transform, which a CSS transform would otherwise replace. */}
       <g className="peek-paws-slot" data-shown={paws || undefined}><g data-part="peek-paws" transform="translate(0 50) scale(1 -1)">
-        <path d="M6 24H11V28H6Z M21 24H26V28H21Z" fill="var(--surface)" />
-        <path d="M5 23H12V27H11V24H6V27H5Z M20 23H27V27H26V24H21V27H20Z" fill="var(--ink)" />
-        <path d="M7.5 24H8V25.5H7.5Z M9 24H9.5V25.5H9Z M22.5 24H23V25.5H22.5Z M24 24H24.5V25.5H24Z" fill="var(--ink)" opacity="0.55" />
+        <path d="M6 24H11V28H6Z M21 24H26V28H21Z" fill="var(--nekko-face, var(--surface))" />
+        <path d="M5 23H12V27H11V24H6V27H5Z M20 23H27V27H26V24H21V27H20Z" fill="var(--nekko-line, var(--ink))" />
+        <path d="M7.5 24H8V25.5H7.5Z M9 24H9.5V25.5H9Z M22.5 24H23V25.5H22.5Z M24 24H24.5V25.5H24Z" fill="var(--nekko-line, var(--ink))" opacity="0.55" />
       </g></g>
     </svg>
   );

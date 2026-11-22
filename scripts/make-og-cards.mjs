@@ -29,12 +29,13 @@ export const STANDALONE = [
   { name: 'beta', eyebrow: 'Beta', title: 'What beta means', line: 'What you get, what to expect, and what happens to your data.', path: '/beta' },
   { name: 'status', eyebrow: 'Status', title: 'Is Nekko working?', line: 'Live status for Nekko Cloud and phone access, plus known issues.', path: '/status' },
   { name: 'privacy', eyebrow: 'Privacy', title: 'Privacy policy', line: 'What we keep, why, who handles it, and your rights.', path: '/privacy' },
+  { name: 'whatsnew', eyebrow: "What's new", title: "What's new", line: 'The changes worth knowing in each release, and who shipped them.', path: '/whatsnew' },
 ];
 
 // Each docs section gets its own glow, all within the plum family, so a feed of
 // Nekko links is easy to tell apart at a glance.
 const HUES = { Introduction: '#c084b5', 'Using Nekko Agent': '#b0609f', Contributing: '#8f6bc4', 'For AI agents': '#d0789a' };
-const PAGE_HUE = { beta: '#d0789a', status: '#7fa7c9', privacy: '#8f6bc4' };
+const PAGE_HUE = { beta: '#d0789a', status: '#7fa7c9', privacy: '#8f6bc4', whatsnew: '#c084b5' };
 
 export function cardsFor(pages) {
   return [
@@ -57,12 +58,12 @@ const cat = (fill, cls = '', defs = '') =>
 
 
 // Nekko the mascot's head: the app's pixel cat (PixelHead in the desktop
-// app's components/Mascot.tsx), on the same 32px grid: brand plum, white line
-// and eyes, light-plum mouth. Happy (^ ^) eyes on the homepage.
+// app's components/Mascot.tsx), on the same 32px grid, in Nekko's dark-mode
+// colours (spec/brand/colour-palette.md): face #16161c, line #f3e8ee, white eyes, mouth #854f6c. Happy (^ ^) eyes on the homepage.
 const mascot = (cls, { happy = false } = {}) => `<svg class="${cls}" viewBox="2 3 28 25" shape-rendering="crispEdges">
-<path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#190019" stroke="#ffffff" stroke-width="2" stroke-linejoin="miter"/>
+<path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#16161c" stroke="#f3e8ee" stroke-width="2" stroke-linejoin="miter"/>
 <path fill="#ffffff" d="${happy ? 'M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z' : 'M11 15H13V18H11Z M20 15H22V18H20Z'}"/>
-<path d="M15 20H17V21H15Z" fill="#c99bb3"/>
+<path d="M15 20H17V21H15Z" fill="#854f6c"/>
 </svg>`;
 
 const base = (hue) => `
