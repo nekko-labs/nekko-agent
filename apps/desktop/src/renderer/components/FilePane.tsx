@@ -182,6 +182,9 @@ function HostFilePane({ path, readOnly, onUnreadable }: { path: string; readOnly
     setLanguage(null);
     window.nekko.readFile(path).then((f) => {
       if (!live) return;
+      // The engine answers a missing file with empty content, not an error (#3212): an empty read is
+      // checked too, and the wrapper only acts when the folder doesn't list the file.
+      if (!f.content && !f.binary && !f.imageDataUrl) onUnreadable?.(path);
       setContent(f.content);
       setImage(f.imageDataUrl ?? '');
       setBinary(f.binary);
