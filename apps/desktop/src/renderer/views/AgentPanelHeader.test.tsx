@@ -116,7 +116,7 @@ describe('Agent group hierarchy', () => {
   it('uses larger primary-color labels and separated vertical groups', () => {
     const layout = stylesheet('components/commandWallLayouts.css');
     expect(renderSidebar()).toContain('agent-panel-group-label');
-    expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': 'var(--text-sm)', color: 'var(--accent)' });
+    expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': 'var(--text-xs)', color: 'var(--accent)' });
     expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('20px');
     expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('4px');
     // The list keeps one width whether or not it scrolls.

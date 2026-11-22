@@ -78,7 +78,9 @@ async fn the_daemon_runs_tasks_and_fires_them_on_time() {
     });
     assert!(asked, "the model was sent the task's prompt");
     let next = task["nextRunAt"].as_f64().unwrap() - task["lastRunAt"].as_f64().unwrap();
-    assert!((3_600_000.0..3_601_000.0).contains(&next), "{task}");
+    // An hour after the run; `nextRunAt` counts from when the run finished, a
+    // second or more after `lastRunAt` on a slow runner.
+    assert!((3_600_000.0..3_610_000.0).contains(&next), "{task}");
 
     // Paused tasks never fire; deleting removes it.
     let id = task["id"].as_str().unwrap().to_string();

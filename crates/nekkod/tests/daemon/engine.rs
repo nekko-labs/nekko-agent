@@ -687,7 +687,8 @@ async fn a_chats_agent_starts_a_clip_and_its_watch_gets_the_news() {
     })
     .await;
     assert!(news.starts_with("The clip is ready (Wan2.2 TI2V 5B, 832x480): "), "{news}");
-    assert!(news.contains("media/waves.webp"), "{news}");
+    // A native path: `media\waves.webp` on Windows.
+    assert!(news.replace('\\', "/").contains("media/waves.webp"), "{news}");
     let kept: Vec<_> = std::fs::read_dir(data.join("agent-pictures/s_film")).unwrap().collect();
     assert_eq!(kept.len(), 1);
     assert!(workspace.join("media/waves.webp").is_file());

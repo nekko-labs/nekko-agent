@@ -2092,7 +2092,11 @@ impl Turns {
         }
         if let Some(reported) = mapper.context() {
             let mut s = lock(session);
-            let context = claude_code_context(s.get("claudeCodeContext"), reported, model, wanted.model.clone());
+            // Keyed by the chat's saved model id (an alias stays `opus`), which
+            // is what the context gauge compares it with; `wanted.model` is the
+            // concrete model the alias runs on (#2942) and would never match.
+            let saved_model = str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string);
+            let context = claude_code_context(s.get("claudeCodeContext"), reported, model, saved_model);
             if let Some(obj) = s.as_object_mut() {
                 obj.insert("claudeCodeContext".into(), context);
             }

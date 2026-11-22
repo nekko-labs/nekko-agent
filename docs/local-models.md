@@ -149,6 +149,8 @@ saw in memory and the models your local chats used, newest first. **Load** uses 
 saved settings, or the recommended ones when it has none, and starts the engine if it is
 stopped.
 
+**Reading the VRAM bar.** In the model library, the bar starts with the model and adds the extra memory for minimum, recommended and maximum context. A plain tail is memory left after maximum context; a striped tail is memory the load would need beyond what is available. Hover a band or focus its label for the numbers.
+
 **Configuring a load.** A model's drawer leads with a **memory meter**: graphics memory
 (VRAM) and system memory (RAM) as two bars, each split into other apps, this model (its
 weights, its context, its working space) and what is left, plus a line when part of the

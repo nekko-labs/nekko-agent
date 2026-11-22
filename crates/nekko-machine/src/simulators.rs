@@ -483,6 +483,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(windows, ignore = "builds macOS `open -a` paths; Path::join writes `\\` on Windows")]
     fn open_uses_devicehub_from_xcode_27_and_simulator_before() {
         let udid = "937C0078-69EC-4BEF-8C34-710DA0A4F98F";
         let dev = Path::new("/Applications/Xcode.app/Contents/Developer");

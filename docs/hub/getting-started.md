@@ -2,6 +2,8 @@
 
 Nekko Agent is AI help on your computer, for coding and everyday work. It reads, edits, searches and runs things in your projects, using AI that runs on your own machine, an online service you already pay for, or both. It is free, open source and MIT licensed.
 
+During desktop setup, **Dictation** lets you use an installed speech engine or download a local one. You can skip it and set it up later in **Settings → Dictation**. Audio stays on your computer.
+
 ## Who we are
 
 Nekko Agent is made by [Nekko Labs](https://nekkolabs.com), and its name comes from neko, Japanese for cat. We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
