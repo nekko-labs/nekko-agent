@@ -108,7 +108,7 @@ const staffEmails = process.env.NEKKO_STAFF_EMAILS ? process.env.NEKKO_STAFF_EMA
 const accountsAllowedDomains = parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_DOMAINS);
 const accountsAllowedEmails = parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_EMAILS);
 if (!accountsAllowedDomains.length && !accountsAllowedEmails.length) console.warn("NEKKO_ACCOUNTS_ALLOWED_DOMAINS / _EMAILS not set: any account with a proven email may sign in.");
-const app = buildServer({ db, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
+const app = buildServer({ db, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS), fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {

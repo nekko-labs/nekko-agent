@@ -21,6 +21,18 @@ What lives here:
 Planned: serve this service on `api.nekkoagent.com` (today it answers on its Fly
 hostname).
 
+## Management console pilot
+
+The website serves `/console`. Sign-in respects the account gate; the browser keeps its bearer in memory only and revokes it on sign-out. Billing happens at Stripe. Keep the pilot unlinked until live identity and billing have been exercised.
+
+Set `NEKKO_PRIVACY_REVIEWER_SUBJECTS` to comma-separated verified Supabase subject IDs only after assigning a human to monitor the queue. Unset, the case APIs are absent and customers are directed to email. Organization roles and the feature-switch staff list do not grant review access. Removing a subject takes effect on service restart. Cases store type, status, times and actor IDs, not export contents, documents or free text. History is removed with the account; org activity is removed with the org. No legal hold or certified retention guarantee is implied.
+
+- GET/POST `/v1/privacy/cases`: one's latest 100 cases or submit an export or erasure request. One open case per type.
+- GET `/v1/staff/privacy/cases`: oldest 100 open cases. PATCH `/v1/staff/privacy/cases/:id` to reviewing then closed. Transitions are transactional. Verify identity, fulfill separately and notify the requester before recording closure. Review never exports data or deletes an account.
+- GET `/v1/orgs/:orgId/activity`: owner/admin only, latest 100 recorded organization, membership and invitation changes. No historical backfill.
+
+For loopback testing, generate design tokens with the website build, then start `npm run dev:local` in this package with `DEV_WEB_CONSOLE=1` and open http://127.0.0.1:4330/console. Uses in-memory Postgres and fake codes. Never deploy the local development identity provider.
+
 ## Endpoints
 
 - `POST /v1/signups` with JSON `{ email, name?, list?, source?, utm?, marketing?, policyVersion?, website? }`.

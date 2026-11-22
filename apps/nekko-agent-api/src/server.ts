@@ -13,6 +13,7 @@ import { confirmSignup, page, sendConfirmation, unsubscribe, type Mailer } from 
 import { parseSignup, recordSignup } from "./signups.js";
 import type { DeleteAuthUser } from "./supabase.js";
 import { registerFleet } from "./fleet.js";
+import { registerPrivacyCases } from "./privacy-cases.js";
 import { registerOrgs } from "./orgs.js";
 import { registerShares } from "./shares.js";
 import { registerSync } from "./sync.js";
@@ -54,6 +55,7 @@ export interface ServerOptions {
   stripe?: Stripe;
   /** Lower-case emails of Nekko team accounts, who switch unreleased features on. Defaults to DEFAULT_STAFF_EMAILS. */
   staffEmails?: string[];
+  privacyReviewers?: string[];
   /** Sends signup confirmation emails; without it signups still save and the email is skipped. */
   mailer?: Mailer;
   /** This service's public origin, for the links in emails. */
@@ -136,6 +138,14 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     });
   }
 
+  // Console calls use explicit bearers, never cookies. Only configured web origins may preflight.
+  for (const path of ["auth/*", "orgs", "orgs/*", "billing/*", "machines", "privacy/cases", "staff/privacy/cases", "staff/privacy/cases/*"]) {
+    app.options("/v1/" + path, async (req, reply) => {
+      if (!req.headers.origin || !origins.has(req.headers.origin)) return reply.code(403).send();
+      return reply.header("access-control-allow-methods", "GET,POST,PATCH,DELETE")
+        .header("access-control-allow-headers", "authorization,content-type").code(204).send();
+    });
+  }
   app.options("/v1/signups", async (req, reply) => {
     if (!req.headers.origin || !origins.has(req.headers.origin)) return reply.code(403).send();
     reply
@@ -212,6 +222,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const auth = opts.authRateLimit ?? { max: 30, windowMs: 60 * 1000 };
   app.register(async (scope) => {
     await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
+    const reviewers = opts.privacyReviewers ?? [];
+    if (reviewers.length) scope.register(async privacy => registerPrivacyCases(privacy, opts.db, reviewers));
     registerSync(scope, opts.db);
     registerShares(scope, opts.db, features);
     if (opts.fleetEnabled) registerFleet(scope, opts.db);
