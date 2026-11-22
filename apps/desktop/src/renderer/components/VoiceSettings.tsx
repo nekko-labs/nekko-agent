@@ -8,7 +8,7 @@ import { SettingsSection } from './SettingsSection.js';
 
 const VoiceIntro = lazy(() => import('./VoiceIntro.js'));
 
-export function VoiceSettings({ compact = false }: { compact?: boolean }) {
+export function VoiceSettings({ compact = false, showHeading = true }: { compact?: boolean; showHeading?: boolean }) {
   const settings = useStore(s => s.settings);
   const voice = settings?.voice ?? {};
   const [status, setStatus] = useState<VoiceStatus | null>(null);
@@ -108,6 +108,6 @@ export function VoiceSettings({ compact = false }: { compact?: boolean }) {
     {error && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text">{error}</p>}
   </>;
   return compact
-    ? <section className="min-w-0" aria-label="Voice settings"><h2 className="text-sm font-semibold">Dictation</h2>{body}</section>
+    ? <section className="min-w-0" aria-label="Voice settings">{showHeading && <h2 className="text-sm font-semibold">Dictation</h2>}{body}</section>
     : <SettingsSection title="Dictation" aria-label="Voice settings">{body}</SettingsSection>;
 }

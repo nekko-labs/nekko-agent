@@ -6,11 +6,11 @@ import { RecommendedModels, imageFitText } from './RecommendedModels.js';
 import { CheckIcon, WarningIcon } from '../../icons.js';
 import { StatusDot } from '../primitives/index.js';
 import { familyKind, groupModelFamilies, gpuGuidance, modelFamilyName, setUpPictureModels, shelveCatalog, type FamilyKind, type LibraryModel, type ModelFamily } from './modelFamilies.js';
-import { VoiceSettings } from '../VoiceSettings.js';
+import { ModelRowActions, useModelRowActions } from './ModelRowActions.js';
 import { pictureModelBlurb, pictureTimeText } from './pictureModelText.js';
 import { useStore } from '../../store.js';
 import { formatBytes } from '../runtimes/verdict.js';
-import { familyProblem, paramsLabel, paramsText, sizeRangeText } from './modelFacts.js';
+import { familyProblem, localTypeLabel, paramsLabel, paramsText, sizeRangeText } from './modelFacts.js';
 import { ModelGpuFacts } from './ModelGpuFacts.js';
 
 /**
@@ -207,16 +207,25 @@ export function ModelsHome({
   const selectedRepo = repositories.includes(repoId ?? '') ? repoId! : repositories[0];
   const residentById = useMemo(() => new Map(resident.map(r => [r.id, r])), [resident]);
 
+  const actions = useModelRowActions(providerId, onChanged);
   const row = (f: ModelFamily) => {
     const setUp = setUpModelOf(f, picks);
     const line = familyLine(f, mode, memory, setUp);
     const problem = mode === 'installed' ? familyProblem(f.local) : null;
     const loaded = f.local.some(m => m.loaded);
     const on = selected?.key === f.key;
-    return <button key={f.key} type="button" data-model-family={f.key} className={`-mx-2 flex w-[calc(100%+16px)] items-center gap-2 rounded-lg px-2 py-(--q-inline) text-left transition-colors duration-(--dur-fast) ${on ? 'bg-accent-soft' : 'hover:bg-(--q-wash)'}`} aria-pressed={on} onClick={() => { setSelectedKey(f.key); setRepoId(null); }}>
+    const single = mode === 'installed' && f.local.length === 1 ? f.local[0] : undefined;
+    const installed = mode === 'installed';
+    const types = installed ? [...new Set(f.local.map(localTypeLabel))] : [];
+    const type = familyKind(f) === 'video' ? 'Video generation' : types.length === 1 ? types[0] : 'Mixed types';
+    const facts = installed && [type, paramsLabel(f.name, f.local.find(m => m.parameterSize)?.parameterSize), sizeRangeText(f.local.map(m => m.sizeBytes).filter(n => n > 0))].filter(Boolean).join(' · ');
+    const smallest = installed ? f.local.reduce((a, b) => a.sizeBytes <= b.sizeBytes ? a : b) : undefined;
+    const selectedClass = on ? 'bg-accent-soft' : 'hover:bg-(--q-wash)';
+    const control = <button key={f.key} type="button" data-model-family={f.key} className={`flex min-w-0 items-center gap-2 rounded-lg px-2 py-(--q-inline) text-left ${installed ? 'w-full' : `-mx-2 w-[calc(100%+16px)] ${selectedClass}`}`} aria-pressed={on} onClick={() => { setSelectedKey(f.key); setRepoId(null); }}>
       <div className="min-w-0 flex-1">
-        <p className="break-words text-sm font-medium">{setUp?.name ?? f.name}</p>
-        <p className={`mt-(--q-tight) text-xs ${LINE_TONE[line.tone]}`} title={line.title} data-model-line>{line.text}</p>
+        <p className="break-words text-sm font-medium">{setUp?.name ?? f.name}{installed && f.local.some(actions.isDefault) && <span className="ml-2 text-2xs text-accent">Default</span>}</p>
+        {facts && <p className="mt-(--q-tight) text-xs text-ink-soft" data-model-facts>{facts.replace(/(\d) (GB|MB|KB|B)\b/g, '$1\u00a0$2')}</p>}
+        <p className={`${facts ? 'mt-0.5' : 'mt-(--q-tight)'} text-xs ${LINE_TONE[line.tone]}`} title={line.title} data-model-line>{installed && !problem ? (loaded ? 'In memory' : gpuGuidance(smallest?.sizeBytes, memory, smallest)) : line.text}</p>
       </div>
       {problem ? (
         <span className={`shrink-0 ${problem.tone === 'danger' ? 'text-danger' : 'text-warning'}`} role="img" aria-label={`${problem.text}: ${problem.detail}`} title={problem.detail} data-family-problem><WarningIcon className="h-4 w-4" /></span>
@@ -226,6 +235,11 @@ export function ModelsHome({
         <span className="shrink-0 text-success" role="img" aria-label="Downloaded" title="Downloaded"><CheckIcon className="h-4 w-4" /></span>
       ) : null}
     </button>;
+    return installed ? <div key={f.key} className={`-mx-2 flex items-center rounded-lg pr-1 transition-colors duration-(--dur-fast) ${selectedClass}`}>
+      <div className="min-w-0 flex-1">{control}</div>
+      {single && <ModelRowActions model={single} label={setUp?.name ?? f.name} actions={actions} />}
+      {!single && <span className="shrink-0 pr-2 text-2xs text-ink-faint">{f.local.length} variants</span>}
+    </div> : control;
   };
 
   const emptyLibrary = mode === 'installed' && models.length === 0;
@@ -238,7 +252,7 @@ export function ModelsHome({
     {emptyLibrary ? (
       <div data-empty-library>
         {onFind && <button type="button" className="btn btn-primary mb-(--q-inline) py-1 text-xs" onClick={onFind}>Find a model for this machine</button>}
-        <ModelLibrary providerId={providerId} models={[]} canLoad={canLoad} onChanged={onChanged} />
+        <ModelLibrary providerId={providerId} models={[]} actions={actions} canLoad={canLoad} onChanged={onChanged} />
       </div>
     ) : (
     <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.6fr)]">
@@ -258,15 +272,6 @@ export function ModelsHome({
         </div>
       </div>
       <div className="min-w-0" aria-label="Model details">
-        {/* Speech recognizers are models too, but the OS or Nekko Voice runs
-            them, not the engine: they get their own block with install, remove
-            and "use for dictation" instead of a Load button. */}
-        {mode === 'installed' && (
-          <details className="mb-(--q-group)" aria-label="System models">
-            <summary className="cursor-pointer text-sm font-medium">System models</summary>
-            <div className="mt-(--q-inline)"><VoiceSettings compact /></div>
-          </details>
-        )}
         {selected ? <>
           <h3 className="break-words text-xl font-semibold">{setUpModelOf(selected, picks)?.name ?? selected.name}</h3>
           <p className="mt-(--q-tight) text-xs text-ink-faint" data-family-summary>
@@ -276,7 +281,7 @@ export function ModelsHome({
           </p>
           {selected.local.length > 0 && <>
             <h4 className="mt-(--q-group) quiet-group-label">Variants on this machine</h4>
-            <div className="mt-(--q-heading)"><ModelLibrary providerId={providerId} models={selected.local} resident={resident} memory={memory} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} running={running} /></div>
+            <div className="mt-(--q-heading)"><ModelLibrary providerId={providerId} models={selected.local} actions={actions} resident={resident} memory={memory} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} running={running} /></div>
             {firstVariant && <ModelGpuFacts key={firstVariant.id} providerId={providerId} model={firstVariant} resident={residentById.get(firstVariant.id)} others={residentNames(resident, models, firstVariant.id)} />}
           </>}
           {repositories.length > 0 && <div className="mt-(--q-group)"><label className="block text-xs text-ink-faint" htmlFor="model-source">{selected.local.length ? 'Other builds from' : 'Variant provider / repository'}</label><select id="model-source" className="quiet-field mt-(--q-tight) w-full text-xs" value={selectedRepo} onChange={e => setRepoId(e.target.value)}>{repositories.map(id => <option key={id} value={id}>{id}</option>)}</select></div>}

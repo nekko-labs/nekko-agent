@@ -645,6 +645,10 @@ export function build() {
   // With initials here; the deploy adds avatars once the contributor cache exists.
   files.set('whatsnew.html', whatsNewPage(loadWhatsNew()));
 
+  // Copy the shared plan catalog so the pricing page can render from it without
+  // drifting from the app's copy. Gitignored: Vercel writes it on every deploy.
+  files.set('plan-catalog.json', readFileSync(join(repo, 'packages', 'shared', 'src', 'plan-catalog.json')));
+
   const docsList = [
     '## Documentation',
     '',

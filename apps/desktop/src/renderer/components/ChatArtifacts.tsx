@@ -4,6 +4,8 @@ import { LOCAL_IMAGE_EXT } from '../localImages.js';
 import { LocalImageCard } from './LocalImageCard.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { mainCheckoutPath } from '../artifactPaths.js';
+import { fileListed, locateMovedFile, type ListDir } from '../locateFile.js';
+import { GfArrowUpRightIcon } from '../gentleface-icons.js';
 import { artifactKind } from '../artifactsIndex.js';
 import { useStore } from '../store.js';
 import { MarkdownSandbox, safeHref } from './Markdown.js';
@@ -48,6 +50,25 @@ export function followMovedFile(path: string, listDir: (path: string) => Promise
   return found;
 }
 
+/** Card files checked so far: a found move is kept for the run, "it's there" or "nowhere" for a minute. */
+const located = new Map<string, { at: number; to: Promise<string | null> }>();
+const RECHECK_MS = 60_000;
+
+/**
+ * Where a card's file is when it is not where the reply's link says (#3212): followed out of a removed
+ * worktree, or found by name in a designs folder nearby (a design named by its bare name resolves to the
+ * chat folder). Null when the file is there, or nowhere. Listings only.
+ */
+export function locateCardFile(path: string, listDir: ListDir, now = Date.now()): Promise<string | null> {
+  const key = path.toLowerCase();
+  const hit = located.get(key);
+  if (hit && now - hit.at < RECHECK_MS) return hit.to;
+  const to = (async () => ((await fileListed(path, listDir)) === false ? locateMovedFile(path, listDir) : null))();
+  located.set(key, { at: now, to });
+  void to.then((found) => { if (found) located.set(key, { at: Infinity, to }); });
+  return to;
+}
+
 /** Moves found so far (old path, lower-cased, to new), and the cards waiting to hear of one. */
 const followed = new Map<string, string>();
 const listeners = new Set<() => void>();
@@ -55,15 +76,18 @@ let followedVersion = 0;
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 const version = () => followedVersion;
 
-/** The cards' files, each followed to the main checkout when its worktree was removed after merging. */
+/**
+ * The cards' files, each followed to where it is now when it isn't where the reply said: out of a
+ * removed worktree, or into the designs folder a bare design name meant (#3212).
+ */
 function useFollowMoved(artifacts: ChatArtifact[], sandbox: boolean): ChatArtifact[] {
   React.useSyncExternalStore(subscribe, version, version);
-  const key = artifacts.filter((a) => !a.live && mainCheckoutPath(a.path)).map((a) => a.path).join('\n');
+  const key = artifacts.filter((a) => !a.live).map((a) => a.path).join('\n');
   React.useEffect(() => {
     const listDir = typeof window === 'undefined' ? undefined : window.nekko?.listDir;
     if (!key || sandbox || !listDir) return;
     for (const path of key.split('\n')) {
-      void followMovedFile(path, (dir) => listDir(dir)).then((to) => {
+      void locateCardFile(path, (dir) => listDir(dir)).then((to) => {
         if (!to || followed.get(path.toLowerCase()) === to) return;
         followed.set(path.toLowerCase(), to);
         followedVersion++;
@@ -176,16 +200,16 @@ export function HtmlRenderingCard({ artifact, sessionId }: { artifact: ChatArtif
   const note = sandbox ? 'Host file previews are unavailable in Sandbox' : current?.note ?? (near ? 'Loading preview…' : '');
   const frameStyle = { width: THUMB_VIEWPORT.width, height: THUMB_VIEWPORT.height, transformOrigin: '0 0' };
 
-  return <div className="artifact-card artifact-render-card flex w-full min-w-0 flex-col overflow-hidden rounded-xl border" role="group" aria-label={`${artifact.title}, HTML page`} data-render-card>
+  // A click anywhere on the card opens the page beside the chat (#3212); keyboard users have the Open button.
+  return <div className="artifact-card artifact-render-card flex w-full min-w-0 flex-col overflow-hidden rounded-xl border" role="group" aria-label={`${artifact.title}, HTML page`} data-render-card
+    onClick={sandbox ? undefined : open} style={{ cursor: sandbox ? 'default' : 'pointer' }}>
     {live
-      // The running page takes the pointer and the keyboard itself.
+      // The running page plays in the card but takes no clicks, so a click on it opens the page.
       ? <div ref={box} className="artifact-render-thumb relative h-[200px] w-full overflow-hidden" data-render-thumb data-render-live>
-        <iframe ref={frame} title={artifact.title} src={live} sandbox={SERVED_PREVIEW_SANDBOX} referrerPolicy="no-referrer"
-          className="absolute left-0 top-0 border-0 bg-white" style={frameStyle} />
+        <iframe ref={frame} title={artifact.title} src={live} sandbox={SERVED_PREVIEW_SANDBOX} referrerPolicy="no-referrer" tabIndex={-1}
+          className="absolute left-0 top-0 border-0 bg-white" style={{ ...frameStyle, pointerEvents: 'none' }} />
       </div>
-      // A still picture repeats Open for the pointer; keyboard users have the button below.
-      : <div ref={box} className="artifact-render-thumb relative h-[200px] w-full overflow-hidden" data-render-thumb aria-hidden
-        onClick={sandbox || !source ? undefined : open} style={{ cursor: sandbox || !source ? 'default' : 'pointer' }}>
+      : <div ref={box} className="artifact-render-thumb relative h-[200px] w-full overflow-hidden" data-render-thumb aria-hidden>
         {source
           ? <iframe ref={frame} title={`${artifact.title} thumbnail`} sandbox="" referrerPolicy="no-referrer" tabIndex={-1} loading="lazy"
             srcDoc={isolatedDocument(source)}
@@ -197,12 +221,13 @@ export function HtmlRenderingCard({ artifact, sessionId }: { artifact: ChatArtif
       <span className="artifact-card-chip flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-2xs font-semibold uppercase" aria-hidden>{artifact.filename.split('.').at(-1)}</span>
       <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-ink">{artifact.title}</span><span className="block truncate text-2xs text-ink-soft">{artifact.filename}</span></span>
       <span className="flex shrink-0 items-center gap-2">
-        <button type="button" className="artifact-card-action rounded-md border px-2 py-1 text-xs disabled:opacity-50" disabled={sandbox}
-          title={sandbox ? 'Host file previews are unavailable in Sandbox' : `Open ${path}${design ? ' beside this chat' : ''}`} onClick={open}>{design ? 'Open in chat' : 'Open ↗'}</button>
         {/* A design can also fill Library, on its canvas with its versions. */}
         {design && <button type="button" className="artifact-card-action rounded-md border px-2 py-1 text-xs disabled:opacity-50" disabled={sandbox} data-open-in-library
           title={sandbox ? 'Host file previews are unavailable in Sandbox' : `Open ${path} in Library, full screen`}
-          onClick={() => { if (!sandbox) useStore.getState().openInLibrary(path, sessionId); }}>Open in Library</button>}
+          onClick={(e) => { e.stopPropagation(); if (!sandbox) useStore.getState().openInLibrary(path, sessionId); }}>Open in Library</button>}
+        <button type="button" className="artifact-card-action inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:opacity-50" disabled={sandbox} data-open-card
+          title={sandbox ? 'Host file previews are unavailable in Sandbox' : `Open ${path} beside this chat`}
+          onClick={(e) => { e.stopPropagation(); open(); }}>Open<GfArrowUpRightIcon className="h-3.5 w-3.5" /></button>
       </span>
     </div>
   </div>;

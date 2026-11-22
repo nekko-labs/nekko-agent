@@ -7,6 +7,8 @@ export * from './brand-env.js';
 export * from './platform-support.js';
 export * from './voice.js';
 export * from './cloud.js';
+export * from './planCatalog.js';
+export * from './paymentMethods.js';
 export * from './feedback.js';
 export * from './nekko-package.js';
 export * from './nekko-package-signature.js';

@@ -7,3 +7,6 @@
 
 # Generated from docs/hub/whats-new.json during the website build
 /whatsnew.html
+
+# Generated from packages/shared/src/plan-catalog.json during the website build
+/plan-catalog.json

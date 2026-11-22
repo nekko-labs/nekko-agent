@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Script, createContext } from 'node:vm';
 import { avatarsFrom, build, loadNav, loadWhatsNew, parseWhatsNew, releaseInfo, slugify, whatsNewPage } from './build-docs.mjs';
 
 // Staleness itself is not a test: the pages are built on deploy, and the Docs
@@ -369,4 +370,43 @@ test('every site page links to the What\'s new page, and the sitemap and llms.tx
   const llmsLinks = [...files.get('llms.txt').matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]);
   assert.ok(llmsLinks.some((link) => link === 'https://nekkoagent.com/whatsnew'), 'llms.txt links the page');
   assert.ok(files.get('docs/whats-new.html').includes('href="/whatsnew"'));
+});
+
+test('the build copies plan-catalog.json from the shared package', () => {
+  const files = build();
+  assert.ok(files.has('plan-catalog.json'), 'plan-catalog.json is in the build output');
+  const catalog = JSON.parse(files.get('plan-catalog.json'));
+  assert.ok(Array.isArray(catalog.plans), 'catalog has plans');
+  assert.ok(Array.isArray(catalog.groups), 'catalog has groups');
+  assert.equal(catalog.plans.length, 3, 'three plans: free, pro, team/enterprise');
+});
+
+test('pricing.js renders tiers and all comparison rows from a catalog object', () => {
+  const src = readFileSync(new URL('../apps/website/pricing.js', import.meta.url), 'utf8');
+  const ctx = createContext({ window: {}, document: { querySelector() { return null; } } });
+  new Script(src).runInContext(ctx);
+  const { renderTiers, renderTable } = ctx.window.NekkoPricing;
+  assert.equal(typeof renderTiers, 'function', 'renderTiers is exported');
+  assert.equal(typeof renderTable, 'function', 'renderTable is exported');
+
+  const catalog = JSON.parse(readFileSync(new URL('../packages/shared/src/plan-catalog.json', import.meta.url), 'utf8'));
+
+  // renderTiers: three tier cards, with "Coming soon" for Pro when no price
+  const tiersEl = { innerHTML: '' };
+  const mockDoc = { querySelector(s) { return s === '[data-pricing-tiers]' ? tiersEl : null; } };
+  renderTiers(mockDoc, catalog, null);
+  assert.equal((tiersEl.innerHTML.match(/class="pr-tier/g) ?? []).length, 3, 'three tier cards');
+  assert.ok(tiersEl.innerHTML.includes('Coming soon'), 'Pro shows "Coming soon" with no billing price');
+  assert.ok(tiersEl.innerHTML.includes('$0'), 'Free shows $0');
+  assert.ok(tiersEl.innerHTML.includes('Talk to us'), 'Enterprise says Talk to us');
+
+  // renderTable: every catalog row appears in the output
+  const tableEl = { innerHTML: '' };
+  const mockDoc2 = { querySelector(s) { return s === '[data-pricing-table]' ? tableEl : null; } };
+  renderTable(mockDoc2, catalog);
+  const totalRows = catalog.groups.reduce(function (n, g) { return n + g.rows.length; }, 0);
+  assert.equal((tableEl.innerHTML.match(/class="pr-table-row"/g) ?? []).length, totalRows, 'all catalog rows rendered');
+  for (const g of catalog.groups) {
+    assert.ok(tableEl.innerHTML.includes(g.name), 'group ' + g.name + ' in table');
+  }
 });

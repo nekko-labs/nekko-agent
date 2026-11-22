@@ -46,6 +46,14 @@ User intent (Philip, 2026-11-20): "Remove the browser tab entirely. For folders,
 - Picking a file opens it in a **file window** on the wall: into the active zone, like a chat or terminal, or shows the one already open. It is the app's file editor (edit, undo, save with Ctrl/Cmd+S, auto-save when on); Markdown, HTML and Mermaid open rendered with a **Source** toggle as elsewhere. File windows are kept across restarts (the wall's saved tree now accepts `file`).
 - Folders on other computers are not listed: their files cannot be browsed from this one yet.
 
+### Manage connected folders (#3213)
+
+**Add folder…** follows the connected folders and is available when the list is empty. It opens the existing folder picker (a server-side path prompt in the Local Web UI). Cancelling changes nothing. Connecting a folder makes it available in Nekko; it does not attach it to the current chat.
+
+Each folder and cloned repository row has a separate **×** on the right that disconnects it from Nekko, not just one chat. The action leaves files on disk, retains the existing restriction while a chat is using the folder, and does not expand the tree or change the current window. No new filesystem or network permissions are introduced.
+
+Status: implemented in the shared desktop/web renderer. Focused tests and the hidden Windows renderer with a synthetic bridge cover add, cancel, blocked disconnect, keyboard focus, and file browsing at desktop and narrow widths. The native picker, installed app, and live Local Web UI were not exercised. Native phone apps are unchanged.
+
 ## Browsers and Files without an agent (2026-11-15, superseded)
 
 The Browsers segment described here was removed on 2026-11-20 and the Files rows below replaced by the file browser above. Browser and Files windows saved on a wall from before still open. The `servers:list` probe stays in the daemon, unused by the panel.
