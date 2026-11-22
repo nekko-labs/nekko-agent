@@ -146,7 +146,7 @@ function CompanionResizer({ sessionId }: { sessionId: string }) {
 
 function CompanionBody({ pane }: { pane: WbPane }) {
   switch (pane.kind) {
-    case 'file': return <FilePane path={pane.refId} />;
+    case 'file': return <FilePane path={pane.refId} onMoved={(to) => useStore.getState().retargetPane(pane.id, to)} />;
     case 'files': return <ExplorerPane paneId={pane.id} root={pane.refId} />;
     case 'browser': return <BrowserPane url={pane.refId} />;
     case 'diff': return <DiffPane sessionId={pane.refId} />;
@@ -975,7 +975,7 @@ export function CommandWall({
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : pane.kind === 'files' ? <ExplorerPane key={pane.refId} paneId={pane.id} root={pane.refId} named />
             : pane.kind === 'browser' ? <BrowserPane key={pane.refId} url={pane.refId} />
-            : pane.kind === 'file' ? <FilePane key={pane.refId} path={pane.refId} />
+            : pane.kind === 'file' ? <FilePane key={pane.refId} path={pane.refId} onMoved={(to) => useStore.getState().retargetPane(pane.id, to)} />
             : null}
            </div>
             {pane.kind === 'chat' && showCompanions && companions.length > 0 && <CompanionResizer sessionId={pane.refId} />}
