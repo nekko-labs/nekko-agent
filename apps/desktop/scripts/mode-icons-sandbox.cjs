@@ -10,6 +10,7 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 app.disableHardwareAcceleration();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const js = v => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const report = { checks: {}, captures: [], errors: [] };
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:)/.test(d.url) }));
@@ -17,7 +18,7 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1100, height: 800, useContentSize: true, show: false, focusable: false, skipTaskbar: true, x: -10000, y: -10000, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
   const run = code => win.webContents.executeJavaScript(code, true);
   const crop = async (name, selector) => {
-    const r = await run(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; const b = e.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) }; })()`);
+    const r = await run(`(() => { const e = document.querySelector(${js(selector)}); if (!e) return null; const b = e.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) }; })()`);
     if (!r) { report.errors.push('missing ' + selector); return; }
     const file = path.join(out, name + '.png');
     fs.writeFileSync(file, (await win.capturePage(r, { stayHidden: true })).toPNG());
