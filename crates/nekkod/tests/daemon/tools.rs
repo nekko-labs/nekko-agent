@@ -234,11 +234,12 @@ async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
         "privacy": { "mode": "redact", "allow": ["a@b.io"] },
     });
     let home = tempfile::tempdir().unwrap();
-    let shared = home.path().canonicalize().unwrap().join(".nekko/other-product");
+    let home_path = home.path().canonicalize().unwrap();
+    let shared = home_path.join(".nekko/other-product");
     std::fs::create_dir_all(&shared).unwrap();
     let path = shared.join("child.txt");
     let home_var = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
-    let rig = turn_rig_env("spawn", session, json!({}), &[(home_var, home.path().to_str())]);
+    let rig = turn_rig_env("spawn", session, json!({}), &[(home_var, home_path.to_str())]);
     let model = scripted_model(vec![
         call_tool("c_spawn", "spawn_agent", json!({ "task": "count the files" })),
         call_tool("c_child_write", "write_file", json!({ "path": path, "content": "delegated shared write" })),
@@ -263,7 +264,12 @@ async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
     // A shielded chat's sub-agent is shielded too.
     assert_eq!(child["privacy"], json!({ "mode": "redact", "allow": ["a@b.io"] }));
     assert_eq!(child["messages"][0]["content"], "count the files");
-    assert_eq!(std::fs::read_to_string(path).unwrap(), "delegated shared write");
+    assert_eq!(
+        std::fs::read_to_string(path).as_deref().ok(),
+        Some("delegated shared write"),
+        "child transcript: {}",
+        child["messages"]
+    );
     let read =
         child["messages"].as_array().unwrap().iter().find(|m| m["toolResult"]["toolCallId"] == "c_child_read").unwrap();
     assert!(read["toolResult"]["output"].as_str().unwrap().contains("delegated shared write"), "{read}");

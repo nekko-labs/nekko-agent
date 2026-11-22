@@ -154,6 +154,12 @@ pub fn fake_claude() {
             let reply = json!({ "probe": probe, "answer": answer }).to_string();
             out(assistant("m_title", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "shared directory probe" {
+            let directories: Vec<&str> =
+                args.windows(2).filter(|pair| pair[0] == "--add-dir").map(|pair| pair[1].as_str()).collect();
+            let reply = json!({ "cwd": std::env::current_dir().unwrap(), "directories": directories }).to_string();
+            out(assistant("m_shared", json!([{ "type": "text", "text": reply }])));
+            out(result(&reply, "completed"));
         } else if text == "picture probe" {
             // The picture tools: whether the bridge lists them, and what a call
             // gets (made even when unoffered: the daemon must refuse it itself).
@@ -1423,6 +1429,30 @@ async fn a_wake_up_after_a_mode_change_still_reaches_the_chat() {
     let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
     let metas = kinds(&events).iter().filter(|k| *k == "session_meta").count();
     assert!(metas < 10, "{metas} session_meta events: {:?}", kinds(&events));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_adds_the_shared_directory_without_changing_its_cwd() {
+    let home = tempfile::tempdir().unwrap();
+    let home_path = home.path().canonicalize().unwrap();
+    let shared = home_path.join(".nekko");
+    std::fs::create_dir(&shared).unwrap();
+    let rig = rig_env(
+        "shared-directory",
+        "guardrails",
+        true,
+        &[("HOME", home_path.to_str()), ("USERPROFILE", home_path.to_str())],
+    );
+    let (status, _) =
+        post(rig.d.port, "chat:turn", json!([spec(&rig, "shared", "shared directory probe")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, end) = turn_record(&rig, "shared", "s_cc").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let msg = saved(&rig)["messages"].as_array().unwrap().last().unwrap().clone();
+    let reply: Value = serde_json::from_str(msg["content"].as_str().unwrap()).unwrap();
+    assert_eq!(reply["directories"], json!([shared]));
+    let cwd = Path::new(reply["cwd"].as_str().unwrap()).canonicalize().unwrap();
+    assert_eq!(cwd, rig.workspace.canonicalize().unwrap());
 }
 
 /// A Claude Agent on a second Claude Code account runs with that account's
