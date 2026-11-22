@@ -723,7 +723,6 @@ async fn admit(
         &settings,
         &[
             "systemInstructions",
-            "promptProfiles",
             "turnWrapper",
             "aboutUser",
             "orchestration",
@@ -736,6 +735,12 @@ async fn admit(
             "privacyTerms",
         ],
     );
+    // Carry only the selected overlay; other models' instructions are not turn inputs.
+    if !sandbox
+        && let Some(text) = crate::prompt_profile::model_instructions(&settings, s(&provider, "id"), kind, model_id)
+    {
+        spec_settings["modelSystemInstructions"] = json!(text);
+    }
     spec_settings["providers"] = Value::Array(providers);
     let mut spec = json!({
         "turnId": turn_id,

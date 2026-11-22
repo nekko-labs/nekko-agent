@@ -357,6 +357,7 @@ pub fn turn_system_prompt(input: &Value) -> String {
         can_ask: has(name(&c.ask_user)),
         can_plan: has(name(&c.update_plan)),
         system_instructions: Some(&instructions),
+        model_instructions: if sandbox { None } else { str_of("modelSystemInstructions") },
         turn_wrapper: Some(wrapper),
         about_user: about,
         checkout_notice: Some(&checkout),
@@ -473,6 +474,36 @@ mod tests {
         assert!(!t.contains("chat context"));
         let turn = turn_system_prompt(&serde_json::json!({ "settings": { "pullRequests": { "linkIssue": false } } }));
         assert!(turn.contains("- Do not link PRs to issues."));
+    }
+
+    #[test]
+    fn exact_model_guidance_adds_one_section_without_changing_any_other_directive() {
+        let model_section = "Model-specific guidance (does not override other instructions):\nUse short headings.\n";
+        let c = catalog();
+        for profile in ["small", "medium", "large"] {
+            let mut input = serde_json::json!({
+                "promptProfile": profile,
+                "workMode": "plan",
+                "tools": [c.ask_user, c.update_plan, { "function": { "name": "agent_watch" } }],
+                "settings": {
+                    "systemInstructions": "Keep test reports.",
+                    "turnWrapper": "Check the result.",
+                    "pullRequests": { "linkIssue": false }
+                },
+                "contextBlock": "Always read the project guide."
+            });
+            let ordinary = turn_system_prompt(&input);
+            input["settings"]["modelSystemInstructions"] = serde_json::json!(" Use short headings. ");
+            let composed = turn_system_prompt(&input);
+            assert_eq!(composed.matches(model_section).count(), 1);
+            assert_eq!(composed.replace(model_section, ""), ordinary);
+            assert!(composed.contains("Keep test reports."));
+            assert!(composed.contains("Do not link PRs to issues."));
+            assert!(composed.contains("Server instructions for this user turn:\nCheck the result."));
+            assert!(composed.contains("Always read the project guide."));
+            input["sandbox"] = serde_json::json!(true);
+            assert!(!turn_system_prompt(&input).contains("Use short headings."));
+        }
     }
 
     fn names(input: serde_json::Value) -> Vec<String> {

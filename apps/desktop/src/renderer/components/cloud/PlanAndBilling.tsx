@@ -114,6 +114,10 @@ export function TeamSwitches() {
   );
 }
 
+export function planLabel(plan?: string) {
+  return plan === 'team' ? 'Nekko Cloud Team' : plan === 'pro' ? 'Nekko Cloud Pro' : 'Free plan';
+}
+
 export function price(p: BillingPlan) {
   // Stripe counts in the currency's smallest unit: cents for USD, whole yen for JPY.
   const currency = p.currency.toUpperCase();

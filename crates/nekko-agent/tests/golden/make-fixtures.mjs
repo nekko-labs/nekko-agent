@@ -855,7 +855,7 @@ const models = [
     name: 'chatgpt',
     provider: 'chatgpt',
     responses: {
-      'https://chatgpt.com/backend-api/codex/models?client_version=0.160.0': json({
+      'https://chatgpt.com/backend-api/codex/models?client_version=0.171.0': json({
         models: [
           { slug: 'gpt-6-sol', display_name: 'GPT-6 Sol', context_window: 400000, priority: 2, visibility: 'list' },
           { slug: 'gpt-6-astra', display_name: 'GPT-6 Astra', context_window: 400000, priority: 1, visibility: 'list', show_in_picker: true },
@@ -871,17 +871,17 @@ const models = [
   {
     name: 'chatgpt-catalog-404-falls-back',
     provider: 'chatgpt',
-    responses: { 'https://chatgpt.com/backend-api/codex/models?client_version=0.160.0': { status: 404, body: '{"detail":"Not Found"}' } },
+    responses: { 'https://chatgpt.com/backend-api/codex/models?client_version=0.171.0': { status: 404, body: '{"detail":"Not Found"}' } },
   },
   {
     name: 'chatgpt-catalog-empty-falls-back',
     provider: 'chatgpt',
-    responses: { 'https://chatgpt.com/backend-api/codex/models?client_version=0.160.0': json({ models: [] }) },
+    responses: { 'https://chatgpt.com/backend-api/codex/models?client_version=0.171.0': json({ models: [] }) },
   },
   {
     name: 'chatgpt-catalog-wrong-shape-falls-back',
     provider: 'chatgpt',
-    responses: { 'https://chatgpt.com/backend-api/codex/models?client_version=0.160.0': json({ models: 'nope' }) },
+    responses: { 'https://chatgpt.com/backend-api/codex/models?client_version=0.171.0': json({ models: 'nope' }) },
   },
   // No account id: the catalog GET is skipped entirely, curated list answers.
   { name: 'chatgpt-no-account', provider: 'chatgpt-no-account', responses: {} },
@@ -892,7 +892,7 @@ const models = [
     name: 'chatgpt-custom-live',
     provider: 'chatgpt-custom',
     responses: {
-      'https://chatgpt.com/backend-api/codex/models?client_version=0.160.0': json({
+      'https://chatgpt.com/backend-api/codex/models?client_version=0.171.0': json({
         models: [{ slug: 'gpt-6.1-sol', display_name: 'GPT-6.1 Sol' }],
       }),
     },

@@ -73,3 +73,18 @@ then marks the head red with a status naming `gh workflow run ios-native.yml --r
 PR-level Native iOS run. The rest of the batch (conflict handling, statuses, the
 manifest) is unchanged. No token is broadened: giving the batch a GitHub App token
 with Workflows write, so such PRs can batch too, stays Philip's settings call.
+
+## Keychain consent across macOS development rebuilds (#3194)
+
+Developers should not have to approve access to the same Nekko credential item
+on every rebuild. Local development builds can reuse an explicitly selected
+Apple Development identity from the repository's local Git config. macOS still
+owns the checks, and a new signing identity or locked Keychain can still require
+approval. The setting grants no access itself, stores no secret, and does not
+change release signing or select personal signing keys by default.
+[Setup and rollback](../../docs/signing.md#development-builds-keeping-keychain-answers-across-rebuilds).
+
+Implemented and tested for identity selection and precedence. Acceptance on a
+real Mac still requires approving the existing item for the new identity, then
+rebuilding with a code change and confirming that the unlocked Keychain no
+longer prompts at startup.

@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nekko Cloud walkthrough v3: the Nekko Cloud mark, plans, payment methods and the pricing page</title>
+<style>
+  body { margin:0; padding:32px; background:#e6e5ec; font:14px/1.45 "Geist", -apple-system, "Segoe UI", system-ui, sans-serif; color:#1d1b22; }
+  header.page { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:20px; }
+  header.page h1 { font-size:18px; margin:0 0 4px; }
+  header.page p { margin:0; color:#5d5966; font-size:13px; max-width:820px; }
+  .replay { font:inherit; font-size:12px; padding:6px 12px; border-radius:8px; border:0; background:#1d1b22; color:#fff; cursor:pointer; }
+  h2.row-title { font-size:12px; font-weight:500; color:#5d5966; margin:32px 0 12px; }
+  .canvas { display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start; }
+  .frame { display:flex; flex-direction:column; gap:10px; }
+  .frame .label { font-size:12px; color:#5d5966; } .frame .label b { color:#1d1b22; font-weight:600; margin-right:6px; }
+  .frame .why { font-size:12px; color:#7b7785; max-width:480px; }
+  .window { position:relative; width:480px; height:660px; border-radius:14px; overflow:hidden; display:grid; place-items:center; }
+  .window.wide { width:720px; } .window.tall { height:900px; } .window.narrow { width:380px; }
+
+  .t-light { --paper:#fbfbfd; --win:#fcfcfe; --surface:#ffffff; --surface-2:#f2f2f7; --ink:#17171d; --ink-soft:#52525e; --ink-faint:#6c6c77; --line:#e8e8ef;
+    --accent:#5a2352; --accent-2:#8a4a7f; --success:#3aa870; --danger-text:#b4372f; --info:#1f6680; --shadow-ink:#17171d; }
+  .t-dusk { --paper:#0b0c14; --win:#181a25; --surface:#14151f; --surface-2:#1d1f2c; --ink:#eaeaf4; --ink-soft:#a3a4b6; --ink-faint:#87899b; --line:#252735;
+    --accent:#c084b5; --accent-2:#c99bb3; --success:#4ec98a; --danger-text:#f08a7e; --info:#6bb8d4; --shadow-ink:#000; }
+  .t-light, .t-dusk { --accent-soft:color-mix(in srgb, var(--accent) 14%, transparent); --ring:color-mix(in srgb, var(--accent) 38%, transparent);
+    --ease-out:cubic-bezier(0.22, 1, 0.36, 1); --font-mono:"Geist Mono", ui-monospace, "Cascadia Mono", monospace; color:var(--ink); background:var(--paper); }
+  .app-behind { position:absolute; inset:0; padding:20px; display:flex; flex-direction:column; gap:10px; }
+  .app-behind i { display:block; height:10px; border-radius:5px; background:var(--surface-2); }
+
+  .cw-backdrop { position:absolute; inset:0; display:grid; place-items:center; padding:20px; background:color-mix(in srgb, var(--paper) 70%, transparent); backdrop-filter:blur(6px); }
+  .cw-backdrop::before { content:''; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(55% 70% at 0% 100%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%), radial-gradient(50% 60% at 100% 0%, color-mix(in srgb, var(--accent-2) 13%, transparent), transparent 70%), radial-gradient(40% 45% at 92% 96%, color-mix(in srgb, #ff7eb6 10%, transparent), transparent 70%); }
+  .cw { position:relative; width:min(420px, 100%); border-radius:20px; padding:8px 24px 16px; background:color-mix(in srgb, var(--win) 72%, transparent); backdrop-filter:blur(24px) saturate(160%);
+    box-shadow:inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent), 0 30px 80px -30px color-mix(in srgb, var(--accent) 50%, transparent), 0 2px 12px -4px color-mix(in srgb, var(--shadow-ink) 30%, transparent); }
+  .cw.is-wide { width:min(640px, 100%); }
+  .t-light .cw { background:color-mix(in srgb, #fff 80%, transparent); }
+  .cw::after { content:''; position:absolute; inset:-1px; border-radius:inherit; padding:1px; pointer-events:none; background:linear-gradient(120deg, var(--accent), var(--accent-2) 40%, #46e0bd 58%, #ffbe5c 76%, #ff7eb6);
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; opacity:.55; }
+  .cw-close { position:absolute; right:12px; top:12px; width:28px; height:28px; border:0; border-radius:8px; background:none; color:var(--ink-faint); z-index:2; }
+  .cw-scene { height:160px; margin:0 -24px; } .cw-scene.is-compact { height:84px; }
+  .cw-scene svg { display:block; width:100%; height:100%; overflow:visible; }
+  .cw h1 { font-size:20px; font-weight:600; letter-spacing:-0.01em; text-align:center; margin:4px 0 0; }
+  .cw .lede { margin:4px auto 0; max-width:340px; font-size:14px; color:var(--ink-soft); text-align:center; line-height:1.45; }
+  .stack { margin-top:20px; display:flex; flex-direction:column; gap:8px; }
+  .btn { height:32px; border-radius:9px; border:0; font:500 14px/1 inherit; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:8px; width:100%; }
+  .btn-primary { background:var(--accent); color:var(--paper); } .t-dusk .btn-primary { background:#190019; color:#f3e8ee; box-shadow:inset 0 0 0 1px #854f6c; }
+  .btn-link { background:none; color:var(--ink-soft); font-size:12px; height:28px; }
+  .provider { height:40px; border-radius:11px; border:1px solid var(--line); background:var(--surface); display:flex; align-items:center; justify-content:center; gap:10px; font-weight:500; }
+  .foot { margin-top:16px; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+  .foot .back { justify-self:start; font-size:12px; color:var(--ink-soft); background:none; border:0; padding:4px 8px; margin-left:-8px; font-family:inherit; }
+  .dots { display:flex; gap:6px; } .dots i { height:6px; width:6px; border-radius:3px; background:var(--line); } .dots i.on { width:18px; background:var(--accent); } .dots i.done { background:var(--accent-soft); }
+  .stagger > * { animation:item-in .28s var(--ease-out) both; } .stagger > *:nth-child(2) { animation-delay:.05s; } .stagger > *:nth-child(3) { animation-delay:.1s; } .stagger > *:nth-child(4) { animation-delay:.15s; }
+
+  /* ===== The Nekko Cloud mark ===== */
+  .nc-cloud { fill:var(--surface); stroke:var(--ink); stroke-width:2.2; stroke-linejoin:round; }
+  .nc-eyes { fill:none; stroke:var(--ink); stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+  .nc-hop { animation:nc-hop 7s var(--ease-out) infinite; transform-box:view-box; }
+  @keyframes nc-hop { 0%, 84%, 100% { transform:translateY(0); } 88% { transform:translateY(-4px); } 92% { transform:translateY(0); } 95% { transform:translateY(-1.5px); } 98% { transform:translateY(0); } }
+  .marks { display:flex; gap:28px; align-items:flex-end; padding:24px; border-radius:14px; }
+  .marks figure { margin:0; display:flex; flex-direction:column; align-items:center; gap:8px; font-size:11px; color:var(--ink-faint); }
+  .marks .hopnow .nc-hop { animation-duration:2.2s; }
+
+  /* ===== The scene ===== */
+  .s * { transition:opacity .36s var(--ease-out), transform .6s var(--ease-out), stroke .3s, fill .3s; transform-box:view-box; }
+  .s .ring { fill:none; stroke-width:2; stroke-linecap:round; stroke-dasharray:277; stroke-dashoffset:277; opacity:0; transform:rotate(-90deg); transform-origin:180px 80px; transition:stroke-dashoffset .9s var(--ease-out), opacity .3s, stroke .3s; }
+  .s .dev .body { fill:var(--surface); stroke:var(--line); stroke-width:1.2; } .s .dev .b { fill:var(--surface-2); } .s .dev .b.you { fill:var(--accent-soft); }
+  .s .dev .ok { fill:var(--success); opacity:0; transform:scale(.4); transform-box:fill-box; transform-origin:center; }
+  .s .link { fill:none; stroke:var(--line); stroke-width:1.5; stroke-dasharray:3 4; }
+  .s .pk { offset-rotate:0deg; }
+  .s .pk.p1 { offset-path:path("M48 104 C 48 80 140 78 162 62"); animation:up 2.6s var(--ease-out) infinite; }
+  .s .pk.p2 { offset-path:path("M128 100 C 128 84 160 78 172 63"); animation:down 2.6s .65s var(--ease-out) infinite; }
+  .s .pk.p3 { offset-path:path("M232 100 C 232 84 200 78 188 63"); animation:up 2.6s 1.3s var(--ease-out) infinite; }
+  .s .pk.p4 { offset-path:path("M312 104 C 312 80 220 78 198 62"); animation:down 2.6s 1.95s var(--ease-out) infinite; }
+  .s .mark { transform-origin:180px 80px; }
+  .s .badge { opacity:0; transform:scale(.6); transform-box:fill-box; transform-origin:center; }
+  .s .lockb { fill:var(--accent); } .s .lockg { fill:none; stroke:var(--paper); stroke-width:1.5; stroke-linecap:round; } .s .lockf { fill:var(--paper); }
+  .s .checkb { fill:var(--success); } .s .checkg { fill:none; stroke:var(--paper); stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .s .browser .body { fill:var(--surface); stroke:var(--line); stroke-width:1.2; } .s .browser .bar { fill:var(--line); } .s .browser .go { fill:var(--accent-soft); } .s .browser .gol { fill:var(--accent); }
+  .s .blink { fill:none; stroke:var(--line); stroke-width:1.5; stroke-dasharray:3 4; }
+  .s .blinkpk { fill:var(--accent); offset-path:path("M152 80 Q 198 56 242 72"); animation:up 1.6s var(--ease-out) infinite; }
+  .s .mail rect { fill:var(--surface); stroke:var(--line); stroke-width:1.2; } .s .mail .flap { fill:none; stroke:var(--ink-faint); stroke-width:1.2; stroke-linejoin:round; } .s .mail .seal { fill:var(--accent); }
+  .s :is(.browser, .blink, .g-blink, .mail) { opacity:0; }
+  /* welcome / sync / done: the mark up top, four devices below linked to it */
+  .s:is(.s-welcome, .s-sync, .s-done) .mark { transform:translateY(-38px) scale(1.3); }
+  .s:is(.s-welcome, .s-done) .dev { animation:dev-in .5s var(--ease-out) both; }
+  .s:is(.s-welcome, .s-done) .dev.d2 { animation-delay:.08s; } .s:is(.s-welcome, .s-done) .dev.d3 { animation-delay:.16s; } .s:is(.s-welcome, .s-done) .dev.d4 { animation-delay:.24s; }
+  .s:is(.s-welcome, .s-done) .link { animation:draw .7s .3s var(--ease-out) both; }
+  .s.s-welcome .mark-in { animation:pop .5s var(--ease-out) both; }
+  .s:is(.s-welcome, .s-sync) .badge.lock { opacity:1; transform:scale(1); transition-delay:.4s; }
+  .s.s-sync .pk { fill:var(--accent); } .s.s-sync .badge.lock { transform:scale(1.2); }
+  .s.s-sync .pk.p2, .s.s-sync .pk.p4 { animation-name:up; }
+  .s.s-done .link { stroke:color-mix(in srgb, var(--success) 55%, var(--line)); stroke-dasharray:none; }
+  .s.s-done .dev .ok { opacity:1; transform:scale(1); transition-delay:.5s; }
+  .s.s-done .g-pk { opacity:0; }
+  /* account / code / in: the devices step down and out, the mark centres in a prism ring */
+  .s:is(.s-account, .s-browser, .s-code, .s-in, .s-plan) .dev { opacity:0; transform:translateY(10px); }
+  .s:is(.s-account, .s-browser, .s-code, .s-in, .s-plan) :is(.link, .g-pk) { opacity:0; }
+  .s:is(.s-account, .s-code, .s-in) .ring { opacity:1; stroke-dashoffset:0; }
+  .s.s-in .ring { stroke:var(--success); }
+  .s:is(.s-in, .s-done) .badge.ok { opacity:1; transform:scale(1); transition-delay:.25s; }
+  .s.s-browser .mark { transform:translateX(-62px); }
+  .s.s-browser :is(.browser, .blink, .g-blink) { opacity:1; } .s.s-browser .browser { animation:dev-in .5s var(--ease-out) both; }
+  .s.s-code .mail { opacity:1; animation:mail .7s var(--ease-out) both; }
+  .s.s-plan .mark { transform:scale(.8); }
+
+  /* ===== Plans ===== */
+  .pcols { margin-top:16px; display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .pcol { text-align:left; padding:14px; border-radius:14px; display:flex; flex-direction:column; gap:2px; transition:background .2s var(--ease-out); }
+  .pcol.sel { background:var(--accent-soft); }
+  .pcol .top { display:flex; align-items:center; gap:8px; }
+  .tick { width:16px; height:16px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--line); display:grid; place-items:center; flex:none; color:var(--paper); }
+  .sel .tick { background:var(--accent); box-shadow:none; }
+  .pcol .name { font-weight:600; font-size:14px; } .pcol.sel .name { color:var(--accent); }
+  .pcol .price { font-size:20px; font-weight:600; margin-top:6px; font-variant-numeric:tabular-nums; } .pcol .price small { font-size:12px; font-weight:400; color:var(--ink-faint); }
+  .pcol .tag { font-size:12px; color:var(--ink-faint); }
+  .pcol ul { list-style:none; margin:10px 0 0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .pcol li { display:flex; gap:6px; font-size:12px; color:var(--ink-soft); line-height:1.35; }
+  .pcol li svg { flex:none; margin-top:2px; color:var(--success); }
+  .more { margin:12px auto 0; display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); background:none; border:0; font-family:inherit; }
+  .more svg { transition:transform .26s var(--ease-out); } .more.open svg { transform:rotate(180deg); }
+  .fold { display:grid; grid-template-rows:0fr; transition:grid-template-rows .32s var(--ease-out); } .fold.open { grid-template-rows:1fr; } .fold > div { overflow:hidden; }
+  .ptable { margin-top:8px; font-size:12px; }
+  .ptable .hd, .ptable .r { display:grid; grid-template-columns:1fr 72px 72px 84px; align-items:center; min-height:30px; }
+  .ptable .hd { position:sticky; top:0; font-weight:500; color:var(--ink-soft); }
+  .ptable .hd span:not(:first-child), .ptable .r span:not(:first-child) { text-align:center; }
+  .ptable .hd .on { color:var(--accent); }
+  .ptable .g { font-weight:500; color:var(--ink-soft); min-height:36px; align-items:end; } .ptable .g > span:first-child { padding-bottom:4px; }
+  .ptable .r { color:var(--ink); }
+  .ptable .r span:first-child { padding-right:8px; }
+  .ptable .r > span:not(:first-child), .ptable .g > span:not(:first-child), .ptable .hd > span:not(:first-child) { align-self:stretch; display:grid; place-items:center; }
+  .ptable .g { display:grid; grid-template-columns:1fr 72px 72px 84px; } .compare .ptable .g { grid-template-columns:1fr 120px 120px 120px; }
+  .ptable .hd .on { background:color-mix(in srgb, var(--accent) 7%, transparent); border-radius:8px 8px 0 0; }
+  .ptable .col-sel { background:color-mix(in srgb, var(--accent) 7%, transparent); }
+  .ptable .no { color:var(--ink-faint); } .ptable .val { color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .soon { margin-left:6px; font-size:11px; color:var(--info); }
+  .fold.open .ptable > * { animation:item-in .3s var(--ease-out) both; }
+
+  /* ===== Pricing page (website) ===== */
+  .site { position:absolute; inset:0; overflow:hidden; background:var(--paper); }
+  .site nav { display:flex; align-items:center; gap:24px; padding:18px 32px; font-size:13px; color:var(--ink-soft); }
+  .site nav b { color:var(--ink); letter-spacing:.06em; margin-right:auto; font-size:13px; }
+  .site .hero { text-align:center; padding:28px 32px 8px; }
+  .site .hero h2 { font-size:40px; letter-spacing:-0.02em; margin:0; }
+  .site .hero p { color:var(--ink-soft); margin:8px auto 0; max-width:520px; font-size:15px; }
+  .site .notsale { margin:16px auto 0; width:fit-content; font-size:12px; color:var(--info); padding:6px 12px; border-radius:99px; background:color-mix(in srgb, var(--info) 10%, transparent); }
+  .tiers { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; padding:28px 40px 0; }
+  .tier { border-radius:18px; padding:22px; background:var(--surface); box-shadow:0 1px 0 var(--line), 0 12px 32px -20px color-mix(in srgb, var(--shadow-ink) 30%, transparent); display:flex; flex-direction:column; }
+  .tier.hl { position:relative; box-shadow:0 0 0 1.5px var(--accent), 0 20px 40px -22px color-mix(in srgb, var(--accent) 60%, transparent); }
+  .tier.hl::before { content:'Most people'; position:absolute; top:-10px; left:22px; font-size:11px; padding:2px 8px; border-radius:99px; background:var(--accent); color:var(--paper); }
+  .tier h3 { margin:0; font-size:16px; } .tier .p { font-size:30px; font-weight:600; margin:10px 0 2px; } .tier .p small { font-size:13px; font-weight:400; color:var(--ink-faint); }
+  .tier .t { font-size:13px; color:var(--ink-faint); }
+  .tier ul { list-style:none; padding:0; margin:16px 0 18px; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink-soft); }
+  .tier li { display:flex; gap:8px; } .tier li svg { flex:none; margin-top:3px; color:var(--success); }
+  .tier .cta { margin-top:auto; height:36px; border-radius:10px; display:grid; place-items:center; font-weight:500; font-size:13px; background:color-mix(in srgb, var(--ink) 6%, transparent); }
+  .tier.hl .cta { background:var(--accent); color:var(--paper); }
+  .compare { margin:28px 40px 0; } .compare .more { margin:0 auto; font-size:13px; }
+  .compare .ptable { font-size:13px; margin-top:12px; } .compare .ptable .hd, .compare .ptable .r { grid-template-columns:1fr 120px 120px 120px; min-height:36px; border-bottom:1px solid var(--line); }
+  .compare .ptable .g { border:0; }
+  .payline { margin:24px 40px 0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px; color:var(--ink-faint); justify-content:center; }
+  .chip { padding:4px 10px; border-radius:99px; background:var(--surface-2); color:var(--ink-soft); font-size:12px; }
+  .faq { margin:28px 40px; display:grid; grid-template-columns:1fr 1fr; gap:18px 40px; font-size:13px; }
+  .faq b { display:block; margin-bottom:4px; } .faq span { color:var(--ink-soft); }
+  .site.mobile .hero h2 { font-size:30px; } .site.mobile .tiers { grid-template-columns:1fr; padding:20px 16px 0; } .site.mobile nav { padding:14px 16px; } .site.mobile nav span { display:none; }
+
+  /* ===== Paying ===== */
+  .sum { display:flex; justify-content:space-between; font-size:14px; margin-top:36px; } .sum b { font-weight:500; } .sum span { font-variant-numeric:tabular-nums; }
+  .where { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--ink-faint); margin-top:2px; } .where u { text-decoration:none; color:var(--ink-soft); }
+  .tiles { margin-top:14px; display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+  .tile { height:52px; border-radius:11px; padding:7px 8px; display:flex; flex-direction:column; justify-content:space-between; font-size:11.5px; font-weight:500; color:var(--ink-soft);
+    background:color-mix(in srgb, var(--ink) 4%, transparent); transition:background .2s, box-shadow .2s, color .2s; }
+  .tile svg { width:18px; height:18px; color:var(--ink-soft); }
+  .tile.sel { background:var(--accent-soft); box-shadow:inset 0 0 0 1.5px var(--accent); color:var(--accent); } .tile.sel svg { color:var(--accent); }
+  .tile.tile-more { color:var(--ink-faint); }
+  .pv { margin-top:14px; min-height:150px; display:grid; place-items:center; animation:item-in .24s var(--ease-out) both; }
+  .mini-card { position:relative; width:236px; height:146px; border-radius:14px; padding:12px 14px; color:#f3e8ee; overflow:hidden;
+    background:radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent-2) 75%, #190019), color-mix(in srgb, var(--accent) 55%, #190019) 65%); box-shadow:0 18px 36px -20px color-mix(in srgb, var(--accent) 80%, transparent); }
+  .mini-card .r1 { display:flex; justify-content:space-between; font-size:11px; opacity:.9; }
+  .mini-card .chip { width:28px; height:21px; border-radius:5px; margin-top:12px; background:linear-gradient(135deg, color-mix(in srgb, #ffbe5c 70%, #f3e8ee), color-mix(in srgb, #ffbe5c 40%, #190019)); }
+  .mini-card .num { margin-top:12px; font:500 15px/1 var(--font-mono); letter-spacing:.06em; white-space:nowrap; }
+  .mini-card .num i { font-style:normal; opacity:0; animation:char .01s both; }
+  .mini-card .r3 { position:absolute; left:14px; right:14px; bottom:10px; display:flex; justify-content:space-between; font-size:11px; opacity:.9; }
+  .sheet { width:236px; border-radius:16px; padding:14px; background:var(--surface); box-shadow:0 1px 0 var(--line), 0 18px 36px -22px color-mix(in srgb, var(--shadow-ink) 40%, transparent); font-size:12px; animation:sheet-up .4s var(--ease-out) both; }
+  .sheet .h { display:flex; justify-content:space-between; font-weight:600; font-size:13px; } .sheet .l { display:flex; justify-content:space-between; color:var(--ink-faint); margin-top:8px; }
+  .sheet .confirm { margin-top:12px; height:30px; border-radius:8px; display:grid; place-items:center; background:var(--ink); color:var(--paper); font-weight:500; }
+  .mandate { width:100%; border-radius:14px; padding:14px; background:var(--surface-2); font-size:12px; color:var(--ink-soft); line-height:1.45; }
+  .mandate .acct { display:flex; align-items:center; gap:10px; color:var(--ink); font:500 14px/1.2 var(--font-mono); letter-spacing:.04em; margin-bottom:8px; }
+  .mandate .acct svg { color:var(--ink-soft); width:18px; height:18px; flex:none; }
+  .hand { display:flex; align-items:center; gap:14px; font-size:13px; color:var(--ink-soft); }
+  .hand .box { width:52px; height:52px; border-radius:14px; background:var(--surface-2); display:grid; place-items:center; color:var(--ink-soft); flex:none; } .hand .box svg { width:24px; height:24px; }
+  .hand .arrow { color:var(--ink-faint); animation:nudge 1.6s var(--ease-out) infinite; }
+  .note { font-size:12px; color:var(--info); margin-top:10px; text-align:center; }
+  .test { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--info); margin-top:10px; justify-content:center; } .test::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--info); }
+  .blocked { text-align:center; padding:12px 0 4px; font-size:13px; color:var(--ink-soft); }
+  @keyframes char { to { opacity:1; } }
+  @keyframes sheet-up { from { opacity:0; transform:translateY(12px); } }
+  @keyframes nudge { 0%, 60%, 100% { transform:translateX(0); } 75% { transform:translateX(3px); } }
+  @keyframes item-in { from { opacity:0; transform:translateY(4px); } }
+  @keyframes dev-in { from { opacity:0; transform:translateY(8px); } }
+  @keyframes pop { from { opacity:0; transform:scale(.92); } }
+  @keyframes draw { from { stroke-dashoffset:60; opacity:0; } }
+  @keyframes up { 0% { offset-distance:0%; opacity:0; } 15%, 85% { opacity:1; } 100% { offset-distance:100%; opacity:0; } }
+  @keyframes down { 0% { offset-distance:100%; opacity:0; } 15%, 85% { opacity:1; } 100% { offset-distance:0%; opacity:0; } }
+  @keyframes mail { from { opacity:0; transform:translate(56px, -28px) rotate(-10deg); } }
+  @media (prefers-reduced-motion: reduce) { *, .s * { animation:none !important; transition:opacity .2s !important; } }
+  .motion { background:#fff; border-radius:14px; padding:16px 20px; width:520px; font-size:12px; }
+  .motion td { padding:5px 0; vertical-align:top; } .motion td:first-child { color:#5d5966; width:140px; } .motion td:last-child { text-align:right; color:#7b7785; white-space:nowrap; padding-left:12px; }
+</style>
+</head>
+<body>
+
+<template id="mark">
+  <svg viewBox="0 0 64 48" aria-hidden="true"><g class="nc-hop">
+    <path class="nc-cloud" d="M16 40 A9 9 0 1 1 19 22.5 A13 13 0 0 1 19.5 20.4 L16.4 11.8 Q15.6 9.2 18.4 9.6 L25.2 13 A13 13 0 0 1 38.8 13 L45.6 9.6 Q48.4 9.2 47.6 11.8 L44.5 20.4 A13 13 0 0 1 45 22.5 A9 9 0 1 1 48 40 Z"/>
+    <path class="nc-eyes" d="M23.5 29.5 L26.5 26 L29.5 29.5 M34.5 29.5 L37.5 26 L40.5 29.5"/>
+  </g></svg>
+</template>
+
+<template id="scene">
+  <svg viewBox="0 0 360 160" aria-hidden="true">
+    <defs>
+      <radialGradient id="g"><stop offset="0" stop-color="var(--accent)" stop-opacity=".22"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></radialGradient>
+      <linearGradient id="p" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset=".45" stop-color="var(--accent-2)"/><stop offset=".62" stop-color="#46e0bd"/><stop offset=".8" stop-color="#ffbe5c"/><stop offset="1" stop-color="#ff7eb6"/></linearGradient>
+    </defs>
+    <circle class="ring" cx="180" cy="80" r="44" stroke="url(#p)"/>
+    <path class="link" d="M48 104 C 48 80 140 78 162 62"/><path class="link" d="M128 100 C 128 84 160 78 172 63"/>
+    <path class="link" d="M232 100 C 232 84 200 78 188 63"/><path class="link" d="M312 104 C 312 80 220 78 198 62"/>
+    <g class="g-pk"><circle class="pk p1" r="2.4" fill="url(#p)"/><circle class="pk p2" r="2.4" fill="url(#p)"/><circle class="pk p3" r="2.4" fill="url(#p)"/><circle class="pk p4" r="2.4" fill="url(#p)"/></g>
+    <g class="dev d1"><rect class="body" x="20" y="104" width="56" height="34" rx="4"/><path class="body" d="M12 141 H84 L79 146 H17 Z"/>
+      <rect class="b" x="27" y="111" width="24" height="5" rx="2.5"/><rect class="b you" x="40" y="120" width="28" height="5" rx="2.5"/><rect class="b" x="27" y="129" width="18" height="5" rx="2.5"/><circle class="ok" cx="76" cy="104" r="4.5"/></g>
+    <g class="dev d2"><rect class="body" x="100" y="100" width="56" height="38" rx="4"/><rect class="body" x="124" y="138" width="8" height="4"/><rect class="body" x="116" y="142" width="24" height="3" rx="1.5"/>
+      <rect class="b" x="107" y="107" width="26" height="5" rx="2.5"/><rect class="b you" x="122" y="116" width="27" height="5" rx="2.5"/><rect class="b" x="107" y="125" width="20" height="5" rx="2.5"/><circle class="ok" cx="156" cy="100" r="4.5"/></g>
+    <g class="dev d3"><rect class="body" x="219" y="98" width="26" height="48" rx="6"/><rect class="b" x="227" y="101.5" width="10" height="2.5" rx="1.25"/>
+      <rect class="b" x="223" y="109" width="14" height="4" rx="2"/><rect class="b you" x="227" y="116" width="14" height="4" rx="2"/><rect class="b" x="223" y="123" width="11" height="4" rx="2"/><circle class="ok" cx="245" cy="98" r="4.5"/></g>
+    <g class="dev d4"><rect class="body" x="284" y="104" width="56" height="40" rx="6"/>
+      <rect class="b" x="291" y="111" width="24" height="5" rx="2.5"/><rect class="b you" x="306" y="120" width="27" height="5" rx="2.5"/><rect class="b" x="291" y="129" width="18" height="5" rx="2.5"/><circle class="ok" cx="340" cy="104" r="4.5"/></g>
+    <g class="browser"><rect class="body" x="244" y="46" width="88" height="64" rx="8"/><circle class="bar" cx="254" cy="55" r="2"/><circle class="bar" cx="261" cy="55" r="2"/><circle class="bar" cx="268" cy="55" r="2"/>
+      <rect class="bar" x="256" y="70" width="44" height="4" rx="2"/><rect class="go" x="256" y="84" width="64" height="14" rx="7"/><rect class="gol" x="276" y="89.5" width="24" height="3" rx="1.5"/></g>
+    <path class="blink" d="M152 80 Q 198 56 242 72"/><g class="g-blink"><circle class="blinkpk" r="2.4"/></g>
+    <g class="mail"><rect x="228" y="44" width="36" height="25" rx="4"/><path class="flap" d="M230 47 L246 59 L262 47"/><circle class="seal" cx="246" cy="59" r="3"/></g>
+    <g class="mark"><g class="mark-in">
+      <circle cx="180" cy="80" r="64" fill="url(#g)"/>
+      <g transform="translate(148 56)"><g class="nc-hop">
+        <path class="nc-cloud" d="M16 40 A9 9 0 1 1 19 22.5 A13 13 0 0 1 19.5 20.4 L16.4 11.8 Q15.6 9.2 18.4 9.6 L25.2 13 A13 13 0 0 1 38.8 13 L45.6 9.6 Q48.4 9.2 47.6 11.8 L44.5 20.4 A13 13 0 0 1 45 22.5 A9 9 0 1 1 48 40 Z"/>
+        <path class="nc-eyes" d="M23.5 29.5 L26.5 26 L29.5 29.5 M34.5 29.5 L37.5 26 L40.5 29.5"/>
+        <g class="badge lock"><circle class="lockb" cx="56" cy="40" r="8"/><path class="lockg" d="M53 39.5 v-2 a3 3 0 0 1 6 0 v2"/><rect class="lockf" x="51.5" y="39" width="9" height="6.5" rx="1.5"/></g>
+        <g class="badge ok"><circle class="checkb" cx="56" cy="40" r="8"/><path class="checkg" d="M52.2 40.3 l2.6 2.6 l5 -5.4"/></g>
+      </g></g>
+    </g></g>
+  </svg>
+</template>
+
+<header class="page">
+  <div>
+    <h1>Nekko Cloud walkthrough v3</h1>
+    <p>v3 (2026-11-23): the mark's ears move out to the edges of the cloud and are wider with rounded tips; everything else is v2. Changes v2 made to v1 (issues #3190 to #3193): the Nekko Cloud mark (a cloud with two ears and caret eyes that hops now and then) at the centre of every picture, several devices syncing to it, the Welcome copy about your way rather than "your Nekko", Pay now, Free / Pro / Enterprise with three main points and the full list behind Show the full list, payment methods by country, device and account, and the pricing page for the website (hidden until billing is on for everyone). Prices other than $12 are placeholders: Stripe sets each currency's price.</p>
+  </div>
+  <button class="replay" onclick="replay()">Replay motion</button>
+</header>
+
+<h2 class="row-title">The Nekko Cloud mark</h2>
+<div class="canvas">
+  <section class="frame"><div class="label"><b>0</b>The ears, v2 and v3</div>
+    <div class="marks t-light"><figure><svg viewBox="0 0 64 48" style="width:112px;display:block"><path class="nc-cloud" d="M16 40 A9 9 0 1 1 19 22.5 A13 13 0 0 1 22.8 14.8 L22.5 5.5 L27.1 12 A13 13 0 0 1 36.9 12 L41.5 5.5 L41.2 14.8 A13 13 0 0 1 45 22.5 A9 9 0 1 1 48 40 Z"/><path class="nc-eyes" d="M23.5 29.5 L26.5 26 L29.5 29.5 M34.5 29.5 L37.5 26 L40.5 29.5"/></svg>v2: pointed, near the middle</figure><figure><svg viewBox="0 0 64 48" style="width:112px;display:block"><path class="nc-cloud" d="M16 40 A9 9 0 1 1 19 22.5 A13 13 0 0 1 19.5 20.4 L16.4 11.8 Q15.6 9.2 18.4 9.6 L25.2 13 A13 13 0 0 1 38.8 13 L45.6 9.6 Q48.4 9.2 47.6 11.8 L44.5 20.4 A13 13 0 0 1 45 22.5 A9 9 0 1 1 48 40 Z"/><path class="nc-eyes" d="M23.5 29.5 L26.5 26 L29.5 29.5 M34.5 29.5 L37.5 26 L40.5 29.5"/></svg>v3: out at the edges, wide, rounded</figure></div>
+    <div class="why">Each ear starts where the top of the cloud meets its side and leans out, with a base nearly twice as wide and a rounded tip.</div>
+  </section>
+  <section class="frame"><div class="label"><b>1</b>Sizes, Light Nekko and Dusk</div>
+    <div style="display:flex; gap:16px">
+      <div class="marks t-light"><figure><span class="mk" style="width:24px"></span>24</figure><figure><span class="mk" style="width:40px"></span>40</figure><figure><span class="mk" style="width:64px"></span>64</figure><figure class="hopnow"><span class="mk" style="width:112px"></span>112, hopping</figure></div>
+      <div class="marks t-dusk"><figure><span class="mk" style="width:24px"></span>24</figure><figure><span class="mk" style="width:40px"></span>40</figure><figure><span class="mk" style="width:64px"></span>64</figure><figure class="hopnow"><span class="mk" style="width:112px"></span>112, hopping</figure></div>
+    </div>
+    <div class="why">A cloud outline with two ears on its top lobe and caret eyes; no nose, mouth or whiskers. Line drawing in --ink on --surface, like our other line marks. It hops 4px and settles with a 1.5px echo, once every 7s (shown here every 2.2s). Reduced motion keeps it still.</div>
+  </section>
+</div>
+
+<h2 class="row-title">Welcome and the picture, with the mark</h2>
+<div class="canvas">
+  <section class="frame"><div class="label"><b>2</b>Welcome</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="welcome"></div>
+      <h1>Your way, on every device</h1>
+      <p class="lede">Your profile, computers, fleet and settings follow you to every device, end-to-end encrypted.</p>
+      <div class="stack stagger"><button class="btn btn-primary">Create your account</button><button class="btn btn-link">I already have an account</button></div>
+      <div class="foot"><span></span><div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">Laptop, desktop, phone and tablet rise in one after another, their links draw up to the mark, and packets run both ways. The lock lands on the cloud. "Your Nekko" is gone: it is about your setup.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>3</b>Welcome, Dusk</div>
+    <div class="window t-dusk"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="welcome"></div>
+      <h1>Your way, on every device</h1>
+      <p class="lede">Your profile, computers, fleet and settings follow you to every device, end-to-end encrypted.</p>
+      <div class="stack stagger"><button class="btn btn-primary">Create your account</button><button class="btn btn-link">I already have an account</button></div>
+      <div class="foot"><span></span><div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+  </section>
+
+  <section class="frame"><div class="label"><b>4</b>Account</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="account"></div>
+      <h1>Create your account</h1>
+      <p class="lede">Pick how you'd like to sign in. It's the same for signing in later.</p>
+      <div class="stack"><div class="provider">Continue with GitHub</div><div class="provider">Continue with Google</div><div class="provider">Continue with Apple</div></div>
+      <div class="foot"><button class="back">Back</button><div class="dots"><i class="done"></i><i class="on"></i><i></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">The devices drop away and the mark moves to the centre inside the prism ring. Browser, code and You're in work as in v1, with the mark in place of the pixel head.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>5</b>You're in, Dusk</div>
+    <div class="window t-dusk"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="in"></div>
+      <h1>You're in</h1>
+      <p class="lede">Signed in as philip@nekkolabs.com. A couple of quick steps and you're set.</p>
+      <div class="stack"><button class="btn btn-primary">Continue</button></div>
+      <div class="foot"><span></span><div class="dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+  </section>
+
+  <section class="frame"><div class="label"><b>6</b>Sync</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="sync"></div>
+      <h1>Save your recovery key</h1>
+      <p class="lede">Sync is on. If you ever lose every device, this key is the only way back to your chats. We can't reset it.</p>
+      <div class="stack"><button class="btn btn-primary">Continue</button></div>
+    </div></div></div>
+    <div class="why">Every device sends locked packets up into the cloud; the lock on the mark is a little larger.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>7</b>All set</div>
+    <div class="window t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene" data-scene="done"></div>
+      <h1>You're all set</h1>
+      <p class="lede">Your setup follows you now. Sign in on your phone to bring it along.</p>
+      <div class="stack"><button class="btn btn-primary">Start using Nekko Agent</button></div>
+    </div></div></div>
+    <div class="why">Every link turns solid green and each device gets its dot.</div>
+  </section>
+</div>
+
+<h2 class="row-title">Choose a plan: three main points, then the full list</h2>
+<div class="canvas">
+  <section class="frame"><div class="label"><b>8</b>Plans, collapsed</div>
+    <div class="window wide t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw is-wide">
+      <button class="cw-close">✕</button>
+      <div class="cw-scene is-compact" data-scene="plan"></div>
+      <h1>Choose a plan</h1>
+      <p class="lede">Everything on this computer stays free. Pro brings your way to every device.</p>
+      <div class="pcols stagger" data-plans></div>
+      <button class="more"><span>Show the full list</span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      <div class="stack"><button class="btn btn-primary">Continue with Pro</button></div>
+      <div class="foot"><span></span><div class="dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i></div><span></span></div>
+    </div></div></div>
+    <div class="why">The window widens to 640 for this step (width and height ease, 260ms). Three plans side by side, each a choice: name, price, a line, three main points. The chosen one gets the accent wash. Enterprise is the old Team plan (still "team" inside); it says Talk to us and its button is Email us.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>9</b>Plans, the full list open</div>
+    <div class="window wide tall t-light"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw is-wide">
+      <button class="cw-close">✕</button>
+      <h1 style="margin-top:20px">Choose a plan</h1>
+      <div class="pcols" data-plans></div>
+      <button class="more open"><span>Hide the full list</span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      <div class="fold" data-fold><div><div class="ptable" data-table></div></div></div>
+      <div class="stack"><button class="btn btn-primary">Continue with Pro</button></div>
+    </div></div></div>
+    <div class="why">Show the full list opens below (rows ease from 0fr to 1fr, 320ms) and its rows rise in one after another; the chevron turns over. The chosen plan's column carries a faint wash. Not-yet-shipped rows say Soon in Petrol. On a long list the window scrolls.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>10</b>Plans at 380px, Dusk</div>
+    <div class="window narrow t-dusk"><div class="cw-backdrop" style="padding:10px"><div class="cw">
+      <h1 style="margin-top:20px">Choose a plan</h1>
+      <div class="pcols" data-plans style="grid-template-columns:1fr"></div>
+      <button class="more"><span>Show the full list</span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+    </div></div></div>
+    <div class="why">Narrower than 560, the plans stack.</div>
+  </section>
+</div>
+
+<h2 class="row-title">Paying: methods by country, device and account</h2>
+<div class="canvas" id="payments"></div>
+<div class="canvas" style="margin-top:24px"><div class="motion" style="width:760px"><table>
+  <tr><td>Where the list comes from</td><td>Stripe Checkout in subscription mode shows only methods that can renew by themselves, for the payer's country and currency, that our Stripe account has switched on. This screen mirrors that so people know before the browser opens. Assumes the Stripe account belongs to Nekko Labs LLC (US): PayPal, Revolut Pay, Bacs and BECS need an EU, UK or AU account and are left out.</td><td></td></tr>
+  <tr><td>Left out on purpose</td><td>Konbini, bank transfer and Bancontact only pay one invoice at a time; Afterpay, Affirm, PayPay and Samsung Pay don't do subscriptions; Canadian pre-authorized debit isn't in Checkout's subscription mode.</td><td></td></tr>
+  <tr><td>Device</td><td>Apple Pay appears on a Mac, iPhone or iPad (it finishes in Safari with a card in Wallet); Google Pay elsewhere (Chrome with a saved card). Never in India for Google Pay.</td><td></td></tr>
+  <tr><td>Account</td><td>Anyone can buy Pro for themselves. Changing an organization's plan is for its owners and admins; Enterprise can also pay by invoice and bank transfer.</td><td></td></tr>
+</table></div></div>
+
+<h2 class="row-title">The pricing page on nekkoagent.com (hidden until billing is on for everyone)</h2>
+<div class="canvas">
+  <section class="frame"><div class="label"><b>P1</b>Desktop, Light, the full list open</div>
+    <div class="window t-light" style="width:1040px;height:1180px"><div class="site">
+      <nav><b>NEKKO AGENT</b><span>About us</span><span>Docs</span><span>What's new</span></nav>
+      <div class="hero"><h2>Free on your computer. Pro everywhere else.</h2><p>Nekko Agent is free and open source. Nekko Cloud brings your way of working to every device.</p><div class="notsale">Nekko Cloud plans aren't on sale yet. During the beta, Nekko Agent is free.</div></div>
+      <div class="tiers" data-tiers></div>
+      <div class="compare"><button class="more open"><span>Hide the full comparison</span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button><div class="fold open"><div><div class="ptable" data-table="site"></div></div></div></div>
+      <div class="payline"><span>Pay with</span><span class="chip">Cards</span><span class="chip">Apple Pay</span><span class="chip">Google Pay</span><span class="chip">Link</span><span class="chip">Bank debit</span><span class="chip">PayPal</span><span>and local options, depending on where you are</span></div>
+      <div class="faq">
+        <div><b>Is the app really free?</b><span>Yes. Everything Nekko Agent does on your computer is free and open source, for good.</span></div>
+        <div><b>Can Nekko Labs read my chats?</b><span>No. They're encrypted on your devices before they're uploaded, on every plan.</span></div>
+        <div><b>How do I pay?</b><span>In the app, through Stripe. Nekko Labs never sees your card. Cancel any time in Settings.</span></div>
+        <div><b>What about my company?</b><span>Enterprise adds seats, single sign-on and one invoice. Email hello@nekkoagent.com.</span></div>
+      </div>
+    </div></div>
+    <div class="why">Shares the plan list with the app. Prices come from Stripe through the API; until billing is on for everyone the tiers show without prices and the banner says plans aren't on sale. Stays noindex and unlinked.</div>
+  </section>
+
+  <section class="frame"><div class="label"><b>P2</b>Phone, Dusk</div>
+    <div class="window t-dusk" style="width:390px;height:1180px"><div class="site mobile">
+      <nav><b>NEKKO AGENT</b><span>Docs</span></nav>
+      <div class="hero"><h2>Free on your computer. Pro everywhere else.</h2><p>Nekko Agent is free and open source. Nekko Cloud brings your way of working to every device.</p></div>
+      <div class="tiers" data-tiers></div>
+      <div class="compare" style="margin:20px 16px 0"><button class="more"><span>Show the full comparison</span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button></div>
+    </div></div>
+  </section>
+</div>
+
+<h2 class="row-title">Motion</h2>
+<div class="canvas"><div class="motion"><table>
+  <tr><td>The mark</td><td>Hops 4px and settles with a 1.5px echo, every 7s. An exception to "nothing bounces", asked for by Philip; reduced motion keeps it still.</td><td>~1s in 7s</td></tr>
+  <tr><td>Picture morph</td><td>Devices rise in one after another, links draw, packets loop both ways; the mark slides between the top and the centre</td><td>500 to 700ms</td></tr>
+  <tr><td>Plan step</td><td>Window width and height ease to the wider layout</td><td>260ms</td></tr>
+  <tr><td>Full list</td><td>Rows ease open from 0fr to 1fr, rows rise in 20ms apart, chevron turns</td><td>320ms</td></tr>
+  <tr><td>Payment method</td><td>Tab pill slides, the preview below crossfades</td><td>200ms</td></tr>
+</table></div></div>
+
+<script>
+  const CHECK = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const TICK = '<svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 5.2l2 2 4-4.4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const CATALOG = {"plans":[{"id":"free","name":"Free","price":"free","tagline":"Everything on your computer","points":["The whole app on your computer","Local models and your own accounts","Your phone on your own network"]},{"id":"pro","name":"Pro","price":"stripe","tagline":"Your way, on every device","points":["Chats, Library and settings on every device","Your computers as one fleet","Nekko Cloud machines for your phone"]},{"id":"team","name":"Enterprise","price":"contact","tagline":"Pro for your whole company","points":["Pro for everyone, with seats","Single sign-on and admin controls","Audit log and one invoice"]}],"groups":[{"name":"On your computer","rows":[{"feature":"Desktop app, Local Web UI and Docker","free":true,"pro":true,"team":true},{"feature":"Local models, set up in one click","free":true,"pro":true,"team":true},{"feature":"Your own provider accounts and keys","free":true,"pro":true,"team":true},{"feature":"Automations and workflows","free":true,"pro":true,"team":true},{"feature":"Privacy Shield","free":true,"pro":true,"team":true}]},{"name":"Your phone","rows":[{"feature":"Pair your phone on your own network","free":true,"pro":true,"team":true},{"feature":"Reach your computers from anywhere","free":"Beta","pro":true,"team":true},{"feature":"Nekko Cloud machines","free":false,"pro":true,"team":true}]},{"name":"Nekko Cloud","rows":[{"feature":"Your profile and sign-in","free":true,"pro":true,"team":true},{"feature":"Hardware keys and remote sign-out","free":true,"pro":true,"team":true},{"feature":"Chats on every device, end-to-end encrypted","free":false,"pro":true,"team":true},{"feature":"Settings and setup on every device","free":false,"pro":true,"team":true},{"feature":"Library on every device","free":false,"pro":true,"team":true,"soon":true},{"feature":"Your computers as one fleet","free":false,"pro":true,"team":true},{"feature":"Encrypted storage","free":false,"pro":"5 GB","team":"20 GB"},{"feature":"Zero data retention mode","free":false,"pro":true,"team":true}]},{"name":"Teams and companies","rows":[{"feature":"Organizations: share computers with a team","free":false,"pro":true,"team":true},{"feature":"Seats and one invoice","free":false,"pro":false,"team":true},{"feature":"Single sign-on","free":false,"pro":false,"team":true,"soon":true},{"feature":"Admin controls and audit log","free":false,"pro":false,"team":true,"soon":true},{"feature":"Priority support","free":false,"pro":false,"team":true}]}]};
+  const PRICE = { free: ['$0', ''], stripe: ['$12', 'a month'], contact: ['Talk to us', ''] };
+  function plans(host) {
+    host.innerHTML = CATALOG.plans.map((p) => `<div class="pcol${p.id === 'pro' ? ' sel' : ''}"><div class="top"><span class="tick">${p.id === 'pro' ? TICK : ''}</span><span class="name">${p.name}</span></div>
+      <div class="price">${PRICE[p.price][0]} <small>${PRICE[p.price][1]}</small></div><div class="tag">${p.tagline}</div><ul>${p.points.map((x) => `<li>${CHECK}<span>${x}</span></li>`).join('')}</ul></div>`).join('');
+  }
+  function tiers(host) {
+    host.innerHTML = CATALOG.plans.map((p) => `<div class="tier${p.id === 'pro' ? ' hl' : ''}"><h3>${p.name}</h3><div class="p">${PRICE[p.price][0]} <small>${PRICE[p.price][1]}</small></div><div class="t">${p.tagline}</div>
+      <ul>${p.points.map((x) => `<li>${CHECK}<span>${x}</span></li>`).join('')}</ul><div class="cta">${p.id === 'free' ? 'Download' : p.id === 'pro' ? 'Get Pro in the app' : 'Email us'}</div></div>`).join('');
+  }
+  function table(host) {
+    const cell = (v, sel) => `<span class="${sel ? 'col-sel ' : ''}${v === false ? 'no' : typeof v === 'string' ? 'val' : ''}">${v === true ? CHECK : v === false ? '–' : v}</span>`;
+    let i = 0;
+    const rows = CATALOG.groups.map((g) => `<div class="g" style="animation-delay:${(i++) * 20}ms"><span>${g.name}</span><span></span><span class="col-sel"></span><span></span></div>` + g.rows.map((r) => `<div class="r" style="animation-delay:${(i++) * 20}ms"><span>${r.feature}${r.soon ? '<span class="soon">Soon</span>' : ''}</span>${cell(r.free)}${cell(r.pro, true)}${cell(r.team)}</div>`).join('')).join('');
+    host.innerHTML = `<div class="hd"><span></span><span>Free</span><span class="on">Pro</span><span>Enterprise</span></div>` + rows;
+  }
+  function fill() {
+    payments();
+    document.querySelectorAll('.mk').forEach((n) => { n.innerHTML = document.getElementById('mark').innerHTML; n.firstElementChild.style.width = n.style.width; n.firstElementChild.style.display = 'block'; });
+    const tpl = document.getElementById('scene');
+    document.querySelectorAll('[data-scene]').forEach((host, i) => {
+      host.innerHTML = tpl.innerHTML.replaceAll('id="g"', `id="g${i}"`).replaceAll('id="p"', `id="p${i}"`).replaceAll('url(#g)', `url(#g${i})`).replaceAll('url(#p)', `url(#p${i})`);
+      const svg = host.firstElementChild; const scene = host.dataset.scene;
+      svg.setAttribute('class', `s s-${['welcome', 'done', 'sync'].includes(scene) ? scene : 'account'}`);
+      requestAnimationFrame(() => requestAnimationFrame(() => svg.setAttribute('class', `s s-${scene}`)));
+    });
+    document.querySelectorAll('[data-plans]').forEach(plans);
+    document.querySelectorAll('[data-tiers]').forEach(tiers);
+    document.querySelectorAll('[data-table]').forEach(table);
+    setTimeout(() => document.querySelectorAll('[data-fold]').forEach((f) => f.classList.add('open')), 400);
+  }
+  /* ---- Payment methods: the data the app will carry (packages/shared), and frames built from it ---- */
+  const G = {
+    card: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2 7.5h14M5 11h3"/></svg>',
+    wallet: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="2" width="8" height="14" rx="2"/><path d="M7.5 9.2l1.2 1.2 2.2-2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    link: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M10 2.5L4.5 10H9l-1 5.5L13.5 8H9z"/></svg>',
+    bank: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 7L9 3l6.5 4zM4 8v5M7 8v5M11 8v5M14 8v5M2.5 15h13"/></svg>',
+    app: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="13" height="13" rx="3.5"/><path d="M7 11l4-4M7.5 7H11v3.5"/></svg>',
+    qr: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="5" height="5" rx="1"/><rect x="10.5" y="2.5" width="5" height="5" rx="1"/><rect x="2.5" y="10.5" width="5" height="5" rx="1"/><path d="M10.5 10.5h2v2M15.5 10.5v5h-5"/></svg>',
+    invoice: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 2.5h7l3 3v10H4z"/><path d="M6.5 8h5M6.5 11h5" stroke-linecap="round"/></svg>',
+    more: '<svg viewBox="0 0 18 18" fill="currentColor"><circle cx="4.5" cy="9" r="1.3"/><circle cx="9" cy="9" r="1.3"/><circle cx="13.5" cy="9" r="1.3"/></svg>',
+  };
+  const EEA = ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','IS','LI','NO'];
+  const EU_UK_MERCHANT = [...EEA, 'CH', 'GB'];
+  const METHODS = [
+    { id: 'card', name: 'Card', kind: 'card' },
+    { id: 'kr_card', name: 'Korean card', kind: 'card', countries: ['KR'] },
+    { id: 'apple_pay', name: 'Apple Pay', kind: 'wallet', device: 'apple', notIn: ['IN'] },
+    { id: 'google_pay', name: 'Google Pay', kind: 'wallet', device: 'other', notIn: ['IN'] },
+    { id: 'link', name: 'Link', kind: 'link', notIn: ['IN'] },
+    { id: 'us_bank_account', name: 'Bank (ACH)', kind: 'bank', countries: ['US'] },
+    { id: 'sepa_debit', name: 'SEPA debit', kind: 'bank', countries: EEA },
+    { id: 'bacs_debit', name: 'Bacs debit', kind: 'bank', countries: ['GB'], merchant: ['GB'] },
+    { id: 'au_becs_debit', name: 'BECS debit', kind: 'bank', countries: ['AU'], merchant: ['AU'] },
+    { id: 'ideal', name: 'iDEAL', kind: 'app', countries: ['NL'], handoff: "your bank's iDEAL page. Later months are SEPA debits from the same account" },
+    { id: 'pix', name: 'Pix', kind: 'qr', countries: ['BR'], handoff: 'your bank app, to approve Pix Automático' },
+    { id: 'upi', name: 'UPI', kind: 'qr', countries: ['IN'], handoff: 'your UPI app, to approve AutoPay with your PIN' },
+    { id: 'kakao_pay', name: 'Kakao Pay', kind: 'app', countries: ['KR'], handoff: 'Kakao Pay' },
+    { id: 'naver_pay', name: 'Naver Pay', kind: 'app', countries: ['KR'], handoff: 'Naver Pay' },
+    { id: 'cashapp', name: 'Cash App Pay', kind: 'app', countries: ['US'], handoff: 'Cash App' },
+    { id: 'amazon_pay', name: 'Amazon Pay', kind: 'app', countries: ['US', 'GB', 'DE', 'FR', 'NL', 'BE', 'AT', 'IE', 'IT', 'ES', 'LU', 'PT', 'SE', 'DK', 'CH', 'HU', 'CY'], handoff: 'Amazon' },
+    { id: 'paypal', name: 'PayPal', kind: 'app', countries: [...EEA, 'GB', 'CH'], merchant: EU_UK_MERCHANT, handoff: 'PayPal' },
+    { id: 'revolut_pay', name: 'Revolut Pay', kind: 'app', countries: [...EEA, 'GB'], merchant: EU_UK_MERCHANT, handoff: 'Revolut' },
+    { id: 'klarna', name: 'Klarna', kind: 'app', countries: ['US', 'CA', 'AU', 'GB', 'DE', 'FR', 'NL', 'BE', 'AT', 'FI', 'IE', 'IT', 'ES', 'SE', 'DK', 'NO', 'PL', 'PT', 'CH'], handoff: 'Klarna, paying in full each month' },
+    { id: 'invoice', name: 'Invoice', kind: 'invoice', enterprise: true },
+  ];
+  const NOTES = { IN: 'Your bank tells you a day before each payment, as Indian rules require.', BR: 'Your bank tells you a few days before each payment.' };
+  const COUNTRY = { JP: 'Japan', US: 'the United States', DE: 'Germany', NL: 'the Netherlands', IN: 'India', KR: 'South Korea', GB: 'the United Kingdom', BR: 'Brazil' };
+  const MERCHANT = 'US';
+  function methodsFor({ country, device, enterprise = false }) {
+    return METHODS.filter((m) => (!m.countries || m.countries.includes(country)) && !(m.notIn || []).includes(country)
+      && (!m.merchant || m.merchant.includes(MERCHANT)) && (!m.device || m.device === device) && (!m.enterprise || enterprise)
+      && !(m.id === 'card' && country === 'KR' && false));
+  }
+  function preview(m, ctx) {
+    if (m.kind === 'card') {
+      const num = ctx.country === 'JP' ? '3566 0020 2036 0505' : '4242 4242 4242 4242';
+      return `<div class="mini-card"><div class="r1"><span>Test card</span><span>${m.name === 'Korean card' ? 'Korean card' : ctx.country === 'JP' ? 'JCB' : 'Visa'}</span></div><div class="chip"></div><div class="num">${[...num].map((c, i) => `<i style="animation-delay:${0.3 + i * 0.028}s">${c === ' ' ? '&nbsp;' : c}</i>`).join('')}</div><div class="r3"><span>philip@nekkolabs.com</span><span>12/34</span></div></div>`;
+    }
+    if (m.kind === 'wallet') return `<div class="sheet"><div class="h"><span>${m.name}</span><span>${ctx.price}</span></div><div class="l"><span>Nekko Cloud Pro</span><span>every month</span></div><div class="l"><span>Card</span><span>•••• 4242</span></div><div class="confirm">${m.id === 'apple_pay' ? 'Confirm with Touch ID' : 'Continue'}</div></div>`;
+    if (m.kind === 'link') return `<div class="mandate"><div class="acct">${G.link} philip@nekkolabs.com</div>Your card and details saved with Link fill in for you. Visa •••• 4242.</div>`;
+    if (m.kind === 'bank') {
+      const acct = { us_bank_account: 'Checking •••• 6789', sepa_debit: 'DE89 •••• •••• 3000', bacs_debit: '10-88-00 •••• 2345', au_becs_debit: '000-000 •••• 3456' }[m.id];
+      return `<div class="mandate"><div class="acct">${G.bank} ${acct}</div>You allow Nekko Labs to take ${ctx.price.replace(/ a month$/, '')} from this account each month for Nekko Cloud Pro, until you cancel. Your bank can refund a payment you didn't expect.</div>`;
+    }
+    if (m.kind === 'invoice') return `<div class="mandate"><div class="acct">${G.invoice} Pay by invoice</div>We email an invoice each month to your billing contact. Pay by bank transfer within 30 days. Owners and admins of Acme only.</div>`;
+    return `<div class="hand"><div class="box">${G[m.kind]}</div><svg class="arrow" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 9h11M10 5l4 4-4 4"/></svg><div>You'll finish in ${m.handoff}.</div></div>`;
+  }
+  function payFrame(n, label, why, ctx) {
+    const list = methodsFor(ctx);
+    const sel = list.find((m) => m.id === ctx.select) || list[0];
+    // The chosen method is always on show: it takes the third tile when it would sit behind "more".
+    let shown = ctx.all || list.length <= 4 ? list : list.slice(0, 3);
+    if (!shown.includes(sel)) shown = [...shown.slice(0, 2), sel];
+    const rest = list.length - shown.length;
+    const tiles = shown.map((m) => `<div class="tile${m === sel ? ' sel' : ''}">${G[m.kind]}<span>${m.name}</span></div>`).join('') + (rest > 0 ? `<div class="tile tile-more">${G.more}<span>${rest} more</span></div>` : '');
+    const busy = ctx.state === 'paying';
+    const body = ctx.blocked
+      ? `<h1>Ask an admin</h1><p class="lede">Only owners and admins of Acme can change its plan. Sam Lee and 1 other can.</p><div class="blocked"><button class="btn btn-primary" style="width:auto;padding:0 14px;display:inline-flex">Email Sam</button></div>`
+      : `<div class="sum"><b>Nekko Cloud ${ctx.enterprise ? 'Enterprise' : 'Pro'}</b><span>${ctx.price}</span></div>
+         <div class="where">Paying from <u>${COUNTRY[ctx.country]}</u> on <u>${ctx.device === 'apple' ? 'a Mac' : 'Windows'}</u> · Change</div>
+         <div class="tiles">${tiles}</div><div class="pv">${preview(sel, ctx)}</div>${NOTES[ctx.country] ? `<div class="note">${NOTES[ctx.country]}</div>` : ''}
+         <div class="stack" style="margin-top:14px"><button class="btn btn-primary"${busy ? ' style="opacity:.75"' : ''}>${busy ? 'Paying…' : sel.kind === 'card' || sel.kind === 'bank' || sel.kind === 'link' || sel.kind === 'invoice' ? 'Pay now' : 'Continue to ' + sel.name}</button></div>
+         <div class="test">Test mode: nothing is charged</div>`;
+    return `<section class="frame"><div class="label"><b>${n}</b>${label}</div><div class="window t-${ctx.theme || 'light'}${ctx.tall ? ' tall' : ''}"><div class="app-behind"><i style="width:40%"></i><i></i></div><div class="cw-backdrop"><div class="cw"><button class="cw-close">✕</button>${body}
+      <div class="foot"><button class="back">${ctx.blocked ? '' : 'Back'}</button><div class="dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i></div><span></span></div></div></div></div><div class="why">${why}</div></section>`;
+  }
+  function payments() {
+    const usd = '$12 a month', jpy = '¥1,800 a month', eur = '€11 a month', inr = '₹999 a month', krw = '₩16,000 a month';
+    document.getElementById('payments').innerHTML = [
+      payFrame('11', 'Japan, on a Mac: card', 'Detected from the time zone and language; Change picks another country or device. In Japan the test card is a JCB. Konbini and bank transfer pay one invoice at a time, so they are not here. "Pay now", not "Pay $12".', { country: 'JP', device: 'apple', price: jpy, select: 'card' }),
+      payFrame('12', 'United States, on Windows: Google Pay', 'Apple Pay is replaced by Google Pay off Apple devices. Bank (ACH), Cash App Pay, Amazon Pay and Klarna are behind 4 more. Wallets say Continue to Google Pay: the browser finishes it.', { country: 'US', device: 'other', price: usd, select: 'google_pay', extra: true }),
+      payFrame('13', 'Germany: SEPA debit', 'Bank debits show the mandate in plain words, with a test account. PayPal and Revolut Pay would join here if the Stripe account were in the EU or UK.', { country: 'DE', device: 'apple', price: eur, select: 'sepa_debit' }),
+      payFrame('14', 'Netherlands: iDEAL', 'Paying apps hand off with a nudge of the arrow. iDEAL pays the first month and sets up SEPA debits for the rest.', { country: 'NL', device: 'apple', price: eur, select: 'ideal' }),
+      payFrame('15', 'India: UPI', 'Indian rules: a notice a day before each charge, and UPI AutoPay up to ₹15,000 a payment. No Google Pay or Link in India.', { country: 'IN', device: 'other', price: inr, select: 'upi' }),
+      payFrame('16', 'South Korea: Kakao Pay', 'Korean cards, Kakao Pay and Naver Pay.', { country: 'KR', device: 'other', price: krw, select: 'kakao_pay' }),
+      payFrame('17', 'United States, every method, Dusk', 'Opening "more" lays every tile out in the grid (rows rise in, 20ms apart).', { country: 'US', device: 'apple', price: usd, select: 'us_bank_account', all: true, theme: 'dusk' }),
+      payFrame('18', 'Paying', 'Then the green check and "You\'re on Pro" as in v1.', { country: 'JP', device: 'apple', price: jpy, select: 'card', state: 'paying' }),
+      payFrame('19', 'An organization member', 'Upgrading an organization is for its owners and admins: a member is told who can, instead of a checkout.', { blocked: true }),
+      payFrame('20', 'Enterprise, an owner or admin', 'Enterprise adds Invoice: an emailed invoice paid by bank transfer within 30 days.', { country: 'US', device: 'apple', price: 'Per seat', select: 'invoice', all: true, enterprise: true }),
+    ].join('');
+  }
+  function replay() { document.querySelectorAll('.window, .marks').forEach((w) => w.replaceWith(w.cloneNode(true))); fill(); }
+  fill();
+</script>
+</body>
+</html>

@@ -19,7 +19,7 @@ Desktop and Local Web UI Mode changes now persist changed fields as defaults for
 
 ### Composer folders (#2339)
 
-Implemented: folders are outside Mode. Every new and active text-agent composer shows one selected-folder picker immediately right of **+**, in Simple and Detailed, even with details collapsed. The picker keeps primary/supporting folders, adding, default stars, per-chat removal and saved-access revocation distinct. While a reply runs the picker remains visible but disabled. Folders remain excluded from saved modes. Automated and visual verification are recorded with the PR; packaged macOS/Linux and native mobile are not covered by this renderer change.
+Implemented: folders are outside Mode. Every new and active text-agent composer shows one selected-folder picker immediately right of **+**, in Simple and Detailed, even with details collapsed. The picker keeps primary/supporting folders, adding, default stars, per-chat removal and saved-access revocation distinct. While a reply runs the picker remains visible but disabled. Folders remain excluded from saved modes. `[updated 2026-11-22]` The picker moved off the bar to the box's bottom row, before Mode (Philip: "move the folder down to the bottom row"); the bar keeps +, the model chip, mic and Send. Below 520px it shows its icon only. Automated and visual verification are recorded with the PR; packaged macOS/Linux and native mobile are not covered by this renderer change.
 
 ### Mode shows its options as icons; no separate approvals chip (2026-11-22)
 

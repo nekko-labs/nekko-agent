@@ -246,3 +246,208 @@ mod with_hypergate_tests {
         );
     }
 }
+
+// ── Update migration: bring a saved gateway entry forward ─────────────────────
+//
+// An install that paired with Hypergate before the renames can hold an entry
+// named after the old product ("NekkoMCP gateway") with no token (from before
+// scoped agent tokens), and Hypergate may know this app as "Kotrain". Such an
+// entry reaches nothing: the gateway refuses it. At start the daemon renames
+// the entry and re-claims this install's own agent token, without asking and
+// without minting: a user who removed the agent in Hypergate stays removed.
+
+/// Names the gateway entry was saved under before it was "Hypergate".
+const LEGACY_ENTRY_NAMES: &[&str] = &["NekkoMCP gateway", "NekkoMCP", "Nekko MCP gateway", "Nekko MCP"];
+
+/// The keys Hypergate may know this app by: today's first, then its earlier names.
+const AGENT_KEYS: &[&str] = &["nekko-agent", "kotrain", "agent-nekko", "nekkos", "open-paw"];
+
+/// This install's existing agent token, found under any name it has had, or
+/// `None`. Never creates an agent and never falls back to the master gateway
+/// token. Stops at an ambiguous key rather than pick between two agents.
+async fn reclaim(base: &str) -> Option<Value> {
+    let http = client();
+    let deadline = Instant::now() + TOKEN_BUDGET;
+    for key in AGENT_KEYS {
+        let req = http.post(format!("{base}/api/clients/resolve")).json(&json!({ "key": key, "create": false }));
+        match json_within(req, deadline).await {
+            Some((true, agent)) if nekko_js::truthy(agent.get("token")) => return agent.get("token").cloned(),
+            Some((_, answer)) if answer.get("error").and_then(Value::as_str) == Some("ambiguous") => return None,
+            Some(_) => continue,
+            None => return None,
+        }
+    }
+    None
+}
+
+/// The saved entry brought forward, or `None` when nothing changes: a legacy
+/// name becomes "Hypergate" (a name the user chose is kept), and the gateway's
+/// current URL and this install's token replace stale ones. `enabled` and any
+/// other field are left as the user had them.
+pub fn heal_entry(entry: &Value, gateway_url: Option<&Value>, token: Option<&Value>) -> Option<Value> {
+    let mut out = entry.as_object()?.clone();
+    let mut changed = false;
+    if out.get("name").and_then(Value::as_str).is_some_and(|n| LEGACY_ENTRY_NAMES.contains(&n)) {
+        out.insert("name".into(), json!("Hypergate"));
+        changed = true;
+    }
+    for (key, value) in [("url", gateway_url), ("token", token)] {
+        if let Some(v) = value.filter(|v| nekko_js::truthy(Some(v)))
+            && out.get(key) != Some(v)
+        {
+            out.insert(key.into(), v.clone());
+            changed = true;
+        }
+    }
+    changed.then_some(Value::Object(out))
+}
+
+/// What one pass of [`heal_saved`] found.
+#[derive(Debug, PartialEq)]
+pub enum Healed {
+    /// No gateway entry saved: nothing to do, now or later.
+    NoEntry,
+    /// The entry is current (or was just brought forward).
+    Done,
+    /// Hypergate did not answer; worth trying again once it is up.
+    NotAnswering,
+}
+
+/// One pass of the update migration over the saved gateway entry.
+pub async fn heal_saved(ctx: &crate::routes::Ctx) -> Healed {
+    let settings = crate::settings::current(ctx).await;
+    let Some(list) = settings.get("mcpServers").and_then(Value::as_array).cloned() else { return Healed::NoEntry };
+    let Some(idx) = list.iter().position(|s| s.get("id").and_then(Value::as_str) == Some(ENTRY_ID)) else {
+        return Healed::NoEntry;
+    };
+    let port =
+        list[idx].get("url").and_then(Value::as_str).and_then(|u| reqwest::Url::parse(u).ok()).and_then(|u| u.port());
+    let base = base(port, |k| std::env::var(k).ok());
+    let info = detect(&base).await;
+    let (url, token) = match &info {
+        Some(info) => (info.get("url").cloned(), reclaim(&base).await),
+        None => (None, None),
+    };
+    let had_token = nekko_js::truthy(list[idx].get("token"));
+    if let Some(healed) = heal_entry(&list[idx], url.as_ref(), token.as_ref()) {
+        let mut next = list.clone();
+        next[idx] = healed;
+        match crate::settings::update(ctx, json!({ "mcpServers": next })).await {
+            Ok(saved) => {
+                eprintln!("[migrate] brought the saved Hypergate gateway entry forward");
+                ctx.mcp.sync(saved.get("mcpServers").unwrap_or(&json!([]))).await;
+            }
+            Err(e) => eprintln!("[migrate] could not update the Hypergate entry: {e}"),
+        }
+    }
+    // A tokenless entry is only finished once Hypergate has answered.
+    if info.is_none() && !had_token { Healed::NotAnswering } else { Healed::Done }
+}
+
+/// How often, and how many times, start-up retries while Hypergate is not up
+/// yet (both start at login, in no particular order).
+const HEAL_EVERY: Duration = Duration::from_secs(30);
+const HEAL_TRIES: u32 = 20;
+
+/// The update migration, run once at daemon start (boot.rs).
+pub fn start_migration(ctx: &crate::routes::Ctx) {
+    let ctx = ctx.clone();
+    tokio::spawn(async move {
+        for _ in 0..HEAL_TRIES {
+            if heal_saved(&ctx).await != Healed::NotAnswering {
+                return;
+            }
+            tokio::time::sleep(HEAL_EVERY).await;
+        }
+    });
+}
+
+#[cfg(test)]
+mod heal_tests {
+    use super::*;
+
+    #[test]
+    fn renames_a_legacy_entry_and_fills_in_the_token_keeping_the_rest() {
+        let old = json!({ "id": "hypergate", "name": "NekkoMCP gateway", "url": "http://localhost:7777/mcp", "enabled": false, "command": "", "args": [] });
+        let healed = heal_entry(&old, Some(&json!("http://localhost:7777/mcp")), Some(&json!("t-agent"))).unwrap();
+        assert_eq!(healed["name"], "Hypergate");
+        assert_eq!(healed["token"], "t-agent");
+        assert_eq!(healed["enabled"], false, "the user's switch is theirs");
+        assert_eq!(healed["url"], "http://localhost:7777/mcp");
+    }
+
+    #[test]
+    fn keeps_a_name_the_user_chose_and_changes_nothing_when_current() {
+        let mine = json!({ "id": "hypergate", "name": "My gateway", "url": "http://localhost:7777/mcp", "token": "t1", "enabled": true });
+        assert_eq!(heal_entry(&mine, Some(&json!("http://localhost:7777/mcp")), Some(&json!("t1"))), None);
+        // Hypergate not answering: no URL or token to offer, nothing to change.
+        assert_eq!(heal_entry(&mine, None, None), None);
+        // Only the name can be brought forward without Hypergate.
+        let old = json!({ "id": "hypergate", "name": "NekkoMCP", "url": "http://localhost:7777/mcp" });
+        assert_eq!(heal_entry(&old, None, None).unwrap()["name"], "Hypergate");
+    }
+
+    #[test]
+    fn follows_a_moved_gateway_and_a_rotated_token() {
+        let saved =
+            json!({ "id": "hypergate", "name": "Hypergate", "url": "http://localhost:7777/mcp", "token": "old" });
+        let healed = heal_entry(&saved, Some(&json!("http://localhost:7799/mcp")), Some(&json!("new"))).unwrap();
+        assert_eq!(
+            (healed["url"].as_str(), healed["token"].as_str()),
+            (Some("http://localhost:7799/mcp"), Some("new"))
+        );
+    }
+
+    /// A Hypergate that knows this app only as "Kotrain" (one that predates
+    /// its own rename migration) still hands back the existing token, and
+    /// nothing is created along the way.
+    #[tokio::test]
+    async fn reclaims_the_token_under_an_earlier_name_without_creating_one() {
+        use axum::{Json, Router, routing::post};
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+        let log = seen.clone();
+        let app = Router::new().route(
+            "/api/clients/resolve",
+            post(move |Json(body): Json<Value>| {
+                let log = log.clone();
+                async move {
+                    log.lock().unwrap().push(body.clone());
+                    if body["key"] == "kotrain" {
+                        (
+                            axum::http::StatusCode::OK,
+                            Json(json!({ "id": "kotrain-0fd8", "name": "Kotrain", "token": "t-old-agent" })),
+                        )
+                    } else {
+                        (axum::http::StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" })))
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let token = reclaim(&format!("http://127.0.0.1:{port}")).await;
+        server.abort();
+        assert_eq!(token, Some(json!("t-old-agent")));
+        let asked = seen.lock().unwrap().clone();
+        assert_eq!(asked.iter().map(|b| b["key"].as_str().unwrap()).collect::<Vec<_>>(), ["nekko-agent", "kotrain"]);
+        assert!(asked.iter().all(|b| b["create"] == false), "a migration never mints an agent");
+    }
+
+    #[tokio::test]
+    async fn stops_at_an_ambiguous_key() {
+        use axum::{Json, Router, routing::post};
+        let app = Router::new().route(
+            "/api/clients/resolve",
+            post(|| async {
+                (axum::http::StatusCode::CONFLICT, Json(json!({ "error": "ambiguous", "ids": ["a", "b"] })))
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let token = reclaim(&format!("http://127.0.0.1:{port}")).await;
+        server.abort();
+        assert_eq!(token, None);
+    }
+}
