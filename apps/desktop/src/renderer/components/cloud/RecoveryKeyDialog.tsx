@@ -9,6 +9,23 @@ import './cloud.css';
  * device is lost: Nekko Labs doesn't have it and can't reset it.
  */
 export function RecoveryKeyDialog({ recoveryKey, email, onDone }: { recoveryKey: string | null; email: string; onDone: () => void }) {
+  return (
+    <div className="cloud-signin-backdrop" role="presentation">
+      <div className="cloud-signin" style={{ width: 'min(460px, 100%)' }} role="dialog" aria-modal="true" aria-labelledby="recovery-title" data-testid="recovery-dialog">
+        <RecoveryKeySteps recoveryKey={recoveryKey} email={email} onDone={onDone} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Show the key, then have it typed back. Used by the dialog above and inline
+ * by the Nekko Cloud walkthrough's Sync step, whose picture already explains
+ * sync, so there the lede opens with "Sync is on".
+ */
+export function RecoveryKeySteps({ recoveryKey, email, onDone, inWalkthrough = false }: {
+  recoveryKey: string | null; email: string; onDone: (confirmed: boolean) => void; inWalkthrough?: boolean;
+}) {
   const [step, setStep] = useState<'show' | 'confirm'>(recoveryKey ? 'show' : 'confirm');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -29,7 +46,7 @@ export function RecoveryKeyDialog({ recoveryKey, email, onDone }: { recoveryKey:
     setError('');
     try {
       await window.nekko.syncConfirmRecoveryKey(typed);
-      onDone();
+      onDone(true);
     } catch (e) {
       setError(cloudError(e));
     } finally {
@@ -38,14 +55,16 @@ export function RecoveryKeyDialog({ recoveryKey, email, onDone }: { recoveryKey:
   };
 
   return (
-    <div className="cloud-signin-backdrop" role="presentation">
-      <div className="cloud-signin" style={{ width: 'min(460px, 100%)' }} role="dialog" aria-modal="true" aria-labelledby="recovery-title" data-testid="recovery-dialog">
+    <>
         {step === 'show' && recoveryKey ? (
           <>
             <h1 id="recovery-title">Save your recovery key</h1>
-            <p className="cloud-lede">If you ever lose every device, this key is the only way to get your synced chats back. Nekko Labs doesn't have it and can't reset it.</p>
+            <p className="cloud-lede">
+              {inWalkthrough ? 'Sync is on. If you ever lose every device, this key is the only way back to your chats. We can\'t reset it.'
+                : 'If you ever lose every device, this key is the only way to get your synced chats back. Nekko Labs doesn\'t have it and can\'t reset it.'}
+            </p>
             <div className="recovery-key mt-5" data-testid="recovery-key" aria-label="Recovery key">
-              {groups.map((g, i) => <span key={i}>{g}</span>)}
+              {groups.map((g, i) => <span key={i} className="cw-key" style={{ animationDelay: `${100 + i * 40}ms` }}>{g}</span>)}
             </div>
             <div className="mt-3 flex gap-2">
               <button className="btn btn-outline flex-1 py-1! text-xs!" onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</button>
@@ -57,7 +76,7 @@ export function RecoveryKeyDialog({ recoveryKey, email, onDone }: { recoveryKey:
               I've saved my recovery key somewhere safe
             </label>
             <div className="mt-4 flex gap-2">
-              <button className="btn btn-ghost flex-1 text-xs!" onClick={onDone}>Remind me later</button>
+              <button className="btn btn-ghost flex-1 text-xs!" onClick={() => onDone(false)}>Remind me later</button>
               <button className="btn btn-primary flex-1" disabled={!saved} onClick={() => setStep('confirm')} data-testid="recovery-continue">Continue</button>
             </div>
           </>
@@ -69,15 +88,14 @@ export function RecoveryKeyDialog({ recoveryKey, email, onDone }: { recoveryKey:
               onChange={(e) => setTyped(e.target.value)} spellCheck={false} aria-label="Recovery key" data-testid="recovery-typed" />
             {error && <p role="alert" className="mt-2 text-xs text-(--danger)">{error}</p>}
             <div className="mt-4 flex gap-2">
-              <button className="btn btn-ghost flex-1 text-xs!" onClick={onDone}>Later</button>
+              <button className="btn btn-ghost flex-1 text-xs!" onClick={() => onDone(false)}>Later</button>
               <button className="btn btn-primary flex-1" disabled={busy || typed.replace(/[\s-]/g, '').length < 55} onClick={() => void confirm()} data-testid="recovery-confirm">
                 {busy ? 'Checking…' : 'Confirm'}
               </button>
             </div>
           </>
         )}
-      </div>
-    </div>
+    </>
   );
 }
 

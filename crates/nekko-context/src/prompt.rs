@@ -18,6 +18,8 @@ pub struct PromptContext<'a> {
     pub can_plan: bool,
     /// The user's custom system instructions (Settings).
     pub system_instructions: Option<&'a str>,
+    /// User-authored, additive guidance for the exact provider/model route.
+    pub model_instructions: Option<&'a str>,
     /// The per-turn server instructions (Settings; `DEFAULT_TURN_WRAPPER` when unset).
     pub turn_wrapper: Option<&'a str>,
     /// What the user wrote about themselves (Settings).
@@ -430,6 +432,7 @@ pub fn build_system_prompt(ctx: &PromptContext) -> String {
         format!("\nAdditional context provided for this turn:\n\n{}", ctx.context_block)
     };
     let custom = section("Custom system instructions:", ctx.system_instructions);
+    let model = section("Model-specific guidance (does not override other instructions):", ctx.model_instructions);
     let about = section("About the user (user-provided background and preferences):", ctx.about_user);
     let wrapper = section("Server instructions for this user turn:", ctx.turn_wrapper);
     // Not trimmed: `${ctx.checkoutNotice ? ... : ''}`.
@@ -438,7 +441,7 @@ pub fn build_system_prompt(ctx: &PromptContext) -> String {
         _ => String::new(),
     };
     format!(
-        "{intro}\n\nPlatform: {}\n{ask}{plan}{hint}{custom}{about}{wrapper}{checkout}\nWorkspace folders:\n{folders}\n{block}",
+        "{intro}\n\nPlatform: {}\n{ask}{plan}{hint}{custom}{model}{about}{wrapper}{checkout}\nWorkspace folders:\n{folders}\n{block}",
         ctx.platform
     )
 }

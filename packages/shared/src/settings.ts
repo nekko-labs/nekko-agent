@@ -238,6 +238,8 @@ export interface AppSettings {
     auto?: boolean;
     models?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
     providers?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
+    /** Additive system guidance for the exact `<providerId>::<modelId>` route. */
+    modelInstructions?: Record<string, string>;
   };
   /** Server-side instructions applied to every user turn. Empty disables them. */
   turnWrapper?: string;

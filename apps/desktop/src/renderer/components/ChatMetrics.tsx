@@ -211,6 +211,50 @@ function useEffort({ modelId, metadata, onChanged, session, onSessionChange }: E
   return { pick, ...effortRungs(saved, modelId, metadata) };
 }
 
+/** The model chip's leading gauge: effort at a glance, set in the model menu's Effort section (the phone's Model and effort button). */
+export function EffortChipGauge(props: EffortProps) {
+  const { options, index, shown } = useEffort(props);
+  return (
+    <span className="flex shrink-0 items-center" data-effort-gauge data-effort-index={index} title={`Reasoning effort: ${shown}`}>
+      <EffortDial index={Math.max(0, index)} count={options.length} size={16} />
+      <span className="sr-only">Effort {shown},</span>
+    </span>
+  );
+}
+
+/** Effort as a section of the model menu, as the phone's Model and effort panel has it. */
+export function EffortSection(props: EffortProps) {
+  const { pick, options, index, shown } = useEffort(props);
+  const { metadata, session } = props;
+  const description = index >= 0 ? metadata?.levels.find((level) => level.effort === options[index])?.description : undefined;
+  const following = session ? session.effort == null : false;
+  return (
+    <div className="flex flex-col gap-2 px-2 py-1" data-effort-section>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-2xs font-semibold text-ink-faint">Effort</span>
+        <span className={`text-xs font-semibold ${index < 0 ? 'text-ink-soft' : 'text-ink'}`}>{shown}</span>
+      </div>
+      {!options.length ? (
+        <p className="text-2xs leading-snug text-ink-faint">{metadata ? 'This provider reports no selectable effort choices for this model.' : 'This provider has not reported effort choices for this model.'}</p>
+      ) : (<>
+        <input
+          type="range" min={0} max={options.length - 1} step={1} value={Math.max(0, index)}
+          disabled={options.length === 1}
+          aria-label="Reasoning effort" aria-valuetext={shown}
+          className="w-full accent-(--accent)"
+          onChange={(e) => { const level = options[Number(e.currentTarget.value)]; if (level) pick(level); }}
+        />
+        <div className="flex w-full justify-between gap-1 text-2xs text-ink-faint" aria-hidden="true">
+          {options.map((o) => <span key={o} className="min-w-0 break-words text-center">{effortLabel(o)}</span>)}
+        </div>
+        {description && <p className="text-2xs text-ink-soft">{description}</p>}
+        {index < 0 && <button type="button" className="self-start text-xs text-accent" onClick={() => pick(options[0])}>Use {effortLabel(options[0])}</button>}
+        <p className="text-2xs leading-snug text-ink-faint">{following ? "Following this computer's effort setting. " : ''}Higher effort thinks longer and spends more tokens.</p>
+      </>)}
+    </div>
+  );
+}
+
 /**
  * Model-specific effort rungs on a compact slider beside the model picker.
  * Given a chat, it shows and sets that chat's effort (`Session.effort`, which
@@ -251,7 +295,6 @@ export function EffortSlider(props: EffortProps) {
         data-effort-count={options.length}
       >
         <EffortDial index={Math.max(0, index)} count={options.length} size={18} />
-        <span>Effort</span>
       </button>
       {pop.open && available && createPortal(
         <div ref={pop.pop} style={pop.style} className="card fixed z-[100] p-4 shadow-(--shadow-float)" role="dialog" aria-label="Reasoning effort" data-effort-popover>

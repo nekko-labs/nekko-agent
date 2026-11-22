@@ -426,6 +426,49 @@ async fn every_model_list_maps_exactly_as_the_ts_provider_maps_it() {
     }
 }
 
+/// Synthetic account catalogs, not evidence of live GPT-6.2 entitlement.
+#[tokio::test]
+async fn chatgpt_current_client_discovers_astra_only_when_the_account_lists_it() {
+    let providers = read("providers.json");
+    for visible in [true, false] {
+        let mut rows = vec![json!({
+            "slug": "gpt-6-astra", "display_name": "GPT-6 Astra", "priority": 2,
+            "visibility": "list", "show_in_picker": true
+        })];
+        if visible {
+            rows.push(json!({
+                "slug": "gpt-6.2-astra", "display_name": "GPT-6.2 Astra", "priority": 1,
+                "visibility": "list", "show_in_picker": true, "context_window": 1050000,
+                "supported_reasoning_levels": [{"effort": "medium"}, {"effort": "high"}],
+                "default_reasoning_level": "medium"
+            }));
+        }
+        rows.extend([
+            json!({"slug": "hidden-model", "visibility": "hidden", "show_in_picker": true}),
+            json!({"slug": "unpicked-model", "visibility": "list", "show_in_picker": false}),
+        ]);
+        let transport = FakeTransport::queue(vec![json!({"body": json!({"models": rows}).to_string()})]);
+        let provider = provider(&providers["chatgpt"], transport.clone());
+        let models = provider.list_models().await.unwrap();
+        let sent = transport.sent();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].url, "https://chatgpt.com/backend-api/codex/models?client_version=0.171.0");
+        assert_eq!(models.len(), if visible { 2 } else { 1 });
+        assert!(models.iter().all(|m| !m.fallback));
+        if visible {
+            let astra = &models[0];
+            assert_eq!(astra.id, "gpt-6.2-astra");
+            assert_eq!(astra.name, "GPT-6.2 Astra");
+            assert_eq!(astra.context_length, Some(1050000));
+            let effort = serde_json::to_value(astra.effort.as_ref().unwrap()).unwrap();
+            assert_eq!(effort["default"], "medium");
+            assert_eq!(effort["levels"][1]["effort"], "high");
+        } else {
+            assert_eq!(models[0].id, "gpt-6-astra");
+        }
+    }
+}
+
 #[tokio::test]
 async fn only_a_shipped_catalog_is_flagged_as_the_fallback() {
     let providers = read("providers.json");

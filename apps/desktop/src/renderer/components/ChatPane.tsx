@@ -90,7 +90,7 @@ import { SUBSCRIPTION_KINDS } from './providers/AddProvider.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
-import { ContextGauge, EffortSlider, formatContextTokens } from './ChatMetrics.js';
+import { ContextGauge, EffortChipGauge, EffortSection, EffortSlider, formatContextTokens } from './ChatMetrics.js';
 import { AsksFirstMenu } from './AsksFirstMenu.js';
 import { ExpertMonitor, useExpertMode, useShown } from './ModeViews.js';
 import { hasAppChrome } from '../chrome.js';
@@ -2844,7 +2844,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         pickedModel.current = providerId ? { sessionId, providerId, modelId: AUTO_MODEL_ID } : null;
         void window.nekko.setSessionOptions(sessionId, { autoModel: true, autoProviderSwitch: true }).then((s) => { if (s) setSession(s); }).catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
+      leading={showEffort && <EffortChipGauge {...effortProps} />}
       footer={<>
+        {/* Effort rides the model menu, as the phone's Model and effort panel has it. */}
+        {showEffort && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1"><EffortSection {...effortProps} /></div>}
         {!expertMode && autoQualityControl && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1">{autoQualityControl}</div>}
         {!session?.parentSessionId && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1"><SubagentModelControl fusionAllowed={autoSwitch} /></div>}
       </>}
@@ -2874,8 +2877,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
     />}
-    {/* Effort stays beside the model in both Simple and Expert. */}
-    {showEffort && <EffortSlider {...effortProps} />}
+    {/* Simple mode can hide the model and keep effort: then the gauge stands alone. */}
+    {!(showModel || needsModel) && showEffort && <EffortSlider {...effortProps} />}
     </div>
   );
 
@@ -3734,9 +3737,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       }}
                     />
                   </div>
-                  <div className="composer-folders min-w-0">
-                    <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} selectedSummary />
-                  </div>
                   {!expertMode && asksFirst}
                   </>)}
                   {(header || wallWindow) && (
@@ -3763,7 +3763,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
-                {!imageMode && (showMode || (expertMode && showSuggest)) && <div className="composer-foot-row flex min-w-0 items-center gap-2 border-t border-line px-2 py-1 empty:hidden" data-composer-mode-row>
+                {/* The box's bottom row: the chat's folder, then Mode, with suggestions at the right. */}
+                {!imageMode && <div className="composer-foot-row flex min-w-0 items-center gap-2 border-t border-line px-2 py-1 empty:hidden" data-composer-mode-row>
+                  <div className="composer-folders min-w-0">
+                    <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} selectedSummary />
+                  </div>
                   {showMode && <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />}
                   {promptSuggestions}
                 </div>}

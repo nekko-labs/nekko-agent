@@ -1,0 +1,69 @@
+{
+  "$comment": "What each Nekko Cloud plan includes (#3191). One list for the app's plan step and the website's pricing page; prices come from Stripe, never from here. A value is true (included), false (not included) or a short word or two. soon marks something not shipped yet.",
+  "plans": [
+    {
+      "id": "free",
+      "name": "Free",
+      "price": "free",
+      "tagline": "Everything on your computer",
+      "points": ["The whole app on your computer", "Local models and your own accounts", "Your phone on your own network"]
+    },
+    {
+      "id": "pro",
+      "name": "Pro",
+      "price": "stripe",
+      "tagline": "Your way, on every device",
+      "points": ["Chats, Library and settings on every device", "Your computers as one fleet", "Nekko Cloud machines for your phone"]
+    },
+    {
+      "id": "team",
+      "name": "Enterprise",
+      "price": "contact",
+      "tagline": "Pro for your whole company",
+      "points": ["Pro for everyone, with seats", "Single sign-on and admin controls", "Audit log and one invoice"]
+    }
+  ],
+  "groups": [
+    {
+      "name": "On your computer",
+      "rows": [
+        { "feature": "Desktop app, Local Web UI and Docker", "free": true, "pro": true, "team": true },
+        { "feature": "Local models, set up in one click", "free": true, "pro": true, "team": true },
+        { "feature": "Your own provider accounts and keys", "free": true, "pro": true, "team": true },
+        { "feature": "Automations and workflows", "free": true, "pro": true, "team": true },
+        { "feature": "Privacy Shield", "free": true, "pro": true, "team": true }
+      ]
+    },
+    {
+      "name": "Your phone",
+      "rows": [
+        { "feature": "Pair your phone on your own network", "free": true, "pro": true, "team": true },
+        { "feature": "Reach your computers from anywhere", "free": "Beta", "pro": true, "team": true },
+        { "feature": "Nekko Cloud machines", "free": false, "pro": true, "team": true }
+      ]
+    },
+    {
+      "name": "Nekko Cloud",
+      "rows": [
+        { "feature": "Your profile and sign-in", "free": true, "pro": true, "team": true },
+        { "feature": "Hardware keys and remote sign-out", "free": true, "pro": true, "team": true },
+        { "feature": "Chats on every device, end-to-end encrypted", "free": false, "pro": true, "team": true },
+        { "feature": "Settings and setup on every device", "free": false, "pro": true, "team": true },
+        { "feature": "Library on every device", "free": false, "pro": true, "team": true, "soon": true },
+        { "feature": "Your computers as one fleet", "free": false, "pro": true, "team": true },
+        { "feature": "Encrypted storage", "free": false, "pro": "5 GB", "team": "20 GB" },
+        { "feature": "Zero data retention mode", "free": false, "pro": true, "team": true }
+      ]
+    },
+    {
+      "name": "Teams and companies",
+      "rows": [
+        { "feature": "Organizations: share computers with a team", "free": false, "pro": true, "team": true },
+        { "feature": "Seats and one invoice", "free": false, "pro": false, "team": true },
+        { "feature": "Single sign-on", "free": false, "pro": false, "team": true, "soon": true },
+        { "feature": "Admin controls and audit log", "free": false, "pro": false, "team": true, "soon": true },
+        { "feature": "Priority support", "free": false, "pro": false, "team": true }
+      ]
+    }
+  ]
+}

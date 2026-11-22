@@ -45,6 +45,7 @@ export function ModelPicker({
   placeholder,
   resolvedModelId,
   footer,
+  leading,
   fusionActive = false,
   onFusion,
 }: {
@@ -81,6 +82,8 @@ export function ModelPicker({
   resolvedModelId?: string;
   /** Under the list, for what belongs with the model (such as Auto quality). */
   footer?: React.ReactNode;
+  /** Drawn at the chip's start, before the name (the composer's effort gauge). */
+  leading?: React.ReactNode;
   fusionActive?: boolean;
   onFusion?: () => void;
 }) {
@@ -519,6 +522,7 @@ export function ModelPicker({
         aria-expanded={open}
         title={unavailableModel ? `${unavailableModel} is not available right now. Pick a model again.` : needsChoice ? 'This chat has no model yet - pick one' : `Model: ${currentName} · ${providerLabel}`}
       >
+        {leading}
         <span className="min-w-0 truncate text-left" data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : placeholder && !modelId ? placeholder : chipName}</span>
         {chipAccount && !unavailableModel && !needsChoice && <span className="min-w-0 max-w-[96px] shrink truncate text-ink-faint" data-model-chip-account>{chipAccount}</span>}
         <span className="ctl-caret shrink-0">▾</span>
