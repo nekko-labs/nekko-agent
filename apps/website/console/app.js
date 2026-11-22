@@ -1,9 +1,10 @@
 import {api, signIn, signOut} from './session.js';
 import {el, action, row, feedback} from './ui.js';
 import {organizations} from './organizations.js';
+import {hypergate} from './hypergate.js';
 import {cases} from './cases.js';
 const main=document.querySelector('main'),nav=document.querySelector('nav');let account,reviewer=false;
-const titles={account:'Account and billing',orgs:'Organizations',operations:'Fleet and operations',privacy:'Privacy requests',staff:'Staff case review'};
+const titles={account:'Account and billing',orgs:'Organizations',operations:'Fleet and operations',hypergate:'Hypergate',privacy:'Privacy requests',staff:'Staff case review'};
 function login(){nav.hidden=true;nav.replaceChildren();main.replaceChildren();account=null;reviewer=false;signIn(main,async a=>{account=a;await show('account');});}
 function menu(key){nav.hidden=false;nav.replaceChildren();for(const [k,v] of Object.entries(titles)){if(k==='staff'&&!reviewer)continue;const b=action(nav,v,()=>show(k));if(k===key)b.setAttribute('aria-current','page');}
  action(nav,'Sign out',async()=>{await signOut();login();});}
@@ -11,6 +12,7 @@ async function show(key,id){if(!account||key==='staff'&&!reviewer)return;const r
  const active=()=>root.isConnected;const refresh=()=>active()&&show(key,id);
  try{if(key==='orgs')await organizations(root,account,newId=>active()&&show(key,newId),id);
  else if(key==='privacy'||key==='staff')await cases(root,key==='staff',refresh);
+ else if(key==='hypergate')await hypergate(root,refresh);
  else if(key==='account'){
   const {account:a}=await api('/v1/auth/me');if(!active())return;account=a;row(root,'Signed in as',a.email);row(root,'Current plan',a.plan.toUpperCase());
   if(a.features.billing)action(root,a.plan==='free'?'Upgrade to Pro':'Manage billing',async()=>{const upgrade=a.plan==='free';const {url}=await api('/v1/billing/'+(upgrade?'checkout':'portal'),'POST',upgrade?{plan:'pro'}:undefined);const dest=new URL(url);if(dest.protocol!=='https:'||!['checkout.stripe.com','billing.stripe.com'].includes(dest.hostname))throw new Error('Billing destination is unavailable.');if(active())location.assign(dest.href);});

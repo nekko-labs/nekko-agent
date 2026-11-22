@@ -15,3 +15,5 @@ Export and erasure are separate requests. Submitting either starts review, not f
 The browser is not an unlocked Nekko device. Fleet descriptors, pairing secrets, CI logs and automation content stay on trusted hosts. Operations views must distinguish missing telemetry from an empty or healthy fleet. Planned: consented org-level operational summaries, audited pairing changes on a trusted device, broader org audit review, and approved delivery or erasure receipts. No platform-wide customer directory or cross-org impersonation.
 
 Navigation wraps on narrow and folded screens, with the same scope and destructive confirmations. Pilot verification uses synthetic accounts; production Supabase, Stripe and legal fulfillment require separate operational verification.
+
+Hypergate has a separate [employee setup preview](hypergate-cloud-setup.md) within the console.
