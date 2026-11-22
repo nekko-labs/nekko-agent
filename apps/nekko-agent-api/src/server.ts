@@ -1,5 +1,5 @@
 import rateLimit from "@fastify/rate-limit";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { registerAccount, type SignInConfig } from "./account.js";
 import { registerBilling, type Stripe } from "./billing.js";
 import { accountGateFrom } from "./auth.js";
@@ -78,7 +78,18 @@ export const LOG_SERIALIZERS = {
   err: (e: Error & { code?: unknown }) => ({ type: e.name, message: e.message, code: e.code, stack: e.stack ?? "" }),
 };
 
-export const DEFAULT_PUBLIC_URL = "https://nekko-agent-api.fly.dev";
+/**
+ * Postgres never connected, so the request did nothing and is safe to send
+ * again: node-postgres' connect and pool timeouts, and the server refusing new
+ * connections (57P03 starting up or shutting down, 53300 too many). A
+ * connection lost mid-query is not here: that query may have run.
+ */
+export function databaseUnavailable(e: { message?: string; code?: unknown }): boolean {
+  const m = e.message ?? "";
+  return m.includes("due to connection timeout") || m.includes("timeout exceeded when trying to connect") || e.code === "57P03" || e.code === "53300";
+}
+
+export const DEFAULT_PUBLIC_URL ="https://nekko-agent-api.fly.dev";
 export const DEFAULT_ORIGINS = ["https://nekkoagent.com", "https://www.nekkoagent.com"];
 
 export function buildServer(opts: ServerOptions): FastifyInstance {
@@ -106,6 +117,17 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
 
   // Fastify's own 404 logs the full URL, query string included.
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not-found" }));
+
+  // A 5xx never carries the error's own text: a pg message can name tables or
+  // quote values, and the apps showed it to people verbatim. The log keeps it.
+  // Postgres not connecting in time is 503 `unavailable` with a Retry-After,
+  // which the apps retry on their own (#3186).
+  app.setErrorHandler((error: FastifyError, req, reply) => {
+    if ((error.statusCode ?? 500) < 500) return reply.send(error);
+    req.log.error({ err: error }, "request failed");
+    if (databaseUnavailable(error)) return reply.code(503).header("retry-after", "5").send({ error: "unavailable" });
+    return reply.code(error.statusCode ?? 500).send({ error: "internal" });
+  });
 
   if (opts.alert) {
     const alert = opts.alert;

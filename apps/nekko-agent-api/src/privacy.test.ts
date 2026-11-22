@@ -76,6 +76,37 @@ describe("error alerting (GD8)", () => {
   });
 });
 
+describe("5xx answers (#3186)", () => {
+  const failing = (error: Error & { code?: string }) => buildServer({ db: { ...db, query: async () => { throw error; } }, allowedOrigins: [] });
+  const signup = (a: ReturnType<typeof buildServer>) => a.inject({ method: "POST", url: "/v1/signups", payload: { email: "ada@example.com" } });
+
+  it("never sends the error's own text", async () => {
+    const res = await signup(failing(new Error('relation "users" does not exist')));
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toEqual({ error: "internal" });
+  });
+
+  it("answers a database that didn't connect in time with a retryable 503", async () => {
+    for (const error of [
+      new Error("Connection terminated due to connection timeout"),
+      new Error("timeout exceeded when trying to connect"),
+      Object.assign(new Error("sorry, too many clients already"), { code: "53300" }),
+    ]) {
+      const res = await signup(failing(error));
+      expect(res.statusCode).toBe(503);
+      expect(res.headers["retry-after"]).toBe("5");
+      expect(res.json()).toEqual({ error: "unavailable" });
+    }
+  });
+
+  it("leaves a 4xx as Fastify sends it", async () => {
+    const a = buildServer({ db, allowedOrigins: [] });
+    const res = await a.inject({ method: "POST", url: "/v1/signups", headers: { "content-type": "application/json" }, payload: "{nope" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("FST_ERR_CTP_INVALID_JSON_BODY");
+  });
+});
+
 /** An account with something in every table that refers to it. */
 async function account(email: string, subject: string) {
   const { rows } = await db.query<{ id: string }>("insert into users (email, plan, auth_subject) values ($1, 'pro', $2) returning id", [email, subject]);
