@@ -89,7 +89,7 @@ pub fn assert_in_jail(target: &str, ctx: &ToolContext) -> Result<(), String> {
     if roots.is_empty() {
         return Ok(());
     }
-    if let Some(root) = &ctx.app_data_root {
+    for root in [&ctx.app_data_root, &ctx.shared_data_root].into_iter().flatten() {
         roots.push(native::resolve(&[root]));
     }
     let outside = || {

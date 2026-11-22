@@ -1394,7 +1394,7 @@ impl Turns {
         // The prompt's tool-specific instructions follow what the chat can do,
         // so a tool behind `run_code` keeps them.
         let prompt_tools: Vec<&Value> = tools.iter().chain(code_mode.iter().flat_map(|c| c.wrapped.iter())).collect();
-        let system = turn::turn_system_prompt(&json!({
+        let mut system = turn::turn_system_prompt(&json!({
             "workspaces": workspaces,
             "tools": prompt_tools,
             "settings": settings,
@@ -1406,6 +1406,9 @@ impl Turns {
             "workMode": loaded.get("workMode").cloned().unwrap_or(Value::Null),
             "promptProfile": facts.pointer("/promptProfile/profile").cloned().unwrap_or(Value::Null),
         }));
+        if !sandbox && crate::cli_install::shared_nekko_grant().is_some() {
+            system.push_str("\n\nLocal Nekko data: the shared ~/.nekko folder is available without attaching it as a project. App data defaults to ~/.nekko/nekko-agent. Normal approvals and read-only grants still apply. Never publish credentials or private chats.");
+        }
 
         if shared.cancel.is_cancelled() {
             return json!({ "early": true });
@@ -1795,6 +1798,14 @@ impl Turns {
         let Some((cwd, rest)) = paths.split_first() else {
             return fail("A Claude subscription chat needs a workspace folder to run in.", &history);
         };
+        // Claude turns are host-only (checked before dispatch). Give Claude
+        // and its subagents the extra directory, not a new cwd or bridge root.
+        let mut add_dirs = rest.to_vec();
+        if let Some(root) = crate::cli_install::shared_nekko_grant()
+            && !paths.contains(&root)
+        {
+            add_dirs.push(root);
+        }
         // The provider's Claude Code account. Its sessions live in its own
         // folder, so one saved under another account (the chat switched) is
         // not resumed: the next launch starts a new Claude Code session.
@@ -1805,7 +1816,7 @@ impl Turns {
         };
         let wanted = Wanted {
             cwd: cwd.clone(),
-            add_dirs: rest.to_vec(),
+            add_dirs,
             // A chat saved on a family alias runs on that family's newest model.
             model: str_at(opts, "modelId")
                 .filter(|m| !js::trim(m).is_empty())
@@ -2247,7 +2258,7 @@ fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec
 /// `nekko_context::DESIGN_RULES`, and the project's own instructions win.
 fn claude_design_note() -> String {
     format!(
-        "Nekko design note: {} {} Where the project's own instructions differ, follow them.",
+        "Nekko design note: {} {} Where the project's own instructions differ, follow them. Local Nekko data: when present, ~/.nekko is available without attaching it as a project; normal approvals still apply. Agent data defaults to ~/.nekko/nekko-agent. Never publish credentials or private chats.",
         nekko_context::DESIGN_RULES[0],
         nekko_context::DESIGN_RULES[1]
     )
@@ -2912,7 +2923,8 @@ fn native_context(
         }
     });
     let mut ctx = ToolContext::new(approver);
-    ctx.app_data_root = nekko_js::home_dir().map(|home| home.join(".nekko-agent").to_string_lossy().into_owned());
+    ctx.app_data_root = Some(turns.data_dir.to_string_lossy().into_owned());
+    ctx.shared_data_root = crate::cli_install::shared_nekko_grant().map(|root| root.to_string_lossy().into_owned());
     let parse = |key: &str| settings.get(key).filter(|v| !v.is_null()).cloned();
     if let Some(v) = parse("sandboxMode") {
         ctx.sandbox_mode = serde_json::from_value(v).ok()?;

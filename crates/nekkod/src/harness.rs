@@ -660,7 +660,7 @@ pub fn decide(
         // Claude Code's shell keeps its own working directory, which Nekko
         // cannot see: only absolute paths count as inside a delete root.
         let folders: Vec<String> = roots.iter().map(|r| r.to_string_lossy().into_owned()).collect();
-        let app = nekko_js::home_dir().map(|h| h.join(".nekko-agent").to_string_lossy().into_owned());
+        let app = Some(crate::cli_install::cli_link_dir().to_string_lossy().into_owned());
         let scope = nekko_tools::DeleteScope {
             cwd: None,
             roots: nekko_tools::delete_roots(folders.iter().map(String::as_str), app.as_deref()),

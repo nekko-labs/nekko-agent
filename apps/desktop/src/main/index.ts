@@ -657,11 +657,11 @@ app.whenReady().then(async () => {
     if (brandEnv('DATA_DIR')) throw e;
     const sources = [...new Set([...legacyUserDataDirs(undefined, app.getPath('appData')), ...(existsSync(join(devSource, 'settings.json')) ? [devSource] : [])])];
     if (!sources.length) { dialog.showErrorBox('Data migration needs attention', (e as Error).message); app.quit(); return; }
-    const choice = dialog.showMessageBoxSync({ type: 'question', title: 'Move Nekko Agent data', message: 'Choose the profile to move into ~/.nekko-agent', detail: `Close all other Nekko Agent desktop, web and CLI instances first. Settings, sessions and managed model files will move to ${dataDir}. Borrowed model folders are unchanged. Other profiles are not merged or deleted.`, buttons: ['Cancel', ...sources.map(p => `Move ${p}`)], defaultId: 0, cancelId: 0, noLink: true });
+    const choice = dialog.showMessageBoxSync({ type: 'question', title: 'Move Nekko Agent data', message: `Choose the profile to move into ${dataDir}`, detail: `Close all other Nekko Agent desktop, web and CLI instances first. Settings, sessions and managed model files will move to ${dataDir}. Borrowed model folders are unchanged. Other profiles are not merged or deleted.`, buttons: ['Cancel', ...sources.map(p => `Move ${p}`)], defaultId: 0, cancelId: 0, noLink: true });
     if (choice === 0) { app.quit(); return; }
     try {
       const source = sources[choice - 1];
-      migrateUserData(source, dataDir, source.endsWith('nekko-agent') ? join(source, '..') : undefined);
+      migrateUserData(source, dataDir, source === devSource || source === join(app.getPath('appData'), 'Nekko Agent', 'nekko-agent') ? join(source, '..') : undefined);
     }
     catch (failure) { dialog.showErrorBox('Data migration stopped', (failure as Error).message); app.quit(); return; }
   }

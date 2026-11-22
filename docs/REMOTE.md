@@ -837,7 +837,7 @@ updater and shell.
 ### Where the logs live
 
 The logs a phone reads are files you can open yourself: `logs/app.log` and `logs/nekkod.log` in the data folder
-(`~/.nekko-agent` unless you moved it). Each is rotated at 5 MB, and the last three old copies are kept
+(`~/.nekko/nekko-agent` unless you moved it). Each is rotated at 5 MB, and the last three old copies are kept
 (`app.log.1` to `app.log.3`). Windows' engine log holds only start-up lines and crashes for now.
 
 ## Security model, honestly stated

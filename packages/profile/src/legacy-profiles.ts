@@ -13,8 +13,8 @@ import { applyToDataRoot, planDedupe, providerIdentity, type AccountOf, type Fol
  * The app has been renamed several times (Nekko Paw, Open Paw, Kotrain, Agent
  * Nekko) and each name wrote its own data folder, install and updater cache.
  * `migrateUserData` (user-data.ts) moves ONE profile into an empty
- * `~/.nekko-agent`. This module covers what it refuses to: several profiles,
- * or a profile when `~/.nekko-agent` already has data. Everything here is
+ * `~/.nekko/nekko-agent`. This module covers what it refuses to: several profiles,
+ * or a profile when `~/.nekko/nekko-agent` already has data. Everything here is
  * additive (nothing in the target is overwritten) and cleanup only deletes a
  * folder after `unmerged()` finds nothing in it that the target lacks.
  *
@@ -27,7 +27,7 @@ export interface LegacyEnv {
   localAppData: string;
   tmp: string;
   platform: NodeJS.Platform;
-  /** The current data root, `~/.nekko-agent` unless overridden. */
+  /** The current data root, `~/.nekko/nekko-agent` unless overridden. */
   target: string;
 }
 
@@ -45,7 +45,8 @@ export interface LegacyItem {
 // Names this app has shipped under. `Nekko Paw` is deliberately absent: it is
 // listed in the PR notes as an open question, and `Nekko Notes`, APFS and the
 // agent-nekko-pr-* evidence folders are other products or current workflows.
-const HOME_DIRS = ['.nekko', '.agent-nekko', '.kotrain', '.open-paw'];
+// The shared ~/.nekko parent is never a merge or cleanup candidate.
+const HOME_DIRS = ['.nekko-agent', '.agent-nekko', '.kotrain', '.open-paw'];
 const APPDATA_DIRS = ['@agent-nekko', '@kotrain', '@open-paw', '@nekko', 'Agent Nekko', 'Kotrain', 'Open Paw', 'Nekko Agent'];
 const INSTALL_NAMES = ['Kotrain', 'Open Paw'];
 const UPDATER_DIRS = ['@agent-nekkodesktop-updater', '@kotraindesktop-updater', '@open-pawdesktop-updater', '@nekkodesktop-updater'];
@@ -53,7 +54,7 @@ const TEMP_PREFIXES = ['kotrain-'];
 /** Chromium folders that are never a Nekko data root, so probing skips them. */
 const BROWSER_DIRS = new Set(['Cache', 'Code Cache', 'GPUCache', 'Local Storage', 'Session Storage', 'Network', 'Service Worker', 'blob_storage', 'backups']);
 /** Root files that describe one machine's running state; never merged. */
-const SKIP_JSON = new Set(['window-state.json', 'cli-link.json', 'migration.json']);
+const SKIP_JSON = new Set(['window-state.json', 'cli-link.json', 'migration.json', 'keystore-scope.json']);
 const MAX_JSON_BYTES = 32 * 1024 * 1024;
 
 export function legacyEnv(over: Partial<LegacyEnv> = {}): LegacyEnv {
@@ -115,7 +116,12 @@ export function detectLegacy(env: LegacyEnv = legacyEnv()): LegacyItem[] {
   };
   for (const name of HOME_DIRS) {
     const path = join(env.home, name);
-    if (isDir(path) && hasAnyFile(path)) add('data', path, name, findDataRoots(path));
+    if (isDir(path) && hasAnyFile(path)) {
+      const roots = findDataRoots(path);
+      // A completed canonical move can leave stale process metadata behind.
+      if (name === '.nekko-agent' && !roots.length) continue;
+      add('data', path, name, roots);
+    }
   }
   for (const name of APPDATA_DIRS) {
     const path = join(env.appData, name);
