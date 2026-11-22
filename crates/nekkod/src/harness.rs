@@ -810,7 +810,8 @@ mod tests {
         let bash = |mode: &str, command: String| {
             decide(mode, "Bash", &serde_json::json!({ "command": command }), &rules, std::slice::from_ref(&wt))
         };
-        let inside = format!("rm -rf {}", wt.join("build").to_string_lossy());
+        // As typed into Bash: a Windows path's backslashes are escapes there.
+        let inside = format!("rm -rf {}", wt.join("build").to_string_lossy().replace('\\', "/"));
         assert_eq!(bash("guardrails", inside.clone()), Decision::Allow);
         assert_eq!(bash("yolo", inside.clone()), Decision::Allow);
         assert!(asks(&bash("ask", inside)));
