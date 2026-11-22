@@ -212,13 +212,36 @@ export function modePatchSkips(options: SavedModeOptions, opts: { cloudModel: bo
 
 const MODEL_SCOPE_LABEL: Record<ModelScope, string> = { cloud: 'cloud models', fusion: 'local + cloud', local: 'local models' };
 
-/** A short line for the rail: where it runs, then anything unusual. */
-export function savedModeSummary(options: SavedModeOptions): string {
+/** One item of a mode's summary: which setting (`key`), its value, and the words for it. */
+export interface SavedModeSummaryPart {
+  key: 'where' | 'models' | 'approvals' | 'offline' | 'incognito' | 'effort' | 'memory' | 'guidance' | 'code';
+  value: string;
+  label: string;
+}
+
+/** Where it runs, then anything unusual, as parts (the Mode button draws each as an icon). */
+export function savedModeSummaryParts(options: SavedModeOptions): SavedModeSummaryPart[] {
   const where = options.executionMode === 'sandbox' ? 'sandbox' : options.executionMode === 'worktree' ? 'worktree' : 'local';
-  const models = options.models ? MODEL_SCOPE_LABEL[options.models] : '';
   // Local models are offline by definition, and a sandbox has no network.
   const offline = options.offline && options.models !== 'local' ? (options.executionMode === 'sandbox' ? 'no network' : 'offline') : '';
-  return [where, models, options.mode === 'guardrails' ? '' : CHAT_MODE_LABEL[options.mode]?.toLowerCase(), offline, options.incognito ? 'incognito' : '', options.effort === 'normal' ? '' : options.effort ?? '', options.memory && options.memory !== 'all' ? `memory ${options.memory}` : '', options.guidance && options.guidance !== 'rules' ? `rules ${options.guidance}` : '', options.toolApproach === 'code' ? 'code mode' : ''].filter(Boolean).join(' · ');
+  const approvals = options.mode === 'guardrails' ? '' : CHAT_MODE_LABEL[options.mode]?.toLowerCase();
+  const parts: (SavedModeSummaryPart | false | undefined | '')[] = [
+    { key: 'where', value: where, label: where },
+    options.models && { key: 'models', value: options.models, label: MODEL_SCOPE_LABEL[options.models] },
+    approvals && { key: 'approvals', value: options.mode, label: approvals },
+    offline && { key: 'offline', value: offline, label: offline },
+    options.incognito && { key: 'incognito', value: 'on', label: 'incognito' },
+    options.effort && options.effort !== 'normal' && { key: 'effort', value: options.effort, label: options.effort },
+    options.memory && options.memory !== 'all' && { key: 'memory', value: options.memory, label: `memory ${options.memory}` },
+    options.guidance && options.guidance !== 'rules' && { key: 'guidance', value: options.guidance, label: `rules ${options.guidance}` },
+    options.toolApproach === 'code' && { key: 'code', value: 'code', label: 'code mode' },
+  ];
+  return parts.filter((p): p is SavedModeSummaryPart => !!p);
+}
+
+/** A short line for the rail: where it runs, then anything unusual. */
+export function savedModeSummary(options: SavedModeOptions): string {
+  return savedModeSummaryParts(options).map((p) => p.label).join(' · ');
 }
 
 /** A fresh id for a mode the user is saving, unique among `modes`. */

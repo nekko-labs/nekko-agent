@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } f
 import { createPortal } from 'react-dom';
 import type { ChatMode, McpServerStatus, Session } from '@nekko-agent/shared';
 import { CLAUDE_CODE_PROVIDER_KIND, getExecutionMode, groupToolsByCategory, toolAllowedOffline } from '@nekko-agent/shared';
-import { ModePanel, modeButtonLabel } from './ModePanel.js';
+import { ModePanel, modeButtonLabel, summaryPartIcon } from './ModePanel.js';
 import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
 import { WrenchIcon, PlaneIcon, IncognitoIcon, PlugIcon, PlusIcon, GlobeIcon, GlobeOffIcon, CloudIcon } from '../icons.js';
@@ -482,7 +482,10 @@ export function ChatControls({
         >
           <span className="ctl-menu-label">Mode</span>
           <label.icon className="h-3 w-3 shrink-0 text-ink-faint" />
-          <span className="min-w-0 truncate"><span className="text-ink">{label.name}</span>{label.summary ? ` · ${label.summary}` : ''}</span>
+          <span className="min-w-0 truncate text-ink">{label.name}</span>
+          {/* The chosen options as the Mode panel's icons; the words ride in the title and for screen readers. */}
+          {label.parts.map((p) => { const Icon = summaryPartIcon(p); return Icon && <span key={p.key} className="grid shrink-0 place-items-center" title={p.label} data-mode-part={p.key}><Icon className="h-3.5 w-3.5" /></span>; })}
+          {label.summary && <span className="sr-only">{` · ${label.summary}`}</span>}
           <span className="ctl-caret">▾</span>
         </button>
         {modeOpen && createPortal(
