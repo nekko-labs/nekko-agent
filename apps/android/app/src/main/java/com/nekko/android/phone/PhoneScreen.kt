@@ -125,7 +125,7 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
     }
     // OpenRouter's sign-in came back and its provider was kept (#2852): the form closes.
     LaunchedEffect(s.signIn) {
-        if (s.signIn == PhoneChats.SignIn.DONE) { adding = false; providers = true; notice = "OpenRouter connected."; phone.clearSignIn() }
+        if (s.signIn == PhoneChats.SignIn.DONE) { adding = false; providers = true; notice = "${PhoneProviders.kind(s.signInKind ?: "openrouter")?.label ?: "Provider"} connected."; phone.clearSignIn() }
     }
     if (adding) {
         var failed by remember { mutableStateOf<String?>(null) }
@@ -134,9 +134,10 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
             busy = busy || s.signIn == PhoneChats.SignIn.ADDING,
             failed = failed ?: s.signInError,
             onDismiss = { adding = false; phone.clearSignIn() },
-            onSignIn = {
+            onSignIn = { kind ->
                 failed = null
-                open(context, phone.startOpenRouterSignIn())
+                if (kind == "chatgpt") phone.startChatGptSignIn()?.let { open(context, it) }
+                else open(context, phone.startOpenRouterSignIn())
             },
             onOpen = { url -> open(context, url) },
         ) { kind, label, url, key, workspace ->
@@ -186,7 +187,7 @@ private fun ProviderForm(
     busy: Boolean,
     failed: String?,
     onDismiss: () -> Unit,
-    onSignIn: () -> Unit,
+    onSignIn: (String) -> Unit,
     onOpen: (String) -> Unit,
     onSave: (String, String, String, String, String) -> Unit,
 ) {
@@ -210,8 +211,19 @@ private fun ProviderForm(
             TextButton(onClick = { choosing = !choosing }, modifier = Modifier.testTag("phone.kind")) { Text(kind.label) }
             if (choosing) PhoneProviders.kinds.forEach { k -> TextButton(onClick = { kindId = k.id; label = k.label; url = k.defaultUrl; key = ""; opened = false; error = null; choosing = false }, modifier = Modifier.testTag("phone.kind.${k.id}")) { Text(k.label) } }
             Text(kind.hint)
+            // ChatGPT (#3244): the sign-in is the whole form; there is no key to paste.
+            if (kind.plan) {
+                Button(onClick = { onSignIn(kind.id) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("phone.signIn")) { Text("Sign in with ${kind.label}") }
+                Text("Approve in the browser and come back. This phone keeps its own sign-in, sealed by its keystore; your computers keep theirs.", style = MaterialTheme.typography.bodySmall)
+                Text("OpenAI’s terms are written around its own apps, so this is offered as-is. An OpenAI API key works too.", style = MaterialTheme.typography.bodySmall)
+                if (busy) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Text("Signing in…", style = MaterialTheme.typography.bodySmall)
+                }
+                failed?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("phone.addError")) }
+                return@Column
+            }
             if (kind.signIn) {
-                Button(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("phone.signIn")) { Text("Sign in with ${kind.label}") }
+                Button(onClick = { onSignIn(kind.id) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("phone.signIn")) { Text("Sign in with ${kind.label}") }
                 Text("Approve in the browser and the key comes back to this phone.", style = MaterialTheme.typography.bodySmall)
                 Text("Or use a key", style = MaterialTheme.typography.labelLarge)
             }
@@ -241,7 +253,7 @@ private fun ProviderForm(
             }
             (error ?: failed)?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("phone.addError")) }
         }
-    }, confirmButton = { TextButton(onClick = { save() }, enabled = !busy, modifier = Modifier.testTag("phone.save")) { Text("Add") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+    }, confirmButton = { if (!kind.plan) TextButton(onClick = { save() }, enabled = !busy, modifier = Modifier.testTag("phone.save")) { Text("Add") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable

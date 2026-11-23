@@ -172,6 +172,42 @@ public final class PhoneChats {
         return key
     }
 
+    /// ChatGPT's sign-in came back to the listener with a code (#3244): swap it for this
+    /// iPhone's own tokens. They become the provider's key (`Tokens.encoded`).
+    public func chatGPTTokens(code: String, verifier: String) async throws -> ChatGPTSignIn.Tokens {
+        let (status, _, body) = try await http.send(ChatGPTSignIn.tokenRequest(code: code, verifier: verifier))
+        guard (200..<300).contains(status), let tokens = ChatGPTSignIn.tokens(from: body, now: now()) else { throw ChatGPTSignIn.Problem.failed }
+        return tokens
+    }
+
+    @ObservationIgnored private var renewals: [String: Task<String?, Never>] = [:]
+
+    /// A ChatGPT sign-in about to run out is renewed before it is used (#3244): the new key,
+    /// or nil when nothing changed. One renewal at a time, since OpenAI replaces the refresh
+    /// token each time. A failed renewal leaves the old tokens; the request then fails with
+    /// "sign in again".
+    @discardableResult
+    func renewSignIn(_ providerId: String) async -> String? {
+        if let running = renewals[providerId] { return await running.value }
+        guard let p = provider(providerId), p.kind == "chatgpt", let old = key(providerId),
+              let tokens = ChatGPTSignIn.Tokens.decode(old), tokens.needsRefresh(now: now()),
+              let request = ChatGPTSignIn.refreshRequest(tokens) else { return nil }
+        let http = self.http
+        let now = self.now
+        let task = Task<String?, Never> {
+            guard let answer = try? await http.send(request), (200..<300).contains(answer.status),
+                  let next = ChatGPTSignIn.tokens(from: answer.body, now: now(), previous: tokens) else { return nil }
+            return next.encoded
+        }
+        renewals[providerId] = task
+        let next = await task.value
+        renewals[providerId] = nil
+        // Only over the sign-in it renewed: a new sign-in meanwhile wins.
+        guard let next, key(providerId) == old else { return nil }
+        secrets.set(PhoneProviders.keyName(providerId), next)
+        return next
+    }
+
     /// A new key for a provider (a Vertex AI token runs out in an hour).
     public func setKey(_ providerId: String, _ key: String) {
         guard provider(providerId) != nil, PhoneProviders.headerValue(key) else { return }
@@ -204,6 +240,7 @@ public final class PhoneChats {
     /// A provider's models: its list, or the kind's catalog. A failure is kept in `modelErrors`.
     @discardableResult
     public func loadModels(_ providerId: String) async -> [PhoneModel] {
+        await renewSignIn(providerId)
         guard let p = provider(providerId), p.enabled, let kind = PhoneProviders.kind(p.kind) else { return [] }
         let epoch = providerEpoch[providerId]
         let load = UUID()
@@ -421,8 +458,12 @@ public final class PhoneChats {
             return
         }
         let request: PhoneRequest
-        do { request = try PhoneProviders.chatRequest(p, key: key(p.id), model: chat.modelId, messages: history, system: tone.systemPrompt) }
-        catch { finish(chatId, answerId, error: "Check the provider address, key and model, then retry."); return }
+        let system = tone.systemPrompt
+        do { request = try PhoneProviders.chatRequest(p, key: key(p.id), model: chat.modelId, messages: history, system: system) }
+        catch {
+            let why = p.kind == "chatgpt" ? String(localized: "Your ChatGPT sign-in has expired. Sign in again.") : String(localized: "Check the provider address, key and model, then retry.")
+            finish(chatId, answerId, error: why); return
+        }
         running.insert(chatId)
         let http = self.http
         tasks[chatId] = Task { [weak self] in
@@ -430,6 +471,13 @@ public final class PhoneChats {
             var count = PhoneTokenCount()
             var completed = false
             do {
+                try Task.checkCancellation()
+                // A ChatGPT sign-in about to run out is renewed first, and the request made again with it (#3244).
+                var request = request
+                if p.kind == "chatgpt", let renewed = await self?.renewSignIn(p.id),
+                   let again = try? PhoneProviders.chatRequest(p, key: renewed, model: chat.modelId, messages: history, system: system) {
+                    request = again
+                }
                 try Task.checkCancellation()
                 let (status, headers, lines) = try await http.lines(request)
                 try Task.checkCancellation()
