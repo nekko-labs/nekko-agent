@@ -105,7 +105,6 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     // library-multiplayer joins once the service runs its relay (#2751).
     available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud"]),
   };
-  registerHypergate(app, opts.db, features);
   const gate = accountGateFrom(opts.accountsAllowedDomains, opts.accountsAllowedEmails);
   if (gate) app.decorate("accountGate", gate);
   const { max, windowMs } = opts.rateLimit ?? { max: 5, windowMs: 60 * 60 * 1000 };
@@ -228,6 +227,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const auth = opts.authRateLimit ?? { max: 30, windowMs: 60 * 1000 };
   app.register(async (scope) => {
     await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
+    registerHypergate(scope, opts.db, features, { max: sync.max, timeWindow: sync.windowMs });
     const reviewers = opts.privacyReviewers ?? [];
     if (reviewers.length) scope.register(async privacy => registerPrivacyCases(privacy, opts.db, reviewers));
     registerSync(scope, opts.db);

@@ -27,3 +27,18 @@ it('isolates free employee accounts, rejects secret fields, and never overwrites
   await db.query('update users set email_verified=false where email=$1',['a@unit.test']);expect((await call(a,'GET')).statusCode).toBe(403);
  }finally{await app.close();await db.close();}
 });
+
+it('rate limits both Hypergate setup methods before authentication', async () => {
+  const db = pgliteDb(new PGlite());
+  const app = buildServer({ db, allowedOrigins: [], syncRateLimit: { max: 1, windowMs: 60_000 } });
+  try {
+    for (const [method, remoteAddress] of [['GET', '192.0.2.1'], ['PUT', '192.0.2.2']] as const) {
+      const request = { method, url: '/v1/hypergate/setup', remoteAddress };
+      expect((await app.inject(request)).statusCode).toBe(401);
+      expect((await app.inject(request)).statusCode).toBe(429);
+    }
+  } finally {
+    await app.close();
+    await db.close();
+  }
+});

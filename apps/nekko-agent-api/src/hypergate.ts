@@ -4,8 +4,8 @@ import { authenticate } from './auth.js';
 import type { Features } from './features.js';
 import { fields, isSetup } from './hypergate-format.js';
 
-export function registerHypergate(app: FastifyInstance, db: Db, features: Features) {
-  app.route({ method: ['GET','PUT'], url: '/v1/hypergate/setup', handler: async (req, reply) => {
+export function registerHypergate(app: FastifyInstance, db: Db, features: Features, rateLimit: { max: number; timeWindow: number }) {
+  app.route({ method: ['GET','PUT'], url: '/v1/hypergate/setup', config: { rateLimit }, handler: async (req, reply) => {
     reply.header('cache-control','no-store');
     const user = await authenticate(db, req);
     if (!user) return reply.code(401).send({error:'unauthenticated'});
