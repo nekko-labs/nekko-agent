@@ -468,6 +468,15 @@ impl Installer {
             } else {
                 None
             };
+            // Older than the pinned release, and installed from a build this machine still offers
+            // (that build is what `install` is asked for, so the backend stays the same).
+            let outdated = record
+                .get("version")
+                .and_then(Value::as_str)
+                .and_then(|v| builds::outdated_llama(self.runtime, v).map(|pinned| (v, pinned)))
+                .zip(
+                    record.get("buildId").and_then(Value::as_str).filter(|id| available.iter().any(|b| b["id"] == *id)),
+                );
             let mut m = Map::new();
             m.insert("binPath".into(), json!(bin));
             m.insert("source".into(), json!("managed"));
@@ -480,14 +489,27 @@ impl Installer {
                 m.insert("problem".into(), p);
             }
             if let Some(u) = upgrade {
+                // The switch downloads the pinned release too, so it also settles an old engine.
+                let also = if outdated.is_some() { " It also brings the engine up to date." } else { "" };
                 m.insert(
                     "upgrade".into(),
                     json!({
                         "buildId": u["id"],
                         "message": format!(
-                            "Your NVIDIA graphics card can run the CUDA engine, which is {} than Vulkan. It is a download of several hundred MB.",
+                            "Your NVIDIA graphics card can run the CUDA engine, which is {} than Vulkan. It is a download of several hundred MB.{also}",
                             builds::CUDA_FASTER.to_lowercase()
                         ),
+                    }),
+                );
+            }
+            if let Some(((installed, pinned), build_id)) = outdated {
+                m.insert(
+                    "outdated".into(),
+                    json!({
+                        "buildId": build_id,
+                        "installed": installed,
+                        "pinned": pinned,
+                        "message": format!("Your engine is {installed}; this version of Nekko Agent expects {pinned}."),
                     }),
                 );
             }

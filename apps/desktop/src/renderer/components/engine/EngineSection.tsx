@@ -1,5 +1,6 @@
 import { useDownloadAction } from './useDownloadAction.js';
 import { DownloadProgress } from './DownloadProgress.js';
+import { engineNotice } from './engineNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DownloadJob, EngineStatus, LocalModel } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -125,6 +126,7 @@ export function EngineSection({
 
   const { install, running } = status;
   const installed = Boolean(install.binPath || status.diffusionInstall?.binPath);
+  const notice = engineNotice(install);
   // A model's weights, shards and helper files are one download, so the count is per model, not per file.
   const active = groupDownloads(jobs).filter((g) => isActive(g.state));
   const borrowed = models.filter((m) => m.managed === false).length;
@@ -132,7 +134,8 @@ export function EngineSection({
   // One click puts a broken engine right: the same build, downloaded again into
   // a clean folder. The server is stopped by the host just before the swap.
   // The CUDA upgrade takes the same path: a different build, downloaded into
-  // its own folder, swapped in when it lands.
+  // its own folder, swapped in when it lands. So does the update of an old
+  // engine: the installed build again, at the pinned release.
   const reinstall = async (buildId: string | undefined, started: string) => {
     if (!buildId) return;
     const res = await runtimeDownload.run(() => window.nekko.engineInstall(buildId));
@@ -273,7 +276,7 @@ export function EngineSection({
         {installed && (
           <>
 
-            {install.problem && (
+            {notice === 'repair' && install.problem && (
               <div
                 role="alert"
                 className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3"
@@ -290,7 +293,7 @@ export function EngineSection({
               </div>
             )}
 
-            {install.upgrade && !install.problem && (
+            {notice === 'switch' && install.upgrade && (
               <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
                 <p className="min-w-0 flex-1 text-xs text-ink-soft">{install.upgrade.message}</p>
                 <button
@@ -299,6 +302,19 @@ export function EngineSection({
                   disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
                 >
                   {repairing ? 'Downloading…' : 'Switch to CUDA'}
+                </button>
+              </div>
+            )}
+
+            {notice === 'update' && install.outdated && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
+                <p className="min-w-0 flex-1 text-xs text-ink-soft">{install.outdated.message}</p>
+                <button
+                  className="btn py-1 text-xs"
+                  onClick={() => void reinstall(install.outdated?.buildId, 'Updating the engine. The server stops while it swaps in, so switch it back on once it finishes.')}
+                  disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
+                >
+                  {repairing ? 'Downloading…' : 'Update'}
                 </button>
               </div>
             )}

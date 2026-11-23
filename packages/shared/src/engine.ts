@@ -83,6 +83,14 @@ export interface EngineInstall {
    * opt-in step up, never taken without the user asking.
    */
   upgrade?: { buildId: string; message: string };
+  /**
+   * The managed llama.cpp build is older than the release this version of the
+   * app pins. `buildId` is the build already installed, so installing it again
+   * keeps the backend and brings the version up to `pinned`. Never set for an
+   * engine the user pointed at or one found on PATH, or when the installed
+   * version is missing or not a `b<number>` tag.
+   */
+  outdated?: { buildId: string; installed: string; pinned: string; message: string };
   /** Builds offered for this machine, best first. */
   available: EngineBuild[];
   /** The build we would install if asked, from the hardware probe. */
