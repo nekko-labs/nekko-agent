@@ -87,6 +87,11 @@ export function savedModes(settings: ModeSettings | null | undefined): SavedMode
   return settings?.savedModes ?? STARTER_MODES;
 }
 
+/** Whether a mode is one of the starter set rather than one the user saved. */
+export function isStarterMode(mode: Pick<SavedMode, 'id'>): boolean {
+  return STARTER_MODES.some((m) => m.id === mode.id);
+}
+
 /** The mode new chats start in, when the user picked one. */
 export function defaultSavedMode(settings: ModeSettings | null | undefined): SavedMode | undefined {
   const id = settings?.defaultSavedModeId;
