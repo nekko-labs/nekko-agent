@@ -52,7 +52,7 @@ const app = buildServer({
 // Explicit file list: the local console never serves .env files or directory listings.
 if (process.env.DEV_WEB_CONSOLE === "1") {
   const site = new URL("../../../website/", import.meta.url);
-  const files = ["console.html", "console/app.js", "console/ui.js", "console/organizations.js", "console/session.js", "console/cases.js", "console/console.css", "ds/tokens.css", "logo.svg", "favicon.svg", "fonts.css", "fonts/geist-latin-wght-normal.woff2", "privacy.html", ...["connections", "remote", "automations", "ci-runners"].map(n => "docs/" + n + ".html")];
+  const files = ["console.html", "console/app.js", "console/ui.js", "console/organizations.js", "console/session.js", "console/cases.js", "console/hypergate.js", "console/console.css", "ds/tokens.css", "logo.svg", "favicon.svg", "fonts.css", "fonts/geist-latin-wght-normal.woff2", "privacy.html", ...["connections", "remote", "automations", "ci-runners"].map(n => "docs/" + n + ".html")];
   const types: Record<string,string> = {html:"text/html", js:"text/javascript", css:"text/css", svg:"image/svg+xml",woff2:"font/woff2"};
   for (const name of files) app.get("/"+name.replace(/\.html$/, ""), async (_req,reply) => reply.type(types[name.split(".").pop()!]).send(await readFile(new URL(name,site))));
 }

@@ -12,6 +12,7 @@ import { registerMachines, type MachinesOptions } from "./machines.js";
 import { confirmSignup, page, sendConfirmation, unsubscribe, type Mailer } from "./confirmations.js";
 import { parseSignup, recordSignup } from "./signups.js";
 import type { DeleteAuthUser } from "./supabase.js";
+import { registerHypergate } from "./hypergate.js";
 import { registerFleet } from "./fleet.js";
 import { registerPrivacyCases } from "./privacy-cases.js";
 import { registerOrgs } from "./orgs.js";
@@ -112,9 +113,13 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const { max, windowMs } = opts.rateLimit ?? { max: 5, windowMs: 60 * 60 * 1000 };
   const hits = new Map<string, { count: number; resetAt: number }>();
 
+  // Hypergate signs in explicitly from its loopback manager. Never authorize cookies or other Cloud routes for loopback.
+  const canRead = (origin: string, path: string) => origins.has(origin) ||
+    (/^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/.test(origin) &&
+      ["/v1/auth/config", "/v1/auth/session", "/v1/hypergate/setup"].includes(path));
   app.addHook("onRequest", async (req, reply) => {
     const origin = req.headers.origin;
-    if (origin && origins.has(origin)) {
+    if (origin && canRead(origin, req.url)) {
       reply.header("access-control-allow-origin", origin);
       reply.header("vary", "Origin");
     }
@@ -142,10 +147,10 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   }
 
   // Console calls use explicit bearers, never cookies. Only configured web origins may preflight.
-  for (const path of ["auth/*", "orgs", "orgs/*", "billing/*", "machines", "privacy/cases", "staff/privacy/cases", "staff/privacy/cases/*"]) {
+  for (const path of ["hypergate/setup", "auth/*", "orgs", "orgs/*", "billing/*", "machines", "privacy/cases", "staff/privacy/cases", "staff/privacy/cases/*"]) {
     app.options("/v1/" + path, async (req, reply) => {
-      if (!req.headers.origin || !origins.has(req.headers.origin)) return reply.code(403).send();
-      return reply.header("access-control-allow-methods", "GET,POST,PATCH,DELETE")
+      if (!req.headers.origin || !canRead(req.headers.origin, req.url)) return reply.code(403).send();
+      return reply.header("access-control-allow-methods", path === "hypergate/setup" ? "GET,PUT" : "GET,POST,PATCH,DELETE")
         .header("access-control-allow-headers", "authorization,content-type").code(204).send();
     });
   }
@@ -225,6 +230,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const auth = opts.authRateLimit ?? { max: 30, windowMs: 60 * 1000 };
   app.register(async (scope) => {
     await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
+    registerHypergate(scope, opts.db, features, { max: sync.max, timeWindow: sync.windowMs });
     const reviewers = opts.privacyReviewers ?? [];
     if (reviewers.length) scope.register(async privacy => registerPrivacyCases(privacy, opts.db, reviewers));
     registerSync(scope, opts.db);
