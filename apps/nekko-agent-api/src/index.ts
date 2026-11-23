@@ -10,7 +10,7 @@ import { resendMailer } from "./confirmations.js";
 import { purgeFeedbackScreenshots, purgeSignups } from "./retention.js";
 import { purgeLibraryHistory } from "./shares.js";
 import { Stripe } from "./billing.js";
-import { parseSigningKey, publicKeyText } from "./relay.js";
+import { parseSigningKey } from "./relay.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
 import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
 
@@ -108,7 +108,8 @@ const relaySigningKey = process.env.NEKKO_RELAY_SIGNING_KEY;
 const relay = relaySigningKey
   ? { signingKey: parseSigningKey(relaySigningKey), url: process.env.NEKKO_RELAY_URL ?? "wss://nekko-agent-relay.fly.dev" }
   : undefined;
-if (relay) console.log(`relay tickets: on (relay public key ${publicKeyText(relay.signingKey)})`);
+// Nothing derived from the signing key is logged; the README shows how to get its public half for the relay.
+if (relay) console.log("relay tickets: on");
 else console.warn("NEKKO_RELAY_SIGNING_KEY not set: Nekko Cloud Relay is off (the /v1/relay routes are absent).");
 // Nekko team accounts (comma-separated); unset uses the four team addresses in features.ts.
 const staffEmails = process.env.NEKKO_STAFF_EMAILS ? process.env.NEKKO_STAFF_EMAILS.split(",") : undefined;

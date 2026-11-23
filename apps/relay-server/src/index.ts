@@ -10,7 +10,7 @@ const HOST = brandEnv('RELAY_HOST') ?? '0.0.0.0';
 async function main() {
   const authzUrl = brandEnv('RELAY_AUTHZ_URL') || undefined;
   const allowUnauthenticated = brandEnv('RELAY_ALLOW_UNAUTHENTICATED') === '1';
-  // Nekko Cloud Relay (decision 0116): the Cloud API's public ticket key, as it prints it at start.
+  // Nekko Cloud Relay (decision 0116): the public half of the Cloud API's ticket signing key.
   const ticketText = brandEnv('RELAY_TICKET_KEY');
   const ticketKey = ticketText ? parseTicketKey(ticketText) : undefined;
   const { app } = buildRelay({ authzUrl, allowUnauthenticated, ticketKey });

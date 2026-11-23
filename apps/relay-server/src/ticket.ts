@@ -29,7 +29,7 @@ export interface Ticket {
 
 const OPAQUE = /^[A-Za-z0-9:_-]{1,80}$/;
 
-/** The relay's public key from its environment: the raw 32 bytes in base64url (what the API prints at start). */
+/** The relay's public key from its environment: the raw 32 bytes in base64url. */
 export function parseTicketKey(text: string): KeyObject {
   const raw = Buffer.from(text.trim(), 'base64url');
   if (raw.length !== 32) throw new Error('NEKKO_RELAY_TICKET_KEY must be a 32-byte Ed25519 public key in base64url');

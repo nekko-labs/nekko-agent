@@ -31,7 +31,7 @@ Env: `NEKKO_RELAY_PORT` (4400), `NEKKO_RELAY_HOST` (0.0.0.0),
 account for managed hosting; agents then connect with `&access=<bearer>` and the
 relay POSTs it to this URL, expecting `{ok:true}`),
 `NEKKO_RELAY_TICKET_KEY` (Nekko Cloud Relay, decision 0116: the Cloud API's Ed25519
-public key, 32 bytes base64url, as the API prints it at start. Agents then present
+public key, 32 bytes base64url; the API README shows how to make the pair. Agents then present
 `access=nkr1.…` tickets the relay checks itself, renew them with
 `{type:'access'}`, and the account channel opens on `/account`).
 

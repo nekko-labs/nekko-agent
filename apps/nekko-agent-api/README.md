@@ -308,12 +308,15 @@ turns the `cloud-relay` switch on (decision 0116). Pro and Team accounts then ge
 relay tickets from `POST /v1/relay/ticket`; Free gets 402.
 
 ```bash
-# an Ed25519 seed (32 bytes); keep it only in Fly secrets
-fly secrets set NEKKO_RELAY_SIGNING_KEY="$(openssl rand -base64 32)" NEKKO_RELAY_URL='wss://nekko-agent-relay.fly.dev'
+# An Ed25519 key pair; the private key goes only into Fly secrets.
+openssl genpkey -algorithm ed25519 -out relay-ticket.pem
+fly secrets set NEKKO_RELAY_SIGNING_KEY="$(cat relay-ticket.pem)" NEKKO_RELAY_URL='wss://nekko-agent-relay.fly.dev'
+# Its public half, as the relay takes it (32 bytes, base64url):
+openssl pkey -in relay-ticket.pem -pubout -outform DER | tail -c 32 | base64 | tr '+/' '-_' | tr -d '='
+rm relay-ticket.pem
 ```
 
-The API prints the matching public key at start (`relay tickets: on (relay public key …)`):
-set it on the relay as `NEKKO_RELAY_TICKET_KEY`.
+Set that public key on the relay as `NEKKO_RELAY_TICKET_KEY`.
 
 ## Billing: Stripe
 
