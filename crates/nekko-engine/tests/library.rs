@@ -330,10 +330,11 @@ fn names_a_model_by_its_file_when_the_header_name_is_generic() {
     let bonsai = row("Ternary-Bonsai-2-27B-PTQ1_0.gguf");
     assert_eq!(bonsai["name"], "Ternary-Bonsai-2-27B-PTQ1_0");
     assert_eq!(bonsai["sourceRepo"], "prism-ml/Ternary-Bonsai-2-27B-gguf");
-    // A name that says something keeps winning.
+    // A name that says something keeps winning, over the folder too: this
+    // Qwen3.8 quant sits in a folder named for another model.
     let saluki = row("Underdog-Saluki-27B-1.0-IQ2-mix.gguf");
     assert_eq!(saluki["name"], "Qwen3.8-27B GSQ-RCO");
-    assert_eq!(saluki["sourceRepo"], "ConwayResearch/Underdog-Saluki-27B-1.0");
+    assert!(saluki.get("sourceRepo").is_none());
     // Not the publisher/repo/file layout: no repo is guessed.
     let loose = row("Some-Model-Q4_K_M.gguf");
     assert_eq!(loose["name"], "Some-Model-Q4_K_M");
@@ -341,12 +342,22 @@ fn names_a_model_by_its_file_when_the_header_name_is_generic() {
 
     // An index written before names were vetted is corrected, not kept.
     let index = Path::new(&cfg.models_dir).join("library.json");
-    let text = std::fs::read_to_string(&index).unwrap().replace("\"Ternary-Bonsai-2-27B-PTQ1_0\"", "\"Hf\"");
-    assert!(text.contains("\"Hf\""));
-    std::fs::write(&index, text).unwrap();
+    // So is a folder repo stored over a real header name.
+    let mut stored: Value = serde_json::from_str(&std::fs::read_to_string(&index).unwrap()).unwrap();
+    for m in stored["models"].as_object_mut().unwrap().values_mut() {
+        let file = m["file"].as_str().unwrap().to_string();
+        if file.ends_with("PTQ1_0.gguf") {
+            m["name"] = json!("Hf");
+        } else if file.ends_with("IQ2-mix.gguf") {
+            m["sourceRepo"] = json!("ConwayResearch/Underdog-Saluki-27B-1.0");
+        }
+    }
+    std::fs::write(&index, stored.to_string()).unwrap();
     let again = library::list(&cfg).unwrap();
     let fixed = again.iter().find(|r| r["file"].as_str().unwrap().ends_with("PTQ1_0.gguf")).unwrap();
     assert_eq!(fixed["name"], "Ternary-Bonsai-2-27B-PTQ1_0");
+    let saluki = again.iter().find(|r| r["file"].as_str().unwrap().ends_with("IQ2-mix.gguf")).unwrap();
+    assert!(saluki.get("sourceRepo").is_none());
     std::fs::remove_dir_all(dir).ok();
 }
 

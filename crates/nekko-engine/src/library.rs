@@ -306,10 +306,16 @@ fn is_generic_name(name: &str) -> bool {
     words.peek().is_some() && words.all(|w| GENERIC.contains(&w))
 }
 
-/// LM Studio keeps `<root>/<publisher>/<repo>/<file>.gguf`, the Hugging Face
-/// repo it was fetched from. Anything laid out differently has no repo.
-fn lmstudio_repo(root: &Root, p: &str) -> Option<String> {
-    if root.provider.as_ref().and_then(Value::as_str) != Some("lmstudio") {
+fn is_lmstudio(root: &Root) -> bool {
+    root.provider.as_ref().and_then(Value::as_str) == Some("lmstudio")
+}
+
+/// LM Studio keeps `<root>/<publisher>/<repo>/<file>.gguf`, named after the
+/// Hugging Face repo it was fetched from. Only a row named after its file (the
+/// header had no usable name) takes it: a folder can be named for something
+/// else, and a real header name says better what the model is.
+fn lmstudio_repo(root: &Root, p: &str, shown: &str) -> Option<String> {
+    if !is_lmstudio(root) || shown != strip_gguf(&path::basename(p)) {
         return None;
     }
     match rel_parts(&root.path, p).as_slice() {
@@ -318,19 +324,22 @@ fn lmstudio_repo(root: &Root, p: &str) -> Option<String> {
     }
 }
 
-/// Rows indexed before names were vetted keep a meaningless "Hf" and no
-/// LM Studio repo. Fix just those fields so presets and the rest stay put.
+/// Rows indexed before names were vetted keep a meaningless "Hf", and LM Studio
+/// rows may carry a folder repo over a real header name. Fix just those fields
+/// so presets and the rest stay put.
 fn refresh_naming(root: &Root, p: &str, stored: &mut Map<String, Value>) -> bool {
     let mut changed = false;
     if stored.get("name").and_then(Value::as_str).is_some_and(is_generic_name) {
         stored.insert("name".into(), json!(strip_gguf(&path::basename(p))));
         changed = true;
     }
-    if !stored.contains_key("sourceRepo")
-        && let Some(repo) = lmstudio_repo(root, p)
-    {
-        stored.insert("sourceRepo".into(), json!(repo));
-        changed = true;
+    if is_lmstudio(root) {
+        let shown = stored.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+        let repo = lmstudio_repo(root, p, &shown).map(Value::String);
+        if stored.get("sourceRepo") != repo.as_ref() {
+            assign(stored, "sourceRepo", repo);
+            changed = true;
+        }
     }
     changed
 }
@@ -425,7 +434,7 @@ fn describe_with(
     m.insert("id".into(), json!(id));
     m.insert("name".into(), json!(shown));
     m.insert("file".into(), json!(p));
-    let source_repo = if typed { repo_from_typed_path(&root.path, p) } else { lmstudio_repo(root, p) };
+    let source_repo = if typed { repo_from_typed_path(&root.path, p) } else { lmstudio_repo(root, p, &shown) };
     put(&mut m, "sourceRepo", source_repo.map(Value::String));
     m.insert("folderId".into(), root.id.clone());
     put(&mut m, "folderProvider", root.provider.clone());
