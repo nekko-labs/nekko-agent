@@ -32,6 +32,7 @@ pub mod library;
 mod org_records;
 mod orgs;
 pub mod records;
+pub mod relay_channel;
 pub mod state;
 pub use nekko_vault as vault;
 
@@ -182,6 +183,8 @@ pub struct Cloud {
     host: Mutex<Option<Arc<HostInfo>>>,
     /// One publish, withdrawal or sharing change at a time.
     share: tokio::sync::Mutex<()>,
+    /// The Nekko Cloud Relay account channel: presence and sync nudges (decision 0116).
+    relay: relay_channel::Channel,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -214,6 +217,7 @@ impl Cloud {
             run: tokio::sync::Mutex::new(()),
             host: Mutex::new(None),
             share: tokio::sync::Mutex::new(()),
+            relay: relay_channel::Channel::default(),
         })
     }
 
@@ -582,6 +586,8 @@ impl Cloud {
         };
         json!({
             "signedIn": signed_in,
+            // Decision 0116: the account channel, while this account may use Nekko Cloud Relay.
+            "relay": if self.relay_included() { self.relay.status() } else { Value::Null },
             "account": s.account.as_ref().map(|a| json!({
                 "email": a.email, "plan": a.plan, "canSync": a.can_sync,
                 "staff": a.staff, "features": { "billing": a.billing, "libraryCloud": a.library_cloud, "cloudRelay": a.cloud_relay },
@@ -1424,6 +1430,10 @@ impl Cloud {
                 s.last_sync_at = Some(nekko_js::now_ms_f64());
             }
         })?;
+        // Something new is in Nekko Cloud: the account's other devices pull now (decision 0116).
+        if err.is_none() && lock(&self.live).pushed > 0 {
+            self.relay.nudge("sync");
+        }
         self.changed();
         result
     }
