@@ -326,7 +326,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
     if (!opts.ticketKey || typeof access !== 'string') return null;
     const t = checkTicket(opts.ticketKey, access);
     if (!t || t.scope !== scope) return null;
-    if (scope === 'agent' && t.room !== code?.toLowerCase()) return null;
+    if (scope === 'agent' && (typeof code !== 'string' || t.room !== code.toLowerCase())) return null;
     return t;
   };
   /** Fire `fn` when a ticket runs out: never later than the longest a ticket may run, whatever it says. */
@@ -384,11 +384,13 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
       const bucket: Bucket = { tokens: limits.rateBurst, last: Date.now() };
 
       if (role === 'agent') {
-        const granted = await authorizeAgent(q.access, code);
+        // A repeated query parameter arrives as an array: only a single string is a ticket or token.
+        const access = typeof q.access === 'string' ? q.access : undefined;
+        const granted = await authorizeAgent(access, code);
         if (!granted) {
           socket.close(
             4003,
-            opts.ticketKey && q.access?.startsWith('nkr1.')
+            opts.ticketKey && access?.startsWith('nkr1.')
               ? 'Nekko Cloud Relay ticket refused'
               : authzUrl
               ? 'relay access denied by NEKKO_RELAY_AUTHZ_URL'

@@ -92,6 +92,10 @@ describe('agents on Nekko Cloud Relay', () => {
     expect((await (await agent(url, ticket({ room: 'ffffffffffffffff' }))).closed).code).toBe(4003);
     expect((await (await agent(url, ticket({ scope: 'account' }))).closed).code).toBe(4003);
 
+    // A repeated access parameter is not a ticket.
+    const twice = await open(`${url}/relay?room=${ROOM}&role=agent&key=k&access=${ticket({})}&access=${ticket({})}`);
+    expect((await twice.closed).code).toBe(4003);
+
     const ok = await agent(url, ticket({}));
     const phone = await open(`${url}/relay?${new URLSearchParams({ room: ROOM, role: 'client', key: 'k' })}`);
     expect(await phone.next()).toEqual({ type: 'agent-online' });
