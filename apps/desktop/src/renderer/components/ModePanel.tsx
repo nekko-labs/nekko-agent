@@ -500,6 +500,12 @@ const LOCK_NOTE: Record<NonNullable<ToolApproachLock>, string> = {
   'claude-agent': "Claude Agent chats run Claude Code's own tools, so code mode doesn't apply and saves nothing. Pick another model to use it.",
 };
 
+/** The short why, shown on hovering a locked option. */
+const LOCK_HINT: Record<NonNullable<ToolApproachLock>, string> = {
+  sandbox: 'Sandbox chats always use the tool list.',
+  'claude-agent': "Claude Agent uses Claude Code's own tools. Pick another model to choose.",
+};
+
 /**
  * The Tools flyout's choice of how tools reach the model: a tool list, or
  * code mode (new). A sandbox chat and a Claude Agent chat keep the list.
@@ -508,15 +514,19 @@ export function ToolApproachPicker({ approach, locked = null, onPick }: { approa
   return (
     <div role="radiogroup" aria-label="How tools reach the model" data-tool-approaches>
       <p className="mode-group">How tools reach the model</p>
-      {TOOL_APPROACHES.map((a) => (
-        <button key={a.id} role="radio" aria-checked={approach === a.id} disabled={!!locked} data-tool-approach={a.id} className="mode-opt disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onPick(a.id)}>
-          <span className="mode-opt-ic">{a.id === 'code' ? <CodeIcon /> : <ListIcon />}</span>
-          <span className="min-w-0 flex-1">
-            <span className="mode-t">{a.label}{a.isNew && <span className="mode-badge is-accent">New</span>}{approach === a.id && <CheckIcon className="h-3.5 w-3.5 text-accent" />}</span>
-            <span className="mode-s">{a.description}</span>
-          </span>
-        </button>
-      ))}
+      {TOOL_APPROACHES.map((a) => {
+        const opt = (
+          <button key={a.id} role="radio" aria-checked={approach === a.id} disabled={!!locked} data-tool-approach={a.id} className="mode-opt disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onPick(a.id)}>
+            <span className="mode-opt-ic">{a.id === 'code' ? <CodeIcon /> : <ListIcon />}</span>
+            <span className="min-w-0 flex-1">
+              <span className="mode-t">{a.label}{a.isNew && <span className="mode-badge is-accent">New</span>}{approach === a.id && <CheckIcon className="h-3.5 w-3.5 text-accent" />}</span>
+              <span className="mode-s">{a.description}</span>
+            </span>
+          </button>
+        );
+        // A disabled button may swallow pointer events, so the hint hangs on a wrapper.
+        return locked ? <HoverTip key={a.id} label={LOCK_HINT[locked]} side="top"><span className="block">{opt}</span></HoverTip> : opt;
+      })}
       <a className="mode-link block" href={CODE_MODE_DOCS} data-code-mode-docs onClick={(e) => { e.preventDefault(); void window.nekko.openPath(CODE_MODE_DOCS); }}>What's code mode, and what does it save? <ExternalIcon className="inline h-2.5 w-2.5" /></a>
       {locked && <p className="mode-note" data-tool-approach-lock={locked}>{LOCK_NOTE[locked]}</p>}
     </div>
