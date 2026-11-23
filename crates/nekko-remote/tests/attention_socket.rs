@@ -68,6 +68,7 @@ impl Rig {
             &tokio::runtime::Handle::current(),
             Spawn {
                 url: format!("ws://{}", listener.local_addr().unwrap()),
+                access: None,
                 secret: "secret".into(),
                 room: "room".into(),
                 host_key: proof::new_key(&hello::os_random()),

@@ -32,6 +32,7 @@ pub mod library;
 mod org_records;
 mod orgs;
 pub mod records;
+pub mod relay_channel;
 pub mod state;
 pub use nekko_vault as vault;
 
@@ -182,6 +183,8 @@ pub struct Cloud {
     host: Mutex<Option<Arc<HostInfo>>>,
     /// One publish, withdrawal or sharing change at a time.
     share: tokio::sync::Mutex<()>,
+    /// The Nekko Cloud Relay account channel: presence and sync nudges (decision 0116).
+    relay: relay_channel::Channel,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -214,6 +217,7 @@ impl Cloud {
             run: tokio::sync::Mutex::new(()),
             host: Mutex::new(None),
             share: tokio::sync::Mutex::new(()),
+            relay: relay_channel::Channel::default(),
         })
     }
 
@@ -360,6 +364,31 @@ impl Cloud {
 
     fn token(&self) -> Result<String, String> {
         self.vault.get("token").ok_or_else(|| "Sign in to Nekko Cloud first.".to_string())
+    }
+
+    /// A Nekko Cloud Relay ticket (decision 0116): `agent` for this computer's
+    /// relay room, `account` for the account channel. The ticket, and how long
+    /// to keep it before asking for the next. Errors are what the owner reads.
+    pub async fn relay_ticket(&self, scope: &str, room: Option<&str>) -> Result<(String, Duration), String> {
+        let token = self.token().map_err(|_| "Sign in to Nekko Cloud to use Nekko Cloud Relay.".to_string())?;
+        let mut body = json!({ "scope": scope });
+        if let Some(room) = room {
+            body["room"] = json!(room);
+        }
+        match self.api.send(&token, reqwest::Method::POST, "/v1/relay/ticket", Some(body)).await {
+            Ok(v) => {
+                let ticket = v["ticket"].as_str().filter(|t| t.starts_with("nkr1.")).ok_or("Nekko Cloud sent no relay ticket.")?;
+                // At least a minute, so a short answer can't make the agent ask in a loop.
+                let renew = v["renewAfterSeconds"].as_u64().unwrap_or(3 * 3600).max(60);
+                Ok((ticket.to_string(), Duration::from_secs(renew)))
+            }
+            Err(err) => Err(match (err.status, err.code.as_str()) {
+                (402, _) => "Nekko Cloud Relay is part of Nekko Cloud Pro. Upgrade, or use Tailscale for free.".into(),
+                (404, _) => "Nekko Cloud Relay isn't available for this account yet.".into(),
+                (401, _) => "Sign in to Nekko Cloud again to use Nekko Cloud Relay.".into(),
+                _ => format!("Couldn't get a Nekko Cloud Relay ticket: {}", err.message),
+            }),
+        }
     }
 
     fn key_id(&self) -> u32 {
@@ -557,9 +586,11 @@ impl Cloud {
         };
         json!({
             "signedIn": signed_in,
+            // Decision 0116: the account channel, while this account may use Nekko Cloud Relay.
+            "relay": if self.relay_included() { self.relay.status() } else { Value::Null },
             "account": s.account.as_ref().map(|a| json!({
                 "email": a.email, "plan": a.plan, "canSync": a.can_sync,
-                "staff": a.staff, "features": { "billing": a.billing, "libraryCloud": a.library_cloud },
+                "staff": a.staff, "features": { "billing": a.billing, "libraryCloud": a.library_cloud, "cloudRelay": a.cloud_relay },
             })),
             "library": library,
             "oauthPending": live.oauth.is_some(),
@@ -1399,6 +1430,10 @@ impl Cloud {
                 s.last_sync_at = Some(nekko_js::now_ms_f64());
             }
         })?;
+        // Something new is in Nekko Cloud: the account's other devices pull now (decision 0116).
+        if err.is_none() && lock(&self.live).pushed > 0 {
+            self.relay.nudge("sync");
+        }
         self.changed();
         result
     }

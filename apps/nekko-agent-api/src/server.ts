@@ -14,6 +14,7 @@ import { parseSignup, recordSignup } from "./signups.js";
 import type { DeleteAuthUser } from "./supabase.js";
 import { registerFleet } from "./fleet.js";
 import { registerOrgs } from "./orgs.js";
+import { registerRelay, type RelayOptions } from "./relay.js";
 import { registerShares } from "./shares.js";
 import { registerSync } from "./sync.js";
 
@@ -52,6 +53,8 @@ export interface ServerOptions {
   accountsAllowedEmails?: string[];
   /** Stripe plans and billing (issue #2724); without it the /v1/billing routes are absent. */
   stripe?: Stripe;
+  /** Nekko Cloud Relay tickets (decision 0116); without it the /v1/relay routes are absent. */
+  relay?: RelayOptions;
   /** Lower-case emails of Nekko team accounts, who switch unreleased features on. Defaults to DEFAULT_STAFF_EMAILS. */
   staffEmails?: string[];
   /** Sends signup confirmation emails; without it signups still save and the email is skipped. */
@@ -100,7 +103,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const features: Features = {
     staff: new Set((opts.staffEmails ?? DEFAULT_STAFF_EMAILS).map((e) => e.trim().toLowerCase()).filter(Boolean)),
     // library-multiplayer joins once the service runs its relay (#2751).
-    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud"]),
+    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud", ...(opts.relay ? ["cloud-relay"] as const : [])]),
   };
   const gate = accountGateFrom(opts.accountsAllowedDomains, opts.accountsAllowedEmails);
   if (gate) app.decorate("accountGate", gate);
@@ -219,6 +222,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs }, { driver: opts.machines?.driver, deleteAuthUser: opts.deleteAuthUser, stripe: opts.stripe }, features);
     registerFeatures(scope, opts.db, features);
     if (opts.stripe) registerBilling(scope, opts.db, opts.stripe, features, opts.publicUrl ?? DEFAULT_PUBLIC_URL);
+    if (opts.relay) registerRelay(scope, opts.db, features, opts.relay);
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
   registerFeedback(app, opts.db, opts.feedbackRateLimit ?? { max: 10, windowMs: 60 * 60 * 1000 }, opts.feedbackScreenshotLimit);

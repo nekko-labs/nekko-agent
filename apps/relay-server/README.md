@@ -29,7 +29,11 @@ docker run -p 4400:4400 nekko-agent-relay
 Env: `NEKKO_RELAY_PORT` (4400), `NEKKO_RELAY_HOST` (0.0.0.0),
 `NEKKO_RELAY_AUTHZ_URL` (optional: gate agent enrollment on a Nekko Cloud
 account for managed hosting; agents then connect with `&access=<bearer>` and the
-relay POSTs it to this URL, expecting `{ok:true}`).
+relay POSTs it to this URL, expecting `{ok:true}`),
+`NEKKO_RELAY_TICKET_KEY` (Nekko Cloud Relay, decision 0116: the Cloud API's Ed25519
+public key, 32 bytes base64url; the API README shows how to make the pair. Agents then present
+`access=nkr1.…` tickets the relay checks itself, renew them with
+`{type:'access'}`, and the account channel opens on `/account`).
 
 The managed instance lives at `wss://nekko-agent-relay.fly.dev`
 (`fly deploy -c apps/relay-server/fly.toml --dockerfile apps/relay-server/Dockerfile .` from

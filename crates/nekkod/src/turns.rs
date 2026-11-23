@@ -2262,7 +2262,7 @@ fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec
 /// `nekko_context::DESIGN_RULES`, and the project's own instructions win.
 fn claude_design_note() -> String {
     format!(
-        "Nekko design note: {} {} Where the project's own instructions differ, follow them. Local Nekko data: when present, ~/.nekko is available without attaching it as a project; normal approvals still apply. Agent data defaults to ~/.nekko/nekko-agent. Never publish credentials or private chats.",
+        "Nekko design note: {} {} Local Nekko data: when present, ~/.nekko is available without attaching it as a project; normal approvals still apply. Agent data defaults to ~/.nekko/nekko-agent. Never publish credentials or private chats. Where the project's own instructions differ, follow them.",
         nekko_context::DESIGN_RULES[0],
         nekko_context::DESIGN_RULES[1]
     )
@@ -4454,6 +4454,8 @@ mod tests {
         }
         assert!(text.contains("nekko-designs/") && text.contains("never in reports/"));
         assert!(text.contains("checkout-design-v2.html"));
+        assert!(text.contains("Agent data defaults to ~/.nekko/nekko-agent."));
+        assert!(text.contains("normal approvals still apply."));
         assert!(text.ends_with("Where the project's own instructions differ, follow them."));
         assert_eq!(user["content"], "Mock up the checkout", "the saved message is not edited");
         // With the naming note, the design note comes first and each is added once.

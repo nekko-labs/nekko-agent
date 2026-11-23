@@ -342,6 +342,11 @@ ${rendered.html}
 // who shipped them.
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i;
 const text = (v) => typeof v === 'string' && v.trim() !== '';
+// A highlight's optional `kind`, and how the page labels it.
+const KINDS = { improvement: 'Improvements', performance: 'Performance', fix: 'Fixes' };
+// The home page's pixel Nekko (apps/website/index.html, .pixel-nekko) with its
+// happy eyes, held still: it sits on the headliners card's top edge.
+const HEADLINERS_NEKKO = `<svg class="headliners-nekko" viewBox="0 0 32 32" width="56" height="56" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" style="fill: var(--mascot-face); stroke: var(--mascot-line)" stroke-width="2" /><path d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" style="fill: var(--mascot-eyes)" /><path d="M15 20H17V21H15Z" style="fill: var(--lavender)" /></svg>`;
 
 // Validate the highlights file and list its release lines newest first. Links
 // are built from the login, PR number and tag, so each is checked here.
@@ -363,6 +368,8 @@ export function parseWhatsNew(data) {
       if (!Number.isInteger(h.pr) || h.pr < 1) fail(`${h.title}: no pull request number`);
       if (!Array.isArray(h.authors) || !h.authors.length) fail(`${h.title}: no author`);
       for (const login of h.authors) if (!LOGIN.test(login ?? '')) fail(`${h.title}: not a GitHub login: ${login}`);
+      if ('major' in h && typeof h.major !== 'boolean') fail(`${h.title}: major is true or false`);
+      if ('kind' in h && !Object.hasOwn(KINDS, h.kind)) fail(`${h.title}: kind is one of ${Object.keys(KINDS).join(', ')}`);
     }
     // Everyone who merged a pull request in this line; the highlights' authors are among them.
     if (!Array.isArray(entry.contributors) || !entry.contributors.length) fail('contributors are missing');
@@ -411,11 +418,11 @@ export function whatsNewPage(lines, avatars = new Map(), rng = Math.random) {
   const description = 'The changes worth knowing in each Nekko Agent release, and the people who shipped them.';
   const canonical = `${ORIGIN}/whatsnew`;
   const og = `${ORIGIN}/og/whatsnew.jpg?v=${OG_VERSION}`;
-  const face = (login) => {
+  const face = (login, size = 28) => {
     const avatar = avatars.get(login.toLowerCase());
     return (
       `<span class="by-avatar" aria-hidden="true">${escapeHtml(login.slice(0, 2).toUpperCase())}` +
-      (avatar ? `<img class="by-img" src="${escapeHtml(avatar)}" alt="" width="28" height="28" loading="lazy" decoding="async" />` : '') +
+      (avatar ? `<img class="by-img" src="${escapeHtml(avatar)}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async" />` : '') +
       `</span>`
     );
   };
@@ -438,35 +445,68 @@ ${lines
   )
   .join('\n')}
       </nav>`;
+  const pr = (n) => `<a href="${GITHUB}/pull/${n}" rel="noopener">#${n}</a>`;
+  const highlight = (h, cls = '') => `          <li${cls}>
+            <h3>${escapeHtml(h.title)}</h3>
+            <p>${escapeHtml(h.detail)}</p>
+            <p class="shipped"><span class="by-faces">${h.authors.map((a) => face(a)).join('')}</span><span>Shipped by ${h.authors.map(person).join(', ')} <span aria-hidden="true">·</span> ${pr(h.pr)}</span></p>
+          </li>`;
+  const everyone = (l) => `        <p class="everyone-who">Everyone who shipped ${l.line}</p>
+        <ul class="everyone">
+${shuffled(l.contributors)
+  .map((login) => `          <li><a class="by" href="https://github.com/${login}" rel="noopener">${face(login)}${escapeHtml(login)}</a></li>`)
+  .join('\n')}
+        </ul>`;
+  // A one-liner's credit: small faces, then each login, as "Shipped by" does on a headliner.
+  // The rest of a release's highlights go under one heading per kind, in KINDS order, then the untagged.
+  const oneLinerBy = (authors) => `<span class="more-by"><span class="by-faces">${authors.map((a) => face(a, 20)).join('')}</span><span>${authors.map(person).join(', ')}</span></span>`;
+  // A release with major highlights: its people first, the headliners in the
+  // soft panel under the pixel Nekko, then the rest as one-liners.
+  const headlined = (l, majors) => {
+    const rest = l.highlights.filter((h) => !h.major);
+    return `${everyone(l)}
+        <div class="headliners">
+          <p class="headliners-tab">${HEADLINERS_NEKKO}<span class="headliners-word">Headliners</span></p>
+          <ul class="headliner-list">
+${majors.map((h, i) => highlight(h, i === 0 ? ' class="headliner-lead"' : '')).join('\n')}
+          </ul>
+        </div>${
+          rest.length
+            ? `
+        <div class="more-all">
+${[...Object.keys(KINDS), undefined]
+  .map((kind) => [kind ? KINDS[kind] : `Also in ${l.line}`, rest.filter((h) => h.kind === kind)])
+  .filter(([, items]) => items.length)
+  .map(
+    ([heading, items]) => `          <h3 class="more-group">${heading}</h3>
+          <ul class="more">
+${items.map((h) => `            <li><span class="more-title">${escapeHtml(h.title)}</span>${oneLinerBy(h.authors)}<span class="more-dot" aria-hidden="true">·</span><span class="more-pr">${pr(h.pr)}</span></li>`).join('\n')}
+          </ul>`,
+  )
+  .join('\n')}
+        </div>`
+            : ''
+        }`;
+  };
+  // A release with none renders as it did before headliners.
+  const plain = (l) => `        <ul class="highlights">
+${l.highlights.map((h) => highlight(h)).join('\n')}
+        </ul>
+${everyone(l)}`;
   const sections = lines
-    .map(
-      (l) => `
+    .map((l) => {
+      const majors = l.highlights.filter((h) => h.major);
+      return `
       <section id="${l.line}" aria-labelledby="release-${l.line}">
         <header class="release-head">
           <h2 id="release-${l.line}">${l.line}</h2>
           <time datetime="${l.date}">${monthYear(l.date)}</time>
         </header>
         <p class="release-intro">${escapeHtml(l.intro)}</p>
-        <ul class="highlights">
-${l.highlights
-  .map(
-    (h) => `          <li>
-            <h3>${escapeHtml(h.title)}</h3>
-            <p>${escapeHtml(h.detail)}</p>
-            <p class="shipped"><span class="by-faces">${h.authors.map(face).join('')}</span><span>Shipped by ${h.authors.map(person).join(', ')} <span aria-hidden="true">·</span> <a href="${GITHUB}/pull/${h.pr}" rel="noopener">#${h.pr}</a></span></p>
-          </li>`,
-  )
-  .join('\n')}
-        </ul>
-        <p class="everyone-who">Everyone who shipped ${l.line}</p>
-        <ul class="everyone">
-${shuffled(l.contributors)
-  .map((login) => `          <li><a class="by" href="https://github.com/${login}" rel="noopener">${face(login)}${escapeHtml(login)}</a></li>`)
-  .join('\n')}
-        </ul>
+${majors.length ? headlined(l, majors) : plain(l)}
         <p class="release-all"><a href="${GITHUB}/releases/tag/${l.tag}" rel="noopener">See every change in ${l.line} on GitHub ↗</a></p>
-      </section>`,
-    )
+      </section>`;
+    })
     .join('\n');
   return `<!doctype html>
 <html lang="en" data-theme="white">
@@ -542,6 +582,41 @@ ${shuffled(l.contributors)
         .rail { display: flex; flex-wrap: wrap; align-items: center; gap: 0 20px; margin-top: 20px; }
         .rail ul { display: flex; flex-wrap: wrap; gap: 0 20px; }
         .rail[data-solo] { display: none; }
+      }
+      /* A release's headliners: a soft plum panel, no border or offset shadow, with the pixel Nekko peeking over its top edge. Still: no motion. */
+      .headliners { position: relative; margin: 64px 0 0; padding: 40px 36px 34px; background: var(--band-peach); border-radius: 18px; }
+      :root[data-theme='dark'] .headliners { background: var(--peach-soft); }
+      .legal .headliners-tab { position: absolute; top: -34px; left: 28px; display: flex; align-items: flex-end; gap: 10px; margin: 0; }
+      .headliners-nekko { flex: none; overflow: visible; }
+      .headliners-word { padding-bottom: 6px; color: var(--lavender); font: 700 24px/1 var(--led); letter-spacing: 0.04em; text-transform: uppercase; }
+      :root[data-theme='dark'] .headliners-word { color: var(--accent); }
+      .headliner-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 28px; }
+      .headliner-list p { margin: 0; }
+      .headliner-list .shipped { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; }
+      .legal .headliner-lead h3 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+      @media (min-width: 900px) { .headliner-list { grid-template-columns: 1fr 1fr; gap: 28px 32px; } .headliner-lead, .headliner-list > li:last-child:nth-child(even) { grid-column: 1 / -1; } }
+      @media (max-width: 560px) { .headliners { padding: 34px 20px 24px; } .legal .headliners-tab { left: 16px; } }
+      /* The other highlights, one heading per kind. Narrow: the title, then who shipped it and the pull request under it.
+         From 560px: one grid for every group (title, author, pull request), so the columns line up down the page. */
+      .more-all { margin: 44px 0 0; }
+      .legal .more-group { margin: 32px 0 12px; font: 12px var(--retro-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+      .legal .more-group:first-child { margin-top: 0; }
+      .more { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; font-size: 15px; }
+      .more li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--ink); }
+      .more-title { flex: 1 0 100%; }
+      .more-by { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+      .more .by-avatar { width: 20px; height: 20px; font-size: 8px; }
+      .more .by-avatar + .by-avatar { margin-left: -5px; }
+      .more-dot { color: var(--muted); }
+      .more-pr { font-size: 14px; font-variant-numeric: tabular-nums; }
+      .legal .more-pr a { color: var(--muted); }
+      @media (min-width: 560px) {
+        .more-all { display: grid; grid-template-columns: minmax(0, 1fr) max-content max-content; column-gap: 28px; }
+        .more-all > .more-group { grid-column: 1 / -1; }
+        .more-all > .more, .more li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
+        .more { gap: 10px; }
+        .more-dot { display: none; }
+        .more-pr { justify-self: end; }
       }
     </style>
   </head>
