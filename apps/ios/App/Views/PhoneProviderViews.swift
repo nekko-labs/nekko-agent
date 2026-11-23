@@ -39,12 +39,12 @@ struct PhoneModelsView: View {
     @State private var next: ModelsSheet?
 
     /// The providers most people reach for, in the desktop's order.
-    private static let popular = ["anthropic", "openai", "gemini", "openrouter", "ollama-cloud"]
+    private static let popular = ["chatgpt", "anthropic", "openai", "gemini", "openrouter", "ollama-cloud"]
 
     var body: some View {
         List {
             Section {
-                Text("Chats run on \(ChatPlace.phoneName) itself, with your own key, and have no tools. Keys stay in this iPhone’s Keychain.")
+                Text("Chats run on \(ChatPlace.phoneName) itself, with your own key or ChatGPT sign-in, and have no tools. Keys and sign-ins stay in this iPhone’s Keychain.")
                     .font(.footnote).foregroundStyle(palette.inkSoft)
                     .listRowBackground(Color.clear)
             }

@@ -11,6 +11,10 @@ Tracked by #2079 (CTA sizing) and #2082 (questions and visible replies).
 
 `[implemented in source; unit-tested; before/after screenshots in the PR]` Philip asked for slimmer buttons across the app. `.btn` is now 28px tall with a mouse or trackpad and keeps the 44 × 44 target only under a coarse pointer (a finger), so the Local Web UI on a phone or a touch laptop is unchanged ([decision 0079](../../docs/decisions/0079-buttons-are-slim-for-a-pointer-and-44px-for-a-finger.md)). This supersedes the first point below for `.btn` on pointer devices. Composer attachment, dictation and send/stop, and question options and Back, use the 44px target directly and are unchanged. The native iOS and Android apps keep their platforms' own target sizes.
 
+## Composer bar icon buttons match the model chip (2026-11-23)
+
+`[implemented in source; unit-tested]` The composer bar's attach, dictation and send/stop buttons now follow `.btn`: 28 × 28 with a mouse or trackpad and 44 × 44 under a coarse pointer, so they match the 28px model chip beside them ([decision 0117](../../docs/decisions/0117-composer-bar-icon-buttons-are-slim-for-a-pointer.md), amending 0079). Closed, the dictation island is as wide as its button. This supersedes the previous section's "unchanged" for these three controls on pointer devices; question options and Back keep the 44px target on every device.
+
 ## Implemented in this change
 
 - Shared desktop (macOS, Windows, Linux) and Local Web UI `.btn` controls reserve a real 44 × 44 CSS-pixel minimum layout target. Composer attachment, dictation, send/stop, and question option/navigation controls use the same minimum without enlarging their glyphs. Expanded dictation still collapses to a 44px target.

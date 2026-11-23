@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>What's new: headliners first</title>
+<style>
+/* The website's tokens (apps/website/styles.css), White and Dark. Fonts fall back to the system's: nothing is fetched. */
+:root{color-scheme:light dark;--bg:#fbf6f8;--bg-2:#ffffff;--ink:#16161c;--muted:#5d5970;--line:rgba(22,22,28,.1);--accent:#190019;--lavender:#854f6c;--sticker:#16161c;--mascot-face:#ffffff;--mascot-line:#190019;--mascot-eyes:#190019;--canvas:#eee8ec;
+--sans:'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace;--led:'Handjet',var(--sans);--retro-mono:'Space Mono',var(--mono)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0c0c11;--bg-2:#16161c;--ink:#ffffff;--muted:#a3a1b0;--line:#26262f;--accent:#c99bb3;--sticker:#854f6c;--mascot-face:#16161c;--mascot-line:#f3e8ee;--mascot-eyes:#ffffff;--canvas:#050508}}
+:root[data-theme="dark"]{--bg:#0c0c11;--bg-2:#16161c;--ink:#ffffff;--muted:#a3a1b0;--line:#26262f;--accent:#c99bb3;--sticker:#854f6c;--mascot-face:#16161c;--mascot-line:#f3e8ee;--mascot-eyes:#ffffff;--canvas:#050508}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);font:15px/1.6 var(--sans)}
+header{padding:40px 40px 8px;max-width:1100px}
+header h1{margin:0;font-size:24px;font-weight:700}
+header p{margin:8px 0;color:var(--muted)}
+.canvas{display:flex;gap:40px;padding:20px 40px 60px;align-items:flex-start;overflow-x:auto}
+.frame{flex:0 0 auto}
+.caption{font-size:12px;color:var(--muted);margin-bottom:8px}
+.caption b{color:var(--ink);font-weight:600}
+.page{background:var(--bg);padding:48px 40px 56px;line-height:1.65}
+.page.desk{width:800px}.page.phone{width:390px;padding:40px 20px 48px}
+.page p,.page li{color:var(--muted)}.page a{color:var(--accent)}
+.head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 20px}
+.head h2{font:600 44px/1 var(--led);margin:0;color:var(--ink)}
+.head time,.eyebrow{font:12px var(--retro-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.intro{margin:8px 0 0}
+.eyebrow{margin:40px 0 0}
+.everyone{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:12px 20px;font-size:14px}
+.everyone a{display:inline-flex;align-items:center;gap:8px}
+.face{display:inline-grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;background:var(--bg);color:var(--ink);font:600 10px var(--mono)}
+.card .face{background:var(--bg)}.everyone .face{background:var(--bg-2)}
+.card{position:relative;margin:72px 0 0;padding:44px 34px 32px;background:var(--bg-2);border:2px solid var(--sticker);border-radius:16px;box-shadow:5px 5px 0 var(--lavender)}
+.phone .card{padding:36px 20px 24px}
+.tab{position:absolute;top:-42px;left:26px;display:flex;align-items:flex-end;gap:8px;margin:0}
+.phone .tab{left:16px}
+.pill{display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;padding:3px 14px 3px 10px;border-radius:999px;background:var(--ink);color:var(--bg);font:700 19px/1.2 var(--led);letter-spacing:.06em;text-transform:uppercase}
+.pill svg{fill:currentColor}
+.list{list-style:none;padding:0;margin:0;display:grid;gap:28px}
+.desk .list{grid-template-columns:1fr 1fr;gap:28px 32px}.desk .lead{grid-column:1/-1}
+.list h3{font:600 17px/1.4 var(--sans);letter-spacing:-.01em;margin:0 0 2px;color:var(--ink)}
+.lead h3{font-size:24px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+.list p{margin:0}.shipped{display:flex;align-items:center;gap:10px;margin-top:10px!important;font-size:14px}
+.more-in{margin:44px 0 0}
+.more{list-style:none;padding:16px 0 0;margin:14px 0 0;border-top:1px solid var(--line);display:grid;gap:10px}
+.more li{display:grid;grid-template-columns:92px minmax(0,1fr);align-items:baseline;gap:0 12px;color:var(--ink)}
+.kind{font:11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.all{margin:32px 0 0}
+</style>
+<body>
+<header>
+  <h1>What's new: headliners first</h1>
+  <p>A release's major highlights sit in the site's sticker card under the pixel Nekko, after the people who shipped it; the rest follow as tagged one-liners. A release with no major highlight keeps today's plain list. Option D of four from the #2810 mockup; real 0.10 data.</p>
+</header>
+<div class="canvas">
+  <div class="frame">
+    <div class="caption"><b>/whatsnew · desktop</b> · the 0.10 section, 720px column</div>
+    <div class="page desk" id="desk"></div>
+  </div>
+  <div class="frame">
+    <div class="caption"><b>/whatsnew · 390px</b> · headliners in one column</div>
+    <div class="page phone" id="phone"></div>
+  </div>
+</div>
+<template id="release">
+  <div class="head"><h2>0.10</h2><time>November 2026</time></div>
+  <p class="intro">Billing and provider setup move into quieter screens, and Ctrl/Cmd+K searches everything.</p>
+  <p class="eyebrow">Everyone who shipped 0.10</p>
+  <ul class="everyone">
+    <li><a href="#"><span class="face">ER</span>ermish</a></li><li><a href="#"><span class="face">GH</span>Ghezz9</a></li><li><a href="#"><span class="face">TR</span>TravisJPN</a></li><li><a href="#"><span class="face">AU</span>austinermish</a></li><li><a href="#"><span class="face">MA</span>matthewkurtti</a></li><li><a href="#"><span class="face">BO</span>BobbyRobBob</a></li>
+  </ul>
+  <div class="card">
+    <p class="tab"><svg viewBox="0 0 32 32" width="60" height="60" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" style="fill:var(--mascot-face);stroke:var(--mascot-line)" stroke-width="2"/><path d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" style="fill:var(--mascot-eyes)"/><path d="M15 20H17V21H15Z" style="fill:var(--lavender)"/></svg><span class="pill"><svg viewBox="0 0 8 8" width="10" height="10" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 0H5V3H8V5H5V8H3V5H0V3H3Z"/></svg>Headliners</span></p>
+    <ul class="list">
+      <li class="lead"><h3>Search everything with Ctrl/Cmd+K</h3><p>Find commands, chats and settings.</p><p class="shipped"><span class="face">ER</span><span>Shipped by <a href="#">ermish</a> · <a href="#">#2389</a></span></p></li>
+      <li><h3>Plan &amp; billing in Settings</h3><p>See your plan and switch teams.</p><p class="shipped"><span class="face">ER</span><span>Shipped by <a href="#">ermish</a> · <a href="#">#2732</a></span></p></li>
+      <li><h3>Guided Google Gemini setup</h3><p>Connect Gemini step by step.</p><p class="shipped"><span class="face">ER</span><span>Shipped by <a href="#">ermish</a> · <a href="#">#2726</a></span></p></li>
+    </ul>
+  </div>
+  <p class="eyebrow more-in">More in 0.10</p>
+  <ul class="more">
+    <li><span class="kind">Improvement</span><span>Fusion routing strategies · <a href="#">#2737</a></span></li>
+    <li><span class="kind">Improvement</span><span>Winter theme · <a href="#">#2412</a></span></li>
+    <li><span class="kind">Improvement</span><span>Nekko Agent in CarPlay · <a href="#">#2783</a></span></li>
+    <li><span class="kind">Performance</span><span>nekkod's memory stays bounded · <a href="#">#2368</a></span></li>
+    <li><span class="kind">Fix</span><span>The macOS app launches again · <a href="#">#2705</a></span></li>
+  </ul>
+  <p class="all"><a href="#">See every change in 0.10 on GitHub ↗</a></p>
+</template>
+<script>
+  for (const id of ['desk', 'phone']) document.getElementById(id).append(document.getElementById('release').content.cloneNode(true));
+</script>
+</body>
+</html>

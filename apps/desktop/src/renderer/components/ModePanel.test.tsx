@@ -46,6 +46,26 @@ describe('Mode panel markup', () => {
     expect(out).toContain('data-hover-tip="Your machine, with your shell, apps and credentials.');
     expect(out).toContain('data-hover-tip="This chat is not saved to your history.');
   });
+  it('puts the user\'s own modes first, under Custom, above the built-in ones', () => {
+    expect(html()).not.toContain('data-mode-group="custom"');
+    const mine = { id: 'careful', name: 'Careful', icon: 'sparkle' as const, options: starter('cloud').options };
+    store.settings = { ...store.settings, savedModes: [...STARTER_MODES, mine] };
+    const out = html();
+    const at = (s: string) => out.indexOf(s);
+    expect(at('data-mode-group="custom"')).toBeGreaterThan(-1);
+    expect(at('data-mode-group="custom"')).toBeLessThan(at('data-saved-mode="careful"'));
+    expect(at('data-saved-mode="careful"')).toBeLessThan(at('data-mode-group="starter"'));
+    expect(at('data-mode-group="starter"')).toBeLessThan(at('data-saved-mode="cloud"'));
+    expect(out).toContain('>Built-in</p>');
+  });
+  it('scrolls the modes on their own and keeps New mode outside the list', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, name: `Mode ${i}`, icon: 'sparkle' as const, options: starter('cloud').options }));
+    store.settings = { ...store.settings, savedModes: [...STARTER_MODES, ...many] };
+    const list = html().match(/<div class="mode-rail-list"[^>]*>([\s\S]*?)<\/div><button[^>]*>.*?New mode/);
+    expect(list).not.toBeNull();
+    expect(list![1]).toContain('data-saved-mode="m29"');
+    expect(list![1]).not.toContain('New mode');
+  });
   it('marks the matching saved mode and the planned settings', () => {
     session = { ...base, cloudOnly: true };
     const out = html();
@@ -75,9 +95,13 @@ describe('Mode panel markup', () => {
     const sandboxed = renderToStaticMarkup(<ToolApproachPicker approach="list" locked="sandbox" onPick={() => {}} />);
     expect(sandboxed.match(/disabled=""/g)).toHaveLength(2);
     expect(sandboxed).toContain('Sandbox chats use the tool list');
+    // Hovering a locked option says why it can't be picked.
+    expect(sandboxed.match(/data-hover-tip="Sandbox chats always use the tool list."/g)).toHaveLength(2);
+    expect(out).not.toContain('data-hover-tip');
     const claude = renderToStaticMarkup(<ToolApproachPicker approach="list" locked="claude-agent" onPick={() => {}} />);
     expect(claude.match(/disabled=""/g)).toHaveLength(2);
     expect(claude).toContain("Claude Agent chats run Claude Code&#x27;s own tools");
+    expect(claude).toContain('data-hover-tip="Claude Agent uses Claude Code&#x27;s own tools. Pick another model to choose."');
   });
   it('says on the Tools row when the chat is in code mode', () => {
     session = { ...base, toolApproach: 'code' } as Session;

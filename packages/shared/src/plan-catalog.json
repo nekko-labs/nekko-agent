@@ -13,7 +13,7 @@
       "name": "Pro",
       "price": "stripe",
       "tagline": "Your way, on every device",
-      "points": ["Chats, Library and settings on every device", "Your computers as one fleet", "Nekko Cloud machines for your phone"]
+      "points": ["Chats, Library and settings on every device", "Reach your computers from anywhere with Nekko Cloud Relay", "Nekko Cloud machines for your phone"]
     },
     {
       "id": "team",
@@ -38,7 +38,8 @@
       "name": "Your phone",
       "rows": [
         { "feature": "Pair your phone on your own network", "free": true, "pro": true, "team": true },
-        { "feature": "Reach your computers from anywhere", "free": "Beta", "pro": true, "team": true },
+        { "feature": "Reach your computers from anywhere (Nekko Cloud Relay)", "free": false, "pro": true, "team": true },
+        { "feature": "Choose Nekko Cloud Relay or Tailscale per device", "free": false, "pro": true, "team": true },
         { "feature": "Nekko Cloud machines", "free": false, "pro": true, "team": true }
       ]
     },
