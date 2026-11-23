@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { parseList } from "../auth.js";
 import { migrate } from "../migrate.js";
@@ -38,6 +39,7 @@ const app = buildServer({
   accountsAllowedEmails: parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_EMAILS),
   // Team accounts that may switch unreleased features (the Library itest signs in as one); unset keeps the usual team.
   staffEmails: process.env.NEKKO_STAFF_EMAILS ? parseList(process.env.NEKKO_STAFF_EMAILS) : undefined,
+  privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS),
   allowedOrigins: [],
   logger: false,
   // Tests sign several devices in from one address.
@@ -47,5 +49,12 @@ const app = buildServer({
 });
 ({ jwks } = await fakeGoTrue(app, { baseUrl: () => base, code: process.env.DEV_CODE }));
 
+// Explicit file list: the local console never serves .env files or directory listings.
+if (process.env.DEV_WEB_CONSOLE === "1") {
+  const site = new URL("../../../website/", import.meta.url);
+  const files = ["console.html", "console/app.js", "console/ui.js", "console/organizations.js", "console/session.js", "console/cases.js", "console/console.css", "ds/tokens.css", "logo.svg", "favicon.svg", "fonts.css", "fonts/geist-latin-wght-normal.woff2", "privacy.html", ...["connections", "remote", "automations", "ci-runners"].map(n => "docs/" + n + ".html")];
+  const types: Record<string,string> = {html:"text/html", js:"text/javascript", css:"text/css", svg:"image/svg+xml",woff2:"font/woff2"};
+  for (const name of files) app.get("/"+name.replace(/\.html$/, ""), async (_req,reply) => reply.type(types[name.split(".").pop()!]).send(await readFile(new URL(name,site))));
+}
 await app.listen({ host: "127.0.0.1", port });
 console.log(`Nekko Cloud (local dev) on ${base} · plan ${plan} · fake Supabase Auth on the same port`);
