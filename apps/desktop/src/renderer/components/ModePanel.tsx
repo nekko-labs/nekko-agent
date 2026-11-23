@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND } from '@nekko-agent/shared';
 import type { ChatMode, EffortLevel, SavedModeSummaryPart, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
-  CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getWorkMode, matchSavedMode, newSavedModeId,
+  CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getWorkMode, isStarterMode, matchSavedMode, newSavedModeId,
   modePatchSkips, savedModeSummary, savedModeSummaryParts, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
@@ -363,27 +363,33 @@ export function ModePanel({
     </div>
   );
   const approvals: ChatMode = current.mode;
+  const railItem = (m: SavedMode) => {
+    const Glyph = SAVED_MODE_GLYPH[m.icon] ?? SparkleIcon;
+    const isDefault = m.id === defaultId;
+    return (
+      <div key={m.id} className="mode-rail-item" aria-checked={active?.id === m.id} role="radio" tabIndex={0} data-saved-mode={m.id}
+        title={`${m.name}: ${savedModeSummary(m.options) || 'local'}`}
+        onClick={() => void actions.applyMode(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void actions.applyMode(m); } }}>
+        <span className="mode-glyph"><Glyph /></span>
+        <span className="min-w-0 flex-1"><span className="mode-rail-n">{m.name}</span><span className="mode-rail-d">{savedModeSummary(m.options) || 'local'}</span></span>
+        <button className={`mode-star ${isDefault ? 'is-on' : ''}`} aria-label={isDefault ? `${m.name} is the default for new chats` : `Use ${m.name} for new chats`} title={isDefault ? 'Default for new chats (click to clear)' : 'Use for new chats'}
+          onClick={(e) => { e.stopPropagation(); void actions.toggleDefault(m.id); }}><StarIcon filled={isDefault} /></button>
+      </div>
+    );
+  };
+  // The user's own modes come first, under their own heading.
+  const custom = modes.filter((m) => !isStarterMode(m));
+  const starters = modes.filter(isStarterMode);
 
   return (<>
     <div ref={(el) => { panel.current = el; if (typeof panelRef === 'function') panelRef(el); else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }}
       style={style} className="mode-panel card fixed z-[100] shadow-(--shadow-float)" role="dialog" aria-label="Mode" data-mode-panel onKeyDown={onKeyDown}>
-      <div className="mode-rail" role="radiogroup" aria-label="Saved modes">
-        <p className="mode-sec">Saved modes</p>
-        {modes.map((m) => {
-          const Glyph = SAVED_MODE_GLYPH[m.icon] ?? SparkleIcon;
-          const isDefault = m.id === defaultId;
-          return (
-            <div key={m.id} className="mode-rail-item" aria-checked={active?.id === m.id} role="radio" tabIndex={0} data-saved-mode={m.id}
-              title={`${m.name}: ${savedModeSummary(m.options) || 'local'}`}
-              onClick={() => void actions.applyMode(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void actions.applyMode(m); } }}>
-              <span className="mode-glyph"><Glyph /></span>
-              <span className="min-w-0 flex-1"><span className="mode-rail-n">{m.name}</span><span className="mode-rail-d">{savedModeSummary(m.options) || 'local'}</span></span>
-              <button className={`mode-star ${isDefault ? 'is-on' : ''}`} aria-label={isDefault ? `${m.name} is the default for new chats` : `Use ${m.name} for new chats`} title={isDefault ? 'Default for new chats (click to clear)' : 'Use for new chats'}
-                onClick={(e) => { e.stopPropagation(); void actions.toggleDefault(m.id); }}><StarIcon filled={isDefault} /></button>
-            </div>
-          );
-        })}
-        <span className="flex-1" />
+      <div className="mode-rail">
+        {/* The list scrolls on its own so New mode stays in reach however many modes there are. */}
+        <div className="mode-rail-list" role="radiogroup" aria-label="Saved modes" data-mode-rail-list>
+          {custom.length > 0 && <><p className="mode-sec" data-mode-group="custom">Custom</p>{custom.map(railItem)}</>}
+          {starters.length > 0 && <><p className={`mode-sec${custom.length > 0 ? ' is-sub' : ''}`} data-mode-group="starter">{custom.length > 0 ? 'Built-in' : 'Saved modes'}</p>{starters.map(railItem)}</>}
+        </div>
         <button className="mode-rail-item" onClick={() => setSaving({ name: '', makeDefault: false })}><span className="mode-glyph"><PlusIcon /></span><span className="mode-rail-n">New mode</span></button>
       </div>
 
