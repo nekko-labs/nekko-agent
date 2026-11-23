@@ -1,3 +1,4 @@
+import { trimTrailingSlashes } from './trim.js';
 /**
  * Remote access (phone remote control) over the relay.
  *
@@ -108,13 +109,7 @@ export const CLOUD_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
 
 /** Whether a relay address is Nekko Cloud Relay (same scheme, host and port). */
 export function isCloudRelay(url: string | undefined | null): boolean {
-  // A loop, not /\/+$/: that regex is quadratic on a long run of slashes (CodeQL).
-  const norm = (u: string) => {
-    const t = u.trim();
-    let end = t.length;
-    while (end > 0 && t.charCodeAt(end - 1) === 47) end--;
-    return t.slice(0, end).toLowerCase();
-  };
+  const norm = (u: string) => trimTrailingSlashes(u.trim()).toLowerCase();
   return !!url && norm(url) === norm(CLOUD_RELAY_URL);
 }
 

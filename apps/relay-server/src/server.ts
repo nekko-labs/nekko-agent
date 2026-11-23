@@ -13,7 +13,7 @@ import {
   type CardState,
   type PushSender,
 } from './push.js';
-import { checkTicket, type Ticket } from './ticket.js';
+import { checkTicket, MAX_TICKET_SECONDS, type Ticket } from './ticket.js';
 
 /**
  * Nekko Agent relay v2, the piece that lets a paired phone reach a local agent
@@ -329,9 +329,13 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
     if (scope === 'agent' && t.room !== code?.toLowerCase()) return null;
     return t;
   };
-  /** Fire `fn` when a ticket runs out (setTimeout's limit is about 24.8 days; tickets last hours). */
-  const atExpiry = (exp: number, fn: () => void) =>
-    setTimeout(fn, Math.min(Math.max(0, exp * 1000 - Date.now()), 2 ** 31 - 1));
+  /** Fire `fn` when a ticket runs out: never later than the longest a ticket may run, whatever it says. */
+  const atExpiry = (exp: number, fn: () => void) => {
+    let wait = exp * 1000 - Date.now();
+    if (!(wait > 0)) wait = 0;
+    if (wait > MAX_TICKET_SECONDS * 1000) wait = MAX_TICKET_SECONDS * 1000;
+    return setTimeout(fn, wait);
+  };
 
   const authorizeAgent = async (access: string | undefined, code: string): Promise<boolean | Ticket> => {
     if (opts.ticketKey && access?.startsWith('nkr1.')) return ticketFor(access, 'agent', code) ?? false;

@@ -66,7 +66,7 @@ const agent = (url: string, access?: string, room = ROOM) =>
 describe('ticket format', () => {
   it("checks the API's vector", () => {
     const key = parseTicketKey(vector.publicKey);
-    expect(checkTicket(key, vector.ticket)).toEqual(vector.payload);
+    expect(checkTicket(key, vector.ticket, vector.payload.iat)).toEqual(vector.payload);
     expect(checkTicket(key, vector.ticket, vector.payload.exp)).toBeNull();
     expect(checkTicket(parseTicketKey(Buffer.alloc(32, 1).toString('base64url')), vector.ticket)).toBeNull();
     expect(() => parseTicketKey('abc')).toThrow();
@@ -79,6 +79,8 @@ describe('ticket format', () => {
     expect(checkTicket(publicKey, `${p}.${Buffer.from('{"v":1}').toString('base64url')}.${s}`)).toBeNull();
     expect(checkTicket(publicKey, ticket({ dev: 'has spaces' }))).toBeNull();
     expect(checkTicket(publicKey, ticket({ scope: 'agent', room: undefined }))).toBeNull();
+    // A signed ticket still may not claim to run for days: it would hold a timer that long.
+    expect(checkTicket(publicKey, ticket({ exp: Math.floor(Date.now() / 1000) + 2 * 24 * 3600 }))).toBeNull();
   });
 });
 

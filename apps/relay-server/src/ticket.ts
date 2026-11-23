@@ -10,6 +10,8 @@ import { createPublicKey, type KeyObject, verify } from 'node:crypto';
  */
 
 export const TICKET_PREFIX = 'nkr1';
+/** The longest a ticket may run from now; the API issues six hours. A ticket claiming more is refused. */
+export const MAX_TICKET_SECONDS = 24 * 60 * 60;
 
 export interface Ticket {
   v: 1;
@@ -52,7 +54,8 @@ export function checkTicket(key: KeyObject, text: string, nowSeconds = Math.floo
   try {
     const p = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Ticket;
     if (p?.v !== 1 || (p.scope !== 'agent' && p.scope !== 'account')) return null;
-    if (typeof p.exp !== 'number' || p.exp <= nowSeconds) return null;
+    if (typeof p.exp !== 'number' || !Number.isFinite(p.exp) || p.exp <= nowSeconds) return null;
+    if (p.exp - nowSeconds > MAX_TICKET_SECONDS) return null;
     if (typeof p.acct !== 'string' || !OPAQUE.test(p.acct) || typeof p.dev !== 'string' || !OPAQUE.test(p.dev)) return null;
     if (p.scope === 'agent' && typeof p.room !== 'string') return null;
     return p;
