@@ -299,6 +299,57 @@ fn files(dir: &Path) -> Vec<String> {
     out
 }
 
+/// A header with a name and the architecture the reader needs to accept it.
+fn named_gguf(name: &str) -> Vec<u8> {
+    build(&json!({ "pairs": [
+        ["general.architecture", { "type": "string", "value": "llama" }],
+        ["general.name", { "type": "string", "value": name }],
+    ] }))
+}
+
+#[test]
+fn names_a_model_by_its_file_when_the_header_name_is_generic() {
+    let dir = scratch("names");
+    let lm = dir.join("lmstudio");
+    let files = [
+        ("prism-ml/Ternary-Bonsai-2-27B-gguf/Ternary-Bonsai-2-27B-PTQ1_0.gguf", "Hf"),
+        ("ConwayResearch/Underdog-Saluki-27B-1.0/Underdog-Saluki-27B-1.0-IQ2-mix.gguf", "Qwen3.8-27B GSQ-RCO"),
+        ("loose/Some-Model-Q4_K_M.gguf", " models "),
+    ];
+    for (rel, name) in files {
+        let p = lm.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, named_gguf(name)).unwrap();
+    }
+    let models = dir.join("models").to_string_lossy().into_owned();
+    let folders = vec![json!({ "id": "lm", "path": lm.to_string_lossy(), "provider": "lmstudio", "enabled": true })];
+    let cfg = LibraryConfig { models_dir: models, folders, mlx_runnable: false, now: 1.0 };
+    let rows = library::list(&cfg).unwrap();
+    let row = |file: &str| rows.iter().find(|r| r["file"].as_str().unwrap().ends_with(file)).unwrap().clone();
+
+    let bonsai = row("Ternary-Bonsai-2-27B-PTQ1_0.gguf");
+    assert_eq!(bonsai["name"], "Ternary-Bonsai-2-27B-PTQ1_0");
+    assert_eq!(bonsai["sourceRepo"], "prism-ml/Ternary-Bonsai-2-27B-gguf");
+    // A name that says something keeps winning.
+    let saluki = row("Underdog-Saluki-27B-1.0-IQ2-mix.gguf");
+    assert_eq!(saluki["name"], "Qwen3.8-27B GSQ-RCO");
+    assert_eq!(saluki["sourceRepo"], "ConwayResearch/Underdog-Saluki-27B-1.0");
+    // Not the publisher/repo/file layout: no repo is guessed.
+    let loose = row("Some-Model-Q4_K_M.gguf");
+    assert_eq!(loose["name"], "Some-Model-Q4_K_M");
+    assert!(loose.get("sourceRepo").is_none());
+
+    // An index written before names were vetted is corrected, not kept.
+    let index = Path::new(&cfg.models_dir).join("library.json");
+    let text = std::fs::read_to_string(&index).unwrap().replace("\"Ternary-Bonsai-2-27B-PTQ1_0\"", "\"Hf\"");
+    assert!(text.contains("\"Hf\""));
+    std::fs::write(&index, text).unwrap();
+    let again = library::list(&cfg).unwrap();
+    let fixed = again.iter().find(|r| r["file"].as_str().unwrap().ends_with("PTQ1_0.gguf")).unwrap();
+    assert_eq!(fixed["name"], "Ternary-Bonsai-2-27B-PTQ1_0");
+    std::fs::remove_dir_all(dir).ok();
+}
+
 #[test]
 fn lists_imports_deletes_and_reports_as_the_host_does() {
     let g = golden();

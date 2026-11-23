@@ -18,6 +18,17 @@ describe('model families', () => {
   it('uses explicit base model metadata to match conversion repos', () => {
     expect(groupModelFamilies([local('weights', { sourceRepo: 'publisher/conversion' })], [catalog('conversion', { id: 'publisher/conversion', baseModel: 'Qwen/Qwen3-8B' })])[0].local).toHaveLength(1);
   });
+  it('names a borrowed LM Studio model by its repo and drops a trailing gguf', () => {
+    expect(modelFamilyName('prism-ml/Ternary-Bonsai-2-27B-gguf')).toBe('Ternary-Bonsai-2-27B');
+    expect(modelFamilyName('empero-ai/Qwen3.8-2B-Distill-GGUF')).toBe('Qwen3.8-2B-Distill');
+    const groups = groupModelFamilies([
+      local('Ternary-Bonsai-2-27B-PTQ1_0', { sourceRepo: 'prism-ml/Ternary-Bonsai-2-27B-gguf', folderProvider: 'lmstudio' }),
+      local('Ternary-Bonsai-2-27B-Q4_K_M', { sourceRepo: 'someone/Ternary-Bonsai-2-27B-GGUF', folderProvider: 'lmstudio' }),
+      local('Qwen3.8-2B-BF16', { sourceRepo: 'empero-ai/Qwen3.8-2B-Distill-GGUF', folderProvider: 'lmstudio' }),
+      local('Qwen3.8-4B-BF16', { sourceRepo: 'empero-ai/Qwen3.8-4B-Distill-GGUF', folderProvider: 'lmstudio' }),
+    ], []);
+    expect(groups.map(g => [g.name, g.local.length]).sort()).toEqual([['Qwen3.8-2B-Distill', 1], ['Qwen3.8-4B-Distill', 1], ['Ternary-Bonsai-2-27B', 2]]);
+  });
   it('normalizes filename suffixes without stripping parameter counts', () => {
     expect(modelFamilyName('owner/Qwen3-8B-Q4_K_M.gguf')).toBe('Qwen3-8B');
   });
