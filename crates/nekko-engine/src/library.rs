@@ -1033,6 +1033,20 @@ pub fn gpu_fit_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64>) ->
     }
 }
 
+/// `gpu_fit_for` on the same card with nothing else holding it: every device's
+/// free memory is its total less the desktop reserve. `None` where that idea
+/// does not apply (unified memory, or no GPU).
+pub fn gpu_fit_idle_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64>) -> Option<&'static str> {
+    if hw.unified || hw.devices.is_empty() {
+        return None;
+    }
+    let mut idle = hw.clone();
+    for d in &mut idle.devices {
+        d.free = (d.total - capacity::DESKTOP_GPU_RESERVE_BYTES).max(0.0);
+    }
+    Some(gpu_fit_for(model, &idle, overhead_floor))
+}
+
 /// `engine:models`: the library with load state, the last failure and the
 /// GPU-fit verdict folded in. `hw` is `None` when no GPU probe answered.
 pub fn with_load_state(
@@ -1046,6 +1060,7 @@ pub fn with_load_state(
         .map(|row| {
             let id = row.get("id").map(nekko_js::display).unwrap_or_default();
             let fit = hw.map(|hw| gpu_fit_for(&row, hw, overhead_floor));
+            let idle = hw.filter(|_| fit == Some("partial")).and_then(|hw| gpu_fit_idle_for(&row, hw, overhead_floor));
             let mut m = match row {
                 Value::Object(m) => m,
                 _ => Map::new(),
@@ -1053,6 +1068,9 @@ pub fn with_load_state(
             m.insert("loaded".into(), json!(loaded.contains(&id)));
             assign(&mut m, "lastLoadError", errors.get(&id).filter(|e| !e.is_null()).cloned());
             assign(&mut m, "gpuFit", fit.map(|f| json!(f)));
+            // A partial fit may only be the card being busy: say whether it
+            // would fit with the card to itself.
+            assign(&mut m, "gpuFitIdle", idle.map(|f| json!(f)));
             Value::Object(m)
         })
         .collect()

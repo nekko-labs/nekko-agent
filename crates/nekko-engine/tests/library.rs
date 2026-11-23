@@ -216,6 +216,56 @@ fn rates_gpu_fit_as_the_host_does() {
     }
 }
 
+fn fit_hw(total_gb: f64, free_gb: f64, unified: bool) -> Hardware {
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+    Hardware::from_value(&json!({
+        "devices": [{"name": "GPU", "totalBytes": total_gb * GB, "freeBytes": free_gb * GB}],
+        "unified": unified,
+        "systemRamTotalBytes": 64.0 * GB,
+        "systemRamFreeBytes": 32.0 * GB,
+    }))
+}
+
+/// 6.3 GB of weights and buffers and 64 MB of KV per 1k tokens, as on a 12 GB laptop card.
+fn fit_model(preset: Value) -> Value {
+    json!({
+        "id": "m", "name": "m", "path": "/m.gguf", "sizeBytes": 6.3 * 1024.0 * 1024.0 * 1024.0,
+        "layers": 16, "kvHeads": 8, "headDim": 128, "maxContext": 131072, "addedAt": 0,
+        "preset": preset,
+    })
+}
+
+#[test]
+fn rates_gpu_fit_on_an_idle_card() {
+    // 11.9 GB card, 8.7 GB free: the 64k default context spills now and on an idle card.
+    let hw = fit_hw(11.9, 8.7, false);
+    let model = fit_model(json!({}));
+    assert_eq!(library::gpu_fit_for(&model, &hw, None), "partial");
+    assert_eq!(library::gpu_fit_idle_for(&model, &hw, None), Some("partial"));
+    // A 16k context spills beside the other apps but fits once they let go.
+    let small = fit_model(json!({"contextTokens": 16384}));
+    let hw = fit_hw(11.9, 5.0, false);
+    assert_eq!(library::gpu_fit_for(&small, &hw, None), "partial");
+    assert_eq!(library::gpu_fit_idle_for(&small, &hw, None), Some("full"));
+    // The idle idea does not apply to unified memory or a machine without a GPU.
+    assert_eq!(library::gpu_fit_idle_for(&model, &fit_hw(11.9, 8.7, true), None), None);
+    let mut none = fit_hw(11.9, 8.7, false);
+    none.devices.clear();
+    assert_eq!(library::gpu_fit_idle_for(&model, &none, None), None);
+    // Only partial rows carry the idle verdict.
+    let rows = library::with_load_state(
+        vec![model.clone(), small.clone()],
+        &Default::default(),
+        &Map::new(),
+        Some(&fit_hw(11.9, 5.0, false)),
+        None,
+    );
+    assert_eq!((rows[0]["gpuFit"].as_str(), rows[0]["gpuFitIdle"].as_str()), (Some("partial"), Some("partial")));
+    let rows = library::with_load_state(vec![small], &Default::default(), &Map::new(), Some(&fit_hw(11.9, 11.0, false)), None);
+    assert_eq!(rows[0]["gpuFit"], "full");
+    assert!(rows[0].get("gpuFitIdle").is_none());
+}
+
 fn write_tree(root: &Path, tree: &Map<String, Value>) {
     for (rel, spec) in tree {
         let p = root.join(rel);

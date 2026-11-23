@@ -38,6 +38,7 @@ export function ownGpuBytes(resident: ResidentModel | undefined): number {
  * models on. The planner reserves the same 2 GB of system RAM for the OS
  * (`OS_RESERVE_BYTES` in capacity.rs).
  */
+// Keep equal to `DESKTOP_GPU_RESERVE_BYTES` in crates/nekko-engine/src/capacity.rs.
 export const DESKTOP_RESERVE_BYTES = 2 * 1024 ** 3;
 
 /** "All 256k", "196k of 256k" or "None": a context figure read against the model's longest. */
