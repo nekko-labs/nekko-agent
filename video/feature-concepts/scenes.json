@@ -1,0 +1,87 @@
+[
+  {
+    "id": "A1-fusion-tokens",
+    "frames": 270,
+    "still": 236
+  },
+  {
+    "id": "A2-fusion-what-leaves",
+    "frames": 240,
+    "still": 200
+  },
+  {
+    "id": "B1-svg-logo",
+    "frames": 270,
+    "still": 240
+  },
+  {
+    "id": "B2-svg-icon-set",
+    "frames": 270,
+    "still": 240
+  },
+  {
+    "id": "B3-svg-edit-by-chat",
+    "frames": 270,
+    "still": 240
+  },
+  {
+    "id": "C1-game-sprites",
+    "frames": 270,
+    "still": 220
+  },
+  {
+    "id": "C2-game-2d-assets",
+    "frames": 270,
+    "still": 240
+  },
+  {
+    "id": "C3-game-3d-asset",
+    "frames": 270,
+    "still": 220
+  },
+  {
+    "id": "C4-game-audio",
+    "frames": 270,
+    "still": 220
+  },
+  {
+    "id": "C5-game-pipeline",
+    "frames": 300,
+    "still": 272
+  },
+  {
+    "id": "C6-game-orchestra",
+    "frames": 420,
+    "still": 220
+  },
+  {
+    "id": "D-two-models",
+    "frames": 270,
+    "still": 250
+  },
+  {
+    "id": "E1-cloud-sync",
+    "frames": 240,
+    "still": 210
+  },
+  {
+    "id": "E2-cloud-optional",
+    "frames": 270,
+    "still": 240
+  },
+  {
+    "id": "F-fleet-pooling",
+    "frames": 270,
+    "still": 250
+  },
+  {
+    "id": "G-privacy-shield",
+    "frames": 270,
+    "still": 240
+  },
+  {
+    "id": "H-model-routing",
+    "frames": 300,
+    "still": 280
+  }
+]

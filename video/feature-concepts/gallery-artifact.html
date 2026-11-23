@@ -1,0 +1,116 @@
+<title>Nekko Feature Concepts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: one quiet grid of looping demos, Nekko app tokens (dark Nekko / light Nekko). */
+:root{--paper:#fbfbfd;--surface:#ffffff;--ink:#17171d;--soft:#52525e;--faint:#6c6c77;--line:#e8e8ef;--accent:#5a2352;
+  --sans:'Inter Tight',system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#0c0c11;--surface:#16161c;--ink:#eceaf3;--soft:#a3a1b0;--faint:#898894;--line:#26262f;--accent:#c084b5;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#0c0c11;--surface:#16161c;--ink:#eceaf3;--soft:#a3a1b0;--faint:#898894;--line:#26262f;--accent:#c084b5;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header,.group{max-width:1400px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;margin-bottom:32px}
+h1{font-size:28px;font-weight:600;margin:0;text-wrap:balance}
+header p{margin:0;color:var(--soft);font-size:15px;max-width:65ch}
+h2{font-size:16px;font-weight:600;color:var(--soft);margin:40px 0 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:36px 28px}
+figure{margin:0;min-width:0}
+video{width:100%;max-width:100%;aspect-ratio:16/9;display:block;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
+figcaption{margin-top:12px;display:grid;gap:4px}
+.id{font-family:var(--mono);font-size:13px;color:var(--accent)}
+.hl{font-size:18px;font-weight:600}
+.idea{font-size:14px;color:var(--soft);line-height:1.45}
+.grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr))}
+.open{all:unset;display:block;cursor:zoom-in;border-radius:12px}
+.open:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.hint{font-size:13px;color:var(--faint)}
+dialog{border:0;padding:0;background:transparent;max-width:none;max-height:none;width:100vw;height:100%}
+dialog::backdrop{background:rgba(0,0,0,.85)}
+.lb{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px));box-sizing:border-box;cursor:zoom-out}
+.lb video{width:min(96vw,calc((100vh - 110px) * 16 / 9));height:auto;border:0;background:#000;cursor:default}
+.lb p{margin:0;color:#eceaf3;font-size:16px;text-align:center}
+.lb .row{display:flex;gap:12px}
+.lb button{font:inherit;font-size:14px;color:#eceaf3;background:rgba(255,255,255,.12);border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+.lb button:focus-visible{outline:2px solid #c084b5}
+</style>
+
+<header>
+  <h1>Feature concepts</h1>
+  <p>First-draft animations in the website pillar style, grouped by how likely they are to make a launch post. All are concepts; numbers are illustrative. They follow your light or dark theme.</p>
+</header>
+<div id="root"></div>
+<dialog id="lb"><div class="lb" id="lbwrap">
+  <video id="lbv" autoplay loop muted playsinline></video>
+  <p id="lbt"></p>
+  <div class="row"><button id="prev" type="button">← Previous</button><button id="fs" type="button">Full screen</button><button id="close" type="button">Close</button><button id="next" type="button">Next →</button></div>
+</div></dialog>
+
+<script>
+const GROUPS = [
+  ['Launch-film style test', [
+    ['what-is-nekko','What is Nekko Agent?','30 s on a 120 BPM grid: a Dock click opens the app splash, which zooms into the wave matrix; eight user questions, each answered by a quick graphic; a flood of questions collapses into the logo. Dark only, silent.'],
+    ['G-launch','Use any model. Keep your data.','Privacy Shield as a fast, dramatic launch reveal: hook, scan, model cuts, the return, end card. 16 s, dark only. A first step toward a launch style.'],
+  ]],
+  ['Could lead a launch post', [
+    ['C6-game-orchestra','One plans. Four make.','A paid main agent (Opus 5.5) sends four briefs; each local sub-agent makes its asset live: sprite, tiles, 3D chest, sounds. They come back as one playable level.'],
+    ['G-privacy-shield','Use any model. Keep your data.','Names, emails and keys masked locally; the model sees placeholders; real values restored.'],
+    ['A1-fusion-tokens','Same task. Less sent.','Claude alone vs Claude + Nekko Agent: running token and cost counters.'],
+    ['C5-game-pipeline',"Your game's assets. One chat.",'One request fans out to four local sub-agents and flows back into one folder.'],
+  ]],
+  ['Strong supporting clips', [
+    ['D-two-models','Two models. One pipeline.','Parent chat model hands a brief to a local image model; the picture comes back.'],
+    ['A2-fusion-what-leaves','Same task. Less leaves your machine.','Whole file sent vs only the lines needed; the key and emails stay local.'],
+    ['H-model-routing','Easy parts here. Hard parts there.','One request split: simple parts to a local model, hard parts to a frontier model.'],
+    ['C1-game-sprites',"Your game's assets. One chat.",'A fox sprite sheet, idle and run, animating in a preview.'],
+    ['E2-cloud-optional','Works on its own. Cloud if you want it.','Local chat works offline; Nekko Cloud is a switch you turn on.'],
+  ]],
+  ['Need rework first', [
+    ['B1-svg-logo','Logos and icons. Made locally.','A prompt becomes a clean SVG logo, drawn path by path.'],
+    ['C3-game-3d-asset',"Your game's assets. One chat.",'A low-poly treasure chest builds as wireframe, then shades and turns.'],
+    ['B2-svg-icon-set','One prompt. A matching set.','Six app icons in one style from one prompt.'],
+    ['C2-game-2d-assets',"Your game's assets. One chat.",'Tiles, items and UI for one scene, then assembled.'],
+    ['C4-game-audio',"Your game's assets. One chat.",'Jump, coin and hit sounds drawn as waveforms (no audio).'],
+    ['E1-cloud-sync','Your chats, everywhere. Encrypted.','Chats, library, artifacts and photos sync encrypted between two devices.'],
+    ['B3-svg-edit-by-chat','Change it by asking.','"Make it rounder", "two colours only": the SVG updates live.'],
+    ['F-fleet-pooling','Three Macs. One brain.','Three laptops pool compute to finish one big task sooner.'],
+  ]],
+];
+const mq = matchMedia('(prefers-color-scheme: dark)');
+function isDark() {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === 'dark' : mq.matches;
+}
+function render() {
+  const s = isDark() ? '' : '-light';
+  const sx = (id) => ['G-launch','what-is-nekko'].includes(id) ? '' : s;
+  document.getElementById('root').innerHTML = GROUPS.map(([g, items]) => `
+    <section class="group"><h2>${g}</h2><div class="grid">${items.map(([id, hl, idea]) => `
+      <figure><button class="open" type="button" data-id="${id}" aria-label="Enlarge ${id}"><video src="${id}/${id}${sx(id)}.mp4" poster="stills/${id}${sx(id)}.png" autoplay loop muted playsinline></video></button>
+      <figcaption><span class="id">${id}</span><span class="hl">${hl}</span><span class="idea">${idea}</span><span class="hint">Click to enlarge</span></figcaption></figure>`).join('')}
+    </div></section>`).join('');
+}
+const ALL = GROUPS.flatMap(([, items]) => items);
+const lb = document.getElementById('lb'), lbv = document.getElementById('lbv');
+let cur = 0;
+function show(i) {
+  cur = (i + ALL.length) % ALL.length;
+  const [id, hl] = ALL[cur], s = isDark() || ['G-launch','what-is-nekko'].includes(id) ? '' : '-light';
+  lbv.src = `${id}/${id}${s}.mp4`;
+  document.getElementById('lbt').textContent = `${id} · ${hl}`;
+}
+document.getElementById('root').addEventListener('click', (e) => {
+  const b = e.target.closest('.open'); if (!b) return;
+  show(ALL.findIndex((x) => x[0] === b.dataset.id)); lb.showModal();
+});
+document.getElementById('lbwrap').addEventListener('click', (e) => { if (e.target.id === 'lbwrap') lb.close(); });
+document.getElementById('close').onclick = () => lb.close();
+document.getElementById('prev').onclick = () => show(cur - 1);
+document.getElementById('next').onclick = () => show(cur + 1);
+document.getElementById('fs').onclick = () => { try { const r = lbv.requestFullscreen?.(); r?.catch?.(() => {}); } catch {} };
+lb.addEventListener('close', () => lbv.removeAttribute('src'));
+document.addEventListener('keydown', (e) => { if (!lb.open) return; if (e.key === 'ArrowRight') show(cur + 1); if (e.key === 'ArrowLeft') show(cur - 1); });
+render();
+mq.addEventListener('change', render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+</script>

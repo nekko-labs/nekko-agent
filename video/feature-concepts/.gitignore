@@ -1,0 +1,4 @@
+remotion/node_modules
+*.mp4
+render-errors.log
+render-videos.log

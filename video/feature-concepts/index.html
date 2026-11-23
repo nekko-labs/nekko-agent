@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feature concepts</title>
+<style>
+@font-face{font-family:'Inter Tight';font-weight:100 900;src:url(../../apps/website/fonts/inter-tight-latin-wght-normal.woff2) format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-weight:100 900;src:url(../../apps/website/fonts/jetbrains-mono-latin-wght-normal.woff2) format('woff2');}
+:root{--paper:#0c0c11;--surface:#16161c;--ink:#eceaf3;--soft:#a3a1b0;--faint:#898894;--line:#26262f;--accent:#c084b5;}
+:root[data-theme="light"]{--paper:#fbfbfd;--surface:#ffffff;--ink:#17171d;--soft:#52525e;--faint:#6c6c77;--line:#e8e8ef;--accent:#5a2352;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter Tight',system-ui,sans-serif;padding:40px 20px 80px}
+header{max-width:1400px;margin:0 auto 32px;display:flex;align-items:baseline;gap:20px;flex-wrap:wrap}
+h1{font-size:28px;font-weight:600;margin:0}
+header p{color:var(--soft);margin:0;font-size:15px}
+.toggle{margin-left:auto;display:flex;gap:4px;font-size:14px}
+.toggle button{font:inherit;background:none;border:0;color:var(--soft);padding:6px 12px;border-radius:8px;cursor:pointer}
+.toggle button[aria-pressed="true"]{background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink)}
+.grid{max-width:1400px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:40px 28px}
+@media (max-width:460px){.grid{grid-template-columns:1fr}}
+figure{margin:0}
+video,img{width:100%;aspect-ratio:16/9;display:block;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
+figcaption{margin-top:12px}
+.id{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent)}
+.hl{font-size:18px;font-weight:600;margin-top:4px}
+.idea{font-size:14px;color:var(--soft);margin-top:4px;line-height:1.4}
+.links{font-size:13px;margin-top:6px;color:var(--faint)}
+.links a{color:var(--faint)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Feature concepts</h1>
+  <p>First drafts in the pillar-demo style. All are concepts; numbers are illustrative.</p>
+  <div class="toggle"><button data-t="dark" aria-pressed="true">Dark</button><button data-t="light" aria-pressed="false">Light</button></div>
+</header>
+<main class="grid" id="grid"></main>
+<script>
+const S = [
+  ['A1-fusion-tokens','Same task. Less sent.','Claude alone vs Claude + Nekko Agent: running token and cost counters.'],
+  ['A2-fusion-what-leaves','Same task. Less leaves your machine.','Whole file sent vs only the lines needed; the key and emails stay local.'],
+  ['B1-svg-logo','Logos and icons. Made locally.','A prompt becomes a clean SVG logo, drawn path by path.'],
+  ['B2-svg-icon-set','One prompt. A matching set.','Six app icons in one style from one prompt.'],
+  ['B3-svg-edit-by-chat','Change it by asking.','"Make it rounder", "two colours only": the SVG updates live.'],
+  ['C1-game-sprites',"Your game's assets. One chat.",'A fox sprite sheet, idle and run, animating in a preview.'],
+  ['C2-game-2d-assets',"Your game's assets. One chat.",'Tiles, items and UI for one scene, then assembled.'],
+  ['C3-game-3d-asset',"Your game's assets. One chat.",'A low-poly treasure chest builds as wireframe, then shades and turns.'],
+  ['C4-game-audio',"Your game's assets. One chat.",'Jump, coin and hit sounds drawn as waveforms and played.'],
+  ['C5-game-pipeline',"Your game's assets. One chat.",'One request fans out to four local sub-agents and flows back into one folder.'],
+  ['D-two-models','Two models. One pipeline.','Parent chat model hands a brief to a local image model; the picture comes back.'],
+  ['E1-cloud-sync','Your chats, everywhere. Encrypted.','Chats, library, artifacts and photos sync encrypted between two devices.'],
+  ['E2-cloud-optional','Works on its own. Cloud if you want it.','Local chat works offline; Nekko Cloud is a switch you turn on.'],
+  ['F-fleet-pooling','Three Macs. One brain.','Three laptops pool compute to finish one big task about three times sooner.'],
+  ['G-privacy-shield','Use any model. Keep your data.','Names, emails and keys masked locally; the model sees placeholders; real values restored.'],
+  ['H-model-routing','Easy parts here. Hard parts there.','One request split: simple parts to a local model, hard parts to a frontier model.'],
+];
+const grid = document.getElementById('grid');
+function render(theme) {
+  document.documentElement.dataset.theme = theme;
+  const sfx = theme === 'light' ? '-light' : '';
+  grid.innerHTML = S.map(([id, hl, idea]) => `
+    <figure>
+      <video src="${id}/${id}${sfx}.mp4" poster="stills/${id}${sfx}.png" autoplay loop muted playsinline></video>
+      <figcaption><div class="id">${id}</div><div class="hl">${hl}</div><div class="idea">${idea}</div>
+      <div class="links"><a href="${id}/${id}${sfx}.mp4">mp4</a> · <a href="stills/${id}${sfx}.png">still</a></div></figcaption>
+    </figure>`).join('');
+  document.querySelectorAll('.toggle button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === theme)));
+}
+document.querySelectorAll('.toggle button').forEach((b) => b.addEventListener('click', () => render(b.dataset.t)));
+render('dark');
+</script>
+</body>
+</html>

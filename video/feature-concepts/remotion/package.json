@@ -1,0 +1,11 @@
+{
+  "name": "feature-concepts",
+  "private": true,
+  "scripts": {
+    "setup": "cd ../../pillars && npm ci && cd ../feature-concepts/remotion && ln -sfn ../../pillars/node_modules node_modules",
+    "studio": "remotion studio src/index.tsx --public-dir=../../pillars/public",
+    "render": "node render.mjs",
+    "render:what-is": "remotion render src/index.tsx what-is-nekko ../what-is-nekko/what-is-nekko.mp4 --codec=h264 --crf=20 --pixel-format=yuv420p --public-dir=../../pillars/public",
+    "render:g-launch": "remotion render src/index.tsx G-launch ../G-launch/G-launch.mp4 --codec=h264 --crf=20 --pixel-format=yuv420p --public-dir=../../pillars/public"
+  }
+}
