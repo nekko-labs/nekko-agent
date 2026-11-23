@@ -14,8 +14,9 @@ class PhoneProvidersTest {
         return parser.line("")
     }
     @Test fun sevenKindsAndCorrectAuthentication() {
-        assertEquals(listOf("anthropic", "openai", "openrouter", "gemini", "ollama-cloud", "bedrock", "foundry", "vertex", "openai-compat"), PhoneProviders.kinds.map { it.id })
-        for (kind in PhoneProviders.kinds) {
+        assertEquals(listOf("chatgpt", "anthropic", "openai", "openrouter", "gemini", "ollama-cloud", "bedrock", "foundry", "vertex", "openai-compat"), PhoneProviders.kinds.map { it.id })
+        // ChatGPT signs in instead of taking a key (ChatGptSignInTest).
+        for (kind in PhoneProviders.kinds.filterNot { it.plan }) {
             val req = PhoneProviders.chatRequest(provider(kind.id), " secret ", "model", emptyList())
             if (kind.id in listOf("anthropic", "bedrock", "foundry")) { assertEquals("secret", req.headers["x-api-key"]); assertNull(req.headers["Authorization"]) }
             else { assertEquals("Bearer secret", req.headers["Authorization"]); assertNull(req.headers["x-api-key"]) }
@@ -138,6 +139,7 @@ class PhoneProvidersTest {
     @Test fun guidedKindsHaveAKeyPageAndOnlyOpenRouterSignsIn() {
         assertEquals(listOf("anthropic", "openai", "openrouter", "gemini", "ollama-cloud"), PhoneProviders.kinds.filter { it.keyPage != null }.map { it.id })
         assertEquals(listOf("openrouter"), PhoneProviders.kinds.filter { it.signIn }.map { it.id })
+        assertEquals(listOf("chatgpt"), PhoneProviders.kinds.filter { it.plan }.map { it.id })
         for (id in listOf("gemini", "ollama-cloud")) {
             val req = PhoneProviders.chatRequest(PhoneProviders.make("p", id, "X", null, "k"), "k", "m", emptyList())
             assertTrue(req.url.endsWith("/chat/completions"))

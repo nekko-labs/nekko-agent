@@ -118,6 +118,7 @@ fn hello_verdicts_match() {
             code: p["code"].as_str().unwrap().to_string(),
             expires_at: p["expiresAt"].as_f64().unwrap(),
             computer: false,
+            route: None,
         });
         let got = hello::verify_hello(&devices, &c["hello"], pairing.as_ref(), c["now"].as_f64().unwrap());
         same(&got.value(), &c["verdict"], &format!("hello {} with {}", c["hello"], c["pairing"]));

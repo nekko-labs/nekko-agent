@@ -24,6 +24,8 @@ serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
 tokio.workspace = true
+# The Nekko Cloud Relay account channel (src/relay_channel.rs, decision 0116).
+tokio-tungstenite = { workspace = true, features = ["native-tls"] }
 zeroize = "1"
 
 [dev-dependencies]
@@ -31,4 +33,3 @@ zeroize = "1"
 nekko-remote = { path = "../nekko-remote" }
 p256 = { version = "0.13", default-features = false, features = ["ecdh", "ecdsa", "std"] }
 tempfile = "3"
-tokio-tungstenite.workspace = true

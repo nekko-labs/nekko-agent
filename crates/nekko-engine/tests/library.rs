@@ -216,6 +216,56 @@ fn rates_gpu_fit_as_the_host_does() {
     }
 }
 
+fn fit_hw(total_gb: f64, free_gb: f64, unified: bool) -> Hardware {
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+    Hardware::from_value(&json!({
+        "devices": [{"name": "GPU", "totalBytes": total_gb * GB, "freeBytes": free_gb * GB}],
+        "unified": unified,
+        "systemRamTotalBytes": 64.0 * GB,
+        "systemRamFreeBytes": 32.0 * GB,
+    }))
+}
+
+/// 6.3 GB of weights and buffers and 64 MB of KV per 1k tokens, as on a 12 GB laptop card.
+fn fit_model(preset: Value) -> Value {
+    json!({
+        "id": "m", "name": "m", "path": "/m.gguf", "sizeBytes": 6.3 * 1024.0 * 1024.0 * 1024.0,
+        "layers": 16, "kvHeads": 8, "headDim": 128, "maxContext": 131072, "addedAt": 0,
+        "preset": preset,
+    })
+}
+
+#[test]
+fn rates_gpu_fit_on_an_idle_card() {
+    // 11.9 GB card, 8.7 GB free: the 64k default context spills now and on an idle card.
+    let hw = fit_hw(11.9, 8.7, false);
+    let model = fit_model(json!({}));
+    assert_eq!(library::gpu_fit_for(&model, &hw, None), "partial");
+    assert_eq!(library::gpu_fit_idle_for(&model, &hw, None), Some("partial"));
+    // A 16k context spills beside the other apps but fits once they let go.
+    let small = fit_model(json!({"contextTokens": 16384}));
+    let hw = fit_hw(11.9, 5.0, false);
+    assert_eq!(library::gpu_fit_for(&small, &hw, None), "partial");
+    assert_eq!(library::gpu_fit_idle_for(&small, &hw, None), Some("full"));
+    // The idle idea does not apply to unified memory or a machine without a GPU.
+    assert_eq!(library::gpu_fit_idle_for(&model, &fit_hw(11.9, 8.7, true), None), None);
+    let mut none = fit_hw(11.9, 8.7, false);
+    none.devices.clear();
+    assert_eq!(library::gpu_fit_idle_for(&model, &none, None), None);
+    // Only partial rows carry the idle verdict.
+    let rows = library::with_load_state(
+        vec![model.clone(), small.clone()],
+        &Default::default(),
+        &Map::new(),
+        Some(&fit_hw(11.9, 5.0, false)),
+        None,
+    );
+    assert_eq!((rows[0]["gpuFit"].as_str(), rows[0]["gpuFitIdle"].as_str()), (Some("partial"), Some("partial")));
+    let rows = library::with_load_state(vec![small], &Default::default(), &Map::new(), Some(&fit_hw(11.9, 11.0, false)), None);
+    assert_eq!(rows[0]["gpuFit"], "full");
+    assert!(rows[0].get("gpuFitIdle").is_none());
+}
+
 fn write_tree(root: &Path, tree: &Map<String, Value>) {
     for (rel, spec) in tree {
         let p = root.join(rel);
@@ -247,6 +297,68 @@ fn files(dir: &Path) -> Vec<String> {
     walk(dir, "", &mut out);
     out.sort();
     out
+}
+
+/// A header with a name and the architecture the reader needs to accept it.
+fn named_gguf(name: &str) -> Vec<u8> {
+    build(&json!({ "pairs": [
+        ["general.architecture", { "type": "string", "value": "llama" }],
+        ["general.name", { "type": "string", "value": name }],
+    ] }))
+}
+
+#[test]
+fn names_a_model_by_its_file_when_the_header_name_is_generic() {
+    let dir = scratch("names");
+    let lm = dir.join("lmstudio");
+    let files = [
+        ("prism-ml/Ternary-Bonsai-2-27B-gguf/Ternary-Bonsai-2-27B-PTQ1_0.gguf", "Hf"),
+        ("ConwayResearch/Underdog-Saluki-27B-1.0/Underdog-Saluki-27B-1.0-IQ2-mix.gguf", "Qwen3.8-27B GSQ-RCO"),
+        ("loose/Some-Model-Q4_K_M.gguf", " models "),
+    ];
+    for (rel, name) in files {
+        let p = lm.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, named_gguf(name)).unwrap();
+    }
+    let models = dir.join("models").to_string_lossy().into_owned();
+    let folders = vec![json!({ "id": "lm", "path": lm.to_string_lossy(), "provider": "lmstudio", "enabled": true })];
+    let cfg = LibraryConfig { models_dir: models, folders, mlx_runnable: false, now: 1.0 };
+    let rows = library::list(&cfg).unwrap();
+    let row = |file: &str| rows.iter().find(|r| r["file"].as_str().unwrap().ends_with(file)).unwrap().clone();
+
+    let bonsai = row("Ternary-Bonsai-2-27B-PTQ1_0.gguf");
+    assert_eq!(bonsai["name"], "Ternary-Bonsai-2-27B-PTQ1_0");
+    assert_eq!(bonsai["sourceRepo"], "prism-ml/Ternary-Bonsai-2-27B-gguf");
+    // A name that says something keeps winning, over the folder too: this
+    // Qwen3.8 quant sits in a folder named for another model.
+    let saluki = row("Underdog-Saluki-27B-1.0-IQ2-mix.gguf");
+    assert_eq!(saluki["name"], "Qwen3.8-27B GSQ-RCO");
+    assert!(saluki.get("sourceRepo").is_none());
+    // Not the publisher/repo/file layout: no repo is guessed.
+    let loose = row("Some-Model-Q4_K_M.gguf");
+    assert_eq!(loose["name"], "Some-Model-Q4_K_M");
+    assert!(loose.get("sourceRepo").is_none());
+
+    // An index written before names were vetted is corrected, not kept.
+    let index = Path::new(&cfg.models_dir).join("library.json");
+    // So is a folder repo stored over a real header name.
+    let mut stored: Value = serde_json::from_str(&std::fs::read_to_string(&index).unwrap()).unwrap();
+    for m in stored["models"].as_object_mut().unwrap().values_mut() {
+        let file = m["file"].as_str().unwrap().to_string();
+        if file.ends_with("PTQ1_0.gguf") {
+            m["name"] = json!("Hf");
+        } else if file.ends_with("IQ2-mix.gguf") {
+            m["sourceRepo"] = json!("ConwayResearch/Underdog-Saluki-27B-1.0");
+        }
+    }
+    std::fs::write(&index, stored.to_string()).unwrap();
+    let again = library::list(&cfg).unwrap();
+    let fixed = again.iter().find(|r| r["file"].as_str().unwrap().ends_with("PTQ1_0.gguf")).unwrap();
+    assert_eq!(fixed["name"], "Ternary-Bonsai-2-27B-PTQ1_0");
+    let saluki = again.iter().find(|r| r["file"].as_str().unwrap().ends_with("IQ2-mix.gguf")).unwrap();
+    assert!(saluki.get("sourceRepo").is_none());
+    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]

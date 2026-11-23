@@ -11,7 +11,7 @@ import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
 
 import { ContextAction, ContextMenu } from './ContextMenu.js';
-import { isPrUrl, PrLinkChip } from './PrLinkChip.js';
+import { IssueLinkChip, isIssueUrl, isPrUrl, PrLinkChip } from './PrLinkChip.js';
 import { useStore } from '../store.js';
 import { BranchIcon, CheckIcon, CompassIcon, CopyIcon, ListIcon, QuestionIcon, TerminalIcon } from '../icons.js';
 import { commandToRun } from '../suggestedCommands.js';
@@ -747,8 +747,9 @@ function Link({ href, doc, children }: { href: string; doc?: boolean; children: 
   const menuNode = menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
     {linkContextActions(safe).map((action) => <ContextAction key={action.label} onClick={() => { setMenu(null); action.run(); }}>{action.label}</ContextAction>)}
   </ContextMenu>;
-  // A PR reads as its live state, so it needs no site preview.
+  // A PR or issue reads as its live state, so it needs no site preview.
   if (web && !doc && isPrUrl(safe)) return <><PrLinkChip href={safe} label={children === href ? undefined : children} onContextMenu={openMenu} />{menuNode}</>;
+  if (web && !doc && isIssueUrl(safe)) return <><IssueLinkChip href={safe} label={children === href ? undefined : children} onContextMenu={openMenu} />{menuNode}</>;
   return (
     <>
       <a href={safe} target="_blank" rel="noreferrer" className="wrap-break-word cursor-pointer underline" style={{ color: 'var(--accent)' }} onContextMenu={openMenu}>

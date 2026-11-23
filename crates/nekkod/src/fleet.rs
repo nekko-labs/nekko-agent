@@ -51,6 +51,22 @@ impl FleetGate for CloudGate {
     }
 }
 
+/// Nekko Cloud Relay tickets for a relay room, from this computer's Nekko Cloud
+/// account (decision 0116). A Free account is told it needs Pro.
+pub fn relay_tickets(cloud: Arc<Cloud>) -> crate::remote::RelayTickets {
+    Arc::new(move |room: String| {
+        let cloud = cloud.clone();
+        let access: nekko_remote::Access = Arc::new(move || {
+            let (cloud, room) = (cloud.clone(), room.clone());
+            Box::pin(async move {
+                let (ticket, renew_after) = cloud.relay_ticket("agent", Some(&room)).await?;
+                Ok(nekko_remote::AccessTicket { ticket, renew_after })
+            })
+        });
+        access
+    })
+}
+
 /// The signer for links to computers of this account found in `org_id`.
 pub fn signer(cloud: Arc<Cloud>, org_id: String) -> FleetSigner {
     Arc::new(move |b: &Binding| cloud.fleet_hello(&org_id, &hello_binding(b)))
@@ -69,6 +85,7 @@ pub fn connect_info(remote: &Remote) -> Option<ConnectInfo> {
 /// desktop's own fleet links once it is signed out or locked.
 pub fn start(remote: Arc<Remote>, computers: Arc<Computers>, cloud: Arc<Cloud>, hub: &Hub) {
     remote.set_fleet_gate(Arc::new(CloudGate(cloud.clone())));
+    remote.set_relay_tickets(relay_tickets(cloud.clone()));
     computers.set_cloud(cloud.clone());
     let mut events = hub.subscribe();
     tokio::spawn(async move {

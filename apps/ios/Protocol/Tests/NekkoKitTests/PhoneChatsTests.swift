@@ -123,7 +123,7 @@ final class PhoneChatsTests: XCTestCase {
     }
 
     func testEveryDesktopCloudKindButTheComputerOnesIsOffered() async {
-        XCTAssertEqual(PhoneProviders.kinds.map(\.id), ["anthropic", "openai", "openrouter", "gemini", "ollama-cloud", "bedrock", "foundry", "vertex", "openai-compat"])
+        XCTAssertEqual(PhoneProviders.kinds.map(\.id), ["chatgpt", "anthropic", "openai", "openrouter", "gemini", "ollama-cloud", "bedrock", "foundry", "vertex", "openai-compat"])
         XCTAssertTrue(PhoneProviders.kind("bedrock")!.catalog.allSatisfy { $0.id.hasPrefix("anthropic.") })
         XCTAssertFalse(PhoneProviders.kind("anthropic")!.listsModels == false)
     }

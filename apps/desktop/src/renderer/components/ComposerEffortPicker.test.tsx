@@ -26,6 +26,8 @@ describe('composer effort and suggestions', () => {
       const row = out.slice(out.indexOf('data-composer-mode-row'));
       expect(row.indexOf('data-chat-mode-button')).toBeLessThan(row.indexOf('data-composer-suggestions'));
       expect(row).toContain('composer-suggestions ml-auto shrink-0');
+      // Approvals are one of Mode's options, so no separate approvals chip beside it.
+      expect(out).not.toContain('data-asks-first');
       // The folder sits on this bottom row, before Mode, and no longer on the bar.
       expect(row.indexOf('composer-folders')).toBeGreaterThan(-1);
       expect(row.indexOf('composer-folders')).toBeLessThan(row.indexOf('data-chat-mode-button'));

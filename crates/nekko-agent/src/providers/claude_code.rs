@@ -20,12 +20,9 @@ const FAMILY_ALIASES: [&str; 3] = ["opus", "sonnet", "haiku"];
 /// for anything that is not a bare alias.
 pub fn resolve_alias(id: &str) -> Option<&'static str> {
     let id = id.trim().to_ascii_lowercase();
-    FAMILY_ALIASES.contains(&id.as_str()).then(|| {
-        CLAUDE_MODELS
-            .iter()
-            .map(|(m, _)| *m)
-            .find(|m| m.starts_with(&format!("claude-{id}-")))
-    })?
+    FAMILY_ALIASES
+        .contains(&id.as_str())
+        .then(|| CLAUDE_MODELS.iter().map(|(m, _)| *m).find(|m| m.starts_with(&format!("claude-{id}-"))))?
 }
 
 /// The id to pass on `--model`: a saved alias becomes the newest concrete

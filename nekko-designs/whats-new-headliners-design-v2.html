@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>What's new: headliners first (v2)</title>
+<style>
+/* The website's tokens (apps/website/styles.css), White and Dark, one set per frame. Fonts fall back to the system's: nothing is fetched. */
+.t-white{--bg:#fbf6f8;--bg-2:#ffffff;--ink:#16161c;--muted:#5d5970;--accent:#190019;--lavender:#854f6c;--word:#854f6c;--panel:#f3e8ee;--mascot-face:#ffffff;--mascot-line:#190019;--mascot-eyes:#190019}
+.t-dark{--bg:#0c0c11;--bg-2:#16161c;--ink:#ffffff;--muted:#a3a1b0;--accent:#c99bb3;--lavender:#854f6c;--word:#c99bb3;--panel:#190019;--mascot-face:#16161c;--mascot-line:#f3e8ee;--mascot-eyes:#ffffff}
+:root{--sans:'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace;--led:'Handjet',var(--sans);--retro-mono:'Space Mono',var(--mono)}
+*{box-sizing:border-box}
+body{margin:0;background:#eee8ec;color:#16161c;font:15px/1.6 var(--sans)}
+header{padding:40px 40px 8px;max-width:1100px}
+header h1{margin:0;font-size:24px;font-weight:700}
+header p{margin:8px 0;color:#5d5970}
+.canvas{display:flex;flex-wrap:wrap;gap:40px;padding:20px 40px 60px;align-items:flex-start}
+.frame{flex:0 0 auto}
+.caption{font-size:12px;color:#5d5970;margin-bottom:8px}
+.caption b{color:#16161c;font-weight:600}
+.page{background:var(--bg);color:var(--ink);padding:48px 40px 56px;line-height:1.65}
+.page.desk{width:800px}.page.phone{width:390px;padding:40px 20px 48px}
+.page p{color:var(--muted)}.page a{color:var(--accent)}
+.head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 20px}
+.head h2{font:600 44px/1 var(--led);margin:0;color:var(--ink)}
+.head time,.eyebrow,.group{font:12px var(--retro-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.intro{margin:8px 0 0}
+.eyebrow{margin:40px 0 0}
+.everyone{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:12px 20px;font-size:14px}
+.everyone a{display:inline-flex;align-items:center;gap:8px}
+.face{display:inline-grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;background:var(--bg-2);color:var(--ink);font:600 10px var(--mono)}
+/* Headliners: a soft plum panel, no border, no offset shadow, the pixel Nekko peeking over its top edge. Still: no motion. */
+.panel{position:relative;margin:64px 0 0;padding:40px 36px 34px;background:var(--panel);border-radius:18px}
+.phone .panel{padding:34px 20px 24px}
+.tab{position:absolute;top:-34px;left:28px;display:flex;align-items:flex-end;gap:10px;margin:0}
+.phone .tab{left:16px}
+.word{padding-bottom:6px;color:var(--word);font:700 24px/1 var(--led);letter-spacing:.04em;text-transform:uppercase}
+.list{list-style:none;padding:0;margin:0;display:grid;gap:28px}
+.desk .list{grid-template-columns:1fr 1fr;gap:28px 32px}.desk .lead{grid-column:1/-1}
+.list h3{font:600 17px/1.4 var(--sans);letter-spacing:-.01em;margin:0 0 2px;color:var(--ink)}
+.lead h3{font-size:24px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+.list p{margin:0}.shipped{display:flex;align-items:center;gap:10px;margin-top:10px!important;font-size:14px}
+/* The rest: one heading per kind. From 560px one three-column grid (title, who, pull request); narrower, who and PR sit under the title. */
+.rest{margin:44px 0 0}
+.group{margin:32px 0 12px;color:var(--ink)}.group:first-child{margin-top:0}
+.more{list-style:none;padding:0;margin:0;display:grid;gap:14px;font-size:15px}
+.more li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;color:var(--ink)}
+.title{flex:1 0 100%}
+.by{display:inline-flex;align-items:center;gap:6px;font-size:14px}
+.more .face{width:20px;height:20px;font-size:8px}
+.dot{color:var(--muted)}
+.pr{font-size:14px;font-variant-numeric:tabular-nums}.page .pr a{color:var(--muted)}
+.desk .rest{display:grid;grid-template-columns:minmax(0,1fr) max-content max-content;column-gap:28px}
+.desk .rest>.group{grid-column:1/-1}
+.desk .rest>.more,.desk .more li{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:center}
+.desk .more{gap:10px}.desk .dot{display:none}.desk .pr{justify-self:end}.desk .title{flex:none}
+.all{margin:32px 0 0}
+</style>
+<body>
+<header>
+  <h1>What's new: headliners first (v2)</h1>
+  <p>Option A, as shipped. The people who shipped a release, then its major highlights in a soft panel with the pixel Nekko peeking over, then the rest as one-liners grouped by kind, each naming its authors. A release with no major highlight keeps the plain list. Supersedes v1 (option D). Real 0.10 data.</p>
+</header>
+<div class="canvas">
+  <div class="frame t-white">
+    <div class="caption"><b>/whatsnew · desktop · White</b> · the 0.10 section, 720px column</div>
+    <div class="page desk"></div>
+  </div>
+  <div class="frame t-white">
+    <div class="caption"><b>/whatsnew · 390px · White</b> · headliners in one column, one-liners stack</div>
+    <div class="page phone"></div>
+  </div>
+  <div class="frame t-dark">
+    <div class="caption"><b>/whatsnew · desktop · Dark</b></div>
+    <div class="page desk"></div>
+  </div>
+  <div class="frame t-dark">
+    <div class="caption"><b>/whatsnew · 390px · Dark</b></div>
+    <div class="page phone"></div>
+  </div>
+</div>
+<template id="release">
+  <div class="head"><h2>0.10</h2><time>November 2026</time></div>
+  <p class="intro">Billing and provider setup move into quieter screens, and Ctrl/Cmd+K searches everything.</p>
+  <p class="eyebrow">Everyone who shipped 0.10</p>
+  <ul class="everyone">
+    <li><a href="#"><span class="face">ER</span>ermish</a></li><li><a href="#"><span class="face">GH</span>Ghezz9</a></li><li><a href="#"><span class="face">TR</span>TravisJPN</a></li><li><a href="#"><span class="face">AU</span>austinermish</a></li><li><a href="#"><span class="face">MA</span>matthewkurtti</a></li><li><a href="#"><span class="face">BO</span>BobbyRobBob</a></li>
+  </ul>
+  <div class="panel">
+    <p class="tab"><svg viewBox="0 0 32 32" width="56" height="56" shape-rendering="crispEdges" aria-hidden="true" style="overflow:visible"><path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" style="fill:var(--mascot-face);stroke:var(--mascot-line)" stroke-width="2"/><path d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" style="fill:var(--mascot-eyes)"/><path d="M15 20H17V21H15Z" style="fill:var(--lavender)"/></svg><span class="word">Headliners</span></p>
+    <ul class="list">
+      <li class="lead"><h3>Search everything with Ctrl/Cmd+K</h3><p>Find commands, chats and settings.</p><p class="shipped"><span class="face">ER</span><span>Shipped by <a href="#">ermish</a> · <a href="#">#2389</a></span></p></li>
+      <li><h3>Plan &amp; billing in Settings</h3><p>See your plan and switch teams.</p><p class="shipped"><span class="face">ER</span><span>Shipped by <a href="#">ermish</a> · <a href="#">#2732</a></span></p></li>
+      <li><h3>Guided Google Gemini setup</h3><p>Connect Gemini step by step.</p><p class="shipped"><span class="face">ER</span><span>Shipped by <a href="#">ermish</a> · <a href="#">#2726</a></span></p></li>
+    </ul>
+  </div>
+  <div class="rest">
+    <h3 class="group">Improvements</h3>
+    <ul class="more">
+      <li><span class="title">Fusion routing strategies</span><span class="by"><span class="face">ER</span><a href="#">ermish</a></span><span class="dot">·</span><span class="pr"><a href="#">#2737</a></span></li>
+      <li><span class="title">Winter theme</span><span class="by"><span class="face">ER</span><a href="#">ermish</a></span><span class="dot">·</span><span class="pr"><a href="#">#2412</a></span></li>
+      <li><span class="title">Nekko Agent in CarPlay</span><span class="by"><span class="face">ER</span><a href="#">ermish</a></span><span class="dot">·</span><span class="pr"><a href="#">#2783</a></span></li>
+      <li><span class="title">Chats continue when a usage limit resets</span><span class="by"><span class="face">ER</span><a href="#">ermish</a></span><span class="dot">·</span><span class="pr"><a href="#">#2813</a></span></li>
+      <li><span class="title">Choose the subagent model</span><span class="by"><span class="face">ER</span><a href="#">ermish</a></span><span class="dot">·</span><span class="pr"><a href="#">#2490</a></span></li>
+      <li><span class="title">Attach files to Claude Agent chats</span><span class="by"><span class="face">AU</span><a href="#">austinermish</a></span><span class="dot">·</span><span class="pr"><a href="#">#2552</a></span></li>
+      <li><span class="title">One chat list across every computer on Android</span><span class="by"><span class="face">GH</span><a href="#">Ghezz9</a></span><span class="dot">·</span><span class="pr"><a href="#">#2654</a></span></li>
+      <li><span class="title">Tailscale guide after pairing on iPhone</span><span class="by"><span class="face">TR</span><a href="#">TravisJPN</a></span><span class="dot">·</span><span class="pr"><a href="#">#2720</a></span></li>
+    </ul>
+    <h3 class="group">Performance</h3>
+    <ul class="more">
+      <li><span class="title">nekkod's memory stays bounded</span><span class="by"><span class="face">ER</span><a href="#">ermish</a></span><span class="dot">·</span><span class="pr"><a href="#">#2368</a></span></li>
+      <li><span class="title">Long replies checkpoint instead of resending</span><span class="by"><span class="face">ER</span><a href="#">ermish</a></span><span class="dot">·</span><span class="pr"><a href="#">#2493</a></span></li>
+    </ul>
+    <h3 class="group">Fixes</h3>
+    <ul class="more">
+      <li><span class="title">ChatGPT chats no longer hang on Thinking</span><span class="by"><span class="face">ER</span><a href="#">ermish</a></span><span class="dot">·</span><span class="pr"><a href="#">#2367</a></span></li>
+      <li><span class="title">A notification opens its chat on a cold start</span><span class="by"><span class="face">BO</span><a href="#">BobbyRobBob</a></span><span class="dot">·</span><span class="pr"><a href="#">#2324</a></span></li>
+      <li><span class="title">The macOS app launches again</span><span class="by"><span class="face">MA</span><a href="#">matthewkurtti</a></span><span class="dot">·</span><span class="pr"><a href="#">#2705</a></span></li>
+    </ul>
+  </div>
+  <p class="all"><a href="#">See every change in 0.10 on GitHub ↗</a></p>
+</template>
+<script>
+  for (const page of document.querySelectorAll('.page')) page.append(document.getElementById('release').content.cloneNode(true));
+</script>
+</body>
+</html>

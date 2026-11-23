@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, PROTECT_COMPUTER_DOCS_URL, relayHost, relayUrlProblem, remoteStoppedBanner, type SecurityStatus, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
+import { CLOUD_RELAY_URL, pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, PROTECT_COMPUTER_DOCS_URL, relayHost, relayUrlProblem, relayVia, remoteStoppedBanner, type CloudStatus, type DeviceRoute, type SecurityStatus, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { StatusDot } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
 import { useStore } from '../store.js';
@@ -16,14 +16,44 @@ import { SettingRow, SettingsSection } from './SettingsSection.js';
  * sees ciphertext. Self-hosting the relay is documented and first-class.
  */
 
-/** The managed relay, shown to owners as Nekko Cloud. */
-export const MANAGED_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
+/** The managed relay, shown to owners as Nekko Cloud Relay (decision 0116). */
+export const MANAGED_RELAY_URL = CLOUD_RELAY_URL;
 /**
  * Whether the managed relay is deployed. It is not today (the Fly app is gone
  * and its name no longer resolves), so Nekko Cloud is shown as coming soon and
  * a computer still pointed at it is told to change. Flip this when it is back.
  */
 export const NEKKO_CLOUD_LIVE = false;
+/**
+ * What this account is offered of Nekko Cloud Relay (decision 0116), a Pro
+ * perk: `hidden` until the `cloud-relay` switch shows it to the account (so
+ * signed-out and not-yet-launched accounts see *Coming soon*), `upgrade` on
+ * Free, `included` on Pro, Team, or a Nekko team account.
+ */
+export type CloudRelayOffer = 'hidden' | 'upgrade' | 'included';
+export function cloudRelayOffer(cloud: CloudStatus | null | undefined): CloudRelayOffer {
+  const a = cloud?.signedIn ? cloud.account : null;
+  if (!a?.features?.cloudRelay) return 'hidden';
+  return a.plan === 'pro' || a.plan === 'team' || a.staff ? 'included' : 'upgrade';
+}
+
+/** What the owner calls a route. */
+export const ROUTE_LABEL: Record<DeviceRoute, string> = { auto: 'Either', cloud: 'Nekko Cloud Relay', direct: 'Tailscale' };
+
+/**
+ * Where a pairing link sends a device (decision 0116): for `auto`, every route
+ * this computer has, nearest first (the main relay, its LAN addresses, then
+ * Nekko Cloud Relay as the fallback); for `cloud` or `direct`, only that kind.
+ * The computer checks the route again at HELLO, so this only spares the phone
+ * dialing a route it would be turned away on.
+ */
+export function pairingRoutes(main: string, also: string[], lanAlts: string[], route: DeviceRoute): { relayUrl: string; alts: string[] } {
+  const all = [main, ...lanAlts, ...also].filter((u, i, a) => a.indexOf(u) === i);
+  const allowed = all.filter((u) => route === 'auto' || relayVia(u) === route);
+  const ordered = [...allowed.filter((u) => relayVia(u) === 'direct'), ...allowed.filter((u) => relayVia(u) === 'cloud')];
+  return { relayUrl: ordered[0] ?? main, alts: ordered.slice(1) };
+}
+
 const SELF_HOST_DOCS = 'https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md';
 const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download';
 
@@ -102,6 +132,15 @@ export function RemoteAccess() {
   const [urlProblem, setUrlProblem] = useState<string | undefined>();
   const [localRelay, setLocalRelay] = useState<LocalRelayStatus | null>(null);
   const [security, setSecurity] = useState<SecurityStatus | null>(null);
+  const [cloud, setCloud] = useState<CloudStatus | null>(null);
+  /** The route the next pairing code is for (decision 0116). */
+  const [pairRoute, setPairRoute] = useState<DeviceRoute>('auto');
+  const offer = cloudRelayOffer(cloud);
+
+  // Whether Nekko Cloud Relay is offered to this account, and on its plan.
+  useEffect(() => {
+    void window.nekko.cloudStatus?.().then(setCloud).catch(() => {});
+  }, [status.enabled]);
 
   // Whether step-up is on, for the one-time *Protect this computer* prompt (SK-10).
   useEffect(() => {
@@ -157,9 +196,10 @@ export function RemoteAccess() {
     }
     void window.nekko.getRemotePairing().then((p) => {
       if (!p) return setLink('');
-      setLink(pairingLink(pairingBase(location), { ...p, pair: liveGrant.code, alts: pairingAlts(p.relayUrl, localRelay) }));
+      const routes = pairingRoutes(p.relayUrl, status.alsoRelays ?? [], pairingAlts(p.relayUrl, localRelay), pairRoute);
+      setLink(pairingLink(pairingBase(location), { ...p, ...routes, pair: liveGrant.code }));
     });
-  }, [status.enabled, liveGrant?.code, alts]);
+  }, [status.enabled, liveGrant?.code, alts, pairRoute, (status.alsoRelays ?? []).join(' ')]);
 
   useEffect(() => {
     if (link) pairingQr(link).then(setQr).catch(() => setQr(''));
@@ -197,9 +237,30 @@ export function RemoteAccess() {
     if (active.length > 0 && !confirm('Change how phones connect? Paired phones keep the old address and need to pair again afterwards.')) return;
     await disable();
   };
-  const pair = async () => {
-    setGrant(await window.nekko.startRemotePairing());
+  const pair = async (route: DeviceRoute = pairRoute) => {
+    setPairRoute(route);
+    setGrant(await window.nekko.startRemotePairing(route));
     setNow(Date.now());
+  };
+  /** Nekko Cloud Relay beside Tailscale: the computer holds its room on both (decision 0116). */
+  const setCloudRelay = async (on: boolean) => {
+    setBusy(true);
+    try {
+      const next = await window.nekko.setRemoteRelays?.(on ? [CLOUD_RELAY_URL] : []);
+      if (next) setStatus(next);
+    } catch (e) {
+      setUrlProblem(String((e as Error)?.message ?? e).replace(/^Error:\s*/, ''));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const setRoute = async (d: RemoteDevice, route: DeviceRoute) => {
+    await window.nekko.setRemoteRoute?.(d.id, route);
+    void refresh();
+  };
+  const upgrade = async () => {
+    const { url } = await window.nekko.cloudBillingCheckout('pro');
+    window.open(url, '_blank', 'noopener');
   };
   const revoke = async (d: RemoteDevice) => {
     if (!confirm(`Revoke "${d.name}"? It loses access immediately and must be paired again.`)) return;
@@ -218,6 +279,10 @@ export function RemoteAccess() {
   };
 
   const devices = status.devices ?? [];
+  /** Both kinds of route are up (or configured): pairing and devices may pick one. */
+  const routes = new Set([status.relayUrl, ...(status.alsoRelays ?? [])].filter(Boolean).map((u) => relayVia(u!)));
+  const twoRoutes = routes.size > 1;
+  const cloudAlso = (status.alsoRelays ?? []).some((u) => relayVia(u) === 'cloud');
   const active = devices.filter((d) => !d.revoked);
   const connected = new Set(status.connected ?? []);
   const secsLeft = liveGrant ? Math.max(0, Math.ceil((liveGrant.expiresAt - now) / 1000)) : 0;
@@ -255,19 +320,29 @@ export function RemoteAccess() {
           onTailscale={() => localRelay?.url && void enable(localRelay.url, true)}
           onCloud={() => void enable(MANAGED_RELAY_URL)}
           onOwnRelay={() => void enable(relayUrl)}
+          cloudLive={NEKKO_CLOUD_LIVE || offer !== 'hidden'}
+          cloudOffer={offer}
+          onUpgrade={() => void upgrade()}
         />
       ) : (
         <div className="mt-(--q-group) space-y-(--q-group)">
           {security && !security.enabled && <ProtectComputerPrompt />}
-          {!NEKKO_CLOUD_LIVE && status.relayUrl === MANAGED_RELAY_URL && <CloudGoneBanner busy={busy} onChange={() => void change()} />}
+          {!NEKKO_CLOUD_LIVE && offer === 'hidden' && status.relayUrl === MANAGED_RELAY_URL && <CloudGoneBanner busy={busy} onChange={() => void change()} />}
           {/* Paired devices */}
           <div data-shot="phone-pairing">
             <div className="flex items-center justify-between">
               <h3 className="quiet-group-label">Paired devices</h3>
-              <button className="btn btn-primary py-1 text-xs" onClick={pair}>
+              <button className="btn btn-primary py-1 text-xs" onClick={() => void pair()}>
                 + Pair a device
               </button>
             </div>
+            {twoRoutes && (
+              <RouteChoice
+                label="The next device connects through"
+                value={pairRoute}
+                onChange={(r) => void pair(r)}
+              />
+            )}
             {/* Pairing QR (short-lived, single-use) */}
             {liveGrant && link && (
               <div className="mt-(--q-inline) flex flex-col items-start gap-4 sm:flex-row sm:items-center">
@@ -334,7 +409,17 @@ export function RemoteAccess() {
                       )}
                       <StatusDot tone={connected.has(d.id) ? 'success' : 'neutral'} title={connected.has(d.id) ? 'Connected now' : 'Offline'} />
                       <span className="ml-auto text-ink-faint">{connected.has(d.id) ? 'connected' : `seen ${ago(d.lastSeenAt, now)}`}</span>
-                      <button className="btn btn-ghost quiet-row-action py-1 text-xs" onClick={pair} aria-label={`Re-pair ${d.name}`}>Re-pair</button>
+                      {(twoRoutes || d.route) && (
+                        <select
+                          className="quiet-field w-auto py-0.5 text-xs"
+                          aria-label={`How ${d.name} connects`}
+                          value={d.route ?? 'auto'}
+                          onChange={(e) => void setRoute(d, e.target.value as DeviceRoute)}
+                        >
+                          {(['auto', 'cloud', 'direct'] as const).map((r) => <option key={r} value={r}>{r === 'auto' ? 'Either way' : `Only ${ROUTE_LABEL[r]}`}</option>)}
+                        </select>
+                      )}
+                      <button className="btn btn-ghost quiet-row-action py-1 text-xs" onClick={() => void pair(d.route ?? 'auto')} aria-label={`Re-pair ${d.name}`}>Re-pair</button>
                       <button className="btn btn-ghost quiet-row-action py-1 text-xs text-danger-text" onClick={() => revoke(d)}>
                         Revoke
                       </button>
@@ -354,6 +439,16 @@ export function RemoteAccess() {
             <Field label="Room" value={status.room!} mono />
           </div>
           {connectionName(status.relayUrl!, localRelay) === 'Tailscale' && <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />}
+          {offer !== 'hidden' && relayVia(status.relayUrl!) === 'direct' && (
+            <CloudRelayRow
+              offer={offer}
+              on={cloudAlso}
+              busy={busy}
+              route={status.relays?.find((r) => r.via === 'cloud')}
+              onToggle={(on) => void setCloudRelay(on)}
+              onUpgrade={() => void upgrade()}
+            />
+          )}
           <NetworkVisibilitySwitch />
           <PhoneChangesSwitch />
           <PhoneAccess devices={active} onChanged={() => void refresh()} />
@@ -398,6 +493,8 @@ export function PairingChoiceView({
   onCloud,
   onOwnRelay,
   cloudLive = NEKKO_CLOUD_LIVE,
+  cloudOffer = 'included',
+  onUpgrade,
 }: {
   local: LocalRelayStatus | null;
   busy?: boolean;
@@ -408,7 +505,11 @@ export function PairingChoiceView({
   onCloud: () => void;
   onOwnRelay: () => void;
   cloudLive?: boolean;
+  /** Decision 0116: on Free, Nekko Cloud Relay is offered as an upgrade instead. */
+  cloudOffer?: CloudRelayOffer;
+  onUpgrade?: () => void;
 }) {
+  const upgrade = cloudLive && cloudOffer === 'upgrade';
   const tailscale = !!local && local.available !== false;
   const connected = !!local?.tailnetIp && !!local.url;
   return (
@@ -442,14 +543,21 @@ export function PairingChoiceView({
           <div className="flex items-baseline gap-2">
             <h3 className={`text-sm font-medium ${cloudLive ? '' : 'text-ink-faint'}`}>Nekko Cloud</h3>
             {!cloudLive && <span className="text-xs text-ink-faint">Coming soon</span>}
+            {upgrade && <span className="text-xs text-ink-faint">Pro</span>}
           </div>
           <p className="mt-(--q-tight) flex-1 text-xs text-ink-faint">
             Works anywhere, nothing to install. End-to-end encrypted: Nekko Cloud only passes along messages it can’t read.
             {!cloudLive && ' Not running yet: use Tailscale for now.'}
           </p>
-          <button className={`btn ${cloudLive ? 'btn-primary' : 'btn-ghost'} mt-(--q-inline) self-start py-1 text-xs disabled:opacity-50`} onClick={onCloud} disabled={busy || !cloudLive}>
-            {busy && cloudLive ? 'Connecting…' : 'Use Nekko Cloud'}
-          </button>
+          {upgrade ? (
+            <button className="btn btn-ghost mt-(--q-inline) self-start py-1 text-xs" onClick={onUpgrade} disabled={busy}>
+              Upgrade to Pro
+            </button>
+          ) : (
+            <button className={`btn ${cloudLive ? 'btn-primary' : 'btn-ghost'} mt-(--q-inline) self-start py-1 text-xs disabled:opacity-50`} onClick={onCloud} disabled={busy || !cloudLive}>
+              {busy && cloudLive ? 'Connecting…' : 'Use Nekko Cloud'}
+            </button>
+          )}
         </div>
       </div>
       {problem && (
@@ -913,6 +1021,67 @@ export function PhoneChangesSwitch() {
  * stopped it and when, until remote access is turned on again here.
  */
 /** Remote access still points at Nekko Cloud while it isn't running: phones can't reach this computer. */
+/**
+ * Decision 0116: with Tailscale as the connection, Nekko Cloud Relay can be
+ * a second route, so a phone without Tailscale (or away from it) still
+ * reaches this computer. A Pro perk: Free sees it with an upgrade.
+ */
+export function CloudRelayRow({
+  offer,
+  on,
+  busy,
+  route,
+  onToggle,
+  onUpgrade,
+}: {
+  offer: Exclude<CloudRelayOffer, 'hidden'>;
+  on: boolean;
+  busy?: boolean;
+  route?: { online: boolean; error?: string | null };
+  onToggle: (on: boolean) => void;
+  onUpgrade: () => void;
+}) {
+  return (
+    <div data-shot="cloud-relay" className="min-w-0">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-medium">Also through Nekko Cloud Relay</h3>
+        <span className="text-xs text-ink-faint">Pro</span>
+        <span className="ml-auto">
+          {offer === 'included' ? (
+            <Toggle value={on} onChange={onToggle} disabled={busy} label="Also through Nekko Cloud Relay" />
+          ) : (
+            <button className="btn btn-ghost py-1 text-xs" onClick={onUpgrade} disabled={busy}>Upgrade to Pro</button>
+          )}
+        </span>
+      </div>
+      <p className="mt-(--q-tight) text-xs text-ink-faint">
+        Phones reach this computer from anywhere, with or without Tailscale. Still end-to-end encrypted: the relay passes along messages it can’t read.
+      </p>
+      {on && route && !route.online && route.error && <p className="mt-(--q-tight) text-xs text-warning-text">{route.error}</p>}
+    </div>
+  );
+}
+
+/** Pick a route for the next pairing (decision 0116). */
+export function RouteChoice({ label, value, onChange }: { label: string; value: DeviceRoute; onChange: (r: DeviceRoute) => void }) {
+  return (
+    <div className="mt-(--q-inline) flex flex-wrap items-center gap-2 text-xs" role="radiogroup" aria-label={label}>
+      <span className="text-ink-faint">{label}</span>
+      {(['auto', 'cloud', 'direct'] as const).map((r) => (
+        <button
+          key={r}
+          role="radio"
+          aria-checked={value === r}
+          className={`btn py-0.5 text-xs ${value === r ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => onChange(r)}
+        >
+          {r === 'auto' ? 'Either way' : ROUTE_LABEL[r]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function CloudGoneBanner({ busy, onChange }: { busy?: boolean; onChange: () => void }) {
   return (
     <div data-shot="cloud-gone" role="alert" className="flex flex-wrap items-center gap-2 rounded-xl px-4 py-2 text-xs text-ink" style={{ background: 'var(--danger-soft)' }}>

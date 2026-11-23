@@ -789,7 +789,7 @@ function makeWebClient(): NekkoApi {
     getRemoteStatus: () => call(IpcChannels.remoteStatus),
     getMessagingStatus: () => call(IpcChannels.messagingStatus),
     getRemotePairing: () => call(IpcChannels.remotePairing),
-    startRemotePairing: () => call(IpcChannels.remotePair),
+    startRemotePairing: (route) => (route && route !== 'auto' ? call(IpcChannels.remotePair, null, { route }) : call(IpcChannels.remotePair)),
     startComputerPairing: () => call(IpcChannels.remotePairComputer),
     // Connected computers are the desktop app's: a server has no window to show them in.
     listComputers: async () => [],
@@ -811,6 +811,8 @@ function makeWebClient(): NekkoApi {
     renameRemoteDevice: (deviceId, name) => call(IpcChannels.remoteRename, deviceId, name),
     rotateRemoteSecret: () => call(IpcChannels.remoteRotate),
     setRemoteAccess: (deviceId, access) => call(IpcChannels.remoteSetAccess, deviceId, access),
+    setRemoteRoute: (deviceId, route) => call(IpcChannels.remoteSetRoute, deviceId, route),
+    setRemoteRelays: (urls) => call(IpcChannels.remoteSetRelays, urls),
     getRemoteActivity: (deviceId) => call(IpcChannels.remoteActivity, deviceId),
     // The web and self-hosted editions run on a server: the relay that ships beside
     // them is apps/relay-server itself, so there is nothing for this page to start.
