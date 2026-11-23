@@ -10,6 +10,7 @@ import { resendMailer } from "./confirmations.js";
 import { purgeFeedbackScreenshots, purgeSignups } from "./retention.js";
 import { purgeLibraryHistory } from "./shares.js";
 import { Stripe } from "./billing.js";
+import { parseSigningKey } from "./relay.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
 import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
 
@@ -102,13 +103,21 @@ const stripe = stripeKey && stripeWebhookSecret
   ? new Stripe({ secretKey: stripeKey, webhookSecret: stripeWebhookSecret, prices: { pro: process.env.STRIPE_PRICE_PRO || undefined } })
   : undefined;
 if (!stripe) console.warn("STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET not set: billing is off (the /v1/billing routes are absent).");
+// Nekko Cloud Relay (decision 0116): tickets signed with this Ed25519 key; the relay is started with its public half.
+const relaySigningKey = process.env.NEKKO_RELAY_SIGNING_KEY;
+const relay = relaySigningKey
+  ? { signingKey: parseSigningKey(relaySigningKey), url: process.env.NEKKO_RELAY_URL ?? "wss://nekko-agent-relay.fly.dev" }
+  : undefined;
+// Nothing derived from the signing key is logged; the README shows how to get its public half for the relay.
+if (relay) console.log("relay tickets: on");
+else console.warn("NEKKO_RELAY_SIGNING_KEY not set: Nekko Cloud Relay is off (the /v1/relay routes are absent).");
 // Nekko team accounts (comma-separated); unset uses the four team addresses in features.ts.
 const staffEmails = process.env.NEKKO_STAFF_EMAILS ? process.env.NEKKO_STAFF_EMAILS.split(",") : undefined;
 // Invite-only (#2932): when either is set, only accounts with a proven email in them may sign in or keep using a token.
 const accountsAllowedDomains = parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_DOMAINS);
 const accountsAllowedEmails = parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_EMAILS);
 if (!accountsAllowedDomains.length && !accountsAllowedEmails.length) console.warn("NEKKO_ACCOUNTS_ALLOWED_DOMAINS / _EMAILS not set: any account with a proven email may sign in.");
-const app = buildServer({ db, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS), fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
+const app = buildServer({ db, relay, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS), fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {

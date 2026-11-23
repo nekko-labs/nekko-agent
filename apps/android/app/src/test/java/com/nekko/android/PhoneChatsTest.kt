@@ -401,4 +401,46 @@ class PhoneChatsTest {
         assertNull(phone.state.value.signIn)
         assertTrue(phone.state.value.providers.isEmpty())
     }
+
+    // ChatGPT on the phone (#3244): the sign-in's tokens are the key, renewed before they run out.
+    private val chatGptModels = """{"models":[{"slug":"gpt-5.5","display_name":"GPT-5.5"}]}"""
+    private fun chatGptTokens(expiresAt: Long, access: String = "access-1") =
+        com.nekko.protocol.ChatGptSignIn.Tokens(access, "refresh-1", expiresAt, "acct-1")
+
+    @Test fun aChatGptSignInIsKeptAndItsModelsAreThePlans() = runTest {
+        val http = Routed { r -> if (r.url.contains("/codex/models")) chatGptModels else error("unexpected ${r.url}") }
+        val memory = Memory(); val phone = PhoneChats(memory, http, backgroundScope)
+        phone.load()
+        val id = phone.connect("chatgpt", "ChatGPT", null, chatGptTokens(System.currentTimeMillis() + 3_600_000).encode())
+        assertEquals(listOf("gpt-5.5"), phone.state.value.models[id]!!.map { it.id })
+        assertEquals("acct-1", http.requests.single().headers["chatgpt-account-id"])
+        // An API key is not a sign-in.
+        try { phone.connect("chatgpt", "ChatGPT", null, "sk-key"); fail("kept an API key as a sign-in") } catch (_: IllegalArgumentException) {}
+    }
+
+    @Test fun aChatGptSignInAboutToRunOutIsRenewedFirst() = runTest {
+        val renewed = chatGptTokens(System.currentTimeMillis() + 3_600_000, access = "access-2")
+        val http = Routed { r ->
+            when {
+                r.url == com.nekko.protocol.ChatGptSignIn.TOKEN_URL -> """{"access_token":"access-2","refresh_token":"refresh-2","expires_in":3600}"""
+                r.url.contains("/codex/models") -> chatGptModels
+                else -> error("unexpected ${r.url}")
+            }
+        }
+        val memory = Memory(); val phone = PhoneChats(memory, http, backgroundScope)
+        phone.load()
+        // Kept while fresh, then left until it is a minute from running out.
+        val id = phone.connect("chatgpt", "ChatGPT", null, chatGptTokens(System.currentTimeMillis() + 3_600_000).encode())
+        memory.values["phone.provider.key.$id"] = chatGptTokens(System.currentTimeMillis() + 60_000).encode()
+        http.requests.clear()
+        phone.models(id)
+        val refresh = http.requests.first()
+        assertEquals(com.nekko.protocol.ChatGptSignIn.TOKEN_URL, refresh.url)
+        assertTrue(refresh.form!!.contains("grant_type=refresh_token") && refresh.form!!.contains("refresh_token=refresh-1"))
+        assertEquals("Bearer access-2", http.requests.last().headers["Authorization"])
+        val kept = com.nekko.protocol.ChatGptSignIn.Tokens.decode(memory.values["phone.provider.key.$id"])!!
+        assertEquals(renewed.access, kept.access)
+        assertEquals("refresh-2", kept.refresh)
+        assertEquals("acct-1", kept.accountId)
+    }
 }

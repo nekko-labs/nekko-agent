@@ -2,10 +2,10 @@ import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { allowModeChange } from './YoloWarning.js';
 import { createPortal } from 'react-dom';
 import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND } from '@nekko-agent/shared';
-import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
+import type { ChatMode, EffortLevel, SavedModeSummaryPart, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
-  CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getWorkMode, matchSavedMode, newSavedModeId,
-  modePatchSkips, savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
+  CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getWorkMode, isStarterMode, matchSavedMode, newSavedModeId,
+  modePatchSkips, savedModeSummary, savedModeSummaryParts, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
@@ -363,27 +363,33 @@ export function ModePanel({
     </div>
   );
   const approvals: ChatMode = current.mode;
+  const railItem = (m: SavedMode) => {
+    const Glyph = SAVED_MODE_GLYPH[m.icon] ?? SparkleIcon;
+    const isDefault = m.id === defaultId;
+    return (
+      <div key={m.id} className="mode-rail-item" aria-checked={active?.id === m.id} role="radio" tabIndex={0} data-saved-mode={m.id}
+        title={`${m.name}: ${savedModeSummary(m.options) || 'local'}`}
+        onClick={() => void actions.applyMode(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void actions.applyMode(m); } }}>
+        <span className="mode-glyph"><Glyph /></span>
+        <span className="min-w-0 flex-1"><span className="mode-rail-n">{m.name}</span><span className="mode-rail-d">{savedModeSummary(m.options) || 'local'}</span></span>
+        <button className={`mode-star ${isDefault ? 'is-on' : ''}`} aria-label={isDefault ? `${m.name} is the default for new chats` : `Use ${m.name} for new chats`} title={isDefault ? 'Default for new chats (click to clear)' : 'Use for new chats'}
+          onClick={(e) => { e.stopPropagation(); void actions.toggleDefault(m.id); }}><StarIcon filled={isDefault} /></button>
+      </div>
+    );
+  };
+  // The user's own modes come first, under their own heading.
+  const custom = modes.filter((m) => !isStarterMode(m));
+  const starters = modes.filter(isStarterMode);
 
   return (<>
     <div ref={(el) => { panel.current = el; if (typeof panelRef === 'function') panelRef(el); else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }}
       style={style} className="mode-panel card fixed z-[100] shadow-(--shadow-float)" role="dialog" aria-label="Mode" data-mode-panel onKeyDown={onKeyDown}>
-      <div className="mode-rail" role="radiogroup" aria-label="Saved modes">
-        <p className="mode-sec">Saved modes</p>
-        {modes.map((m) => {
-          const Glyph = SAVED_MODE_GLYPH[m.icon] ?? SparkleIcon;
-          const isDefault = m.id === defaultId;
-          return (
-            <div key={m.id} className="mode-rail-item" aria-checked={active?.id === m.id} role="radio" tabIndex={0} data-saved-mode={m.id}
-              title={`${m.name}: ${savedModeSummary(m.options) || 'local'}`}
-              onClick={() => void actions.applyMode(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void actions.applyMode(m); } }}>
-              <span className="mode-glyph"><Glyph /></span>
-              <span className="min-w-0 flex-1"><span className="mode-rail-n">{m.name}</span><span className="mode-rail-d">{savedModeSummary(m.options) || 'local'}</span></span>
-              <button className={`mode-star ${isDefault ? 'is-on' : ''}`} aria-label={isDefault ? `${m.name} is the default for new chats` : `Use ${m.name} for new chats`} title={isDefault ? 'Default for new chats (click to clear)' : 'Use for new chats'}
-                onClick={(e) => { e.stopPropagation(); void actions.toggleDefault(m.id); }}><StarIcon filled={isDefault} /></button>
-            </div>
-          );
-        })}
-        <span className="flex-1" />
+      <div className="mode-rail">
+        {/* The list scrolls on its own so New mode stays in reach however many modes there are. */}
+        <div className="mode-rail-list" role="radiogroup" aria-label="Saved modes" data-mode-rail-list>
+          {custom.length > 0 && <><p className="mode-sec" data-mode-group="custom">Custom</p>{custom.map(railItem)}</>}
+          {starters.length > 0 && <><p className={`mode-sec${custom.length > 0 ? ' is-sub' : ''}`} data-mode-group="starter">{custom.length > 0 ? 'Built-in' : 'Saved modes'}</p>{starters.map(railItem)}</>}
+        </div>
         <button className="mode-rail-item" onClick={() => setSaving({ name: '', makeDefault: false })}><span className="mode-glyph"><PlusIcon /></span><span className="mode-rail-n">New mode</span></button>
       </div>
 
@@ -494,6 +500,12 @@ const LOCK_NOTE: Record<NonNullable<ToolApproachLock>, string> = {
   'claude-agent': "Claude Agent chats run Claude Code's own tools, so code mode doesn't apply and saves nothing. Pick another model to use it.",
 };
 
+/** The short why, shown on hovering a locked option. */
+const LOCK_HINT: Record<NonNullable<ToolApproachLock>, string> = {
+  sandbox: 'Sandbox chats always use the tool list.',
+  'claude-agent': "Claude Agent uses Claude Code's own tools. Pick another model to choose.",
+};
+
 /**
  * The Tools flyout's choice of how tools reach the model: a tool list, or
  * code mode (new). A sandbox chat and a Claude Agent chat keep the list.
@@ -502,15 +514,19 @@ export function ToolApproachPicker({ approach, locked = null, onPick }: { approa
   return (
     <div role="radiogroup" aria-label="How tools reach the model" data-tool-approaches>
       <p className="mode-group">How tools reach the model</p>
-      {TOOL_APPROACHES.map((a) => (
-        <button key={a.id} role="radio" aria-checked={approach === a.id} disabled={!!locked} data-tool-approach={a.id} className="mode-opt disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onPick(a.id)}>
-          <span className="mode-opt-ic">{a.id === 'code' ? <CodeIcon /> : <ListIcon />}</span>
-          <span className="min-w-0 flex-1">
-            <span className="mode-t">{a.label}{a.isNew && <span className="mode-badge is-accent">New</span>}{approach === a.id && <CheckIcon className="h-3.5 w-3.5 text-accent" />}</span>
-            <span className="mode-s">{a.description}</span>
-          </span>
-        </button>
-      ))}
+      {TOOL_APPROACHES.map((a) => {
+        const opt = (
+          <button key={a.id} role="radio" aria-checked={approach === a.id} disabled={!!locked} data-tool-approach={a.id} className="mode-opt disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onPick(a.id)}>
+            <span className="mode-opt-ic">{a.id === 'code' ? <CodeIcon /> : <ListIcon />}</span>
+            <span className="min-w-0 flex-1">
+              <span className="mode-t">{a.label}{a.isNew && <span className="mode-badge is-accent">New</span>}{approach === a.id && <CheckIcon className="h-3.5 w-3.5 text-accent" />}</span>
+              <span className="mode-s">{a.description}</span>
+            </span>
+          </button>
+        );
+        // A disabled button may swallow pointer events, so the hint hangs on a wrapper.
+        return locked ? <HoverTip key={a.id} label={LOCK_HINT[locked]} side="top"><span className="block">{opt}</span></HoverTip> : opt;
+      })}
       <a className="mode-link block" href={CODE_MODE_DOCS} data-code-mode-docs onClick={(e) => { e.preventDefault(); void window.nekko.openPath(CODE_MODE_DOCS); }}>What's code mode, and what does it save? <ExternalIcon className="inline h-2.5 w-2.5" /></a>
       {locked && <p className="mode-note" data-tool-approach-lock={locked}>{LOCK_NOTE[locked]}</p>}
     </div>
@@ -523,6 +539,23 @@ export function ToolApproachPicker({ approach, locked = null, onPick }: { approa
  */
 export function modeButtonLabel(session: Session, settings: Parameters<typeof chatModeState>[1], opts: { claudeAgent?: boolean } = {}) {
   const { active, current } = chatModeState(session, settings);
-  const summary = savedModeSummary(opts.claudeAgent ? { ...current, toolApproach: undefined } : current);
-  return { name: active?.name ?? 'Custom', icon: active ? SAVED_MODE_GLYPH[active.icon] : SparkleIcon, summary };
+  const parts = savedModeSummaryParts(opts.claudeAgent ? { ...current, toolApproach: undefined } : current);
+  const summary = parts.map((p) => p.label).join(' · ');
+  return { name: active?.name ?? 'Custom', icon: active ? SAVED_MODE_GLYPH[active.icon] : SparkleIcon, summary, parts };
+}
+
+type Glyph = (p: { className?: string }) => React.ReactElement;
+/** The Mode panel's own icon for each summary part. Running locally is the baseline, so it gets none. */
+export function summaryPartIcon(part: SavedModeSummaryPart): Glyph | null {
+  switch (part.key) {
+    case 'where': return part.value === 'worktree' ? WorktreeIcon : part.value === 'sandbox' ? CubeIcon : null;
+    case 'models': return part.value === 'cloud' ? CloudIcon : part.value === 'fusion' ? RouteIcon : LaptopIcon;
+    case 'approvals': return CHAT_MODE_ICON[part.value as ChatMode] ?? null;
+    case 'offline': return GlobeOffIcon;
+    case 'incognito': return IncognitoIcon;
+    case 'effort': return GaugeIcon;
+    case 'memory': return BrainCircuitIcon;
+    case 'guidance': return ListIcon;
+    case 'code': return CodeIcon;
+  }
 }

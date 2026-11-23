@@ -1,16 +1,27 @@
 {
-  "$comment": "The highlights of each release line (MAJOR.MINOR), read by the What's new page at nekkoagent.com/whatsnew (scripts/build-docs.mjs). date and tag are the line's newest release; authors are the GitHub logins of the pull request's author; contributors are the logins of everyone who merged a pull request in the line (from its GitHub release notes, bots left out).",
+  "$comment": "The highlights of each release line (MAJOR.MINOR), read by the What's new page at nekkoagent.com/whatsnew (scripts/build-docs.mjs). date and tag are the line's newest release; authors are the GitHub logins of the pull request's author; contributors are the logins of everyone who merged a pull request in the line (from its GitHub release notes, bots left out). Optional per highlight: \"major\": true puts it among the line's headliners, and the rest show as one-liners; \"kind\" (improvement, performance or fix) puts a one-liner under that heading. A line with no major highlight keeps the plain list.",
   "0.10": {
     "date": "2026-11-16",
     "tag": "v0.10.1004",
     "intro": "Billing and provider setup move into quieter screens, and Ctrl/Cmd+K searches everything.",
     "contributors": ["ermish", "Ghezz9", "TravisJPN", "austinermish", "matthewkurtti", "BobbyRobBob"],
     "highlights": [
-      { "title": "Plan & billing in Settings", "detail": "See your plan and switch teams.", "pr": 2732, "icon": "settings", "authors": ["ermish"] },
-      { "title": "Guided Google Gemini setup", "detail": "Connect Gemini step by step.", "pr": 2726, "icon": "brain-circuit", "authors": ["ermish"] },
-      { "title": "Fusion routing strategies", "detail": "Route by model capability tier.", "pr": 2737, "icon": "router", "authors": ["ermish"] },
-      { "title": "Search everything with Ctrl/Cmd+K", "detail": "Find commands, chats and settings.", "pr": 2389, "icon": "search", "authors": ["ermish"] },
-      { "title": "Winter theme", "detail": "A snowy look with hidden extras.", "pr": 2412, "icon": "palette", "authors": ["ermish"] }
+      { "title": "Search everything with Ctrl/Cmd+K", "detail": "Find commands, chats and settings.", "pr": 2389, "icon": "search", "authors": ["ermish"], "major": true },
+      { "title": "Plan & billing in Settings", "detail": "See your plan and switch teams.", "pr": 2732, "icon": "settings", "authors": ["ermish"], "major": true },
+      { "title": "Guided Google Gemini setup", "detail": "Connect Gemini step by step.", "pr": 2726, "icon": "brain-circuit", "authors": ["ermish"], "major": true },
+      { "title": "Fusion routing strategies", "detail": "Route by model capability tier.", "pr": 2737, "icon": "router", "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Winter theme", "detail": "A snowy look with hidden extras.", "pr": 2412, "icon": "palette", "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Nekko Agent in CarPlay", "detail": "Voice-first, with your active work.", "pr": 2783, "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Chats continue when a usage limit resets", "detail": "No need to come back and say go on.", "pr": 2813, "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Choose the subagent model", "detail": "Auto picks a lighter one.", "pr": 2490, "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Attach files to Claude Agent chats", "detail": "Send a file on its own, too.", "pr": 2552, "authors": ["austinermish"], "kind": "improvement" },
+      { "title": "One chat list across every computer on Android", "detail": "And this phone's chats with them.", "pr": 2654, "authors": ["Ghezz9"], "kind": "improvement" },
+      { "title": "Tailscale guide after pairing on iPhone", "detail": "Reach your computer away from home.", "pr": 2720, "authors": ["TravisJPN"], "kind": "improvement" },
+      { "title": "nekkod's memory stays bounded", "detail": "Less background load, too.", "pr": 2368, "authors": ["ermish"], "kind": "performance" },
+      { "title": "Long replies checkpoint instead of resending", "detail": "A large output is sent once.", "pr": 2493, "authors": ["ermish"], "kind": "performance" },
+      { "title": "ChatGPT chats no longer hang on Thinking", "detail": "Replies arrive as they should.", "pr": 2367, "authors": ["ermish"], "kind": "fix" },
+      { "title": "A notification opens its chat on a cold start", "detail": "Even when the app was closed.", "pr": 2324, "authors": ["BobbyRobBob"], "kind": "fix" },
+      { "title": "The macOS app launches again", "detail": "After a keychain entitlement stopped it.", "pr": 2705, "authors": ["matthewkurtti"], "kind": "fix" }
     ]
   },
   "0.9": {
@@ -19,11 +30,11 @@
     "intro": "New Nekko themes, an agent that asks before data leaves, and more of the desktop on Android.",
     "contributors": ["ermish", "Ghezz9", "TravisJPN", "BobbyRobBob", "xayashi", "matthewkurtti", "Sinkleberg"],
     "highlights": [
-      { "title": "Nekko and Indigo themes", "detail": "New looks with a plum app icon.", "pr": 1596, "authors": ["TravisJPN"] },
-      { "title": "Asks before data leaves", "detail": "A chat that read untrusted content asks first.", "pr": 1947, "authors": ["Ghezz9"] },
-      { "title": "Text size", "detail": "Set it in Settings › Accessibility.", "pr": 1973, "authors": ["BobbyRobBob"] },
-      { "title": "Lock Screen card on Android", "detail": "Allow, deny or stop from the Lock Screen.", "pr": 1407, "authors": ["Ghezz9"] },
-      { "title": "Rename a chat from its card", "detail": "Right in the agents list.", "pr": 1525, "authors": ["Ghezz9"] }
+      { "title": "Nekko and Indigo themes", "detail": "New looks with a plum app icon.", "pr": 1596, "authors": ["TravisJPN"], "major": true },
+      { "title": "Asks before data leaves", "detail": "A chat that read untrusted content asks first.", "pr": 1947, "authors": ["Ghezz9"], "major": true },
+      { "title": "Text size", "detail": "Set it in Settings › Accessibility.", "pr": 1973, "authors": ["BobbyRobBob"], "kind": "improvement" },
+      { "title": "Lock Screen card on Android", "detail": "Allow, deny or stop from the Lock Screen.", "pr": 1407, "authors": ["Ghezz9"], "kind": "improvement" },
+      { "title": "Rename a chat from its card", "detail": "Right in the agents list.", "pr": 1525, "authors": ["Ghezz9"], "kind": "improvement" }
     ]
   },
   "0.8": {
@@ -32,12 +43,12 @@
     "intro": "Nekko runs models on its own engine, puts every chat on one board, and arrives on Android.",
     "contributors": ["ermish", "Ghezz9", "TravisJPN", "BobbyRobBob", "matthewkurtti", "xayashi"],
     "highlights": [
-      { "title": "The Nekko engine", "detail": "Run models with no separate server.", "pr": 196, "authors": ["ermish"] },
-      { "title": "One board for every chat", "detail": "See what each agent is doing.", "pr": 199, "authors": ["ermish"] },
-      { "title": "Image generation in chat", "detail": "Switch a chat to make images.", "pr": 221, "authors": ["ermish"] },
-      { "title": "Android app", "detail": "Run your computer's agents from your phone.", "pr": 434, "authors": ["Ghezz9"] },
-      { "title": "Skills from GitHub", "detail": "Find and install Agent Skills in the Marketplace.", "pr": 522, "authors": ["Ghezz9"] },
-      { "title": "Find in chat", "detail": "Search a conversation for a keyword.", "pr": 633, "authors": ["BobbyRobBob"] }
+      { "title": "The Nekko engine", "detail": "Run models with no separate server.", "pr": 196, "authors": ["ermish"], "major": true },
+      { "title": "One board for every chat", "detail": "See what each agent is doing.", "pr": 199, "authors": ["ermish"], "major": true },
+      { "title": "Image generation in chat", "detail": "Switch a chat to make images.", "pr": 221, "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Android app", "detail": "Run your computer's agents from your phone.", "pr": 434, "authors": ["Ghezz9"], "major": true },
+      { "title": "Skills from GitHub", "detail": "Find and install Agent Skills in the Marketplace.", "pr": 522, "authors": ["Ghezz9"], "kind": "improvement" },
+      { "title": "Find in chat", "detail": "Search a conversation for a keyword.", "pr": 633, "authors": ["BobbyRobBob"], "kind": "improvement" }
     ]
   },
   "0.7": {
@@ -46,11 +57,11 @@
     "intro": "Nekko gets its name, signs in with the subscription you already have, and walks you through setup.",
     "contributors": ["ermish"],
     "highlights": [
-      { "title": "Sign in with your Claude subscription", "detail": "Use the plan you already pay for.", "pr": 168, "authors": ["ermish"] },
-      { "title": "Sign in with your ChatGPT subscription", "detail": "No API key needed.", "pr": 169, "authors": ["ermish"] },
-      { "title": "First-run setup", "detail": "Pick a theme and connect providers.", "pr": 172, "authors": ["ermish"] },
-      { "title": "Workflow triggers", "detail": "Start workflows from connectors and webhooks.", "pr": 176, "authors": ["ermish"] },
-      { "title": "Run models locally", "detail": "Load models with a memory fit check.", "pr": 181, "authors": ["ermish"] }
+      { "title": "Sign in with your Claude subscription", "detail": "Use the plan you already pay for.", "pr": 168, "authors": ["ermish"], "major": true },
+      { "title": "Sign in with your ChatGPT subscription", "detail": "No API key needed.", "pr": 169, "authors": ["ermish"], "major": true },
+      { "title": "First-run setup", "detail": "Pick a theme and connect providers.", "pr": 172, "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Workflow triggers", "detail": "Start workflows from connectors and webhooks.", "pr": 176, "authors": ["ermish"], "kind": "improvement" },
+      { "title": "Run models locally", "detail": "Load models with a memory fit check.", "pr": 181, "authors": ["ermish"], "major": true }
     ]
   }
 }

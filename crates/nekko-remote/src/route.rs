@@ -111,3 +111,68 @@ fn is_private_ipv4(h: &str) -> bool {
 fn is_private_ipv6(h: &str) -> bool {
     h.contains(':') && (h.starts_with("fc") || h.starts_with("fd") || h.starts_with("fe80:"))
 }
+
+/// Nekko Cloud Relay, the hosted relay (decision 0116). `NEKKO_CLOUD_RELAY_URL`
+/// replaces it (a staging relay, or tests).
+pub const CLOUD_RELAY_URL: &str = "wss://nekko-agent-relay.fly.dev";
+
+pub fn cloud_relay_url() -> String {
+    std::env::var("NEKKO_CLOUD_RELAY_URL")
+        .ok()
+        .map(|u| u.trim().trim_end_matches('/').to_string())
+        .filter(|u| !u.is_empty())
+        .unwrap_or_else(|| CLOUD_RELAY_URL.to_string())
+}
+
+/// Whether `url` is Nekko Cloud Relay: the same scheme and host (and port, if any).
+pub fn is_cloud_relay(url: &str) -> bool {
+    let norm = |u: &str| u.trim().trim_end_matches('/').to_ascii_lowercase();
+    norm(url) == norm(&cloud_relay_url())
+}
+
+/// How a device reaches this computer over a relay address: `cloud` through
+/// Nekko Cloud Relay, `direct` for everything else (the relay on this computer
+/// over Tailscale or the LAN, or a relay the owner runs). A device's route
+/// choice (`auto`, `cloud`, `direct`) is checked against this at HELLO.
+pub fn via(url: &str) -> &'static str {
+    if is_cloud_relay(url) { "cloud" } else { "direct" }
+}
+
+/// The routes a device may be limited to. `auto` (or none) allows both.
+pub const DEVICE_ROUTES: [&str; 3] = ["auto", "cloud", "direct"];
+
+/// Whether a device whose route choice is `route` may come in `via`.
+pub fn route_allows(route: Option<&str>, via: &str) -> bool {
+    match route {
+        Some("cloud") => via == "cloud",
+        Some("direct") => via == "direct",
+        _ => true,
+    }
+}
+
+#[cfg(test)]
+mod cloud_tests {
+    use super::*;
+
+    #[test]
+    fn tells_nekko_cloud_relay_from_every_other_route() {
+        assert!(is_cloud_relay("wss://nekko-agent-relay.fly.dev/"));
+        assert!(is_cloud_relay("WSS://Nekko-Agent-Relay.fly.dev"));
+        assert_eq!(via(CLOUD_RELAY_URL), "cloud");
+        for other in ["ws://gomi.tail1234.ts.net:4400", "ws://192.168.1.4:4400", "wss://relay.example.com", "wss://nekko-agent-relay.fly.dev.evil.com"] {
+            assert_eq!(via(other), "direct", "{other}");
+        }
+    }
+
+    #[test]
+    fn a_route_choice_limits_how_a_device_comes_in() {
+        for v in ["cloud", "direct"] {
+            assert!(route_allows(None, v));
+            assert!(route_allows(Some("auto"), v));
+        }
+        assert!(route_allows(Some("cloud"), "cloud"));
+        assert!(!route_allows(Some("cloud"), "direct"));
+        assert!(route_allows(Some("direct"), "direct"));
+        assert!(!route_allows(Some("direct"), "cloud"));
+    }
+}

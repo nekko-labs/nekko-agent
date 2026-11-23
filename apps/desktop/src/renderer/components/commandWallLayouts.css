@@ -360,7 +360,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* Keep the active group visible until its own rows end. */
 .agent-panel-list .agent-panel-group-heading { position: sticky; top: 0; z-index: 1; background: var(--paper); }
 .agent-panel-list .agent-panel-group-heading:hover { background: var(--surface-2); }
-.agent-panel-group-label { font-size: var(--text-sm); line-height: 20px; color: var(--accent); }
+.agent-panel-group-label { font-size: var(--text-xs); line-height: 16px; color: var(--accent); }
 
 .hover-tip-multiline { max-width: min(420px, calc(100vw - 16px)); white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 400; }
 

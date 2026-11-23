@@ -2799,7 +2799,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const toggleIncognito = () => {
     window.nekko.setSessionOptions(sessionId, { incognito: !session?.incognito }).then(setSession).catch((e) => useStore.getState().pushToast('error', String(e)));
   };
-  const asksFirst = showAsks && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} isCloudModel={isCloudModel} /> : null;
+  // Approvals are one of Mode's options and its icons show them, so the chip only stands in while Mode is hidden.
+  const asksFirst = showAsks && !showMode && session && session.chatType !== 'image' ?<AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} isCloudModel={isCloudModel} /> : null;
   const effortProps = {
     metadata: selectedModelInfo?.effort,
     session, onSessionChange: setSession, modelId: autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined),
@@ -2906,7 +2907,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
     <ChatCodeRun.Provider value={codeRun}>
     <ChatImages.Provider value={chatImages}>
-    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
+    {/* Portaled popups (the Mode panel and its lists) bubble here through React but are not part of the chat. */}
+    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || !e.currentTarget.contains(e.target as Node) || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <ContextChangeNotice tokens={ctx ? ctxUsed : undefined} onClose={closeContextNotice} />}
       {chatMenu && <ContextMenu x={chatMenu.x} y={chatMenu.y} onClose={() => setChatMenu(null)}>
         {chatMenu.selection && <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMenu.selection).catch(() => useStore.getState().pushToast('error', "Couldn't copy text.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy</ContextAction>}
@@ -3567,7 +3569,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   >
                     <button
                       ref={attachButtonRef}
-                      className="action-target grid h-8 w-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
+                      className="action-target composer-bar-button grid place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
                       onClick={() => (attachMenuOpen ? closeAttachMenu() : setAttachMenuOpen(true))}
                       title="Add a photo, video, file, folder, or skill"
                       aria-label="Add a photo, video, file, folder, or skill"
@@ -3752,7 +3754,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
                       data-composer-action={composerStops ? 'stop' : 'send'}
-                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} composer-action action-target grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-[color,opacity,transform] duration-150 disabled:opacity-40`}
+                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} composer-action action-target composer-bar-button grid shrink-0 place-items-center rounded-xl transition-[color,opacity,transform] duration-150 disabled:opacity-40`}
                       onClick={() => composerStops ? void window.nekko.abortChat(sessionId) : void send()}
                       disabled={!composerStops && (imageMode ? streaming || !draft.trim() : !hasComposerPayload || !hasProvider)}
                       title={composerStops ? 'Stop' : streaming ? 'Add to the queue' : 'Send'}

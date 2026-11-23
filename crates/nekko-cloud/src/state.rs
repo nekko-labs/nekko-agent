@@ -18,6 +18,9 @@ pub struct Account {
     pub billing: bool,
     /// Library files sync to Nekko Cloud for this account (the `library-cloud` switch, #2748).
     pub library_cloud: bool,
+    /// Nekko Cloud Relay is offered to this account (the `cloud-relay` switch, decision 0116).
+    /// Whether its plan includes it is `plan` (Pro, Team) or `staff`.
+    pub cloud_relay: bool,
 }
 
 impl Account {
@@ -31,6 +34,7 @@ impl Account {
             staff: a["staff"].as_bool().unwrap_or(false),
             billing: a["features"]["billing"].as_bool().unwrap_or(false),
             library_cloud: a["features"]["library-cloud"].as_bool().unwrap_or(false),
+            cloud_relay: a["features"]["cloud-relay"].as_bool().unwrap_or(false),
         }
     }
 }
