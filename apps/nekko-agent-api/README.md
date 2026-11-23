@@ -301,6 +301,20 @@ Comma-separated, case-insensitive; with either set, only an account whose **prov
 
 Setting a plan by hand (Team, or before billing is on): `update users set plan = 'pro' where lower(email) = lower('…');`
 
+## Nekko Cloud Relay
+
+Off until the service has a signing key, and hidden even then until a team account
+turns the `cloud-relay` switch on (decision 0116). Pro and Team accounts then get
+relay tickets from `POST /v1/relay/ticket`; Free gets 402.
+
+```bash
+# an Ed25519 seed (32 bytes); keep it only in Fly secrets
+fly secrets set NEKKO_RELAY_SIGNING_KEY="$(openssl rand -base64 32)" NEKKO_RELAY_URL='wss://nekko-agent-relay.fly.dev'
+```
+
+The API prints the matching public key at start (`relay tickets: on (relay public key …)`):
+set it on the relay as `NEKKO_RELAY_TICKET_KEY`.
+
 ## Billing: Stripe
 
 Off until all of this is done, and hidden even then until a team account turns
