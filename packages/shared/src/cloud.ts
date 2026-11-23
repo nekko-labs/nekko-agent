@@ -39,7 +39,7 @@ export interface CloudStatus {
     /** A Nekko team account, which may switch unreleased Cloud features (decision 0092). */
     staff?: boolean;
     /** Unreleased Cloud features switched on for this account. */
-    features?: { billing?: boolean; libraryCloud?: boolean };
+    features?: { billing?: boolean; libraryCloud?: boolean; cloudRelay?: boolean };
   } | null;
   /** Library sync (#2748); null unless the account's plan syncs and the `library-cloud` switch is on for it. */
   library?: LibrarySyncStatus | null;

@@ -40,6 +40,13 @@ export interface RemoteDevice {
    */
   access?: { read?: boolean; change?: boolean };
   /**
+   * How it may reach this computer (decision 0116): `cloud` through Nekko
+   * Cloud Relay only, `direct` (Tailscale, the LAN, the owner's own relay)
+   * only. Missing means either (`auto`). Set with `remote:setRoute`, or by
+   * pairing with a code made for one route.
+   */
+  route?: Exclude<DeviceRoute, 'auto'>;
+  /**
    * Its last HELLO came from an app older than relay replay protection
    * (protocol 4): welcomed for one release unless `acceptLegacyPhones` is
    * false in remote.json. Cleared when the phone connects with a newer app.
@@ -76,7 +83,37 @@ export interface RemoteStatus {
   error?: string;
   /** SK-3: the phone that stopped remote access (`remote:stop`) and when, until it is turned on again: the desktop's banner. */
   stoppedBy?: { deviceId: string; name?: string | null; at: number };
+  /** Decision 0116: relays this computer is also reachable through, besides `relayUrl` (`remote:setRelays`). */
+  alsoRelays?: string[];
+  /** Decision 0116, only while there is more than one relay: how each route is doing. Online is any of them. */
+  relays?: RelayRouteStatus[];
 }
+
+/**
+ * How a device reaches this computer (decision 0116). `cloud`: through Nekko
+ * Cloud Relay, the hosted relay (a Pro perk). `direct`: the relay on this
+ * computer over Tailscale or the LAN, or the owner's own relay. `auto`: either.
+ */
+export type DeviceRoute = 'auto' | 'cloud' | 'direct';
+
+export interface RelayRouteStatus {
+  url: string;
+  via: Exclude<DeviceRoute, 'auto'>;
+  online: boolean;
+  error?: string | null;
+}
+
+/** Nekko Cloud Relay's address; the engine's `route::CLOUD_RELAY_URL`. */
+export const CLOUD_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
+
+/** Whether a relay address is Nekko Cloud Relay (same scheme, host and port). */
+export function isCloudRelay(url: string | undefined | null): boolean {
+  const norm = (u: string) => u.trim().replace(/\/+$/, '').toLowerCase();
+  return !!url && norm(url) === norm(CLOUD_RELAY_URL);
+}
+
+/** Which way a relay address reaches this computer; the engine's `route::via`. */
+export const relayVia = (url: string): Exclude<DeviceRoute, 'auto'> => (isCloudRelay(url) ? 'cloud' : 'direct');
 
 export interface RemotePairing {
   relayUrl: string;

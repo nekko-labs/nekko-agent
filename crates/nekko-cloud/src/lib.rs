@@ -362,6 +362,31 @@ impl Cloud {
         self.vault.get("token").ok_or_else(|| "Sign in to Nekko Cloud first.".to_string())
     }
 
+    /// A Nekko Cloud Relay ticket (decision 0116): `agent` for this computer's
+    /// relay room, `account` for the account channel. The ticket, and how long
+    /// to keep it before asking for the next. Errors are what the owner reads.
+    pub async fn relay_ticket(&self, scope: &str, room: Option<&str>) -> Result<(String, Duration), String> {
+        let token = self.token().map_err(|_| "Sign in to Nekko Cloud to use Nekko Cloud Relay.".to_string())?;
+        let mut body = json!({ "scope": scope });
+        if let Some(room) = room {
+            body["room"] = json!(room);
+        }
+        match self.api.send(&token, reqwest::Method::POST, "/v1/relay/ticket", Some(body)).await {
+            Ok(v) => {
+                let ticket = v["ticket"].as_str().filter(|t| t.starts_with("nkr1.")).ok_or("Nekko Cloud sent no relay ticket.")?;
+                // At least a minute, so a short answer can't make the agent ask in a loop.
+                let renew = v["renewAfterSeconds"].as_u64().unwrap_or(3 * 3600).max(60);
+                Ok((ticket.to_string(), Duration::from_secs(renew)))
+            }
+            Err(err) => Err(match (err.status, err.code.as_str()) {
+                (402, _) => "Nekko Cloud Relay is part of Nekko Cloud Pro. Upgrade, or use Tailscale for free.".into(),
+                (404, _) => "Nekko Cloud Relay isn't available for this account yet.".into(),
+                (401, _) => "Sign in to Nekko Cloud again to use Nekko Cloud Relay.".into(),
+                _ => format!("Couldn't get a Nekko Cloud Relay ticket: {}", err.message),
+            }),
+        }
+    }
+
     fn key_id(&self) -> u32 {
         lock(&self.state).key_id.unwrap_or(0)
     }
@@ -559,7 +584,7 @@ impl Cloud {
             "signedIn": signed_in,
             "account": s.account.as_ref().map(|a| json!({
                 "email": a.email, "plan": a.plan, "canSync": a.can_sync,
-                "staff": a.staff, "features": { "billing": a.billing, "libraryCloud": a.library_cloud },
+                "staff": a.staff, "features": { "billing": a.billing, "libraryCloud": a.library_cloud, "cloudRelay": a.cloud_relay },
             })),
             "library": library,
             "oauthPending": live.oauth.is_some(),
