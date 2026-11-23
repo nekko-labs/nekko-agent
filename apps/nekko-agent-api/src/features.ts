@@ -11,8 +11,10 @@ import type { Db } from "./db.js";
  * `library-cloud`: syncing, sharing and versions of Library files (#2752).
  * `library-multiplayer`: editing a shared document together with live
  * cursors (#2751); unavailable until the service has its relay.
+ * `cloud-relay`: Nekko Cloud Relay, the hosted relay as a Pro perk
+ * (decision 0116); unavailable until the service has a ticket signing key.
  */
-export const FEATURES = ["billing", "library-cloud", "library-multiplayer"] as const;
+export const FEATURES = ["billing", "library-cloud", "library-multiplayer", "cloud-relay"] as const;
 export type Feature = (typeof FEATURES)[number];
 export type FeatureState = "off" | "team" | "on";
 const STATES: ReadonlySet<string> = new Set(["off", "team", "on"]);

@@ -1,5 +1,6 @@
 import { brandEnv } from '@nekko-agent/shared';
 import { buildRelay } from './server.js';
+import { parseTicketKey } from './ticket.js';
 
 export { buildRelay, controlFrame, DEFAULT_LIMITS } from './server.js';
 
@@ -9,10 +10,14 @@ const HOST = brandEnv('RELAY_HOST') ?? '0.0.0.0';
 async function main() {
   const authzUrl = brandEnv('RELAY_AUTHZ_URL') || undefined;
   const allowUnauthenticated = brandEnv('RELAY_ALLOW_UNAUTHENTICATED') === '1';
-  const { app } = buildRelay({ authzUrl, allowUnauthenticated });
+  // Nekko Cloud Relay (decision 0116): the Cloud API's public ticket key, as it prints it at start.
+  const ticketText = brandEnv('RELAY_TICKET_KEY');
+  const ticketKey = ticketText ? parseTicketKey(ticketText) : undefined;
+  const { app } = buildRelay({ authzUrl, allowUnauthenticated, ticketKey });
   await app.listen({ port: PORT, host: HOST });
   console.log(`\n🐾 Nekko Agent relay listening on ws://${HOST}:${PORT}/relay`);
   console.log(`   access: ${authzUrl ? `gated (agents authorized via ${authzUrl})` : allowUnauthenticated ? 'WARNING: unauthenticated agent enrollment explicitly enabled' : 'agent enrollment disabled (set NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 only for trusted deployments)'}`);
+  console.log(`   Nekko Cloud Relay tickets: ${ticketKey ? 'checked (account channel on /account)' : 'off (set NEKKO_RELAY_TICKET_KEY)'}`);
   console.log(`   push: ${process.env.APNS_KEY_P8 || process.env.FCM_SERVICE_ACCOUNT ? 'configured (APNs/FCM)' : 'disabled (set APNS_* and/or FCM_SERVICE_ACCOUNT)'}\n`);
 }
 

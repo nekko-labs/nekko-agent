@@ -1,0 +1,16 @@
+{
+  "$comment": "A Nekko Cloud Relay ticket (decision 0116) signed with a fixed test seed. The API signs it (src/relay.ts) and the relay checks it (apps/relay-server/src/ticket.ts); both test suites read this file. Never a real key.",
+  "seed": "bmVra28gcmVsYXkgdGlja2V0IHRlc3QgdmVjdG9yISE",
+  "publicKey": "va4LDfd9SpS7hDiUfsjyJijCyoYoBEYNZHDActGXaHU",
+  "payload": {
+    "v": 1,
+    "scope": "agent",
+    "acct": "vYqk3J0m5Qy1u2x9cJb7aQ",
+    "dev": "6f1d2c3b-4a59-4e8f-9b0a-1c2d3e4f5a6b",
+    "room": "a1b2c3d4e5f60718",
+    "plan": "pro",
+    "iat": 1795000000,
+    "exp": 4102444800
+  },
+  "ticket": "nkr1.eyJ2IjoxLCJzY29wZSI6ImFnZW50IiwiYWNjdCI6InZZcWszSjBtNVF5MXUyeDljSmI3YVEiLCJkZXYiOiI2ZjFkMmMzYi00YTU5LTRlOGYtOWIwYS0xYzJkM2U0ZjVhNmIiLCJyb29tIjoiYTFiMmMzZDRlNWY2MDcxOCIsInBsYW4iOiJwcm8iLCJpYXQiOjE3OTUwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.LWnx1xtqjh74bQg1hLws-wt25F69UfuohyPS8ZrD3qvjE-eC0BJHmV_3n-ZQ39D1ScqWTtdBoaqKoB7Qu7vjBg"
+}
