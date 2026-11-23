@@ -3569,7 +3569,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   >
                     <button
                       ref={attachButtonRef}
-                      className="action-target grid h-8 w-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
+                      className="action-target composer-bar-button grid place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
                       onClick={() => (attachMenuOpen ? closeAttachMenu() : setAttachMenuOpen(true))}
                       title="Add a photo, video, file, folder, or skill"
                       aria-label="Add a photo, video, file, folder, or skill"
@@ -3754,7 +3754,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
                       data-composer-action={composerStops ? 'stop' : 'send'}
-                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} composer-action action-target grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-[color,opacity,transform] duration-150 disabled:opacity-40`}
+                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} composer-action action-target composer-bar-button grid shrink-0 place-items-center rounded-xl transition-[color,opacity,transform] duration-150 disabled:opacity-40`}
                       onClick={() => composerStops ? void window.nekko.abortChat(sessionId) : void send()}
                       disabled={!composerStops && (imageMode ? streaming || !draft.trim() : !hasComposerPayload || !hasProvider)}
                       title={composerStops ? 'Stop' : streaming ? 'Add to the queue' : 'Send'}
