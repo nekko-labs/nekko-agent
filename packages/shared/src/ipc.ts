@@ -810,7 +810,7 @@ export interface NekkoApi {
   ): Promise<import('./engine.js').EngineSettings>;
   /** The local model library, with load state and the planner's residency verdict folded in. */
   engineModels(): Promise<
-    Array<import('./engine.js').LocalModel & { loaded: boolean; gpuFit?: import('./engine.js').GpuFit }>
+    Array<import('./engine.js').LocalModel & { loaded: boolean; gpuFit?: import('./engine.js').GpuFit; gpuFitIdle?: import('./engine.js').GpuFit }>
   >;
   /** Adopt a GGUF that lives elsewhere on disk, without copying it. */
   engineImportModel(

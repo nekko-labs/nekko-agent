@@ -30,10 +30,12 @@ describe('GPU guidance', () => {
     expect(gpuGuidance(10, undefined, local('m', { gpuFit: 'full', maxContext: 32000, preset: { contextTokens: 4096 } }))).toBe('Fits on GPU, but limited context size');
     expect(gpuGuidance(10, undefined, local('m', { gpuFit: 'partial' }))).toBe('Not enough free GPU memory');
   });
-  it('does not call a model too big when only the busy GPU is short', () => {
+  it('says whether a partial fit is only a busy GPU, from the idle verdict', () => {
     const vram = { kind: 'vram' as const, budgetBytes: 31.8e9 };
-    expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'partial' }))).toBe('Fits on a free GPU');
-    expect(gpuGuidance(30e9, vram, local('m', { gpuFit: 'partial' }))).toBe('Too big');
+    expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'partial', gpuFitIdle: 'full' }))).toBe('Fits when the GPU is free');
+    expect(gpuGuidance(5.5e9, vram, local('m', { gpuFit: 'partial', gpuFitIdle: 'partial' }))).toBe('Part on CPU at this context size');
+    expect(gpuGuidance(30e9, vram, local('m', { gpuFit: 'partial', gpuFitIdle: 'wont' }))).toBe('Part on CPU at this context size');
+    expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'partial' }))).toBe('Not enough free GPU memory');
     expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'partial', layers: 64, preset: { gpuLayers: 40 } }))).toBe('Part on CPU by its settings');
     expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'wont' }))).toBe('Too big');
   });
