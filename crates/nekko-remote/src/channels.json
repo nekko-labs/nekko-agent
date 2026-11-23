@@ -173,6 +173,8 @@
  "remote:revoke",
  "remote:rotate",
  "remote:setAccess",
+ "remote:setRelays",
+ "remote:setRoute",
  "remote:status",
  "remote:stop",
  "resource:queue",

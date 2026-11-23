@@ -41,11 +41,11 @@ export const STEP_UP_DESKTOP_GUARDED = {
   /** Raise a chat's mode, or the default mode (the same rule as the phone's). */
   modeRaise: ['session:setOptions', 'settings:update'],
   /** Turn remote access on, change the relay or the connection. */
-  remoteAccess: ['remote:enable', 'remote:attach'],
+  remoteAccess: ['remote:enable', 'remote:attach', 'remote:setRelays'],
   /** Pair a device, rotate the secret (*Sign out all phones*). */
   pairing: ['remote:pair', 'remote:pairComputer', 'remote:rotate'],
-  /** Change what a phone may do (Read / Change switches, *Lock phones*). */
-  phoneAccess: ['remote:setAccess'],
+  /** Change what a phone may do (Read / Change switches, *Lock phones*), or how it may connect. */
+  phoneAccess: ['remote:setAccess', 'remote:setRoute'],
   /** Add, show or change a provider key or account. */
   providerKeys: ['providers:save', 'providers:remove', 'providers:importCliAuth', 'providers:revealKey'],
   /** Turn step-up off or remove a method: a *different* method, or a recovery code. */
