@@ -1,7 +1,7 @@
 import type { EngineInstall } from '@nekko-agent/shared';
 
 /**
- * Which one thing Settings > Engine says about the managed engine.
+ * Which one thing the Model server card says about the managed engine.
  *
  * Repair, the CUDA switch and the update all download the pinned release into a
  * clean folder, so two of them side by side would be two buttons for the same
