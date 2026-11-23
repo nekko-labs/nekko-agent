@@ -95,9 +95,13 @@ describe('Mode panel markup', () => {
     const sandboxed = renderToStaticMarkup(<ToolApproachPicker approach="list" locked="sandbox" onPick={() => {}} />);
     expect(sandboxed.match(/disabled=""/g)).toHaveLength(2);
     expect(sandboxed).toContain('Sandbox chats use the tool list');
+    // Hovering a locked option says why it can't be picked.
+    expect(sandboxed.match(/data-hover-tip="Sandbox chats always use the tool list."/g)).toHaveLength(2);
+    expect(out).not.toContain('data-hover-tip');
     const claude = renderToStaticMarkup(<ToolApproachPicker approach="list" locked="claude-agent" onPick={() => {}} />);
     expect(claude.match(/disabled=""/g)).toHaveLength(2);
     expect(claude).toContain("Claude Agent chats run Claude Code&#x27;s own tools");
+    expect(claude).toContain('data-hover-tip="Claude Agent uses Claude Code&#x27;s own tools. Pick another model to choose."');
   });
   it('says on the Tools row when the chat is in code mode', () => {
     session = { ...base, toolApproach: 'code' } as Session;
