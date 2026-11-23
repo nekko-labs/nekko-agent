@@ -30,6 +30,7 @@ it('isolates free employee accounts, rejects secret fields, and never overwrites
 
 it('rate limits both Hypergate setup methods before authentication', async () => {
   const db = pgliteDb(new PGlite());
+  await migrate(db, undefined, { lock: false });
   const app = buildServer({ db, allowedOrigins: [], syncRateLimit: { max: 1, windowMs: 60_000 } });
   try {
     for (const [method, remoteAddress] of [['GET', '192.0.2.1'], ['PUT', '192.0.2.2']] as const) {
