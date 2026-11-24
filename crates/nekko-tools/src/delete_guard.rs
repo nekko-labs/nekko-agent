@@ -744,6 +744,12 @@ mod tests {
         }
     }
 
+    /// `p` as typed into a POSIX shell. A Windows path's backslashes are escapes
+    /// there (`rm -rf C:\x` deletes `C:x`), so a POSIX command names it with `/`.
+    fn sh(p: &str) -> String {
+        p.replace('\\', "/")
+    }
+
     impl Drop for Rig {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.dir);
@@ -787,8 +793,8 @@ mod tests {
             ("rm -rf ~/.*", None),
             ("rm ~/*", None),
             ("rm -rf ~root", None),
-            (&format!("rm -rf {home}") as &str, None),
-            (&format!("rm -rf {above}"), None),
+            (&format!("rm -rf {}", sh(&home)) as &str, None),
+            (&format!("rm -rf {}", sh(&above)), None),
             (&format!("rm -rf '{home}/'"), None),
             ("rm -rf . ", Some(home.as_str())),
             ("rm -rf *", Some(home.as_str())),
@@ -884,8 +890,8 @@ mod tests {
             ("cd sub && rm -rf out", Some(wt.as_str())),
             ("rm -rf build && ls", Some(wt.as_str())),
             ("rmdir build", Some(wt.as_str())),
-            (&format!("rm -rf {wt}/build") as &str, None),
-            (&format!("rm -rf {scratch}/tmp"), None),
+            (&format!("rm -rf {}/build", sh(&wt)) as &str, None),
+            (&format!("rm -rf {}/tmp", sh(&scratch)), None),
         ] {
             let d = classify_command_scoped(cmd, &default_guardrails(), Dialect::Posix, &r.scope(cwd));
             assert_eq!(d.action, Action::Allow, "{cmd:?} in {cwd:?}: {:?}", d.matches);

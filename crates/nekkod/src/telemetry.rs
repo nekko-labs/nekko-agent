@@ -284,10 +284,16 @@ pub fn start(ctx: Ctx) {
         let settings = ctx.settings.clone();
         let mut changes = settings.store.subscribe();
         configure(&changes.borrow_and_update());
-        let profile = serde_json::to_value(ctx.machine.profile(false).await).unwrap_or(Value::Null);
-        capture("app_started", &hardware(&profile));
+        // Once per run, as soon as reports are on: at start, or when they are
+        // turned on later (onboarding's step comes after the engine starts).
+        let mut started = false;
         let mut tick = tokio::time::interval(FLUSH_EVERY);
         loop {
+            if !started && state().enabled {
+                started = true;
+                let profile = serde_json::to_value(ctx.machine.profile(false).await).unwrap_or(Value::Null);
+                capture("app_started", &hardware(&profile));
+            }
             tokio::select! {
                 changed = changes.changed() => {
                     if changed.is_err() { break }

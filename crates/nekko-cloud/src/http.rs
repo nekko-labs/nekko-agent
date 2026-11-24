@@ -43,10 +43,66 @@ fn short(s: &str) -> String {
     s.chars().take(200).collect()
 }
 
+/// How long to wait before each retry of a transient failure (#3186).
+const RETRY_AFTER: [std::time::Duration; 2] =
+    [std::time::Duration::from_millis(500), std::time::Duration::from_millis(2000)];
+
 /// Send through Settings > Connections as `cloud-sync` and read the answer.
 async fn call(rb: reqwest::RequestBuilder) -> Result<Value, HttpError> {
-    answer(nekko_net::send("cloud-sync", rb).await.map_err(network)?).await
+    match nekko_net::send("cloud-sync", rb).await {
+        Ok(res) => answer(res).await,
+        Err(err) => {
+            // Only a failed connect is known to have sent nothing; a timeout mid-request may have done the work.
+            let unreachable = matches!(&err, nekko_net::Error::Http(e) if e.is_connect());
+            let mut e = network(err);
+            if unreachable {
+                e.code = "unreachable".into();
+            }
+            Err(e)
+        }
+    }
 }
+
+/// `call` for the Nekko Cloud API: a brief stall (nothing listening yet, a
+/// 502/503/504, or the API's database not answering) is retried twice before it
+/// reaches the user, so one stall doesn't stop sync starting after sign-in.
+/// Supabase calls stay single: a retried sign-in code could send a second email.
+async fn call_api(rb: reqwest::RequestBuilder) -> Result<Value, HttpError> {
+    let mut waits = RETRY_AFTER.iter();
+    let mut rb = rb;
+    loop {
+        let again = rb.try_clone();
+        let result = call(rb).await;
+        let Err(err) = &result else { return result };
+        let retry = match (&again, waits.next()) {
+            (Some(_), Some(wait)) if transient(err) => *wait,
+            _ => return result,
+        };
+        tokio::time::sleep(retry).await;
+        rb = again.expect("checked above");
+    }
+}
+
+/// A failure that is safe to try again: the request never reached the service,
+/// or the service said it couldn't do the work right now.
+fn transient(e: &HttpError) -> bool {
+    match e.status {
+        0 => e.code == "unreachable",
+        502..=504 => true,
+        // An API from before #3186 answered a database connect timeout with a bare 500.
+        500 => e.code == "database-unavailable",
+        _ => false,
+    }
+}
+
+/// The phrases node-postgres uses when it can't open a connection in time.
+fn database_unavailable(body: &Value) -> bool {
+    let m = body.get("message").and_then(Value::as_str).unwrap_or("");
+    m.contains("connection timeout") || m.contains("timeout exceeded when trying to connect")
+}
+
+/// What `answer` says for any 5xx: the server's own text stays in its logs.
+const UNAVAILABLE: &str = "Nekko Cloud is busy right now. Try again in a moment.";
 
 async fn answer(res: reqwest::Response) -> Result<Value, HttpError> {
     let status = res.status().as_u16();
@@ -55,18 +111,26 @@ async fn answer(res: reqwest::Response) -> Result<Value, HttpError> {
     if (200..300).contains(&status) {
         return Ok(body);
     }
-    let code = body.get("error").or(body.get("error_code")).and_then(Value::as_str).unwrap_or("").to_string();
+    let mut code = body.get("error").or(body.get("error_code")).and_then(Value::as_str).unwrap_or("").to_string();
+    if status == 500 && database_unavailable(&body) {
+        code = "database-unavailable".into();
+    }
     // Nekko Cloud is switched on for Nekko Labs accounts only (#2932); say so in our words whatever the server sent.
     let invite_only = "Nekko Cloud is invite-only for now. This account isn't on the list yet.";
     let message = ["message", "msg", "error_description"]
         .iter()
-        .find_map(|k| body.get(*k).and_then(Value::as_str).filter(|_| code != "account-not-available"))
+        .find_map(|k| body.get(*k).and_then(Value::as_str).filter(|_| code != "account-not-available" && status < 500))
         .map(str::to_string)
         .unwrap_or_else(|| match (status, code.as_str()) {
             (_, "account-not-available") => invite_only.into(),
             (402, _) => "Sync needs a Pro or Team plan.".into(),
             (401, _) => "You're signed out of Nekko Cloud. Sign in again.".into(),
             (429, _) => "Too many requests. Try again in a minute.".into(),
+            (500.., "unavailable" | "database-unavailable" | "busy") | (502..=504, _) => UNAVAILABLE.into(),
+            // Fastify's own 5xx carries an HTTP reason phrase ("Internal Server Error"), not one of our codes.
+            (500.., c) if c.is_empty() || c.contains(' ') => {
+                "Nekko Cloud ran into a problem. Try again in a moment.".into()
+            }
             (_, "already-subscribed") => "You already have a plan. Use Manage billing to change it.".into(),
             (_, "no-billing-account") => {
                 "The Nekko team set up your plan, so there's nothing to manage here. Email hello@nekkoagent.com to change it.".into()
@@ -182,16 +246,16 @@ impl Api {
     }
 
     pub async fn config(&self) -> Result<Value, HttpError> {
-        call(self.http.get(self.url("/v1/auth/config"))).await
+        call_api(self.http.get(self.url("/v1/auth/config"))).await
     }
 
     pub async fn session(&self, access_token: &str, label: &str) -> Result<Value, HttpError> {
         let body = json!({ "accessToken": access_token, "label": label });
-        call(self.http.post(self.url("/v1/auth/session")).json(&body)).await
+        call_api(self.http.post(self.url("/v1/auth/session")).json(&body)).await
     }
 
     pub async fn get(&self, token: &str, path: &str) -> Result<Value, HttpError> {
-        call(self.http.get(self.url(path)).bearer_auth(token)).await
+        call_api(self.http.get(self.url(path)).bearer_auth(token)).await
     }
 
     pub async fn send(
@@ -205,7 +269,7 @@ impl Api {
         if let Some(b) = body {
             req = req.json(&b);
         }
-        call(req).await
+        call_api(req).await
     }
 }
 

@@ -114,7 +114,9 @@ struct URLSessionPhoneHTTP: PhoneHTTP {
         guard let url = URL(string: r.url), var c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw URLError(.badURL) }
         let query = c.query
         c.query = nil
-        guard let base = c.string, PhoneProviders.safeURL(base), query == nil || (r.method == "GET" && query == "limit=1000"),
+        // ChatGPT's model list names the Codex version it filters by (#3244); only there.
+        let chatGPTModels = c.host == "chatgpt.com" && c.path == "/backend-api/codex/models" && query == "client_version=\(PhoneProviders.codexClientVersion)"
+        guard let base = c.string, PhoneProviders.safeURL(base), query == nil || (r.method == "GET" && (query == "limit=1000" || chatGPTModels)),
               r.headers.allSatisfy({ PhoneProviders.headerValue($0.key) && PhoneProviders.headerValue($0.value) }) else { throw URLError(.badURL) }
         var req = URLRequest(url: url)
         req.httpMethod = r.method

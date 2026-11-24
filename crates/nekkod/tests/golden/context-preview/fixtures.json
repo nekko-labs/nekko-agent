@@ -4,8 +4,8 @@
     "project/CLAUDE.md": "See AGENTS.md\n",
     "project/src/app.ts": "export const answer = 42;\n",
     "notes.md": "Remember the milk.\r\nAnd the eggs.\n",
-    "data/memory/m-global.md": "---\nid: m-global\nscope: global\ntitle: Deploy\ntags: [release]\ncreatedAt: 1790000000000\nupdatedAt: 1790000000500\n---\nShip every change as a PR.\n",
-    "data/memory/m-ws.md": "---\nid: m-ws\nscope: workspace\nworkspaceId: w1\ntitle: Workspace note\ntags: [x]\ncreatedAt: 1790000000000\nupdatedAt: 1790000000100\n---\nOnly for w1.\n"
+    "data/memory/m-global.md": "---\nid: m-global\nscope: global\ntitle: Deploy\ntags: [release, always]\ncreatedAt: 1790000000000\nupdatedAt: 1790000000500\n---\nShip every change as a PR.\n",
+    "data/memory/m-ws.md": "---\nid: m-ws\nscope: workspace\nworkspaceId: w1\ntitle: Workspace note\ntags: [x, always]\ncreatedAt: 1790000000000\nupdatedAt: 1790000000100\n---\nOnly for w1.\n"
   },
   "settings": {
     "workspaces": [{ "id": "w1", "name": "project", "path": "<root>/project", "addedAt": 1 }],

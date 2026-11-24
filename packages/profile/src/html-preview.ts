@@ -67,8 +67,11 @@ const MIME: Record<string, string> = {
 export const MAX_PREVIEW_FILE_BYTES = 50 * 1024 * 1024;
 /** HTML larger than this is sent as it is, without the storage stand-in. */
 const MAX_REWRITE_BYTES = 5 * 1024 * 1024;
-/** Pages kept servable at once; the oldest goes first. */
-export const MAX_SERVED_PAGES = 32;
+/**
+ * Pages kept servable at once; the oldest goes first. Frames release their page when they close, so this only
+ * bounds a leak; a design canvas with many versions open stays well under it (#3210).
+ */
+export const MAX_SERVED_PAGES = 128;
 
 const LOCAL_SOURCES = "'self' data: blob:";
 const INTERNET_SOURCES = 'https:';

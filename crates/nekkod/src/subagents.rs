@@ -22,6 +22,10 @@ pub struct Run {
     session: Arc<Mutex<Value>>,
     /// Outlives the turn that started it, until its `task_notification`.
     pub background: bool,
+    /// The `Agent` call that first started it, when a `SendMessage` woke it
+    /// again: Claude Code 2.1.312 still marks the woken sub-agent's lines with
+    /// that call, and only its notification with the `SendMessage` call.
+    pub spawn_call: Option<String>,
     /// The model was read off its first reply.
     model_known: bool,
 }
@@ -75,6 +79,11 @@ impl Sink {
                 // Kept past the end of this turn, until its notification.
                 Subagent::Backgrounded { call_id } => {
                     self.harness.with_subagent(&parent.id, &call_id, |run| run.background = true);
+                }
+                Subagent::Resumed { call_id, agent_id, message } => {
+                    if let Err(e) = self.resume(&parent, &call_id, &agent_id, message).await {
+                        eprintln!("nekkod: could not reopen a sub-agent's child chat: {e}");
+                    }
                 }
                 Subagent::Ended { call_id, outcome } => self.end(&parent.id, &call_id, outcome).await,
             }
@@ -152,10 +161,52 @@ impl Sink {
         let first =
             json!({ "id": format!("{id}_task"), "role": "user", "content": task, "createdAt": nekko_js::now_ms() });
         let mapped = vec![Mapped::Message(first)];
-        let run = Run { mapper: Mapper::new(id.clone()), session: session.clone(), background, model_known: false };
+        let run = Run {
+            mapper: Mapper::new(id.clone()),
+            session: session.clone(),
+            background,
+            spawn_call: None,
+            model_known: false,
+        };
         self.harness.add_subagent(&parent.id, call_id, run);
         self.apply(&session, mapped, true).await;
         // Marks it working everywhere until its first real event.
+        self.hub.publish("agent:event", json!({ "type": "text", "sessionId": id, "delta": "" }), false);
+        Ok(())
+    }
+
+    /// Reopen the child chat of a sub-agent that a `SendMessage` woke after it
+    /// ended, under that call, until its notification: without this the chat
+    /// stayed as it stopped (often a failure) while the sub-agent worked on.
+    async fn resume(&self, parent: &Parent, call_id: &str, agent_id: &str, message: String) -> Result<(), String> {
+        let (store, parent_id, agent) = (self.store.clone(), parent.id.clone(), agent_id.to_string());
+        let child = tokio::task::spawn_blocking(move || resumed_child(&store, &parent_id, &agent))
+            .await
+            .map_err(|e| e.to_string())?;
+        // No chat for it: an incognito parent, or made before sub-agents had chats.
+        let Some(child) = child else { return Ok(()) };
+        let id = child.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        let spawn_call = child.get("spawnCallId").and_then(Value::as_str).map(str::to_string);
+        if self.harness.running_subagents().contains(&id) {
+            return Ok(());
+        }
+        let session = Arc::new(Mutex::new(child));
+        let mut mapped = Vec::new();
+        if !message.trim().is_empty() {
+            let id = format!("{id}_resume_{call_id}");
+            mapped.push(Mapped::Message(
+                json!({ "id": id, "role": "user", "content": message, "createdAt": nekko_js::now_ms() }),
+            ));
+        }
+        let run = Run {
+            mapper: Mapper::new(id.clone()),
+            session: session.clone(),
+            background: true,
+            spawn_call,
+            model_known: true,
+        };
+        self.harness.add_subagent(&parent.id, call_id, run);
+        self.apply(&session, mapped, true).await;
         self.hub.publish("agent:event", json!({ "type": "text", "sessionId": id, "delta": "" }), false);
         Ok(())
     }
@@ -218,6 +269,23 @@ pub fn saved_transcript(store: &SessionStore, child: &Value) -> Option<Vec<Value
         return None;
     }
     Some(task.cloned().into_iter().chain(saved).collect())
+}
+
+/// The child chat of `parent_id`'s sub-agent `agent_id` (Claude Code's name for
+/// it), found by the `Agent` call Claude Code saved in its `meta.json`.
+fn resumed_child(store: &SessionStore, parent_id: &str, agent_id: &str) -> Option<Value> {
+    let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+    let parent = store.meta(parent_id)?.into_value();
+    let session = text(&parent, "claudeCodeSessionId")?;
+    let config = nekko_harness::claude_config_dir(text(&parent, "claudeCodeAccount").as_deref())?;
+    let call = nekko_harness::agent_call(&config, &session, agent_id)?;
+    let id = store.list_containing(&call).into_iter().find_map(|c| {
+        let ours = c.get("claudeCodeSubagent") == Some(&Value::Bool(true))
+            && text(&c, "parentSessionId").as_deref() == Some(parent_id)
+            && text(&c, "spawnCallId").as_deref() == Some(call.as_str());
+        ours.then(|| text(&c, "id")).flatten()
+    })?;
+    store.get(&id)
 }
 
 /// At startup: fill the child chats of Claude Code sub-agents that ended

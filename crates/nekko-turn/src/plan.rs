@@ -93,6 +93,16 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     {
         tools.push(remember_tool());
     }
+    // Read-only, so offered wherever the chat reads memory at all; offered
+    // whether or not notes exist yet, so the tool list (part of the cached
+    // prompt prefix) does not change when the first note is saved.
+    if !parent
+        && !training
+        && !disabled.contains(RECALL_MEMORY)
+        && nekko_context::MemoryScope::of_session(session).project()
+    {
+        tools.push(recall_memory_tool());
+    }
     if training {
         tools.push(c.report_experiment.clone());
         tools.push(c.report_artifact.clone());
@@ -119,18 +129,39 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     tools
 }
 
+/// The memory search tool's name.
+pub const RECALL_MEMORY: &str = "recall_memory";
+
+/// The `recall_memory` tool: the model searches the user's memory notes in
+/// its own words, for what the automatic recall on the message missed (#3276).
+fn recall_memory_tool() -> Value {
+    serde_json::json!({
+        "name": RECALL_MEMORY,
+        "description": "Search the user's long-term memory notes. Notes about the topic of a message are usually added to it already (\"# Memory recalled: <title>\"); call this when you need something about the user that is not in your context, for example their setup, people, projects or past decisions. Search with a few distinctive keywords, and try the words a note would use (notes are often written in English, whatever language the user writes in). Returns at most a few notes; nothing found means there is no such note, so do not guess.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": { "type": "string", "description": "Keywords to search for, e.g. \"editor IDE\" or \"deploy staging\"." }
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }
+    })
+}
+
 /// The `remember` tool: the agent saves what it learns about the user as a
 /// global memory note. Offered only where the chat reads global memory, so
 /// incognito and memory-off chats never write it.
 fn remember_tool() -> Value {
     serde_json::json!({
         "name": "remember",
-        "description": "Save something you learned about the user to long-term memory so future chats know it: who they are, their preferences, how they like to work, people and projects they mention. Save durable facts only, never secrets, credentials or things that only matter to this chat. One fact per note with a short title; to correct a note, reuse its exact title (shown as \"# Memory: <title>\" in your context) and it is replaced. The user sees a card each time you save.",
+        "description": "Save something you learned about the user to long-term memory so future chats know it: who they are, their preferences, how they like to work, people and projects they mention. Save durable facts only, never secrets, credentials or things that only matter to this chat. One fact per note with a short title; to correct a note, reuse its exact title (shown as \"# Memory: <title>\" or \"# Memory recalled: <title>\" in your context) and it is replaced. Set always to true only for what applies to every conversation (their name, the language or tone they want, standing preferences): those stay in every chat. Other notes are recalled when a message is about them. The user sees a card each time you save.",
         "parameters": {
             "type": "object",
             "properties": {
                 "title": { "type": "string", "description": "Short name for the fact, e.g. \"Preferred name\"." },
-                "body": { "type": "string", "description": "The fact, in a sentence or two of plain language." }
+                "body": { "type": "string", "description": "The fact, in a sentence or two of plain language." },
+                "always": { "type": "boolean", "description": "Keep this note in every chat (identity, language, standing preferences). Leave out for facts that matter only when their topic comes up." }
             },
             "required": ["title", "body"],
             "additionalProperties": false

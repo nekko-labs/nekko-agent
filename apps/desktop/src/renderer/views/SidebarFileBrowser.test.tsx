@@ -33,6 +33,7 @@ describe('the Files view', () => {
     expect(html).toMatch(/data-connected-folder="app" aria-expanded="false"[^]*shop[^]*acme\/shop/);
     expect(html).toContain('data-connected-folder="notes"');
     expect(html).toContain('title="/Users/me/notes"');
+    expect(html).toMatch(/data-connected-folder="app"[^]*<\/button><button[^>]+aria-label="Disconnect shop"[^]*data-connected-folder="notes"[^]*<\/button><button[^>]+aria-label="Disconnect notes"[^]*Add folder…/);
     // Closed until picked: no folder is read up front.
     expect(html).not.toContain('data-folder-tree');
   });
@@ -55,8 +56,10 @@ describe('the Files view', () => {
     expect(html).not.toContain('data-folders-heading');
   });
 
-  it('says when no folder is connected', () => {
-    expect(renderSidebar({ sessions: [], shows: 'files', settings: { workspaces: [] } })).toContain('No folders connected');
+  it('offers Add folder in the empty state without disconnect controls', () => {
+    const html = renderSidebar({ sessions: [], shows: 'files', settings: { workspaces: [] } });
+    expect(html).toMatch(/No folders connected[^]*Add folder…/);
+    expect(html).not.toContain('aria-label="Disconnect ');
   });
 
   it('names a file by its last segment and tags it with the deepest folder holding it', () => {

@@ -550,7 +550,8 @@ struct AddPhoneProviderSheet: View {
 
     /// A kind to start on, from a provider button; nil starts on the first.
     init(initialKind: String? = nil) {
-        let k = initialKind.flatMap(PhoneProviders.kind) ?? PhoneProviders.kinds[0]
+        // More providers starts on the first key kind; ChatGPT has its own button.
+        let k = initialKind.flatMap(PhoneProviders.kind) ?? PhoneProviders.kinds.first { !$0.plan } ?? PhoneProviders.kinds[0]
         _kindId = State(initialValue: k.id)
         _label = State(initialValue: k.label)
         _url = State(initialValue: initialKind != nil && k.urlRequired ? k.defaultUrl : "")
@@ -574,6 +575,22 @@ struct AddPhoneProviderSheet: View {
                 } footer: {
                     Text(kind.hint).foregroundStyle(palette.inkSoft)
                 }
+                if kind.plan {
+                    // ChatGPT (#3244): the sign-in is the whole form; there is no key to paste.
+                    Section {
+                        Button { Task { await signInChatGPT() } } label: {
+                            Text("Sign in with \(kind.label)").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(busy)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                        .accessibilityIdentifier("addPhoneProvider.signInChatGPT")
+                    } footer: {
+                        Text("Approve in the browser and come back. This iPhone keeps its own sign-in in its Keychain; your computers keep theirs. OpenAI’s terms are written around its own apps, so this is offered as-is. An OpenAI API key works too.")
+                            .foregroundStyle(palette.inkSoft)
+                    }
+                }
                 if kind.signIn {
                     Section {
                         Button { Task { await signIn() } } label: {
@@ -588,14 +605,14 @@ struct AddPhoneProviderSheet: View {
                         Text("Approve in the browser and the key comes back to this iPhone.").foregroundStyle(palette.inkSoft)
                     }
                 }
-                if kind.urlRequired {
+                if kind.urlRequired && !kind.plan {
                     Section {
                         TextField(kind.defaultUrl, text: $url, axis: .vertical)
                             .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                             .accessibilityIdentifier("addPhoneProvider.url")
                     } header: { SectionHeader("Address") }
                 }
-                Section {
+                if !kind.plan { Section {
                     if let page = kind.keyPage.flatMap(URL.init(string:)), let keySite {
                         Button("Open \(keySite)") { opened = true; openURL(page) }
                             .accessibilityIdentifier("addPhoneProvider.openKeyPage")
@@ -621,7 +638,7 @@ struct AddPhoneProviderSheet: View {
                 } header: { SectionHeader(kind.signIn ? "Or use a key" : "Key") } footer: {
                     Text(opened ? "Copy the key, come back and tap Paste. Nekko checks it and connects."
                                 : "Kept in this iPhone’s Keychain, on this device only.").foregroundStyle(palette.inkSoft)
-                }
+                } }
                 if let failed {
                     Section { Label(failed, systemImage: "exclamationmark.triangle").foregroundStyle(palette.danger) }
                 }
@@ -640,7 +657,7 @@ struct AddPhoneProviderSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    if busy { ProgressView() } else {
+                    if busy { ProgressView() } else if !kind.plan {
                         Button("Add") { Task { await add() } }
                             .disabled(label.trimmingCharacters(in: .whitespaces).isEmpty)
                             .accessibilityIdentifier("addPhoneProvider.save")
@@ -675,6 +692,58 @@ struct AddPhoneProviderSheet: View {
             await add()
         } catch let e as ASWebAuthenticationSessionError where e.code == .canceledLogin {
             busy = false
+        } catch {
+            busy = false
+            failed = error.localizedDescription
+        }
+    }
+
+    /// Sign in with ChatGPT (#3244): listen on this iPhone's loopback port for the page to come
+    /// back, open the sign-in, swap the code for this iPhone's own tokens, and keep the provider
+    /// (or replace its sign-in) once its plan's models load.
+    private func signInChatGPT() async {
+        busy = true
+        failed = nil
+        let state = ChatGPTSignIn.state()
+        let verifier = SyncCrypto.base64url(E2E.randomBytes(32))
+        let listener: ChatGPTCallbackListener
+        do {
+            listener = try ChatGPTCallbackListener(state: state)
+            try await listener.start()
+        } catch {
+            busy = false
+            failed = ChatGPTSignIn.Problem.portBusy.localizedDescription
+            return
+        }
+        do {
+            // The listener's answer sends the browser to nekko-agent://, which closes the sheet.
+            _ = try await webAuth.authenticate(
+                using: ChatGPTSignIn.authorizeURL(challenge: SyncCrypto.pkceChallenge(verifier), state: state),
+                callbackURLScheme: "nekko-agent", preferredBrowserSession: .shared)
+        } catch {
+            // Closed by hand, perhaps after the code already came: the listener says.
+        }
+        listener.stop()
+        let answer = await listener.wait()
+        guard case .code(let code)? = answer else {
+            busy = false
+            if case .refused? = answer { failed = ChatGPTSignIn.Problem.cancelled.localizedDescription }
+            return
+        }
+        do {
+            key = try await phone.chatGPTTokens(code: code, verifier: verifier).encoded
+            // Signing in again replaces the old sign-in; the provider and its chats stay.
+            if let existing = phone.providers.first(where: { $0.kind == "chatgpt" }) {
+                phone.setKey(existing.id, key)
+                phone.setEnabled(existing.id, true)
+                if let why = await phone.test(existing.id) { failed = why; busy = false; return }
+                key = ""
+                busy = false
+                dismiss()
+                return
+            }
+            busy = false
+            await add()
         } catch {
             busy = false
             failed = error.localizedDescription

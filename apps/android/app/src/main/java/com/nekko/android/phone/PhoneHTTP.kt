@@ -35,7 +35,10 @@ class DirectPhoneHTTP : PhoneHTTP {
         require(url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.fragment == null) { "Phone providers require HTTPS without credentials or fragments." }
         val builder = Request.Builder().url(url)
         request.headers.forEach { (k, v) -> builder.header(k, v) }
-        builder.method(request.method, request.body?.toString()?.toRequestBody("application/json".toMediaType()))
+        // ChatGPT's token endpoint takes a form; everything else is JSON.
+        val payload = request.form?.toRequestBody("application/x-www-form-urlencoded".toMediaType())
+            ?: request.body?.toString()?.toRequestBody("application/json".toMediaType())
+        builder.method(request.method, payload)
         val call = client.newCall(builder.build())
         cont.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
@@ -52,7 +55,7 @@ class DirectPhoneHTTP : PhoneHTTP {
                                 s.buffer.readUtf8(minOf(s.buffer.size, PhoneProviders.ERROR_BODY_CHARS + 1L))
                             }.orEmpty()
                             val headers = r.headers.associate { (k, v) -> k.lowercase() to v }
-                            val kind = if (url.host == "api.openai.com") "openai" else ""
+                            val kind = when (url.host) { "api.openai.com" -> "openai"; "chatgpt.com" -> "chatgpt"; else -> "" }
                             throw ProviderRefusal(PhoneProviders.failure(r.code, body, headers, kind))
                         }
                         val source = r.body?.source() ?: throw IOException("The provider returned no body.")
