@@ -1023,8 +1023,11 @@ final class LiveRelayTests: XCTestCase {
             let frame = element.frame
             let navigation = app.navigationBars.firstMatch
             let top = navigation.exists ? navigation.frame.maxY : app.frame.minY
-            let viewport = CGRect(x: app.frame.minX + 8, y: top + 8,
-                                  width: app.frame.width - 16, height: app.frame.maxY - top - 16)
+            // Only the vertical edges matter. Settings is a plain list since #2947, so its
+            // rows (and the row-wide switch in them) are the full width of the screen; a
+            // side margin here made every row "outside" and the reveal fail after 16 drags.
+            let viewport = CGRect(x: app.frame.minX, y: top + 8,
+                                  width: app.frame.width, height: app.frame.maxY - top - 16)
             return !frame.isEmpty && viewport.contains(frame) && element.isHittable
         }
         for upward in [true, false] {
