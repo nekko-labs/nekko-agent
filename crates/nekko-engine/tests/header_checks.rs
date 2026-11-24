@@ -259,3 +259,16 @@ fn a_listing_carries_the_engines_verdict_and_drops_the_fit_it_makes_moot() {
     }
     std::fs::remove_dir_all(dir).ok();
 }
+
+#[test]
+fn an_image_or_mlx_row_gets_no_llama_cpp_verdict() {
+    // The model server's load gate skips these, so the listing must not say "Can't run here" for them.
+    let engine = EngineInUse { source: Source::Managed, version: Some("b11224".into()) };
+    let rows = vec![
+        json!({ "id": "img", "name": "img", "path": "/img.gguf", "modality": "image", "unknownWeightType": 143, "minEngineBuild": 11556 }),
+        json!({ "id": "mlx", "name": "mlx", "path": "/mlx", "format": "mlx", "unknownWeightType": 143, "minEngineBuild": 11556 }),
+    ];
+    for row in library::with_load_state(rows, &Default::default(), &Map::new(), None, None, &engine) {
+        assert!(row.get("loadCheck").is_none() && row.get("engineMeetsMinBuild").is_none(), "{row}");
+    }
+}

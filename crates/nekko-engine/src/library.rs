@@ -1181,7 +1181,11 @@ pub fn with_load_state(
     rows.into_iter()
         .map(|row| {
             let id = row.get("id").map(nekko_js::display).unwrap_or_default();
-            let check = load_check(&row, engine);
+            // The llama.cpp rules do not apply to an image or MLX model: the
+            // server's load gate skips them too, so the row must not claim them.
+            let llama = row.get("modality").and_then(Value::as_str) != Some("image")
+                && row.get("format").and_then(Value::as_str) != Some("mlx");
+            let check = llama.then(|| load_check(&row, engine)).flatten();
             let blocked = check.as_ref().is_some_and(LoadCheck::blocked);
             let fit = hw.filter(|_| !blocked).map(|hw| gpu_fit_for(&row, hw, overhead_floor));
             let idle = hw.filter(|_| fit == Some("partial")).and_then(|hw| gpu_fit_idle_for(&row, hw, overhead_floor));
