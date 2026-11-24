@@ -1,6 +1,6 @@
 import { useDownloadAction } from './useDownloadAction.js';
 import { DownloadProgress } from './DownloadProgress.js';
-import { engineNotice } from './engineNotice.js';
+import { engineNotice, engineUpdateText, modelsNeedingNewerEngine } from './engineNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DownloadJob, EngineStatus, LocalModel } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -126,7 +126,8 @@ export function EngineSection({
 
   const { install, running } = status;
   const installed = Boolean(install.binPath || status.diffusionInstall?.binPath);
-  const notice = engineNotice(install);
+  const needNewer = modelsNeedingNewerEngine(models);
+  const notice = engineNotice(install, needNewer);
   // A model's weights, shards and helper files are one download, so the count is per model, not per file.
   const active = groupDownloads(jobs).filter((g) => isActive(g.state));
   const borrowed = models.filter((m) => m.managed === false).length;
@@ -308,7 +309,7 @@ export function EngineSection({
 
             {notice === 'update' && install.outdated && (
               <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
-                <p className="min-w-0 flex-1 text-xs text-ink-soft">{install.outdated.message}</p>
+                <p className="min-w-0 flex-1 text-xs text-ink-soft">{engineUpdateText(install.outdated, needNewer)}</p>
                 <button
                   className="btn py-1 text-xs"
                   onClick={() => void reinstall(install.outdated?.buildId, 'Updating the engine. The server stops while it swaps in, so switch it back on once it finishes.')}
