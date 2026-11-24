@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 
 const COMPLEX: &str = r"\b(implement|refactor|debug|architecture|design|migrat|optim[iy]|algorithm|concurren|distributed|security|performance|test|build|fix the|root cause|trace|why does|explain how)\b";
 
-const NON_CHAT: &str = r"(^|[\W_])(whisper|distil-whisper|parakeet|wav2vec|seamless|tts|piper|kokoro|bark|xtts|embed|embedding|bge|gte|e5|nomic-embed|minilm|jina-(embed|clip)|rerank|reranker|colbert|clip|siglip|sd|sdxl|sd3|stable-diffusion|flux|dall-e|dalle|ocr|trocr|paddle|florence|donut|layoutlm|translate|moderation|guard)([\W_]|$)";
+const NON_CHAT: &str = r"(^|[\W_])(whisper|distil-whisper|parakeet|wav2vec|seamless|tts|piper|kokoro|bark|xtts|embed|embedding|bge|gte|e5|nomic-embed|minilm|jina-(embed|clip)|rerank|reranker|colbert|clip|siglip|sd|sdxl|sd3|stable-diffusion|flux|qwen[-_]?image|z[-_]image|hidream|pixart|ltxv|dall-e|dalle|ocr|trocr|paddle|florence|donut|layoutlm|translate|moderation|guard)([\W_]|$)";
 
 const TIERS: [(&str, i32); 3] = [
     (r"opus|gpt-5|o1-pro|405b|70b|72b", 5),
@@ -84,9 +84,14 @@ fn label(model: &Value) -> String {
     format!("{} {}", crate::show(model.get("id")), crate::show(model.get("name")))
 }
 
+/// The built-in engine files every model under its kind (`chat/…`,
+/// `image/…`): anything outside chat is never a chat model, whatever its name.
+const NON_CHAT_KINDS: [&str; 4] = ["image/", "video/", "audio/", "embedding/"];
+
 /// `isChatModel`.
 pub fn is_chat_model(model: &Value) -> bool {
-    !res().non_chat.test(&label(model))
+    let id = crate::show(model.get("id"));
+    !NON_CHAT_KINDS.iter().any(|k| id.starts_with(k)) && !res().non_chat.test(&label(model))
 }
 
 /// `modelTier`.
@@ -109,4 +114,33 @@ pub fn pick(models: &[Value], prompt: &str) -> Option<Value> {
     ranked.sort_by(|a, b| if want_strong { b.1.cmp(&a.1) } else { a.1.cmp(&b.1) });
     let chosen = if want_strong { ranked.first() } else { ranked.iter().find(|r| r.1 >= 2).or(ranked.first()) };
     chosen.map(|(m, _)| m.get("id").cloned().unwrap_or(Value::Null))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_chat_model;
+    use serde_json::json;
+
+    #[test]
+    fn picture_and_video_models_are_not_chat_models() {
+        let m = |id: &str, name: &str| json!({ "id": id, "name": name });
+        // Built-in engine kinds, whatever the file is called.
+        assert!(!is_chat_model(&m(
+            "image/unsloth_Qwen-Image-Edit-2511-GGUF/qwen-image-edit-2511-Q8_0",
+            "qwen-image-edit-2511-Q8_0"
+        )));
+        assert!(!is_chat_model(&m("image/QuantStack_Qwen-Image-GGUF/Qwen_Image-Q8_0", "Qwen_Image-Q8_0")));
+        assert!(!is_chat_model(&m("video/some-model", "some-model")));
+        assert!(!is_chat_model(&m("embedding/Qwen3-Embedding-0.6B", "Qwen3-Embedding-0.6B")));
+        // The same families served by another server, by name.
+        assert!(!is_chat_model(&m("qwen-image-edit-2511", "Qwen Image Edit")));
+        assert!(!is_chat_model(&m("z-image-turbo", "Z Image Turbo")));
+        // Chat and vision models stay in.
+        assert!(is_chat_model(&m(
+            "chat/lmstudio-community_Qwen3-Coder-Next-GGUF/Qwen3-Coder-Next-Q4_K_M",
+            "Qwen3-Coder-Next-Q4_K_M"
+        )));
+        assert!(is_chat_model(&m("chat/Qwen3.8-27B", "Qwen3.8-27B")));
+        assert!(is_chat_model(&m("qwen2.5-vl-7b-instruct", "Qwen2.5 VL 7B")));
+    }
 }

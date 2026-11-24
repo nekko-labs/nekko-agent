@@ -50,6 +50,18 @@ What it turns on: scheduled tasks, workflows and auto-continue, Nekko's own tool
 
 You can add more than one Claude account, subscription or API. See [Accounts and switching](accounts.md) for how, and for what Anthropic's terms allow with several Claude accounts.
 
+## ChatGPT on your phone
+
+The iPhone and Android apps can run their own chats (**This iPhone** or **This phone**, no computer needed) on your ChatGPT plan too.
+
+1. On iPhone, open **Settings → Models on This iPhone** and tap **ChatGPT**. On Android, open phone chats, **Add provider**, then **ChatGPT**.
+2. Tap **Sign in with ChatGPT** and approve in the browser. The page says *Signed in to ChatGPT* and sends you back to the app.
+3. Start a chat and pick one of your plan's models.
+
+Each phone signs in on its own and keeps its sign-in in its Keychain or Keystore. It never shares a sign-in with your computers, so signing out on one doesn't sign out the other. While the sign-in page is open, the app listens on the phone's own loopback address (port 1455), where OpenAI sends the sign-in back. Nothing else on your network can reach it. If another app is using that port, close it and try again.
+
+When the sign-in expires, the chat says so: open ChatGPT again and sign in, and your chats stay. Chats on the phone have no tools, the same as with an API key.
+
 ## How it works
 
 The OAuth service in the engine daemon (`crates/nekkod/src/oauth.rs`) runs the sign-in flow:

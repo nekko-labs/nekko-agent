@@ -171,7 +171,7 @@ fun NekkoNavHost(
             // Over whatever is open; Back from New chat returns there.
             DeepLink.Share, DeepLink.NewChat -> nav.navigate(Routes.NEW) { launchSingleTop = true }
             DeepLink.Talk -> nav.navigate(Routes.VOICE) { launchSingleTop = true }
-            is DeepLink.OpenRouterKey -> nav.navigate(Routes.phone()) { launchSingleTop = true }
+            is DeepLink.OpenRouterKey, DeepLink.ChatGptSignedIn -> nav.navigate(Routes.phone()) { launchSingleTop = true }
             DeepLink.Dashboard -> nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
             null -> return@LaunchedEffect
         }

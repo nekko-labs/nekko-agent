@@ -1,0 +1,41 @@
+name: What's new draft
+
+# Drafts the next release line's What's new entry (docs/hub/whats-new.json)
+# from the pull requests merged since the last release, before the line's
+# release tag is pushed: the app bundles the file, so the tagged commit needs
+# the entry (docs/runbooks/releasing.md). It only reads; the entry and the
+# candidates go to the run summary, and a person opens the pull request,
+# writes the intro and picks the highlights. Nothing waits on this job.
+#
+#   gh workflow run whats-new-draft.yml -f line=0.11
+
+on:
+  workflow_dispatch:
+    inputs:
+      line:
+        description: The release line about to start (MAJOR.MINOR, like 0.11)
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The release tags set the range.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Draft the entry
+        env:
+          LINE: ${{ inputs.line }}
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/draft-whats-new.mjs --line "$LINE" >> "$GITHUB_STEP_SUMMARY"

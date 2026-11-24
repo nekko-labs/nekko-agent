@@ -14,6 +14,12 @@ name: Queue sweeper
 #   - re-runs the failed jobs of a red `gate` once (attempt 1 only), so a
 #     flake heals itself and a real failure stays red for the author.
 #
+# It also closes the still-open linked issues of every PR merged into main in
+# the last 24 hours. GitHub skips closing keywords on merges made with
+# GITHUB_TOKEN, and auto-merge.yml stops waiting for the merge after 40
+# minutes, so a PR that merged later (after a review, a re-run or a re-arm)
+# left its issues open (#3278). An issue reopened after the merge stays open.
+#
 # There is no merge queue since 2026-11-06; the file keeps its name so the
 # runbooks and history that point at it still resolve.
 #
@@ -27,6 +33,10 @@ on:
   schedule:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
+    inputs:
+      lookback_hours:
+        description: 'Close linked issues of PRs merged in the last N hours'
+        default: '24'
 
 permissions:
   contents: read
@@ -113,3 +123,62 @@ jobs:
                 ;;
             esac
           done <<<"$prs"
+
+  close-linked-issues:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+    steps:
+      - name: Close linked issues of merged PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          LOOKBACK_HOURS: ${{ inputs.lookback_hours || '24' }}
+        run: |
+          case "$LOOKBACK_HOURS" in
+            ''|*[!0-9]*) echo "::error::lookback_hours must be a whole number, got '$LOOKBACK_HOURS'."; exit 1 ;;
+          esac
+          since=$(date -u -d "$LOOKBACK_HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
+
+          # One search returns each merged PR's linked issues with their state,
+          # so REST calls are spent only on issues still open. One line per
+          # open same-repo issue: PR number, merge time, issue number.
+          # shellcheck disable=SC2016 # GraphQL and jq variables, not shell ones.
+          links=$(gh api graphql --paginate \
+            -f q="repo:$GH_REPO is:pr is:merged base:main merged:>=$since" \
+            -f query='query($q: String!, $endCursor: String) {
+              search(query: $q, type: ISSUE, first: 100, after: $endCursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes { ... on PullRequest { number mergedAt
+                  closingIssuesReferences(first: 25) { nodes { number state repository { nameWithOwner } } }
+                } }
+              } }' \
+            --jq '.data.search.nodes[] | .number as $pr | .mergedAt as $at
+              | .closingIssuesReferences.nodes[]
+              | select(.state == "OPEN" and .repository.nameWithOwner == env.GH_REPO)
+              | "\($pr) \($at) \(.number)"')
+
+          while read -r pr at n; do
+            [ -n "$n" ] || continue
+
+            # Someone reopened it after the merge on purpose: leave it open.
+            reopens=$(gh api --paginate "repos/$GH_REPO/issues/$n/events" \
+              --jq '.[] | select(.event == "reopened") | .created_at') \
+              || { echo "::warning::Could not read #$n's events."; continue; }
+            if awk -v at="$at" '$0 > at { found = 1 } END { exit !found }' <<<"$reopens"; then
+              echo "#$n: reopened after #$pr merged; leaving it open."
+              continue
+            fi
+
+            # Another PR linking the same issue may have closed it this run.
+            [ "$(gh issue view "$n" --json state -q .state)" = OPEN ] || continue
+
+            if gh issue close "$n" --reason completed --comment "Fixed in #$pr."; then
+              echo "#$n: closed; #$pr merged at $at."
+            else
+              echo "::warning::Could not close #$n."
+            fi
+          done <<<"$links"

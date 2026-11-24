@@ -463,7 +463,8 @@ const api: NekkoApi = {
   getRemoteStatus: () => inv(IpcChannels.remoteStatus),
   getMessagingStatus: () => inv(IpcChannels.messagingStatus),
   getRemotePairing: () => inv(IpcChannels.remotePairing),
-  startRemotePairing: () => inv(IpcChannels.remotePair),
+  // A code for one route (decision 0116) rides as the second argument; none is the old call.
+  startRemotePairing: (route) => (route && route !== 'auto' ? inv(IpcChannels.remotePair, null, { route }) : inv(IpcChannels.remotePair)),
   startComputerPairing: () => inv(IpcChannels.remotePairComputer),
   listComputers: () => inv(IpcChannels.computersList),
   pairComputer: (link) => inv(IpcChannels.computersPair, link),
@@ -483,6 +484,8 @@ const api: NekkoApi = {
   renameRemoteDevice: (deviceId, name) => inv(IpcChannels.remoteRename, deviceId, name),
   rotateRemoteSecret: () => inv(IpcChannels.remoteRotate),
   setRemoteAccess: (deviceId, access) => inv(IpcChannels.remoteSetAccess, deviceId, access),
+  setRemoteRoute: (deviceId, route) => inv(IpcChannels.remoteSetRoute, deviceId, route),
+  setRemoteRelays: (urls) => inv(IpcChannels.remoteSetRelays, urls),
   getRemoteActivity: (deviceId) => inv(IpcChannels.remoteActivity, deviceId),
   localRelayStatus: () => inv(IpcChannels.localRelayStatus),
   localRelayStart: () => inv(IpcChannels.localRelayStart),
