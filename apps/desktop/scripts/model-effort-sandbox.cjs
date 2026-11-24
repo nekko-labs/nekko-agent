@@ -2,6 +2,7 @@
 // bottom row. Expert mode, one wall window on a model that advertises effort, captured hidden and off-screen.
 //   NEKKO_LAYOUT_SANDBOX=model-effort-sandbox.cjs node apps/desktop/scripts/layout-evidence-integration.cjs
 const { app, BrowserWindow, session } = require('electron');
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const out = process.env.NEKKO_INTEGRATION_OUT;
@@ -34,9 +35,16 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 80 && !await run('!!window.layoutFixture && !!document.querySelector("[data-chat-surface]")'); i++) await sleep(100);
     await run(`(() => {
       const f = layoutFixture, st = f.store, a = f.records[0];
-      const effort = { levels: ['low', 'medium', 'high', 'xhigh', 'max'].map((e) => ({ effort: e })), default: 'medium' };
-      st.setState({ models: st.getState().models.map((m) => ({ ...m, name: 'Claude Opus 5.5', effort })) });
-      f.bridge.listModels = async () => st.getState().models;
+      const effort = { levels: ['low', 'medium', 'high', 'xhigh', 'max'].map((e) => ({ effort: e, description: e === 'high' ? 'Greater reasoning depth for complex problems' : undefined })), default: 'medium' };
+      const selected = { id: a.modelId, providerId: a.providerId, name: 'GPT fixture', effort };
+      const catalog = [selected, ...Array.from({ length: 24 }, (_, i) => ({ ...selected, id: 'gpt-fixture-' + i, name: 'GPT fixture ' + (i + 1) }))];
+      f.bridge.listModels = async () => catalog;
+      st.setState({ models: catalog });
+      f.bridge.setSessionOptions = async (id, patch) => {
+        if (id !== a.id) throw Error('Unexpected chat: ' + id);
+        Object.assign(a, patch);
+        return { ...a };
+      };
       Object.assign(a, { effort: 'high', executionMode: 'worktree', gitIsolation: true });
       f.putCachedSession(a);
     })()`);
@@ -47,9 +55,29 @@ app.whenReady().then(async () => {
     report.checks.standaloneEffort = await run(`document.querySelectorAll('.effort-trigger').length`);
     report.checks.folderOnBottomRow = await run(`!!document.querySelector('[data-composer-mode-row] > .composer-folders') && !document.querySelector('.composer-bar .composer-folders')`);
     await run(`document.querySelector('button[aria-haspopup="listbox"]').click()`);
-    await sleep(700);
-    report.checks.effortSectionInMenu = await run(`!!document.querySelector('[data-effort-section] input[type="range"]')`);
-    await shot('model-menu-open');
+    const slider = '[data-effort-section] input[type="range"]';
+    const select = (s) => `document.querySelector(${js(s)})`;
+    for (const [name, width] of [['desktop', 1100], ['narrow', 360]]) {
+      win.setContentSize(width, 800);
+      await sleep(700);
+      const menu = await rect('[data-model-picker]');
+      const section = await rect('[data-effort-section]');
+      const list = await rect('[data-model-picker] [role="listbox"]');
+      assert.ok(menu && section && list, 'The model menu shows the list and effort section');
+      assert.equal(await run('window.innerWidth'), width, 'The fixture uses the requested viewport');
+      assert.equal(await run(`${select(slider)}?.getAttribute('aria-valuetext')`), 'High');
+      report.checks[name] = { width, menu, section, list, effortCopy: await run(`${select('[data-effort-section]')}.textContent`) };
+      await shot('model-menu-' + name, menu);
+    }
+    // Real keyboard input to the hidden renderer, not a synthetic change event.
+    await run(`${select(slider)}.focus()`);
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Right' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Right' });
+    await sleep(300);
+    report.checks.selectedEffort = await run(`({ value: ${select(slider)}.getAttribute('aria-valuetext'), chat: layoutFixture.records[0].effort, gauge: ${select('[data-effort-gauge]')}.dataset.effortIndex })`);
+    assert.deepEqual(report.checks.selectedEffort, { value: 'Extra high', chat: 'xhigh', gauge: '3' });
+    assert.equal(win.isVisible() || win.isFocused(), false, 'The fixture remains hidden and non-focusable');
+    assert.deepEqual(report.errors, []);
   } catch (e) {
     report.errors.push(String(e && e.stack || e));
     process.exitCode = 1;
