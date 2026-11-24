@@ -258,9 +258,11 @@ impl Harness {
         }
     }
 
-    /// What a provider's Claude Code last reported about plan usage, if anything.
+    /// What a provider's Claude Code last reported about plan usage, if anything,
+    /// with any window whose reset time has passed read as fresh.
     pub fn plan_usage(&self, provider_id: &str) -> Option<serde_json::Value> {
-        lock(&self.plan_usage).get(provider_id).cloned()
+        let now = nekko_oauth::now_ms() as f64;
+        lock(&self.plan_usage).get(provider_id).map(|l| nekko_usage::roll_over_reset_windows(l, now))
     }
 
     /// A chat's Claude Code now runs `n` background tasks, `watchers` of them watchers.

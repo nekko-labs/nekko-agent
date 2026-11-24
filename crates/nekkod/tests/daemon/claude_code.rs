@@ -318,9 +318,10 @@ pub fn fake_claude() {
             out(assistant("m_design", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
         } else if text == "usage" {
-            // Plan usage Claude Code reports on its own while it works.
+            // Plan usage Claude Code reports on its own while it works. The reset is
+            // far off: a window past its reset reads as fresh.
             out(json!({ "type": "rate_limit_event", "rate_limit_info": {
-                "status": "allowed_warning", "resetsAt": 1_761_231_600, "utilization": 0.62,
+                "status": "allowed_warning", "resetsAt": 4_102_444_800_u64, "utilization": 0.62,
             } }));
             out(assistant("m_u", json!([{ "type": "text", "text": "used" }])));
             out(result("used", "completed"));

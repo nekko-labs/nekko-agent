@@ -385,6 +385,24 @@ pub fn parse_claude_code_usage(event: &Value, prev: Option<&Value>, now: f64) ->
     Some(snapshot(windows, extra, now, CLAUDE_CODE_STALE_MS))
 }
 
+/// Claude Code only reports usage while a chat runs, so a window it last
+/// called spent stays spent after its reset unless something says otherwise,
+/// and a spent window keeps the chat that would report the reset from starting.
+/// A window whose reset time has passed reads as fresh: nothing used, allowed,
+/// next reset unknown.
+pub fn roll_over_reset_windows(limits: &Value, now: f64) -> Value {
+    let mut out = limits.clone();
+    for w in out.get_mut("windows").and_then(Value::as_array_mut).into_iter().flatten() {
+        let reset_at = loose_number(get(w, "resetAt"));
+        if reset_at > 0.0 && reset_at <= now && let Some(o) = w.as_object_mut() {
+            o.insert("usedPercent".into(), num(0.0));
+            o.insert("resetAt".into(), num(0.0));
+            o.insert("status".into(), json!("allowed"));
+        }
+    }
+    out
+}
+
 /// The next UTC midnight after `now` (`setUTCHours(24, 0, 0, 0)`).
 fn next_utc_midnight(now: f64) -> f64 {
     const DAY: f64 = 86_400_000.0;
@@ -556,5 +574,21 @@ mod tests {
         let quiet = json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "allowed" } });
         assert_eq!(parse_claude_code_usage(&quiet, None, 0.0), None, "nothing to show without a number");
         assert_eq!(parse_claude_code_usage(&json!({ "type": "assistant" }), None, 0.0), None);
+    }
+
+    #[test]
+    fn claude_code_window_past_its_reset_reads_fresh() {
+        let spent = json!({ "type": "rate_limit_event", "rate_limit_info": {
+            "status": "rejected", "resetsAt": 2_000_000_000_000.0, "utilization": 1.0
+        } });
+        let got = parse_claude_code_usage(&spent, None, 1000.0).unwrap();
+        let before = roll_over_reset_windows(&got, 1_999_999_999_999.0);
+        assert_eq!(before["windows"][0]["status"], "rate_limited", "still spent before the reset");
+        let after = roll_over_reset_windows(&got, 2_000_000_000_000.0);
+        assert_eq!(after["windows"][0]["status"], "allowed");
+        assert_eq!(after["windows"][0]["usedPercent"], num(0.0));
+        assert_eq!(after["windows"][0]["resetAt"], num(0.0), "the next reset is unknown");
+        let unknown = parse_claude_code_usage(&json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected" } }), None, 0.0).unwrap();
+        assert_eq!(roll_over_reset_windows(&unknown, 1e15)["windows"][0]["status"], "rate_limited", "no reset time, no guess");
     }
 }
