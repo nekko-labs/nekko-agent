@@ -287,7 +287,13 @@ impl Harness {
         call_id: &str,
         f: impl FnOnce(&mut crate::subagents::Run) -> T,
     ) -> Option<T> {
-        lock(&self.subagents).get_mut(parent)?.get_mut(call_id).map(f)
+        let mut all = lock(&self.subagents);
+        let runs = all.get_mut(parent)?;
+        if runs.contains_key(call_id) {
+            return runs.get_mut(call_id).map(f);
+        }
+        // A woken sub-agent's lines still carry the `Agent` call that first started it.
+        runs.values_mut().find(|run| run.spawn_call.as_deref() == Some(call_id)).map(f)
     }
 
     pub fn remove_subagent(&self, parent: &str, call_id: &str) -> Option<crate::subagents::Run> {
