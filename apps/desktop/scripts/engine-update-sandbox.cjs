@@ -10,10 +10,10 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], metrics: {}, errors: [] };
-const OLD = 'Your engine is b11224; this version of Nekko Agent expects b12436.';
+const OLD = 'A newer engine (b12436) is available. Yours is b11224.';
 const outdated = { buildId: 'win-x64-cuda', installed: 'b11224', pinned: 'b12436', message: OLD, notify: true };
 // A few days behind: the pin moves several times a day, so the card stays quiet unless a model needs the update.
-const slight = { buildId: 'win-x64-cuda', installed: 'b12400', pinned: 'b12436', message: 'Your engine is b12400; this version of Nekko Agent expects b12436.', notify: false };
+const slight = { buildId: 'win-x64-cuda', installed: 'b12400', pinned: 'b12436', message: 'A newer engine (b12436) is available. Yours is b12400.', notify: false };
 const problem = { message: 'The NVIDIA engine is missing its GPU libraries, so models are running on the processor and replies will be very slow or never arrive. Repair it to use your graphics card.', repairBuildId: 'win-x64-cuda' };
 const upgrade = (also) => ({ buildId: 'win-x64-cuda', message: 'Your NVIDIA graphics card can run the CUDA engine, which is roughly 15-20% faster than Vulkan. It is a download of several hundred MB.' + (also ? ' It also brings the engine up to date.' : '') });
 const states = {

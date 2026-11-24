@@ -211,7 +211,7 @@ async fn calls_an_older_managed_engine_out_of_date() {
             "buildId": "win-x64-cpu",
             "installed": "b11224",
             "pinned": pinned(),
-            "message": format!("Your engine is b11224; this version of Nekko Agent expects {}.", pinned()),
+            "message": format!("A newer engine ({}) is available. Yours is b11224.", pinned()),
             "notify": true,
         })
     );

@@ -8,11 +8,11 @@ const outdated = {
   buildId: 'win-x64-cuda',
   installed: 'b11224',
   pinned: 'b12436',
-  message: 'Your engine is b11224; this version of Nekko Agent expects b12436.',
+  message: 'A newer engine (b12436) is available. Yours is b11224.',
   notify: true,
 };
 // A few days behind: the normal state, since the pin moves several times a day.
-const slightlyOld = { ...outdated, installed: 'b12400', message: 'Your engine is b12400; this version of Nekko Agent expects b12436.', notify: false };
+const slightlyOld = { ...outdated, installed: 'b12400', message: 'A newer engine (b12436) is available. Yours is b12400.', notify: false };
 
 describe('engineNotice', () => {
   it('says nothing about a current engine', () => {
