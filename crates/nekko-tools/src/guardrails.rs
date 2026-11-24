@@ -301,8 +301,14 @@ mod tests {
         assert_eq!((d.action, d.severity), (Action::Ask, Severity::High));
         assert!(ids(&d).contains(&"rm-rf"));
         assert_eq!(
-            classify_command_in(r"Remove-Item -Recurse -Force C:\temp", &default_guardrails(), Dialect::PowerShell)
-                .action,
+            // One level below the top: on Windows `C:\temp` itself is a top-level
+            // folder, which the delete guard refuses outright (as `rm -rf /tmp`).
+            classify_command_in(
+                r"Remove-Item -Recurse -Force C:\temp\build",
+                &default_guardrails(),
+                Dialect::PowerShell
+            )
+            .action,
             Action::Ask
         );
         assert_eq!(posix("dd if=/dev/zero of=/dev/sda").action, Action::Deny);

@@ -27,6 +27,9 @@ pub struct Grant {
     /// Minted for a computer (`remote:pairComputer`), so the device it enrolls
     /// gets the computer class. A phone can't use it, nor a computer a phone's.
     pub computer: bool,
+    /// The route the owner chose for the device this code pairs (decision
+    /// 0116): `cloud` or `direct`; `None` leaves it as it is (`auto` for a new one).
+    pub route: Option<String>,
 }
 
 impl Grant {

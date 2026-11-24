@@ -24,6 +24,14 @@ describe('desktop mode defaults', () => {
     expect(client.updateSettings).not.toHaveBeenCalled();
   });
 
+  it('leaves the defaults alone for a change the app made on its own', async () => {
+    const client = api();
+    const next = await setChatOptionsAndDefaults(client, 'chat', { toolApproach: 'list' }, { chatOnly: true });
+    expect(next).toMatchObject({ toolApproach: 'list' });
+    expect(client.setSessionOptions).toHaveBeenCalledWith('chat', { toolApproach: 'list' });
+    expect(client.updateSettings).not.toHaveBeenCalled();
+  });
+
   it('does not copy unrelated choices from an old window', async () => {
     const client = api();
     client.setSessionOptions.mockResolvedValue(chat({ mode: 'yolo', effort: 'low' }));

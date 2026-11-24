@@ -227,6 +227,67 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
+/// An install paired before the renames: its gateway entry is called
+/// "NekkoMCP gateway" and has no token, and Hypergate knows the app as
+/// "Kotrain". At start the daemon brings the entry forward on its own, with
+/// the existing agent's token, and creates nothing in Hypergate.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pre_rename_hypergate_entry_is_brought_forward_at_start() {
+    use axum::routing::{get, post as route_post};
+    let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+    let log = asked.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let gateway = format!("http://localhost:{port}/mcp");
+    let gw = gateway.clone();
+    let gate = axum::Router::new()
+        .route(
+            "/health",
+            get(|| async { axum::Json(json!({ "service": "hypergated", "version": "1.31.0", "servers": 1 })) }),
+        )
+        .route("/api/gateway", get(move || async move { axum::Json(json!({ "url": gw, "token": "master" })) }))
+        .route(
+            "/api/clients/resolve",
+            route_post(move |axum::Json(body): axum::Json<Value>| {
+                let log = log.clone();
+                async move {
+                    log.lock().unwrap().push(body.clone());
+                    if body["key"] == "kotrain" {
+                        (axum::http::StatusCode::OK, axum::Json(json!({ "token": "t-kotrain", "name": "Kotrain" })))
+                    } else {
+                        (axum::http::StatusCode::NOT_FOUND, axum::Json(json!({ "error": "not_found" })))
+                    }
+                }
+            }),
+        );
+    let server = tokio::spawn(async move { axum::serve(listener, gate).await.unwrap() });
+    let data = std::env::temp_dir().join(format!("nekkod-hypergate-migrate-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    let old = json!({ "id": "hypergate", "name": "NekkoMCP gateway", "command": "", "args": [], "url": gateway, "enabled": true });
+    std::fs::write(data.join("settings.json"), json!({ "mcpServers": [old] }).to_string()).unwrap();
+    let d = start_with(&data);
+    let mut entry = Value::Null;
+    for _ in 0..50 {
+        let (_, saved) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+        entry = saved["mcpServers"][0].clone();
+        if entry["token"] == "t-kotrain" {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+    assert_eq!(
+        (entry["name"].clone(), entry["token"].clone(), entry["enabled"].clone(), entry["url"].clone()),
+        (json!("Hypergate"), json!("t-kotrain"), json!(true), json!(gateway)),
+        "{entry}"
+    );
+    let asked = asked.lock().unwrap().clone();
+    assert!(asked.iter().all(|b| b["create"] == false), "the migration never mints an agent: {asked:?}");
+    server.abort();
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
     let session = json!({
@@ -477,8 +538,16 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     let d = start_with(&data);
     let (status, decision) = post(d.port, "guardrails:classify", json!(["rm -rf /"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{decision}");
-    assert_eq!(decision["action"], "ask", "{decision}");
-    assert_eq!(decision["matches"][0]["ruleId"], "rm-rf", "{decision}");
+    assert_eq!(decision["action"], "deny", "{decision}");
+    let matches = decision["matches"].as_array().unwrap();
+    assert!(matches.iter().any(|rule| rule["ruleId"] == "unsafe-delete" && rule["action"] == "deny"), "{decision}");
+    assert!(matches.iter().any(|rule| rule["ruleId"] == "rm-rf"), "{decision}");
+
+    // Classification only: a relative folder uses the ordinary approval rule.
+    let (_, ordinary) = post(d.port, "guardrails:classify", json!(["rm -rf ./fixture"]), Some(TOKEN)).await;
+    assert_eq!(ordinary["action"], "ask", "{ordinary}");
+    assert_eq!(ordinary["matches"][0]["ruleId"], "rm-rf", "{ordinary}");
+
     let (_, safe) = post(d.port, "guardrails:classify", json!(["ls"]), Some(TOKEN)).await;
     assert_eq!(safe["action"], "allow", "{safe}");
     let (_, tools) = post(d.port, "tools:list", json!([]), Some(TOKEN)).await;

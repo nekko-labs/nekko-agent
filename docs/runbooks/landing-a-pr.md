@@ -89,7 +89,9 @@ The auto-merge workflow arms auto-merge on every ready PR into main, so `gh pr
 merge --auto --squash` is a belt to its braces. It also runs on every push, so a
 fix to a red PR merges itself once `gate` goes green. Every 15 minutes
 `queue-sweeper.yml` arms auto-merge on a ready PR whose `gate` is green but which
-has no auto-merge request, and re-runs a red `gate`'s failed jobs once.
+has no auto-merge request, re-runs a red `gate`'s failed jobs once, and closes
+the still-open linked issues of any PR merged in the last day (GitHub skips
+`Closes #n` on the bot's merges).
 `queue-repair.yml` picks up what is left: it merges `main` into a conflicting PR
 (settling conflicts in the append-only files by rule), and hands a code conflict
 or a `gate` still red after the re-run to Codex with a `@codex` comment. If Codex

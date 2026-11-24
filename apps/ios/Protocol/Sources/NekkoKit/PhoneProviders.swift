@@ -5,7 +5,7 @@ import NekkoProtocol
 /// straight from the phone, on the user's own key, kept in this iPhone's
 /// Keychain and never sent to a computer, the relay or Nekko Cloud. The same
 /// cloud providers the desktop connects to, less the ones that need a computer
-/// (Claude Code, the ChatGPT sign-in, local model servers).
+/// (Claude Code, local model servers). ChatGPT signs in on the iPhone itself (#3244).
 public enum PhoneProviders {
     /// The place's id in the chat list, beside the paired computers' ids.
     public static let computerId = "this-iphone"
@@ -14,7 +14,7 @@ public enum PhoneProviders {
     public static func isPhoneChat(_ id: String) -> Bool { id.hasPrefix(chatPrefix) }
 
     /// Which API a kind speaks.
-    public enum Wire: String, Sendable { case anthropic, vertex, openai }
+    public enum Wire: String, Sendable { case anthropic, vertex, openai, responses }
 
     public struct Kind: Equatable, Sendable, Identifiable {
         public let id: String
@@ -35,6 +35,8 @@ public enum PhoneProviders {
         public var keyPage: String? = nil
         /// OpenRouter: a browser sign-in hands the key back, nothing to copy.
         public var signIn = false
+        /// ChatGPT: signs in to a plan (`ChatGPTSignIn`); there is no key to paste.
+        public var plan = false
         /// It lists its own models (`GET /v1/models` or `/models`).
         public var listsModels: Bool { catalog.isEmpty }
     }
@@ -49,8 +51,18 @@ public enum PhoneProviders {
         PhoneModel(id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6"),
     ]
 
+    /// ChatGPT's Codex backend, as the desktop and the Codex CLI reach it.
+    public static let chatGPTURL = "https://chatgpt.com/backend-api"
+    /// The backend filters its model list by the Codex CLI version a client reports (the desktop's value).
+    public static let codexClientVersion = "0.171.0"
+    static let codexOriginator = "codex_cli_rs"
+
     /// In the order the Add sheet lists them. Ids match the desktop's provider kinds.
     public static let kinds: [Kind] = [
+        Kind(id: "chatgpt", label: "ChatGPT", wire: .responses, defaultUrl: chatGPTURL,
+             urlRequired: false, keyName: "Sign-in", keyOptional: false,
+             hint: "Your ChatGPT Plus, Pro or Business plan. No API key, no per-token bill.", catalog: [],
+             plan: true),
         Kind(id: "anthropic", label: "Claude API", wire: .anthropic, defaultUrl: "https://api.anthropic.com",
              urlRequired: false, keyName: "API key", keyOptional: false,
              hint: "An API key from console.anthropic.com.", catalog: [],
@@ -99,7 +111,6 @@ public enum PhoneProviders {
 
     public static let notOnPhone: [ComputerOnly] = [
         ComputerOnly(label: "Claude subscription", why: "Runs Claude Code, which needs a computer."),
-        ComputerOnly(label: "ChatGPT (subscription)", why: "Signs in on a computer; use an OpenAI API key here."),
         ComputerOnly(label: "Local model servers", why: "Ollama, LM Studio, vLLM and the Model Server run on a computer."),
     ]
 
@@ -173,6 +184,11 @@ public enum PhoneProviders {
               safeURL(url), !url.contains("YOUR_") else { throw Problem.url }
         let secret = key?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if secret.isEmpty && !kind.keyOptional { throw Problem.key }
+        // A sign-in's address is fixed and its key is the sign-in itself.
+        if kind.plan {
+            guard url == kind.defaultUrl else { throw Problem.url }
+            guard ChatGPTSignIn.Tokens.decode(secret) != nil else { throw Problem.key }
+        }
         guard headerValue(secret), headerValue(workspaceId ?? "") else { throw Problem.key }
         let workspace = workspaceId?.trimmingCharacters(in: .whitespacesAndNewlines)
         return PhoneProvider(id: id, kind: kind.id, label: label, baseUrl: url,
@@ -217,6 +233,8 @@ public enum PhoneProviders {
             return .object(["role": .string(m.role.rawValue), "content": .array(content(text: text.isEmpty ? nil : m.text, photos: photos, wire: p.wire))])
         }
         switch p.wire {
+        case .responses:
+            return try chatGPTRequest(p, key: key, model: model, messages: messages, system: system)
         case .anthropic, .vertex:
             var body: [String: JSONValue] = ["max_tokens": .int(Int64(maxTokens)), "stream": true, "messages": .array(turns)]
             if let system { body["system"] = .string(system) }
@@ -238,6 +256,38 @@ public enum PhoneProviders {
             if usageKinds.contains(p.kind) { body["stream_options"] = ["include_usage": true] }
             return PhoneRequest(url: "\(p.baseUrl)/chat/completions", headers: headers(p, key: key), body: .object(body))
         }
+    }
+
+    /// ChatGPT's Responses API on the Codex backend (#3244). It takes only the Codex CLI's
+    /// request shape: no token cap or temperature (those fail the whole request), the system
+    /// prompt as `instructions`, and nothing stored on OpenAI's side.
+    static func chatGPTRequest(_ p: PhoneProvider, key: String?, model: String, messages: [PhoneMessage], system: String?) throws -> PhoneRequest {
+        let input: [JSONValue] = messages.compactMap { m in
+            let text = m.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let photos = m.role == .user ? (m.images ?? []).compactMap(imagePart) : []
+            guard !text.isEmpty || !photos.isEmpty else { return nil }
+            var content: [JSONValue] = []
+            if m.role == .assistant {
+                content.append(.object(["type": "output_text", "text": .string(m.text)]))
+            } else {
+                if !text.isEmpty { content.append(.object(["type": "input_text", "text": .string(m.text)])) }
+                content += photos.map { .object(["type": "input_image", "image_url": .string($0.url)]) }
+            }
+            return .object(["type": "message", "role": .string(m.role.rawValue), "content": .array(content)])
+        }
+        let body: [String: JSONValue] = ["model": .string(model), "instructions": .string(system ?? "Answer in Markdown."),
+                                         "stream": true, "store": false, "input": .array(input)]
+        var h = try chatGPTHeaders(key)
+        h["Content-Type"] = "application/json"
+        h["Accept"] = "text/event-stream"
+        h["OpenAI-Beta"] = "responses=experimental"
+        return PhoneRequest(url: "\(p.baseUrl)/codex/responses", headers: h, body: .object(body))
+    }
+
+    /// The access token and the account it belongs to, as the Codex CLI sends them.
+    static func chatGPTHeaders(_ key: String?) throws -> [String: String] {
+        guard let t = ChatGPTSignIn.Tokens.decode(key) else { throw ChatGPTSignIn.Problem.expired }
+        return ["Authorization": "Bearer \(t.access)", "chatgpt-account-id": t.accountId, "originator": codexOriginator]
     }
 
     /// A message takes this many photos at most, as in a computer chat.
@@ -271,7 +321,7 @@ public enum PhoneProviders {
             }
             if let text { parts.append(.object(["type": "text", "text": .string(text)])) }
             return parts
-        case .openai:
+        case .openai, .responses:
             var parts: [JSONValue] = text.map { [.object(["type": "text", "text": .string($0)])] } ?? []
             parts += photos.map { .object(["type": "image_url", "image_url": .object(["url": .string($0.url)])]) }
             return parts
@@ -289,6 +339,11 @@ public enum PhoneProviders {
         h["Accept"] = "application/json"
         switch p.wire {
         case .anthropic: return PhoneRequest(method: "GET", url: "\(p.baseUrl)/v1/models?limit=1000", headers: h)
+        // The plan's own list: exactly what this sign-in may run, newer models included.
+        case .responses:
+            var g = try chatGPTHeaders(key)
+            g["Accept"] = "application/json"
+            return PhoneRequest(method: "GET", url: "\(p.baseUrl)/codex/models?client_version=\(codexClientVersion)", headers: g)
         case .openai: return PhoneRequest(method: "GET", url: "\(p.baseUrl)/models", headers: h)
         case .vertex: return nil
         }
@@ -329,6 +384,12 @@ public enum PhoneProviders {
             if p.kind == "anthropic", let w = p.workspaceId { h["anthropic-workspace-id"] = w }
         case .vertex:
             h["Authorization"] = "Bearer \(key)"
+        case .responses:
+            if let t = ChatGPTSignIn.Tokens.decode(key) {
+                h["Authorization"] = "Bearer \(t.access)"
+                h["chatgpt-account-id"] = t.accountId
+                h["originator"] = codexOriginator
+            }
         case .openai:
             if !key.isEmpty { h["Authorization"] = "Bearer \(key)" }
             if p.kind == "openrouter" { h["X-Title"] = "Nekko Agent" }
@@ -340,6 +401,7 @@ public enum PhoneProviders {
 
     /// The chat models in a models list, in the order given (Anthropic's is newest first).
     public static func models(from data: Data, kind: String) -> [PhoneModel] {
+        if kind == "chatgpt" { return chatGPTModels(from: data) }
         guard data.count <= 2_000_000, let list = (try? JSONValue.parse(data))?["data"]?.array else { return [] }
         let all = list.compactMap { m -> PhoneModel? in
             guard let id = m.str("id"), !id.isEmpty, id.utf8.count <= 1024, !id.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
@@ -395,6 +457,14 @@ public enum PhoneProviders {
                 ? String(localized: "This key has no credit. Add billing at platform.openai.com, then try again.")
                 : String(localized: "This key has no credit left. Add billing with the provider, then try again.")
         }
+        if kind == "chatgpt" && (status == 401 || status == 403 || code.contains("token_expired")) {
+            return String(localized: "Your ChatGPT sign-in has expired. Sign in again.")
+        }
+        if kind == "chatgpt" && (status == 429 || code.contains("usage_limit_reached")) {
+            guard let wait else { return String(localized: "You’ve reached your ChatGPT plan’s limit for now. Try again later.") }
+            if wait > 90 { return String(localized: "You’ve reached your ChatGPT plan’s limit. Try again in \(Int((wait / 60).rounded(.up))) min.") }
+            return String(localized: "You’ve reached your ChatGPT plan’s limit. Try again in \(max(1, Int(wait.rounded(.up))))s.")
+        }
         if code.contains("invalid_api_key") || code.contains("authentication_error") {
             return String(localized: "The provider turned the key down (\(status)). Check the key and paste it again.")
         }
@@ -414,6 +484,24 @@ public enum PhoneProviders {
         case 404: return String(localized: "The provider doesn’t know that address or model (404)")
         default: return String(localized: "The provider answered \(status)")
         }
+    }
+
+    /// ChatGPT's `models`: each has a `slug` (or `id`) and maybe a `display_name`. Entries the
+    /// plan hides (`visibility` other than `list`, `show_in_picker: false`) stay out, and the
+    /// backend's `priority` orders the rest, as on the desktop.
+    static func chatGPTModels(from data: Data) -> [PhoneModel] {
+        guard data.count <= 2_000_000, let list = (try? JSONValue.parse(data))?["models"]?.array else { return [] }
+        var seen = Set<String>()
+        return list.enumerated().compactMap { order, m -> (Int64, Int, PhoneModel)? in
+            guard let id = m.str("slug") ?? m.str("id"), !id.isEmpty, id.utf8.count <= 1024,
+                  !id.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
+            if let v = m.str("visibility"), v != "list" { return nil }
+            if m["show_in_picker"]?.bool == false { return nil }
+            return (m.long("priority") ?? Int64.max, order, PhoneModel(id: id, name: m.str("display_name") ?? m.str("name") ?? id))
+        }
+        .sorted { ($0.0, $0.1) < ($1.0, $1.1) }
+        .map(\.2)
+        .filter { seen.insert($0.id).inserted }
     }
 
     /// The lowercased `error.code`, `error.type`, `error.status` and top-level `type` of an
@@ -564,15 +652,18 @@ public struct PhoneRequest: Equatable, Sendable {
     public var url: String
     public var headers: [String: String]
     public var body: JSONValue?
+    /// An `application/x-www-form-urlencoded` body instead of JSON (ChatGPT's token endpoint).
+    public var form: String?
 
-    public init(method: String = "POST", url: String, headers: [String: String], body: JSONValue? = nil) {
+    public init(method: String = "POST", url: String, headers: [String: String], body: JSONValue? = nil, form: String? = nil) {
         self.method = method
         self.url = url
         self.headers = headers
         self.body = body
+        self.form = form
     }
 
-    public var bodyData: Data? { body.map { Data($0.serialized().utf8) } }
+    public var bodyData: Data? { form.map { Data($0.utf8) } ?? body.map { Data($0.serialized().utf8) } }
 }
 
 /// How the phone reaches a provider: URLSession in the app, a fake in tests.
@@ -678,6 +769,21 @@ public struct PhoneStreamParser: Sendable {
             return [.usage(input: nil, output: out)]
         case "message_stop":
             return [.done]
+        // ChatGPT's Responses API (#3244): text deltas, then `response.completed` with the usage.
+        case "response.output_text.delta":
+            if let d = v.str("delta"), !d.isEmpty { return [.text(d)] }
+            return []
+        case "response.completed", "response.incomplete":
+            // `incomplete`: a length or content stop; what streamed is kept.
+            var out: [PhoneStreamEvent] = []
+            if let u = v["response"]?["usage"], u.object != nil, u.long("input_tokens") != nil || u.long("output_tokens") != nil {
+                out.append(.usage(input: u.long("input_tokens"), output: u.long("output_tokens")))
+            }
+            return out + [.done]
+        case "response.failed":
+            return [.failed(String(localized: "ChatGPT stopped with an error. Try again."))]
+        case let t? where t.hasPrefix("response."):
+            return []
         default:
             break
         }

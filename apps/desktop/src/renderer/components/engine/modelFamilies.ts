@@ -1,6 +1,6 @@
 import { modelModality, type CatalogModel, type EngineMemory, type GpuFit, type ImageRecommendedOption, type LocalModel, type Recommendations } from '@nekko-agent/shared';
 
-export type LibraryModel = LocalModel & { loaded: boolean; gpuFit?: GpuFit };
+export type LibraryModel = LocalModel & { loaded: boolean; gpuFit?: GpuFit; gpuFitIdle?: GpuFit };
 export interface ModelFamily {
   key: string;
   name: string;
@@ -40,11 +40,13 @@ export function gpuGuidance(sizeBytes: number | undefined, memory?: EngineMemory
   if (model?.gpuFit === 'partial') {
     // The planner measures against what is free now, so "partial" also means
     // a GPU that other models or apps are holding: that is not "too big".
+    // `gpuFitIdle` re-plans the same context on the card less the desktop reserve.
     const layers = model.layers ?? 0;
     const capped = model.preset?.gpuLayers != null && layers > 0 && model.preset.gpuLayers < layers;
     if (capped) return 'Part on CPU by its settings';
-    if (!sizeBytes || !memory?.budgetBytes) return 'Not enough free GPU memory';
-    return sizeBytes * 1.2 <= memory.budgetBytes ? 'Fits on a free GPU' : 'Too big';
+    if (model.gpuFitIdle === 'full') return 'Fits when the GPU is free';
+    if (model.gpuFitIdle === 'partial' || model.gpuFitIdle === 'wont') return 'Part on CPU at this context size';
+    return 'Not enough free GPU memory';
   }
   if (model?.gpuFit === 'full') {
     return model.maxContext && model.preset?.contextTokens && model.preset.contextTokens < model.maxContext

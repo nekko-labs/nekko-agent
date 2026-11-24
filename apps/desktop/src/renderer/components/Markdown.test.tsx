@@ -125,7 +125,17 @@ describe('Markdown', () => {
     expect(out).toContain('>#1663</span>');
     expect(out).toContain('>nekko-agent#1662</span>');
     expect(out).not.toContain('>Preview</button>');
-    expect(html('[issue](https://github.com/nekko-labs/nekko-agent/issues/12)')).toContain('>Preview</button>');
+  });
+  it('draws issue links as issue chips beside PR chips, without a site preview', () => {
+    const out = html('Then [PR #3227](https://github.com/nekko-labs/nekko-agent/pull/3227), linked to [issue #3226](https://github.com/nekko-labs/nekko-agent/issues/3226) and https://github.com/nekko-labs/nekko-agent/issues/12');
+    expect(out.match(/class="pr-link-chip /g)).toHaveLength(3);
+    expect(out.match(/data-issue-state="unknown"/g)).toHaveLength(2);
+    expect(out).toContain('>issue #3226</span>');
+    expect(out).toContain('>nekko-agent#12</span>');
+    expect(out).not.toContain('>Preview</button>');
+    // The issue list and an issue's sub-pages are ordinary links.
+    expect(html('[all](https://github.com/nekko-labs/nekko-agent/issues)')).toContain('>Preview</button>');
+    expect(html('[x](https://github.com/a/b/issues/12/linked_closing_reference)')).toContain('>Preview</button>');
   });
   it('shows a pointer over every chat link, file links included', () => {
     const out = html('[site](https://example.com) and [#1](https://github.com/a/b/pull/1)');

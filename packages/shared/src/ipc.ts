@@ -442,6 +442,10 @@ export const IpcChannels = {
   // IO-33: a paired phone's Read and Change switches, and its Change activity. Never phone-callable.
   remoteSetAccess: 'remote:setAccess',
   remoteActivity: 'remote:activity',
+  /** Decision 0116: limit a paired device to Nekko Cloud Relay or to direct routes, or allow both. */
+  remoteSetRoute: 'remote:setRoute',
+  /** Decision 0116: the relays this computer is also reachable through (Nekko Cloud Relay beside Tailscale). */
+  remoteSetRelays: 'remote:setRelays',
   // Desktop only: the relay this computer can run on its Tailscale address.
   localRelayStatus: 'localRelay:status',
   localRelayStart: 'localRelay:start',
@@ -812,7 +816,7 @@ export interface NekkoApi {
   ): Promise<import('./engine.js').EngineSettings>;
   /** The local model library, with load state and the planner's residency verdict folded in. */
   engineModels(): Promise<
-    Array<import('./engine.js').LocalModel & { loaded: boolean; gpuFit?: import('./engine.js').GpuFit }>
+    Array<import('./engine.js').LocalModel & { loaded: boolean; gpuFit?: import('./engine.js').GpuFit; gpuFitIdle?: import('./engine.js').GpuFit }>
   >;
   /** Adopt a GGUF that lives elsewhere on disk, without copying it. */
   engineImportModel(
@@ -1057,6 +1061,8 @@ export interface NekkoApi {
   setSessionOptions(
     id: string,
     patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
+    /** `chatOnly` leaves the new-chat defaults alone, for a change the app made rather than the user. */
+    opts?: { chatOnly?: boolean },
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
@@ -1397,7 +1403,7 @@ export interface NekkoApi {
   getMessagingStatus(): Promise<import('./messaging.js').MessagingStatus>;
   getRemotePairing(): Promise<import('./remote.js').RemotePairing | null>;
   /** Mint a short-lived single-use pairing code for enrolling a new device. */
-  startRemotePairing(): Promise<import('./remote.js').PairingGrant>;
+  startRemotePairing(route?: import('./remote.js').DeviceRoute): Promise<import('./remote.js').PairingGrant>;
   /** A pairing code that enrolls a computer, not a phone. */
   startComputerPairing(): Promise<import('./remote.js').PairingGrant>;
   listComputers(): Promise<import('./computers.js').ComputerStatus[]>;
@@ -1434,6 +1440,10 @@ export interface NekkoApi {
   rotateRemoteSecret(): Promise<import('./remote.js').RemoteStatus>;
   /** Turn a paired phone's Read or Change access on or off (IO-33). Returns every device. */
   setRemoteAccess(deviceId: string, access: { read?: boolean; change?: boolean }): Promise<import('./remote.js').RemoteDevice[]>;
+  /** Decision 0116: how a paired device may reach this computer. */
+  setRemoteRoute?(deviceId: string, route: import('./remote.js').DeviceRoute): Promise<import('./remote.js').RemoteDevice[]>;
+  /** Decision 0116: the relays this computer is also reachable through, besides the main one. */
+  setRemoteRelays?(urls: string[]): Promise<import('./remote.js').RemoteStatus>;
   /** A paired phone's Change actions, oldest first, allowed or refused (IO-33). */
   getRemoteActivity(deviceId: string): Promise<import('./phone-access.js').PhoneActivityEntry[]>;
   /**

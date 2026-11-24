@@ -58,7 +58,7 @@ fn base36(mut n: u64) -> String {
 }
 
 /// `msg_<time base36>_<counter>`, the shape Nekko's loop gives its messages.
-fn new_id() -> String {
+pub(crate) fn new_id() -> String {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
     format!("msg_{}_h{n}", base36(nekko_js::now_ms()))
 }
@@ -73,6 +73,8 @@ const DELEGATION_TOOLS: [&str; 2] = ["Agent", "Task"];
 const DELEGATE_AS: &str = "spawn_agent";
 /// How Claude Code's `Agent` result begins for a sub-agent it runs in the background.
 const ASYNC_LAUNCHED: &str = "Async agent launched";
+/// The tool Claude Code messages a sub-agent with, waking it when it had ended.
+const MESSAGE_TOOL: &str = "SendMessage";
 
 /// A sub-agent's part of the stream. Claude Code runs it inside the chat's
 /// session, so nothing else tells Nekko it exists: the daemon turns these into
@@ -97,6 +99,15 @@ pub enum Subagent {
     Line {
         call_id: String,
         line: Value,
+    },
+    /// A `SendMessage` woke a sub-agent that had ended: its result names it
+    /// `resumedAgentId`. From then on its lines and the notification that ends
+    /// it carry `call_id`, the `SendMessage` call, not the `Agent` call that
+    /// started it; `agent_id` is its name in Claude Code's own files.
+    Resumed {
+        call_id: String,
+        agent_id: String,
+        message: String,
     },
     Ended {
         call_id: String,
@@ -254,6 +265,8 @@ pub struct Mapper {
     /// Delegating calls waiting for their result: id to whether the sub-agent
     /// runs in the background, where that result only says it started.
     delegating: HashMap<String, bool>,
+    /// `SendMessage` calls waiting for their result: id to the message sent.
+    messaging: HashMap<String, String>,
     /// A `compact_boundary` whose summary message has not arrived yet: the
     /// divider's `compaction` fields, waiting for its text.
     compacted: Option<Value>,
@@ -348,6 +361,7 @@ impl Mapper {
             context: ReportedContext::default(),
             planning: HashMap::new(),
             delegating: HashMap::new(),
+            messaging: HashMap::new(),
             compacted: None,
         }
     }
@@ -686,6 +700,13 @@ impl Mapper {
                         let text = |key| str_at(&call["input"], key).unwrap_or_default().to_string();
                         let (title, task) = (text("title"), text("task"));
                         out.push(Mapped::Subagent(Subagent::Started { call_id, title, task, background }));
+                    } else if name == MESSAGE_TOOL {
+                        let message = match call["input"].get("message") {
+                            Some(Value::String(s)) => s.clone(),
+                            Some(v) if !v.is_null() => v.to_string(),
+                            _ => String::new(),
+                        };
+                        self.messaging.insert(str_at(&call, "id").unwrap_or_default().into(), message);
                     }
                 }
                 _ => {}
@@ -728,6 +749,12 @@ impl Mapper {
                     Outcome::Completed
                 };
                 out.push(Mapped::Subagent(Subagent::Ended { call_id: id.clone(), outcome }));
+            }
+            if let Some(message) = self.messaging.remove(&id)
+                && result.get("isError").is_none()
+                && let Some(agent_id) = resumed_agent(str_at(&result, "output").unwrap_or_default())
+            {
+                out.push(Mapped::Subagent(Subagent::Resumed { call_id: id.clone(), agent_id, message }));
             }
             if let Some((name, input)) = self.planning.remove(&id)
                 && result.get("isError").is_none()
@@ -911,6 +938,15 @@ fn tool_call(b: &Value) -> Value {
         name = "set_chat_title";
     }
     json!({ "id": str_at(b, "id").unwrap_or_default(), "name": name, "input": input, "executedBy": "claude-code" })
+}
+
+/// The sub-agent a `SendMessage` result says it woke (`resumedAgentId`), when it woke one.
+fn resumed_agent(output: &str) -> Option<String> {
+    let v = serde_json::from_str::<Value>(output).ok()?;
+    if v.get("success") == Some(&Value::Bool(false)) {
+        return None;
+    }
+    str_at(&v, "resumedAgentId").filter(|id| !id.is_empty()).map(str::to_string)
 }
 
 /// The name Claude Code gives Nekko's watch on the approval bridge's server.
