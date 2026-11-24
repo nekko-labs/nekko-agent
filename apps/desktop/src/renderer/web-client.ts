@@ -580,10 +580,10 @@ function makeWebClient(): NekkoApi {
   sandboxStatus: (id) => call(IpcChannels.sandboxStatus, id),
   sandboxDiff: (id) => call(IpcChannels.sandboxDiff, id),
   applySandboxDiff: (id, identity, diffId, paths) => call(IpcChannels.sandboxApplyDiff, id, identity, diffId, paths) as Promise<never>,
-  setSessionOptions: (id, patch) => setChatOptionsAndDefaults({
+  setSessionOptions: (id, patch, opts) => setChatOptionsAndDefaults({
     setSessionOptions: (id, patch) => call(IpcChannels.sessionSetOptions, id, patch),
     updateSettings: (patch) => call(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
-  }, id, patch),
+  }, id, patch, opts),
     truncateSession: (id, messageId) => call(IpcChannels.sessionTruncate, id, messageId),
     clearSessions: (scope) => call(IpcChannels.sessionsClear, scope),
     purgeExpiredArchives: () => call(IpcChannels.sessionsPurgeArchived),
