@@ -41,7 +41,7 @@ import { useStore } from '../store.js';
 import { useModelCatalogVersion } from '../modelCatalog.js';
 import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
-import { anchorLiveRun, beginResumedRun, clearLiveRun, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
+import { anchorLiveRun, beginResumedRun, clearLiveRun, engineLost, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
@@ -1801,6 +1801,24 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * `admitted` fires once the turn has begun or been queued; the returned promise settles only when the turn ends.
    */
   const send = async (override?: string, admitted?: () => void, wrap: (text: string) => string = (t) => t): Promise<boolean | undefined> => {
+    try { return await sendDraft(override, admitted, wrap); }
+    catch (e) { turnFailed(e); return false; }
+  };
+  /**
+   * `sendChat` settles when the turn ends, so its failure arrives after the
+   * turn began. An engine that went away mid-turn is handled by
+   * `onRunOrphaned`, which ends the turn and reads back the interrupted
+   * reply. Anything else (a refusal such as a reply already running) ends the
+   * turn here and says why, unless an `error` event already did.
+   */
+  const turnFailed = (e: unknown) => {
+    const message = e instanceof Error ? e.message : String(e);
+    if (engineLost(message)) return;
+    if (streamingRef.current) endTurn();
+    useStore.getState().pushToast('error', message.replace(/^chat:send: /, '') || 'The message could not be sent.');
+    loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
+  };
+  const sendDraft = async (override?: string, admitted?: () => void, wrap: (text: string) => string = (t) => t): Promise<boolean | undefined> => {
     if (remoteBlock) {
       useStore.getState().pushToast('error', `${remoteBlock}. This message wasn't sent.`);
       return false;
@@ -2703,7 +2721,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // this pane re-rendered.
   const editResendRef = useRef(editResend);
   editResendRef.current = editResend;
-  const onEditResend = useCallback((id: string, text: string) => { void editResendRef.current(id, text); }, []);
+  const turnFailedRef = useRef(turnFailed);
+  turnFailedRef.current = turnFailed;
+  const onEditResend = useCallback((id: string, text: string) => { editResendRef.current(id, text).catch((e) => turnFailedRef.current(e)); }, []);
   const copyToComposerRef = useRef(copyToComposer);
   copyToComposerRef.current = copyToComposer;
   const onCopyToComposer = useCallback((id: string) => copyToComposerRef.current(id), []);
