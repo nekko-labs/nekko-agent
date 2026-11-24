@@ -447,6 +447,80 @@ pub fn fake_claude() {
             out(init());
             out(assistant("m_b3", json!([{ "type": "text", "text": "The PR is open." }])));
             out(result("The PR is open.", "completed"));
+        } else if text == "delegate, hit the limit and resume" {
+            // A background sub-agent fails on the usage limit; the chat wakes it
+            // again with `SendMessage`, and from then on Claude Code says it is
+            // that call's: its lines and its notification.
+            let (call, send) = ("toolu_lim", "toolu_send");
+            let input = json!({ "description": "Part B", "prompt": "Write part B" });
+            out(assistant("m_l1", json!([{ "type": "tool_use", "id": call, "name": "Agent", "input": input }])));
+            out(
+                json!({ "type": "system", "subtype": "task_started", "task_id": "a7", "tool_use_id": call, "is_backgrounded": true, "session_id": session }),
+            );
+            out(
+                json!({ "type": "user", "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": call,
+                "content": "Async agent launched successfully. agentId: a7" }] }, "parent_tool_use_id": null, "session_id": session }),
+            );
+            let read = json!([{ "type": "tool_use", "id": "toolu_lread", "name": "Read", "input": { "file_path": "plan.md" } }]);
+            out(
+                json!({ "type": "assistant", "message": { "id": "m_s1", "role": "assistant", "model": "claude-haiku-5-5", "content": read },
+                "parent_tool_use_id": call, "session_id": session }),
+            );
+            let config = PathBuf::from(std::env::var_os("CLAUDE_CONFIG_DIR").unwrap());
+            let dir = config.join("projects").join("C--work-project").join(&session).join("subagents");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("agent-a7.meta.json"), json!({ "toolUseId": call }).to_string()).unwrap();
+            let at = "2026-11-24T02:07:20.000Z";
+            let mut saved = vec![
+                json!({ "type": "user", "timestamp": at, "message": { "role": "user", "content": "Write part B" } }),
+                json!({ "type": "assistant", "timestamp": at, "message": { "id": "m_s1", "role": "assistant", "content": read } }),
+                json!({ "type": "user", "timestamp": at, "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "toolu_lread", "content": "the plan" }] } }),
+            ];
+            let write = |saved: &[Value]| {
+                let body: Vec<String> = saved.iter().map(Value::to_string).collect();
+                std::fs::write(dir.join("agent-a7.jsonl"), body.join("\n") + "\n").unwrap();
+            };
+            write(&saved);
+            out(
+                json!({ "type": "system", "subtype": "task_notification", "task_id": "a7", "tool_use_id": call, "status": "failed", "summary": "You've hit your 5-hour limit", "session_id": session }),
+            );
+            // Hours pass before the chat wakes it: the test has seen it fail.
+            let seen = std::env::current_dir().unwrap().join("limit-seen");
+            while !seen.exists() {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            let message = json!({ "to": "a7", "summary": "Resume part B", "message": "Carry on from the tests." });
+            out(assistant(
+                "m_l2",
+                json!([{ "type": "tool_use", "id": send, "name": "SendMessage", "input": message }]),
+            ));
+            out(
+                json!({ "type": "user", "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": send,
+                "content": "{\"success\":true,\"message\":\"Resuming agent a7\",\"resumedAgentId\":\"a7\"}" }] }, "parent_tool_use_id": null, "session_id": session }),
+            );
+            let test = json!([{ "type": "tool_use", "id": "toolu_ltest", "name": "Bash", "input": { "command": "npm test" } }]);
+            out(
+                json!({ "type": "assistant", "message": { "id": "m_s2", "role": "assistant", "model": "claude-haiku-5-5", "content": test },
+                "parent_tool_use_id": send, "session_id": session }),
+            );
+            saved.extend([
+                json!({ "type": "user", "isMeta": true, "timestamp": at, "origin": { "kind": "coordinator" }, "message": { "role": "user",
+                    "content": "The coordinator sent a message while you were working:\nCarry on from the tests." } }),
+                json!({ "type": "assistant", "timestamp": at, "message": { "id": "m_s2", "role": "assistant", "content": test } }),
+                json!({ "type": "user", "timestamp": at, "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "toolu_ltest", "content": "passed" }] } }),
+                json!({ "type": "assistant", "timestamp": at, "message": { "id": "m_s3", "role": "assistant", "content": [{ "type": "text", "text": "Finished." }] } }),
+            ]);
+            write(&saved);
+            // The test checks the reopened child runs, then says to go on.
+            let gate = std::env::current_dir().unwrap().join("go-on");
+            while !gate.exists() {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            out(
+                json!({ "type": "system", "subtype": "task_notification", "task_id": "a7", "tool_use_id": send, "status": "completed", "summary": "Finished", "session_id": session }),
+            );
+            out(assistant("m_l3", json!([{ "type": "text", "text": "Part B is done." }])));
+            out(result("Part B is done.", "completed"));
         } else if text == "out of tokens" {
             out(result("You've hit your usage limit.", "model_error"));
         } else if text == "hang" {
@@ -1226,6 +1300,58 @@ async fn a_sub_agent_backgrounded_by_default_keeps_recording_and_is_filled_from_
     assert_eq!(status, 200, "{prs}");
     let listed: Vec<&str> = prs.as_array().unwrap().iter().filter_map(|p| p["url"].as_str()).collect();
     assert_eq!(listed, [url], "{prs}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sub_agent_woken_by_send_message_reopens_its_chat_until_it_ends() {
+    let rig = rig("subresume", "guardrails", true);
+    let (status, _) =
+        post(rig.d.port, "chat:turn", json!([spec(&rig, "ccR", "delegate, hit the limit and resume")]), Some(TOKEN))
+            .await;
+    assert_eq!(status, 200);
+    let child = until("the sub-agent's child chat", Duration::from_secs(30), || async {
+        children(&rig).into_iter().find(|c| c["spawnCallId"] == "toolu_lim")
+    })
+    .await;
+    let id = child["id"].as_str().unwrap().to_string();
+    let of_child = |kind: &str| {
+        rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == json!(id) && e["type"] == kind).count()
+    };
+    until("the limit to end it", Duration::from_secs(30), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        (of_child("error") > 0 && !running.as_array().unwrap().contains(&json!(id))).then_some(())
+    })
+    .await;
+    std::fs::write(rig.workspace.join("limit-seen"), "").unwrap();
+    // Woken again: it runs, and says what the chat asked of it.
+    until("the child to run again", Duration::from_secs(30), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        running.as_array().unwrap().contains(&json!(id)).then_some(())
+    })
+    .await;
+    let reopened = children(&rig).into_iter().find(|c| c["id"] == json!(id)).unwrap();
+    let last = reopened["messages"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!((last["role"].as_str(), last["content"].as_str()), (Some("user"), Some("Carry on from the tests.")));
+    std::fs::write(rig.workspace.join("go-on"), "").unwrap();
+    let done = until("the child to end", Duration::from_secs(30), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == json!(id) && e["type"] == "done").cloned()
+    })
+    .await;
+    assert_eq!(done["stop"], "complete");
+    // Every step once, from before and after the limit, with the chat's message between.
+    let child = children(&rig).into_iter().find(|c| c["id"] == json!(id)).unwrap();
+    let messages = child["messages"].as_array().unwrap();
+    let calls: Vec<&str> = messages
+        .iter()
+        .flat_map(|m| m["toolCalls"].as_array().into_iter().flatten())
+        .filter_map(|c| c["id"].as_str())
+        .collect();
+    assert_eq!(calls, ["toolu_lread", "toolu_ltest"], "{messages:?}");
+    let asked: Vec<&Value> = messages.iter().filter(|m| m["content"] == "Carry on from the tests.").collect();
+    assert_eq!(asked.len(), 1, "{messages:?}");
+    assert_eq!(messages.last().unwrap()["content"], "Finished.");
+    let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert!(!running.as_array().unwrap().contains(&json!(id)), "ended: {running}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
