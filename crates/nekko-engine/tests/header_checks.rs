@@ -86,6 +86,8 @@ fn a_tensor_type_past_llama_cpps_is_recorded_and_the_newer_known_ones_are_sized(
     assert_eq!(foreign.unknown_weight_type, Some(143));
     assert!(foreign.weight_layout.is_none());
     assert_eq!(read("edge.gguf", &[("a.weight", 44)]).unknown_weight_type, Some(44));
+    // The highest wins, whatever the order: a fork's type is not hidden by a near one before it.
+    assert_eq!(read("mixed.gguf", &[("a.weight", 44), ("b.weight", 143)]).unknown_weight_type, Some(143));
     assert_eq!(read("last.gguf", &[("a.weight", 43)]).unknown_weight_type, None);
     // Neither is in the value the daemon sends when absent.
     assert!(known.to_value().get("unknownWeightType").is_none());

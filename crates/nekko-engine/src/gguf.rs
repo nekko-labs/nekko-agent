@@ -39,7 +39,7 @@ pub struct GgufMetadata {
     pub kv_layout: Option<KvLayout>,
     /// Expert, feed-forward and lookup-table shares, when the tensor table was read.
     pub weight_layout: Option<WeightLayout>,
-    /// The first tensor type past llama.cpp's own ([`GGML_TYPE_COUNT`]): a
+    /// The highest tensor type past llama.cpp's own ([`GGML_TYPE_COUNT`]): a
     /// fork's weight format, which stock llama.cpp refuses outright.
     pub unknown_weight_type: Option<u32>,
     /// The oldest llama.cpp build ([`ENGINE_REQUIREMENTS`]) that reads this file
@@ -135,6 +135,15 @@ fn file_type(n: f64) -> Option<&'static str> {
 /// the release this app pins. Recheck it, and the sizes in [`ggml_block`],
 /// whenever the pinned llama.cpp release changes (`builds::release_pin`).
 const GGML_TYPE_COUNT: u32 = 44;
+
+/// From this tensor type up, a type is a fork's own range and the managed engine
+/// refuses the file; between [`GGML_TYPE_COUNT`] and here it may only be a type
+/// newer than this engine knows, so the file is let through with a warning and
+/// llama.cpp decides. Upstream has added 44 types in years, so it will not reach
+/// 128 soon; the forks' on-disk types start well above it (ik_llama.cpp's lowest,
+/// Q6_0, is 133; PrismML's PQ2_0 and PTQ1_0 are 142 and 143). Its Q8_0_X4 family
+/// (97-99) never reaches a file, and would only warn.
+pub const FORK_WEIGHT_TYPE_FLOOR: u32 = 128;
 
 /// Header keys that only a llama.cpp build of at least this number reads
 /// correctly: older builds load the file without a warning and give wrong
@@ -340,13 +349,14 @@ struct WeightBytes {
     table: f64,
     /// A tensor of a type we cannot size: no shares rather than wrong ones.
     unknown_type: bool,
-    /// The first tensor type llama.cpp itself does not know.
+    /// The highest tensor type llama.cpp itself does not know: the one that decides
+    /// whether the file is a fork's ([`FORK_WEIGHT_TYPE_FLOOR`]) or merely newer.
     foreign: Option<u32>,
 }
 
 impl WeightBytes {
     fn add(&mut self, name: &str, shape: &[f64], kind: u32) {
-        if kind >= GGML_TYPE_COUNT && self.foreign.is_none() {
+        if kind >= GGML_TYPE_COUNT && self.foreign.is_none_or(|f| kind > f) {
             self.foreign = Some(kind);
         }
         let Some((block, size)) = ggml_block(kind) else {

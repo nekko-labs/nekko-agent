@@ -162,3 +162,26 @@ fn each_verdict_names_the_rule_that_found_it() {
     assert_eq!(cause(&foreign_only(), &engine(Source::External, None)), Some(Cause::WeightFormat));
     assert_eq!(cause(&hadamard(), &engine(Source::External, None)), Some(Cause::EngineAge));
 }
+
+#[test]
+fn a_type_just_past_llama_cpps_count_is_tried_and_a_forks_own_range_is_refused() {
+    use nekko_engine::gguf::FORK_WEIGHT_TYPE_FLOOR;
+    let with = |t: u32| json!({ "name": "M", "unknownWeightType": t });
+    // Type 44 (the first llama.cpp may add) and the last below the floor: a warning on every engine.
+    for t in [44, 60, FORK_WEIGHT_TYPE_FLOOR - 1] {
+        for e in [engine(Source::Managed, Some("b12464")), engine(Source::None, None), engine(Source::External, None)] {
+            let check = load_check(&with(t), &e).unwrap();
+            assert_eq!(check.level, Level::Warning, "type {t}");
+            assert!(
+                check.reason.contains(&format!("tensor type {t}")) && check.reason.contains("update the engine"),
+                "{}",
+                check.reason
+            );
+        }
+    }
+    // The fork floor and PrismML's own types stay refused on the managed engine.
+    for t in [FORK_WEIGHT_TYPE_FLOOR, 142, 143] {
+        let check = load_check(&with(t), &engine(Source::Managed, Some("b12464"))).unwrap();
+        assert!(check.blocked() && check.cause == Cause::WeightFormat, "type {t}");
+    }
+}

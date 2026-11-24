@@ -125,7 +125,18 @@ pub fn load_check(model: &Value, engine: &EngineInUse) -> Option<LoadCheck> {
 
 /// Rule 1: a tensor type llama.cpp does not know.
 fn weight_format(model: &Value, name: &str, engine: &EngineInUse) -> Option<LoadCheck> {
-    let kind = model.get("unknownWeightType").filter(|t| !t.is_null()).map(nekko_js::display)?;
+    let raw = model.get("unknownWeightType").filter(|t| !t.is_null())?;
+    let kind = nekko_js::display(raw);
+    // Just past llama.cpp's count it may be a type newer than this engine: tried, not refused.
+    if raw.as_u64().is_some_and(|t| t < u64::from(crate::gguf::FORK_WEIGHT_TYPE_FLOOR)) {
+        return Some(LoadCheck {
+            level: Level::Warning,
+            cause: Cause::EngineAge,
+            reason: format!(
+                "{name} uses a weight format (GGUF tensor type {kind}) that may be newer than this engine knows. It will be tried: if loading fails, update the engine on the Model server card."
+            ),
+        });
+    }
     let format = format!("{name} stores its weights in a format llama.cpp does not know (GGUF tensor type {kind}).");
     Some(match engine.source {
         Source::External => LoadCheck {
