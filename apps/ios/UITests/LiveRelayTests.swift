@@ -1146,8 +1146,11 @@ final class LiveRelayTests: XCTestCase {
         if let name { attach(app, name) }
         // It also closes by itself 3.4 s after it plays (without VoiceOver), so a tap
         // can find Let's go already gone (seen in testFollowUpInASubagent). Let it
-        // close; tap only if it is still up after that.
-        if !waitGone(done, 6) {
+        // close; tap only if it is still up after that. On a loaded runner the 3.4 s
+        // timer fired between a 6 s wait giving up and the tap resolving the button
+        // ("No matches found for pairSuccess.done", run 45404241625), so wait longer
+        // for the timer and tap only a button that is still there.
+        if !waitGone(done, 12), done.exists {
             done.tap()
             _ = waitGone(done, 5)
         }
