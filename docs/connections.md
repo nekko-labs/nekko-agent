@@ -2,6 +2,10 @@
 
 **Settings > Connections** lists everything Nekko Agent connects to besides your own computer. Nekko Agent sends no usage or crash reports unless you turn them on ([Usage and crash reports](usage-reports.md)).
 
+## Product dashboards in Nekko Cloud
+
+In the [Nekko Cloud console](https://nekkoagent.com/console), choose **Nekko Agent** for fleet and operations or **Hypergate → Settings** for portable Hypergate setup. The latter is an employee preview; other accounts see **Coming soon**. Publish a setup from **Settings → Nekko Cloud** in Hypergate first. Saving in the browser changes no running computer: refresh, review, and apply on each device. Billing and organizations are shared workspace pages, not product settings.
+
 ## All connections off
 
 Turn on **All connections off** to disable Nekko-managed network access:

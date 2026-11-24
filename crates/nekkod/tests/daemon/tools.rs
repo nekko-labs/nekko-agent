@@ -538,8 +538,16 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     let d = start_with(&data);
     let (status, decision) = post(d.port, "guardrails:classify", json!(["rm -rf /"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{decision}");
-    assert_eq!(decision["action"], "ask", "{decision}");
-    assert_eq!(decision["matches"][0]["ruleId"], "rm-rf", "{decision}");
+    assert_eq!(decision["action"], "deny", "{decision}");
+    let matches = decision["matches"].as_array().unwrap();
+    assert!(matches.iter().any(|rule| rule["ruleId"] == "unsafe-delete" && rule["action"] == "deny"), "{decision}");
+    assert!(matches.iter().any(|rule| rule["ruleId"] == "rm-rf"), "{decision}");
+
+    // Classification only: a relative folder uses the ordinary approval rule.
+    let (_, ordinary) = post(d.port, "guardrails:classify", json!(["rm -rf ./fixture"]), Some(TOKEN)).await;
+    assert_eq!(ordinary["action"], "ask", "{ordinary}");
+    assert_eq!(ordinary["matches"][0]["ruleId"], "rm-rf", "{ordinary}");
+
     let (_, safe) = post(d.port, "guardrails:classify", json!(["ls"]), Some(TOKEN)).await;
     assert_eq!(safe["action"], "allow", "{safe}");
     let (_, tools) = post(d.port, "tools:list", json!([]), Some(TOKEN)).await;

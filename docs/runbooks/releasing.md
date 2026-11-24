@@ -4,7 +4,15 @@ Every build is `MAJOR.MINOR.BUILD` ([spec](../../spec/product/version-numbers.md
 
 ## Start a new MAJOR.MINOR (a release)
 
-Only on Philip's say-so. On an up-to-date `main`:
+Only on Philip's say-so. First the line's What's new entry, since the app bundles it: run the draft workflow, then open a pull request that adds the entry from its run summary, write the intro and pick the highlights from the candidates listed there. Tag once it has merged.
+
+```sh
+gh workflow run whats-new-draft.yml -f line=0.10
+```
+
+`node scripts/draft-whats-new.mjs --line 0.10 --write` does the same locally (with `GH_TOKEN` set) and adds the entry to `docs/hub/whats-new.json`. The site build fails until the intro and highlights are written.
+
+Then tag an up-to-date `main`:
 
 ```sh
 git fetch origin

@@ -1,4 +1,5 @@
 import { fusionEnabled, fusionStrategy } from '@nekko-agent/shared';
+import { useChatEngine, useDropCodeModeOnClaudeAgent } from './codeModeLock.js';
 import { ContextChangeNotice, showContextChangeNotice } from './ContextChangeNotice.js';
 import { useClaudePlan } from '../providerAccounts.js';
 import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
@@ -83,7 +84,7 @@ import { PhotoViewer } from './PhotoViewer.js';
 import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSeenIn, type ChatImageItem, type ChatImagesApi } from '../remoteImages.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
-import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure } from './agent-console/interruption.js';
+import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure, subagentResumeRequest } from './agent-console/interruption.js';
 import { ContinueAtReset } from './agent-console/ContinueAtReset.js';
 import { DockSignIn } from './MonitorsDock.js';
 import { SUBSCRIPTION_KINDS } from './providers/AddProvider.js';
@@ -1110,6 +1111,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // A Claude Agent chat's gauge and card read Claude Code's own figures once
   // it has reported them for the picked model (see reportedClaudeCodeContext).
   const claudeCodeChat = providers.find((p) => p.id === providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND;
+  // Code mode never applies on Claude Code: a chat that is on it, or moves to it, goes back to the tool list.
+  useDropCodeModeOnClaudeAgent(useChatEngine(providerId), session, setSession, !readOnly);
   const claudeCodeContext = claudeCodeChat ? session?.claudeCodeContext : undefined;
   const reportedCtx = useMemo(
     () => reportedClaudeCodeContext({ claudeCodeContext }, modelId ?? undefined),
@@ -2046,6 +2049,38 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
   };
 
+  // A Claude Code subagent's chat is a copy to watch, so it never retries: only
+  // its parent's Claude Code can wake it. The request goes in the parent's
+  // queue while the parent works, otherwise it starts the parent's next turn.
+  const [askingParent, setAskingParent] = useState(false);
+  const askParentToResume = async () => {
+    const parentId = session?.parentSessionId;
+    if (!parentId || !errorNotice || askingParent) return;
+    const text = subagentResumeRequest(session?.title, errorNotice);
+    const toast = useStore.getState().pushToast;
+    setAskingParent(true);
+    try {
+      const running = await window.nekko.runningSessions().catch(() => [] as string[]);
+      if (running.includes(parentId)) {
+        if (!await window.nekko.queuePrompt(parentId, text)) throw new Error('The parent chat was not found.');
+      } else {
+        const parent = await window.nekko.getSession(parentId);
+        if (!parent?.providerId || !parent.modelId) throw new Error('The parent chat has no model chosen.');
+        // Settles when the parent's turn ends; this chat follows the subagent meanwhile.
+        void window.nekko.sendChat({ sessionId: parentId, providerId: parent.providerId, modelId: parent.modelId, text })
+          .catch((e) => toast('error', `Could not ask the parent chat: ${String((e as Error)?.message ?? e)}`));
+      }
+      setDismissedInterruption(lastMsgId ?? null);
+      setErrorNotice(null);
+      void window.nekko.setSessionOptions(sessionId, { turnFailure: null }).catch(() => {});
+      toast('success', 'Asked the parent chat to resume this subagent.');
+    } catch (e) {
+      toast('error', `Could not ask the parent chat: ${String((e as Error)?.message ?? e)}`);
+    } finally {
+      setAskingParent(false);
+    }
+  };
+
   const chatMarkdown = () => {
     if (!session) return '';
     const lines = session.messages
@@ -2848,7 +2883,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       leading={showEffort && <EffortChipGauge {...effortProps} />}
       footer={<>
         {/* Effort rides the model menu, as the phone's Model and effort panel has it. */}
-        {showEffort && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1"><EffortSection {...effortProps} /></div>}
+        {showEffort && <div className="mt-1 shrink-0 border-t border-line px-1"><EffortSection {...effortProps} /></div>}
         {!expertMode && autoQualityControl && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1">{autoQualityControl}</div>}
         {!session?.parentSessionId && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1"><SubagentModelControl fusionAllowed={autoSwitch} /></div>}
       </>}
@@ -3059,8 +3094,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
                 {starAsk && !streaming && !question && !secretAsk && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
                 {repoFolderOffer && !question && !secretAsk && !approval && !readOnly && <RepoFolderOffer suggested={repoFolderOffer} />}
+                {/* Claude Code's background tasks (often its own PR watch) wake the chat when they finish, so the turn isn't settled yet. */}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} prs={prs}
-                  eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!secretAsk || !!approval)}
+                  eligible={canOfferPrWatch(session?.messages ?? [], streaming || claudeBackground > 0 || !!held || !!errorNotice || !!question || !!secretAsk || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
                 {errorNotice && !question && !streaming && (() => {
                   // A stop the user asked for is not a failure, so it doesn't wear
@@ -3072,7 +3108,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   const tone = interruption.paused ? 'var(--warning)' : 'var(--danger)';
                   // A used-up usage limit with a known reset can carry on by itself then.
                   const now = Date.now();
-                  const hasPrompt = !!session?.messages.some((m) => m.role === 'user');
+                  // Only the parent can wake a Claude Code subagent, so its chat asks the parent instead of retrying.
+                  const subagent = !!session?.claudeCodeSubagent;
+                  const hasPrompt = !subagent && !!session?.messages.some((m) => m.role === 'user');
                   const resetAt = hasPrompt && !readOnly && !session?.incognito ? usageLimitResetAt(errorNotice, providerLimits, now) : null;
                   const armedAt = session?.turnFailure?.continueAt ?? null;
                   const scheduleContinue = (at: number | null) => {
@@ -3094,8 +3132,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         message the buttons wrapped into a ragged column. */}
                     <div className="flex items-start gap-3">
                       <span className="min-w-0 flex-1 text-ink-soft [overflow-wrap:anywhere]">
-                        <span className="mr-2 font-medium" style={{ color: tone }}>{interruption.title}</span>
-                        {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
+                        <span className="mr-2 font-medium" style={{ color: tone }}>{subagent ? 'Subagent stopped' : interruption.title}</span>
+                        {subagent
+                          ? `${interruption.reason} Its work so far is saved; its parent chat can resume it.`
+                          : <>{interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.</>}
                       </span>
                       <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => {
                         setDismissedInterruption(lastMsgId ?? null);
@@ -3122,8 +3162,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         Retry
                       </button>
                     )}
+                    {subagent && session?.parentSessionId && !readOnly && (
+                      <button className="btn btn-primary shrink-0 px-3 py-0.5 text-2xs" data-notice-ask-parent disabled={askingParent}
+                        title="Ask the chat that started this subagent to wake it, so it carries on from where it stopped"
+                        onClick={() => void askParentToResume()}>
+                        Ask parent to resume
+                      </button>
+                    )}
                     <ContinueAtReset resetAt={resetAt} armedAt={armedAt} now={now} onSchedule={scheduleContinue} />
-                    {cuts.deleteLast && !readOnly && (
+                    {cuts.deleteLast && !readOnly && !subagent && (
                       <button className="btn btn-outline shrink-0 px-3 py-0.5 text-2xs" data-notice-delete
                         title="Delete your last message and anything after it, then write it again (for example without the picture)"
                         onClick={() => onDelete(cuts.deleteLast!.id)}>
@@ -3183,7 +3230,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} kind={imageMode ? 'photo' : 'agent'} title={imageMode && photoSetupShown ? 'Let’s get photo mode set up.' : undefined} />}
           {firstPromptIntro && <Suspense fallback={null}><FirstPromptIntro onClose={closeFirstPromptIntro} /></Suspense>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : cleanStart ? 'w-[min(90%,calc(100%-8px))]' : 'w-full'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
-            {!cleanStart && !question && (
+            {/* Folded away while the agent waits on the person, so it never covers the question or the approval above it (#3288). */}
+            {!cleanStart && !question && !approval && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
             )}
 
@@ -3257,6 +3305,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 session={session}
                 isCloudModel={isCloudModel}
                 modelId={modelId ?? undefined}
+                providerId={providerId}
                 onChange={setSession}
                 draft={draft}
                 toolsInWindow
@@ -3770,7 +3819,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <div className="composer-folders min-w-0">
                     <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} selectedSummary />
                   </div>
-                  {showMode && <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />}
+                  {showMode && <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} providerId={providerId} onChange={setSession} toolsInWindow only="mode" />}
                   {promptSuggestions}
                 </div>}
                 {/* The chat's details: a panel of the composer itself, open or

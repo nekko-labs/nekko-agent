@@ -139,7 +139,7 @@ fn cpu_comes_down_to_the_p95_plus_one_never_under_the_hosted_floor() {
     let idle = Usage { cpu_p95: 0.4, ..light };
     let out = suggest_size(&[idle; 3], &s, &mac());
     assert_eq!(out.cpus, 3);
-    assert_eq!(out.reasons, ["Jobs kept at most 0.4 vCPUs busy (95th percentile)."]);
+    assert_eq!(out.reasons, ["Jobs in the last 30 days kept at most 0.4 vCPUs busy (95th percentile)."]);
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn memory_comes_down_to_the_peak_plus_headroom_never_under_the_hosted_floor() {
     let s = settings(6, 16384);
     let out = suggest_size(&[Usage { mem_peak_mb: 5500, ..job(6, 16384) }; 3], &s, &mac());
     assert_eq!(out.memory_mb, 8192);
-    assert_eq!(out.reasons, ["The biggest job used 5.4 GB at most and never swapped."]);
+    assert_eq!(out.reasons, ["The biggest job in the last 30 days used 5.4 GB at most."]);
     let small = suggest_size(&[Usage { mem_peak_mb: 2000, ..job(6, 16384) }; 3], &s, &mac());
     assert_eq!(small.memory_mb, FLOOR_MEMORY_MB);
 }
@@ -174,4 +174,93 @@ fn memory_never_costs_a_slot() {
     let out = suggest_size(&[swapped; 3], &s, &mac());
     assert_eq!(out.memory_mb, 16384);
     assert_eq!(out.reasons[1], "16.0 GB is the most this Mac can give each of 2 VMs.");
+}
+
+/// This Mac's nekko-labs runner (2 slots, 34 GB for runners) and its jobs of 2026-11-18 to 2026-11-20 (#3274).
+fn mixed_window() -> (RunnerSettings, Vec<Usage>) {
+    let s = RunnerSettings { macos_slots: 2, runner_memory_mb: Some(34816), ..settings(8, 17408) };
+    let at = |cpus, memory_mb, cpu_p95, cpu_full_share, mem_peak_mb, compressed_peak_mb, swap_out_mb| Usage {
+        cpus,
+        memory_mb,
+        cpu_p95,
+        cpu_full_share,
+        mem_peak_mb,
+        compressed_peak_mb,
+        swap_out_mb,
+    };
+    let jobs = vec![
+        // Heavy jobs at other sizes.
+        at(16, 16384, 11.26, 0.02, 15097, 8041, 25367),
+        at(6, 16384, 6.0, 0.18, 14862, 8086, 15251),
+        at(6, 17408, 6.0, 0.17, 15572, 8816, 4568),
+        // The two light jobs at the current size that cut it to 7 vCPUs and 9 GB.
+        at(8, 17408, 5.74, 0.0, 6968, 0, 0),
+        at(8, 17408, 1.08, 0.0, 4804, 678, 0),
+    ];
+    (s, jobs)
+}
+
+#[test]
+fn two_light_jobs_do_not_cut_below_a_heavier_job_at_another_size() {
+    let (s, jobs) = mixed_window();
+    let out = suggest_size(&jobs, &s, &mac());
+    assert_eq!(out.jobs, 2);
+    assert_eq!((out.cpus, out.memory_mb), (8, 17408), "{out:?}");
+    assert!(out.reasons.is_empty(), "{:?}", out.reasons);
+    // Without the heavier jobs the same two still cut, as before.
+    let light = suggest_size(&jobs[3..], &s, &mac());
+    assert_eq!((light.cpus, light.memory_mb), (7, 9216), "{light:?}");
+}
+
+#[test]
+fn a_raise_reaches_the_largest_recent_need_in_one_step() {
+    // The cut applied: 7 vCPUs, 9 GB, and the heavy jobs swap there.
+    let (base, mut jobs) = mixed_window();
+    let s = RunnerSettings { cpus_per_vm: Some(7), memory_per_vm_mb: 9216, ..base };
+    let swapped = Usage {
+        cpus: 7,
+        memory_mb: 9216,
+        cpu_p95: 5.8,
+        cpu_full_share: 0.04,
+        mem_peak_mb: 8114,
+        compressed_peak_mb: 4434,
+        swap_out_mb: 4520,
+    };
+    jobs.extend([swapped; 2]);
+    let out = suggest_size(&jobs, &s, &mac());
+    // 13 GB by the old 4 GB step; 17 GB (the ceiling for 2 slots) once the window counts.
+    assert_eq!(out.memory_mb, 17408, "{out:?}");
+    assert_eq!(
+        out.reasons,
+        [
+            "A job swapped 4.4 GB out to disk.",
+            "Jobs in the last 30 days needed up to 21.0 GB.",
+            "17.0 GB is the most this Mac can give each of 2 VMs.",
+        ]
+    );
+}
+
+#[test]
+fn a_cut_stays_above_a_size_that_swapped() {
+    // Light jobs at 16 GB, but a job swapped at 10 GB this month: never back to 10 GB.
+    let s = settings(6, 16384);
+    let earlier = Usage { mem_peak_mb: 9000, swap_out_mb: 2000, ..job(6, 10240) };
+    let light = Usage { mem_peak_mb: 5000, ..job(6, 16384) };
+    let out = suggest_size(&[earlier, light, light], &s, &mac());
+    assert_eq!(out.memory_mb, 14336, "{out:?}");
+    assert_eq!(out.reasons, ["The biggest job in the last 30 days used 8.8 GB at most.", "A job swapped at 10.0 GB."]);
+
+    let squeezed = Usage { swap_out_mb: 0, compressed_peak_mb: 3000, ..earlier };
+    let out = suggest_size(&[squeezed, light, light], &s, &mac());
+    assert_eq!(out.memory_mb, 14336, "{out:?}");
+    assert_eq!(out.reasons[1], "A job compressed hard at 10.0 GB.");
+}
+
+#[test]
+fn a_cut_never_raises_a_size_the_owner_chose_under_the_floor() {
+    let s = settings(2, 6144);
+    let idle = Usage { cpu_p95: 0.0, cpu_full_share: 0.0, mem_peak_mb: 1000, ..job(2, 6144) };
+    let out = suggest_size(&[idle; 2], &s, &mac());
+    assert_eq!((out.cpus, out.memory_mb), (2, 6144), "{out:?}");
+    assert!(out.reasons.is_empty(), "{:?}", out.reasons);
 }

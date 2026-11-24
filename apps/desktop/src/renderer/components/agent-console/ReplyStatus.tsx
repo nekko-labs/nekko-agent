@@ -97,10 +97,11 @@ export function ReplyStatus({ streaming, status, elapsed, tps, out, last, done, 
   ] : [];
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs text-ink-faint" role="status" data-reply-status>
-      {streaming ? (
+      {/* A run waiting on the person says so, not the step it is paused before (#3288). */}
+      {streaming && !blocked ? (
         <span className="flex items-center gap-2 text-ink-soft"><ReplyActivityIcon state={iconState} /><span className="dots dots-lead -mr-2" aria-hidden="true" />{status || 'Working'}</span>
       ) : blocked ? (
-        <span>{blocked}</span>
+        <span className={streaming ? 'text-ink-soft' : undefined} data-reply-blocked>{blocked}</span>
       ) : sleeping ? (
         <span className="basis-full" data-reply-sleeping>{sleepingLabel(nextWakeAt, now)}</span>
       ) : showDone ? (
