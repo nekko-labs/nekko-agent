@@ -466,7 +466,9 @@ export function modelModality(model: {
   hasProjector?: boolean;
   readable?: boolean;
 }): ModelModality {
-  const arch = model.architecture ?? '';
+  // An architecture is a short GGUF key; capping it, as the name is below,
+  // keeps VISION_ARCHS linear however long a header's string is.
+  const arch = (model.architecture ?? '').slice(0, 256);
   if (arch) {
     if (IMAGE_GEN_ARCHS.test(arch)) return 'image';
     if (AUDIO_ARCHS.test(arch)) return 'audio';
