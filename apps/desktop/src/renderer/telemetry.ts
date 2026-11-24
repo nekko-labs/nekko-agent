@@ -28,6 +28,17 @@ export function errorReport(err: unknown, source = 'renderer'): { source: string
 }
 
 /**
+ * Browser notices that arrive as window errors but are not faults, so they are
+ * not reported. Chromium raises "ResizeObserver loop completed with
+ * undelivered notifications" when a resize callback changes layout and the
+ * rest is delivered next frame; nothing is lost. It was over 98% of all error
+ * reports in November 2026.
+ */
+export function ignoredError(message: unknown): boolean {
+  return typeof message === 'string' && /^(?:[A-Za-z]*Error: )?ResizeObserver loop (?:completed with undelivered notifications|limit exceeded)/.test(message);
+}
+
+/**
  * Opt-in reports from the UI: which screen is open, which controls are
  * clicked, and uncaught errors. The engine drops them unless reports are on,
  * keeps only the allowed fields and scrubs every string
@@ -48,6 +59,6 @@ export function startTelemetry(): void {
     const control = clickControl(e.target);
     if (control) send('click', { screen: useStore.getState().view, control });
   }, { capture: true, passive: true });
-  window.addEventListener('error', (e) => send('error', errorReport(e.error ?? e.message)));
+  window.addEventListener('error', (e) => { if (!ignoredError(e.message)) send('error', errorReport(e.error ?? e.message)); });
   window.addEventListener('unhandledrejection', (e) => send('error', errorReport(e.reason)));
 }

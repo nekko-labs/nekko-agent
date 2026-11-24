@@ -882,6 +882,12 @@ fn is_companion_of(candidate: &str, primary: &str) -> bool {
         || candidate == format!("{stem}.chat_template.jinja")
 }
 
+/// Windows refuses to delete a file another process has open: a sharing
+/// (32) or lock (33) violation. Other systems delete open files.
+fn in_use(e: &std::io::Error) -> bool {
+    cfg!(windows) && matches!(e.raw_os_error(), Some(32 | 33))
+}
+
 /// Delete the file and its row; shards and projectors go with it (`remove`).
 pub fn remove(cfg: &LibraryConfig, id: &str) -> Result<Value, String> {
     let Some(model) = find(cfg, id)? else {
@@ -904,7 +910,16 @@ pub fn remove(cfg: &LibraryConfig, id: &str) -> Result<Value, String> {
             Ok(m) if m.is_dir() => {
                 return Err(format!("Path is a directory: rm returned EISDIR (is a directory) {p}"));
             }
-            Ok(_) => std::fs::remove_file(p).map_err(|e| e.to_string())?,
+            Ok(_) => match std::fs::remove_file(p) {
+                Ok(()) => {}
+                Err(e) if in_use(&e) => {
+                    return Ok(reply(
+                        false,
+                        format!("{name} is open in another app. Close what is using it, then delete it again."),
+                    ));
+                }
+                Err(e) => return Err(e.to_string()),
+            },
             Err(_) => {}
         }
     }
