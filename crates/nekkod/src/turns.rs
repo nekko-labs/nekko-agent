@@ -2452,7 +2452,8 @@ struct ContextParts {
     stable: String,
     /// For this turn's user message (`turnContext`): what this turn alone
     /// brought (its own attachments and the guides they pull in, connector and
-    /// index snippets found for its text) and memory saved since the frame.
+    /// index snippets found for its text), memory changed since the model saw
+    /// it, and the notes its text recalled (#3276).
     tail: String,
     /// The chat's `memoryFrame` once this turn's tail is saved (`Null`: none).
     frame: Value,
@@ -2496,21 +2497,26 @@ fn context_block(
         )
     };
     let scope = nekko_context::MemoryScope::of_session(session);
-    let mut memory = Vec::new();
-    if let Some(dir) = data_dir.filter(|_| scope.project()) {
-        if scope.global() {
-            memory.extend(nekko_context::list_memory(dir, "global", None));
+    // The chat's notes from the daemon's cached read (no note file is read
+    // unless the folder changed), and their search index.
+    let (memory, memory_index) = match data_dir.filter(|_| scope.project()) {
+        Some(dir) => {
+            let (all, index) = nekko_context::memory_notes(dir);
+            let primary = str_at(session, "workspaceId").map(str::to_string);
+            let supporting = strings(session.get("supportingWorkspaceIds")).into_iter().filter(|s| !s.is_empty());
+            let folders: HashSet<String> = primary.into_iter().chain(supporting).collect();
+            let notes: Vec<Value> = all
+                .iter()
+                .filter(|m| {
+                    (scope.global() && nekko_context::in_scope(m, "global", None))
+                        || folders.iter().any(|id| nekko_context::in_scope(m, "workspace", Some(id)))
+                })
+                .cloned()
+                .collect();
+            (notes, Some(index))
         }
-        let mut seen = HashSet::new();
-        let primary = str_at(session, "workspaceId").map(str::to_string);
-        let supporting = strings(session.get("supportingWorkspaceIds")).into_iter().filter(|s| !s.is_empty());
-        for id in primary.into_iter().chain(supporting) {
-            if seen.insert(id.clone()) {
-                memory.extend(nekko_context::list_memory(dir, "workspace", Some(&id)));
-            }
-        }
-    }
-    let frame = nekko_context::memory_frame(session.get("memoryFrame"), scope, &memory);
+        None => (Vec::new(), None),
+    };
     let triple = |v: &Value, a: &str, b: &str, c: &str| -> (String, String, String) {
         let s = |k: &str| v.get(k).map(js::display).unwrap_or_default();
         (s(a), s(b), s(c))
@@ -2528,6 +2534,18 @@ fn context_block(
     let prefs = session.get("contextPrefs");
     let excluded: HashSet<String> = strings(prefs.and_then(|p| p.get("excluded"))).into_iter().collect();
     let pinned: HashSet<String> = strings(prefs.and_then(|p| p.get("pinned"))).into_iter().collect();
+    // A small core rides in the system prompt; the rest waits to be recalled.
+    let core = nekko_context::core_notes(&memory, &pinned, &excluded);
+    let mut frame = nekko_context::memory_frame(session.get("memoryFrame"), scope, &memory, &core);
+    let recalled = match (&memory_index, opts.get("text").and_then(Value::as_str)) {
+        (Some(index), Some(text)) if !frame.value.is_null() && !text.trim().is_empty() => {
+            let allowed: HashSet<String> =
+                memory.iter().filter_map(|m| m.get("id").and_then(Value::as_str)).map(str::to_string).collect();
+            index.recall(text, &allowed, &frame.shown(), &excluded)
+        }
+        _ => Vec::new(),
+    };
+    frame.mark_shown(&recalled);
     let stable = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput {
         attached: nekko_context::collect_attached(&chat_attached),
         guidelines: guidance.guidelines,
@@ -2548,8 +2566,12 @@ fn context_block(
         ..Default::default()
     }));
     let memory_changes = nekko_context::render_memory_changes(&frame, &excluded);
-    let tail =
-        [turn, memory_changes].into_iter().filter(|t| !t.trim().is_empty()).collect::<Vec<_>>().join("\n\n---\n\n");
+    let recalled = nekko_context::render_recalled(&recalled);
+    let tail = [turn, memory_changes, recalled]
+        .into_iter()
+        .filter(|t| !t.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n---\n\n");
     ContextParts { stable, tail, frame: frame.value, fresh_frame: frame.fresh }
 }
 
@@ -4063,6 +4085,7 @@ impl TurnTools {
         let dir = self.turns.data_dir.clone();
         let text = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
         let (title, body) = (text("title"), text("body"));
+        let always = input.get("always").and_then(Value::as_bool);
         // A note applies to every later chat: in a tainted chat, it could be
         // an attacker's instruction that outlives it.
         if self.gated() {
@@ -4074,7 +4097,7 @@ impl TurnTools {
                 return error(id, "Memory was not saved: not approved by user.");
             }
         }
-        let saved = tokio::task::spawn_blocking(move || nekko_workspace::memory::remember(&dir, &title, &body))
+        let saved = tokio::task::spawn_blocking(move || nekko_workspace::memory::remember(&dir, &title, &body, always))
             .await
             .unwrap_or_else(|e| Err(e.to_string()));
         match saved {
