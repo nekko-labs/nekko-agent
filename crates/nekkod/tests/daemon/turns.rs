@@ -1482,11 +1482,15 @@ fn turn_requests(model: &ScriptedModel) -> Vec<Value> {
 }
 
 fn memory_note(rig: &TurnRig, id: &str, title: &str, body: &str, at: u64) {
+    tagged_note(rig, id, title, body, at, "always");
+}
+
+fn tagged_note(rig: &TurnRig, id: &str, title: &str, body: &str, at: u64, tags: &str) {
     let dir = rig.data.join("memory");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join(format!("{id}.md")),
-        format!("---\nid: {id}\nscope: global\ntitle: {title}\ncreatedAt: {at}\nupdatedAt: {at}\n---\n{body}\n"),
+        format!("---\nid: {id}\nscope: global\ntitle: {title}\ntags: [{tags}]\ncreatedAt: {at}\nupdatedAt: {at}\n---\n{body}\n"),
     )
     .unwrap();
 }
@@ -1594,4 +1598,51 @@ async fn a_chat_from_another_computer_takes_no_turn_here() {
     assert!(refused.to_string().contains("belongs to Laptop"), "{refused}");
     assert!(model.requests.lock().unwrap().is_empty(), "a copy never reaches a model");
     assert!(saved_session(&rig, "s_elsewhere")["messages"].as_array().unwrap().is_empty());
+}
+
+/// Memory recall (#3276): the system prompt keeps the core (notes tagged
+/// `always`); any other note reaches the model on the message whose words
+/// match it, once per chat, and the prompt's prefix still never moves.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_recalls_the_notes_it_is_about_and_the_core_stays_put() {
+    let session = json!({
+        "id": "s_recall", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("memory-recall", session);
+    tagged_note(&rig, "m_style", "Reply style", "Answer briefly.", 4, "always");
+    tagged_note(&rig, "m_deploy", "Deploy", "Deploys go through `fly deploy` from main.", 3, "");
+    tagged_note(&rig, "m_cat", "Cat", "The user has a cat called Miso.", 2, "");
+    let model = scripted_model(vec![say_text("one"), say_text("two"), say_text("three")]).await;
+    for (id, text) in
+        [("r1", "How do I deploy the app?"), ("r2", "The deployment failed again"), ("r3", "Tell me about my cat")]
+    {
+        let spec = turn_spec(&rig, &model, id, "s_recall", json!({ "text": text }));
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, id, "s_recall").await;
+        assert_eq!(end["stop"], "complete", "{end}");
+    }
+    let reqs = turn_requests(&model);
+    assert_eq!(reqs.len(), 3, "{reqs:?}");
+    let msgs = |r: &Value| r["messages"].as_array().unwrap().clone();
+    let (m1, m2, m3) = (msgs(&reqs[0]), msgs(&reqs[1]), msgs(&reqs[2]));
+    assert_eq!(m2[..m1.len()], m1[..], "turn 2 re-sends turn 1's request unchanged");
+    assert_eq!(m3[..m2.len()], m2[..], "turn 3 re-sends turn 2's request unchanged");
+
+    let system = m1[0]["content"].as_str().unwrap();
+    assert!(system.contains("# Memory: Reply style\nAnswer briefly."), "the core is in the system prompt");
+    assert!(!system.contains("fly deploy") && !system.contains("Miso"), "{system}");
+    let last = |m: &[Value]| m.last().unwrap()["content"].as_str().unwrap_or_default().to_string();
+    let first = last(&m1);
+    assert!(first.contains("# Memory recalled: Deploy\nDeploys go through `fly deploy` from main."), "{first}");
+    assert!(!first.contains("Miso") && first.ends_with("How do I deploy the app?"), "{first}");
+    assert_eq!(last(&m2), "The deployment failed again", "a note already shown is not recalled again");
+    let third = last(&m3);
+    assert!(third.contains("# Memory recalled: Cat") && !third.contains("fly deploy"), "{third}");
+
+    let saved = saved_session(&rig, "s_recall");
+    let frame = &saved["memoryFrame"];
+    assert_eq!(frame["notes"].as_array().unwrap().len(), 1, "{frame}");
+    let known: Vec<&str> = frame["known"].as_object().unwrap().keys().map(String::as_str).collect();
+    assert_eq!(known, ["m_style", "m_deploy", "m_cat"], "every note the model saw");
 }
