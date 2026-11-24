@@ -37,6 +37,26 @@ pub fn outdated_llama(runtime: &str, installed: &str) -> Option<&'static str> {
     (llama_build_number(installed)? < llama_build_number(pinned)?).then_some(pinned)
 }
 
+/// How many llama.cpp builds behind the pin an engine must be before the Model
+/// server card says so on its own. The pin moves three or four times a day (24
+/// automated bumps in six days, b12242 to b12464, about 37 builds a day) and
+/// nothing updates the managed engine, so nearly every user is a little behind
+/// after nearly every app update and the update is several hundred MB. 1,000
+/// builds is about a month: an engine that old is worth a notice. A nearer one
+/// is still `outdated` (a file that needs a newer build offers the Update), it
+/// just does not `notify`.
+pub const FAR_BEHIND_BUILDS: u64 = 1000;
+
+/// Whether `installed` is at least [`FAR_BEHIND_BUILDS`] behind the pinned llama.cpp
+/// release. Never for a tag that is not exactly `b<number>`, nor another runtime.
+pub fn far_behind_llama(runtime: &str, installed: &str) -> bool {
+    let Some(pinned) = outdated_llama(runtime, installed) else { return false };
+    match (llama_build_number(installed), llama_build_number(pinned)) {
+        (Some(have), Some(pin)) => pin - have >= FAR_BEHIND_BUILDS,
+        _ => false,
+    }
+}
+
 /// The number in a llama.cpp release tag: `b11224` is 11224. `None` for anything
 /// that is not exactly `b` and digits (a fork's version string, a bare commit).
 pub fn llama_build_number(tag: &str) -> Option<u64> {

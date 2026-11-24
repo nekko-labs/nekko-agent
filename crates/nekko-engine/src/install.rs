@@ -510,6 +510,8 @@ impl Installer {
                         "installed": installed,
                         "pinned": pinned,
                         "message": format!("Your engine is {installed}; this version of Nekko Agent expects {pinned}."),
+                        // Only a far-behind engine is worth the card's notice on its own: see FAR_BEHIND_BUILDS.
+                        "notify": builds::far_behind_llama(self.runtime, installed),
                     }),
                 );
             }

@@ -13,7 +13,16 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-const PINNED: &str = "b12436";
+/// The release this build pins, read from the code so a llama.cpp update does not break these tests.
+fn pinned() -> &'static str {
+    builds::release_pin("llama").1
+}
+
+/// The build `by` before (negative) or after the pinned one: `b12435` for -1 at b12436.
+fn near(by: i64) -> String {
+    let n: i64 = pinned().strip_prefix('b').and_then(|n| n.parse().ok()).expect("a b<number> pin");
+    format!("b{}", n + by)
+}
 
 /// GitHub and the archive tool, scripted: the pinned release has one CPU build.
 struct Net {
@@ -25,14 +34,14 @@ impl Net {
     fn answer(&self, url: &str) -> Result<(u16, Vec<u8>), String> {
         self.requests.lock().unwrap().push(url.to_string());
         let release = json!({
-            "tag_name": PINNED,
+            "tag_name": pinned(),
             "assets": [{
-                "name": format!("llama-{PINNED}-bin-win-cpu-x64.zip"),
+                "name": format!("llama-{}-bin-win-cpu-x64.zip", pinned()),
                 "browser_download_url": "https://dl.test/cpu.zip",
                 "size": 3,
             }],
         });
-        if url.ends_with(&format!("/releases/tags/{PINNED}")) {
+        if url.ends_with(&format!("/releases/tags/{}", pinned())) {
             Ok((200, release.to_string().into_bytes()))
         } else if url == "https://dl.test/cpu.zip" {
             Ok((200, b"zip".to_vec()))
@@ -164,16 +173,25 @@ impl Machine {
 
 #[test]
 fn compares_llama_build_numbers() {
-    assert_eq!(builds::release_pin("llama").1, PINNED, "the pin moved: update PINNED here");
-    assert_eq!(builds::outdated_llama("llama", "b11224"), Some(PINNED));
-    assert_eq!(builds::outdated_llama("llama", "b12435"), Some(PINNED));
-    assert_eq!(builds::outdated_llama("llama", "b999"), Some(PINNED), "numbers, not text: b999 < b12436");
-    assert_eq!(builds::outdated_llama("llama", PINNED), None);
-    assert_eq!(builds::outdated_llama("llama", "b12437"), None);
+    assert_eq!(builds::outdated_llama("llama", "b11224"), Some(pinned()));
+    assert_eq!(builds::outdated_llama("llama", &near(-1)), Some(pinned()));
+    assert_eq!(builds::outdated_llama("llama", "b999"), Some(pinned()), "numbers, not text: b999 is older");
+    assert_eq!(builds::outdated_llama("llama", pinned()), None);
+    assert_eq!(builds::outdated_llama("llama", &near(1)), None);
     assert_eq!(builds::outdated_llama("llama", "b99999"), None);
     for odd in ["", "b", "12", "4567", "bXYZ", "b12x", " b1", "b-1", "master-1-abc", "b99999999999999999999999"] {
         assert_eq!(builds::outdated_llama("llama", odd), None, "{odd:?}");
     }
+    // Far behind is a named number of builds, not a guess: 999 is not, 1,000 is, the pin itself is not.
+    assert_eq!(builds::FAR_BEHIND_BUILDS, 1000);
+    assert!(!builds::far_behind_llama("llama", &near(-999)));
+    assert!(builds::far_behind_llama("llama", &near(-1000)));
+    assert!(builds::far_behind_llama("llama", "b11224"));
+    assert!(!builds::far_behind_llama("llama", pinned()) && !builds::far_behind_llama("llama", &near(1)));
+    for odd in ["", "b", "bXYZ", "master-1-abc", "b99999999999999999999999"] {
+        assert!(!builds::far_behind_llama("llama", odd), "{odd:?}");
+    }
+    assert!(!builds::far_behind_llama("diffusion", "b1"));
 }
 
 #[test]
@@ -192,18 +210,45 @@ async fn calls_an_older_managed_engine_out_of_date() {
         json!({
             "buildId": "win-x64-cpu",
             "installed": "b11224",
-            "pinned": PINNED,
-            "message": "Your engine is b11224; this version of Nekko Agent expects b12436.",
+            "pinned": pinned(),
+            "message": format!("Your engine is b11224; this version of Nekko Agent expects {}.", pinned()),
+            "notify": true,
         })
     );
     std::fs::remove_dir_all(&m.root).ok();
 }
 
 #[tokio::test]
+async fn a_slightly_old_engine_is_outdated_but_does_not_notify() {
+    // The pin moves several times a day, so a few days behind is the normal state: the update stays
+    // available (a row that needs it offers it), but the Model server card has nothing to say.
+    for by in [-1, -37, -999] {
+        let installed = near(by);
+        let m = machine(&format!("slight{}", -by), "llama", Some(record(Some(&installed))), None, None);
+        let o = m.outdated().await.expect("still called out of date, so Update has a build to install");
+        assert_eq!(
+            (o["notify"].clone(), o["buildId"].clone(), o["installed"].clone()),
+            (json!(false), json!("win-x64-cpu"), json!(installed))
+        );
+        std::fs::remove_dir_all(&m.root).ok();
+    }
+}
+
+#[tokio::test]
+async fn a_far_behind_engine_notifies() {
+    for by in [-1000, -5000] {
+        let m = machine(&format!("far{}", -by), "llama", Some(record(Some(&near(by)))), None, None);
+        assert_eq!(m.outdated().await.expect("called out")["notify"], json!(true), "{by}");
+        std::fs::remove_dir_all(&m.root).ok();
+    }
+}
+
+#[tokio::test]
 async fn stays_quiet_when_current_newer_or_unknown() {
+    let newer = near(1);
     for (name, version) in [
-        ("equal", Some(PINNED)),
-        ("newer", Some("b12437")),
+        ("equal", Some(pinned())),
+        ("newer", Some(newer.as_str())),
         ("missing", None),
         ("unparseable", Some("custom-build")),
         ("empty", Some("")),
@@ -269,7 +314,7 @@ async fn installing_the_installed_build_again_downloads_the_pinned_release() {
     assert_eq!(*m.stops.lock().unwrap(), 1);
     // The record says what is on disk now, so the notice goes away.
     let after = m.installer.detect().await;
-    assert_eq!(after["version"], PINNED);
+    assert_eq!(after["version"], pinned());
     assert_eq!(after["source"], "managed");
     assert!(after.get("outdated").is_none(), "{after}");
     let bin = after["binPath"].as_str().unwrap();
@@ -298,7 +343,7 @@ async fn the_cuda_switch_says_it_also_updates_an_old_engine() {
     std::fs::remove_dir_all(&m.root).ok();
 
     // A current engine gets the switch's usual words, unchanged.
-    let mut r = record(Some(PINNED));
+    let mut r = record(Some(pinned()));
     r["backend"] = json!("vulkan");
     let m = machine_with_gpu("cuda-current", "llama", Some(r), None, None, Some(nvidia()));
     let d = m.installer.detect().await;
