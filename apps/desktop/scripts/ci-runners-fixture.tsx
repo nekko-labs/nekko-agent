@@ -155,7 +155,7 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'missing-logs': async () => [view({ recent: [{ ...audit(600, 'A job', 'finished', 3400), jobId: null, repo: null, workflow: null, job: null, url: null, vm: null }] })],
   'settings-bottom': async () => [view({ limit: 'memory', available: 1 })],
   'settings-suggested': async () => [view(
-    { suggestedSize: { jobs: 6, cpus: 4, memoryMb: 8 * GB, reasons: ['The biggest job used 5.4 GB at most and never swapped.'] } },
+    { suggestedSize: { jobs: 6, cpus: 4, memoryMb: 8 * GB, reasons: ['The biggest job in the last 30 days used 5.4 GB at most.'] } },
     { memoryPerVmMb: 12 * GB },
   )],
   // Two jobs at 4 vCPUs and 10 GB swapped: the card suggests more memory (#2700).

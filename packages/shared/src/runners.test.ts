@@ -237,7 +237,7 @@ describe('runner helpers', () => {
     expect(at(null)).toBeNull();
     expect(at({ jobs: 1, cpus: 6, memoryMb: 10240, reasons: [] })).toEqual({ line: 'Suggested size after 2 jobs at this size (1 so far).', reasons: [], apply: null });
     expect(at({ jobs: 4, cpus: 6, memoryMb: 10240, reasons: [] })).toEqual({ line: 'Fits your last 4 jobs.', reasons: [], apply: null });
-    const why = ['The biggest job used 5.4 GB at most and never swapped.'];
+    const why = ['The biggest job in the last 30 days used 5.4 GB at most.'];
     expect(at({ jobs: 4, cpus: 6, memoryMb: 8192, reasons: why })).toEqual({
       line: 'Suggested for your jobs: 6 vCPUs, 8 GB (now 6 vCPUs, 10 GB).',
       reasons: why,
