@@ -8,6 +8,9 @@
 //!   match the message (bm25 over title, tags and body), up to
 //!   [`RECALL_BUDGET_TOKENS`] and [`RECALL_MAX_NOTES`], never one the chat has
 //!   already been shown.
+//! - **Looked up**, when the model calls `recall_memory` with words of its
+//!   own: a note in another language or other words than the message, which
+//!   the automatic recall cannot match.
 //!
 //! Pure Rust and in memory: a heavy user's year is a few hundred to a few
 //! thousand short notes. Measured in release on an M-series Mac: 5,000 notes
@@ -27,8 +30,10 @@ pub const CORE_TAG: &str = "always";
 pub const CORE_BUDGET_TOKENS: u64 = 400;
 /// The most a message's recalled notes may take.
 pub const RECALL_BUDGET_TOKENS: u64 = 300;
-/// The most notes one message recalls.
+/// The most notes one message recalls, or one `recall_memory` call returns.
 pub const RECALL_MAX_NOTES: usize = 5;
+/// The most one `recall_memory` call returns: the model asked, so more room.
+pub const LOOKUP_BUDGET_TOKENS: u64 = 600;
 
 const K1: f64 = 1.2;
 const B: f64 = 0.75;
@@ -253,6 +258,24 @@ impl MemoryIndex {
         shown: &HashSet<String>,
         excluded: &HashSet<String>,
     ) -> Vec<Value> {
+        self.pick(query, allowed, shown, excluded, RECALL_BUDGET_TOKENS)
+    }
+
+    /// What the `recall_memory` tool returns: the best matches in the chat's
+    /// scope, shown before or not, up to [`RECALL_MAX_NOTES`] and
+    /// [`LOOKUP_BUDGET_TOKENS`].
+    pub fn lookup(&self, query: &str, allowed: &HashSet<String>, excluded: &HashSet<String>) -> Vec<Value> {
+        self.pick(query, allowed, &HashSet::new(), excluded, LOOKUP_BUDGET_TOKENS)
+    }
+
+    fn pick(
+        &self,
+        query: &str,
+        allowed: &HashSet<String>,
+        shown: &HashSet<String>,
+        excluded: &HashSet<String>,
+        budget: u64,
+    ) -> Vec<Value> {
         let mut used = 0;
         let mut out = Vec::new();
         for (_, note) in self.search(query) {
@@ -261,7 +284,7 @@ impl MemoryIndex {
                 continue;
             }
             let cost = note_tokens(note);
-            if used + cost > RECALL_BUDGET_TOKENS {
+            if used + cost > budget {
                 continue;
             }
             used += cost;
@@ -334,6 +357,16 @@ mod tests {
         assert!(index.recall("deploy", &allowed, &none, &off).is_empty());
         let other: HashSet<String> = ["editor".to_string()].into();
         assert!(index.recall("deploy", &other, &none, &none).is_empty());
+    }
+
+    #[test]
+    fn a_lookup_finds_notes_already_shown_too() {
+        let all = notes();
+        let index = MemoryIndex::new(&all);
+        let allowed: HashSet<String> = all.iter().map(|n| n["id"].as_str().unwrap().to_string()).collect();
+        assert_eq!(ids(&index.lookup("editor code", &allowed, &HashSet::new())), ["editor"]);
+        let off: HashSet<String> = ["mem:editor".to_string()].into();
+        assert!(index.lookup("editor", &allowed, &off).is_empty());
     }
 
     #[test]

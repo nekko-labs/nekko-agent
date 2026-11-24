@@ -2461,6 +2461,38 @@ struct ContextParts {
     fresh_frame: bool,
 }
 
+/// The notes in a chat's memory scope (global ones unless it reads only its
+/// folders', and those of its folders), newest first, with the index to
+/// search them. From the daemon's cached read: no note file is read unless
+/// the memory folder changed (#3276).
+fn chat_memory(
+    session: &Value,
+    scope: nekko_context::MemoryScope,
+    data_dir: &std::path::Path,
+) -> (Vec<Value>, std::sync::Arc<nekko_context::MemoryIndex>) {
+    let (all, index) = nekko_context::memory_notes(data_dir);
+    if !scope.project() {
+        return (Vec::new(), index);
+    }
+    let strings = |v: Option<&Value>| -> Vec<String> {
+        v.and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default()
+    };
+    let primary = str_at(session, "workspaceId").map(str::to_string);
+    let supporting = strings(session.get("supportingWorkspaceIds")).into_iter().filter(|s| !s.is_empty());
+    let folders: HashSet<String> = primary.into_iter().chain(supporting).collect();
+    let notes = all
+        .iter()
+        .filter(|m| {
+            (scope.global() && nekko_context::in_scope(m, "global", None))
+                || folders.iter().any(|id| nekko_context::in_scope(m, "workspace", Some(id)))
+        })
+        .cloned()
+        .collect();
+    (notes, index)
+}
+
 /// The context a turn sends: attached files, project guidance (at the chat's
 /// `guidance` level) and memory (at its `memory` scope) from disk, the host's
 /// connector and index snippets, and the chat's include and pin choices.
@@ -2497,22 +2529,9 @@ fn context_block(
         )
     };
     let scope = nekko_context::MemoryScope::of_session(session);
-    // The chat's notes from the daemon's cached read (no note file is read
-    // unless the folder changed), and their search index.
-    let (memory, memory_index) = match data_dir.filter(|_| scope.project()) {
+    let (memory, memory_index) = match data_dir {
         Some(dir) => {
-            let (all, index) = nekko_context::memory_notes(dir);
-            let primary = str_at(session, "workspaceId").map(str::to_string);
-            let supporting = strings(session.get("supportingWorkspaceIds")).into_iter().filter(|s| !s.is_empty());
-            let folders: HashSet<String> = primary.into_iter().chain(supporting).collect();
-            let notes: Vec<Value> = all
-                .iter()
-                .filter(|m| {
-                    (scope.global() && nekko_context::in_scope(m, "global", None))
-                        || folders.iter().any(|id| nekko_context::in_scope(m, "workspace", Some(id)))
-                })
-                .cloned()
-                .collect();
+            let (notes, index) = chat_memory(session, scope, dir);
             (notes, Some(index))
         }
         None => (Vec::new(), None),
@@ -3410,6 +3429,7 @@ impl TurnTools {
         match name {
             "set_chat_title" => return Ok(self.set_title(id, &input).await),
             "remember" => return Ok(self.remember(call, id, &input).await),
+            turn::plan::RECALL_MEMORY => return Ok(self.recall_memory(id, &input).await),
             "complete_session" => return Ok(self.archive(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             turn::secret::REQUEST_SECRET => return Ok(self.request_secret(call).await),
@@ -4107,6 +4127,47 @@ impl TurnTools {
             }
             Err(e) => error(id, format!("Memory was not saved: {e}")),
         }
+    }
+
+    /// `recall_memory`: the chat's notes that best match the model's own
+    /// words. The notes it returns count as shown, so a later message does
+    /// not recall them again.
+    async fn recall_memory(&self, id: &str, input: &Value) -> Value {
+        let query = input.get("query").and_then(Value::as_str).unwrap_or_default().trim().to_string();
+        if query.is_empty() {
+            return error(id, "recall_memory needs a query: a few keywords to search the memory notes for.");
+        }
+        let session = lock(&self.session).clone();
+        let scope = nekko_context::MemoryScope::of_session(&session);
+        if !scope.project() {
+            return error(id, "This chat does not read memory.");
+        }
+        let dir = self.turns.data_dir.clone();
+        let found = tokio::task::spawn_blocking(move || {
+            let (notes, index) = chat_memory(&session, scope, &dir);
+            let allowed: HashSet<String> =
+                notes.iter().filter_map(|m| m.get("id").and_then(Value::as_str)).map(str::to_string).collect();
+            let excluded: HashSet<String> = session
+                .pointer("/contextPrefs/excluded")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                .unwrap_or_default();
+            index.lookup(&query, &allowed, &excluded)
+        })
+        .await
+        .unwrap_or_default();
+        if found.is_empty() {
+            return result(id, "No memory note matches that. There is no saved note about it.");
+        }
+        if let Some(frame) = lock(&self.session).get_mut("memoryFrame").filter(|f| f.is_object()) {
+            nekko_context::mark_shown(frame, &found);
+        }
+        let text = found
+            .iter()
+            .map(|n| format!("# Memory: {}\n{}", js::display(&n["title"]), js::display(&n["body"])))
+            .collect::<Vec<_>>()
+            .join("\n\n---\n\n");
+        result(id, text)
     }
 
     async fn archive(&self, id: &str, input: &Value) -> Value {

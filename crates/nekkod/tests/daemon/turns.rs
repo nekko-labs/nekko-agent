@@ -1646,3 +1646,44 @@ async fn a_message_recalls_the_notes_it_is_about_and_the_core_stays_put() {
     let known: Vec<&str> = frame["known"].as_object().unwrap().keys().map(String::as_str).collect();
     assert_eq!(known, ["m_style", "m_deploy", "m_cat"], "every note the model saw");
 }
+
+/// `recall_memory` (#3276): a message in other words or another language than
+/// the note recalls nothing by itself; the model searches in the note's own
+/// words, gets the note, and a later message does not recall it again.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_model_looks_up_a_note_the_message_did_not_recall() {
+    let session = json!({
+        "id": "s_lookup", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("memory-lookup", session);
+    tagged_note(&rig, "m_editor", "Editor", "The user edits code in Zed.", 2, "");
+    let model = scripted_model(vec![
+        call_tool("c1", "recall_memory", json!({ "query": "editor" })),
+        say_text("Zed."),
+        say_text("ok"),
+    ])
+    .await;
+    for (id, text) in [("l1", "Quale programma uso per scrivere?"), ("l2", "Change the editor theme")] {
+        let spec = turn_spec(&rig, &model, id, "s_lookup", json!({ "text": text }));
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, id, "s_lookup").await;
+        assert_eq!(end["stop"], "complete", "{end}");
+    }
+    let reqs = turn_requests(&model);
+    assert_eq!(reqs.len(), 3, "{reqs:?}");
+    let tools: Vec<&str> = reqs[0]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|t| t.pointer("/function/name").and_then(Value::as_str))
+        .collect();
+    assert!(tools.contains(&"recall_memory"), "{tools:?}");
+    let first = reqs[0]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_string();
+    assert_eq!(first, "Quale programma uso per scrivere?", "nothing recalled by the Italian words");
+    let answer = reqs[1]["messages"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(answer["role"], "tool", "{answer}");
+    assert!(answer["content"].as_str().unwrap().contains("# Memory: Editor\nThe user edits code in Zed."), "{answer}");
+    let later = reqs[2]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_string();
+    assert_eq!(later, "Change the editor theme", "looked up once, never recalled again");
+}

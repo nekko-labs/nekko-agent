@@ -31,7 +31,7 @@ pub mod recall;
 pub mod rules;
 
 pub use assemble::{AssembleInput, Bundle, Item, assemble, render_block};
-pub use frame::{MemoryFrame, memory_frame, render_memory_changes};
+pub use frame::{MemoryFrame, mark_shown, memory_frame, render_memory_changes};
 pub use gather::{
     Guideline, MemoryScope, collect_attached, collect_guidelines, forget_memory, in_scope, list_memory, memory_notes,
     parse_memory,
