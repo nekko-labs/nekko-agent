@@ -1,4 +1,5 @@
 import { fusionEnabled, fusionStrategy } from '@nekko-agent/shared';
+import { useChatEngine, useDropCodeModeOnClaudeAgent } from './codeModeLock.js';
 import { ContextChangeNotice, showContextChangeNotice } from './ContextChangeNotice.js';
 import { useClaudePlan } from '../providerAccounts.js';
 import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
@@ -1110,6 +1111,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // A Claude Agent chat's gauge and card read Claude Code's own figures once
   // it has reported them for the picked model (see reportedClaudeCodeContext).
   const claudeCodeChat = providers.find((p) => p.id === providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND;
+  // Code mode never applies on Claude Code: a chat that is on it, or moves to it, goes back to the tool list.
+  useDropCodeModeOnClaudeAgent(useChatEngine(providerId), session, setSession, !readOnly);
   const claudeCodeContext = claudeCodeChat ? session?.claudeCodeContext : undefined;
   const reportedCtx = useMemo(
     () => reportedClaudeCodeContext({ claudeCodeContext }, modelId ?? undefined),
@@ -3302,6 +3305,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 session={session}
                 isCloudModel={isCloudModel}
                 modelId={modelId ?? undefined}
+                providerId={providerId}
                 onChange={setSession}
                 draft={draft}
                 toolsInWindow
@@ -3815,7 +3819,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <div className="composer-folders min-w-0">
                     <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} selectedSummary />
                   </div>
-                  {showMode && <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />}
+                  {showMode && <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} providerId={providerId} onChange={setSession} toolsInWindow only="mode" />}
                   {promptSuggestions}
                 </div>}
                 {/* The chat's details: a panel of the composer itself, open or
