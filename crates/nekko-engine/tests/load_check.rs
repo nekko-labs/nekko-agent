@@ -55,7 +55,7 @@ fn an_engine_older_than_the_file_needs_is_refused() {
     assert!(managed.blocked());
     assert_eq!(
         managed.reason,
-        "Ternary-Bonsai-2-27B-Q2_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The engine is too old for this file: it is b11224. Update the engine on the Model server card."
+        "Ternary-Bonsai-2-27B-Q2_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The engine is too old for this file: it is b11224."
     );
     // The user's own llama-server may be a fork whose number is not upstream's: warned, never refused.
     let external = load_check(&hadamard(), &engine(Source::External, Some("b11555"))).unwrap();
@@ -173,7 +173,7 @@ fn a_type_just_past_llama_cpps_count_is_tried_and_a_forks_own_range_is_refused()
             let check = load_check(&with(t), &e).unwrap();
             assert_eq!(check.level, Level::Warning, "type {t}");
             assert!(
-                check.reason.contains(&format!("tensor type {t}")) && check.reason.contains("update the engine"),
+                check.reason.contains(&format!("tensor type {t}")) && check.reason.contains("a newer engine may help"),
                 "{}",
                 check.reason
             );

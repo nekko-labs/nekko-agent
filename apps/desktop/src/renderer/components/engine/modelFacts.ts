@@ -42,7 +42,7 @@ export type ModelProblem = { text: string; tone: 'danger' | 'warning'; detail: s
 export function modelProblem(m: Pick<LocalModel, 'lastLoadError' | 'modality' | 'hasProjector' | 'readable' | 'format' | 'mlxRunnable' | 'name' | 'loadCheck'> & { loaded?: boolean }): ModelProblem | null {
   if (m.lastLoadError && !m.loaded) return { text: 'Last load failed', tone: 'danger', detail: m.lastLoadError };
   const unsupported = m.modality === 'image' ? undefined : cannotLoadReason(m as LocalModel);
-  // An engine too old for the file is one Update away, so it says that rather than "Can't run here".
+  // An engine too old for the file is fixed by a newer engine, so it says that rather than "Can't run here".
   if (unsupported) return { text: unsupported === m.loadCheck?.reason && needsNewerEngine(m) ? 'Needs a newer engine' : "Can't run here", tone: 'warning', detail: unsupported };
   // The engine in use may still try it, and llama.cpp's own error shows if it cannot.
   if (m.loadCheck?.level === 'warning') return { text: 'May not run here', tone: 'warning', detail: m.loadCheck.reason };

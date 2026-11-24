@@ -15,7 +15,7 @@ const row = (id: string, data: Partial<LocalModel>): LocalModel & { loaded: bool
 const ptq1 = { name: 'Ternary-Bonsai-2-27B-PTQ1_0', sourceRepo: repo, modality: 'vision' as const, hasProjector: true, parameterSize: '27B', sizeBytes: 5.9 * 1024 ** 3, maxContext: 262144, unknownWeightType: 143, minEngineBuild: 11556 };
 const hadamard = { name: 'Ternary-Bonsai-2-27B-Q2_0', sourceRepo: repo, modality: 'vision' as const, hasProjector: true, parameterSize: '27B', quantization: 'Q2_0', sizeBytes: 7.1 * 1024 ** 3, maxContext: 262144, minEngineBuild: 11556 };
 const qwen = { name: 'Qwen3.5-9B-Q4_K_M', quantization: 'Q4_K_M', parameterSize: '9B', sizeBytes: 5.7 * 1024 ** 3, maxContext: 262144 };
-const wordsOld = 'Ternary-Bonsai-2-27B-Q2_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The engine is too old for this file: it is b11224. Update the engine on the Model server card.';
+const wordsOld = 'Ternary-Bonsai-2-27B-Q2_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The engine is too old for this file: it is b11224.';
 const format = 'Ternary-Bonsai-2-27B-PTQ1_0 stores its weights in a format llama.cpp does not know (GGUF tensor type 143).';
 const scenarios: Record<string, Array<LocalModel & { loaded: boolean }>> = {
   before: [

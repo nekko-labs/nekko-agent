@@ -12,7 +12,7 @@
 //! 2. **An engine too old for the file** (a header key that needs a minimum
 //!    build, `minEngineBuild`). Older builds load such a file without an
 //!    error and give wrong output, so the managed engine is blocked when its
-//!    release is older (it has an Update). A user's own engine is only warned
+//!    release is older (it needs a newer one). A user's own engine is only warned
 //!    about, whether its version reads older or cannot be read: a fork's number
 //!    says nothing about upstream's.
 //!
@@ -133,7 +133,7 @@ fn weight_format(model: &Value, name: &str, engine: &EngineInUse) -> Option<Load
             level: Level::Warning,
             cause: Cause::EngineAge,
             reason: format!(
-                "{name} uses a weight format (GGUF tensor type {kind}) that may be newer than this engine knows. It will be tried: if loading fails, update the engine on the Model server card."
+                "{name} uses a weight format (GGUF tensor type {kind}) that may be newer than this engine knows. It will be tried: if loading fails, a newer engine may help."
             ),
         });
     }
@@ -184,9 +184,7 @@ fn engine_age(model: &Value, name: &str, engine: &EngineInUse) -> Option<LoadChe
             Some(LoadCheck {
                 level: Level::Blocked,
                 cause: Cause::EngineAge,
-                reason: format!(
-                    "{wants} The engine is too old for this file: it is {version}. Update the engine on the Model server card."
-                ),
+                reason: format!("{wants} The engine is too old for this file: it is {version}."),
             })
         }
         None => Some(LoadCheck {

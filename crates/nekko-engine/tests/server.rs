@@ -703,7 +703,7 @@ async fn the_gate_refuses_what_a_managed_engine_cannot_run_before_anything_spawn
     let r = server.load("q2", json!({})).await;
     assert_eq!(r["ok"], false, "{r}");
     let why = r["message"].as_str().unwrap();
-    assert!(why.contains("b11556") && why.contains("b11224") && why.contains("Update the engine"), "{why}");
+    assert!(why.contains("b11556") && why.contains("b11224"), "{why}");
     assert_eq!(spawned(&fake), 0, "llama-server never started");
     // The refusal is kept as the model's last error, as the Models page and phones read it.
     let errors = server.load_errors();
