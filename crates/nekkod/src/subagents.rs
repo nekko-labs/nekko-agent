@@ -22,6 +22,10 @@ pub struct Run {
     session: Arc<Mutex<Value>>,
     /// Outlives the turn that started it, until its `task_notification`.
     pub background: bool,
+    /// The `Agent` call that first started it, when a `SendMessage` woke it
+    /// again: Claude Code 2.1.312 still marks the woken sub-agent's lines with
+    /// that call, and only its notification with the `SendMessage` call.
+    pub spawn_call: Option<String>,
     /// The model was read off its first reply.
     model_known: bool,
 }
@@ -157,7 +161,13 @@ impl Sink {
         let first =
             json!({ "id": format!("{id}_task"), "role": "user", "content": task, "createdAt": nekko_js::now_ms() });
         let mapped = vec![Mapped::Message(first)];
-        let run = Run { mapper: Mapper::new(id.clone()), session: session.clone(), background, model_known: false };
+        let run = Run {
+            mapper: Mapper::new(id.clone()),
+            session: session.clone(),
+            background,
+            spawn_call: None,
+            model_known: false,
+        };
         self.harness.add_subagent(&parent.id, call_id, run);
         self.apply(&session, mapped, true).await;
         // Marks it working everywhere until its first real event.
@@ -176,6 +186,7 @@ impl Sink {
         // No chat for it: an incognito parent, or made before sub-agents had chats.
         let Some(child) = child else { return Ok(()) };
         let id = child.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        let spawn_call = child.get("spawnCallId").and_then(Value::as_str).map(str::to_string);
         if self.harness.running_subagents().contains(&id) {
             return Ok(());
         }
@@ -187,8 +198,13 @@ impl Sink {
                 json!({ "id": id, "role": "user", "content": message, "createdAt": nekko_js::now_ms() }),
             ));
         }
-        let run =
-            Run { mapper: Mapper::new(id.clone()), session: session.clone(), background: true, model_known: true };
+        let run = Run {
+            mapper: Mapper::new(id.clone()),
+            session: session.clone(),
+            background: true,
+            spawn_call,
+            model_known: true,
+        };
         self.harness.add_subagent(&parent.id, call_id, run);
         self.apply(&session, mapped, true).await;
         self.hub.publish("agent:event", json!({ "type": "text", "sessionId": id, "delta": "" }), false);

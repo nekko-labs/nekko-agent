@@ -450,8 +450,8 @@ pub fn fake_claude() {
             out(result("The PR is open.", "completed"));
         } else if text == "delegate, hit the limit and resume" {
             // A background sub-agent fails on the usage limit; the chat wakes it
-            // again with `SendMessage`, and from then on Claude Code says it is
-            // that call's: its lines and its notification.
+            // again with `SendMessage`. As Claude Code 2.1.312 printed it live, its
+            // lines still carry the `Agent` call and its notification the `SendMessage` call.
             let (call, send) = ("toolu_lim", "toolu_send");
             let input = json!({ "description": "Part B", "prompt": "Write part B" });
             out(assistant("m_l1", json!([{ "type": "tool_use", "id": call, "name": "Agent", "input": input }])));
@@ -502,7 +502,7 @@ pub fn fake_claude() {
             let test = json!([{ "type": "tool_use", "id": "toolu_ltest", "name": "Bash", "input": { "command": "npm test" } }]);
             out(
                 json!({ "type": "assistant", "message": { "id": "m_s2", "role": "assistant", "model": "claude-haiku-5-5", "content": test },
-                "parent_tool_use_id": send, "session_id": session }),
+                "parent_tool_use_id": call, "session_id": session }),
             );
             saved.extend([
                 json!({ "type": "user", "isMeta": true, "timestamp": at, "origin": { "kind": "coordinator" }, "message": { "role": "user",
@@ -1333,6 +1333,16 @@ async fn a_sub_agent_woken_by_send_message_reopens_its_chat_until_it_ends() {
     let reopened = children(&rig).into_iter().find(|c| c["id"] == json!(id)).unwrap();
     let last = reopened["messages"].as_array().unwrap().last().unwrap().clone();
     assert_eq!((last["role"].as_str(), last["content"].as_str()), (Some("user"), Some("Carry on from the tests.")));
+    // Its steps stream while it works, not only once it ends and is filled.
+    until("the woken sub-agent's step to stream", Duration::from_secs(30), || async {
+        rig.events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|e| e["sessionId"] == json!(id) && e["type"] == "tool_call" && e["call"]["id"] == "toolu_ltest")
+            .then_some(())
+    })
+    .await;
     std::fs::write(rig.workspace.join("go-on"), "").unwrap();
     let done = until("the child to end", Duration::from_secs(30), || async {
         rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == json!(id) && e["type"] == "done").cloned()

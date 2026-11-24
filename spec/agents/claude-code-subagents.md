@@ -39,7 +39,9 @@ Decision: [0042](../../docs/decisions/0042-claude-code-sub-agents-are-child-chat
 
 **User intent.** A Part B sub-agent hit the 5-hour usage limit. Its chat showed the failure with **Retry**. Hours later the parent woke it with Claude Code's `SendMessage`, and it finished and committed, but its chat never moved past the failure. Retry from the sub-agent's chat was refused ("This subagent runs inside its parent chat"), which left a second failure that could never succeed. In the user's words, the sub-agent was never meant to be chattable: they do not want to talk to it, they want its chat to show the truth and a way to get the parent to carry on.
 
-**What was wrong.** Once woken, Claude Code reports the sub-agent under the `SendMessage` call: its lines carry that call as `parent_tool_use_id`, and its final `task_notification` names it as `tool_use_id`. Nekko knew only the `Agent` call, so it dropped all of it.
+**What was wrong.** Once woken, Claude Code reports the sub-agent's end under the `SendMessage` call: its `task_started` and final `task_notification` name that call as `tool_use_id`. Nekko knew only the `Agent` call, so it dropped all of it.
+
+**Its lines keep the `Agent` call** (fixed 2026-11-24) `[end-to-end daemon test against a scripted Claude Code; the stream shape recorded from a live Claude Code 2.1.312 run on Windows; not yet watched in a live chat]`. The first version of this fix assumed the woken sub-agent's own lines carry the `SendMessage` call as `parent_tool_use_id`, as read from saved files. A live stream shows they still carry the `Agent` call that first started it. So the reopened chat said it was working, but its steps were dropped until it ended and was filled from its saved transcript, and the parent chat's **Waiting on N sub-agents** row could not say what it was doing. Now a reopened sub-agent's lines are matched under either call.
 
 **Now:**
 
