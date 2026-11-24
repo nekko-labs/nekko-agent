@@ -102,6 +102,34 @@ impl SessionStore {
         &self.dir
     }
 
+    /// A picture kept beside the chats (`<sha256>.<ext>`, see blobs.rs) is here.
+    pub fn has_blob(&self, name: &str) -> bool {
+        blobs::valid_name(name) && blobs::dir(&self.dir).join(name).is_file()
+    }
+
+    /// A picture's bytes, by its blob name.
+    pub fn blob(&self, name: &str) -> Option<Vec<u8>> {
+        if !blobs::valid_name(name) {
+            return None;
+        }
+        std::fs::read(blobs::dir(&self.dir).join(name)).ok()
+    }
+
+    /// Keep a picture beside the chats, as a chat's `nekko-blob:<name>` will look for it. Refused
+    /// unless the bytes hash to the name, so nothing else can be written there under it.
+    pub fn put_blob(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
+        if !blobs::matches(name, bytes) {
+            return Err("a picture that is not what its name says".into());
+        }
+        let dir = blobs::dir(&self.dir);
+        let path = dir.join(name);
+        if path.is_file() {
+            return Ok(());
+        }
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        write::write_atomic_bytes(&path, bytes).map_err(|e| e.to_string())
+    }
+
     /// Every chat file, with its metadata (one `stat` each, following links
     /// as `is_file` does).
     fn files(&self) -> Vec<(PathBuf, std::fs::Metadata)> {

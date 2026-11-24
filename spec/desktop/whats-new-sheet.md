@@ -73,7 +73,7 @@ User intent (Kai, #2810, 2026-11-14): people who never click the pill never see 
   | The model server | `server` |
   | Anything else | `sparkles` |
 - The list holds as many highlights as were written for the line; the sheet shows the first 3 and puts the rest behind "Show more". There is no upper limit yet.
-- The file is written by hand for each release line.
+- A line's entry is drafted before its release tag by `scripts/draft-whats-new.mjs` (the `whats-new-draft.yml` workflow): date, tag, contributors and the merged pull requests as candidates. A person writes the intro and picks the highlights.
 
 ## Privacy and security
 

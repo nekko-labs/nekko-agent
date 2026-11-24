@@ -35,7 +35,7 @@ Each event carries:
 
 | Event | Sent by | Properties |
 | --- | --- | --- |
-| `app_started` | engine, at start | hardware from `machine:profile`: `cpu` (model), `cpu_cores`, `ram_gb`, `gpu` (first GPU's name), `gpu_count`, `vram_gb` (all GPUs), `unified`, `backends` (`metal,cpu`). Gigabytes are whole numbers; never serial numbers or host names |
+| `app_started` | engine, once per run: at start, or when reports are turned on later (onboarding, Settings). With the app's facts, so it is the per-platform install signal (`os`, `arch`) | hardware from `machine:profile`: `cpu` (model), `cpu_cores`, `ram_gb`, `gpu` (first GPU's name), `gpu_count`, `vram_gb` (all GPUs), `unified`, `backends` (`metal,cpu`). Gigabytes are whole numbers; never serial numbers or host names |
 | `app_opened` | Electron main, once the engine starts | none |
 | `app_closed` | Electron main, on quit | `running_seconds` (how long the app ran). The engine sends it at once; quitting waits at most two seconds |
 | `turn_started` | engine, at each turn's admission | provider kind (`openai`, `ollama`…), `local`, `offline`, `mode` (execution: `worktree`, `sandbox` or `unified`), `sandbox`, `model` (the model id, scrubbed: a path keeps only its last part), `permission` (`ask`, `guardrails`, `yolo`, `plan`), `subagent`, `running_agents` (other chats with a turn running), `connectors` (connected kinds, `github,gitlab`), `mcp_servers` (a count) |
@@ -47,6 +47,7 @@ Each event carries:
 | `error` | engine panics, uncaught UI errors and Electron main crashes | source, message (class and first line only), stack (frame names only) |
 
 - The engine accepts only these events and properties; anything else is dropped. The UI cannot send `app_started`, `turn_started`, `voice_used` or `runner_job` (`ENGINE_ONLY`).
+- `[fixed 2026-11-25, #3301; unit-tested, and seen arriving from a running engine at a local stand-in for PostHog]` **`app_started` was never sent before this fix.** The engine read the settings as empty at start, so reports looked off and the event was dropped; other events only went out after the next settings save. PostHog had no `app_started` in the 30 days to 2026-11-25. `arch` uses Rust's names (`aarch64`, `x86_64`), not the website's (`arm64`, `x64`).
 - **Desktop only so far.** The iPhone and Android apps send no reports of their own; turns, voice and runner jobs they start on a computer are reported by that computer's engine.
 - Every string is scrubbed in the engine:
   - secrets (the log redactor);
