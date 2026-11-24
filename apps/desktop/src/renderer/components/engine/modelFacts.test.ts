@@ -43,6 +43,10 @@ describe('a model with a problem wears it', () => {
   it('picks the worst problem across a family', () => {
     expect(familyProblem([{ name: 'a', modality: 'vision', hasProjector: false }, { name: 'b', lastLoadError: 'bad file' }])?.text).toBe('Last load failed');
     expect(familyProblem([{ name: 'a' }, { name: 'b' }])).toBeNull();
+    // An image model is never refused for llama.cpp's reasons: it counts as one that runs.
+    const old = { level: 'blocked', cause: 'engineAge', reason: 'too old' } as const;
+    expect(familyProblem([{ name: 'img', modality: 'image', loadCheck: old }, { name: 'b', loadCheck: old }])).toBeNull();
+    expect(familyProblem([{ name: 'img', modality: 'image', loadCheck: old }])).toBeNull();
   });
 
   describe('what the engine in use says', () => {

@@ -55,8 +55,9 @@ export function familyProblem(local: Array<Parameters<typeof modelProblem>[0]>):
   // A file that cannot run only speaks for the family when none of its other files can either:
   // a family with one build the engine refuses and one it runs is not "Can't run here". With none
   // that run, one an engine update would fix speaks first.
-  const blocked = (m: (typeof local)[number]) => m.modality !== 'image' && !!cannotLoadReason(m as LocalModel);
-  const fixable = (m: (typeof local)[number]) => cannotLoadReason(m as LocalModel) === m.loadCheck?.reason && needsNewerEngine(m);
+  const refusal = (m: (typeof local)[number]) => (m.modality === 'image' ? undefined : cannotLoadReason(m as LocalModel));
+  const blocked = (m: (typeof local)[number]) => !!refusal(m);
+  const fixable = (m: (typeof local)[number]) => refusal(m) === m.loadCheck?.reason && needsNewerEngine(m);
   const runnable = local.filter((m) => !blocked(m));
   const speaking = runnable.length ? runnable : local.some(fixable) ? local.filter(fixable) : local;
   const all = speaking.map(modelProblem).filter((p): p is ModelProblem => !!p);
