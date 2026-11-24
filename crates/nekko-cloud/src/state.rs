@@ -116,6 +116,22 @@ pub struct Synced {
     /// it or a tombstone for it. With `deleted`, the copy was removed here (or there) and a
     /// newer one is not taken.
     pub foreign: bool,
+    /// The record was made with its pictures as `picture` records (#3298). Chats synced before
+    /// pictures synced are looked at once more, and pushed again when they hold any.
+    pub pictured: bool,
+    /// The `picture` records (their local ids) this copy refers to, to know which pictures a
+    /// chat of this computer still needs in Nekko Cloud and which it no longer does.
+    pub pictures: Vec<String>,
+}
+
+/// One `picture` record as this device last pushed or saw it (#3298).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PictureSynced {
+    /// The key epoch it is in Nekko Cloud under; an older one is pushed again.
+    pub key_id: u32,
+    /// A tombstone was pushed or seen: no chat of its computer refers to it any more.
+    pub deleted: bool,
 }
 
 /// An organization key this device holds (the keyring itself is in the vault).
@@ -184,6 +200,11 @@ pub struct State {
     pub library: BTreeMap<String, LibrarySynced>,
     /// Other computers' Library files, per object id.
     pub library_remote: BTreeMap<String, RemoteFile>,
+    /// `picture` records, per local id (`<home>\n<blob name>`).
+    pub pictures: BTreeMap<String, PictureSynced>,
+    /// Pictures a chat here refers to that are not beside the chats yet, per local id: fetched
+    /// one by one after a pull, until they arrive or Nekko Cloud has none.
+    pub pictures_wanted: BTreeSet<String>,
     /// The kinds of record turned off here (`chats`, `library`), each with the pull
     /// cursor it was turned off at. Absent means on, so an older state file syncs
     /// everything. While a kind is off nothing of it is pushed, and pulled records
@@ -249,7 +270,7 @@ impl State {
     /// A pulled record of this collection is passed over: its kind is off here.
     pub fn skips_collection(&self, collection: &str) -> bool {
         match collection {
-            crate::records::CHAT => !self.kind_on("chats"),
+            crate::records::CHAT | crate::records::PICTURE => !self.kind_on("chats"),
             crate::library::LIBRARY => !self.kind_on("library"),
             _ => false,
         }

@@ -377,7 +377,10 @@ impl Cloud {
         }
         match self.api.send(&token, reqwest::Method::POST, "/v1/relay/ticket", Some(body)).await {
             Ok(v) => {
-                let ticket = v["ticket"].as_str().filter(|t| t.starts_with("nkr1.")).ok_or("Nekko Cloud sent no relay ticket.")?;
+                let ticket = v["ticket"]
+                    .as_str()
+                    .filter(|t| t.starts_with("nkr1."))
+                    .ok_or("Nekko Cloud sent no relay ticket.")?;
                 // At least a minute, so a short answer can't make the agent ask in a loop.
                 let renew = v["renewAfterSeconds"].as_u64().unwrap_or(3 * 3600).max(60);
                 Ok((ticket.to_string(), Duration::from_secs(renew)))
@@ -1472,6 +1475,8 @@ impl Cloud {
                 }
                 continue;
             }
+            // Pictures chats here are still waiting for; one that fails waits for the next pass.
+            let _ = self.fetch_wanted_pictures(token).await;
             self.prove(token, self.key_id()).await?;
             let chats_again = self.push(token).await?;
             let library_again = self.push_library(token).await?;
@@ -1551,7 +1556,10 @@ impl Cloud {
             return Ok(());
         };
         let key_id = self.key_id();
-        if kid != key_id || lock(&self.state).revisions.get(oid).is_some_and(|seen| *seen >= rev) {
+        // A picture is checked against its own name, so an older revision of one is no rollback:
+        // it is opened again when a chat here still wants it (fetched one by one).
+        let seen_before = lock(&self.state).revisions.get(oid).is_some_and(|seen| *seen >= rev);
+        if kid != key_id || (seen_before && collection != records::PICTURE) {
             return Ok(());
         }
         let Some(keyring) = self.keyring(kid) else { return Ok(()) };
@@ -1599,6 +1607,16 @@ impl Cloud {
                     ChatRecord::Chat(mut chat) => {
                         let theirs = records::updated_at(&chat);
                         let me = lock(&self.state).device_id.clone().unwrap_or_default();
+                        // Its pictures (#3298): the chat store puts each back from beside the
+                        // chats; those not there yet are fetched after the pull.
+                        let home = records::home_of(&chat).unwrap_or(&me).to_string();
+                        let pictures: Vec<String> =
+                            records::picture_refs(&chat).iter().map(|n| records::picture_local_id(&home, n)).collect();
+                        let missing: Vec<String> = records::picture_refs(&chat)
+                            .into_iter()
+                            .filter(|n| !self.sessions.has_blob(n))
+                            .map(|n| records::picture_local_id(&home, &n))
+                            .collect();
                         // Whose chat it is (#3143): another computer's, this one's, or not said
                         // (a record from before records named their computer).
                         let named = records::home_of(&chat).is_some();
@@ -1640,12 +1658,15 @@ impl Cloud {
                             key_id: kid,
                             homed: named,
                             foreign,
+                            pictured: true,
+                            pictures,
                         };
                         self.edit(|s| {
                             s.revisions.insert(oid.into(), rev);
                             // Only when we took it (or already had it); otherwise our newer copy still needs pushing.
                             if (take && !busy) || same {
                                 s.chats.insert(id.clone(), synced);
+                                s.pictures_wanted.extend(missing);
                             }
                         })?;
                     }
@@ -1670,14 +1691,87 @@ impl Cloud {
                                     key_id: kid,
                                     homed: true,
                                     foreign,
+                                    pictured: true,
+                                    pictures: Vec::new(),
                                 },
                             );
                         })?;
                     }
                 }
             }
+            records::PICTURE => self.apply_picture(&keyring, account_id, kid, oid, rev, blob, seen_before)?,
             LIBRARY => self.apply_library(&keyring, account_id, kid, oid, rev, blob)?,
             _ => {}
+        }
+        Ok(())
+    }
+
+    /// A chat's picture (#3298): kept beside the chats under its blob name, where a chat's
+    /// `nekko-blob:` reference finds it. One that isn't the record filed under its computer and
+    /// name, or whose bytes don't hash to its name, is ignored. A tombstone only notes that its
+    /// computer's chats no longer refer to it; a copy here that still does keeps its picture.
+    #[allow(clippy::too_many_arguments)]
+    fn apply_picture(
+        &self,
+        keyring: &Keyring,
+        account_id: &str,
+        kid: u32,
+        oid: &str,
+        rev: u64,
+        blob: &str,
+        seen_before: bool,
+    ) -> Result<(), String> {
+        let Ok(plain) = open_record(keyring, account_id, kid, records::PICTURE, oid, rev, blob) else {
+            return Ok(());
+        };
+        let Some(rec) = records::parse_picture(&plain) else { return Ok(()) };
+        let local = rec.local_id();
+        if object_id(keyring, records::PICTURE, &local).as_deref() != Ok(oid) {
+            return Ok(());
+        }
+        let deleted = matches!(rec, records::PictureRecord::Deleted { .. });
+        if let records::PictureRecord::Picture { name, bytes, .. } = &rec
+            && self.sessions.put_blob(name, bytes).is_ok()
+        {
+            lock(&self.live).pulled += usize::from(!seen_before);
+        }
+        self.edit(|s| {
+            s.pictures_wanted.remove(&local);
+            if !seen_before {
+                s.revisions.insert(oid.into(), rev);
+                s.pictures.insert(local.clone(), state::PictureSynced { key_id: kid, deleted });
+            }
+        })
+    }
+
+    /// Fetch, one by one, the pictures chats here refer to that are not beside them yet (a chat
+    /// that arrived before its picture, or a picture removed here since). One Nekko Cloud has no
+    /// record of, or only a tombstone for, is no longer looked for.
+    async fn fetch_wanted_pictures(&self, token: &str) -> Result<(), String> {
+        let wanted: Vec<String> = lock(&self.state).pictures_wanted.iter().take(PULL_PAGE as usize).cloned().collect();
+        if wanted.is_empty() {
+            return Ok(());
+        }
+        let account_id = self.account_id()?;
+        let Some(keyring) = self.keyring(self.key_id()) else { return Ok(()) };
+        for local in wanted {
+            let name = local.rsplit('\n').next().unwrap_or("");
+            if self.sessions.has_blob(name) {
+                self.edit(|s| {
+                    s.pictures_wanted.remove(&local);
+                })?;
+                continue;
+            }
+            let oid = object_id(&keyring, records::PICTURE, &local).map_err(|err| err.to_string())?;
+            match self.api.get(token, &format!("/v1/sync/objects/{}/{oid}", records::PICTURE)).await {
+                Ok(o) => self.apply(&account_id, &o)?,
+                Err(err) if err.status == 404 => {}
+                Err(err) => return Err(e(err)),
+            }
+            // Arrived, or nothing more will: either way it is not looked for again.
+            self.edit(|s| {
+                s.pictures_wanted.remove(&local);
+            })?;
         }
         Ok(())
     }
@@ -1766,6 +1860,8 @@ impl Cloud {
         let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
         let st = lock(&self.state).clone();
         let mut queue: Vec<(String, Vec<u8>, Synced)> = Vec::new();
+        // Chats synced before pictures did that hold none: noted, not sent again.
+        let mut pictured: Vec<String> = Vec::new();
         let mut skipped: BTreeMap<&'static str, usize> = BTreeMap::new();
         let me = st.device_id.clone().ok_or("This device isn't registered for sync.")?;
         let summaries = self.sessions.summaries();
@@ -1781,20 +1877,41 @@ impl Cloud {
                 continue;
             }
             let known = st.chats.get(id).filter(|k| k.key_id == key_id);
-            if known.is_some_and(|k| !k.deleted && k.homed && k.updated_at == updated) {
+            if known.is_some_and(|k| !k.deleted && k.homed && k.pictured && k.updated_at == updated) {
                 continue;
             }
             let Some(chat) = self.sessions.get(id) else { continue };
             match records::chat_plaintext(&chat, &me, &st.device_label) {
                 Ok(plain) => {
-                    let digest = records::digest(&plain);
+                    let digest = records::digest(&plain.bytes);
                     if known.is_some_and(|k| k.digest == digest) {
+                        // Synced before pictures did, and has none: nothing to send again.
+                        if known.is_some_and(|k| !k.pictured) {
+                            pictured.push(id.to_string());
+                        }
                         continue;
+                    }
+                    // Each picture is read again from beside the chats when it is sent.
+                    let mut pictures = Vec::new();
+                    for (name, bytes) in &plain.pictures {
+                        if let Some(bytes) = bytes {
+                            let _ = self.sessions.put_blob(name, bytes);
+                        }
+                        pictures.push(records::picture_local_id(&plain.home, name));
                     }
                     queue.push((
                         id.to_string(),
-                        plain,
-                        Synced { updated_at: updated, digest, deleted: false, key_id, homed: true, foreign },
+                        plain.bytes,
+                        Synced {
+                            updated_at: updated,
+                            digest,
+                            deleted: false,
+                            key_id,
+                            homed: true,
+                            foreign,
+                            pictured: true,
+                            pictures,
+                        },
                     ));
                 }
                 Err(skip) => {
@@ -1828,22 +1945,34 @@ impl Cloud {
                         key_id,
                         homed: true,
                         foreign: false,
+                        pictured: true,
+                        pictures: Vec::new(),
                     },
                 ));
             }
         }
-        if !removed_copies.is_empty() {
+        if !removed_copies.is_empty() || !pictured.is_empty() {
             self.edit(|s| {
                 for id in &removed_copies {
                     if let Some(k) = s.chats.get_mut(id) {
                         k.deleted = true;
                     }
                 }
+                for id in &pictured {
+                    if let Some(k) = s.chats.get_mut(id) {
+                        k.pictured = true;
+                    }
+                }
             })?;
+        }
+        // Pictures go first, so a computer pulling the chat finds them already there (#3298).
+        let (sends, removes) = picture_work(&st, &me, key_id, &queue, |name| self.sessions.has_blob(name));
+        let (unsent, mut again) = self.push_pictures(token, &sends, false).await?;
+        if unsent > 0 {
+            skipped.insert("pictures", unsent);
         }
         lock(&self.live).skipped = skipped;
         let total = queue.len();
-        let mut again = false;
         let mut done = 0;
         let sizes: Vec<usize> = queue.iter().map(|(_, plain, _)| plain.len()).collect();
         for range in push_batches(&sizes) {
@@ -1889,7 +2018,84 @@ impl Cloud {
             }
             done += batch.len();
         }
+        // Then the pictures no chat of this computer refers to any more leave Nekko Cloud.
+        if !removes.is_empty() {
+            again |= self.push_pictures(token, &removes, true).await?.1;
+        }
         Ok(again)
+    }
+
+    /// Push `picture` records (#3298), each read from beside the chats as its request is made,
+    /// or (`gone`) their tombstones. Returns how many could not be sent because the plan's
+    /// storage is full, and whether a conflict (another computer wrote one) needs another pass.
+    async fn push_pictures(
+        &self,
+        token: &str,
+        items: &[(String, String, String)],
+        gone: bool,
+    ) -> Result<(usize, bool), String> {
+        if items.is_empty() {
+            return Ok((0, false));
+        }
+        let account_id = self.account_id()?;
+        let key_id = self.key_id();
+        let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
+        let (mut again, mut i) = (false, 0);
+        while i < items.len() {
+            let (mut objects, mut meta, mut bytes) = (Vec::new(), Vec::new(), 0);
+            while i < items.len() && objects.len() < PUSH_BATCH {
+                let (local, home, name) = &items[i];
+                let plain = if gone {
+                    records::picture_tombstone(home, name)
+                } else {
+                    match self.sessions.blob(name).filter(|b| b.len() <= records::MAX_PICTURE_BYTES) {
+                        Some(b) => records::picture_plaintext(home, name, &b),
+                        None => {
+                            i += 1;
+                            continue;
+                        }
+                    }
+                };
+                if !objects.is_empty() && bytes + plain.len() > PUSH_BYTES {
+                    break;
+                }
+                i += 1;
+                bytes += plain.len();
+                let oid = object_id(&keyring, records::PICTURE, local).map_err(|err| err.to_string())?;
+                let revision = lock(&self.state).revisions.get(&oid).copied().unwrap_or(0) + 1;
+                let blob = seal_record(&keyring, &account_id, key_id, records::PICTURE, &oid, revision, &plain)
+                    .map_err(|err| err.to_string())?;
+                objects.push(json!({ "collection": records::PICTURE, "objectId": oid, "revision": revision, "keyId": key_id, "blob": blob }));
+                meta.push((local.clone(), oid, revision));
+            }
+            if objects.is_empty() {
+                continue;
+            }
+            let sent =
+                self.api.send(token, reqwest::Method::POST, "/v1/sync/push", Some(json!({ "objects": objects }))).await;
+            let res = match sent {
+                Ok(res) => res,
+                // The plan's storage is full: these and the rest wait, and the chats still sync.
+                Err(err) if err.status == 413 => return Ok((meta.len() + items.len() - i, again)),
+                Err(err) => return Err(e(err)),
+            };
+            let results = res["results"].as_array().cloned().unwrap_or_default();
+            for ((local, oid, revision), r) in meta.into_iter().zip(results) {
+                match r["status"].as_str() {
+                    Some("ok") => {
+                        lock(&self.live).pushed += 1;
+                        self.edit(|s| {
+                            s.revisions.insert(oid, revision);
+                            s.pictures.insert(local, state::PictureSynced { key_id, deleted: gone });
+                        })?;
+                    }
+                    // Another computer wrote it (the same picture, checked by its name): the pull takes it in.
+                    Some("conflict") | Some("stale-key") => again = true,
+                    _ => {}
+                }
+            }
+        }
+        Ok((0, again))
     }
 
     /// Push the Library files that are new or changed here, and a tombstone for each synced
@@ -2153,9 +2359,89 @@ impl Cloud {
 
 const REMOVED: &str = "This device was removed from sync on another device.";
 
+/// A `picture` record to push: its local id, its computer and its blob name.
+type PictureItem = (String, String, String);
+
+/// Which `picture` records a push sends (#3298), as `(local id, home, name)`: each picture the
+/// chats being pushed refer to, and each a chat of this computer synced before refers to (one a
+/// full plan held back), that Nekko Cloud doesn't hold under this key epoch and that is here to
+/// send. And which it removes: this computer's pictures that none of its chats refers to any more.
+fn picture_work(
+    st: &State,
+    me: &str,
+    key_id: u32,
+    queue: &[(String, Vec<u8>, Synced)],
+    here: impl Fn(&str) -> bool,
+) -> (Vec<PictureItem>, Vec<PictureItem>) {
+    let split = |local: &str| {
+        let (home, name) = local.rsplit_once('\n').unwrap_or(("", local));
+        (local.to_string(), home.to_string(), name.to_string())
+    };
+    // What each chat refers to once this push lands: the queued copy, else the one synced before.
+    let mut refers: BTreeMap<&str, &Synced> =
+        st.chats.iter().filter(|(_, k)| !k.deleted && !k.foreign).map(|(id, k)| (id.as_str(), k)).collect();
+    for (id, _, k) in queue {
+        refers.insert(id.as_str(), k);
+    }
+    let used: BTreeSet<&String> = refers.values().filter(|k| !k.deleted).flat_map(|k| k.pictures.iter()).collect();
+    let queued = queue.iter().flat_map(|(_, _, k)| k.pictures.iter());
+    let held = |local: &str| st.pictures.get(local).is_some_and(|p| p.key_id == key_id && !p.deleted);
+    let mut sends: BTreeSet<&String> = BTreeSet::new();
+    for local in used.iter().copied().chain(queued) {
+        let (_, _, name) = split(local);
+        if !held(local) && here(&name) {
+            sends.insert(local);
+        }
+    }
+    let removes = st
+        .pictures
+        .iter()
+        .filter(|(local, p)| !p.deleted && !used.contains(local) && split(local).1 == me)
+        .map(|(local, _)| split(local))
+        .collect();
+    (sends.into_iter().map(|l| split(l)).collect(), removes)
+}
+
 #[cfg(test)]
 mod push_batch_tests {
     use super::*;
+
+    #[test]
+    fn pictures_go_up_once_per_epoch_and_only_this_computers_leave() {
+        let pic = |home: &str, n: &str| records::picture_local_id(home, &format!("{}.png", n.repeat(64)));
+        let synced = |pictures: Vec<String>, foreign: bool| Synced {
+            pictures,
+            foreign,
+            key_id: 2,
+            pictured: true,
+            homed: true,
+            ..Synced::default()
+        };
+        let mut st = State::default();
+        // A chat of this computer synced before, with a picture held under the current epoch and
+        // one a full plan held back; another computer's copy, whose picture is that computer's.
+        st.chats.insert("s_old".into(), synced(vec![pic("me", "a"), pic("me", "b")], false));
+        st.chats.insert("s_copy".into(), synced(vec![pic("lap", "c")], true));
+        st.pictures.insert(pic("me", "a"), state::PictureSynced { key_id: 2, deleted: false });
+        // Pictures no chat refers to any more: this computer's, held under an older epoch, and another's.
+        st.pictures.insert(pic("me", "d"), state::PictureSynced { key_id: 1, deleted: false });
+        st.pictures.insert(pic("me", "f"), state::PictureSynced { key_id: 2, deleted: true });
+        st.pictures.insert(pic("lap", "e"), state::PictureSynced { key_id: 2, deleted: false });
+        // Pushed now: a new chat with a new picture and one already held; a picture not here.
+        let queue =
+            vec![("s_new".to_string(), vec![], synced(vec![pic("me", "a"), pic("me", "g"), pic("me", "h")], false))];
+        let here = |name: &str| !name.starts_with('h');
+        let (sends, removes) = picture_work(&st, "me", 2, &queue, here);
+        let locals = |v: &[PictureItem]| v.iter().map(|(l, ..)| l.clone()).collect::<Vec<_>>();
+        assert_eq!(locals(&sends), vec![pic("me", "b"), pic("me", "g")]);
+        assert_eq!(sends[0].1, "me");
+        assert_eq!(sends[0].2, format!("{}.png", "b".repeat(64)));
+        assert_eq!(locals(&removes), vec![pic("me", "d")]);
+        // The new chat deleted in the same push: its pictures are no longer needed.
+        let gone = vec![("s_old".to_string(), vec![], Synced { deleted: true, ..Synced::default() })];
+        let (_, removes) = picture_work(&st, "me", 2, &gone, here);
+        assert_eq!(locals(&removes), vec![pic("me", "a"), pic("me", "d")]);
+    }
 
     #[test]
     fn batches_cap_count_and_bytes_and_send_a_big_chat_alone() {
