@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { AUTO_MODEL_ID, modelModality, unsupportedLoadReason, type AppSettings, type LocalModel } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, cannotLoadReason, modelModality, type AppSettings, type LocalModel } from '@nekko-agent/shared';
 import { CheckIcon, StarIcon, TrashIcon } from '../../icons.js';
 import { useStore } from '../../store.js';
 import { notifyModelsChanged } from '../../modelCatalog.js';
@@ -13,7 +13,7 @@ export function canDeleteModel(model: LocalModel): boolean {
 
 export function chatDefaultEligible(model: LocalModel): boolean {
   const type = model.modality ?? modelModality(model);
-  return (type === 'chat' || type === 'vision') && !unsupportedLoadReason(model);
+  return (type === 'chat' || type === 'vision') && !cannotLoadReason(model);
 }
 
 /** One owner for the family list and the variant pane, including in-flight actions. */

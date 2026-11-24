@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogModel } from '@nekko-agent/shared';
-import { groupModelFamilies, gpuGuidance, modelFamilyName, type LibraryModel } from './modelFamilies.js';
+import { groupModelFamilies, gpuGuidance, modelFamilyName, smallestVariant, type LibraryModel } from './modelFamilies.js';
 
 const local = (name: string, extra: Partial<LibraryModel> = {}): LibraryModel => ({ id: name, name, path: name, sizeBytes: 100, addedAt: 0, loaded: false, ...extra });
 const catalog = (name: string, extra: Partial<CatalogModel> = {}): CatalogModel => ({ id: `publisher/${name}`, name, owner: 'publisher', tags: [], quants: [], ...extra });
@@ -49,5 +49,23 @@ describe('GPU guidance', () => {
     expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'partial' }))).toBe('Not enough free GPU memory');
     expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'partial', layers: 64, preset: { gpuLayers: 40 } }))).toBe('Part on CPU by its settings');
     expect(gpuGuidance(15.7e9, vram, local('m', { gpuFit: 'wont' }))).toBe('Too big');
+  });
+});
+
+describe('a model the engine in use will not load', () => {
+  const blocked = { level: 'blocked' as const, reason: 'Needs a modified llama.cpp.' };
+  it('says so instead of a GPU fit', () => {
+    expect(gpuGuidance(6e9, { kind: 'vram', budgetBytes: 31.8e9 }, local('m', { loadCheck: blocked }))).toBe("Can't run here");
+    // Even if a stale fit rode along.
+    expect(gpuGuidance(6e9, undefined, local('m', { gpuFit: 'full', loadCheck: blocked }))).toBe("Can't run here");
+  });
+  it('keeps the fit under a warning, since the engine will try', () => {
+    expect(gpuGuidance(6e9, undefined, local('m', { gpuFit: 'full', loadCheck: { level: 'warning', reason: 'x' } }))).toBe('Fits on GPU');
+  });
+  it('speaks for a family by the files that can run', () => {
+    const files = [local('Bonsai-PTQ1_0.gguf', { sizeBytes: 5, loadCheck: blocked }), local('Bonsai-Q2_0.gguf', { sizeBytes: 7, gpuFit: 'full' })];
+    expect(smallestVariant(files)?.name).toBe('Bonsai-Q2_0.gguf');
+    expect(smallestVariant(files.slice(0, 1))?.name).toBe('Bonsai-PTQ1_0.gguf');
+    expect(smallestVariant([])).toBeUndefined();
   });
 });

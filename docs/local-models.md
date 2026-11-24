@@ -83,6 +83,13 @@ offered **Switch to CUDA** on the Model server card. Every other build
 for your machine stays in the list if you disagree. If you already have a `llama-server`,
 point at it instead: Nekko Agent will run it and never update or remove it.
 
+**Models the engine cannot run.** Two things in a model file can depend on which llama.cpp you use, and the Models page says so on the row instead of showing a GPU fit:
+
+- *A weight format llama.cpp does not know.* Some publishers (PrismML's 1-bit `PTQ1_0` Ternary Bonsai, for one) ship files made for a modified build of llama.cpp. The engine Nekko Agent downloads is stock llama.cpp and refuses them, so the row says **Can't run here**, and loading is refused before anything starts. If you point Nekko Agent at your own `llama-server`, the file is not refused: the row carries a warning that the file needs a modified build, the load is tried, and llama.cpp's own error is shown if it fails.
+- *An engine too old for the file.* Files with PrismML's `prism.hadamard` header need llama.cpp b11556 or newer. An older engine loads them without any error and produces garbage, so Nekko Agent refuses the load and tells you to update the engine from the Model server card. If your own `llama-server`'s version cannot be read, you get a warning instead.
+
+When a file has both problems and you use the engine Nekko Agent installed, the weight format is the reason shown, since updating would not help. The same check applies whether you load from the Models page, on start, from the phone or from the CLI.
+
 **No Visual Studio, ever.** The Windows builds of llama.cpp and stable-diffusion.cpp, and
 Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`,
 `VCRUNTIME140.dll`), not Visual Studio. The installer carries those DLLs beside the daemon

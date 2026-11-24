@@ -14,6 +14,7 @@
 use crate::capacity::{self, FitRequest, Hardware, ModelFacts, PlanOptions};
 use crate::folders::{Candidate, companions_dir, companions_key, known_folder};
 use crate::gguf::{self, GgufMetadata};
+use crate::load_check::{EngineInUse, LoadCheck, load_check};
 use crate::num;
 use nekko_tools::nodefs;
 use nekko_tools::path::native as path;
@@ -403,6 +404,62 @@ fn add_kv_layout(stored: &mut Map<String, Value>, p: &str) -> bool {
     changed
 }
 
+/// Which header checks a stored row has been through. Bump it when a check is
+/// added (an unknown tensor type and a minimum engine build are the first):
+/// rows below it are read once more, and then carry the answer in the index.
+const HEADER_CHECKS: u64 = 1;
+
+/// A row described before the header checks existed (or before the latest one)
+/// gets their answers once, from its header, and is marked so it is not read
+/// again. A file whose header will not read is remembered for this run only, so
+/// the polled listing does not reopen it every time (as `add_kv_layout` does).
+/// `true` when the row changed.
+fn refresh_header_checks(stored: &mut Map<String, Value>, p: &str) -> bool {
+    let done = stored.get("headerChecks").and_then(Value::as_u64).is_some_and(|n| n >= HEADER_CHECKS);
+    if done || stored.get("readable") != Some(&Value::Bool(true)) {
+        return false;
+    }
+    type FileVersion = (String, u64, Option<SystemTime>);
+    static UNREAD: LazyLock<Mutex<HashSet<FileVersion>>> = LazyLock::new(Default::default);
+    let version = std::fs::metadata(p).ok().map(|m| (p.to_string(), m.len(), m.modified().ok()));
+    if let Some(v) = &version
+        && UNREAD.lock().is_ok_and(|s| s.contains(v))
+    {
+        return false;
+    }
+    let Some(meta) = gguf::read_metadata(p) else {
+        if let Some(v) = version
+            && let Ok(mut s) = UNREAD.lock()
+        {
+            s.insert(v);
+        }
+        return false;
+    };
+    put_header_checks(stored, &meta);
+    true
+}
+
+/// The header-derived facts the engine's load verdict reads, and the mark that says they were read.
+fn put_header_checks(row: &mut Map<String, Value>, meta: &GgufMetadata) {
+    assign(row, "unknownWeightType", meta.unknown_weight_type.map(|t| num(f64::from(t))));
+    assign(row, "minEngineBuild", meta.min_engine_build.map(|b| num(f64::from(b))));
+    row.insert("headerChecks".into(), num(HEADER_CHECKS as f64));
+}
+
+/// Rows indexed when an unknown `general.file_type` was shown as `type 143`:
+/// take the quant from the file name, or show none.
+fn refresh_quantization(p: &str, stored: &mut Map<String, Value>) -> bool {
+    let raw = stored.get("quantization").and_then(Value::as_str).is_some_and(|q| {
+        q.strip_prefix("type ").is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+    });
+    if !raw {
+        return false;
+    }
+    let from_name = gguf::quant_from_file_name(strip_gguf(&path::basename(p)));
+    assign(stored, "quantization", from_name.map(Value::String));
+    true
+}
+
 /// Read one file's header into a library row (`describe`).
 fn describe(root: &Root, p: &str, name: Option<&str>, now: f64) -> Map<String, Value> {
     let meta = gguf::read_metadata(p);
@@ -438,7 +495,10 @@ fn describe_with(
     put(&mut m, "sourceRepo", source_repo.map(Value::String));
     m.insert("folderId".into(), root.id.clone());
     put(&mut m, "folderProvider", root.provider.clone());
-    put(&mut m, "quantization", meta.and_then(|m| m.quantization.clone()).map(Value::String));
+    // A header without a known `general.file_type` still has its file name's quant (`...-PTQ1_0`).
+    let quantization =
+        meta.and_then(|m| m.quantization.clone()).or_else(|| gguf::quant_from_file_name(strip_gguf(&file)));
+    put(&mut m, "quantization", quantization.filter(|_| meta.is_some()).map(Value::String));
     put(&mut m, "parameterSize", meta.and_then(|m| m.parameter_size.clone()).map(Value::String));
     put(&mut m, "architecture", meta.and_then(|m| m.architecture.clone()).map(Value::String));
     put(&mut m, "layers", meta.and_then(|m| m.layers).map(num));
@@ -449,6 +509,9 @@ fn describe_with(
     put(&mut m, "weightLayout", meta.and_then(|m| m.weight_layout).map(|w| w.to_value()));
     m.insert("hasChatTemplate".into(), json!(meta.is_some_and(|m| m.chat_template.is_some())));
     m.insert("readable".into(), json!(meta.is_some()));
+    if let Some(meta) = meta {
+        put_header_checks(&mut m, meta);
+    }
     m.insert("addedAt".into(), num(now));
     m
 }
@@ -737,10 +800,14 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
                 }
             };
             dirty |= add_kv_layout(&mut stored, &p);
+            dirty |= refresh_header_checks(&mut stored, &p);
             dirty |= refresh_naming(root, &p, &mut stored);
+            dirty |= refresh_quantization(&p, &mut stored);
             let id = claim(&mut stored, &mut seen_ids);
             index.models().insert(id, Value::Object(stored.clone()));
             let mut row = stored;
+            // Index bookkeeping, not a fact about the model.
+            row.shift_remove("headerChecks");
             row.insert("path".into(), json!(p));
             row.insert("sizeBytes".into(), num(size));
             row.insert("managed".into(), json!(root.managed));
@@ -862,6 +929,7 @@ pub fn import_file(cfg: &LibraryConfig, p: &str) -> Result<Value, String> {
     index.models().insert(id, Value::Object(stored.clone()));
     index.write(cfg)?;
     let mut model = stored.clone();
+    model.shift_remove("headerChecks");
     model.insert("path".into(), json!(p));
     model.insert("sizeBytes".into(), num(size));
     model.insert("managed".into(), json!(true));
@@ -1098,19 +1166,24 @@ pub fn gpu_fit_idle_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64
     Some(gpu_fit_for(model, &idle, overhead_floor))
 }
 
-/// `engine:models`: the library with load state, the last failure and the
-/// GPU-fit verdict folded in. `hw` is `None` when no GPU probe answered.
+/// `engine:models`: the library with load state, the last failure, what the
+/// engine in use makes of each file (`loadCheck`, see [`crate::load_check`]) and
+/// the GPU-fit verdict folded in. `hw` is `None` when no GPU probe answered.
+/// A file the engine cannot load gets no fit: where it would sit is moot.
 pub fn with_load_state(
     rows: Vec<Value>,
     loaded: &HashSet<String>,
     errors: &Map<String, Value>,
     hw: Option<&Hardware>,
     overhead_floor: Option<f64>,
+    engine: &EngineInUse,
 ) -> Vec<Value> {
     rows.into_iter()
         .map(|row| {
             let id = row.get("id").map(nekko_js::display).unwrap_or_default();
-            let fit = hw.map(|hw| gpu_fit_for(&row, hw, overhead_floor));
+            let check = load_check(&row, engine);
+            let blocked = check.as_ref().is_some_and(LoadCheck::blocked);
+            let fit = hw.filter(|_| !blocked).map(|hw| gpu_fit_for(&row, hw, overhead_floor));
             let idle = hw.filter(|_| fit == Some("partial")).and_then(|hw| gpu_fit_idle_for(&row, hw, overhead_floor));
             let mut m = match row {
                 Value::Object(m) => m,
@@ -1122,6 +1195,7 @@ pub fn with_load_state(
             // A partial fit may only be the card being busy: say whether it
             // would fit with the card to itself.
             assign(&mut m, "gpuFitIdle", idle.map(|f| json!(f)));
+            assign(&mut m, "loadCheck", check.map(|c| c.to_value()));
             Value::Object(m)
         })
         .collect()

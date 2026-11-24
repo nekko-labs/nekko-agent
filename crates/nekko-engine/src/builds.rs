@@ -18,6 +18,12 @@ pub fn release_pin(runtime: &str) -> (&'static str, &'static str) {
     }
 }
 
+/// The number in a llama.cpp release tag: `b11224` is 11224. `None` for anything
+/// that is not exactly `b` and digits (a fork's version string, a bare commit).
+pub fn llama_build_number(tag: &str) -> Option<u64> {
+    tag.strip_prefix('b').filter(|n| !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit()))?.parse().ok()
+}
+
 /// `nvidia-smi`'s arguments for the CUDA check (`CUDA_QUERY`).
 pub const CUDA_QUERY: [&str; 2] = ["--query-gpu=compute_cap,driver_version", "--format=csv,noheader"];
 

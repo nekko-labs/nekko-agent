@@ -1,4 +1,4 @@
-import { modelModality, type CatalogModel, type EngineMemory, type GpuFit, type ImageRecommendedOption, type LocalModel, type Recommendations } from '@nekko-agent/shared';
+import { cannotLoadReason, modelModality, type CatalogModel, type EngineMemory, type GpuFit, type ImageRecommendedOption, type LocalModel, type Recommendations } from '@nekko-agent/shared';
 
 export type LibraryModel = LocalModel & { loaded: boolean; gpuFit?: GpuFit; gpuFitIdle?: GpuFit };
 export interface ModelFamily {
@@ -34,7 +34,18 @@ export function groupModelFamilies(local: LibraryModel[], catalog: CatalogModel[
   return [...groups.values()].sort((a, b) => Number(b.local.length > 0) - Number(a.local.length > 0) || a.name.localeCompare(b.name));
 }
 
+/**
+ * The smallest file a family's line speaks for: among the ones this engine can load,
+ * since a build it refuses has no fit to report. Every file, when none can.
+ */
+export function smallestVariant(local: LibraryModel[]): LibraryModel | undefined {
+  const runnable = local.filter((m) => m.modality === 'image' || !cannotLoadReason(m));
+  return (runnable.length ? runnable : local).slice().sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
+}
+
 export function gpuGuidance(sizeBytes: number | undefined, memory?: EngineMemory, model?: LibraryModel): string {
+  // The engine will not load it, so no GPU or CPU split applies.
+  if (model?.loadCheck?.level === 'blocked') return "Can't run here";
   if (model?.gpuFit === 'cpu' || memory?.kind === 'ram') return 'CPU only';
   if (model?.gpuFit === 'wont') return 'Too big';
   if (model?.gpuFit === 'partial') {

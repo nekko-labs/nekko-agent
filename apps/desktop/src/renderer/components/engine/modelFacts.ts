@@ -1,4 +1,4 @@
-import { modelModality, unsupportedLoadReason, type LocalModel, type ModelModality } from '@nekko-agent/shared';
+import { cannotLoadReason, modelModality, type LocalModel, type ModelModality } from '@nekko-agent/shared';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 
 /**
@@ -39,17 +39,23 @@ export function localTypeLabel(model: LocalModel): string {
 /** What is wrong with a model on disk, worst first, or null when nothing is. */
 export type ModelProblem = { text: string; tone: 'danger' | 'warning'; detail: string };
 
-export function modelProblem(m: Pick<LocalModel, 'lastLoadError' | 'modality' | 'hasProjector' | 'readable' | 'format' | 'mlxRunnable' | 'name'> & { loaded?: boolean }): ModelProblem | null {
+export function modelProblem(m: Pick<LocalModel, 'lastLoadError' | 'modality' | 'hasProjector' | 'readable' | 'format' | 'mlxRunnable' | 'name' | 'loadCheck'> & { loaded?: boolean }): ModelProblem | null {
   if (m.lastLoadError && !m.loaded) return { text: 'Last load failed', tone: 'danger', detail: m.lastLoadError };
-  const unsupported = m.modality === 'image' ? undefined : unsupportedLoadReason(m as LocalModel);
+  const unsupported = m.modality === 'image' ? undefined : cannotLoadReason(m as LocalModel);
   if (unsupported) return { text: "Can't run here", tone: 'warning', detail: unsupported };
+  // The engine in use may still try it, and llama.cpp's own error shows if it cannot.
+  if (m.loadCheck?.level === 'warning') return { text: 'May not run here', tone: 'warning', detail: m.loadCheck.reason };
   if (m.modality === 'vision' && !m.hasProjector) return { text: 'No projector', tone: 'warning', detail: 'Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.' };
   return null;
 }
 
 /** The worst problem among a family's files, so the list row can wear it instead of a check. */
 export function familyProblem(local: Array<Parameters<typeof modelProblem>[0]>): ModelProblem | null {
-  const all = local.map(modelProblem).filter((p): p is ModelProblem => !!p);
+  // A file that cannot run only speaks for the family when none of its other files can either:
+  // a family with one build the engine refuses and one it runs is not "Can't run here".
+  const blocked = (m: (typeof local)[number]) => m.modality !== 'image' && !!cannotLoadReason(m as LocalModel);
+  const speaking = local.some((m) => !blocked(m)) ? local.filter((m) => !blocked(m)) : local;
+  const all = speaking.map(modelProblem).filter((p): p is ModelProblem => !!p);
   return all.find((p) => p.tone === 'danger') ?? all[0] ?? null;
 }
 

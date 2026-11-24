@@ -12,6 +12,7 @@ use crate::launch::{
     resolve_companions, unsupported_load_reason,
 };
 use crate::library::{default_context_tokens, model_facts_for};
+use crate::load_check::{EngineInUse, Level, load_check};
 use crate::{BoxFuture, num};
 use nekko_tools::path::native as path;
 use serde_json::{Map, Value, json};
@@ -44,13 +45,26 @@ pub trait Daemon: Send + Sync {
     fn list(&self) -> BoxFuture<Vec<Value>>;
 }
 
+/// An installed server binary: its path, and which engine it is (managed or the
+/// user's own, and its version) for the load gate.
+#[derive(Clone, Debug)]
+pub struct Engine {
+    pub bin: String,
+    pub in_use: EngineInUse,
+}
+
 /// What the policy reads from the rest of the engine (`EngineServerDeps`).
 pub trait Env: Send + Sync {
     /// The engine settings, over their defaults.
     fn settings(&self) -> Value;
     fn prompt_caching(&self) -> bool;
-    /// The `llama`, `diffusion` or `mlx` server binary, when installed.
-    fn bin(&self, runtime: &'static str) -> BoxFuture<Option<String>>;
+    /// The `llama`, `diffusion` or `mlx` server binary and where it came from, when installed.
+    fn engine(&self, runtime: &'static str) -> BoxFuture<Option<Engine>>;
+    /// Just the binary.
+    fn bin(&self, runtime: &'static str) -> BoxFuture<Option<String>> {
+        let engine = self.engine(runtime);
+        Box::pin(async move { engine.await.map(|e| e.bin) })
+    }
     /// Whether the installed engine can put layers on a GPU; `None` is "assume it can".
     fn gpu_capable(&self) -> BoxFuture<Option<bool>>;
     fn find_model(&self, id: String) -> BoxFuture<Option<Value>>;
@@ -766,9 +780,9 @@ impl ModelServer {
         };
         let image = model.get("modality").and_then(Value::as_str) == Some("image");
         let mlx = model.get("format").and_then(Value::as_str) == Some("mlx");
-        let bin = self
+        let engine = self
             .env
-            .bin(if image {
+            .engine(if image {
                 "diffusion"
             } else if mlx {
                 "mlx"
@@ -776,7 +790,7 @@ impl ModelServer {
                 "llama"
             })
             .await;
-        let Some(bin) = bin else {
+        let Some(Engine { bin, in_use }) = engine else {
             let message = if image {
                 "Install stable-diffusion.cpp from Model Server to run this image-generation model.".to_string()
             } else if mlx {
@@ -794,6 +808,17 @@ impl ModelServer {
         if !image && let Some(reason) = unsupported_load_reason(&model) {
             self.set_error(id, &reason);
             return reply(false, reason);
+        }
+        // What this engine makes of the file: the verdict the library rows carry too.
+        if !image
+            && !mlx
+            && let Some(check) = load_check(&model, &in_use)
+        {
+            if check.level == Level::Blocked {
+                self.set_error(id, &check.reason);
+                return reply(false, check.reason);
+            }
+            self.say(check.reason);
         }
         if !mlx {
             let copied = self.env.vc_runtime(&path::dirname(&bin));
