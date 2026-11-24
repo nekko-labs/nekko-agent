@@ -175,7 +175,7 @@ Each slot runs one job in a throwaway VM and moves through five states: **starti
 - CPU up: when a job at this size had every vCPU nearly full for at least 20% of its samples, suggest `N + 2`, or the largest CPU need if that is more.
 - CPU down: when every job's `cpuP95` is at most `N - 2`, suggest the largest CPU need, when that is under `N`.
 - Memory up: when a job at this size swapped out at all, or its compressor peaked at a quarter of `M` or more, suggest `M + 4 GB`, or the largest memory need if that is more.
-- Memory down: when every job's `memPeakMb` plus 2 GB headroom is at least 2 GB under `M`, suggest the largest memory need, when that is under `M`.
+- Memory down: when every job's `memPeakMb` plus 2 GB headroom is at least 2 GB under `M`, suggest the largest memory need, when that is under `M`. When a job that swapped or compressed hard at another size sets it, a second reason names that size ("A job swapped at 10.0 GB.").
 - Otherwise the current value stands. CPU and memory are judged separately.
 - A cut never goes below the floor: GitHub's standard hosted Mac, 3 vCPUs and 7 GB, which passes the jobs this repo routes here. A smaller size the owner chose stays theirs. Never above the ceiling: `cpus_per_vm`'s (cores minus 2) for CPU; for memory, the 64 GB setting limit and the runner memory budget divided by the macOS slots the owner asked for, so applying it never costs a slot. A suggestion held down by a limit says so ("The jobs swapped; 8 GB is the most this Mac can give each of 2 VMs.").
 - GPU is not part of it: a VM's paravirtualized GPU has no size setting.

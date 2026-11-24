@@ -248,7 +248,12 @@ fn a_cut_stays_above_a_size_that_swapped() {
     let light = Usage { mem_peak_mb: 5000, ..job(6, 16384) };
     let out = suggest_size(&[earlier, light, light], &s, &mac());
     assert_eq!(out.memory_mb, 14336, "{out:?}");
-    assert_eq!(out.reasons, ["The biggest job in the last 30 days used 8.8 GB at most."]);
+    assert_eq!(out.reasons, ["The biggest job in the last 30 days used 8.8 GB at most.", "A job swapped at 10.0 GB."]);
+
+    let squeezed = Usage { swap_out_mb: 0, compressed_peak_mb: 3000, ..earlier };
+    let out = suggest_size(&[squeezed, light, light], &s, &mac());
+    assert_eq!(out.memory_mb, 14336, "{out:?}");
+    assert_eq!(out.reasons[1], "A job compressed hard at 10.0 GB.");
 }
 
 #[test]

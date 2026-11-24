@@ -93,7 +93,8 @@ pub fn parse_stats(disk: &[u8], cpus: u8, memory_mb: u32, from_ts: u64) -> Optio
     })
 }
 
-/// The VM size that fits a runner's jobs, from those that ran at its current size.
+/// The VM size that fits a runner's jobs: jobs at its current size decide whether to suggest,
+/// every job in the window bounds the figure.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SizeSuggestion {
@@ -161,13 +162,10 @@ pub fn suggest_size(jobs: &[Usage], s: &RunnerSettings, host: &HostFacts) -> Siz
     let peak = most(|u| f64::from(u.mem_peak_mb));
     // The most any job needed: its peak plus headroom, or 4 GB more than it had if it swapped or
     // compressed hard, whatever size it ran at.
-    let mem_need = jobs
-        .iter()
-        .filter(|u| starved(u))
-        .map(|u| u.memory_mb.saturating_add(4096))
-        .max()
-        .unwrap_or(0)
-        .max(round_up_gb(peak + HEADROOM_MB));
+    let starved_at = jobs.iter().filter(|u| starved(u)).max_by_key(|u| (u.memory_mb, u.swap_out_mb > 0));
+    let starved_need = starved_at.map_or(0, |u| u.memory_mb.saturating_add(4096));
+    let peak_need = round_up_gb(peak + HEADROOM_MB);
+    let mem_need = starved_need.max(peak_need);
     let m = f64::from(memory_mb);
     let (want, why) = if swapped > 0.0 || compressed * 4.0 >= m {
         let why = if swapped > 0.0 {
@@ -186,6 +184,14 @@ pub fn suggest_size(jobs: &[Usage], s: &RunnerSettings, host: &HostFacts) -> Siz
     if want != memory_mb {
         out.reasons.push(why);
     }
+
+    // A cut set by a job that ran short at another size names that size, or the figure looks
+    // unexplained next to the biggest job's peak.
+    if let Some(u) = starved_at.filter(|_| want < memory_mb && starved_need > peak_need) {
+        let how = if u.swap_out_mb > 0 { "swapped" } else { "compressed hard" };
+        out.reasons.push(format!("A job {how} at {}.", gb(f64::from(u.memory_mb))));
+    }
+
     if want > memory_mb.saturating_add(4096) {
         out.reasons.push(format!("Jobs in the last 30 days needed up to {}.", gb(f64::from(want))));
     }
