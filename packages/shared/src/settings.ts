@@ -403,7 +403,7 @@ export interface AppSettings {
   /**
    * Tokens one response from a local model server may generate before it is cut
    * off. Cloud providers are not capped.
-   * Undefined = MAX_OUTPUT_TOKENS_DEFAULT. See MAX_OUTPUT_TOKENS_RANGE.
+   * Undefined or 0 = no limit (the default). See MAX_OUTPUT_TOKENS_RANGE.
    */
   maxOutputTokens?: number;
   /**
@@ -512,19 +512,21 @@ export interface AppSettings {
 }
 
 /**
- * Tokens one model response may generate. Generous enough for a long answer or
- * a big file edit, low enough that a model which collapses into a loop stops on
- * its own within seconds rather than streaming until its context window fills.
- * Sent to local providers as their native output cap; cloud providers run to their own limits.
+ * Tokens one model response may generate, 0 meaning no limit (the default).
+ * A fixed default cut thinking models off mid-plan: their thinking counts
+ * against the cap, so a long plan used it all and the turn ended with no
+ * answer. A model that collapses into a loop is still stopped by the
+ * repetition guard. When the user sets a cap it is sent to local providers as
+ * their native output cap; cloud providers run to their own limits.
  */
-export const MAX_OUTPUT_TOKENS_DEFAULT = 8_192;
+export const MAX_OUTPUT_TOKENS_DEFAULT = 0;
 
 /** Bounds for the per-response output cap (Settings → Agent loop). */
 export const MAX_OUTPUT_TOKENS_RANGE = { min: 256, max: 200_000 } as const;
 
-/** Clamp a user-entered output cap, falling back to the default. */
+/** Clamp a user-entered output cap; unset, 0, blank or invalid means no limit (0). */
 export function clampMaxOutputTokens(n: number | undefined): number {
-  if (n == null || !Number.isFinite(n)) return MAX_OUTPUT_TOKENS_DEFAULT;
+  if (n == null || !Number.isFinite(n) || n <= 0) return MAX_OUTPUT_TOKENS_DEFAULT;
   return Math.min(MAX_OUTPUT_TOKENS_RANGE.max, Math.max(MAX_OUTPUT_TOKENS_RANGE.min, Math.round(n)));
 }
 
