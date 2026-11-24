@@ -121,7 +121,7 @@ fn file_type(n: f64) -> Option<&'static str> {
         36 => "TQ1_0",
         37 => "TQ2_0",
         38 => "MXFP4",
-        // `LLAMA_FTYPE_MOSTLY_*` in llama.h at b12436.
+        // `LLAMA_FTYPE_MOSTLY_*` in llama.h (b12436; unchanged at b12470).
         39 => "NVFP4",
         40 => "Q1_0",
         41 => "Q2_0",
@@ -131,15 +131,15 @@ fn file_type(n: f64) -> Option<&'static str> {
 }
 
 /// llama.cpp's `GGML_TYPE_COUNT`: it refuses a file with a tensor of any type
-/// at or past it ("invalid ggml type"). 44 in `ggml/include/ggml.h` at b12436,
-/// the release this app pins. Recheck it, and the sizes in [`ggml_block`],
+/// at or past it ("invalid ggml type"). 44 in `ggml/include/ggml.h` at b12436
+/// and at b12464 and b12470, the release this app pins. Recheck it, and the sizes in [`ggml_block`],
 /// whenever the pinned llama.cpp release changes (`builds::release_pin`).
 const GGML_TYPE_COUNT: u32 = 44;
 
 /// The llama.cpp release [`GGML_TYPE_COUNT`] and the sizes in [`ggml_block`] were
 /// last checked against. A test ties it to `builds::release_pin`, so the automated
 /// pin-bump PR fails until someone rechecks both at the new release and updates this.
-pub const GGML_TYPES_CHECKED_AT: &str = "b12464";
+pub const GGML_TYPES_CHECKED_AT: &str = "b12470";
 
 /// From this tensor type up, a type is a fork's own range and the managed engine
 /// refuses the file; between [`GGML_TYPE_COUNT`] and here it may only be a type
@@ -331,7 +331,7 @@ fn ggml_block(kind: u32) -> Option<(f64, f64)> {
         34 => (256.0, 54.0),
         35 => (256.0, 66.0),
         39 => (32.0, 17.0), // MXFP4
-        // Types 40-43, from ggml-org/llama.cpp b12436: `blck_size` and `type_size` in
+        // Types 40-43, from ggml-org/llama.cpp b12436 (unchanged at b12470): `blck_size` and `type_size` in
         // `type_traits` (ggml/src/ggml.c), with the structs in ggml/src/ggml-common.h
         // (`ggml_half` is 16 bits) and ggml/include/ggml.h (`ggml_fp8_e4m3_t` is one byte).
         40 => (64.0, 36.0),  // NVFP4: QK_NVFP4 64, block_nvfp4 = 4 scale bytes + 32 of 4-bit values
