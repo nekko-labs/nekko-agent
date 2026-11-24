@@ -259,10 +259,10 @@ const api: NekkoApi = {
   sandboxStatus: (id) => inv(IpcChannels.sandboxStatus, id),
   sandboxDiff: (id) => inv(IpcChannels.sandboxDiff, id),
   applySandboxDiff: (id, identity, diffId, paths) => inv(IpcChannels.sandboxApplyDiff, id, identity, diffId, paths) as Promise<never>,
-  setSessionOptions: (id, patch) => setChatOptionsAndDefaults({
+  setSessionOptions: (id, patch, opts) => setChatOptionsAndDefaults({
     setSessionOptions: (id, patch) => inv(IpcChannels.sessionSetOptions, id, patch),
     updateSettings: (patch) => inv(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
-  }, id, patch),
+  }, id, patch, opts),
   truncateSession: (id, messageId) => inv(IpcChannels.sessionTruncate, id, messageId),
   clearSessions: (scope) => inv(IpcChannels.sessionsClear, scope),
   purgeExpiredArchives: () => inv(IpcChannels.sessionsPurgeArchived),

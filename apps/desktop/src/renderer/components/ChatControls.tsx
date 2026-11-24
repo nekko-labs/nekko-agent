@@ -1,7 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ChatMode, McpServerStatus, Session } from '@nekko-agent/shared';
-import { CLAUDE_CODE_PROVIDER_KIND, getExecutionMode, groupToolsByCategory, toolAllowedOffline } from '@nekko-agent/shared';
+import { getExecutionMode, groupToolsByCategory, toolAllowedOffline } from '@nekko-agent/shared';
+import { useChatEngine } from './codeModeLock.js';
 import { ModePanel, modeButtonLabel, summaryPartIcon } from './ModePanel.js';
 import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
@@ -384,6 +385,7 @@ export function ChatControls({
   toolsInWindow = false,
   only,
   modelId,
+  providerId,
   draft,
   hideMode = false,
   hidePrivacy = false,
@@ -394,6 +396,8 @@ export function ChatControls({
   isCloudModel: boolean;
   /** The chat's model, for the effort rungs it offers. */
   modelId?: string;
+  /** The provider that will run the chat: its own, else the saved default or the first connected one. */
+  providerId?: string | null;
   onChange: (s: Session | null) => void;
   /** Tools and MCP live in the agent window's footer, so the wall composer leaves them out. */
   toolsInWindow?: boolean;
@@ -408,7 +412,7 @@ export function ChatControls({
   const settings = useStore((s) => s.settings);
   const syncOn = useSyncOn();
   // A Claude Agent chat runs Claude Code's tools, never code mode (see ModePanel).
-  const claudeAgent = useStore((s) => !!session && s.providers?.find((p) => p.id === session.providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND);
+  const claudeAgent = useChatEngine(providerId ?? session?.providerId) === 'claude-agent';
   const [modeOpen, setModeOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const modeButton = useRef<HTMLButtonElement>(null);
@@ -489,7 +493,7 @@ export function ChatControls({
           <span className="ctl-caret">▾</span>
         </button>
         {modeOpen && createPortal(
-          <ModePanel session={session} isCloudModel={isCloudModel} modelId={modelId} onChange={onChange} style={modePosition} panelRef={modeMenu}
+          <ModePanel session={session} isCloudModel={isCloudModel} modelId={modelId} providerId={providerId} onChange={onChange} style={modePosition} panelRef={modeMenu}
             onSandboxSetup={() => { setModeOpen(false); setSetupOpen(true); }} />,
           document.body,
         )}
