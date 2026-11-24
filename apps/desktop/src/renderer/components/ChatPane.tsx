@@ -3091,8 +3091,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
                 {starAsk && !streaming && !question && !secretAsk && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
                 {repoFolderOffer && !question && !secretAsk && !approval && !readOnly && <RepoFolderOffer suggested={repoFolderOffer} />}
+                {/* Claude Code's background tasks (often its own PR watch) wake the chat when they finish, so the turn isn't settled yet. */}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} prs={prs}
-                  eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!secretAsk || !!approval)}
+                  eligible={canOfferPrWatch(session?.messages ?? [], streaming || claudeBackground > 0 || !!held || !!errorNotice || !!question || !!secretAsk || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
                 {errorNotice && !question && !streaming && (() => {
                   // A stop the user asked for is not a failure, so it doesn't wear
