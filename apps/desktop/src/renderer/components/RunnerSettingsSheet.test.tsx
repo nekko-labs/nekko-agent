@@ -55,7 +55,7 @@ describe('RunnerSettingsSheet', () => {
 
   it('suggested_size_row_offers_apply_only_for_a_change', () => {
     expect(render(view())).not.toContain('Suggested size');
-    const why = 'The biggest job used 5.4 GB at most and never swapped.';
+    const why = 'The biggest job in the last 30 days used 5.4 GB at most.';
     const change = view({ suggestedSize: { jobs: 4, cpus: 4, memoryMb: 8192, reasons: [why] } }, { memoryPerVmMb: 12288 });
     const html = renderToStaticMarkup(
       <SettingsBody view={change} draft={change.config.settings} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onApplySize={() => {}} onRemove={() => {}} saving={false} />,
