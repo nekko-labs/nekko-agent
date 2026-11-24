@@ -2880,7 +2880,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       leading={showEffort && <EffortChipGauge {...effortProps} />}
       footer={<>
         {/* Effort rides the model menu, as the phone's Model and effort panel has it. */}
-        {showEffort && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1"><EffortSection {...effortProps} /></div>}
+        {showEffort && <div className="mt-1 shrink-0 border-t border-line px-1"><EffortSection {...effortProps} /></div>}
         {!expertMode && autoQualityControl && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1">{autoQualityControl}</div>}
         {!session?.parentSessionId && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1"><SubagentModelControl fusionAllowed={autoSwitch} /></div>}
       </>}
