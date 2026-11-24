@@ -29,6 +29,7 @@ Each event carries:
 - **The install id:** random, and replaced each time the switch is turned on, so turning it off and on again starts a new, unlinked id.
 - **The app's facts:** app, version, OS, OS version and CPU type, the same facts Send feedback may share.
 - **Two flags for PostHog:** no person profile (`$process_person_profile: false`) and no location lookup (`$geoip_disable: true`).
+- `[added 2026-11-25, #3303; unit-tested, not yet seen arriving in PostHog]` **The team's own use, marked:** when the engine is signed in to Nekko Cloud with a Nekko team account (`staff`, [decision 0092](../../docs/decisions/0092-unreleased-cloud-features-sit-behind-a-team-switch.md)), every event it sends carries `internal: true`, checked at each send. Philip asked for the team's usage to be hidden from the analytics; it is marked rather than dropped so the team's crashes and errors still arrive. Nobody else's events carry the property, so the promises above are unchanged. Events from a team member's install while signed out of Nekko Cloud are not marked.
 - `[added 2026-11-12, #2678; unit-tested]` **When, locally:** `local_hour` (0 to 23) and `weekday` (`Mon`…), for time-of-day use. Never the time zone or offset.
 
 `[updated 2026-11-12, #2678: hardware, opens and closes, models, modes, voice, CI runners and clicks; engine and renderer unit-tested; not yet seen arriving from a running app]` Philip asked for as much as can help decide what to build, anonymous only.
@@ -60,5 +61,7 @@ Each event carries:
 ## PostHog project
 
 Project 686111, **Nekko Agent**, in the Nekko Labs org (US cloud). **Discard client IP data** is on (turned on 2026-10-24). Its public ingest key is `PROJECT_KEY` in `crates/nekkod/src/telemetry.rs`. `NEKKO_POSTHOG_KEY` overrides it for development; set it empty to send nothing, and Settings then says nothing is sent.
+
+`[not yet set, #3303]` **Filter out internal and test users** (project settings, Product analytics) holds one filter: event property `internal` **is not set**. Insights and dashboards then hide the team's use with their "Filter out internal and test users" toggle, on by default for new insights.
 
 Decision: [0021](../../docs/decisions/0021-opt-in-reports-sent-by-the-engine.md). User docs: [docs/usage-reports.md](../../docs/usage-reports.md).
