@@ -27,6 +27,7 @@ area: platform
   - The card says that Nekko Agent sends no usage or crash reports unless they are turned on ([opt-in reports](opt-in-usage-and-crash-reports.md)); those appear here as **Usage and crash reports**.
 - **Storage:** events are kept 200 per connection in memory, and in `<data>/logs/connections.log`, which rotates at 2 MB and keeps 2 older files (about 6 MB at most). They are reloaded at startup. **Clear connection logs** empties both.
 - **Default:** everything allowed, as before. Nothing changes until someone flips a switch.
+- `[fixed 2026-11-25, #3301; unit-tested]` **The saved switches hold from the moment the engine starts.** Before, a moment after start the engine reset All connections off and every row switch to on, until the next time any setting was saved.
 
 ## Not covered
 
