@@ -11,7 +11,9 @@ app.setPath('userData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], metrics: {}, errors: [] };
 const OLD = 'Your engine is b11224; this version of Nekko Agent expects b12436.';
-const outdated = { buildId: 'win-x64-cuda', installed: 'b11224', pinned: 'b12436', message: OLD };
+const outdated = { buildId: 'win-x64-cuda', installed: 'b11224', pinned: 'b12436', message: OLD, notify: true };
+// A few days behind: the pin moves several times a day, so the card stays quiet unless a model needs the update.
+const slight = { buildId: 'win-x64-cuda', installed: 'b12400', pinned: 'b12436', message: 'Your engine is b12400; this version of Nekko Agent expects b12436.', notify: false };
 const problem = { message: 'The NVIDIA engine is missing its GPU libraries, so models are running on the processor and replies will be very slow or never arrive. Repair it to use your graphics card.', repairBuildId: 'win-x64-cuda' };
 const upgrade = (also) => ({ buildId: 'win-x64-cuda', message: 'Your NVIDIA graphics card can run the CUDA engine, which is roughly 15-20% faster than Vulkan. It is a download of several hundred MB.' + (also ? ' It also brings the engine up to date.' : '') });
 const states = {
@@ -21,6 +23,10 @@ const states = {
   old: { version: 'b11224', outdated },
   // Same release: one button, the CUDA one, which says it also updates.
   'old-cuda-switch': { version: 'b11224', backend: 'vulkan', upgrade: upgrade(true), outdated },
+  // A little behind and nothing needs it: no notice (the rows and the offer still have their Update).
+  'slightly-old': { version: 'b12400', outdated: slight },
+  // A little behind, but two models in the library are refused for want of a newer engine.
+  'old-with-blocked-files': { version: 'b12400', outdated: slight, blockedFiles: 2 },
   // A broken engine: Repair alone.
   'old-broken': { version: 'b11224', problem, outdated },
 };
@@ -41,7 +47,8 @@ app.whenReady().then(async () => {
     fs.writeFileSync(f, (await win.capturePage({ x: 0, y: top, width, height: Math.min(height, view - top) }, { stayHidden: true, stayAwake: true })).toPNG());
     report.captures.push(f);
   };
-  const set = async (patch) => {
+  const set = async ({ blockedFiles = 0, ...patch }) => {
+    await run(`window.__blocked = ${blockedFiles}`);
     await run(`window.__engine.install = Object.assign({ binPath: 'C:/x/llama-server.exe', source: 'managed', backend: 'cuda', available: [] }, ${JSON.stringify(patch)})`);
     const onPage = `!![...document.querySelectorAll('h2')].find(e => e.textContent.trim() === 'Local model server')`;
     await run(`layoutFixture.store.getState().setView('settings')`);
@@ -66,7 +73,10 @@ app.whenReady().then(async () => {
         resident: [], loading: [], log: [], memory: { budgetBytes: 12 * 1024 ** 3, kind: 'vram' },
         settings: { port: 11500, bind: 'local', autoload: [], autoStart: false, jitLoad: true, idleTtlSeconds: 900, maxLoaded: 2 } };
       window.nekko.engineStatus = async () => window.__engine;
-      window.nekko.engineModels = async () => [{ id: 'qwen3-8b-q4', name: 'Qwen3 8B', quantization: 'Q4_K_M', loaded: false, managed: true, sizeBytes: 5.03 * 1024 ** 3, maxContext: 40960 }];
+      window.__blocked = 0;
+      const needsNewer = { level: 'blocked', cause: 'engineAge', reason: 'needs llama.cpp b11556 or newer.' };
+      window.nekko.engineModels = async () => [{ id: 'qwen3-8b-q4', name: 'Qwen3 8B', quantization: 'Q4_K_M', loaded: false, managed: true, sizeBytes: 5.03 * 1024 ** 3, maxContext: 40960 },
+        ...Array.from({ length: window.__blocked }, (_, i) => ({ id: 'bonsai-' + i, name: 'Ternary Bonsai ' + (i + 1), path: 'C:/m/bonsai-' + i + '.gguf', quantization: 'Q2_0', loaded: false, managed: true, sizeBytes: 7.1 * 1024 ** 3, maxContext: 262144, loadCheck: needsNewer }))];
       window.nekko.testProvider = async () => ({ ok: true });
       window.nekko.listModelsStatus = async () => ({ models: [] });
       window.nekko.engineDownloads = async () => [];
