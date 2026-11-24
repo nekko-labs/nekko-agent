@@ -12,7 +12,7 @@ Claude Code runs a sub-agent inside the chat's own session, so before this chang
 Now each sub-agent is an ordinary child chat, made from what Claude Code prints:
 
 - **In the parent chat** an `Agent` (or older `Task`) call is a delegation, the same row a `spawn_agent` call gets on every client: its task, the model it runs on, **To subagent** and **From subagent**, and **Open ↗**.
-- **In the Agents panel** it sits under its parent, and the Working subagents control on the chat counts it while it runs.
+- **In the Agents panel** it sits under its parent, and the Working subagents control on the chat counts it while it runs. On the Agents wall that control sits on the window's composer bar, beside the microphone and as tall as it, with its list opening above it; a window showing only the transcript, with no composer of its own, keeps it in the window's bottom-right corner (`[implemented 2026-11-24, #3265; unit-tested and checked in a hidden renderer fixture against main; not yet checked in the packaged app]`).
 - **Its own chat** shows what it is doing live: its task as the first message, then its text, thinking, tool calls and results, and the model read from its first reply. `chat:running` lists it while it runs, so a window opened mid-run shows it working.
 
 **A watching copy, not a conversation.** Claude Code holds the real history, so the chat is marked `claudeCodeSubagent`, its composer says *This subagent runs inside its parent chat. Send your message there.*, and `chat:send` refuses it the same way for phones.

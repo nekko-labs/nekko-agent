@@ -52,7 +52,7 @@ import { foldWindow, growWindow, mostOverlapping, outerSide, slideWindow, type B
 import { ChatPane } from './ChatPane.js';
 import { FilePane } from './FilePane.js';
 import { ExplorerPane } from './ExplorerPane.js';
-import { WorkingSubagents } from './WorkingSubagents.js';
+import { WallSubagentsContext, WorkingSubagents } from './WorkingSubagents.js';
 import { FocusIcon } from '../gentleface-icons.js';
 import { agentStatusOfLane, type AgentStatus } from './WorkspaceCard.js';
 import { wakeSourcesOf } from '../views/agentPanelView.js';
@@ -881,6 +881,10 @@ export function CommandWall({
     ];
     return <WallLeaf key={pane.id} deps={deps} render={() => {
       const companions = pane.kind === 'chat' ? workspaceCompanions(workspaces, pane.refId) : [];
+      // With a plan, the plan sheet carries the sub-agents on their steps.
+      const workingSubagents = session && !session.agentPlan?.length
+        ? { children: subagents ?? [], running, pending, onOpen: (id: string) => { const { setState, onSelect } = live.current; setState((s) => openWallPane(s, 'chat', id)); onSelect(id); } }
+        : null;
       return (
       <div
         className={`command-wall-window ${deckCard ? 'command-wall-deck-window' : ''} ${flashing ? 'pane-flash' : ''}`}
@@ -971,7 +975,7 @@ export function CommandWall({
           <div className="command-wall-content" inert={!box || deckCard} aria-hidden={!box || deckCard || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={(focusedChat || parked) || undefined}>
 
             <div className="command-wall-primary">
-           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat || tiled} status={agentStatus ?? 'idle'} selected={selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
+           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><WallSubagentsContext.Provider value={workingSubagents && fullSurface ? workingSubagents : null}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat || tiled} status={agentStatus ?? 'idle'} selected={selected} /></WallSubagentsContext.Provider></PaneDensityHint.Provider></PaneVisibleContext.Provider>
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : pane.kind === 'files' ? <ExplorerPane key={pane.refId} paneId={pane.id} root={pane.refId} named />
             : pane.kind === 'browser' ? <BrowserPane key={pane.refId} url={pane.refId} />
@@ -990,8 +994,8 @@ export function CommandWall({
               })}
             </div>
           </div>
-          {/* With a plan, the plan sheet carries the sub-agents on their steps. */}
-          {session && !session.agentPlan?.length && <WorkingSubagents children={subagents ?? []} running={running} pending={pending} onOpen={(id) => { const { setState, onSelect } = live.current; setState((s) => openWallPane(s, 'chat', id)); onSelect(id); }} />}
+          {/* A window with its own composer shows them beside its microphone instead. */}
+          {workingSubagents && !fullSurface && <WorkingSubagents {...workingSubagents} />}
         </PaneFrame></>}
       </div>
       );
