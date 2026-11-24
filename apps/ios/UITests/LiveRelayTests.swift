@@ -73,11 +73,11 @@ final class LiveRelayTests: XCTestCase {
         let finish = app.buttons["permissions.continue"]
         XCTAssertTrue(finish.waitForExistence(timeout: 20), "the permission checklist follows pairing")
         attach(app, "\(theme)-1b-notifications-step")
-        let notifications = app.buttons["permissions.action.notifications"]
-        if notifications.waitForExistence(timeout: 3) {
-            notifications.tap()
-            tapSystemAlertIfShown()
-        }
+        // The rows fade in only after the first status refresh, which took longer than a few
+        // seconds on a loaded runner. Skipping the row then left notifications undetermined, so
+        // Settings → Send a test notification asked for permission itself and never got a result
+        // inside its 20 seconds (#2454). Wait for the row, grant, and wait for "Allowed".
+        grantNotifications(app)
         finish.tap()
         XCTAssertTrue(waitGone(finish, 10))
 
@@ -1009,6 +1009,28 @@ final class LiveRelayTests: XCTestCase {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let allow = springboard.buttons["Allow"].firstMatch
         if allow.waitForExistence(timeout: 4) { allow.tap() }
+    }
+
+    /// Notification permission is asked right after pairing, from the checklist's Alerts row.
+    /// Ends only when that row reads "Allowed", answering the system prompt whenever it shows.
+    private func grantNotifications(_ app: XCUIApplication) {
+        let row = app.buttons["permissions.row.notifications"]
+        let action = app.buttons["permissions.action.notifications"]
+        let allowed = NSPredicate(format: "value == %@", "Allowed")
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        var tapped = false
+        let deadline = Date().addingTimeInterval(busyWait)
+        while Date() < deadline {
+            if row.exists, allowed.evaluate(with: row) { return }
+            if !tapped, action.exists, action.isHittable {
+                action.tap()
+                tapped = true
+            }
+            let allow = springboard.buttons["Allow"].firstMatch
+            if allow.exists { allow.tap() }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTFail("the checklist never showed notifications as Allowed (offered: \(action.exists), tapped: \(tapped))")
     }
 
     /// Scrolls a long form until `e` can be tapped: down first, then back up
