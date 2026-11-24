@@ -22,6 +22,8 @@ const READ_CAP: usize = 60_000;
 /// a stream and a whole read takes only the head it can show. Reading a
 /// multi-GB log, dump or model whole could abort the daemon out of memory.
 const READ_WHOLE_MAX: u64 = 16 * 1024 * 1024;
+/// How many leading bytes `read_file` checks for a NUL byte to tell a binary file.
+const BINARY_SNIFF_BYTES: u64 = 8 * 1024;
 /// Above this, `edit_file` refuses: an edit needs the file whole, twice.
 const EDIT_MAX: u64 = 64 * 1024 * 1024;
 const GLOB_LIMIT: usize = 200;
@@ -94,6 +96,22 @@ fn read_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
         return Ok(ToolResult::err(call, format!("File not found: {p}")));
     }
     let size = nodefs::size(&p);
+    // A binary file (a picture, audio, a model, an archive) is not text: its
+    // bytes would fill the context window. A NUL byte early on marks it, as git does.
+    // A UTF-16 file (marked by its byte-order mark) has NULs too; it keeps the
+    // read it always had rather than becoming a note.
+    let sniff = nodefs::read_bytes_head(&p, BINARY_SNIFF_BYTES)?;
+    let utf16 = sniff.starts_with(&[0xFF, 0xFE]) || sniff.starts_with(&[0xFE, 0xFF]);
+    if !utf16 && sniff.contains(&0) {
+        let name = std::path::Path::new(&p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or(p.clone());
+        return Ok(ToolResult::ok(
+            call,
+            format!(
+                "{name} is a binary file ({} KB), not text. Pass its path to the tool that handles this file type (edit_image for pictures), or use bash to inspect it.",
+                size.div_ceil(1024)
+            ),
+        ));
+    }
     let big = size > READ_WHOLE_MAX;
     let content = if big { String::new() } else { nodefs::read_utf8(&p)? };
     if arg(call, "start_line").is_some_and(|v| !v.is_null()) || arg(call, "end_line").is_some_and(|v| !v.is_null()) {

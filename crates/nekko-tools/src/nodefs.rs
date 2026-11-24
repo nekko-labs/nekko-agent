@@ -101,6 +101,11 @@ pub fn size(p: &str) -> u64 {
 /// [`read_utf8`] of at most the first `max` bytes, for a file too big to
 /// read whole. A character cut at the end becomes U+FFFD.
 pub fn read_utf8_head(p: &str, max: u64) -> Result<String, String> {
+    Ok(String::from_utf8_lossy(&read_bytes_head(p, max)?).into_owned())
+}
+
+/// The first `max` raw bytes of the file at `p`.
+pub fn read_bytes_head(p: &str, max: u64) -> Result<Vec<u8>, String> {
     use std::io::Read;
     if std::fs::metadata(p).is_ok_and(|m| m.is_dir()) {
         return Err(message(EISDIR, "read", None));
@@ -108,7 +113,7 @@ pub fn read_utf8_head(p: &str, max: u64) -> Result<String, String> {
     let file = std::fs::File::open(p).map_err(|e| os_error(&e, "open", p))?;
     let mut bytes = Vec::new();
     file.take(max).read_to_end(&mut bytes).map_err(|e| os_error(&e, "read", p))?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    Ok(bytes)
 }
 
 /// Lines `start..=end` (1-based) of the file at `p`, read as a stream so a

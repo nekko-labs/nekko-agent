@@ -451,7 +451,7 @@
         },
         {
           "result": {
-            "output": "�PNG\n\u001a\n\u0000\u0000\u0000\rIHDR\u0000\u0000\u0000\u0000\u0000�\u0000�main\u0000\u0000",
+            "output": "binary.png is a binary file (1 KB), not text. Pass its path to the tool that handles this file type (edit_image for pictures), or use bash to inspect it.",
             "isError": false
           },
           "approvals": []
