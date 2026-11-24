@@ -9,6 +9,8 @@
 //!   in the workspace roots, attached files, and memory notes.
 //! - `frame`: the memory notes a chat's system prompt keeps, taken once so
 //!   the prompt's prefix stays byte-stable, and what changed since.
+//! - `recall`: which notes a chat gets: a small core in the system prompt,
+//!   the rest searched (bm25) for the message that needs them.
 //! - `rules`: rule folders and subfolder guides beyond the root files, with
 //!   an index for the ones that load on demand (`Session.guidance`).
 //!
@@ -25,10 +27,15 @@ pub mod frame;
 pub mod gather;
 pub mod nodepath;
 pub mod prompt;
+pub mod recall;
 pub mod rules;
 
 pub use assemble::{AssembleInput, Bundle, Item, assemble, render_block};
-pub use frame::{MemoryFrame, memory_frame, render_memory_changes};
-pub use gather::{Guideline, MemoryScope, collect_attached, collect_guidelines, list_memory, parse_memory};
+pub use frame::{MemoryFrame, mark_shown, memory_frame, render_memory_changes};
+pub use gather::{
+    Guideline, MemoryScope, collect_attached, collect_guidelines, forget_memory, in_scope, list_memory, memory_notes,
+    parse_memory,
+};
 pub use prompt::{DESIGN_RULES, PromptContext, PromptProfile, Workspace, build_system_prompt, intro};
+pub use recall::{MemoryIndex, core_notes, render_recalled};
 pub use rules::{Guidance, ProjectGuidance, collect_rules, project_guidance};

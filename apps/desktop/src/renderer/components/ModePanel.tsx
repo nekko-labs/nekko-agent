@@ -1,13 +1,14 @@
 import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { allowModeChange } from './YoloWarning.js';
 import { createPortal } from 'react-dom';
-import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL } from '@nekko-agent/shared';
 import type { ChatMode, EffortLevel, SavedModeSummaryPart, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
-  CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getWorkMode, matchSavedMode, newSavedModeId,
+  CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getWorkMode, isStarterMode, matchSavedMode, newSavedModeId,
   modePatchSkips, savedModeSummary, savedModeSummaryParts, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
+import { useChatEngine, type ChatEngine } from './codeModeLock.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
   BoltIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon,
@@ -66,6 +67,8 @@ const lastApplied = new Map<string, string>();
 type Deps = {
   session: Session;
   isCloudModel: boolean;
+  /** Claude Code runs this chat, so code mode never applies: a saved mode leaves it as it is. */
+  claudeAgent?: boolean;
   onChange: (s: Session | null) => void;
   /** Sandbox needs its setup dialog (image, consent) before a chat can move in. */
   onSandboxSetup: () => void;
@@ -78,7 +81,7 @@ const toastError = (e: unknown) => useStore.getState().pushToast('error', String
  * tested on its own. Per-chat settings (effort, MCP servers and connectors
  * included) go through setSessionOptions; saved modes are app settings.
  */
-export function modePanelActions({ session, isCloudModel, onChange, onSandboxSetup }: Deps) {
+export function modePanelActions({ session, isCloudModel, claudeAgent = false, onChange, onSandboxSetup }: Deps) {
   const settings = () => useStore.getState().settings;
   const saveSettings = async (patch: Parameters<typeof window.nekko.updateSettings>[0]) => {
     await window.nekko.updateSettings(patch);
@@ -88,6 +91,11 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
     const next = await window.nekko.setSessionOptions(session.id, patch);
     onChange(next);
     return next;
+  };
+  /** This chat's settings as a saved mode. A Claude Agent chat says nothing of code mode (`kept` is what the mode had). */
+  const modeOptions = (kept?: ToolApproach) => {
+    const { toolApproach, ...rest } = sessionModeOptions(session, settings());
+    return claudeAgent ? { ...rest, ...(kept ? { toolApproach: kept } : {}) } : { ...rest, toolApproach };
   };
   return {
     /** Local machine (with or without a worktree) or Sandbox. Also the default for new chats, as before. */
@@ -169,6 +177,8 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
     /** Put this chat in a saved mode: one per-chat write, then the sandbox dialog if it needs one. */
     async applyMode(mode: SavedMode) {
       const patch = sessionPatchForMode(mode.options, { cloudModel: isCloudModel });
+      // A mode is not tied to a model: one that pairs code mode with Claude Code applies without it.
+      if (claudeAgent) delete patch.toolApproach;
       const skipped = modePatchSkips(mode.options, { cloudModel: isCloudModel });
       const intoSandbox = mode.options.executionMode === 'sandbox' && getExecutionMode(session) !== 'sandbox';
       if (intoSandbox) { delete patch.executionMode; delete patch.gitIsolation; delete patch.mode; }
@@ -183,13 +193,13 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
     },
     async saveMode(name: string, makeDefault: boolean) {
       const modes = savedModes(settings());
-      const mode: SavedMode = { id: newSavedModeId(name, modes), name: name.trim() || 'New mode', icon: 'sparkle', options: sessionModeOptions(session, settings()) };
+      const mode: SavedMode = { id: newSavedModeId(name, modes), name: name.trim() || 'New mode', icon: 'sparkle', options: modeOptions() };
       lastApplied.set(session.id, mode.id);
       try { await saveSettings({ savedModes: [...modes, mode], ...(makeDefault ? { defaultSavedModeId: mode.id } : {}) }); } catch (e) { toastError(e); }
       return mode;
     },
     async updateMode(id: string) {
-      const modes = savedModes(settings()).map((m) => (m.id === id ? { ...m, options: sessionModeOptions(session, settings()) } : m));
+      const modes = savedModes(settings()).map((m) => (m.id === id ? { ...m, options: modeOptions(m.options.toolApproach) } : m));
       try { await saveSettings({ savedModes: modes }); } catch (e) { toastError(e); }
     },
     async deleteMode(id: string) {
@@ -205,9 +215,10 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
 }
 
 /** The saved mode a chat is in, or the one it was last put in (for Update/Revert). */
-export function chatModeState(session: Session, settings: Parameters<typeof savedModes>[0] & Parameters<typeof sessionModeOptions>[1]) {
+export function chatModeState(session: Session, settings: Parameters<typeof savedModes>[0] & Parameters<typeof sessionModeOptions>[1], opts: { claudeAgent?: boolean } = {}) {
   const modes = savedModes(settings);
-  const current = sessionModeOptions(session, settings);
+  // Code mode never applies on Claude Code, so it cannot tell two modes apart there.
+  const current = opts.claudeAgent ? { ...sessionModeOptions(session, settings), toolApproach: undefined } : sessionModeOptions(session, settings);
   const active = matchSavedMode(modes, current);
   const last = modes.find((m) => m.id === lastApplied.get(session.id));
   return { modes, current, active, edited: active ? undefined : last };
@@ -221,8 +232,8 @@ type Fly = 'tools' | 'mcp' | 'connectors' | 'skills';
  * Approach). Tools, MCP servers, Connectors and Skills open a list out the side.
  */
 export function ModePanel({
-  session, isCloudModel, onChange, onSandboxSetup, style, panelRef,
-}: Deps & { modelId?: string; style?: React.CSSProperties; panelRef?: React.Ref<HTMLDivElement> }) {
+  session, isCloudModel, providerId, onChange, onSandboxSetup, style, panelRef,
+}: Deps & { modelId?: string; /** The provider that will run the chat; `session.providerId` is empty until one is picked. */ providerId?: string | null; style?: React.CSSProperties; panelRef?: React.Ref<HTMLDivElement> }) {
   const settings = useStore((s) => s.settings);
   const tools = useChatTools();
   const [fly, setFly] = useState<Fly | null>(null);
@@ -231,8 +242,10 @@ export function ModePanel({
   const anchors = useRef<Partial<Record<Fly, HTMLButtonElement | null>>>({});
   const panel = useRef<HTMLDivElement | null>(null);
   const flyRef = useRef<HTMLDivElement | null>(null);
-  const actions = modePanelActions({ session, isCloudModel, onChange, onSandboxSetup });
-  const { modes, current, active, edited } = chatModeState(session, settings);
+  const engine = useChatEngine(providerId ?? session.providerId);
+  const claudeAgent = engine === 'claude-agent';
+  const actions = modePanelActions({ session, isCloudModel, claudeAgent, onChange, onSandboxSetup });
+  const { modes, current, active, edited } = chatModeState(session, settings, { claudeAgent });
   const defaultId = defaultSavedMode(settings)?.id;
   const execution = getExecutionMode(session);
   const sandbox = execution === 'sandbox';
@@ -300,8 +313,7 @@ export function ModePanel({
 
   // Code mode wraps Nekko's own tools. A Claude Agent chat runs Claude Code's
   // tools instead, so the engine never applies it there (nekkod turns.rs).
-  const claudeAgent = useStore((s) => s.providers?.find((p) => p.id === session.providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND);
-  const approachLock: ToolApproachLock = sandbox ? 'sandbox' : claudeAgent ? 'claude-agent' : null;
+  const approachLock = toolApproachLock(sandbox, engine);
   const approach: ToolApproach = approachLock ? 'list' : session.toolApproach ?? 'list';
   const flyBody = (f: Fly) => f === 'tools'
     ? <>
@@ -368,27 +380,33 @@ export function ModePanel({
     </div>
   );
   const approvals: ChatMode = current.mode;
+  const railItem = (m: SavedMode) => {
+    const Glyph = SAVED_MODE_GLYPH[m.icon] ?? SparkleIcon;
+    const isDefault = m.id === defaultId;
+    return (
+      <div key={m.id} className="mode-rail-item" aria-checked={active?.id === m.id} role="radio" tabIndex={0} data-saved-mode={m.id}
+        title={`${m.name}: ${savedModeSummary(m.options) || 'local'}`}
+        onClick={() => void actions.applyMode(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void actions.applyMode(m); } }}>
+        <span className="mode-glyph"><Glyph /></span>
+        <span className="min-w-0 flex-1"><span className="mode-rail-n">{m.name}</span><span className="mode-rail-d">{savedModeSummary(m.options) || 'local'}</span></span>
+        <button className={`mode-star ${isDefault ? 'is-on' : ''}`} aria-label={isDefault ? `${m.name} is the default for new chats` : `Use ${m.name} for new chats`} title={isDefault ? 'Default for new chats (click to clear)' : 'Use for new chats'}
+          onClick={(e) => { e.stopPropagation(); void actions.toggleDefault(m.id); }}><StarIcon filled={isDefault} /></button>
+      </div>
+    );
+  };
+  // The user's own modes come first, under their own heading.
+  const custom = modes.filter((m) => !isStarterMode(m));
+  const starters = modes.filter(isStarterMode);
 
   return (<>
     <div ref={(el) => { panel.current = el; if (typeof panelRef === 'function') panelRef(el); else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }}
       style={style} className="mode-panel card fixed z-[100] shadow-(--shadow-float)" role="dialog" aria-label="Mode" data-mode-panel onKeyDown={onKeyDown}>
-      <div className="mode-rail" role="radiogroup" aria-label="Saved modes">
-        <p className="mode-sec">Saved modes</p>
-        {modes.map((m) => {
-          const Glyph = SAVED_MODE_GLYPH[m.icon] ?? SparkleIcon;
-          const isDefault = m.id === defaultId;
-          return (
-            <div key={m.id} className="mode-rail-item" aria-checked={active?.id === m.id} role="radio" tabIndex={0} data-saved-mode={m.id}
-              title={`${m.name}: ${savedModeSummary(m.options) || 'local'}`}
-              onClick={() => void actions.applyMode(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void actions.applyMode(m); } }}>
-              <span className="mode-glyph"><Glyph /></span>
-              <span className="min-w-0 flex-1"><span className="mode-rail-n">{m.name}</span><span className="mode-rail-d">{savedModeSummary(m.options) || 'local'}</span></span>
-              <button className={`mode-star ${isDefault ? 'is-on' : ''}`} aria-label={isDefault ? `${m.name} is the default for new chats` : `Use ${m.name} for new chats`} title={isDefault ? 'Default for new chats (click to clear)' : 'Use for new chats'}
-                onClick={(e) => { e.stopPropagation(); void actions.toggleDefault(m.id); }}><StarIcon filled={isDefault} /></button>
-            </div>
-          );
-        })}
-        <span className="flex-1" />
+      <div className="mode-rail">
+        {/* The list scrolls on its own so New mode stays in reach however many modes there are. */}
+        <div className="mode-rail-list" role="radiogroup" aria-label="Saved modes" data-mode-rail-list>
+          {custom.length > 0 && <><p className="mode-sec" data-mode-group="custom">Custom</p>{custom.map(railItem)}</>}
+          {starters.length > 0 && <><p className={`mode-sec${custom.length > 0 ? ' is-sub' : ''}`} data-mode-group="starter">{custom.length > 0 ? 'Built-in' : 'Saved modes'}</p>{starters.map(railItem)}</>}
+        </div>
         <button className="mode-rail-item" onClick={() => setSaving({ name: '', makeDefault: false })}><span className="mode-glyph"><PlusIcon /></span><span className="mode-rail-n">New mode</span></button>
       </div>
 
@@ -497,11 +515,24 @@ export function ModePanel({
 }
 
 /** Why a chat cannot use code mode: its tools run in a sandbox, or Claude Code runs them. */
-export type ToolApproachLock = 'sandbox' | 'claude-agent' | null;
+export type ToolApproachLock = 'sandbox' | 'claude-agent' | 'unknown' | null;
 
 const LOCK_NOTE: Record<NonNullable<ToolApproachLock>, string> = {
   sandbox: 'Sandbox chats use the tool list: their few tools run in the container.',
-  'claude-agent': "Claude Agent chats run Claude Code's own tools, so code mode doesn't apply and saves nothing. Pick another model to use it.",
+  'claude-agent': "Claude Agent chats run Claude Code's own tools, so code mode doesn't apply and saves nothing. Pick a model other than Claude Code to use it.",
+  unknown: 'Checking which model runs this chat. Code mode is not offered on Claude Code.',
+};
+
+/** Why the chat cannot pick code mode, if it cannot. Claude Code is locked from the moment it is known, and held until the provider list says. */
+export function toolApproachLock(sandbox: boolean, engine: ChatEngine): ToolApproachLock {
+  return sandbox ? 'sandbox' : engine === 'claude-agent' ? 'claude-agent' : engine === 'unknown' ? 'unknown' : null;
+}
+
+/** The short why, shown on hovering a locked option. */
+const LOCK_HINT: Record<NonNullable<ToolApproachLock>, string> = {
+  sandbox: 'Sandbox chats always use the tool list.',
+  'claude-agent': "Claude Agent uses Claude Code's own tools. Pick a model other than Claude Code to choose.",
+  unknown: 'Checking which model runs this chat.',
 };
 
 /**
@@ -512,15 +543,19 @@ export function ToolApproachPicker({ approach, locked = null, onPick }: { approa
   return (
     <div role="radiogroup" aria-label="How tools reach the model" data-tool-approaches>
       <p className="mode-group">How tools reach the model</p>
-      {TOOL_APPROACHES.map((a) => (
-        <button key={a.id} role="radio" aria-checked={approach === a.id} disabled={!!locked} data-tool-approach={a.id} className="mode-opt disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onPick(a.id)}>
-          <span className="mode-opt-ic">{a.id === 'code' ? <CodeIcon /> : <ListIcon />}</span>
-          <span className="min-w-0 flex-1">
-            <span className="mode-t">{a.label}{a.isNew && <span className="mode-badge is-accent">New</span>}{approach === a.id && <CheckIcon className="h-3.5 w-3.5 text-accent" />}</span>
-            <span className="mode-s">{a.description}</span>
-          </span>
-        </button>
-      ))}
+      {TOOL_APPROACHES.map((a) => {
+        const opt = (
+          <button key={a.id} role="radio" aria-checked={approach === a.id} disabled={!!locked} data-tool-approach={a.id} className="mode-opt disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onPick(a.id)}>
+            <span className="mode-opt-ic">{a.id === 'code' ? <CodeIcon /> : <ListIcon />}</span>
+            <span className="min-w-0 flex-1">
+              <span className="mode-t">{a.label}{a.isNew && <span className="mode-badge is-accent">New</span>}{approach === a.id && <CheckIcon className="h-3.5 w-3.5 text-accent" />}</span>
+              <span className="mode-s">{a.description}</span>
+            </span>
+          </button>
+        );
+        // A disabled button may swallow pointer events, so the hint hangs on a wrapper.
+        return locked ? <HoverTip key={a.id} label={LOCK_HINT[locked]} side="top"><span className="block">{opt}</span></HoverTip> : opt;
+      })}
       <a className="mode-link block" href={CODE_MODE_DOCS} data-code-mode-docs onClick={(e) => { e.preventDefault(); void window.nekko.openPath(CODE_MODE_DOCS); }}>What's code mode, and what does it save? <ExternalIcon className="inline h-2.5 w-2.5" /></a>
       {locked && <p className="mode-note" data-tool-approach-lock={locked}>{LOCK_NOTE[locked]}</p>}
     </div>

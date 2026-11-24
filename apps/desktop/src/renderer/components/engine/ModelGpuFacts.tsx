@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_FIT_REQUEST, type FitPlan, type LocalModel, type ResidentModel } from '@nekko-agent/shared';
+import { capacityBands, GpuCapacityBar } from './GpuCapacityBar.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 
 /**
@@ -37,6 +38,7 @@ export function ownGpuBytes(resident: ResidentModel | undefined): number {
  * models on. The planner reserves the same 2 GB of system RAM for the OS
  * (`OS_RESERVE_BYTES` in capacity.rs).
  */
+// Keep equal to `DESKTOP_GPU_RESERVE_BYTES` in crates/nekko-engine/src/capacity.rs.
 export const DESKTOP_RESERVE_BYTES = 2 * 1024 ** 3;
 
 /** "All 256k", "196k of 256k" or "None": a context figure read against the model's longest. */
@@ -66,11 +68,16 @@ export function ModelGpuFacts({ providerId, model, resident, others = [] }: {
   others?: string[];
 }) {
   const [plan, setPlan] = useState<FitPlan | null>(null);
+  const [recommended, setRecommended] = useState<number | null>(null);
   const maxCtx = model.maxContext ?? 0;
   useEffect(() => {
     setPlan(null);
+    setRecommended(null);
     if (!maxCtx || model.modality === 'image') return;
     let live = true;
+    window.nekko.runtimeRecommend(providerId, model.id, { goal: 'speed' })
+      .then(r => { if (live && r && r.plan.verdict !== 'unknown') setRecommended(r.request.contextTokens); })
+      .catch(() => undefined);
     window.nekko
       .runtimePlan(providerId, model.id, { ...DEFAULT_FIT_REQUEST, contextTokens: maxCtx, gpuLayerFraction: 1 })
       .then((p) => { if (live) setPlan(p); })
@@ -80,32 +87,24 @@ export function ModelGpuFacts({ providerId, model, resident, others = [] }: {
 
   // No GPU, no geometry, or an answer the planner itself would not give: say nothing.
   if (!plan || plan.verdict === 'unknown' || !plan.deviceName || !maxCtx) return null;
-  const free = plan.deviceFreeBytes + ownGpuBytes(resident);
+  if (plan.deviceTotalBytes <= 0) return null;
+  const free = Math.max(0, Math.min(plan.deviceTotalBytes, plan.deviceFreeBytes + ownGpuBytes(resident)));
   const fitsNow = contextThatFits(plan, free, maxCtx);
   const fitsFree = contextThatFits(plan, Math.max(0, plan.deviceTotalBytes - DESKTOP_RESERVE_BYTES), maxCtx);
   if (fitsNow === null || fitsFree === null) return null;
   const perThousand = (plan.kvCacheBytes / maxCtx) * 1024;
-  const takes = plan.weightsBytes + plan.overheadBytes;
   const note = busyNote(plan.deviceTotalBytes - free, others, fitsNow, fitsFree);
-  const facts: Array<{ label: string; value: string; title?: string; warn?: boolean }> = [
-    { label: 'Takes', value: `${formatBytes(takes)} + context`, title: `${formatBytes(plan.weightsBytes)} of weights and ${formatBytes(plan.overheadBytes)} of buffers, before any context` },
-    { label: 'Context per 1k tokens', value: formatBytes(perThousand), title: 'The KV cache this model keeps for every thousand tokens of conversation, at its default precision' },
-    { label: 'Context on a free GPU', value: contextText(fitsFree, maxCtx), title: 'What is left for context once it is loaded, with nothing else on the GPU but the desktop', warn: fitsFree === 0 },
-    { label: 'Context that fits now', value: contextText(fitsNow, maxCtx), title: 'What is left for context once it is loaded beside what holds the GPU right now, with every layer on the GPU', warn: fitsNow === 0 },
-    { label: 'Free on the GPU', value: `${formatBytes(free)} of ${formatBytes(plan.deviceTotalBytes)}` },
-  ];
   return (
-    <div className="mt-(--q-group)" data-model-gpu-facts>
-      <h4 className="quiet-group-label">On {plan.deviceName}</h4>
-      <dl className="mt-(--q-heading) flex flex-wrap gap-x-8 gap-y-2">
-        {facts.map(({ label, value, title, warn }) => (
-          <div key={label} title={title}>
-            <dt className="text-xs text-ink-faint">{label}</dt>
-            <dd className={`mt-(--q-tight) text-sm font-medium tabular-nums ${warn ? 'text-warning-text' : ''}`}>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      {note && <p className="mt-(--q-inline) text-xs text-ink-soft" data-gpu-busy-note>{note}</p>}
-    </div>
+    <section className="mt-(--q-group)" data-model-gpu-facts aria-label="GPU memory estimate">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1">
+        <h4 className="text-sm font-semibold">VRAM on {plan.deviceName}</h4>
+        <span className="text-xs text-ink-soft tabular-nums">{formatBytes(free)} of {formatBytes(plan.deviceTotalBytes)} available</span>
+      </div>
+      <GpuCapacityBar bands={capacityBands(plan, free, maxCtx, recommended)} />
+      <p className="mt-4 text-xs text-ink-soft"><strong className="font-medium text-ink">{fitsNow === 0 ? 'No context fits now.' : contextText(fitsNow, maxCtx) + ' tokens fit now.'}</strong>{' '}
+        {fitsFree > fitsNow && <>{formatTokens(fitsFree)} fit on an idle GPU. </>}{formatBytes(perThousand)} per 1k tokens.
+      </p>
+      {note && <p className="mt-1 text-xs text-ink-soft" data-gpu-busy-note>{note}</p>}
+    </section>
   );
 }

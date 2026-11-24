@@ -296,6 +296,54 @@ fn repo_from_typed_path(root: &str, p: &str) -> Option<String> {
     (i > 0).then(|| format!("{}/{}", String::from_utf16_lossy(&units[..i]), String::from_utf16_lossy(&units[i + 1..])))
 }
 
+/// A header name that says nothing about the model. llama.cpp's converter
+/// takes `general.name` from the source folder, so a checkout called `hf`
+/// yields "Hf". True when every word of the name is a generic folder word.
+fn is_generic_name(name: &str) -> bool {
+    const GENERIC: [&str; 8] = ["hf", "model", "models", "gguf", "main", "snapshot", "snapshots", "unknown"];
+    let lowered = name.to_lowercase();
+    let mut words = lowered.split(|c: char| !c.is_alphabetic()).filter(|w| !w.is_empty()).peekable();
+    words.peek().is_some() && words.all(|w| GENERIC.contains(&w))
+}
+
+fn is_lmstudio(root: &Root) -> bool {
+    root.provider.as_ref().and_then(Value::as_str) == Some("lmstudio")
+}
+
+/// LM Studio keeps `<root>/<publisher>/<repo>/<file>.gguf`, named after the
+/// Hugging Face repo it was fetched from. Only a row named after its file (the
+/// header had no usable name) takes it: a folder can be named for something
+/// else, and a real header name says better what the model is.
+fn lmstudio_repo(root: &Root, p: &str, shown: &str) -> Option<String> {
+    if !is_lmstudio(root) || shown != strip_gguf(&path::basename(p)) {
+        return None;
+    }
+    match rel_parts(&root.path, p).as_slice() {
+        [publisher, repo, _file] if !publisher.is_empty() && !repo.is_empty() => Some(format!("{publisher}/{repo}")),
+        _ => None,
+    }
+}
+
+/// Rows indexed before names were vetted keep a meaningless "Hf", and LM Studio
+/// rows may carry a folder repo over a real header name. Fix just those fields
+/// so presets and the rest stay put.
+fn refresh_naming(root: &Root, p: &str, stored: &mut Map<String, Value>) -> bool {
+    let mut changed = false;
+    if stored.get("name").and_then(Value::as_str).is_some_and(is_generic_name) {
+        stored.insert("name".into(), json!(strip_gguf(&path::basename(p))));
+        changed = true;
+    }
+    if is_lmstudio(root) {
+        let shown = stored.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+        let repo = lmstudio_repo(root, p, &shown).map(Value::String);
+        if stored.get("sourceRepo") != repo.as_ref() {
+            assign(stored, "sourceRepo", repo);
+            changed = true;
+        }
+    }
+    changed
+}
+
 fn put(m: &mut Map<String, Value>, k: &str, v: Option<Value>) {
     if let Some(v) = v {
         m.insert(k.into(), v);
@@ -373,7 +421,8 @@ fn describe_with(
         Some(n) => format!("{}/{n}", root.id_str()),
         None => id_for(root, p),
     };
-    let meta_name = meta.and_then(|m| m.name.as_deref()).map(nekko_js::trim).filter(|n| !n.is_empty());
+    let meta_name =
+        meta.and_then(|m| m.name.as_deref()).map(nekko_js::trim).filter(|n| !n.is_empty() && !is_generic_name(n));
     let shown =
         name.filter(|n| !n.is_empty()).or(meta_name).map_or_else(|| strip_gguf(&file).to_string(), str::to_string);
     let typed = root.managed
@@ -385,7 +434,8 @@ fn describe_with(
     m.insert("id".into(), json!(id));
     m.insert("name".into(), json!(shown));
     m.insert("file".into(), json!(p));
-    put(&mut m, "sourceRepo", if typed { repo_from_typed_path(&root.path, p).map(Value::String) } else { None });
+    let source_repo = if typed { repo_from_typed_path(&root.path, p) } else { lmstudio_repo(root, p, &shown) };
+    put(&mut m, "sourceRepo", source_repo.map(Value::String));
     m.insert("folderId".into(), root.id.clone());
     put(&mut m, "folderProvider", root.provider.clone());
     put(&mut m, "quantization", meta.and_then(|m| m.quantization.clone()).map(Value::String));
@@ -687,6 +737,7 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
                 }
             };
             dirty |= add_kv_layout(&mut stored, &p);
+            dirty |= refresh_naming(root, &p, &mut stored);
             let id = claim(&mut stored, &mut seen_ids);
             index.models().insert(id, Value::Object(stored.clone()));
             let mut row = stored;
@@ -1033,6 +1084,20 @@ pub fn gpu_fit_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64>) ->
     }
 }
 
+/// `gpu_fit_for` on the same card with nothing else holding it: every device's
+/// free memory is its total less the desktop reserve. `None` where that idea
+/// does not apply (unified memory, or no GPU).
+pub fn gpu_fit_idle_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64>) -> Option<&'static str> {
+    if hw.unified || hw.devices.is_empty() {
+        return None;
+    }
+    let mut idle = hw.clone();
+    for d in &mut idle.devices {
+        d.free = (d.total - capacity::DESKTOP_GPU_RESERVE_BYTES).max(0.0);
+    }
+    Some(gpu_fit_for(model, &idle, overhead_floor))
+}
+
 /// `engine:models`: the library with load state, the last failure and the
 /// GPU-fit verdict folded in. `hw` is `None` when no GPU probe answered.
 pub fn with_load_state(
@@ -1046,6 +1111,7 @@ pub fn with_load_state(
         .map(|row| {
             let id = row.get("id").map(nekko_js::display).unwrap_or_default();
             let fit = hw.map(|hw| gpu_fit_for(&row, hw, overhead_floor));
+            let idle = hw.filter(|_| fit == Some("partial")).and_then(|hw| gpu_fit_idle_for(&row, hw, overhead_floor));
             let mut m = match row {
                 Value::Object(m) => m,
                 _ => Map::new(),
@@ -1053,6 +1119,9 @@ pub fn with_load_state(
             m.insert("loaded".into(), json!(loaded.contains(&id)));
             assign(&mut m, "lastLoadError", errors.get(&id).filter(|e| !e.is_null()).cloned());
             assign(&mut m, "gpuFit", fit.map(|f| json!(f)));
+            // A partial fit may only be the card being busy: say whether it
+            // would fit with the card to itself.
+            assign(&mut m, "gpuFitIdle", idle.map(|f| json!(f)));
             Value::Object(m)
         })
         .collect()

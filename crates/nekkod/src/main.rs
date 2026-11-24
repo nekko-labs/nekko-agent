@@ -438,6 +438,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     };
     let _ = running.set(ctx.turns.clone());
     cloud.start(std::time::Duration::from_secs(60));
+    // Presence and sync nudges through Nekko Cloud Relay, for accounts whose plan includes it (decision 0116).
+    cloud.start_relay_channel(nekko_remote::route::cloud_relay_url());
     routes::forward_terminal_events(&ctx);
     ctx.turns.set_background(background::Background::new(
         ctx.machine.clone(),

@@ -882,9 +882,15 @@ How the Android and iOS apps each handle the connection (URL rules, pairing, rec
 
 **Not running right now:** the Fly app is gone and its name no longer resolves, so the desktop shows Nekko Cloud as *Coming soon*. A computer still set to it shows a warning with a **Change** button, and a phone paired through it says it can't find the address instead of "Connecting…". Use Tailscale until it is back.
 
-The app calls this **Nekko Cloud** and never shows the URL. Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
-managed relay becomes part of the paid plans (it already supports gating via
-`NEKKO_RELAY_AUTHZ_URL`), while self-hosting stays free forever.
+The app calls this **Nekko Cloud** and never shows the URL. Self-hosting stays free forever.
+
+**Nekko Cloud Relay is part of Nekko Cloud Pro and Team** (in progress, behind a switch until launch; [the spec](../spec/platform/nekko-cloud-relay.md)):
+
+- Sign in to Nekko Cloud on the computer. On Pro or Team, **Use Nekko Cloud** connects through it; on Free the card offers **Upgrade to Pro**.
+- Already on Tailscale? Turn on **Also through Nekko Cloud Relay** and the computer is reachable both ways at once: phones with Tailscale go direct, phones without it (or away from it) come in through the relay.
+- With both on, **Pair a device** asks how the next device connects (*Either way*, *Nekko Cloud Relay*, *Tailscale*), and each paired device has *Either way*, *Only Nekko Cloud Relay* or *Only Tailscale*. The computer enforces it: a phone set to *Only Tailscale* is turned away if it tries the relay.
+- Everything stays end-to-end encrypted. The relay checks a short-lived ticket your computer gets from Nekko Cloud, so it knows your plan, not who you are.
+- Signed-in computers on Pro also tell each other through the relay when they come online and when they've synced something, so another computer pulls new chats at once instead of within the minute.
 
 ### Private relay over Tailscale (free, no account, nothing hosted)
 

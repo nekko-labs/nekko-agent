@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { describeInterruption, formatResetTime, shouldShowPersistedInterruption, reconcileInterruptionNotice, savedTurnFailure, PERSISTED_INTERRUPTION } from './interruption.js';
+import { describeInterruption, formatResetTime, shouldShowPersistedInterruption, reconcileInterruptionNotice, savedTurnFailure, subagentResumeRequest, PERSISTED_INTERRUPTION } from './interruption.js';
+
+describe('subagentResumeRequest', () => {
+  it('names the subagent and why it stopped, and asks the parent to resume it', () => {
+    expect(subagentResumeRequest(' Part B ', "You've hit your 5-hour limit ")).toBe(
+      'The subagent "Part B" stopped before it finished: You\'ve hit your 5-hour limit\n\nResume it so it carries on from where it stopped.',
+    );
+    expect(subagentResumeRequest(undefined, 'It broke')).toMatch(/^A subagent stopped before it finished: It broke/);
+  });
+});
 
 describe('describeInterruption', () => {
   it('treats an intentional stop as a pause, not an error', () => {

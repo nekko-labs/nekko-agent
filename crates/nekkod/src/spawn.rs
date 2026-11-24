@@ -332,7 +332,7 @@ async fn prepare_sub_agent(
             return Err("The exact model ID is not available from the target provider. Use delegation_targets on the intended provider to refresh exact IDs, or update the saved delegation route in Settings; no fallback was used.".into());
         };
         if !nekko_messaging::auto::is_chat_model(model) {
-            return Err("The selected model is not a chat model. No child was created.".into());
+            return Err("The selected model is not a chat model, so it cannot run a sub-agent. No child was created. For pictures or video, start the sub-agent on a text model (or omit model_id to use this chat's) and have it call generate_image or edit_image with that model ID.".into());
         }
         if assignment.is_some()
             && model.pointer("/availability/status").and_then(Value::as_str).is_some_and(|s| s != "ready")

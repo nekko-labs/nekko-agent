@@ -64,7 +64,7 @@ The figures are estimates at about 4 characters a token, the same rule the Conte
 
 ## Where code mode does not apply
 
-- **Claude Agent chats.** Claude Code runs its own tools (Bash, Read, Edit and the rest), so Nekko Agent has nothing to wrap. The Tools flyout shows the tool list and says why, and these replies show no savings. Pick another model for the chat to use code mode.
+- **Claude Agent chats.** Claude Code runs its own tools (Bash, Read, Edit and the rest), so Nekko Agent has nothing to wrap. The Tools flyout shows the tool list, disables the Code mode option and says why, and these replies show no savings. A chat that was in code mode goes back to the tool list when it is on, or switches to, Claude Code. Pick a model other than Claude Code to use code mode.
 - **Sandbox chats** keep the tool list: their few tools run in the container.
 
 ## When to use the tool list instead

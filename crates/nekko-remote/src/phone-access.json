@@ -1145,7 +1145,8 @@
    ],
    "remoteAccess": [
     "remote:enable",
-    "remote:attach"
+    "remote:attach",
+    "remote:setRelays"
    ],
    "pairing": [
     "remote:pair",
@@ -1153,7 +1154,8 @@
     "remote:rotate"
    ],
    "phoneAccess": [
-    "remote:setAccess"
+    "remote:setAccess",
+    "remote:setRoute"
    ],
    "providerKeys": [
     "providers:save",

@@ -217,11 +217,12 @@ pub(crate) fn turn_provider_allowed(provider: &Value) -> bool {
     s(provider, "kind") == "claude-code" || provider_endpoint(provider).is_some()
 }
 
-/// `clampMaxOutputTokens`.
-fn clamp_max_output_tokens(n: Option<&Value>) -> f64 {
+/// `clampMaxOutputTokens`: no limit unless the user set one (unset, 0 or not
+/// a number means none), otherwise their value kept within 256–200,000.
+fn clamp_max_output_tokens(n: Option<&Value>) -> Option<f64> {
     match n.and_then(Value::as_f64) {
-        Some(n) if n.is_finite() => (n + 0.5).floor().clamp(256.0, 200_000.0),
-        _ => 8192.0,
+        Some(n) if n.is_finite() && n > 0.0 => Some((n + 0.5).floor().clamp(256.0, 200_000.0)),
+        _ => None,
     }
 }
 
@@ -693,11 +694,10 @@ async fn admit(
     // Execution and reply stats must describe the same resolved choice.
     facts.insert("effort".into(), json!(effort_name(&stats_effort)));
     facts.insert("statsEffort".into(), json!(effort_name(&stats_effort)));
-    if is_local(kind) {
-        facts.insert(
-            "maxOutputTokens".into(),
-            nekko_oauth::num(clamp_max_output_tokens(settings.get("maxOutputTokens"))),
-        );
+    if is_local(kind)
+        && let Some(cap) = clamp_max_output_tokens(settings.get("maxOutputTokens"))
+    {
+        facts.insert("maxOutputTokens".into(), nekko_oauth::num(cap));
     }
     facts.insert("promptCaching".into(), json!(settings.get("promptCaching") != Some(&json!(false))));
     let mut thinking = true;
@@ -953,11 +953,12 @@ mod tests {
 
     #[test]
     fn output_caps_and_index_words_follow_the_ts_rules() {
-        assert_eq!(clamp_max_output_tokens(None), 8192.0);
-        assert_eq!(clamp_max_output_tokens(Some(&json!(10))), 256.0);
-        assert_eq!(clamp_max_output_tokens(Some(&json!(1_000_000))), 200_000.0);
-        assert_eq!(clamp_max_output_tokens(Some(&json!(1000.5))), 1001.0);
-        assert_eq!(clamp_max_output_tokens(Some(&json!("4096"))), 8192.0);
+        assert_eq!(clamp_max_output_tokens(None), None);
+        assert_eq!(clamp_max_output_tokens(Some(&json!(0))), None);
+        assert_eq!(clamp_max_output_tokens(Some(&json!(10))), Some(256.0));
+        assert_eq!(clamp_max_output_tokens(Some(&json!(1_000_000))), Some(200_000.0));
+        assert_eq!(clamp_max_output_tokens(Some(&json!(1000.5))), Some(1001.0));
+        assert_eq!(clamp_max_output_tokens(Some(&json!("4096"))), None);
         assert!(has_index_words("fix the auth bug"));
         assert!(!has_index_words("hi, ok?"));
         assert_eq!(terminal_text("a\u{1b}[0mb\nc"), "a[0mb\r\nc");

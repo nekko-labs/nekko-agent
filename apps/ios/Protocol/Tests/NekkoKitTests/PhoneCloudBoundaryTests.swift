@@ -18,7 +18,8 @@ final class PhoneCloudBoundaryTests: XCTestCase {
     }
 
     func testEveryCloudWireAndAuthShape() throws {
-        for kind in PhoneProviders.kinds {
+        // ChatGPT signs in instead of taking a key (ChatGPTSignInTests).
+        for kind in PhoneProviders.kinds where !kind.plan {
             let base = kind.defaultUrl.replacingOccurrences(of: "YOUR_RESOURCE", with: "resource").replacingOccurrences(of: "YOUR_PROJECT", with: "project")
             let p = try PhoneProviders.make(id: kind.id, kind: kind.id, label: kind.label,
                 baseUrl: kind.id == "openai-compat" ? "https://example.com/v1" : base, key: "token", workspaceId: "ws")
