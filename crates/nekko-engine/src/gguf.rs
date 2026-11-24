@@ -136,6 +136,11 @@ fn file_type(n: f64) -> Option<&'static str> {
 /// whenever the pinned llama.cpp release changes (`builds::release_pin`).
 const GGML_TYPE_COUNT: u32 = 44;
 
+/// The llama.cpp release [`GGML_TYPE_COUNT`] and the sizes in [`ggml_block`] were
+/// last checked against. A test ties it to `builds::release_pin`, so the automated
+/// pin-bump PR fails until someone rechecks both at the new release and updates this.
+pub const GGML_TYPES_CHECKED_AT: &str = "b12464";
+
 /// From this tensor type up, a type is a fork's own range and the managed engine
 /// refuses the file; between [`GGML_TYPE_COUNT`] and here it may only be a type
 /// newer than this engine knows, so the file is let through with a warning and

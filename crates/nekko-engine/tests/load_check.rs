@@ -185,3 +185,14 @@ fn a_type_just_past_llama_cpps_count_is_tried_and_a_forks_own_range_is_refused()
         assert!(check.blocked() && check.cause == Cause::WeightFormat, "type {t}");
     }
 }
+
+#[test]
+fn the_ggml_type_table_was_checked_against_the_pinned_release() {
+    assert_eq!(
+        nekko_engine::builds::release_pin("llama").1,
+        nekko_engine::gguf::GGML_TYPES_CHECKED_AT,
+        "The pinned llama.cpp release changed. Recheck GGML_TYPE_COUNT and the block sizes in ggml_block \
+         (crates/nekko-engine/src/gguf.rs) against ggml/include/ggml.h and ggml/src/ggml.c at the new \
+         release, then set GGML_TYPES_CHECKED_AT to it."
+    );
+}
