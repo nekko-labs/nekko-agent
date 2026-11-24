@@ -29,6 +29,7 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   set_chat_title: 'Name this chat',
   complete_session: 'Archive this chat',
   remember: 'Remember something about you',
+  recall_memory: 'Look up what I remember about you',
 };
 
 function humanize(name: string): string {

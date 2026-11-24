@@ -93,6 +93,16 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     {
         tools.push(remember_tool());
     }
+    // Read-only, so offered wherever the chat reads memory at all; offered
+    // whether or not notes exist yet, so the tool list (part of the cached
+    // prompt prefix) does not change when the first note is saved.
+    if !parent
+        && !training
+        && !disabled.contains(RECALL_MEMORY)
+        && nekko_context::MemoryScope::of_session(session).project()
+    {
+        tools.push(recall_memory_tool());
+    }
     if training {
         tools.push(c.report_experiment.clone());
         tools.push(c.report_artifact.clone());
@@ -117,6 +127,26 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
         tools.push(c.video.clone());
     }
     tools
+}
+
+/// The memory search tool's name.
+pub const RECALL_MEMORY: &str = "recall_memory";
+
+/// The `recall_memory` tool: the model searches the user's memory notes in
+/// its own words, for what the automatic recall on the message missed (#3276).
+fn recall_memory_tool() -> Value {
+    serde_json::json!({
+        "name": RECALL_MEMORY,
+        "description": "Search the user's long-term memory notes. Notes about the topic of a message are usually added to it already (\"# Memory recalled: <title>\"); call this when you need something about the user that is not in your context, for example their setup, people, projects or past decisions. Search with a few distinctive keywords, and try the words a note would use (notes are often written in English, whatever language the user writes in). Returns at most a few notes; nothing found means there is no such note, so do not guess.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": { "type": "string", "description": "Keywords to search for, e.g. \"editor IDE\" or \"deploy staging\"." }
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }
+    })
 }
 
 /// The `remember` tool: the agent saves what it learns about the user as a

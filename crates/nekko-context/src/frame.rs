@@ -118,10 +118,16 @@ impl MemoryFrame {
 
     /// Count `notes` as shown, once a message carries them.
     pub fn mark_shown(&mut self, notes: &[Value]) {
-        if let Some(known) = self.value.get_mut("known").and_then(Value::as_object_mut) {
-            for n in notes {
-                known.insert(text(n, "id").to_string(), seen(n));
-            }
+        mark_shown(&mut self.value, notes);
+    }
+}
+
+/// Count `notes` as shown in a stored `memoryFrame` (the chat's), as a
+/// `recall_memory` result does, so a message never recalls them again.
+pub fn mark_shown(frame: &mut Value, notes: &[Value]) {
+    if let Some(known) = frame.get_mut("known").and_then(Value::as_object_mut) {
+        for n in notes {
+            known.insert(text(n, "id").to_string(), seen(n));
         }
     }
 }
