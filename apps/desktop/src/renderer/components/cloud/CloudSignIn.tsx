@@ -343,8 +343,8 @@ function SyncStep({ sync, email, onRetry, onKeyDone, onSkip }: {
   if (sync?.state === 'join') {
     return (
       <>
-        <h1 id="cw-title">Add this computer</h1>
-        <p className="cloud-lede">Your account already syncs on another device. Finish in Settings &gt; Sync with your recovery key, or approve this computer from that device.</p>
+        <h1 id="cw-title">Set up encrypted sync</h1>
+        <p className="cloud-lede">You’re signed in, but this computer doesn’t have your encryption key yet. In Settings &gt; Nekko Cloud &gt; Sync, approve it from another device that already syncs, or use your recovery key.</p>
         <button className="btn btn-primary mt-(--q-group) w-full" onClick={onSkip} data-testid="cw-continue">Continue</button>
       </>
     );

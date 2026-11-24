@@ -3,9 +3,13 @@
 //! (packages/host/src/memory.ts) and `parseMemory` (packages/core/src/memory/store.ts).
 
 use crate::nodepath;
+use crate::recall::MemoryIndex;
 use nekko_js as js;
 use serde_json::{Map, Value, json};
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::SystemTime;
 
 /// The names read from each workspace root, in this order.
 const GUIDELINE_NAMES: [&str; 5] = ["AGENTS.md", "CLAUDE.md", ".cursorrules", ".windsurfrules", "GEMINI.md"];
@@ -130,10 +134,40 @@ pub fn parse_memory(markdown: &str, fallback_id: &str) -> Value {
     Value::Object(m)
 }
 
-/// `listMemory(scope, workspaceId)` over `<data>/memory/*.md`, newest first.
-pub fn list_memory(data_dir: &Path, scope: &str, workspace_id: Option<&str>) -> Vec<Value> {
+/// Every note under `<data>/memory`, parsed, newest first, with its search
+/// index. Read from disk only when the folder changed since the last read
+/// (its modification time, which every create, delete and atomic save moves)
+/// or after [`forget_memory`]; a turn otherwise reads no note file (#3276).
+/// A note edited in place by another program shows up on the next save or
+/// delete through the app.
+pub fn memory_notes(data_dir: &Path) -> (Arc<Vec<Value>>, Arc<MemoryIndex>) {
     let dir = data_dir.join("memory");
-    let Ok(rd) = std::fs::read_dir(&dir) else { return Vec::new() };
+    let stamp = std::fs::metadata(&dir).and_then(|m| m.modified()).ok();
+    let mut cache = MEMORY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(c) = cache.get(&dir).filter(|c| stamp.is_some() && c.stamp == stamp) {
+        return (c.notes.clone(), c.index.clone());
+    }
+    let notes = Arc::new(read_memory(&dir));
+    let index = Arc::new(MemoryIndex::new(&notes));
+    cache.insert(dir, CachedMemory { stamp, notes: notes.clone(), index: index.clone() });
+    (notes, index)
+}
+
+/// Drop the cached notes of `data_dir`, after the app wrote one.
+pub fn forget_memory(data_dir: &Path) {
+    MEMORY_CACHE.lock().unwrap_or_else(|e| e.into_inner()).remove(&data_dir.join("memory"));
+}
+
+struct CachedMemory {
+    stamp: Option<SystemTime>,
+    notes: Arc<Vec<Value>>,
+    index: Arc<MemoryIndex>,
+}
+
+static MEMORY_CACHE: LazyLock<Mutex<HashMap<PathBuf, CachedMemory>>> = LazyLock::new(Default::default);
+
+fn read_memory(dir: &Path) -> Vec<Value> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
     let mut out: Vec<Value> = rd
         .filter_map(|e| e.ok())
         .filter_map(|e| {
@@ -142,13 +176,20 @@ pub fn list_memory(data_dir: &Path, scope: &str, workspace_id: Option<&str>) -> 
             let text = String::from_utf8_lossy(&std::fs::read(e.path()).ok()?).into_owned();
             Some(parse_memory(&text, &id))
         })
-        .filter(|m| {
-            m["scope"] == scope && (scope == "global" || m.get("workspaceId").and_then(Value::as_str) == workspace_id)
-        })
         .collect();
     let at = |v: &Value| v["updatedAt"].as_f64().unwrap_or(f64::NAN);
     out.sort_by(|a, b| at(b).partial_cmp(&at(a)).unwrap_or(std::cmp::Ordering::Equal));
     out
+}
+
+/// Whether `note` is in `scope` (and, for a workspace note, that workspace).
+pub fn in_scope(note: &Value, scope: &str, workspace_id: Option<&str>) -> bool {
+    note["scope"] == scope && (scope == "global" || note.get("workspaceId").and_then(Value::as_str) == workspace_id)
+}
+
+/// `listMemory(scope, workspaceId)` over `<data>/memory/*.md`, newest first.
+pub fn list_memory(data_dir: &Path, scope: &str, workspace_id: Option<&str>) -> Vec<Value> {
+    memory_notes(data_dir).0.iter().filter(|m| in_scope(m, scope, workspace_id)).cloned().collect()
 }
 
 #[cfg(test)]

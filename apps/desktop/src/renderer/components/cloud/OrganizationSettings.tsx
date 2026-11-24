@@ -5,7 +5,7 @@ import { SettingRow, SettingsSection } from '../SettingsSection.js';
 import { StatusDot } from '../primitives/index.js';
 import { Toggle } from '../primitives/Toggle.js';
 import {
-  FLEET_POLL_MS, canManage, canOpen, loadFleet, loadOrgs, lastSeen, openOnComputer, orgErrorText, orgGate, osLabel, reachNote,
+  FLEET_POLL_MS, canManage, canOpen, loadFleet, loadOrgs, lastSeen, openOnComputer, orgErrorText, orgGate, orgListErrorText, osLabel, reachNote,
   roleLabel, roleSentence, setSharing, sortComputers, splitModels, validEmail, type OrgGate, type OrgSnapshot,
 } from './orgModel.js';
 import { addCreatedSession, useStore } from '../../store.js';
@@ -17,7 +17,8 @@ const EVENT_REFRESH_MS = 3000;
 
 export interface OrgHandlers {
   onSelect(orgId: string): void;
-  onCreate(name: string): void;
+  onCreate(name: string): Promise<void>;
+  onRetry(): void;
   onAccept(inviteId: string): void;
   onInvite(email: string, role: 'admin' | 'member'): void;
   onRevokeInvite(inviteId: string): void;
@@ -35,6 +36,7 @@ export interface OrgViewProps extends OrgHandlers {
   /** Nothing loaded yet. */
   loading: boolean;
   orgs: OrgSummary[];
+  selectedId?: string | null;
   invites: PendingOrgInvite[];
   detail: OrgDetail | null;
   fleet: FleetList | null;
@@ -75,7 +77,12 @@ export function OrganizationView(p: OrgViewProps) {
         </div>
       )}
       {p.gate === 'ready' && <Ready {...p} org={org} />}
-      {p.error && <p role={p.unavailable ? 'status' : 'alert'} className={`mt-(--q-inline) text-xs ${p.unavailable ? 'text-ink-soft' : 'text-danger-text'}`} data-testid="org-error">{p.error}</p>}
+      {p.gate === 'ready' && p.error && (
+        <div className="mt-(--q-inline) flex flex-wrap items-center gap-2">
+          <p role={p.unavailable ? 'status' : 'alert'} className={`text-xs ${p.unavailable ? 'text-ink-soft' : 'text-danger-text'}`} data-testid="org-error">{p.error}</p>
+          {p.unavailable && <button className="btn btn-ghost" onClick={p.onRetry} disabled={p.loading || !!p.busy} data-testid="org-retry">Try again</button>}
+        </div>
+      )}
     </SettingsSection>
   );
 }
@@ -87,11 +94,11 @@ function Ready(p: OrgViewProps & { org: OrgDetail | null }) {
   return (
     <>
       {p.invites.length > 0 && <Invites invites={p.invites} busy={p.busy} onAccept={p.onAccept} primary={!hasOrgs} />}
-      {!hasOrgs && !p.unavailable && <CreateOrg busy={p.busy === 'create'} onCreate={p.onCreate} />}
+      {!p.unavailable && <CreateOrg busy={!!p.busy} primary={!hasOrgs && !p.invites.length} onCreate={p.onCreate} />}
       {hasOrgs && p.orgs.length > 1 && (
         <div className="mt-(--q-group) flex flex-wrap gap-1" role="tablist" aria-label="Your organizations">
           {p.orgs.map((o) => (
-            <button key={o.id} type="button" role="tab" aria-selected={o.id === org?.id} className="quiet-tab" onClick={() => p.onSelect(o.id)}>{o.name}</button>
+            <button key={o.id} type="button" role="tab" aria-selected={o.id === (p.selectedId ?? org?.id)} className="quiet-tab" onClick={() => p.onSelect(o.id)}>{o.name}</button>
           ))}
         </div>
       )}
@@ -121,18 +128,36 @@ function Invites({ invites, busy, onAccept, primary }: { invites: PendingOrgInvi
   );
 }
 
-function CreateOrg({ busy, onCreate }: { busy: boolean; onCreate: (name: string) => void }) {
+function CreateOrg({ busy, primary, onCreate }: { busy: boolean; primary: boolean; onCreate: (name: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const ok = name.trim().length > 0;
+  const [error, setError] = useState('');
+  const [creating, setCreating] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const finish = () => { setOpen(false); setName(''); setError(''); };
+  if (!open) return (
+    <div className="mt-(--q-group)">
+      {primary && <p className="mb-(--q-inline) text-xs text-ink-faint">Create a fleet to see the computers you choose to share.</p>}
+      <button ref={trigger} type="button" className={`btn ${primary ? 'btn-primary' : 'btn-ghost'}`} disabled={busy} onClick={() => setOpen(true)} data-testid="org-create-open">Create a fleet</button>
+    </div>
+  );
   return (
-    <form className="mt-(--q-group)" data-testid="org-create" onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onCreate(name.trim()); }}>
-      <div className="text-sm font-medium text-ink">Create an organization</div>
-      <p className="mt-(--q-tight) text-xs text-ink-faint">A team, a family or a company. You invite people by email, and everyone can see which computers are shared.</p>
-      <div className="mt-(--q-inline) flex items-center gap-2">
-        <input className="quiet-field min-w-0 flex-1 py-1.5" value={name} maxLength={80} placeholder="Organization name" aria-label="Organization name"
+    <form className="mt-(--q-group)" data-testid="org-create" onSubmit={async (e) => {
+      e.preventDefault();
+      if (!name.trim() || busy || creating) return;
+      setCreating(true); setError('');
+      try { await onCreate(name.trim()); finish(); }
+      catch (e) { setError(orgErrorText(e)); }
+      finally { setCreating(false); }
+    }}>
+      <label htmlFor="org-create-name" className="text-sm font-medium text-ink">Fleet name</label>
+      <div className="mt-(--q-inline) flex flex-wrap items-center gap-2">
+        <input id="org-create-name" autoFocus className="quiet-field min-w-28 flex-1 py-1.5" value={name} maxLength={80} placeholder="Fleet name" readOnly={creating}
           onChange={(e) => setName(e.target.value)} data-testid="org-create-name" />
-        <button type="submit" className="btn btn-primary shrink-0 py-1! text-xs!" disabled={!ok || busy} data-testid="org-create-submit">{busy ? 'Creating…' : 'Create'}</button>
+        <button type="submit" className="btn btn-primary" disabled={!name.trim() || busy || creating} data-testid="org-create-submit">{creating ? 'Creating…' : 'Create fleet'}</button>
+        <button type="button" className="btn btn-ghost" disabled={creating} onClick={() => { finish(); requestAnimationFrame(() => trigger.current?.focus()); }}>Cancel</button>
       </div>
+      {error && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text" data-testid="org-create-error">{error}</p>}
     </form>
   );
 }
@@ -301,6 +326,8 @@ export function OrganizationSettings() {
   const [status, setStatus] = useState<CloudStatus | null>(null);
   const [snap, setSnap] = useState<OrgSnapshot | null>(null);
   const [error, setError] = useState('');
+  const [listError, setListError] = useState('');
+  const [retrying, setRetrying] = useState(false);
   const [busy, setBusy] = useState('');
   const [visible, setVisible] = useState(true);
   const root = useRef<HTMLDivElement>(null);
@@ -315,11 +342,11 @@ export function OrganizationSettings() {
     try {
       const next = await loadOrgs(window.nekko, wanted.current);
       if (mine !== seq.current) return;
-      wanted.current = next.detail?.id ?? null;
+      wanted.current = next.selectedId;
       setSnap(next);
-      setError('');
+      setListError('');
     } catch (e) {
-      if (mine === seq.current) setError(orgErrorText(e));
+      if (mine === seq.current) setListError(orgListErrorText(e));
     }
   }, []);
 
@@ -338,7 +365,10 @@ export function OrganizationSettings() {
     return () => { live = false; off(); if (timer) clearTimeout(timer); };
   }, [reload]);
 
-  useEffect(() => { if (gate === 'ready') void reload(); else setSnap(null); }, [gate, reload]);
+  useEffect(() => {
+    if (gate === 'ready') void reload();
+    else { seq.current++; wanted.current = null; setSnap(null); setError(''); setListError(''); }
+  }, [gate, reload]);
 
   // Pause while the section is scrolled out of view.
   useEffect(() => {
@@ -377,8 +407,17 @@ export function OrganizationSettings() {
 
   const detail = snap?.detail ?? null;
   const handlers: OrgHandlers = {
-    onSelect: (id) => { wanted.current = id; void reload(); },
-    onCreate: (name) => void act('create', async () => { const o = await window.nekko.orgCreate(name); wanted.current = o?.id ?? null; }),
+    onSelect: (id) => { setError(''); wanted.current = id; void reload(); },
+    onRetry: () => { setRetrying(true); void reload().finally(() => setRetrying(false)); },
+    onCreate: async (name) => {
+      setError('');
+      setBusy('create');
+      try {
+        const created = await window.nekko.orgCreate(name);
+        wanted.current = created.id;
+        await reload();
+      } finally { setBusy(''); }
+    },
     onAccept: (id) => void act(`accept:${id}`, async () => { await window.nekko.orgAcceptInvite(id); }),
     onInvite: (email, role) => void act('invite', () => window.nekko.orgInvite(detail!.id, email, role)),
     onRevokeInvite: (id) => void act('revoke', () => window.nekko.orgRevokeInvite(detail!.id, id)),
@@ -403,9 +442,9 @@ export function OrganizationSettings() {
 
   return (
     <div ref={root}>
-      <OrganizationView {...handlers} gate={gate} loading={gate === 'ready' && !snap && !error}
-        orgs={snap?.list.orgs ?? []} invites={snap?.list.invites ?? []} detail={detail} fleet={snap?.fleet ?? null}
-        error={error} unavailable={!snap && !!error} fleetError={snap?.fleetError ?? ''} busy={busy} />
+      <OrganizationView {...handlers} gate={gate} loading={gate === 'ready' && !snap && !listError}
+        orgs={snap?.list.orgs ?? []} selectedId={snap?.selectedId} invites={snap?.list.invites ?? []} detail={detail} fleet={snap?.fleet ?? null}
+        error={error || listError || snap?.detailError || ''} unavailable={!snap && !!listError} fleetError={snap?.fleetError ?? ''} busy={busy || (retrying ? 'retry' : '')} />
     </div>
   );
 }

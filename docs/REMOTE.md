@@ -54,7 +54,9 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 
 **Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
 
-**Your own computers, with no link.** When your computers share themselves with your organization in Nekko Cloud (Settings, Phone pairing, Organization), any of them signed in to the same account and unlocked can open a chat on another without a pairing link. In the organization's Computers list, hover one of your own online computers and choose **Open chat**. It connects with your account's keys, adds the computer to Settings, Computers (as *Opened from your organization*) and opens a new chat there. The other computer needs **Remote access** on; otherwise its row says so. A teammate's computer is listed but can't be opened. Nothing is paired and nothing is saved: the link ends when you restart, sign out or lock, and the other computer cuts it within 15 seconds if it stops sharing, signs out, or your account removes this device. The same rules apply as for any connected computer above.
+**Create a fleet.** With a supported plan and an unlocked account, open Settings > Nekko Cloud > Fleet management, choose **Create a fleet**, and give it a name. To show this computer in the fleet, turn on **Share this computer** separately. Creating a fleet does not share your chats or computers. If Fleet management says it cannot load your fleets, choose **Try again**.
+
+**Your own computers, with no link.** When your computers share themselves with your organization in Nekko Cloud, any of them signed in to the same account and unlocked can open a chat on another without a pairing link. In the organization's Computers list, hover one of your own online computers and choose **Open chat**. It connects with your account's keys, adds the computer to Settings, Computers (as *Opened from your organization*) and opens a new chat there. The other computer needs **Remote access** on; otherwise its row says so. A teammate's computer is listed but can't be opened. Nothing is paired and nothing is saved: the link ends when you restart, sign out or lock, and the other computer cuts it within 15 seconds if it stops sharing, signs out, or your account removes this device. The same rules apply as for any connected computer above.
 
 **Keeping a computer awake for its agents.** A run you start on another computer stops when that computer falls asleep. On the computer that runs the agents, turn on *Keep this computer awake while agents run* (Settings, Computers). While any agent runs there it won't go to sleep on its own, and once the last one finishes it sleeps as usual. Closing the lid still sleeps it.
 
@@ -880,9 +882,15 @@ How the Android and iOS apps each handle the connection (URL rules, pairing, rec
 
 **Not running right now:** the Fly app is gone and its name no longer resolves, so the desktop shows Nekko Cloud as *Coming soon*. A computer still set to it shows a warning with a **Change** button, and a phone paired through it says it can't find the address instead of "Connecting…". Use Tailscale until it is back.
 
-The app calls this **Nekko Cloud** and never shows the URL. Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
-managed relay becomes part of the paid plans (it already supports gating via
-`NEKKO_RELAY_AUTHZ_URL`), while self-hosting stays free forever.
+The app calls this **Nekko Cloud** and never shows the URL. Self-hosting stays free forever.
+
+**Nekko Cloud Relay is part of Nekko Cloud Pro and Team** (in progress, behind a switch until launch; [the spec](../spec/platform/nekko-cloud-relay.md)):
+
+- Sign in to Nekko Cloud on the computer. On Pro or Team, **Use Nekko Cloud** connects through it; on Free the card offers **Upgrade to Pro**.
+- Already on Tailscale? Turn on **Also through Nekko Cloud Relay** and the computer is reachable both ways at once: phones with Tailscale go direct, phones without it (or away from it) come in through the relay.
+- With both on, **Pair a device** asks how the next device connects (*Either way*, *Nekko Cloud Relay*, *Tailscale*), and each paired device has *Either way*, *Only Nekko Cloud Relay* or *Only Tailscale*. The computer enforces it: a phone set to *Only Tailscale* is turned away if it tries the relay.
+- Everything stays end-to-end encrypted. The relay checks a short-lived ticket your computer gets from Nekko Cloud, so it knows your plan, not who you are.
+- Signed-in computers on Pro also tell each other through the relay when they come online and when they've synced something, so another computer pulls new chats at once instead of within the minute.
 
 ### Private relay over Tailscale (free, no account, nothing hosted)
 

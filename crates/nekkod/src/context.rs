@@ -160,6 +160,19 @@ pub fn preview(
             memory.extend(nekko_context::list_memory(data_dir, "workspace", Some(&id)));
         }
     }
+    // What the system prompt carries: the chat's frame once it has one, else
+    // the core a first turn would take. Recalled notes ride on the messages
+    // that asked for them, so they count in the conversation (#3276).
+    let memory = match session.and_then(|s| s.get("memoryFrame")).and_then(|f| f.get("notes")).and_then(Value::as_array)
+    {
+        Some(notes) if scope.project() => notes.clone(),
+        _ => {
+            let prefs = session.and_then(|s| s.get("contextPrefs"));
+            let pinned = strings(prefs.and_then(|p| p.get("pinned"))).into_iter().collect::<HashSet<_>>();
+            // Switched-off notes stay listed (as excluded) so they can be switched back on.
+            nekko_context::core_notes(&memory, &pinned, &HashSet::new())
+        }
+    };
     let guidance = nekko_context::project_guidance(
         &paths,
         &attached,

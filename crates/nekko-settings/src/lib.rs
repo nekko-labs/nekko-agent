@@ -422,9 +422,15 @@ impl SettingsStore {
         Ok(value)
     }
 
-    /// Every saved change from now on (the receiver starts at `null`, or the
-    /// last saved value).
+    /// Every saved change from now on. The receiver starts at the current
+    /// settings, so a reader that applies them at once (`connections`,
+    /// `telemetry`) never sees `null` before the first save.
     pub fn subscribe(&self) -> tokio::sync::watch::Receiver<Value> {
+        let mut cache = self.lock();
+        if self.changed.borrow().is_null() {
+            let now = self.current(&mut cache);
+            self.changed.send_replace((*now).clone());
+        }
         self.changed.subscribe()
     }
 }
@@ -475,6 +481,21 @@ mod tests {
         assert_eq!(SettingsStore::new(&dir).get()["theme"], "dark");
         store.reset().unwrap();
         assert_eq!(SettingsStore::new(&dir).get()["theme"], "system");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_new_subscriber_starts_at_the_saved_settings() {
+        let dir = std::env::temp_dir().join(format!("nekko-settings-{}", nekko_js::uuid()));
+        SettingsStore::new(&dir).update(&json!({ "connections": { "allOff": true } })).unwrap();
+        // A fresh process: nothing saved yet in it.
+        let store = SettingsStore::new(&dir);
+        let mut rx = store.subscribe();
+        assert_eq!(rx.borrow_and_update()["connections"]["allOff"], true);
+        assert!(!rx.has_changed().unwrap(), "starting at the saved value is not a change");
+        store.update(&json!({ "theme": "dark" })).unwrap();
+        assert!(rx.has_changed().unwrap());
+        assert_eq!(store.subscribe().borrow()["theme"], "dark");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -14,6 +14,7 @@ import {
 import { WelcomeStep } from '../components/onboarding/WelcomeStep.js';
 import { ThemeStep } from '../components/onboarding/ThemeStep.js';
 import { ProvidersStep } from '../components/onboarding/ProvidersStep.js';
+import { DictationStep } from '../components/onboarding/DictationStep.js';
 import { IntegrationsStep } from '../components/onboarding/IntegrationsStep.js';
 import { WorkTrackingStep } from '../components/onboarding/WorkTrackingStep.js';
 import { HelpImproveStep } from '../components/onboarding/HelpImproveStep.js';
@@ -194,6 +195,7 @@ export function OnboardingView() {
       {step.id === 'detail' && <DetailStep commitRef={stepCommitRef} />}
       {step.id === 'theme' && <ThemeStep />}
       {step.id === 'providers' && <ProvidersStep onExit={close} />}
+      {step.id === 'dictation' && <DictationStep />}
       {step.id === 'integrations' && <IntegrationsStep commitRef={stepCommitRef} />}
       {step.id === 'tracking' && <WorkTrackingStep commitRef={stepCommitRef} />}
       {step.id === 'help' && <HelpImproveStep commitRef={stepCommitRef} />}

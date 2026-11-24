@@ -1,0 +1,21 @@
+.gpu-capacity-track {
+  display: flex;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 6px;
+  margin-top: var(--q-inline);
+}
+.gpu-capacity-fill { flex-basis: 0; min-width: 0; }
+.gpu-capacity-track [data-band] + [data-band] { box-shadow: inset 1px 0 var(--paper); }
+.gpu-capacity-key { border-radius: 4px; }
+.gpu-capacity-key i { width: 8px; height: 8px; border-radius: 2px; }
+[data-model-gpu-facts] [data-band=model] { background: var(--accent); }
+[data-model-gpu-facts] [data-band=min] { background: color-mix(in srgb, var(--accent-2) 60%, var(--ink)); }
+[data-model-gpu-facts] [data-band=rec] { background: var(--accent-2); }
+[data-model-gpu-facts] [data-band=max] { background: color-mix(in srgb, var(--accent-2) 55%, var(--paper)); }
+[data-model-gpu-facts] [data-band=free] { background: var(--line); }
+[data-model-gpu-facts] [data-band=short] { background: repeating-linear-gradient(125deg, var(--surface-2) 0 4px, var(--ink-faint) 4px 5px); }
+@media (prefers-reduced-motion: no-preference) {
+  .gpu-capacity-track { animation: gpu-capacity-in 160ms ease-out; }
+  @keyframes gpu-capacity-in { from { clip-path: inset(0 100% 0 0 round 6px); } to { clip-path: inset(0 0 0 0 round 6px); } }
+}

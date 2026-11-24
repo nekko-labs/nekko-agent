@@ -10,6 +10,9 @@ const GB: f64 = 1024.0 * 1024.0 * 1024.0;
 const MB: f64 = 1024.0 * 1024.0;
 const HEADROOM_MARGIN_BYTES: f64 = 768.0 * MB;
 const OS_RESERVE_BYTES: f64 = 2.0 * GB;
+/// What the desktop keeps from a discrete GPU when nothing else is using it; the
+/// renderer's `DESKTOP_RESERVE_BYTES` (`ModelGpuFacts.tsx`) is the same figure.
+pub const DESKTOP_GPU_RESERVE_BYTES: f64 = 2.0 * GB;
 const OVERHEAD_FLOOR_BYTES: f64 = 256.0 * MB;
 const GRAPH_CONTEXT_CAP: f64 = 8192.0;
 const MAX_SUGGESTIONS: usize = 3;

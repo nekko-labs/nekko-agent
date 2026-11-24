@@ -25,7 +25,7 @@ Option 4. `.btn` is 28px tall (12px side padding, 14/500 label, 8px radius) and 
 ## Consequences
 
 - Every `.btn` in the desktop app and the Local Web UI gets shorter on pointer devices; layouts that leaned on the 44px height tighten. Screens are checked as they are touched.
-- Composer and question controls that use `action-target` directly keep 44px on every device.
+- Composer and question controls that use `action-target` directly keep 44px on every device. (The composer bar's attach, dictation and send/stop are slim for a pointer since [0117](0117-composer-bar-icon-buttons-are-slim-for-a-pointer.md).)
 - A touch laptop reports a fine primary pointer and gets slim buttons; that is the same trade every desktop app makes.
 - The native iOS and Android apps are not affected: they follow their platforms' sizes.
 - The spec passages that promised 44px for `.btn` on desktop are amended ([question pages and action targets](../../spec/chat/question-pages-and-action-targets.md)).

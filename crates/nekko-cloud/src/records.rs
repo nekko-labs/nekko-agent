@@ -1,9 +1,15 @@
 //! What goes inside a sealed record. Nekko Cloud sees none of this.
 //!
 //! - `chat` (local id = the chat's id): `{ "v": 1, "chat": <the chat> }`, or a
-//!   tombstone `{ "v": 1, "deleted": true, "deletedAt": ms }`. Pictures are
-//!   left out (replaced by a short note): they would dominate storage, and a
-//!   chat's text is what another device needs.
+//!   tombstone `{ "v": 1, "deleted": true, "deletedAt": ms }`. A picture in a
+//!   message (`images`, `toolResult.images`) is not in the record: it stands as
+//!   `nekko-blob:<sha256>.<ext>`, the name the chat store keeps it under, and
+//!   travels once as its own `picture` record (#3298). Any other inline data,
+//!   and a picture over [`MAX_PICTURE_BYTES`], is replaced by a short note.
+//! - `picture` (local id = the chat's computer and the picture's blob name):
+//!   `{ "v": 1, "home", "name", "data": <base64url> }`, or a tombstone
+//!   `{ "v": 1, "deleted": true, "home", "name" }` once no chat of that computer
+//!   refers to it. An opened picture must hash to its name.
 //! - `account` (local id `epoch-<n>`, one per key epoch): the epoch number,
 //!   the recovery key's public half and the devices this account trusts. Only
 //!   a holder of that epoch's keyring can write it, so the server can't add a
@@ -11,8 +17,11 @@
 //!   device takes a new epoch only from a device listed in the record of the
 //!   epoch it holds, and only once that new epoch's record lists it too.
 
+use nekko_store::blobs;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub const CHAT: &str = "chat";
 pub const ACCOUNT: &str = "account";
@@ -85,10 +94,22 @@ pub fn home_of(chat: &Value) -> Option<&str> {
 /// arrives: how it is arranged here, which is this computer's business.
 pub const KEPT_HERE: [&str; 3] = ["pinned", "order", "archivedAt"];
 
+/// A chat's record as it is pushed: its plaintext and the pictures it refers to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChatPlain {
+    pub bytes: Vec<u8>,
+    /// The computer the chat belongs to, whose `picture` records these are.
+    pub home: String,
+    /// Each picture the record names (`nekko-blob:<name>`) by its blob name, with its bytes when
+    /// the chat held it inline. A name without bytes was a reference already: its picture is
+    /// beside the chats here, or (a copy whose picture never arrived) nowhere.
+    pub pictures: BTreeMap<String, Option<Vec<u8>>>,
+}
+
 /// The plaintext of a chat's record, or why it is skipped. One of this computer's chats is stamped
 /// with this computer as its home; another computer's copy (re-sealed under a newer key epoch)
-/// keeps the home it names.
-pub fn chat_plaintext(chat: &Value, device_id: &str, device: &str) -> Result<Vec<u8>, Skip> {
+/// keeps the home it names. Its pictures become references to `picture` records.
+pub fn chat_plaintext(chat: &Value, device_id: &str, device: &str) -> Result<ChatPlain, Skip> {
     if let Some(skip) = excluded(chat) {
         return Err(skip);
     }
@@ -98,12 +119,108 @@ pub fn chat_plaintext(chat: &Value, device_id: &str, device: &str) -> Result<Vec
     {
         o.insert(HOME.into(), json!({ "deviceId": device_id, "device": device }));
     }
+    let home = home_of(&c).unwrap_or(device_id).to_string();
+    let pictures = RefCell::new(BTreeMap::new());
+    blobs::map_pictures(&mut c, |s| {
+        if let Some(name) = s.strip_prefix(blobs::REF) {
+            if blobs::valid_name(name) {
+                pictures.borrow_mut().entry(name.to_string()).or_insert(None);
+            }
+            return None;
+        }
+        if s.len() > MAX_PICTURE_URL {
+            return None; // left to the note below
+        }
+        let (name, bytes) = blobs::encode(s)?;
+        let reference = format!("{}{name}", blobs::REF);
+        pictures.borrow_mut().insert(name, Some(bytes));
+        Some(reference)
+    });
     strip_inline_data(&mut c);
     let bytes = serde_json::to_vec(&json!({ "v": 1, "chat": c })).unwrap_or_default();
     if bytes.len() > MAX_CHAT_BYTES {
         return Err(Skip::TooLarge);
     }
-    Ok(bytes)
+    Ok(ChatPlain { bytes, home, pictures: pictures.into_inner() })
+}
+
+/// The blob names of the pictures a chat refers to (`nekko-blob:<name>` in its messages).
+pub fn picture_refs(chat: &Value) -> BTreeSet<String> {
+    let mut c = chat.clone();
+    let names = RefCell::new(BTreeSet::new());
+    blobs::map_pictures(&mut c, |s| {
+        if let Some(name) = s.strip_prefix(blobs::REF).filter(|n| blobs::valid_name(n)) {
+            names.borrow_mut().insert(name.to_string());
+        }
+        None
+    });
+    names.into_inner()
+}
+
+pub const PICTURE: &str = "picture";
+
+/// The largest picture synced. Base64 in the record and sealed, it stays under Nekko Cloud's
+/// 16 MiB object cap. A screenshot is a few hundred KB to a few MB.
+pub const MAX_PICTURE_BYTES: usize = 8_000_000;
+/// A data URL longer than this holds a picture over `MAX_PICTURE_BYTES`.
+const MAX_PICTURE_URL: usize = MAX_PICTURE_BYTES / 3 * 4 + 64;
+
+/// A picture record's local id: the computer whose chats refer to it, and its blob name. Two
+/// computers with the same picture keep a record each, so each removes its own.
+pub fn picture_local_id(home: &str, name: &str) -> String {
+    format!("{home}\n{name}")
+}
+
+pub fn picture_plaintext(home: &str, name: &str, bytes: &[u8]) -> Vec<u8> {
+    serde_json::to_vec(&json!({ "v": 1, "home": home, "name": name, "data": nekko_sync::b64_encode(bytes) }))
+        .unwrap_or_default()
+}
+
+pub fn picture_tombstone(home: &str, name: &str) -> Vec<u8> {
+    serde_json::to_vec(&json!({ "v": 1, "deleted": true, "home": home, "name": name })).unwrap_or_default()
+}
+
+/// An opened picture record.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PictureRecord {
+    Picture { home: String, name: String, bytes: Vec<u8> },
+    Deleted { home: String, name: String },
+}
+
+impl PictureRecord {
+    pub fn home(&self) -> &str {
+        match self {
+            PictureRecord::Picture { home, .. } | PictureRecord::Deleted { home, .. } => home,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            PictureRecord::Picture { name, .. } | PictureRecord::Deleted { name, .. } => name,
+        }
+    }
+
+    pub fn local_id(&self) -> String {
+        picture_local_id(self.home(), self.name())
+    }
+}
+
+/// A picture record, refused unless its name is a blob name and (for a picture) its bytes hash to it.
+pub fn parse_picture(bytes: &[u8]) -> Option<PictureRecord> {
+    let v: Value = serde_json::from_slice(bytes).ok()?;
+    if v.get("v").and_then(Value::as_u64) != Some(1) {
+        return None;
+    }
+    let home = v.get("home")?.as_str().filter(|h| !h.is_empty())?.to_string();
+    let name = v.get("name")?.as_str().filter(|n| blobs::valid_name(n))?.to_string();
+    if v.get("deleted").and_then(Value::as_bool) == Some(true) {
+        return Some(PictureRecord::Deleted { home, name });
+    }
+    let data = nekko_sync::b64_decode(v.get("data")?.as_str()?).ok()?;
+    if data.len() > MAX_PICTURE_BYTES || !blobs::matches(&name, &data) {
+        return None;
+    }
+    Some(PictureRecord::Picture { home, name, bytes: data })
 }
 
 pub fn tombstone(deleted_at: f64) -> Vec<u8> {
@@ -202,24 +319,75 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pictures_are_left_out_and_text_kept() {
-        let big = format!("data:image/png;base64,{}", "A".repeat(5000));
-        let chat = json!({ "id": "s_1", "messages": [{ "content": "hi", "images": [big] }], "updatedAt": 5 });
+    fn pictures_travel_apart_and_text_is_kept() {
+        use base64::Engine;
+        let bytes = vec![7u8; 3000];
+        let png = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes));
+        let (name, _) = blobs::encode(&png).unwrap();
+        let other = format!("data:application/pdf;base64,{}", "A".repeat(5000));
+        let kept = format!("{}{}.jpg", blobs::REF, "b".repeat(64));
+        let chat = json!({ "id": "s_1", "messages": [
+            { "content": "hi", "images": [png, kept] },
+            { "role": "tool", "toolResult": { "output": "ok", "images": [png] } },
+            { "content": "file", "attachment": other },
+        ], "updatedAt": 5 });
         let plain = chat_plaintext(&chat, "dev-a", "Desk").unwrap();
-        let ChatRecord::Chat(back) = parse_chat(&plain).unwrap() else { panic!() };
+        assert_eq!(plain.home, "dev-a");
+        // One picture used twice travels once; a reference already made travels as itself.
+        assert_eq!(plain.pictures.len(), 2);
+        assert_eq!(plain.pictures[&name], Some(bytes));
+        assert_eq!(plain.pictures[&format!("{}.jpg", "b".repeat(64))], None);
+        let ChatRecord::Chat(back) = parse_chat(&plain.bytes).unwrap() else { panic!() };
         assert_eq!(back["messages"][0]["content"], "hi");
-        assert_eq!(back["messages"][0]["images"][0], IMAGE_NOTE);
+        let reference = format!("{}{name}", blobs::REF);
+        assert_eq!(back["messages"][0]["images"][0], reference.as_str());
+        assert_eq!(back["messages"][1]["toolResult"]["images"][0], reference.as_str());
+        // Inline data that isn't a picture the store keeps is still left out.
+        assert_eq!(back["messages"][2]["attachment"], IMAGE_NOTE);
+        assert_eq!(picture_refs(&back).len(), 2);
         assert_eq!(updated_at(&back), 5.0);
         // Stamped with the computer it belongs to (#3143).
         assert_eq!(home_of(&back), Some("dev-a"));
         assert_eq!(back[HOME]["device"], "Desk");
         assert_eq!(home_of(&chat), None);
-        // Another computer's copy keeps its home.
+        // Another computer's copy keeps its home, and its pictures are that computer's.
         let copy = json!({ "id": "s_2", "home": { "deviceId": "dev-b", "device": "Laptop" }, "messages": [] });
-        let ChatRecord::Chat(back) = parse_chat(&chat_plaintext(&copy, "dev-a", "Desk").unwrap()).unwrap() else {
-            panic!()
-        };
+        let plain = chat_plaintext(&copy, "dev-a", "Desk").unwrap();
+        assert_eq!(plain.home, "dev-b");
+        let ChatRecord::Chat(back) = parse_chat(&plain.bytes).unwrap() else { panic!() };
         assert_eq!(back[HOME]["device"], "Laptop");
+    }
+
+    #[test]
+    fn a_picture_too_large_is_left_out() {
+        let huge = format!("data:image/png;base64,{}", "A".repeat(MAX_PICTURE_URL + 4));
+        let chat = json!({ "id": "s_1", "messages": [{ "images": [huge] }] });
+        let plain = chat_plaintext(&chat, "dev-a", "Desk").unwrap();
+        assert!(plain.pictures.is_empty());
+        let ChatRecord::Chat(back) = parse_chat(&plain.bytes).unwrap() else { panic!() };
+        assert_eq!(back["messages"][0]["images"][0], IMAGE_NOTE);
+    }
+
+    #[test]
+    fn a_picture_record_opens_only_when_its_bytes_are_its_name() {
+        let bytes = b"a picture".to_vec();
+        let name = format!("{:x}.png", Sha256::digest(&bytes));
+        let rec = parse_picture(&picture_plaintext("dev-a", &name, &bytes)).unwrap();
+        assert_eq!(rec, PictureRecord::Picture { home: "dev-a".into(), name: name.clone(), bytes: bytes.clone() });
+        assert_eq!(rec.local_id(), picture_local_id("dev-a", &name));
+        let gone = parse_picture(&picture_tombstone("dev-a", &name)).unwrap();
+        assert_eq!(gone, PictureRecord::Deleted { home: "dev-a".into(), name: name.clone() });
+        // Other bytes under its name, a name that isn't a blob name, no computer: refused.
+        assert_eq!(parse_picture(&picture_plaintext("dev-a", &name, b"something else")), None);
+        assert_eq!(parse_picture(&picture_plaintext("dev-a", "../x.png", &bytes)), None);
+        assert_eq!(parse_picture(&picture_plaintext("", &name, &bytes)), None);
+        assert_eq!(parse_picture(br#"{"v":2}"#), None);
+    }
+
+    #[test]
+    fn the_largest_picture_fits_the_server_cap_once_sealed() {
+        let plain = picture_plaintext("dev-a", &format!("{}.png", "a".repeat(64)), &vec![0; MAX_PICTURE_BYTES]);
+        assert!(sealed_len(plain.len()) <= MAX_SEALED_BYTES);
     }
 
     #[test]

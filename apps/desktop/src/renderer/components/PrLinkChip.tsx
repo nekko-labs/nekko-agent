@@ -111,6 +111,19 @@ export function isPrUrl(href: string): boolean {
   return /^https?:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+\/?(?:[?#].*)?$/i.test(href) && parsePrUrl(href) !== null;
 }
 
+const ISSUE_URL_RE = /^https?:\/\/github\.com\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})\/issues\/([1-9]\d{0,6})\/?(?:[?#].*)?$/i;
+
+/** A link to one GitHub issue (not the issue list, not a PR). */
+export function isIssueUrl(href: string): boolean {
+  return ISSUE_URL_RE.test(href);
+}
+
+/** `repo#N` for an issue link, the same short form a PR chip falls back to. */
+function issueFallback(href: string): string {
+  const m = href.match(ISSUE_URL_RE);
+  return m ? `${m[2]}#${m[3]}` : href;
+}
+
 /**
  * A GitHub PR link drawn as a compact chip: the PR's live state glyph, tinted
  * as on GitHub, and its label. Opens in the external browser like any link.
@@ -144,7 +157,7 @@ export function PrLinkChip({ href, label, onContextMenu }: { href: string; label
 }
 
 /** A GitHub issue reference drawn like a PR chip, with the issue's live state. */
-export function IssueLinkChip({ href, label }: { href: string; label: React.ReactNode }) {
+export function IssueLinkChip({ href, label, onContextMenu }: { href: string; label?: React.ReactNode; onContextMenu?: (e: React.MouseEvent) => void }) {
   const issue = useIssueInfo(href);
   const look = issue && issueLook(issue);
   const plain = issue ? `${issue.owner}/${issue.repo}#${issue.number} · ${look!.label} · ${issue.title}` : href;
@@ -159,9 +172,10 @@ export function IssueLinkChip({ href, label }: { href: string; label: React.Reac
       rel="noreferrer"
       data-issue-state={look ? look.icon : 'unknown'}
       className="pr-link-chip mx-0.5 inline-flex max-w-full cursor-pointer items-center gap-1 rounded-full border border-line px-2 py-px align-[-0.15em] text-sm font-medium leading-5 no-underline hover:bg-surface-2 focus-visible:outline focus-visible:outline-accent"
+      onContextMenu={onContextMenu}
     >
       <span style={{ color: look ? look.tone : 'var(--ink-faint)' }} className="inline-flex"><GfIcon name={look ? look.icon : 'record'} className="h-3.5 w-3.5" /></span>
-      <span style={{ color: look ? look.tone : 'var(--ink)' }} className="min-w-0 truncate">{label}</span>
+      <span style={{ color: look ? look.tone : 'var(--ink)' }} className="min-w-0 truncate">{label ?? issueFallback(href)}</span>
       {look && <span className="sr-only"> ({look.label})</span>}
     </a>
     </HoverTip>

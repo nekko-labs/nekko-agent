@@ -6,11 +6,12 @@ import { ONBOARDING_VERSION } from '@nekko-agent/shared';
 import { WizardShell } from './WizardShell.js';
 import { WelcomeStep } from './WelcomeStep.js';
 import { ProvidersStep } from './ProvidersStep.js';
+import { DictationStep } from './DictationStep.js';
 import { IntegrationsStep } from './IntegrationsStep.js';
 import { DoneStep } from './DoneStep.js';
 import { WorkTrackingStep } from './WorkTrackingStep.js';
 import { ProjectManagementToggles } from '../WorkTrackingToggles.js';
-import { ONBOARDING_STEPS, wizardTransition, type WizardState } from './onboardingMachine.js';
+import { ONBOARDING_STEPS, SKIPPABLE_STEP_IDS, wizardTransition, type WizardState } from './onboardingMachine.js';
 
 // The step components and the store read browser globals at import time;
 // node has none, so provide the minimum first (hoisted above module imports
@@ -138,6 +139,16 @@ describe('WizardShell', () => {
 });
 
 describe('onboarding step content', () => {
+  it('offers local dictation separately and lets the user skip straight to integrations', () => {
+    const index = at('dictation');
+    expect(index).toBe(at('providers') + 1);
+    expect(SKIPPABLE_STEP_IDS.has('dictation')).toBe(true);
+    expect(renderToStaticMarkup(<DictationStep />)).toContain('aria-label="Speech engines"');
+    expect(renderToStaticMarkup(<IntegrationsStep />)).not.toContain('aria-label="Speech engines"');
+    expect(wizardTransition({ index, steps: {} }, { type: 'skipStep' }).state)
+      .toEqual({ index: at('integrations'), steps: { dictation: 'skipped' } });
+  });
+
   it('greets as Nekko, with the mascot drawn but hidden from screen readers', () => {
     const html = renderToStaticMarkup(<WelcomeStep />);
     expect(html).toContain('Hi, I&#x27;m Nekko.');

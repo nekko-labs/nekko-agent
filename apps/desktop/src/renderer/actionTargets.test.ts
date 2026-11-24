@@ -26,6 +26,20 @@ describe('comfortable action targets', () => {
 
   it('limits the compact height exception to native caption-strip chrome', () => {
     expect(cssRule(sheet, '#command-titlebar-slot .btn')['min-height']).toBe('28px');
-    expect(cssRule(sheet, '.voice-island')['flex']).toBe('0 0 44px');
+  });
+
+  // Decision 0117: the composer bar's attach, dictation and send/stop follow .btn.
+  it('keeps the composer bar icon buttons slim for a pointer and 44px for a finger', () => {
+    expect(cssRule(sheet, '.composer-bar .composer-bar-button')).toMatchObject({ 'min-width': '28px', 'min-height': '28px' });
+    expect(cssRule(sheet, '.voice-island')['flex']).toBe('0 0 28px');
+    const touch: Record<string, string> = {};
+    sheet.walkAtRules('media', (media) => {
+      if (!media.params.includes('pointer: coarse')) return;
+      media.walkRules((rule) => {
+        if (rule.selector === '.composer-bar .composer-bar-button') rule.walkDecls((d) => { touch[d.prop] = d.value; });
+        if (rule.selector === '.voice-island:not(.is-open)') rule.walkDecls((d) => { touch[`island-${d.prop}`] = d.value; });
+      });
+    });
+    expect(touch).toMatchObject({ 'min-width': '44px', 'min-height': '44px', 'island-flex-basis': '44px' });
   });
 });

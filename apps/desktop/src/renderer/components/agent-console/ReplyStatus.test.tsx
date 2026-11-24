@@ -54,6 +54,12 @@ describe('reply measurements', () => {
     expect(blocked).toContain('Waiting for approval');
     expect(blocked).not.toContain('Sleeping');
   });
+  it('says a running reply is waiting for approval instead of naming the paused step (#3288)', () => {
+    const html = renderToStaticMarkup(<ReplyStatus streaming status="Running cd" elapsed={11844} tps={48} out={3800} last={null} blocked="Waiting for approval" />);
+    expect(html).toContain('Waiting for approval');
+    expect(html).not.toContain('Running cd');
+    expect(html).toContain('data-reply-blocked');
+  });
   it('shows nothing for an idle, unmeasured chat instead of a "Reply stats" placeholder', () => {
     const html = renderToStaticMarkup(<ReplyStatus streaming={false} status="" elapsed={0} tps={0} out={0} last={null} />);
     expect(html).toBe('');

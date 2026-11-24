@@ -175,6 +175,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     if (count.rows[0].n >= MAX_ORGS_PER_USER) return reply.code(409).send({ error: "org-limit" });
     const created = await tx.query<{ id: string }>("insert into orgs (name, created_by) values ($1, $2) returning id", [name, caller.userId]);
     await tx.query("insert into org_members (org_id, user_id, role) values ($1, $2, 'owner')", [created.rows[0].id, caller.userId]);
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [created.rows[0].id, caller.userId, "Organization created"]);
     return reply.code(201).send(await orgFor(tx, created.rows[0].id, caller.userId));
   }));
 
@@ -208,6 +209,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     if (m.role === "member") return forbidden(reply);
     const name = cleanName(((req.body ?? {}) as Record<string, unknown>).name);
     if (!name) return reply.code(400).send({ error: "bad-name" });
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Organization renamed"]);
     await tx.query("update orgs set name = $2 where id = $1", [orgId, name]);
     return orgFor(tx, orgId, caller.userId);
   }));
@@ -248,6 +250,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
       "insert into org_invites (org_id, email, role, invited_by) values ($1, $2, $3, $4) returning id, created_at, expires_at",
       [orgId, email, role, caller.userId],
     );
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Invitation created"]);
     return reply.code(201).send({ id: rows[0].id, email, role, createdAt: rows[0].created_at, expiresAt: rows[0].expires_at });
   }));
 
@@ -258,6 +261,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     const { inviteId } = req.params as { inviteId: string };
     if (!UUID.test(inviteId)) return notFound(reply);
     const { rows } = await tx.query("delete from org_invites where id = $1 and org_id = $2 and accepted_at is null returning id", [inviteId, orgId]);
+    if (rows.length) await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Invitation revoked"]);
     return rows.length ? reply.code(204).send() : notFound(reply);
   }));
 
@@ -284,6 +288,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
       if (size.rows[0].n >= MAX_ORG_MEMBERS) return reply.code(409).send({ error: "org-full" });
       await tx.query("insert into org_members (org_id, user_id, role) values ($1, $2, $3)", [orgId, caller.userId, rows[0].role]);
     }
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Invitation accepted"]);
     await tx.query("update org_invites set accepted_at = now() where id = $1", [inviteId]);
     return orgFor(tx, orgId, caller.userId);
   }));
@@ -307,7 +312,15 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     }
     await tx.query("delete from org_fleet_computers where org_id = $1 and user_id = $2", [orgId, userId]);
     await tx.query("delete from org_members where org_id = $1 and user_id = $2", [orgId, userId]);
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Membership ended"]);
     return { rotateKey: true };
+  }));
+
+  app.get("/v1/orgs/:orgId/activity", async (req, reply) => handle(req, reply, { gate: "none", lock: "none" }, async (tx, caller, orgId) => {
+    const m = await membership(tx, orgId, caller.userId);
+    if (!m) return notFound(reply);
+    if (m.role === "member") return forbidden(reply);
+    return { events: (await tx.query("select a.action,a.at,u.email as actor from org_activity a left join users u on u.id=a.actor where org_id=$1 order by a.id desc limit 100", [orgId])).rows };
   }));
 
   // ------------------------------------------------------------- org key
