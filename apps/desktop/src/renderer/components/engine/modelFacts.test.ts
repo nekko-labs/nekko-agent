@@ -67,6 +67,17 @@ describe('a model with a problem wears it', () => {
       expect(familyProblem([ptq1])?.text).toBe("Can't run here");
       expect(familyProblem([ptq1, { name: 'Bonsai-Q8_0', lastLoadError: 'out of memory' }])?.text).toBe('Last load failed');
     });
+
+    it('names the fix when only the engine’s age is in the way', () => {
+      const tooOld = { level: 'blocked' as const, cause: 'engineAge' as const, reason: blocked.reason };
+      const format = { level: 'blocked' as const, cause: 'weightFormat' as const, reason: 'Needs a modified llama.cpp.' };
+      expect(modelProblem({ name: 'Bonsai-Q2_0', loadCheck: tooOld })).toEqual({ text: 'Needs a newer engine', tone: 'warning', detail: tooOld.reason });
+      expect(modelProblem({ name: 'Bonsai-PTQ1_0', loadCheck: format })?.text).toBe("Can't run here");
+      // A reason no engine can fix still wins over the engine's own verdict.
+      expect(modelProblem({ name: 'Whisper', modality: 'audio', loadCheck: tooOld })?.text).toBe("Can't run here");
+      // With nothing in the family that runs, the file an update would fix speaks for it.
+      expect(familyProblem([{ name: 'Bonsai-PTQ1_0', loadCheck: format }, { name: 'Bonsai-Q2_0', loadCheck: tooOld }])?.text).toBe('Needs a newer engine');
+    });
   });
 });
 

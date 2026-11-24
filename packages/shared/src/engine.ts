@@ -536,7 +536,14 @@ export function unsupportedLoadReason(model: {
  */
 export interface ModelLoadCheck {
   level: 'blocked' | 'warning';
+  /** Which rule found it: no engine update helps a weight format; one does help an engine too old for the file. */
+  cause?: 'weightFormat' | 'engineAge';
   reason: string;
+}
+
+/** Blocked only because the engine is older than the file needs: updating the engine fixes it. */
+export function needsNewerEngine(model: { loadCheck?: ModelLoadCheck }): boolean {
+  return model.loadCheck?.level === 'blocked' && model.loadCheck.cause === 'engineAge';
 }
 
 /**

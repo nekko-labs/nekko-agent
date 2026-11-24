@@ -11,8 +11,10 @@
 //!    llama.cpp has the last word.
 //! 2. **An engine too old for the file** (a header key that needs a minimum
 //!    build, `minEngineBuild`). Older builds load such a file without an
-//!    error and give wrong output, so a known-older engine is blocked, and one
-//!    whose version cannot be read is warned about.
+//!    error and give wrong output, so the managed engine is blocked when its
+//!    release is older (it has an Update). A user's own engine is only warned
+//!    about, whether its version reads older or cannot be read: a fork's number
+//!    says nothing about upstream's.
 //!
 //! This is the single source of the decision. The model server's load gate
 //! (`server.rs`) refuses a [`Level::Blocked`] check, which covers the Load
@@ -70,9 +72,18 @@ pub enum Level {
     Warning,
 }
 
+/// Which rule found it, so the apps can name the fix: no engine update helps
+/// a weight format, and one does help an engine that is too old.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cause {
+    WeightFormat,
+    EngineAge,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LoadCheck {
     pub level: Level,
+    pub cause: Cause,
     pub reason: String,
 }
 
@@ -81,10 +92,14 @@ impl LoadCheck {
         self.level == Level::Blocked
     }
 
-    /// The row's `loadCheck`: `{ level: 'blocked' | 'warning', reason }`.
+    /// The row's `loadCheck`: `{ level: 'blocked' | 'warning', cause: 'weightFormat' | 'engineAge', reason }`.
     pub fn to_value(&self) -> Value {
         let level = if self.blocked() { "blocked" } else { "warning" };
-        json!({ "level": level, "reason": self.reason })
+        let cause = match self.cause {
+            Cause::WeightFormat => "weightFormat",
+            Cause::EngineAge => "engineAge",
+        };
+        json!({ "level": level, "cause": cause, "reason": self.reason })
     }
 }
 
@@ -99,9 +114,11 @@ pub fn load_check(model: &Value, engine: &EngineInUse) -> Option<LoadCheck> {
     let blocked = found.iter().position(LoadCheck::blocked);
     match blocked {
         Some(i) => Some(found.swap_remove(i)),
+        // Warnings are said together, under the first one's cause.
         None => {
+            let cause = found.first()?.cause;
             let reasons: Vec<String> = found.into_iter().map(|c| c.reason).collect();
-            (!reasons.is_empty()).then(|| LoadCheck { level: Level::Warning, reason: reasons.join(" ") })
+            Some(LoadCheck { level: Level::Warning, cause, reason: reasons.join(" ") })
         }
     }
 }
@@ -113,12 +130,14 @@ fn weight_format(model: &Value, name: &str, engine: &EngineInUse) -> Option<Load
     Some(match engine.source {
         Source::External => LoadCheck {
             level: Level::Warning,
+            cause: Cause::WeightFormat,
             reason: format!(
                 "{format} It needs a modified build of llama.cpp: if your llama-server is not one, loading will fail."
             ),
         },
         Source::Managed | Source::None => LoadCheck {
             level: Level::Blocked,
+            cause: Cause::WeightFormat,
             reason: format!(
                 "{format} It needs a modified build of llama.cpp, which the engine Nekko Agent installs is not. To run it, point Nekko Agent at a llama-server built for it."
             ),
@@ -137,19 +156,31 @@ fn engine_age(model: &Value, name: &str, engine: &EngineInUse) -> Option<LoadChe
     );
     match engine.build() {
         Some(have) if have >= needs => None,
+        // The user's own llama-server may be a fork (PrismML's reads these keys)
+        // whose number says nothing about upstream's, so it is theirs to try.
+        Some(_) if engine.source == Source::External => {
+            let version = engine.version.as_deref().unwrap_or_default();
+            Some(LoadCheck {
+                level: Level::Warning,
+                cause: Cause::EngineAge,
+                reason: format!(
+                    "{wants} The llama-server Nekko Agent is pointed at reports {version}: if it is stock llama.cpp, update it."
+                ),
+            })
+        }
         Some(_) => {
             let version = engine.version.as_deref().unwrap_or_default();
-            let fix = match engine.source {
-                Source::External => "Update the llama-server Nekko Agent is pointed at.",
-                _ => "Update the engine on the Model server card.",
-            };
             Some(LoadCheck {
                 level: Level::Blocked,
-                reason: format!("{wants} The engine is too old for this file: it is {version}. {fix}"),
+                cause: Cause::EngineAge,
+                reason: format!(
+                    "{wants} The engine is too old for this file: it is {version}. Update the engine on the Model server card."
+                ),
             })
         }
         None => Some(LoadCheck {
             level: Level::Warning,
+            cause: Cause::EngineAge,
             reason: format!(
                 "{wants} The version of the engine could not be read, so check that it is b{needs} or newer."
             ),

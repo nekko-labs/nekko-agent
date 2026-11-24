@@ -68,4 +68,10 @@ describe('a model the engine in use will not load', () => {
     expect(smallestVariant(files.slice(0, 1))?.name).toBe('Bonsai-PTQ1_0.gguf');
     expect(smallestVariant([])).toBeUndefined();
   });
+  it('names the fix when only the engine’s age is in the way, and lets that file speak for the family', () => {
+    const tooOld = { level: 'blocked' as const, cause: 'engineAge' as const, reason: 'Needs llama.cpp b11556 or newer.' };
+    expect(gpuGuidance(7e9, undefined, local('m', { loadCheck: tooOld }))).toBe('Needs a newer engine');
+    const files = [local('Bonsai-PTQ1_0.gguf', { sizeBytes: 5, loadCheck: { ...blocked, cause: 'weightFormat' } }), local('Bonsai-Q2_0.gguf', { sizeBytes: 7, loadCheck: tooOld })];
+    expect(smallestVariant(files)?.name).toBe('Bonsai-Q2_0.gguf');
+  });
 });

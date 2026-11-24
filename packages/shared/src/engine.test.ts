@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cannotLoadReason, modelModality, unsupportedLoadReason } from './engine.js';
+import { cannotLoadReason, modelModality, needsNewerEngine, unsupportedLoadReason } from './engine.js';
 
 /**
  * What a GGUF is for, before anyone tries to serve it.
@@ -80,6 +80,16 @@ describe('unsupportedLoadReason', () => {
       /image-generation/,
     );
     expect(unsupportedLoadReason({ name: 'Qwen3' })).toBeUndefined();
+  });
+});
+
+describe('needsNewerEngine', () => {
+  it('is true only for a block an engine update fixes', () => {
+    expect(needsNewerEngine({ loadCheck: { level: 'blocked', cause: 'engineAge', reason: 'x' } })).toBe(true);
+    expect(needsNewerEngine({ loadCheck: { level: 'blocked', cause: 'weightFormat', reason: 'x' } })).toBe(false);
+    expect(needsNewerEngine({ loadCheck: { level: 'warning', cause: 'engineAge', reason: 'x' } })).toBe(false);
+    expect(needsNewerEngine({ loadCheck: { level: 'blocked', reason: 'x' } })).toBe(false);
+    expect(needsNewerEngine({})).toBe(false);
   });
 });
 

@@ -736,13 +736,16 @@ async fn an_external_engine_of_unknown_version_is_warned_about_and_let_try() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn an_external_engine_known_to_be_old_is_refused_for_its_age_only() {
+async fn an_external_engine_is_never_refused_whatever_version_it_reports() {
+    // A PrismML build reads these files whatever its own number says, so an old-looking one only gets a warning.
     let external = json!({ "source": "external", "version": "b11224" });
     let (fake, server) = engine_rig("gate-external-old", external, prism_models());
-    let r = server.load("q2", json!({})).await;
-    assert_eq!(r["ok"], false, "{r}");
-    assert!(r["message"].as_str().unwrap().contains("Update the llama-server"), "{r}");
-    assert_eq!(spawned(&fake), 0);
+    for id in ["ptq1", "q2"] {
+        assert_eq!(server.load(id, json!({})).await["ok"], true, "{id}");
+    }
+    assert_eq!(spawned(&fake), 2);
+    let log = server.status()["log"].to_string();
+    assert!(log.contains("reports b11224") && log.contains("update it"), "the warning is in the log: {log}");
     let current = json!({ "source": "external", "version": "b12436" });
     let (fake, server) = engine_rig("gate-external-new", current, prism_models());
     // Fork or not, a current external engine is the user's to try; llama.cpp's own error would surface.

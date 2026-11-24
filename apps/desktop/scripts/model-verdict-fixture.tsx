@@ -24,13 +24,13 @@ const scenarios: Record<string, Array<LocalModel & { loaded: boolean }>> = {
     row('qwen', { ...qwen, gpuFit: 'full' }),
   ],
   managed: [
-    row('ptq1', { ...ptq1, quantization: 'PTQ1_0', loadCheck: { level: 'blocked', reason: `${format} It needs a modified build of llama.cpp, which the engine Nekko Agent installs is not. To run it, point Nekko Agent at a llama-server built for it.` } }),
-    row('q2', { ...hadamard, loadCheck: { level: 'blocked', reason: wordsOld } }),
+    row('ptq1', { ...ptq1, quantization: 'PTQ1_0', loadCheck: { level: 'blocked', cause: 'weightFormat', reason: `${format} It needs a modified build of llama.cpp, which the engine Nekko Agent installs is not. To run it, point Nekko Agent at a llama-server built for it.` } }),
+    row('q2', { ...hadamard, loadCheck: { level: 'blocked', cause: 'engineAge', reason: wordsOld } }),
     row('qwen', { ...qwen, gpuFit: 'full' }),
   ],
   external: [
-    row('ptq1', { ...ptq1, quantization: 'PTQ1_0', gpuFit: 'partial', gpuFitIdle: 'partial', loadCheck: { level: 'warning', reason: `${format} It needs a modified build of llama.cpp: if your llama-server is not one, loading will fail. Ternary-Bonsai-2-27B-PTQ1_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The version of the engine could not be read, so check that it is b11556 or newer.` } }),
-    row('q2', { ...hadamard, gpuFit: 'full', loadCheck: { level: 'warning', reason: 'Ternary-Bonsai-2-27B-Q2_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The version of the engine could not be read, so check that it is b11556 or newer.' } }),
+    row('ptq1', { ...ptq1, quantization: 'PTQ1_0', gpuFit: 'partial', gpuFitIdle: 'partial', loadCheck: { level: 'warning', cause: 'weightFormat', reason: `${format} It needs a modified build of llama.cpp: if your llama-server is not one, loading will fail. Ternary-Bonsai-2-27B-PTQ1_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The version of the engine could not be read, so check that it is b11556 or newer.` } }),
+    row('q2', { ...hadamard, gpuFit: 'full', loadCheck: { level: 'warning', cause: 'engineAge', reason: 'Ternary-Bonsai-2-27B-Q2_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The version of the engine could not be read, so check that it is b11556 or newer.' } }),
     row('qwen', { ...qwen, gpuFit: 'full' }),
   ],
 };

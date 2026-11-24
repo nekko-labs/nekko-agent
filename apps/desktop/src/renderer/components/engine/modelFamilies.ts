@@ -1,4 +1,4 @@
-import { cannotLoadReason, modelModality, type CatalogModel, type EngineMemory, type GpuFit, type ImageRecommendedOption, type LocalModel, type Recommendations } from '@nekko-agent/shared';
+import { cannotLoadReason, modelModality, needsNewerEngine, type CatalogModel, type EngineMemory, type GpuFit, type ImageRecommendedOption, type LocalModel, type Recommendations } from '@nekko-agent/shared';
 
 export type LibraryModel = LocalModel & { loaded: boolean; gpuFit?: GpuFit; gpuFitIdle?: GpuFit };
 export interface ModelFamily {
@@ -40,12 +40,15 @@ export function groupModelFamilies(local: LibraryModel[], catalog: CatalogModel[
  */
 export function smallestVariant(local: LibraryModel[]): LibraryModel | undefined {
   const runnable = local.filter((m) => m.modality === 'image' || !cannotLoadReason(m));
-  return (runnable.length ? runnable : local).slice().sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
+  // With none that run, one an engine update would fix, so the line names that fix.
+  const fixable = local.filter((m) => cannotLoadReason(m) === m.loadCheck?.reason && needsNewerEngine(m));
+  const speaking = runnable.length ? runnable : fixable.length ? fixable : local;
+  return speaking.slice().sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
 }
 
 export function gpuGuidance(sizeBytes: number | undefined, memory?: EngineMemory, model?: LibraryModel): string {
   // The engine will not load it, so no GPU or CPU split applies.
-  if (model?.loadCheck?.level === 'blocked') return "Can't run here";
+  if (model?.loadCheck?.level === 'blocked') return needsNewerEngine(model) ? 'Needs a newer engine' : "Can't run here";
   if (model?.gpuFit === 'cpu' || memory?.kind === 'ram') return 'CPU only';
   if (model?.gpuFit === 'wont') return 'Too big';
   if (model?.gpuFit === 'partial') {

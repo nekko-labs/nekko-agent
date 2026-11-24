@@ -2,7 +2,7 @@
 //! external with an unknown one, against a file with an unknown weight format,
 //! one that needs a newer llama.cpp, both, and neither.
 
-use nekko_engine::load_check::{EngineInUse, Level, LoadCheck, Source, load_check};
+use nekko_engine::load_check::{Cause, EngineInUse, Level, LoadCheck, Source, load_check};
 use serde_json::{Value, json};
 
 fn engine(source: Source, version: Option<&str>) -> EngineInUse {
@@ -57,12 +57,12 @@ fn an_engine_older_than_the_file_needs_is_refused() {
         managed.reason,
         "Ternary-Bonsai-2-27B-Q2_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The engine is too old for this file: it is b11224. Update the engine on the Model server card."
     );
+    // The user's own llama-server may be a fork whose number is not upstream's: warned, never refused.
     let external = load_check(&hadamard(), &engine(Source::External, Some("b11555"))).unwrap();
-    assert!(external.blocked());
-    assert!(
-        external.reason.contains("it is b11555") && external.reason.contains("Update the llama-server"),
-        "{}",
-        external.reason
+    assert_eq!(external.level, Level::Warning);
+    assert_eq!(
+        external.reason,
+        "Ternary-Bonsai-2-27B-Q2_0 needs llama.cpp b11556 or newer. Older builds load it without an error and give wrong output. The llama-server Nekko Agent is pointed at reports b11555: if it is stock llama.cpp, update it."
     );
     // The number is compared as a number, not as text.
     assert_eq!(level(&hadamard(), &engine(Source::Managed, Some("b999"))), Some(Level::Blocked));
@@ -104,10 +104,11 @@ fn where_both_apply_the_weight_format_wins_on_the_managed_engine() {
     // Updating would not help it, so a current managed engine says the same.
     let current = load_check(&ptq1(), &engine(Source::Managed, Some("b12436"))).unwrap();
     assert!(current.blocked() && current.reason.contains("tensor type 143"));
-    // External: a known-old engine is refused for its age (older builds read the header wrongly whatever the
-    // file's own format), an unknown or new one only warned, and warnings are said together.
+    // External: never refused, whatever version it reports (a PrismML build is exactly what runs this file);
+    // the warnings are said together.
     let old = load_check(&ptq1(), &engine(Source::External, Some("b11224"))).unwrap();
-    assert!(old.blocked() && old.reason.contains("too old"), "{}", old.reason);
+    assert_eq!(old.level, Level::Warning);
+    assert!(old.reason.contains("tensor type 143") && old.reason.contains("reports b11224"), "{}", old.reason);
     let unknown = load_check(&ptq1(), &engine(Source::External, None)).unwrap();
     assert_eq!(unknown.level, Level::Warning);
     assert!(unknown.reason.contains("tensor type 143") && unknown.reason.contains("b11556"), "{}", unknown.reason);
@@ -145,8 +146,19 @@ fn reads_the_engine_from_an_install_report() {
 }
 
 #[test]
-fn the_row_shape_is_level_and_reason() {
-    let check = LoadCheck { level: Level::Warning, reason: "r".into() };
-    assert_eq!(check.to_value(), json!({ "level": "warning", "reason": "r" }));
-    assert_eq!(LoadCheck { level: Level::Blocked, reason: "r".into() }.to_value()["level"], "blocked");
+fn the_row_shape_is_level_cause_and_reason() {
+    let check = LoadCheck { level: Level::Warning, cause: Cause::WeightFormat, reason: "r".into() };
+    assert_eq!(check.to_value(), json!({ "level": "warning", "cause": "weightFormat", "reason": "r" }));
+    let old = LoadCheck { level: Level::Blocked, cause: Cause::EngineAge, reason: "r".into() };
+    assert_eq!(old.to_value(), json!({ "level": "blocked", "cause": "engineAge", "reason": "r" }));
+}
+
+#[test]
+fn each_verdict_names_the_rule_that_found_it() {
+    // The apps say "Needs a newer engine" only where an update helps.
+    let cause = |m: &Value, e: &EngineInUse| load_check(m, e).map(|c| c.cause);
+    assert_eq!(cause(&hadamard(), &engine(Source::Managed, Some("b11224"))), Some(Cause::EngineAge));
+    assert_eq!(cause(&ptq1(), &engine(Source::Managed, Some("b11224"))), Some(Cause::WeightFormat));
+    assert_eq!(cause(&foreign_only(), &engine(Source::External, None)), Some(Cause::WeightFormat));
+    assert_eq!(cause(&hadamard(), &engine(Source::External, None)), Some(Cause::EngineAge));
 }
