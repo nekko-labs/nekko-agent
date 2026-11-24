@@ -31,6 +31,16 @@ export function describeInterruption(message: string, canContinue: boolean) {
 }
 
 /**
+ * What "Ask parent to resume" sends the parent of a Claude Code subagent that
+ * stopped: only the parent's Claude Code can wake it, so the subagent's own
+ * chat never retries (it is a copy to watch).
+ */
+export function subagentResumeRequest(title: string | undefined, failure: string): string {
+  const name = title?.trim() ? `The subagent "${title.trim()}"` : 'A subagent';
+  return `${name} stopped before it finished: ${failure.trim()}\n\nResume it so it carries on from where it stopped.`;
+}
+
+/**
  * Whether a failed reply was refused for its credentials (an expired or revoked
  * sign-in, a bad key), which only signing in again fixes. Providers report it as
  * "<provider> 401: {...}" with codes like token_expired or invalid_api_key.
