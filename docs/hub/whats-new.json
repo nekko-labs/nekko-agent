@@ -1,5 +1,5 @@
 {
-  "$comment": "The highlights of each release line (MAJOR.MINOR), read by the What's new page at nekkoagent.com/whatsnew (scripts/build-docs.mjs). date and tag are the line's newest release; authors are the GitHub logins of the pull request's author; contributors are the logins of everyone who merged a pull request in the line (from its GitHub release notes, bots left out). Optional per highlight: \"major\": true puts it among the line's headliners, and the rest show as one-liners; \"kind\" (improvement, performance or fix) puts a one-liner under that heading. A line with no major highlight keeps the plain list.",
+  "$comment": "The highlights of each release line (MAJOR.MINOR), read by the What's new page at nekkoagent.com/whatsnew (scripts/build-docs.mjs). date and tag are the line's newest release; authors are the GitHub logins of the pull request's author; contributors are the logins of everyone who merged a pull request in the line (the range of its GitHub release notes, bots left out; scripts/draft-whats-new.mjs drafts a new line's entry). Optional per highlight: \"major\": true puts it among the line's headliners, and the rest show as one-liners; \"kind\" (improvement, performance or fix) puts a one-liner under that heading. A line with no major highlight keeps the plain list.",
   "0.10": {
     "date": "2026-11-16",
     "tag": "v0.10.1004",
