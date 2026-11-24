@@ -90,6 +90,14 @@ fn a_tensor_type_past_llama_cpps_is_recorded_and_the_newer_known_ones_are_sized(
     // Neither is in the value the daemon sends when absent.
     assert!(known.to_value().get("unknownWeightType").is_none());
     assert_eq!(foreign.to_value()["unknownWeightType"], 143);
+    // A table that cannot be read to its end still says what it showed before it ended.
+    let mut cut = gguf_bytes(&[Kv::Str("general.architecture", "qwen35")], &[("a.weight", 143), ("b.weight", 0)]);
+    cut.truncate(cut.len() - 6);
+    let p = dir.join("cut.gguf");
+    write(&p, cut);
+    let meta = gguf::read_metadata(&p.to_string_lossy()).unwrap();
+    assert_eq!(meta.unknown_weight_type, Some(143));
+    assert!(meta.weight_layout.is_none());
     std::fs::remove_dir_all(dir).ok();
 }
 

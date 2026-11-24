@@ -266,14 +266,18 @@ fn parse(buf: &[u8], last: bool) -> Parsed {
         Err(Stop::Bad) => return Parsed::Done(None),
     };
     let mut meta = to_metadata(&kv);
-    match tensor_table(&mut r, tensors) {
-        Ok((attn, bytes)) => {
+    let mut attn = Vec::new();
+    let mut bytes = WeightBytes::default();
+    match tensor_table(&mut r, tensors, &mut attn, &mut bytes) {
+        Ok(()) => {
             meta.kv_layout = kv_layout(&kv, &arrays, &attn, tensors);
             meta.weight_layout = bytes.layout(&kv);
             meta.unknown_weight_type = bytes.foreign;
         }
         Err(Stop::Eof) if !last => return Parsed::Truncated,
-        Err(_) => {}
+        // A table that cannot be read to its end (cut short at the most a header may take, or malformed) gives
+        // no layout, but a tensor type past llama.cpp's own that was already read is still a fact about the file.
+        Err(_) => meta.unknown_weight_type = bytes.foreign,
     }
     Parsed::Done(Some(Box::new(meta)))
 }
@@ -390,12 +394,10 @@ impl WeightBytes {
 /// The tensor table's attention projections (`blk.N.attn_k`, `attn_v`,
 /// `attn_qkv`), which layers are recurrent (`blk.N.ssm_*`), and the bytes of
 /// every tensor by kind.
-fn tensor_table(r: &mut Reader, count: f64) -> Result<(Vec<AttnTensor>, WeightBytes), Stop> {
+fn tensor_table(r: &mut Reader, count: f64, out: &mut Vec<AttnTensor>, bytes: &mut WeightBytes) -> Result<(), Stop> {
     if count > 1_000_000.0 {
         return Err(Stop::Bad);
     }
-    let mut out = Vec::new();
-    let mut bytes = WeightBytes::default();
     for _ in 0..count as u64 {
         let name = r.string()?;
         let dims = r.u32()?;
@@ -422,7 +424,7 @@ fn tensor_table(r: &mut Reader, count: f64) -> Result<(Vec<AttnTensor>, WeightBy
             out.push(AttnTensor { layer, kind, width });
         }
     }
-    Ok((out, bytes))
+    Ok(())
 }
 
 /// Every second or sixth layer slides where the file has a window but no
