@@ -76,7 +76,7 @@ export interface LiveRun {
   retrying?: { attempt: number; maxAttempts: number; delayMs: number; reason: string; at: number };
 }
 
-import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity, resetSubagentActivityFor } from './subagentActivity.js';
+import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity, resetSubagentActivityFor, seedSubagentWaits } from './subagentActivity.js';
 
 const runs = new Map<string, LiveRun>();
 /**
@@ -422,6 +422,12 @@ export function applyReplay(replay: AgentReplay): void {
 export function startLiveRuns(): () => void {
   const offEvents = window.nekko.onAgentEvent((e: AgentEvent) => applyEvent(e));
   const offReplay = window.nekko.onAgentReplay?.((r) => applyReplay(r));
+  // Waits already open at launch: their events went out before this window
+  // listened, and a sub-agent's must still show on its parent chat (#3270).
+  window.nekko.pendingInput?.().then((pending) => {
+    seedSubagentWaits(pending);
+    for (const id of Object.keys(pending)) markDirty(id);
+  }).catch(() => {});
   // Only while something runs: an idle app asks the engine nothing.
   const reconcile = setInterval(() => {
     if (!runs.size) return;
