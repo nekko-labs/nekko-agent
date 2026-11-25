@@ -124,4 +124,107 @@ class SavedTranscriptsTest {
         assertEquals(listOf("", ""), back.images)
         assertFalse((m.savedJson() as JsonObject).containsKey("images"))
     }
+
+    // ---- off the caller's thread (#3413) ----
+
+    private class SlowFiles : OfflineFiles {
+        val map = java.util.concurrent.ConcurrentHashMap<String, JsonElement>()
+        val writers = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        val chatWrites = java.util.concurrent.atomic.AtomicInteger()
+        override fun load(computerId: String, name: String) = map["$computerId/$name"]
+        override fun save(computerId: String, name: String, value: JsonElement) {
+            writers += Thread.currentThread().name
+            if (name.startsWith("chat-")) chatWrites.incrementAndGet()
+            map["$computerId/$name"] = value
+        }
+        override fun remove(computerId: String) { map.keys.removeAll { it.startsWith("$computerId/") } }
+        override fun removeFile(computerId: String, name: String) { map.remove("$computerId/$name") }
+    }
+
+    private fun queued(files: OfflineFiles, io: BackgroundIO) =
+        SavedTranscripts(io = io) { clock++ }.apply { use(files, "c1") }
+
+    @Test fun `a save is filed away at once and written on the queue, a burst becoming one write of the newest`() {
+        val io = BackgroundIO("test-saved-copies")
+        val files = SlowFiles()
+        val s = queued(files, io)
+        repeat(5) { n -> s.save(session("a", "first", "answer $n")) }
+        // Nothing is on disk yet, but the newest copy reads back.
+        assertTrue(files.map.isEmpty())
+        assertEquals("answer 4", s.saved("a")!!.session.messages.last().content)
+        s.flush()
+        assertEquals(1, files.chatWrites.get())
+        assertEquals(listOf("a"), s.chatIds)
+        assertEquals("answer 4", s.saved("a")!!.session.messages.last().content)
+        // Every write ran on the queue's thread, none on the test's.
+        assertEquals(setOf("test-saved-copies"), files.writers)
+    }
+
+    @Test fun `a chat that has not changed since its last save is not written again, only moved to the front`() {
+        val io = BackgroundIO("test-saved-copies")
+        val files = SlowFiles()
+        val s = queued(files, io)
+        s.save(session("a", "1"))
+        s.save(session("b", "2"))
+        s.flush()
+        assertEquals(2, files.chatWrites.get())
+        s.save(session("a", "1"))
+        s.flush()
+        assertEquals("only its place changed", 2, files.chatWrites.get())
+        assertEquals(listOf("a", "b"), s.chatIds)
+        s.save(session("a", "1", "more"))
+        s.flush()
+        assertEquals(3, files.chatWrites.get())
+    }
+
+    @Test fun `a removal never overtakes the save before it, and a save waiting for a chat that was removed is dropped`() {
+        val io = BackgroundIO("test-saved-copies")
+        val files = SlowFiles()
+        val s = queued(files, io)
+        s.save(session("a", "1"))
+        s.flush()
+        s.save(session("a", "1", "2"))
+        s.remove("a")
+        s.flush()
+        assertTrue(files.map.keys.none { it.contains("/chat-") })
+        assertTrue(s.chatIds.isEmpty())
+    }
+
+    @Test fun `a save waiting when the computer changes is not written into the other computer`() {
+        val io = BackgroundIO("test-saved-copies")
+        val files = SlowFiles()
+        val s = queued(files, io)
+        s.save(session("a", "1"))
+        s.use(files, "c2")
+        s.flush()
+        assertTrue(files.map.isEmpty())
+        assertTrue(s.chatIds.isEmpty())
+    }
+
+    @Test fun `the queue writes in the order asked for`() {
+        val io = BackgroundIO("test-order")
+        val seen = java.util.Collections.synchronizedList(ArrayList<Int>())
+        repeat(50) { n -> io.run { seen += n } }
+        io.waitUntilIdle()
+        assertEquals((0 until 50).toList(), seen)
+    }
+
+    @Test fun `the coalescing writer writes the newest value per key once, and flushNow hands it over at once`() {
+        val io = BackgroundIO("test-coalesce")
+        val seen = java.util.Collections.synchronizedList(ArrayList<Pair<String, Int>>())
+        val w = CoalescedWriter<Int>(io, delayMs = 60_000) { k, v -> seen += k to v }
+        w.submit("x", 1); w.submit("y", 1); w.submit("x", 2)
+        assertEquals(2, w.pending("x"))
+        assertTrue(seen.isEmpty())
+        w.flushNow()
+        io.waitUntilIdle()
+        assertEquals(setOf("x" to 2, "y" to 1), seen.toSet())
+        assertEquals(2, seen.size)
+        assertEquals(null, w.pending("x"))
+        w.submit("z", 1)
+        w.cancel("z")
+        w.flushNow()
+        io.waitUntilIdle()
+        assertEquals(2, seen.size)
+    }
 }

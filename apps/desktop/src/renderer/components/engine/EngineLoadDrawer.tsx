@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
 import { ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
 import { Shown } from '../ModeViews.js';
-import { PixelSkeleton } from '../PixelSkeleton.js';
-import { ASPECT_COLOR, MemoryBar, OTHER_COLOR, Swatch, type BarSegment } from './MemoryBar.js';
-import { breakdown, type Aspect, type AspectPart } from './memoryBreakdown.js';
+import { LoadMemoryMeter, useLoadPlacement } from './LoadMemoryMeter.js';
 import {
   KEEP_LABELS,
   PRECISIONS,
@@ -38,17 +36,13 @@ import {
  * that fits, then where it runs and how much it remembers, with everything else
  * folded under More controls and Expert.
  *
- * There is one state, the `LoadParams` the engine launches with. The meter is
- * the placement planner's answer for exactly those parameters
+ * There is one state, the `LoadParams` the engine launches with. For GGUF, the meter is
+ * the placement planner's answer for those parameters
  * (`crates/nekko-engine/src/placement.rs`), and the launch passes the
  * placement explicitly with `--fit off`, so what loads is what the meter showed.
  * It deliberately predicts memory, never tokens per second: we can measure the
  * one and would be inventing the other.
  */
-
-const PLAN_DEBOUNCE_MS = 150;
-/** The meter's "other apps" figures move; re-read them while the drawer is open. */
-const LIVE_REFRESH_MS = 5000;
 
 export function EngineLoadDrawer({
   providerId,
@@ -79,14 +73,12 @@ export function EngineLoadDrawer({
   const saved = useMemo(() => fromPreset(model.preset), [model.preset]);
   const [params, setParams] = useState<LoadParams>(saved.params);
   const [split, setSplit] = useState<SplitPreset>(saved.split);
-  const [plan, setPlan] = useState<PlacementPlan | null>(null);
+  const { plan, hardware, pending, previous } = useLoadPlacement(providerId, model, params);
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [applied, setApplied] = useState(false);
   const [more, setMore] = useState(initialSurface === 'advanced');
   const [expert, setExpert] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [tick, setTick] = useState(0);
-  const latest = useRef(0);
   const layers = model.layers;
   const moe = isMoe(model);
   const mlx = model.format === 'mlx';
@@ -111,11 +103,12 @@ export function EngineLoadDrawer({
   // The recommendation, once per open. With no saved settings it is applied
   // straight away, so a model opened for the first time shows a setup that fits.
   useEffect(() => {
+    if (mlx) return; // The placement planner doesn't model the MLX runtime.
     let live = true;
     window.nekko
       .runtimeRecommend(providerId, model.id, { goal: 'speed' })
       .then((r) => {
-        if (!live || !r) return;
+        if (!live || !r || r.plan.verdict === 'unknown' || r.plan.verdict === 'wont-load') return;
         setRec(r);
         if (!model.preset) applyRecommendation(r);
       })
@@ -124,26 +117,11 @@ export function EngineLoadDrawer({
       live = false;
     };
     // Re-solving on every params change would chase the user's own edits.
-  }, [providerId, model.id]);
-
-  useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), LIVE_REFRESH_MS);
-    return () => clearInterval(t);
-  }, []);
-
-  // The meter: where these exact parameters put every byte.
-  useEffect(() => {
-    const seq = ++latest.current;
-    const t = setTimeout(async () => {
-      const next = await window.nekko.runtimePlace(providerId, model.id, toPlacementRequest(params, model)).catch(() => null);
-      if (seq === latest.current) setPlan(next);
-    }, PLAN_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [providerId, model, params, tick]);
+  }, [providerId, model.id, mlx]);
 
   const runOn = runOnOf(params, layers);
-  const unified = plan?.unified ?? false;
-  const noGpu = model.gpuFit === 'cpu' || (plan !== null && plan.deviceName === null);
+  const unified = hardware?.unified ?? false;
+  const noGpu = model.gpuFit === 'cpu' || (hardware !== null && hardware.deviceName === null);
   const matches = matchesRecommendation(params, rec?.request, layers);
   // A load from chat or at engine start uses the saved settings, not these.
   const unsaved = differsFromSaved(params, saved.params);
@@ -175,7 +153,7 @@ export function EngineLoadDrawer({
     const r = await window.nekko
       .runtimeRecommend(providerId, model.id, { goal, request: { ...toPlacementRequest({ ...params, ...full }, model), runOn: 'hybrid' } })
       .catch(() => null);
-    if (!r) return pushToast('error', "Couldn't work out a split that fits.");
+    if (!r || r.plan.verdict === 'unknown' || r.plan.verdict === 'wont-load') return pushToast('error', "Couldn't work out a split that fits.");
     setParams((prev) => ({ ...fromRecommendation(r.request, model, prev), ...(p === 'coding' ? { speculative: undefined } : {}) }));
   };
 
@@ -228,24 +206,21 @@ export function EngineLoadDrawer({
               .join(' · ')}
           </p>
         </div>
-        {plan && <VerdictChip plan={plan} />}
+        {plan && plan.verdict !== 'unknown' && <VerdictChip plan={plan} />}
       </div>
 
-      <MemoryMeter plan={plan} params={params} layers={layers} />
+      <LoadMemoryMeter model={model} plan={plan} params={params} pending={pending} previous={previous} />
 
       <div className="mt-3">
         <button
-          className="btn btn-primary flex min-h-[52px] w-full items-center justify-center gap-2 text-base font-semibold"
+          className="btn btn-outline text-xs"
+          title={rec ? undefined : 'A fitting recommendation is unavailable'}
           onClick={() => rec && applyRecommendation(rec)}
           disabled={!rec}
           data-recommend
         >
-          <BoltIcon />
           Use recommended settings
         </button>
-        <p className="mt-1 text-center text-xs text-ink-faint">
-          Picks the fastest setup that fits this model on this machine. GPU first, always.
-        </p>
         {applied && rec && (
           <div className="mt-2 rounded-lg border px-3 py-2" style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, transparent)', background: 'var(--accent-soft)' }}>
             <p className="text-xs font-medium">What this chose</p>
@@ -372,8 +347,7 @@ export function EngineLoadDrawer({
         </div>
         <p className="mt-1 text-xs text-ink-faint">
           How much the model can keep in mind at once: your messages, its replies and any files it reads.{' '}
-          {formatTokens(perSession)} is roughly {pagesOf(perSession)} pages of text. More context uses more memory, and the meter
-          above shows how much.
+          {formatTokens(perSession)} is roughly {pagesOf(perSession)} pages of text.{mlx ? ' MLX allocates its cache as tokens are used.' : ' More context uses more memory. The meter shows an estimate when available.'}
         </p>
       </div>
 
@@ -531,149 +505,8 @@ function VerdictChip({ plan }: { plan: PlacementPlan }) {
   );
 }
 
-/**
- * Graphics memory and system memory as two bars (one on a Mac): other apps,
- * then this model part by part, then what is left. Each part is named by the
- * setting that drives it: how the weights load, how many parallel sessions the
- * context is split into (one slice each), the working space. The table under
- * the bars says how much of each lands in VRAM and in RAM. A load that will not
- * fit outlines the bar in red; the line under it says what is read from the SSD.
- */
-function MemoryMeter({ plan, params, layers }: { plan: PlacementPlan | null; params: LoadParams; layers?: number }) {
-  const [hover, setHover] = useState<Aspect | null>(null);
-  if (!plan) return <PixelSkeleton className="mt-3 h-24 rounded-lg" label="Loading placement plan" />;
-  if (plan.verdict === 'unknown') {
-    return (
-      <p className="mt-3 rounded-lg border px-3 py-2 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
-        This file does not describe its layers, so we cannot say how much memory it needs. Load it and we will measure it.
-      </p>
-    );
-  }
-  const parts = breakdown(plan, params, layers);
-  const bars = plan.unified
-    ? [{ key: 'vram' as const, title: 'Memory (shared by GPU and CPU)', pool: plan.vram }]
-    : [
-        ...(plan.deviceName ? [{ key: 'vram' as const, title: 'Graphics memory (VRAM)', pool: plan.vram }] : []),
-        { key: 'ram' as const, title: 'System memory (RAM)', pool: plan.ram },
-      ];
-  const bytesIn = (p: AspectPart, key: 'vram' | 'ram') => (key === 'vram' ? p.vramBytes : p.ramBytes);
-  const disk: string[] = [];
-  if (plan.disk.tableBytes > 0) disk.push(`Its lookup table (${formatBytes(plan.disk.tableBytes)}) stays on your SSD and is read a few KB per word.`);
-  if (plan.disk.overflowBytes > 0) disk.push(`Reads about ${formatBytes(plan.disk.overflowBytes)} of the model from your SSD as it needs it. A fast NVMe drive matters here.`);
-  return (
-    <section aria-label="Memory" className="mt-3 space-y-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }} data-meter onMouseLeave={() => setHover(null)}>
-      {bars.map(({ key, title, pool }) => {
-        const mine = parts.reduce((a, p) => a + bytesIn(p, key), 0);
-        const room = Math.max(0, pool.totalBytes - pool.otherBytes);
-        const over = mine > pool.availBytes;
-        const segments: BarSegment[] = [
-          { key: 'other', bytes: pool.otherBytes, color: OTHER_COLOR, title: `Other apps ${formatBytes(pool.otherBytes)}`, dim: hover !== null },
-          ...parts.map((p) => ({
-            key: p.aspect,
-            bytes: bytesIn(p, key),
-            color: ASPECT_COLOR[p.aspect],
-            title: `${p.label} ${formatBytes(bytesIn(p, key))}: ${p.driver}`,
-            slices: p.slices,
-            dim: hover !== null && hover !== p.aspect,
-            onHover: (on: boolean) => setHover(on ? p.aspect : null),
-          })),
-        ];
-        return (
-          <div key={key} data-meter-bar={key}>
-            <div className="flex justify-between gap-3 text-xs">
-              <span className="font-medium">{title}</span>
-              <span className="font-mono text-2xs text-ink-faint">
-                {formatBytes(pool.otherBytes + mine)} of {formatBytes(pool.totalBytes)}
-              </span>
-            </div>
-            <div className="mt-1">
-              <MemoryBar segments={segments} scaleBytes={Math.max(pool.totalBytes, pool.otherBytes + mine, 1)} label={`${title} this load would use`} over={over} />
-            </div>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-faint">
-              <span className="inline-flex items-center gap-2">
-                <Swatch color={OTHER_COLOR} />
-                Other apps {formatBytes(pool.otherBytes)}
-              </span>
-              <span>This model {formatBytes(mine)}</span>
-              <span className="ml-auto" style={over ? { color: 'var(--danger-text)' } : undefined}>
-                {over ? `Short by ${formatBytes(mine - pool.availBytes)}` : `Free ${formatBytes(room - mine)}`}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-      <table className="w-full text-xs" data-meter-breakdown>
-        <thead>
-          <tr className="text-2xs text-ink-faint">
-            <th className="pb-1 text-left font-normal">What uses it</th>
-            {bars.map((b) => (
-              <th key={b.key} className="w-20 pb-1 text-right font-normal">
-                {plan.unified ? 'Memory' : b.key === 'vram' ? 'VRAM' : 'RAM'}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {parts.map((p) => (
-            <tr
-              key={p.aspect}
-              className="align-baseline transition-opacity duration-(--dur-fast)"
-              style={{ opacity: hover !== null && hover !== p.aspect ? 0.45 : 1 }}
-              onMouseEnter={() => setHover(p.aspect)}
-              onMouseLeave={() => setHover(null)}
-              data-meter-part={p.aspect}
-            >
-              <td className="py-0.5 pr-3">
-                <span className="inline-flex items-baseline gap-2">
-                  <span className="self-center">
-                    <Swatch color={ASPECT_COLOR[p.aspect]} />
-                  </span>
-                  <span className="font-medium">{p.label}</span>
-                  <span className="text-ink-faint">{p.driver}</span>
-                </span>
-              </td>
-              {bars.map((b) => (
-                <td key={b.key} className="py-0.5 text-right font-mono text-2xs text-ink-faint">
-                  {bytesIn(p, b.key) > 0 ? formatBytes(bytesIn(p, b.key)) : '–'}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {disk.length > 0 && (
-        <p className="text-xs" style={{ color: 'var(--warning)' }} data-meter-disk>
-          {disk.join(' ')}
-        </p>
-      )}
-      <p className="text-xs">{expectation(plan)}</p>
-    </section>
-  );
-}
-
-function expectation(plan: PlacementPlan): string {
-  if (plan.verdict === 'wont-load') {
-    if (plan.reason === 'context-over-max') return 'That is more context than this model supports.';
-    const pool = plan.reason === 'ram' ? 'system memory' : plan.unified ? 'memory than the GPU may use' : 'graphics memory';
-    return `This won’t load as set: it needs ${formatBytes(plan.shortByBytes ?? 0)} more ${pool}. Try Use recommended settings, or lower the context.`;
-  }
-  if (plan.unified) return 'Runs entirely on the GPU. Macs share memory, so this is already the fastest setup.';
-  if (!plan.deviceName || plan.vram.model.weightsBytes === 0) return 'Everything runs on the processor. It always fits, and it is the slowest option.';
-  if (plan.ram.model.weightsBytes === 0 && plan.ram.model.kvCacheBytes === 0) return 'Everything runs on the graphics card. This is the fastest way to run a model.';
-  if (plan.ram.model.weightsBytes === 0) return 'The model sits on the graphics card and its context lives in system memory. Good for very long context; each word is a little slower.';
-  return `The graphics card does the core work; ${formatBytes(plan.ram.model.weightsBytes)} of the model waits in system memory${plan.disk.overflowBytes > 0 ? ' and on your SSD' : ''}. Slower than all-GPU, much faster than the processor alone.`;
-}
-
 function RecommendedTag() {
   return <span className="ml-2 text-2xs font-normal" style={{ color: 'var(--accent)' }}>Recommended</span>;
-}
-
-function BoltIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
-    </svg>
-  );
 }
 
 function Section({ title, hint, control, recommended }: { title: string; hint: string; control?: React.ReactNode; recommended?: boolean }) {
