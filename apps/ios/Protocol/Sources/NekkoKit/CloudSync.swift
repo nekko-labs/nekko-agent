@@ -111,9 +111,12 @@ public final class CloudSync {
     }
 
     /// - Parameter key: this iPhone's agreement key, made on first use (a Secure Enclave key on a device).
+    /// - Parameter retryWaits: how long to wait before each retry of a brief Nekko Cloud stall (tests pass tiny waits).
     public init(api: URL, http: CloudHTTP = URLSessionCloudHTTP(), secrets: SecureStore, files: OfflineFiles?,
-                deviceLabel: String, key: @escaping () throws -> SyncAgreementKey) {
+                deviceLabel: String, retryWaits: [Duration] = [.milliseconds(500), .seconds(2)],
+                key: @escaping () throws -> SyncAgreementKey) {
         self.api = api
+        self.retryWaits = retryWaits
         self.http = http
         self.secrets = secrets
         self.files = files
@@ -933,6 +936,16 @@ public final class CloudSync {
         return supabase!
     }
 
+    private let retryWaits: [Duration]
+
+    /// A failure that is safe to try again: nothing reached the service (a failed connect), or the
+    /// service said it couldn't do the work right now (502, 503, 504). Same as the desktop (#3186).
+    private static func transient(status: Int?, error: Error?) -> Bool {
+        if let status { return (502...504).contains(status) }
+        guard let e = error as? URLError else { return false }
+        return e.code == .cannotConnectToHost || e.code == .cannotFindHost
+    }
+
     @discardableResult
     private func request(_ method: String, _ url: URL, json: JSONValue? = nil, token: String? = nil, headers: [String: String] = [:]) async throws -> JSONValue {
         var h = headers
@@ -946,15 +959,35 @@ public final class CloudSync {
                   account?.id == accountId, secrets.get("cloud.token") == token else { return }
             resetFleet()
         }
-        let status: Int
-        let data: Data
-        do { (status, data) = try await http.send(method, url, headers: h, body: json.map { Data($0.serialized().utf8) }) }
-        catch { invalidateFleet(); throw error }
+        // Only Nekko Cloud's own API is retried; a sign-in code sent twice would send two emails.
+        var waits = url.host == api.host ? retryWaits[...] : []
+        var status = 0
+        var data = Data()
+        while true {
+            do { (status, data) = try await http.send(method, url, headers: h, body: json.map { Data($0.serialized().utf8) }) }
+            catch {
+                if Self.transient(status: nil, error: error), let wait = waits.popFirst() {
+                    try await Task.sleep(for: wait)
+                    continue
+                }
+                invalidateFleet(); throw error
+            }
+            if Self.transient(status: status, error: nil), let wait = waits.popFirst() {
+                try await Task.sleep(for: wait)
+                continue
+            }
+            break
+        }
         let v = (try? JSONValue.parse(data)) ?? .null
         guard (200..<300).contains(status) else {
             invalidateFleet()
             let code = v.str("error") ?? v.str("error_code") ?? ""
-            let message = code == "account-not-available" ? "Nekko Cloud is invite-only for now. This account isn't on the list yet." : v.str("message") ?? v.str("msg") ?? (status == 402 ? "Sync needs a Pro or Enterprise plan." : status == 401 ? "You're signed out of Nekko Cloud." : "Nekko Cloud answered \(status).")
+            // A 5xx never shows the server's own text, only ours (as on the desktop).
+            let busy = (502...504).contains(status) || (status >= 500 && ["unavailable", "database-unavailable", "busy"].contains(code))
+            let message = code == "account-not-available" ? "Nekko Cloud is invite-only for now. This account isn't on the list yet."
+                : busy ? "Nekko Cloud is busy right now. Try again in a moment."
+                : status >= 500 ? "Nekko Cloud ran into a problem. Try again in a moment."
+                : v.str("message") ?? v.str("msg") ?? (status == 402 ? "Sync needs a Pro or Enterprise plan." : status == 401 ? "You're signed out of Nekko Cloud." : "Nekko Cloud answered \(status).")
             throw CloudError(status: status, code: code, message: message)
         }
         return v
