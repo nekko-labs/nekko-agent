@@ -39,7 +39,7 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
-## session:get can return chat pictures as references (#PR1, 2026-11-26)
+## session:get can return chat pictures as references (#3454, 2026-11-26)
 Area: engine daemon
 Result: improvement (wire bytes and read time for a window that opts in; nothing uses the option yet)
 Conditions: release `nekkod` from this branch on an Apple M1 Max, behind the Local Web UI over loopback HTTP, scratch data dir from `scripts/perf/pictures.mjs --runs 7` (a 400-message agent chat with 50 tool screenshots and 6 attached pictures, 1280x720 PNGs of about 280 KB each, and a 400-message text chat). One warm-up call, then the median of 7.
