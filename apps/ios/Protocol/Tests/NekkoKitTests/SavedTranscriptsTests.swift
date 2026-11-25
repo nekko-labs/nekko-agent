@@ -308,6 +308,7 @@ extension StoreTests {
         chat.start()
         await settle()
         XCTAssertNil(chat.savedAt)
+        await s.transcripts.flush()
         XCTAssertEqual(s.transcripts.chatIds, ["s1"])
         chat.stop()
 
@@ -352,6 +353,7 @@ extension StoreTests {
         chat.start()
         await settle()
         chat.stop()
+        await s.transcripts.flush()
         XCTAssertFalse(files.chats(id).isEmpty)
 
         s.forget(id)
@@ -379,9 +381,11 @@ extension StoreTests {
             await settle()
             chat.stop()
         }
+        await s.transcripts.flush()
         XCTAssertEqual(Set(s.transcripts.chatIds), ["s1", "gone"])
         // The next full read of the list doesn't have "gone".
         await s.refresh()
+        await s.transcripts.flush()
         XCTAssertEqual(s.transcripts.chatIds, ["s1"])
         XCTAssertEqual(files.chats(id).count, 1)
         // Opening one the computer says is deleted drops its copy.
@@ -408,11 +412,13 @@ extension StoreTests {
         chat.start()
         await settle()
         chat.stop()
+        await s.transcripts.flush()
         XCTAssertTrue(s.transcripts.chatIds.isEmpty)
         // Turned on: the next answer is kept.
         let files = MemoryTranscriptCache()
         s.transcriptCache = files
         await chat.reload()
+        await s.transcripts.flush()
         XCTAssertEqual(s.transcripts.chatIds, ["s1"])
     }
 }
