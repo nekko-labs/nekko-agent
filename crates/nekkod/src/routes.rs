@@ -236,7 +236,9 @@ impl Table {
                 let id = str_arg(&args, 0).unwrap_or_default().to_string();
                 let max = tail_bytes(channel, &args);
                 if is_agent(&id) {
-                    let snap = ctx.turns.agent_logs.route("terminal:snapshot", &id, &args).await?;
+                    // A window's card asks for a few lines (`maxBytes`): only that much of the log is read.
+                    let read = if channel == "terminal:snapshot" { max } else { None };
+                    let snap = ctx.turns.agent_logs.snapshot_tail(&id, read).await?;
                     return Ok(match max {
                         Some(max) => cap_buffer(snap, max),
                         None => snap,
