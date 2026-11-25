@@ -810,15 +810,15 @@ async function measureLongStream({ appUrl, mock, api, ids }) {
 }
 
 /**
- * Probe 2: frame work in chat A while chat B finishes. A streams the long reply
- * on screen; chat B (another seeded chat, parked on the board) is sent a short
+ * Probe 2: frame work in chat A while chat B finishes. A streams the gate's long
+ * reply (28 KB, 23 s) on screen; chat B (another seeded chat, parked on the board) is sent a short
  * prompt once a second, and each `done` makes the app refresh its session list.
  */
 async function measureConcurrent({ appUrl, mock, api, ids }) {
   const app = await openApp({ appUrl, cdpPort: CFG.cdpPort + 4, vsync: true });
   await app.openChat(0, '');
-  const finished = mock.state.streamsFinished;
-  await app.startStream(mock, LONG_TRIGGER);
+  // The 28 KB reply (23 s), not the 16 KB one (13 s): A must still be streaming when the window ends.
+  await app.startStream(mock);
   let completions = 0;
   const during = async (over) => {
     for (let k = 0; !over(); k++) {
@@ -827,9 +827,13 @@ async function measureConcurrent({ appUrl, mock, api, ids }) {
     }
   };
   const maxMs = QUICK ? 5000 : 8000;
-  const t = await traceFrames(app, { maxMs, during, done: () => mock.state.streamsFinished > finished });
-  // The trace ends early if A's reply ends first, which would measure an idle page.
-  const aStillStreaming = t.seconds * 1000 >= maxMs - 250;
+  // A fixed window. (The mock's finished-stream counter is not A's alone: a stream a
+  // follow-up request started earlier can finish inside the window.) A is still
+  // streaming at the end if its reply is still growing on screen.
+  const t = await traceFrames(app, { maxMs, during });
+  const a = await shownReplyChars(app.cdp);
+  await sleep(500);
+  const aStillStreaming = (await shownReplyChars(app.cdp)) > a;
   await api('chat:abort', ids[0]);
   await app.close();
   return { browser: app.browser.version, seconds: t.seconds, bCompletions: completions, aStillStreaming, frames: t.frames, work: t.work, busyFraction: t.busyFraction, source: t.source };
