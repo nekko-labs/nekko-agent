@@ -50,4 +50,11 @@
     <string name="conn_update_required_fix">Google Play から更新してください。</string>
     <string name="conn_removed_line">%1$s がこの電話を削除しました。</string>
     <string name="conn_unknown_line">%1$s はこの電話を認識しなくなりました。</string>
+    <string name="conn_route_title">接続方法</string>
+    <string name="conn_route_tailscale">Tailscale</string>
+    <string name="conn_route_cloud">Nekko Cloud Relay</string>
+    <string name="conn_route_add_cloud">追加するには、%1$s で Nekko Cloud Relay をオンにして、もう一度ペアリングしてください。</string>
+    <string name="conn_route_add_tailscale">追加するには、%1$s で Tailscale をオンにして、もう一度ペアリングしてください。</string>
+    <string name="conn_route_line">%1$s は、このスマートフォンを別の経路からしか受け付けません。</string>
+    <string name="conn_route_fix">もう一度ペアリングするか、%1$s で変更してください。</string>
 </resources>

@@ -50,4 +50,11 @@
     <string name="conn_update_required_fix">请从 Google Play 更新。</string>
     <string name="conn_removed_line">%1$s 已移除这部手机。</string>
     <string name="conn_unknown_line">%1$s 不再认识这部手机。</string>
+    <string name="conn_route_title">连接方式</string>
+    <string name="conn_route_tailscale">Tailscale</string>
+    <string name="conn_route_cloud">Nekko Cloud Relay</string>
+    <string name="conn_route_add_cloud">要添加它，请在 %1$s 上开启 Nekko Cloud Relay 后重新配对。</string>
+    <string name="conn_route_add_tailscale">要添加它，请在 %1$s 上开启 Tailscale 后重新配对。</string>
+    <string name="conn_route_line">%1$s 只允许这部手机通过另一条路线接入。</string>
+    <string name="conn_route_fix">请重新配对，或在 %1$s 上更改。</string>
 </resources>

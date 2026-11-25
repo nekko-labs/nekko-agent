@@ -55,6 +55,8 @@ class RelayClientTest {
         var refuseNext: Pair<Int, String>? = null
         /** `host:port` of routes that don't work: true hangs (never opens), false refuses at once. */
         val unreachable = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+        /** `host:port` of routes the computer answers with `denied: route` (its per-device route choice, #3243). */
+        val routeDenied: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
         /** The computer's phone protocol version in its welcome (IO-32); null sends none. */
         var welcomeProtocol: Int? = null
         /** Challenge each connection and hold HELLOs and requests to it. */
@@ -69,7 +71,7 @@ class RelayClientTest {
         val rejected = CopyOnWriteArrayList<JsonObject>()
         var answer: (JsonObject) -> JsonObject? = { req -> buildJsonObject { put("type", "res"); put("id", req["id"]!!); put("result", JsonPrimitive("ok:${req["channel"]!!.jsonPrimitive.content}")) } }
 
-        inner class Conn(val listener: WsListener) : WsConnection {
+        inner class Conn(val listener: WsListener, val hostPort: String = "") : WsConnection {
             @Volatile var open = true
             val host = HostEnd(room, key, hostSigner)
             /** The challenge this connection must answer next, or null once answered. */
@@ -104,6 +106,7 @@ class RelayClientTest {
                         val id = frame["deviceId"]!!.jsonPrimitive.content
                         val pair = frame["pair"]?.jsonPrimitive?.content
                         val reply = when {
+                            id in known && hostPort in routeDenied -> "route"
                             id in known -> null
                             pair != null && pair == code -> { known += id; code = null; null }
                             pair != null -> "bad-code"
@@ -143,7 +146,7 @@ class RelayClientTest {
 
         override fun open(url: String, listener: WsListener): WsConnection {
             urls += url
-            val c = Conn(listener)
+            val c = Conn(listener, url.substringAfter("://").substringBefore('/'))
             when (unreachable[url.substringAfter("://").substringBefore('/')]) {
                 true -> return c
                 false -> { scope.launchSoon { c.drop(1006, "connection refused") }; return c }
@@ -1094,6 +1097,29 @@ class RelayClientTest {
         assertEquals(tailnetRoute, c.await(RelayState.ONLINE).route)
         assertEquals(2, relay.urls.size)
         c.close()
+    }
+
+    @Test fun `denied route moves to the next route and stays there`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.routeDenied += "192.168.1.20:4400"
+        val c = twoRoutes(relay)
+        c.connect()
+        assertEquals(tailnetRoute, c.await(RelayState.ONLINE).route)
+        assertEquals(2, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `denied route on the only route ends as denied route`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.routeDenied += "192.168.1.20:4400"
+        relay.routeDenied += "studio.tail1234.ts.net:4400"
+        val c = twoRoutes(relay)
+        c.connect()
+        assertEquals(DenyReason.ROUTE, c.await(RelayState.DENIED).denied)
+        assertEquals(2, relay.urls.size)
+        delay(150)
+        assertEquals("no loop once every route is refused", 2, relay.urls.size)
+        try { c.call(Channels.APP_INFO); fail() } catch (e: RelayException) { assertTrue(e.message!!.contains("another route")) }
     }
 
     @Test fun `leaving the LAN moves to the tailnet, then back when it answers again`() = runBlocking {

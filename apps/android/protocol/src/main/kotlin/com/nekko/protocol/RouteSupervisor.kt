@@ -64,6 +64,8 @@ class RouteSupervisor(
     private var since = now
     private val cooldownUntil = HashMap<Int, Long>()
     private var successes = 0
+    /** Routes the computer refused this phone on (`denied: route`): not dialed again by this supervisor. */
+    private val refusedRoutes = HashSet<Int>()
 
     init {
         current = best(now) ?: this.routes.indices.firstOrNull { eligible(it) } ?: 0
@@ -75,7 +77,7 @@ class RouteSupervisor(
 
     /** Allowed on this phone, and not a LAN address on cellular. */
     fun eligible(i: Int): Boolean =
-        allowed(routes[i]) && (path != NetworkPath.CELLULAR || RelayRoute.of(routes[i]) != RelayRoute.LAN)
+        i !in refusedRoutes && allowed(routes[i]) && (path != NetworkPath.CELLULAR || RelayRoute.of(routes[i]) != RelayRoute.LAN)
 
     private fun cooling(i: Int, now: Long) = (cooldownUntil[i] ?: Long.MIN_VALUE) > now
 
@@ -113,6 +115,18 @@ class RouteSupervisor(
         val ready = !cooling(next, now)
         move(next, now)
         return Failover(changed = true, ready = ready)
+    }
+
+    /**
+     * The computer refused this phone on the current route (`denied: route`, decision 0116): that route
+     * is left for good and the next allowed one is used. False when none is left (the supervisor stays put).
+     */
+    fun refused(now: Long): Boolean {
+        refusedRoutes += current
+        val next = best(now) ?: routes.indices.firstOrNull { eligible(it) }
+        if (next == null) return false
+        move(next, now)
+        return true
     }
 
     /** On the best route this network allows: nothing to move back to. */
