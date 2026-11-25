@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 android {
@@ -62,6 +63,17 @@ android {
     sourceSets["androidTest"].assets.directories += "../../../crates/nekko-sync/tests/golden"
 }
 
+// Benchmark-only code (the long-chat screen :baselineprofile drives): its Kotlin lives in src/benchmark/java and is
+// added to the two variants the Baseline Profile plugin makes, never to debug or release; each of those has the
+// manifest entry for it (src/<variant>/AndroidManifest.xml).
+androidComponents {
+    onVariants { variant ->
+        if (variant.buildType == "benchmarkRelease" || variant.buildType == "nonMinifiedRelease") {
+            variant.sources.java?.addStaticSourceDirectory("src/benchmark/java")
+        }
+    }
+}
+
 kotlin {
     jvmToolchain(17)
 }
@@ -78,6 +90,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.process)
+    // Installs the baseline profile at install time (already pulled in by Compose and Startup; named so it is not lost).
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.gms.code.scanner)
     // App lock: the system fingerprint / face / screen-lock prompt. BiometricPrompt needs a FragmentActivity.

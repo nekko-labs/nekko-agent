@@ -24,3 +24,4 @@ rootProject.name = "NekkoAndroid"
 
 include(":protocol")
 include(":app")
+include(":baselineprofile")
