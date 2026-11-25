@@ -242,6 +242,7 @@
  "session:watches",
  "sessions:clear",
  "sessions:clearHistory",
+ "sessions:finderText",
  "sessions:historyUsage",
  "sessions:list",
  "sessions:purgeArchived",

@@ -734,3 +734,36 @@ async fn scoped_files_and_logs_for_remote_callers() {
     drop(d);
     let _ = std::fs::remove_dir_all(data);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn serves_the_chat_finders_text_without_pictures_or_tool_output() {
+    let data = std::env::temp_dir().join(format!("nekkod-finder-text-{}", std::process::id()));
+    let sessions = data.join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let chat = json!({ "id": "s_find", "title": "Find", "updatedAt": 5, "messages": [
+        { "id": "u", "role": "user", "content": "where is the cat", "images": ["data:image/png;base64,iVBORw0KGgo="], "createdAt": 1 },
+        { "id": "a", "role": "assistant", "content": "on the mat", "reasoning": "thinking hard", "createdAt": 2,
+          "toolCalls": [{ "id": "t", "name": "write_file", "input": { "path": "/x/cat.md", "content": "BODY" } }] },
+        { "id": "r", "role": "tool", "content": "", "toolResult": { "output": "TOOL OUTPUT" }, "createdAt": 3 },
+    ] });
+    std::fs::write(sessions.join("s_find.json"), serde_json::to_vec(&chat).unwrap()).unwrap();
+    let d = start_with(&data);
+
+    let (status, got) =
+        post(d.port, "sessions:finderText", json!([["s_find", "s_missing", "../escape"]]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(got["s_missing"], Value::Null);
+    assert_eq!(got["../escape"], Value::Null);
+    let view = &got["s_find"];
+    assert_eq!(view["title"], "Find");
+    assert_eq!(view["messages"][0]["content"], "where is the cat");
+    assert_eq!(view["messages"][1]["toolCalls"], json!([{ "name": "write_file", "input": { "path": "/x/cat.md" } }]));
+    assert_eq!(view["messages"].as_array().unwrap().len(), 2);
+    let text = view.to_string();
+    for gone in ["data:image", "thinking hard", "BODY", "TOOL OUTPUT"] {
+        assert!(!text.contains(gone), "{gone}");
+    }
+    let (_, none) = post(d.port, "sessions:finderText", json!([]), Some(TOKEN)).await;
+    assert_eq!(none, json!({}));
+    let _ = std::fs::remove_dir_all(&data);
+}

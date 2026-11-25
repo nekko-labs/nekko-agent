@@ -153,6 +153,8 @@ export const IpcChannels = {
   sessionWatches: 'session:watches',
   sessionCancelWatch: 'session:cancelWatch',
   sessionsSummaries: 'sessions:summaries',
+  /** The chat finder's index: chats' searchable text only, kept per file version by the daemon. */
+  sessionsFinderText: 'sessions:finderText',
   sessionCreate: 'session:create',
   sessionGet: 'session:get',
   sessionDelete: 'session:delete',
@@ -957,6 +959,12 @@ export interface NekkoApi {
   applySandboxDiff(sessionId: string, identity: string, diffId: string, paths: string[]): Promise<never>;
   createSession(workspaceId?: string): Promise<Session>;
   getSession(id: string): Promise<Session | null>;
+  /**
+   * The searchable text of up to 200 chats at once, by id (a missing chat is
+   * `null`): what the chat finder and the command palette index, without
+   * pictures, reasoning or tool output.
+   */
+  finderChatText(ids: string[]): Promise<Record<string, import('./session-summary.js').FinderChatText | null>>;
   deleteSession(id: string): Promise<void>;
   setSessionWorkspace(sessionId: string, workspaceId?: string): Promise<Session | null>;
   setSessionSupportingWorkspaces(sessionId: string, workspaceIds: string[]): Promise<Session | null>;
