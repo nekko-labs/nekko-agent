@@ -5,6 +5,8 @@ import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
 import { Shown } from '../ModeViews.js';
 import { PixelSkeleton } from '../PixelSkeleton.js';
+import { ASPECT_COLOR, MemoryBar, OTHER_COLOR, Swatch, type BarSegment } from './MemoryBar.js';
+import { breakdown, type Aspect, type AspectPart } from './memoryBreakdown.js';
 import {
   KEEP_LABELS,
   PRECISIONS,
@@ -228,7 +230,7 @@ export function EngineLoadDrawer({
         {plan && <VerdictChip plan={plan} />}
       </div>
 
-      <MemoryMeter plan={plan} />
+      <MemoryMeter plan={plan} params={params} layers={layers} />
 
       <div className="mt-3">
         <button
@@ -528,21 +530,16 @@ function VerdictChip({ plan }: { plan: PlacementPlan }) {
   );
 }
 
-const SEG = {
-  other: 'color-mix(in srgb, var(--ink-faint) 55%, transparent)',
-  weights: 'var(--accent)',
-  kv: 'var(--accent-2)',
-  overhead: 'color-mix(in srgb, var(--accent) 50%, var(--accent-2))',
-  pinned: 'color-mix(in srgb, var(--accent) 35%, transparent)',
-};
-
 /**
- * Graphics memory and system memory as two bars: other apps, this model (its
- * weights, its context, its working space), and what is left. A load that will
- * not fit runs the bar past its end in red; the line under it says what is read
- * from the SSD.
+ * Graphics memory and system memory as two bars (one on a Mac): other apps,
+ * then this model part by part, then what is left. Each part is named by the
+ * setting that drives it: how the weights load, how many parallel sessions the
+ * context is split into (one slice each), the working space. The table under
+ * the bars says how much of each lands in VRAM and in RAM. A load that will not
+ * fit outlines the bar in red; the line under it says what is read from the SSD.
  */
-function MemoryMeter({ plan }: { plan: PlacementPlan | null }) {
+function MemoryMeter({ plan, params, layers }: { plan: PlacementPlan | null; params: LoadParams; layers?: number }) {
+  const [hover, setHover] = useState<Aspect | null>(null);
   if (!plan) return <PixelSkeleton className="mt-3 h-24 rounded-lg" label="Loading placement plan" />;
   if (plan.verdict === 'unknown') {
     return (
@@ -551,59 +548,98 @@ function MemoryMeter({ plan }: { plan: PlacementPlan | null }) {
       </p>
     );
   }
+  const parts = breakdown(plan, params, layers);
   const bars = plan.unified
-    ? [{ title: 'Memory (shared by GPU and CPU)', pool: plan.vram, extra: plan.ram.model }]
+    ? [{ key: 'vram' as const, title: 'Memory (shared by GPU and CPU)', pool: plan.vram }]
     : [
-        ...(plan.deviceName ? [{ title: 'Graphics memory (VRAM)', pool: plan.vram, extra: null }] : []),
-        { title: 'System memory (RAM)', pool: plan.ram, extra: null },
+        ...(plan.deviceName ? [{ key: 'vram' as const, title: 'Graphics memory (VRAM)', pool: plan.vram }] : []),
+        { key: 'ram' as const, title: 'System memory (RAM)', pool: plan.ram },
       ];
+  const bytesIn = (p: AspectPart, key: 'vram' | 'ram') => (key === 'vram' ? p.vramBytes : p.ramBytes);
   const disk: string[] = [];
   if (plan.disk.tableBytes > 0) disk.push(`Its lookup table (${formatBytes(plan.disk.tableBytes)}) stays on your SSD and is read a few KB per word.`);
   if (plan.disk.overflowBytes > 0) disk.push(`Reads about ${formatBytes(plan.disk.overflowBytes)} of the model from your SSD as it needs it. A fast NVMe drive matters here.`);
   return (
-    <section aria-label="Memory" className="mt-3 space-y-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }} data-meter>
-      {bars.map(({ title, pool, extra }) => {
-        const m = pool.model;
-        const parts = [
-          { label: 'Model', bytes: m.weightsBytes + (extra?.weightsBytes ?? 0), color: SEG.weights },
-          { label: 'Context', bytes: m.kvCacheBytes + (extra?.kvCacheBytes ?? 0), color: SEG.kv },
-          { label: 'Working space', bytes: m.overheadBytes + (extra?.overheadBytes ?? 0), color: SEG.overhead },
-          { label: 'Pinned copy', bytes: m.pinnedBytes, color: SEG.pinned },
-        ].filter((p) => p.bytes > 0);
-        const mine = parts.reduce((a, p) => a + p.bytes, 0);
+    <section aria-label="Memory" className="mt-3 space-y-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }} data-meter onMouseLeave={() => setHover(null)}>
+      {bars.map(({ key, title, pool }) => {
+        const mine = parts.reduce((a, p) => a + bytesIn(p, key), 0);
         const room = Math.max(0, pool.totalBytes - pool.otherBytes);
         const over = mine > pool.availBytes;
-        const scale = Math.max(pool.totalBytes, pool.otherBytes + mine, 1);
-        const pct = (b: number) => `${(b / scale) * 100}%`;
+        const segments: BarSegment[] = [
+          { key: 'other', bytes: pool.otherBytes, color: OTHER_COLOR, title: `Other apps ${formatBytes(pool.otherBytes)}`, dim: hover !== null },
+          ...parts.map((p) => ({
+            key: p.aspect,
+            bytes: bytesIn(p, key),
+            color: ASPECT_COLOR[p.aspect],
+            title: `${p.label} ${formatBytes(bytesIn(p, key))}: ${p.driver}`,
+            slices: p.slices,
+            dim: hover !== null && hover !== p.aspect,
+            onHover: (on: boolean) => setHover(on ? p.aspect : null),
+          })),
+        ];
         return (
-          <div key={title} data-meter-bar>
+          <div key={key} data-meter-bar={key}>
             <div className="flex justify-between gap-3 text-xs">
               <span className="font-medium">{title}</span>
               <span className="font-mono text-2xs text-ink-faint">
                 {formatBytes(pool.otherBytes + mine)} of {formatBytes(pool.totalBytes)}
               </span>
             </div>
-            <div
-              className="mt-1 flex h-4 overflow-hidden rounded"
-              style={{ background: 'color-mix(in srgb, var(--ink-faint) 14%, transparent)', outline: over ? '2px solid var(--danger)' : undefined }}
-            >
-              <div style={{ width: pct(pool.otherBytes), background: SEG.other }} title={`Other apps ${formatBytes(pool.otherBytes)}`} />
-              {parts.map((p) => (
-                <div key={p.label} style={{ width: pct(p.bytes), background: p.color }} title={`${p.label} ${formatBytes(p.bytes)}`} />
-              ))}
+            <div className="mt-1">
+              <MemoryBar segments={segments} scaleBytes={Math.max(pool.totalBytes, pool.otherBytes + mine, 1)} label={`${title} this load would use`} over={over} />
             </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-faint">
-              <Legend color={SEG.other} text={`Other apps ${formatBytes(pool.otherBytes)}`} />
-              {parts.map((p) => (
-                <Legend key={p.label} color={p.color} text={`${p.label} ${formatBytes(p.bytes)}`} />
-              ))}
-              <span style={over ? { color: 'var(--danger)' } : undefined}>
+              <span className="inline-flex items-center gap-2">
+                <Swatch color={OTHER_COLOR} />
+                Other apps {formatBytes(pool.otherBytes)}
+              </span>
+              <span>This model {formatBytes(mine)}</span>
+              <span className="ml-auto" style={over ? { color: 'var(--danger-text)' } : undefined}>
                 {over ? `Short by ${formatBytes(mine - pool.availBytes)}` : `Free ${formatBytes(room - mine)}`}
               </span>
             </div>
           </div>
         );
       })}
+      <table className="w-full text-xs" data-meter-breakdown>
+        <thead>
+          <tr className="text-2xs text-ink-faint">
+            <th className="pb-1 text-left font-normal">What uses it</th>
+            {bars.map((b) => (
+              <th key={b.key} className="w-20 pb-1 text-right font-normal">
+                {plan.unified ? 'Memory' : b.key === 'vram' ? 'VRAM' : 'RAM'}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {parts.map((p) => (
+            <tr
+              key={p.aspect}
+              className="align-baseline transition-opacity duration-(--dur-fast)"
+              style={{ opacity: hover !== null && hover !== p.aspect ? 0.45 : 1 }}
+              onMouseEnter={() => setHover(p.aspect)}
+              onMouseLeave={() => setHover(null)}
+              data-meter-part={p.aspect}
+            >
+              <td className="py-0.5 pr-3">
+                <span className="inline-flex items-baseline gap-2">
+                  <span className="self-center">
+                    <Swatch color={ASPECT_COLOR[p.aspect]} />
+                  </span>
+                  <span className="font-medium">{p.label}</span>
+                  <span className="text-ink-faint">{p.driver}</span>
+                </span>
+              </td>
+              {bars.map((b) => (
+                <td key={b.key} className="py-0.5 text-right font-mono text-2xs text-ink-faint">
+                  {bytesIn(p, b.key) > 0 ? formatBytes(bytesIn(p, b.key)) : '–'}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
       {disk.length > 0 && (
         <p className="text-xs" style={{ color: 'var(--warning)' }} data-meter-disk>
           {disk.join(' ')}
@@ -625,15 +661,6 @@ function expectation(plan: PlacementPlan): string {
   if (plan.ram.model.weightsBytes === 0 && plan.ram.model.kvCacheBytes === 0) return 'Everything runs on the graphics card. This is the fastest way to run a model.';
   if (plan.ram.model.weightsBytes === 0) return 'The model sits on the graphics card and its context lives in system memory. Good for very long context; each word is a little slower.';
   return `The graphics card does the core work; ${formatBytes(plan.ram.model.weightsBytes)} of the model waits in system memory${plan.disk.overflowBytes > 0 ? ' and on your SSD' : ''}. Slower than all-GPU, much faster than the processor alone.`;
-}
-
-function Legend({ color, text }: { color: string; text: string }) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      <span className="h-2 w-2 rounded-sm" style={{ background: color }} />
-      {text}
-    </span>
-  );
 }
 
 function RecommendedTag() {

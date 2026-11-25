@@ -28,6 +28,7 @@ Every report carries the app version, edition, OS and CPU type, and the local ho
 - **A CI runner job ended:** how it ended and how long it took. Not the repository or workflow.
 - **A screen opened:** its name, such as `models` or `settings`.
 - **A control clicked:** the screen and the control's fixed name, such as `Add provider`. A control whose name includes something of yours (a file, chat or person's name) is never reported.
+- **Send feedback opened:** which way you opened it: the left rail, the command palette, About, the Help menu, the tray menu, or a `nekko-agent://feedback` link. Never what you write, or your name or email.
 - **An error:** where it happened, the kind of error and the first line of its message (at most 200 characters), and the names of the functions and files it passed through. Never the rest of the message, which could repeat something you typed. Secrets, emails, phone and card numbers, IP addresses, your user name and folder paths are removed first.
 
 ## Seeing what is sent

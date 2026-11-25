@@ -630,7 +630,20 @@ impl Table {
             crate::downloads::CHANNELS,
             handler!(|ctx, channel, args| ctx.downloads.clone().route(channel, &args).await),
         );
-        t.add(crate::library::CHANNELS, handler!(|ctx, channel, args| ctx.library.clone().route(channel, &args).await));
+        t.add(
+            crate::library::CHANNELS,
+            handler!(|ctx, channel, args| {
+                // A loaded model's file is open in its server, and Windows will not
+                // delete an open file (os error 32), so it is unloaded first.
+                if channel == "engine:deleteModel" {
+                    let id = args.first().map(nekko_js::display).unwrap_or_default();
+                    if ctx.server.model.loaded_ids().contains(&id) {
+                        ctx.server.model.unload(&id).await;
+                    }
+                }
+                ctx.library.clone().route(channel, &args).await
+            }),
+        );
         t.add(
             crate::catalog::CHANNELS,
             handler!(|ctx, channel, args| crate::catalog::route(&ctx.catalog, channel, &args).await),

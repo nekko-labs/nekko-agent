@@ -5,7 +5,8 @@
 
 use nekko_engine::BoxFuture;
 use nekko_engine::launch::{self, Companions};
-use nekko_engine::server::{Daemon, Env, ModelServer};
+use nekko_engine::load_check::EngineInUse;
+use nekko_engine::server::{Daemon, Engine, Env, ModelServer};
 use serde_json::{Map, Value, json};
 use std::collections::HashSet;
 use std::path::Path;
@@ -246,14 +247,21 @@ impl Env for Fake {
     fn prompt_caching(&self) -> bool {
         self.case.get("promptCaching").and_then(Value::as_bool).unwrap_or(true)
     }
-    fn bin(&self, runtime: &'static str) -> BoxFuture<Option<String>> {
+    fn engine(&self, runtime: &'static str) -> BoxFuture<Option<Engine>> {
         let file = match runtime {
             "diffusion" => "sd-server.exe",
             "mlx" => "mlx_lm.server",
             _ => "llama-server.exe",
         };
         let on = self.case.get("bins").and_then(|b| b.get(runtime)) == Some(&Value::Bool(true));
-        let p = on.then(|| join(&[&self.root, "engine", file]));
+        // `engine: { source, version }` says which llama.cpp this is; a managed engine of unknown version otherwise.
+        let install = self.case.get("engine").cloned().unwrap_or_else(|| json!({ "source": "managed" }));
+        let p = on.then(|| {
+            let bin = join(&[&self.root, "engine", file]);
+            let mut install = install;
+            install["binPath"] = json!(bin);
+            Engine { bin, in_use: EngineInUse::from_install(&install) }
+        });
         Box::pin(async move { p })
     }
     fn gpu_capable(&self) -> BoxFuture<Option<bool>> {
@@ -640,4 +648,109 @@ async fn unloading_all_shuts_down_every_model_even_one_kept_resident() {
     assert_eq!(r["stopped"], json!(0));
     assert_eq!(kills(&fake), vec!["kept".to_string(), "b".to_string()]);
     assert!(server.loaded_ids().is_empty());
+}
+
+/* ----------------------------------------- the load gate: what the engine in use can run */
+
+/// A scripted engine of this kind (`{ source, version }`, as `detect` reports it) and these models.
+fn engine_rig(name: &str, engine: Value, models: Value) -> (Arc<Fake>, Arc<ModelServer>) {
+    let g = golden();
+    let root = scratch(name);
+    write_files(&root, &g["files"]);
+    let fake = Arc::new(Fake {
+        case: json!({ "bins": { "llama": true }, "engine": engine }),
+        root: root.clone(),
+        clock: Mutex::new(1_700_000_000_000.0),
+        landed: Mutex::new(false),
+        settings: Mutex::new(
+            json!({ "port": 11500, "bind": "local", "autoStart": false, "jitLoad": true, "idleTtlSeconds": 900, "maxLoaded": 2 }),
+        ),
+        models: denorm(&root, &models).as_array().unwrap().clone(),
+        flags: Arc::new(HashSet::new()),
+        serving: Mutex::new(true),
+        children: Mutex::default(),
+        calls: Mutex::default(),
+        spawns: Mutex::default(),
+        n: Mutex::new(0),
+    });
+    let server = ModelServer::new(fake.clone(), fake.clone(), false);
+    (fake, server)
+}
+
+fn spawned(fake: &Fake) -> usize {
+    fake.calls.lock().unwrap().iter().filter(|c| c.get("spawn").is_some()).count()
+}
+
+/// PrismML's 1-bit build (tensor type 143, hadamard header) and a build of known types with the hadamard header.
+fn prism_models() -> Value {
+    let mut ptq1 = sized("ptq1", 6.0);
+    ptq1["unknownWeightType"] = json!(143);
+    ptq1["minEngineBuild"] = json!(11556);
+    let mut q2 = sized("q2", 7.0);
+    q2["minEngineBuild"] = json!(11556);
+    json!([ptq1, q2, sized("plain", 2.0)])
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_gate_refuses_what_a_managed_engine_cannot_run_before_anything_spawns() {
+    let managed = json!({ "source": "managed", "version": "b11224" });
+    let (fake, server) = engine_rig("gate-managed", managed, prism_models());
+    // An unknown weight format, even though the old engine is also too old.
+    let r = server.load("ptq1", json!({})).await;
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(r["message"].as_str().unwrap().contains("tensor type 143"), "{r}");
+    // Too old for the hadamard header: update, not "wrong format".
+    let r = server.load("q2", json!({})).await;
+    assert_eq!(r["ok"], false, "{r}");
+    let why = r["message"].as_str().unwrap();
+    assert!(why.contains("b11556") && why.contains("b11224") && why.contains("Update the engine"), "{why}");
+    assert_eq!(spawned(&fake), 0, "llama-server never started");
+    // The refusal is kept as the model's last error, as the Models page and phones read it.
+    let errors = server.load_errors();
+    assert!(errors["q2"].as_str().unwrap().contains("too old"), "{errors:?}");
+    // An ordinary model still loads.
+    assert_eq!(server.load("plain", json!({})).await["ok"], true);
+    assert_eq!(spawned(&fake), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_managed_engine_that_is_current_still_refuses_the_unknown_format_but_runs_the_rest() {
+    let managed = json!({ "source": "managed", "version": "b12436" });
+    let (fake, server) = engine_rig("gate-current", managed, prism_models());
+    assert_eq!(server.load("ptq1", json!({})).await["ok"], false);
+    assert_eq!(server.load("q2", json!({})).await["ok"], true);
+    assert_eq!(spawned(&fake), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_external_engine_of_unknown_version_is_warned_about_and_let_try() {
+    let external = json!({ "source": "external" });
+    let (fake, server) = engine_rig("gate-external", external, prism_models());
+    for id in ["ptq1", "q2"] {
+        let r = server.load(id, json!({})).await;
+        assert_eq!(r["ok"], true, "{id}: {r}");
+    }
+    assert_eq!(spawned(&fake), 2);
+    let log = server.status()["log"].to_string();
+    assert!(log.contains("tensor type 143") && log.contains("could not be read"), "the warnings are in the log: {log}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_external_engine_is_never_refused_whatever_version_it_reports() {
+    // A PrismML build reads these files whatever its own number says, so an old-looking one only gets a warning.
+    let external = json!({ "source": "external", "version": "b11224" });
+    let (fake, server) = engine_rig("gate-external-old", external, prism_models());
+    for id in ["ptq1", "q2"] {
+        assert_eq!(server.load(id, json!({})).await["ok"], true, "{id}");
+    }
+    assert_eq!(spawned(&fake), 2);
+    let log = server.status()["log"].to_string();
+    assert!(log.contains("reports b11224") && log.contains("update it"), "the warning is in the log: {log}");
+    let current = json!({ "source": "external", "version": "b12436" });
+    let (fake, server) = engine_rig("gate-external-new", current, prism_models());
+    // Fork or not, a current external engine is the user's to try; llama.cpp's own error would surface.
+    for id in ["ptq1", "q2"] {
+        assert_eq!(server.load(id, json!({})).await["ok"], true, "{id}");
+    }
+    assert_eq!(spawned(&fake), 2);
 }
