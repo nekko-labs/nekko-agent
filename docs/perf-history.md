@@ -39,7 +39,7 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
-## Renderer code splitting: non-default tabs, QR and Remotion load after first paint (#3445, 2026-11-26)
+## Renderer code splitting: non-default tabs, QR and Remotion load after first paint (#3445, PR #3455, 2026-11-26)
 Area: renderer
 Result: improvement (startup); no effect on chat switching or keypress
 Conditions: Apple M1 Max (10 cores, 64 GB), macOS 27.2.1, Node v26.8.1, Chrome for Testing (Playwright chromium-1248) headless, `--no-gpu`, the production `build:web` renderer, a debug `nekkod` (`NEKKOD_PATH`; the startup probe does not exercise it). Before: `main` at `cde5e98da` built in its own worktree. After: the same commit plus this change. Three runs of `node scripts/perf/run.mjs --only startup --no-gpu` each, alternating before, after, before, after, before, after (`--app <before worktree>` for before). Each run is 5 cold-profile loads (new browser, empty profile), on a scratch data dir and a scripted model, never the user's app. Other agents were building and testing on the same machine, so absolute numbers drift between runs (an earlier non-alternating pass read about 40 ms lower on both sides); only the alternating pairs are compared.
