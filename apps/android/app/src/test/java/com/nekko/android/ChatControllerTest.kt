@@ -174,6 +174,49 @@ class ChatControllerTest {
     }
 
     @Test
+    fun `a re-read does not read the runnable skills again, a reconnect and an earlier failure do`() = runTest {
+        var fail = true
+        val caller = FakeCaller { c ->
+            when (c.channel) {
+                Channels.SESSION_GET -> session()
+                Channels.SKILLS_RUNNABLE -> if (fail) throw RelayException("unknown channel") else buildJsonArray {
+                    add(buildJsonObject { put("name", "review"); put("description", "Review"); put("category", "Code quality"); put("source", "builtin") })
+                }
+                else -> JsonNull
+            }
+        }
+        val skillReads = { caller.calls.count { it.channel == Channels.SKILLS_RUNNABLE } }
+        val chat = controller(caller)
+        // The first read fails: the next re-read tries again.
+        chat.reload(); runCurrent()
+        chat.reload(); runCurrent()
+        assertEquals(2, skillReads())
+        fail = false
+        chat.reload(); runCurrent()
+        assertEquals(3, skillReads())
+        assertEquals(listOf("review"), chat.state.value.skills.map { it.name })
+        // Read once: a turn ending, an answered card or a setting change re-read the chat, not the skills.
+        repeat(4) { chat.reload(); runCurrent() }
+        assertEquals(3, skillReads())
+        assertEquals(7, caller.calls.count { it.channel == Channels.SESSION_GET })
+        // The connection came back: read them again.
+        chat.reload(refreshSkills = true); runCurrent()
+        assertEquals(4, skillReads())
+    }
+
+    @Test
+    fun `one open and four re-reads read the skills once, where reading them every time read them five times`() = runTest {
+        suspend fun reads(refreshEvery: Boolean): Int {
+            val caller = FakeCaller { c -> if (c.channel == Channels.SESSION_GET) session() else if (c.channel == Channels.SKILLS_RUNNABLE) buildJsonArray { } else JsonNull }
+            val chat = controller(caller)
+            repeat(5) { chat.reload(refreshSkills = refreshEvery); runCurrent() }
+            return caller.calls.count { it.channel == Channels.SKILLS_RUNNABLE }
+        }
+        assertEquals(5, reads(refreshEvery = true))
+        assertEquals(1, reads(refreshEvery = false))
+    }
+
+    @Test
     fun `the session's own model wins over defaults, but never the auto sentinel`() {
         val s = com.nekko.protocol.Session.from(session(providerId = "local", modelId = "qwen-7b"))
         assertEquals("local" to "qwen-7b", ChatController.resolveModel(s, online.defaults))
