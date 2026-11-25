@@ -37,9 +37,70 @@ pub fn redial_wait(failures: u32, unit: f64) -> Duration {
 /// A session this long counts as the Relay being fine: the next redial starts from 5 s again.
 pub const STABLE_SESSION: Duration = Duration::from_secs(60);
 
-/// How long to hold a nudge-triggered pass, so the account's devices don't all pull the instant one pushes.
-pub fn nudge_delay(unit: f64) -> Duration {
-    Duration::from_secs(3).mul_f64(unit)
+/// The most a nudge-triggered pass is held, so the account's devices don't all pull the instant one pushes.
+pub const NUDGE_WINDOW: Duration = Duration::from_secs(3);
+
+/// How long to hold a nudge-triggered pass: 0 to `window`.
+pub fn nudge_delay(window: Duration, unit: f64) -> Duration {
+    window.mul_f64(unit)
+}
+
+/// With the Relay account channel up, a change arrives as a nudge, so the timer is only a safety net.
+pub const SAFETY_POLL: Duration = Duration::from_secs(5 * 60);
+
+/// The account and sync state are read in full at least this often (and on events), not on every pass.
+pub const FULL_EVERY: Duration = Duration::from_secs(10 * 60);
+
+/// How often the sync loop looks at the clock to notice the computer waking from sleep.
+pub const WAKE_TICK: Duration = Duration::from_secs(30);
+
+/// How long the sync loop waits between passes: `every` without the channel, the safety poll with it.
+pub fn poll_interval(channel_up: bool, every: Duration) -> Duration {
+    if channel_up { SAFETY_POLL.max(every) } else { every }
+}
+
+/// Spots a computer waking from sleep: the wall clock jumped further than the loop's own tick.
+/// Timers count awake time only, so after a lid-close a 5 min wait would otherwise run on.
+pub struct WakeWatch {
+    last: std::time::SystemTime,
+}
+
+impl WakeWatch {
+    pub fn new(now: std::time::SystemTime) -> Self {
+        WakeWatch { last: now }
+    }
+
+    /// Called every `WAKE_TICK`; true when far more wall time passed than that.
+    pub fn woke(&mut self, now: std::time::SystemTime) -> bool {
+        let gap = now.duration_since(self.last).unwrap_or(Duration::ZERO);
+        self.last = now;
+        gap > WAKE_TICK * 2
+    }
+}
+
+/// When the account and sync state were last read in full, and whether something asked for another read.
+#[derive(Default)]
+pub struct FullRead {
+    last: Option<(String, Instant)>,
+    wanted: bool,
+}
+
+impl FullRead {
+    pub fn done(&mut self, token: &str, now: Instant) {
+        self.last = Some((token.to_string(), now));
+        self.wanted = false;
+    }
+
+    /// Something said the account or its settings changed: read in full on the next pass.
+    pub fn want(&mut self) {
+        self.wanted = true;
+    }
+
+    /// A full read is due: never done under this token, asked for, or `FULL_EVERY` old.
+    pub fn due(&self, token: &str, now: Instant) -> bool {
+        self.wanted
+            || self.last.as_ref().is_none_or(|(t, at)| t != token || now.saturating_duration_since(*at) >= FULL_EVERY)
+    }
 }
 
 /// One pass at a time is waiting on a nudge; nudges that arrive meanwhile join it.
@@ -141,9 +202,44 @@ mod tests {
 
     #[test]
     fn nudges_are_held_for_up_to_three_seconds() {
-        assert_eq!(secs(nudge_delay(0.0)), 0.0);
-        assert_eq!(secs(nudge_delay(0.5)), 1.5);
-        assert!(secs(nudge_delay(0.999_999)) < 3.0);
+        assert_eq!(secs(nudge_delay(NUDGE_WINDOW, 0.0)), 0.0);
+        assert_eq!(secs(nudge_delay(NUDGE_WINDOW, 0.5)), 1.5);
+        assert!(secs(nudge_delay(NUDGE_WINDOW, 0.999_999)) < 3.0);
+    }
+
+    #[test]
+    fn the_timer_slows_to_a_safety_poll_only_while_the_channel_is_up() {
+        let every = Duration::from_secs(60);
+        assert_eq!(poll_interval(false, every), every);
+        assert_eq!(poll_interval(true, every), Duration::from_secs(300));
+        assert_eq!(poll_interval(true, Duration::from_secs(900)), Duration::from_secs(900), "never faster than asked");
+    }
+
+    #[test]
+    fn a_wall_clock_jump_means_the_computer_slept() {
+        use std::time::SystemTime;
+        let t0 = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let mut w = WakeWatch::new(t0);
+        assert!(!w.woke(t0 + WAKE_TICK), "an ordinary tick");
+        assert!(!w.woke(t0 + WAKE_TICK * 2 + Duration::from_secs(5)), "a little late");
+        assert!(w.woke(t0 + Duration::from_secs(3600)), "an hour passed in one tick");
+        assert!(!w.woke(t0 + Duration::from_secs(3630)), "and back to normal");
+        assert!(!w.woke(t0), "a clock set back is not a wake");
+    }
+
+    #[test]
+    fn a_full_read_is_due_on_start_on_a_new_token_when_asked_and_every_ten_minutes() {
+        let t0 = Instant::now();
+        let mut f = FullRead::default();
+        assert!(f.due("a", t0), "on start");
+        f.done("a", t0);
+        assert!(!f.due("a", t0 + Duration::from_secs(599)));
+        assert!(f.due("a", t0 + Duration::from_secs(600)), "ten minutes");
+        assert!(f.due("b", t0), "another sign-in");
+        f.want();
+        assert!(f.due("a", t0), "asked for");
+        f.done("a", t0 + Duration::from_secs(1));
+        assert!(!f.due("a", t0 + Duration::from_secs(2)), "asking is cleared by a read");
     }
 
     #[test]

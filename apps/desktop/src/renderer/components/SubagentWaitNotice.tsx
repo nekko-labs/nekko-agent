@@ -1,5 +1,6 @@
 import type { SessionSummary } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
+import { stableSelector } from '../selectStable.js';
 import { useLiveRunsVersion } from '../liveRuns.js';
 import { waitingOn, type SubagentWait } from '../subagentActivity.js';
 
@@ -9,6 +10,22 @@ const ASK: Record<SubagentWait, string> = { approval: 'your approval', question:
  * The sub-agents below a chat (children, their children, …) that wait on the
  * person, those waiting for approval first. Pure, for the tests.
  */
+/** Every sub-agent below a chat, so a subscriber re-renders only when one of them changes. */
+export function descendantSessions(sessionId: string, sessions: SessionSummary[]): SessionSummary[] {
+  const below = new Set([sessionId]);
+  const found: SessionSummary[] = [];
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const s of sessions) {
+      if (!s.parentSessionId || !below.has(s.parentSessionId) || below.has(s.id)) continue;
+      below.add(s.id);
+      found.push(s);
+      grew = true;
+    }
+  }
+  return found;
+}
+
 export function waitingDescendants(sessionId: string, sessions: SessionSummary[]): { child: SessionSummary; wait: SubagentWait }[] {
   const below = new Set([sessionId]);
   const found: { child: SessionSummary; wait: SubagentWait }[] = [];
@@ -26,6 +43,8 @@ export function waitingDescendants(sessionId: string, sessions: SessionSummary[]
   return found.sort((a, b) => Number(b.wait === 'approval') - Number(a.wait === 'approval'));
 }
 
+const descendantsOf = stableSelector((s: { sessions?: SessionSummary[] }, id) => descendantSessions(id, s.sessions ?? []));
+
 /**
  * A line above the composer while a sub-agent of this chat waits on the
  * person, so the parent chat says so and one click opens the waiting chat
@@ -33,8 +52,8 @@ export function waitingDescendants(sessionId: string, sessions: SessionSummary[]
  */
 export function SubagentWaitNotice({ sessionId, onOpen }: { sessionId: string; onOpen: (id: string) => void }) {
   useLiveRunsVersion();
-  const sessions = useStore((s) => s.sessions);
-  const waiting = waitingDescendants(sessionId, sessions ?? []);
+  const below = useStore((s) => descendantsOf(s, sessionId));
+  const waiting = waitingDescendants(sessionId, below);
   if (!waiting.length) return null;
   const [{ child, wait }] = waiting;
   const title = child.title || 'Sub-agent';
