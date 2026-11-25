@@ -157,6 +157,13 @@ class RelayConfig(
     /** Backoff knobs; tests shrink them. */
     val retryBaseMs: Long = 1_000,
     val retryMaxMs: Long = 30_000,
+    /**
+     * Up to this fraction is added to each backoff delay, at random, so phones and computers that
+     * lost the relay together do not all redial in the same instant (the iPhone's `retryJitter`).
+     */
+    val retryJitter: Double = 0.5,
+    /** A number in 0 until 1 for the jitter; tests fix it. */
+    val jitterSource: () -> Double = { kotlin.random.Random.nextDouble() },
     val offlinePollMs: Long = 15_000,
     /** Other addresses of the same relay (the pairing link's `alt` routes). */
     val alts: List<String> = emptyList(),
@@ -177,6 +184,15 @@ class RelayConfig(
 ) {
     /** The relay address first, then the alternates. */
     val routes: List<String> get() = listOf(relayUrl) + alts
+
+    /**
+     * The wait before redial number [attempt] (0 is the first): 1 s, 2 s, 4 s … capped at [retryMaxMs],
+     * then 0 to [retryJitter] more of it.
+     */
+    fun retryDelayMs(attempt: Int): Long {
+        val base = minOf(retryMaxMs, retryBaseMs shl minOf(attempt, 20))
+        return base + (base * maxOf(0.0, retryJitter) * jitterSource().coerceIn(0.0, 1.0)).toLong()
+    }
 }
 
 /**
@@ -808,9 +824,8 @@ class RelayClient(
         val delayMs: Long
         synchronized(lock) {
             if (stopped) return
-            // 1s, 2s, 4s … capped; an offline computer is polled at a fixed pace.
-            delayMs = if (offline) config.offlinePollMs
-            else minOf(config.retryMaxMs, config.retryBaseMs shl minOf(retry++, 20))
+            // 1s, 2s, 4s … capped, plus jitter; an offline computer is polled at a fixed pace.
+            delayMs = if (offline) config.offlinePollMs else config.retryDelayMs(retry++)
             retryJob?.cancel()
             retryJob = scope.launch {
                 delay(delayMs)

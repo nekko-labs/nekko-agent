@@ -33,6 +33,8 @@ class AndroidSecureStore(context: Context) : SecureStore {
             cipher.updateAAD(key.toByteArray(Charsets.UTF_8))
             String(cipher.doFinal(packed, IV_BYTES, packed.size - IV_BYTES), Charsets.UTF_8)
         } catch (_: Exception) {
+            // The key may be the one that failed: open it again next time.
+            keystoreKey.forget()
             // The Keystore key is gone (app data restored elsewhere, key invalidated):
             // the value is unreadable for good, so drop it rather than fail forever.
             prefs.edit(commit = true) { remove(key) }
@@ -55,8 +57,12 @@ class AndroidSecureStore(context: Context) : SecureStore {
         }
     }
 
-    @Synchronized
-    private fun secretKey(): SecretKey {
+    /** The opened Keystore key, kept: reopening it (load, getEntry) on every read is slow IPC to the Keystore. */
+    private val keystoreKey = CachedKey(::openKey)
+
+    private fun secretKey(): SecretKey = keystoreKey.get()
+
+    private fun openKey(): SecretKey {
         val ks = KeyStore.getInstance(KEYSTORE).apply { load(null) }
         (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
@@ -79,5 +85,19 @@ class AndroidSecureStore(context: Context) : SecureStore {
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_BYTES = 12
         const val TAG_BITS = 128
+    }
+}
+
+/**
+ * One value opened lazily and kept ([open] runs again only after [forget]). The Android Keystore
+ * entry is opened at most once per process unless a use of it failed.
+ */
+internal class CachedKey(private val open: () -> SecretKey) {
+    @Volatile private var key: SecretKey? = null
+
+    fun get(): SecretKey = key ?: synchronized(this) { key ?: open().also { key = it } }
+
+    fun forget() {
+        key = null
     }
 }
