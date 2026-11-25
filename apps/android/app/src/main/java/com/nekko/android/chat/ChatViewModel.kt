@@ -250,7 +250,7 @@ class ChatViewModel(
         controller.showSavedCopy()
         // Load when the computer is reachable, and again after every reconnect.
         viewModelScope.launch {
-            repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload() }
+            repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload(refreshSkills = true) }
         }
         viewModelScope.launch {
             repo.events.collect { e -> if (controller.onEvent(e)) launch { controller.reload() } }
