@@ -22,9 +22,12 @@ export async function setChatOptionsAndDefaults(
   api: Pick<NekkoApi, 'setSessionOptions' | 'updateSettings'>,
   id: string,
   patch: Parameters<NekkoApi['setSessionOptions']>[1],
+  opts: { chatOnly?: boolean } = {},
 ): Promise<Session | null> {
   const next = await api.setSessionOptions(id, patch);
-  if (!next) return next;
+  // `chatOnly`: a change the app made on its own (a setting that cannot apply
+  // to the chat's model) is not the user's new default.
+  if (!next || opts.chatOnly) return next;
   const defaults: NonNullable<AppSettings['defaultSessionOptions']> = {};
   for (const key of MODE_KEYS) {
     if (Object.hasOwn(patch, key)) Object.assign(defaults, { [key]: next[key] ?? null });

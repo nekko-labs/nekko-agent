@@ -21,6 +21,7 @@ mod image_boundary;
 mod injection;
 mod lifecycle;
 mod native;
+mod orchestrate_fusion;
 mod remote;
 mod runner;
 mod sandbox;

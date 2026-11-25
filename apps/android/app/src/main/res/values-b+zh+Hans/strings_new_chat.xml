@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_new_chat.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="newchat_runs_on">在 %1$s 上运行</string>
+    <string name="newchat_checklist_title">有了这些，Nekko 能做更多</string>
+    <string name="newchat_checklist_count">%1$d / %2$d</string>
+    <string name="newchat_checklist_close">关闭清单</string>
+    <string name="newchat_checklist_hidden">已隐藏清单。</string>
+    <string name="newchat_undo">撤销</string>
+    <string name="newchat_close">关闭</string>
+    <string name="newchat_connect">连接</string>
+    <string name="newchat_done_named">已完成，%1$s</string>
+    <string name="newchat_note">Nekko 还不能使用你的文件或工具。</string>
+    <string name="newchat_item_computer">配对一台电脑</string>
+    <string name="newchat_item_computer_detail">让 Nekko 使用工具和你的文件</string>
+    <string name="newchat_item_folder">添加文件夹</string>
+    <string name="newchat_item_folder_detail">供 Nekko 工作的项目</string>
+    <string name="newchat_item_folder_waiting">配对电脑之后</string>
+    <string name="newchat_item_git">连接一个 Git 提供商</string>
+    <string name="newchat_item_git_detail">GitHub、GitLab 或 Bitbucket</string>
+    <string name="newchat_item_tasks">连接任务工具</string>
+    <string name="newchat_item_tasks_detail">Linear、Jira、Floop 等</string>
+    <string name="newchat_this_phone_detail">自己的模型</string>
+    <string name="limit_reached">已达到%1$s限额</string>
+    <string name="limit_used">%2$s限额的 %1$d%%</string>
+    <string name="limit_resets">%1$s · %2$s 重置</string>
+    <string name="limit_switch_model">切换模型</string>
+    <string name="model_dated_one">1 个带日期的版本</string>
+    <string name="model_dated_many">%1$d 个带日期的版本</string>
+    <string name="model_dated_hide">隐藏带日期的版本</string>
+</resources>

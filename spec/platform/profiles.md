@@ -13,7 +13,7 @@ One person, one Nekko account, several separate lives: Personal, Work, a client.
 
 The requirement that drives the design (Philip, 2026-11-10): **a model running in one profile must not have access to another profile's content.** Not through a tool, a search, a saved note, a connector, a sub-agent, a scheduled run or a prompt the app assembles.
 
-This is not the existing "data profile" (the `~/.nekko-agent` folder, [legacy consolidation](../../docs/legacy-profile-consolidation.md)), the Claude Code named accounts ([accounts and switching](../models/accounts-and-switching.md)), or the Auto mode tiers. In the UI and the docs, "profile" means this feature from now on; the data folder is "the data folder".
+This is not the existing "data profile" (the `~/.nekko/nekko-agent` folder, [legacy consolidation](../../docs/legacy-profile-consolidation.md)), the Claude Code named accounts ([accounts and switching](../models/accounts-and-switching.md)), or the Auto mode tiers. In the UI and the docs, "profile" means this feature from now on; the data folder is "the data folder".
 
 ## Who the boundary is against
 

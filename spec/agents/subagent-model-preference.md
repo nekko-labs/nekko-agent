@@ -37,6 +37,16 @@ An auto pick never names a stronger model than the parent's. When the parent is 
 
 [#2731](https://github.com/nekko-labs/nekko-agent/issues/2731) adds `orchestration.subagentTier`: Small, Medium, Large, Frontier, or Smaller than parent (default). Automatic tier picks choose the target, then nearest smaller, never exceeding the parent. Editable provider-scoped classifications, strategies, permissions, limitations and verification are defined in [Fusion routing and model tiers](../chat/fusion-routing-and-model-tiers.md). Claude Code maps explicit tier targets to Haiku/Sonnet/Opus without inventing a Frontier CLI alias.
 
+## Per-assignment capability in Orchestrate chats
+
+[#3175](https://github.com/nekko-labs/nekko-agent/issues/3175) lets a coordinator call `spawn_agent` with optional `capability: "small" | "medium" | "large"`. Only chats with Orchestrate enabled offer or accept the field. It cannot be combined with `provider_id` or `model_id`. Calls without the field keep existing behavior.
+
+A saved exact route wins and is verified as specified. Next, **Same model as the chat** keeps the parent's concrete model. Otherwise the assignment target is capped by the parent's known tier and any saved tier target (including an explicitly saved **Smaller than parent**). The existing provider preference applies, and the router picks the resulting tier or the nearest smaller eligible tier. Provider-scoped user classifications take precedence over suggested tiers. Orchestrate does not enable Fusion or change cloud-only, offline, incognito, or tool approval rules.
+
+If discovery fails, the catalog is only a fallback, the parent tier is unknown for an automatic pick, or no eligible model fits, the assignment fails without substituting another route or creating a child. A successful catalog with no eligible local match still permits the same-provider step of an automatic local preference. This is daemon routing, not a new option for Claude Code's own sub-agents. Live provider and packaged-app behavior are unverified.
+
+The worker's resolved, comparable effort is capped by the active coordinator turn's effective effort, even when a saved exact model wins. If the worker advertises no comparable supported level at or below that cap, admission refuses the turn. A provider-default effort that the daemon cannot observe is not a compute or billing guarantee. Neither discovery nor delegation may leave the saved provider scope; changing scope or approvals during lookup stops preparation rather than using the old selection.
+
 ## Data
 
 `orchestration.subagentModel`: `auto` | `auto-same-provider` | `auto-local` | `inherit` (unset is `auto`). `orchestration.delegationRoute` wins when set. Code: `crates/nekkod/src/subagent_model.rs` (the pick and the Claude Code variable), `spawn.rs` (`auto_target`), `nekko-turn` `plan.rs` (the prompt line), `apps/desktop/src/renderer/components/SubagentModelControl.tsx`.

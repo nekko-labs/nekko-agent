@@ -17,6 +17,7 @@ import com.nekko.protocol.RelayHint
 import com.nekko.protocol.RelayRoute
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RelayStatus
+import com.nekko.protocol.RouteChoice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -28,11 +29,11 @@ class ConnectionNotesTest {
     private fun facts(
         id: String = "studio", state: RelayState = RelayState.ONLINE, route: RelayRoute = RelayRoute.INTERNET,
         active: Boolean = false, detail: String? = null, denied: DenyReason? = null, disabled: Boolean = false,
-        protocolCheck: ProtocolCheck = ProtocolCheck.SAME, exit: ExitKind? = null, waiting: Int = 0,
+        protocolCheck: ProtocolCheck = ProtocolCheck.SAME, exit: ExitKind? = null, waiting: Int = 0, offTailnet: Boolean = false,
     ) = ConnectionFacts(
         id = id, name = id.replaceFirstChar { it.uppercase() }, route = route, relayHost = "relay.example.dev", state = state,
         detail = detail, denied = denied, active = active, disabled = disabled, protocolCheck = protocolCheck,
-        exit = exit, exitAt = if (exit != null) 1L else null, waiting = waiting,
+        exit = exit, exitAt = if (exit != null) 1L else null, waiting = waiting, offTailnet = offTailnet,
     )
 
     private fun make(vararg c: ConnectionFacts, tailscale: Boolean = true) = ConnectionNotes.make(c.toList(), tailscale) { "9:41" }
@@ -57,6 +58,36 @@ class ConnectionNotesTest {
         assertEquals(Tone.OFF, idle.tone); assertNull(idle.word)
     }
 
+    @Test fun `a computer also on Nekko Cloud Relay is never blamed on Tailscale`() {
+        // Paired with Tailscale first and Nekko Cloud Relay as the fallback (decision 0116).
+        val offline = make(facts("macbook", RelayState.OFFLINE, route = RelayRoute.TAILSCALE, active = true, offTailnet = true), tailscale = false)
+        assertEquals(listOf("macbook"), offline.map { it.id })
+        assertEquals(R.string.conn_word_offline, word(offline.single()))
+        assertFalse(Action.OPEN_TAILSCALE in offline.single().actions)
+
+        val silent = make(facts("macbook", RelayState.CONNECTING, route = RelayRoute.TAILSCALE, detail = "timeout", offTailnet = true), tailscale = false).single()
+        assertEquals(R.string.conn_no_answer_line, res(silent.line))
+        assertEquals(listOf(Action.RETRY), silent.actions)
+    }
+
+    @Test fun `only the tailnet-only computer says Tailscale off, and there is no page-wide item`() {
+        val notes = make(
+            facts("gomi", RelayState.CONNECTING, route = RelayRoute.TAILSCALE),
+            facts("macbook", RelayState.OFFLINE, route = RelayRoute.TAILSCALE, offTailnet = true),
+            tailscale = false,
+        )
+        assertEquals(listOf("gomi", "macbook"), notes.map { it.id })
+        assertEquals(R.string.conn_word_tailscale_off, word(notes[0]))
+        assertEquals(R.string.conn_word_offline, word(notes[1]))
+    }
+
+    @Test fun `a Nekko Cloud Relay route reaches a computer off the tailnet, a LAN address does not`() {
+        val tailnet = "ws://mac.tail1234.ts.net:4400"
+        assertTrue(ConnectionNotes.reachableOffTailnet(listOf(tailnet, "wss://nekko-agent-relay.fly.dev")))
+        assertFalse(ConnectionNotes.reachableOffTailnet(listOf(tailnet)))
+        assertFalse(ConnectionNotes.reachableOffTailnet(listOf(tailnet, "ws://192.168.1.20:4400")))
+    }
+
     @Test fun `offline is one word, one line and Retry`() {
         val n = make(facts(state = RelayState.OFFLINE)).single()
         assertEquals(Tone.WARNING, n.tone)
@@ -73,30 +104,56 @@ class ConnectionNotesTest {
         assertEquals(listOf(R.string.conn_offline_fix, R.string.conn_waits_other), n.tail.map(::res))
     }
 
-    @Test fun `Tailscale off leads the row and the tailnet computer waits quietly`() {
+    @Test fun `a tailnet-only computer blocked by Tailscale gets its own item with Open Tailscale`() {
         val notes = make(facts("studio", RelayState.CONNECTING, RelayRoute.TAILSCALE, active = true, waiting = 1), facts("gomi"), tailscale = false)
-        val (ts, studio, gomi) = notes
-        assertTrue(ts.isTailscale)
-        assertEquals(R.string.conn_word_tailscale_off, word(ts))
-        assertEquals(Msg.Res(R.string.conn_tailscale_line, listOf(Names(listOf("Studio")))), ts.line)
-        assertEquals(listOf(Action.OPEN_TAILSCALE, Action.DETAILS), ts.actions)
-        assertEquals(listOf(R.string.conn_waits_one), ts.tail.map(::res))
-        assertEquals(Tone.WAITING, studio.tone); assertNull(studio.word)
+        val (studio, gomi) = notes
+        assertEquals(Tone.WARNING, studio.tone)
+        assertEquals(Tone.WARNING, studio.wordTone)
+        assertEquals(R.string.conn_word_tailscale_off, word(studio))
+        assertEquals(Msg.Res(R.string.conn_tailscale_line, listOf("Studio")), studio.line)
+        assertEquals(listOf(Action.OPEN_TAILSCALE, Action.DETAILS), studio.actions)
+        assertEquals(listOf(R.string.conn_waits_one), studio.tail.map(::res))
+        assertTrue(studio.more)
         assertEquals(Tone.OK, gomi.tone)
+        assertNull(gomi.word)
     }
 
     @Test fun `Tailscale off only counts for enabled tailnet computers that are dialing or offline`() {
-        assertEquals(1, make(facts("a", RelayState.ONLINE, RelayRoute.TAILSCALE), tailscale = false).size)
-        assertEquals(1, make(facts("a", RelayState.OFFLINE, RelayRoute.INTERNET), tailscale = false).size)
-        assertEquals(1, make(facts("a", RelayState.OFFLINE, RelayRoute.TAILSCALE, disabled = true), tailscale = false).size)
-        assertEquals(1, make(facts("a", RelayState.DENIED, RelayRoute.TAILSCALE, denied = DenyReason.REVOKED), tailscale = false).size)
-        assertTrue(make(facts("a", RelayState.OFFLINE, RelayRoute.TAILSCALE), tailscale = false).first().isTailscale)
+        assertNull(make(facts("a", RelayState.ONLINE, RelayRoute.TAILSCALE), tailscale = false).single().word)
+        assertEquals(R.string.conn_word_offline, word(make(facts("a", RelayState.OFFLINE, RelayRoute.INTERNET), tailscale = false).single()))
+        assertEquals(Tone.OFF, make(facts("a", RelayState.OFFLINE, RelayRoute.TAILSCALE, disabled = true), tailscale = false).single().tone)
+        assertEquals(R.string.conn_word_refused, word(make(facts("a", RelayState.DENIED, RelayRoute.TAILSCALE, denied = DenyReason.REVOKED), tailscale = false).single()))
+        assertEquals(R.string.conn_word_tailscale_off, word(make(facts("a", RelayState.OFFLINE, RelayRoute.TAILSCALE), tailscale = false).single()))
+        // Tailscale on: the ordinary words.
+        assertEquals(R.string.conn_word_offline, word(make(facts("a", RelayState.OFFLINE, RelayRoute.TAILSCALE), tailscale = true).single()))
     }
 
-    @Test fun `several blocked computers are named together and Details needs the active one`() {
-        val ts = make(facts("a", RelayState.OFFLINE, RelayRoute.TAILSCALE), facts("b", RelayState.CONNECTING, RelayRoute.TAILSCALE), tailscale = false).first()
-        assertEquals(Names(listOf("A", "B")), (ts.line as Msg.Res).args.single())
-        assertEquals(listOf(Action.OPEN_TAILSCALE), ts.actions)
+    @Test fun `several blocked computers each say it themselves, Details only on the active one`() {
+        val (a, b) = make(facts("a", RelayState.OFFLINE, RelayRoute.TAILSCALE, active = true), facts("b", RelayState.CONNECTING, RelayRoute.TAILSCALE), tailscale = false)
+        assertEquals(listOf(Action.OPEN_TAILSCALE, Action.DETAILS), a.actions)
+        assertEquals(listOf(Action.OPEN_TAILSCALE), b.actions)
+        assertEquals(Msg.Res(R.string.conn_tailscale_line, listOf("B")), b.line)
+    }
+
+    @Test fun `a tailnet computer reached only by the phone's choice of direct is blamed on Tailscale, cloud never`() {
+        val tailnet = "ws://mac.tail1234.ts.net:4400"
+        val cloud = "wss://nekko-agent-relay.fly.dev"
+        fun computer(choice: RouteChoice) = Computer("m", "Mac", tailnet, 0, alts = listOf(cloud), routeChoice = choice)
+        fun note(choice: RouteChoice) = ConnectionNotes.make(
+            ConnectionNotes.facts(ComputersState(ready = true, computers = listOf(computer(choice)), activeId = "m", conn = RelayState.OFFLINE), 0, false), tailscaleOn = false,
+        ).single()
+        assertEquals(R.string.conn_word_offline, word(note(RouteChoice.AUTO)))
+        assertEquals(R.string.conn_word_tailscale_off, word(note(RouteChoice.DIRECT)))
+        assertEquals(R.string.conn_word_offline, word(note(RouteChoice.CLOUD)))
+    }
+
+    @Test fun `a computer that only lets this phone in another way says refused with Pair again`() {
+        val n = make(facts(state = RelayState.DENIED, denied = DenyReason.ROUTE, active = true)).single()
+        assertEquals(Tone.WARNING, n.tone)
+        assertEquals(R.string.conn_word_refused, word(n))
+        assertEquals(Msg.Res(R.string.conn_route_line, listOf("Studio")), n.line)
+        assertEquals(listOf(R.string.conn_route_fix), n.tail.map(::res))
+        assertEquals(listOf(Action.PAIR_AGAIN, Action.DETAILS), n.actions)
     }
 
     @Test fun `Tailscale on and the computer silent moves the word to the computer`() {

@@ -475,6 +475,7 @@ function makeWebClient(): NekkoApi {
     engineCatalog: (query, format) => call(IpcChannels.engineCatalog, query, format),
     engineCatalogModel: (id) => call(IpcChannels.engineCatalogModel, id),
     engineCatalogDetail: (id) => call(IpcChannels.engineCatalogDetail, id),
+    engineCatalogChecks: (id, file) => call(IpcChannels.engineCatalogChecks, id, file),
     engineFolders: () => call(IpcChannels.engineFolders),
     engineFoldersSave: (folders) => call(IpcChannels.engineFoldersSave, folders),
     engineDownloadModel: (modelId, quantLabel) => call(IpcChannels.engineDownloadModel, modelId, quantLabel),
@@ -580,10 +581,10 @@ function makeWebClient(): NekkoApi {
   sandboxStatus: (id) => call(IpcChannels.sandboxStatus, id),
   sandboxDiff: (id) => call(IpcChannels.sandboxDiff, id),
   applySandboxDiff: (id, identity, diffId, paths) => call(IpcChannels.sandboxApplyDiff, id, identity, diffId, paths) as Promise<never>,
-  setSessionOptions: (id, patch) => setChatOptionsAndDefaults({
+  setSessionOptions: (id, patch, opts) => setChatOptionsAndDefaults({
     setSessionOptions: (id, patch) => call(IpcChannels.sessionSetOptions, id, patch),
     updateSettings: (patch) => call(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
-  }, id, patch),
+  }, id, patch, opts),
     truncateSession: (id, messageId) => call(IpcChannels.sessionTruncate, id, messageId),
     clearSessions: (scope) => call(IpcChannels.sessionsClear, scope),
     purgeExpiredArchives: () => call(IpcChannels.sessionsPurgeArchived),
@@ -855,6 +856,8 @@ function makeWebClient(): NekkoApi {
     getMcpStatus: () => call(IpcChannels.mcpStatus),
     detectHypergate: (port) => call(IpcChannels.mcpHypergate, port),
     connectHypergate: (port) => call(IpcChannels.mcpHypergateConnect, port),
+    checkHypergate: (port) => call(IpcChannels.mcpHypergateCheck, port),
+    startHypergate: (port) => call(IpcChannels.mcpHypergateStart, port),
     registerPushToken: (token, platform) => registerPush(token, platform),
     checkForUpdates: async () => {
       const info = (await call(IpcChannels.appInfo)) as AppInfo;

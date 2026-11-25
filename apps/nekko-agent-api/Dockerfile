@@ -14,6 +14,9 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY migrations ./migrations
+COPY start.sh ./
 USER node
 EXPOSE 8080
-CMD ["node", "dist/index.js"]
+# start.sh caps the heap at NODE_HEAP_PERCENT of the machine (README "Memory").
+# Starting `node` directly here would drop the cap; the startup log warns if it does.
+CMD ["./start.sh"]

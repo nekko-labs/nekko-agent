@@ -118,7 +118,8 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
           {agents.length > 0 && !(agents.length === 1 && items.length === 1) && <span className="min-w-0 truncate text-accent" title={agents.map(({ call }) => subagentSummary(call)).join(', ')}>· {agents.length} subagent{agents.length === 1 ? '' : 's'}</span>}
           {watchOnly && <WatchClockChip call={lastWatch.call} result={lastWatch.result} />}
           {!open && tools.map(({ call }) => {
-            const since = toolQuietSince(toolActivity, call.id);
+            // A call waiting for approval is not quiet; it is waiting on the person (#3288).
+            const since = call.id === pendingCallId ? undefined : toolQuietSince(toolActivity, call.id);
             return since === undefined ? null : <ToolProgressChip key={call.id} since={since} />;
           })}
         </button>
@@ -177,7 +178,7 @@ function IndexedStepRow({ step, streaming, total, toolActivity, pendingCallId }:
     <StepRow
       index={index}
       item={item}
-      quietSince={item.kind === 'tool' ? toolQuietSince(toolActivity, item.call.id) : undefined}
+      quietSince={item.kind === 'tool' && item.call.id !== pendingCallId ? toolQuietSince(toolActivity, item.call.id) : undefined}
       // Tools stay live until their own result, not until a newer row arrives.
       live={streaming && (item.kind === 'tool' ? isRunningTool(item, pendingCallId) : index === total)}
     />
@@ -203,7 +204,7 @@ function PurposeGroupRow({ row, live, streaming, total, toolActivity, pendingCal
   const startedAt = tools[0]?.startedAt;
   const ends = tools.map((t) => t.endedAt);
   const endedAt = ends.every((e) => e !== undefined) ? Math.max(...(ends as number[])) : undefined;
-  const quiets = tools.map((t) => toolQuietSince(toolActivity, t.call.id)).filter((q): q is number => q !== undefined);
+  const quiets = tools.filter((t) => t.call.id !== pendingCallId).map((t) => toolQuietSince(toolActivity, t.call.id)).filter((q): q is number => q !== undefined);
   return (
     <li className="list-none" data-purpose-group={row.purpose} data-vt-stamp={startedAt ? fmtTime(startedAt) || undefined : undefined}>
       <button

@@ -168,6 +168,20 @@ final class BeyondTests: XCTestCase {
         XCTAssertEqual(RunOption.values(of: ["autoModel": true, "title": "x", "offline": .null]), ["autoModel": true], "only run settings, and only set ones")
     }
 
+    func testOrchestrateIsASeparateBooleanRunOption() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        XCTAssertNil(chat.runOptions["orchestrate"])
+        for enabled in [true, false] {
+            try await chat.setRunOption("orchestrate", .bool(enabled))
+            XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, [.string("s1"), ["orchestrate": .bool(enabled)]])
+        }
+        XCTAssertEqual(RunOption.values(of: ["toolApproach": "code", "orchestrate": false]),
+                       ["toolApproach": "code", "orchestrate": false])
+        XCTAssertNil(RunOption.values(of: ["orchestrate": "true"])["orchestrate"]?.bool)
+    }
+
     func testPrivacyShieldChangesOnlyItsMode() throws {
         let privacy = try XCTUnwrap(RunOption.all.first { $0.key == "privacy" })
         let current: JSONValue = ["mode": "off", "allow": ["me@example.com"]]

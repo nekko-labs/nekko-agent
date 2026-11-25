@@ -151,8 +151,10 @@ async fn delegation_targets_lists_exact_chat_models_without_the_host() {
     let workspace = data.join("project");
     std::fs::create_dir_all(data.join("sessions")).unwrap();
     std::fs::create_dir_all(&workspace).unwrap();
-    let chat =
-        json!({ "id": "s_del", "title": "Del", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    // This positive case explicitly grants cross-provider catalog discovery.
+    // delegation_guard checks that a pinned chat makes no request to that catalog.
+    let chat = json!({ "id": "s_del", "title": "Del", "workspaceId": "w1", "messages": [],
+        "createdAt": 1, "updatedAt": 1, "providerId": "p1", "autoModel": true, "autoProviderSwitch": true });
     std::fs::write(data.join("sessions/s_del.json"), chat.to_string()).unwrap();
     let model = scripted_model(vec![
         call_tool("c1", "delegation_targets", json!({ "provider_id": "p2" })),

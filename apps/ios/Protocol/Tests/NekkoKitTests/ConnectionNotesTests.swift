@@ -5,9 +5,10 @@ import XCTest
 final class ConnectionNotesTests: XCTestCase {
     private func facts(_ id: String, _ state: RelayState, route: RelayRoute = .internet, detail: String? = nil,
                        denied: DenyReason? = nil, active: Bool = false, waiting: Int = 0,
-                       check: ProtocolCheck = .same, disabled: Bool = false) -> ConnectionFacts {
+                       check: ProtocolCheck = .same, disabled: Bool = false, offTailnet: Bool = false) -> ConnectionFacts {
         ConnectionFacts(id: id, name: id.capitalized, route: route, relayHost: "\(id).tail.ts.net", state: state, detail: detail,
-                        denied: denied, active: active, disabled: disabled, protocolCheck: check, waiting: waiting)
+                        denied: denied, active: active, disabled: disabled, protocolCheck: check, waiting: waiting,
+                        offTailnet: offTailnet)
     }
 
     func testEveryComputerOnlineSaysNothingButItsName() {
@@ -40,6 +41,37 @@ final class ConnectionNotesTests: XCTestCase {
         XCTAssertEqual(notes[0].word, "no answer")
         XCTAssertEqual(notes[0].actions, [.retry, .openTailscale, .details])
         XCTAssertTrue(notes[0].more)
+    }
+
+    func testAComputerAlsoOnNekkoCloudRelayIsNeverBlamedOnTailscale() {
+        // Paired with Tailscale first and Nekko Cloud Relay as the fallback (decision 0116):
+        // Tailscale being off is not what keeps it away, so no "Tailscale off" item.
+        let notes = ConnectionNotes.make([facts("macbook", .offline, route: .tailscale, active: true, offTailnet: true)], tailscaleOn: false)
+        XCTAssertEqual(notes.map(\.id), ["macbook"])
+        XCTAssertEqual(notes[0].word, "offline")
+        XCTAssertEqual(notes[0].line, "Macbook is offline.")
+        XCTAssertFalse(notes[0].actions.contains(.openTailscale))
+
+        let silent = ConnectionNotes.make([facts("macbook", .connecting, route: .tailscale, detail: "timeout", offTailnet: true)], tailscaleOn: false)
+        XCTAssertEqual(silent.map(\.id), ["macbook"])
+        XCTAssertEqual(silent[0].line, "Can’t reach Macbook right now.")
+        XCTAssertEqual(silent[0].actions, [.retry])
+    }
+
+    func testANekkoCloudRelayRouteReachesAComputerOffTheTailnet() {
+        let tailnet = "ws://mac.tail1234.ts.net:4400"
+        XCTAssertTrue(Computer(id: "m", name: "Mac", relayUrl: tailnet, pairedAt: 0, alts: ["wss://nekko-agent-relay.fly.dev"]).reachableOffTailnet)
+        XCTAssertFalse(Computer(id: "m", name: "Mac", relayUrl: tailnet, pairedAt: 0).reachableOffTailnet)
+        XCTAssertFalse(Computer(id: "m", name: "Mac", relayUrl: tailnet, pairedAt: 0, alts: ["ws://192.168.1.20:4400"]).reachableOffTailnet,
+                       "a LAN address is no use away from home")
+    }
+
+    func testOnlyTheTailnetOnlyComputerWaitsOnTailscale() {
+        let notes = ConnectionNotes.make([facts("gomi", .connecting, route: .tailscale),
+                                          facts("macbook", .offline, route: .tailscale, offTailnet: true)], tailscaleOn: false)
+        XCTAssertEqual(notes.map(\.id), [ConnectionNote.tailscaleId, "gomi", "macbook"])
+        XCTAssertEqual(notes[0].line, "Turn on Tailscale to reach Gomi.")
+        XCTAssertEqual(notes[2].word, "offline")
     }
 
     func testFirstDialSaysNothingUntilItFails() {

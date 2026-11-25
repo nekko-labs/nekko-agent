@@ -226,31 +226,25 @@ export function EffortChipGauge(props: EffortProps) {
 export function EffortSection(props: EffortProps) {
   const { pick, options, index, shown } = useEffort(props);
   const { metadata, session } = props;
-  const description = index >= 0 ? metadata?.levels.find((level) => level.effort === options[index])?.description : undefined;
-  const following = session ? session.effort == null : false;
+  const detail = !options.length
+    ? metadata ? 'This provider reports no selectable effort choices for this model.' : 'This provider has not reported effort choices for this model.'
+    : session && session.effort == null ? `${shown}. Following this computer’s effort setting.` : shown;
   return (
-    <div className="flex flex-col gap-2 px-2 py-1" data-effort-section>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-2xs font-semibold text-ink-faint">Effort</span>
-        <span className={`text-xs font-semibold ${index < 0 ? 'text-ink-soft' : 'text-ink'}`}>{shown}</span>
-      </div>
-      {!options.length ? (
-        <p className="text-2xs leading-snug text-ink-faint">{metadata ? 'This provider reports no selectable effort choices for this model.' : 'This provider has not reported effort choices for this model.'}</p>
-      ) : (<>
+    <div className="flex min-h-(--q-row-dense) items-center gap-2 px-2" data-effort-section>
+      <span className="shrink-0 text-2xs font-semibold text-ink-faint">Effort</span>
+      {options.length > 0 && (
         <input
           type="range" min={0} max={options.length - 1} step={1} value={Math.max(0, index)}
           disabled={options.length === 1}
           aria-label="Reasoning effort" aria-valuetext={shown}
-          className="w-full accent-(--accent)"
+          className="h-(--q-row-dense) min-w-0 flex-1 accent-(--accent) pointer-coarse:h-11"
           onChange={(e) => { const level = options[Number(e.currentTarget.value)]; if (level) pick(level); }}
         />
-        <div className="flex w-full justify-between gap-1 text-2xs text-ink-faint" aria-hidden="true">
-          {options.map((o) => <span key={o} className="min-w-0 break-words text-center">{effortLabel(o)}</span>)}
-        </div>
-        {description && <p className="text-2xs text-ink-soft">{description}</p>}
-        {index < 0 && <button type="button" className="self-start text-xs text-accent" onClick={() => pick(options[0])}>Use {effortLabel(options[0])}</button>}
-        <p className="text-2xs leading-snug text-ink-faint">{following ? "Following this computer's effort setting. " : ''}Higher effort thinks longer and spends more tokens.</p>
-      </>)}
+      )}
+      <span title={detail} className={`ml-auto w-24 shrink-0 truncate text-right text-xs font-semibold ${index < 0 ? 'text-ink-soft' : 'text-ink'}`}>{shown}</span>
+      {options.length > 0 && index < 0 && (
+        <button type="button" className="btn btn-ghost shrink-0 text-xs text-accent" onClick={() => pick(options[0])}>Use {effortLabel(options[0])}</button>
+      )}
     </div>
   );
 }

@@ -308,13 +308,24 @@ pub fn install_status(app: &AppPaths) -> Value {
     status(installed, on_path, installed.then_some(bin_path), bin_dir, command, message)
 }
 
+/// The shared root for Nekko products on this computer.
+pub(crate) fn shared_nekko_dir() -> Option<PathBuf> {
+    nekko_js::home_dir().filter(|h| h.is_absolute()).map(|h| h.join(".nekko"))
+}
+
+/// Grant only a real directory. A link at the root could make the whole home
+/// (or a different host filesystem) implicitly accessible.
+pub(crate) fn shared_nekko_grant() -> Option<PathBuf> {
+    shared_nekko_dir().filter(|p| std::fs::symlink_metadata(p).is_ok_and(|m| m.is_dir()))
+}
+
 /// Where the CLI looks for the link file: `NEKKO_DATA_DIR`, else
-/// `~/.nekko-agent` (`defaultUserDataDir`). Not the app's userData: the CLI
+/// `~/.nekko/nekko-agent` (`defaultUserDataDir`). Not the app's userData: the CLI
 /// has no way to know where that is.
 pub fn cli_link_dir() -> PathBuf {
     match std::env::var_os("NEKKO_DATA_DIR").filter(|d| !d.is_empty()) {
         Some(d) => PathBuf::from(d),
-        None => nekko_js::home_dir().unwrap_or_default().join(".nekko-agent"),
+        None => shared_nekko_dir().unwrap_or_else(|| PathBuf::from(".nekko")).join("nekko-agent"),
     }
 }
 

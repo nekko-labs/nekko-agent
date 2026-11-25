@@ -79,6 +79,16 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
         .filter(|t| !disabled.contains(name(t)))
         .filter(|t| !offline || tool_allowed_offline(name(t)))
         .collect();
+    if session.get("orchestrate") == Some(&Value::Bool(true))
+        && !incognito
+        && let Some(spawn) = tools.iter_mut().find(|t| name(t) == "spawn_agent")
+    {
+        spawn["parameters"]["properties"]["capability"] = serde_json::json!({
+            "type": "string",
+            "enum": ["small", "medium", "large"],
+            "description": "Optional worker capability. Omit provider_id and model_id when using it. Saved routing choices take priority."
+        });
+    }
     tools.push(c.update_plan.clone());
     if session.get("titleAuto") != Some(&Value::Bool(false)) && !parent {
         tools.push(c.set_chat_title.clone());
@@ -92,6 +102,16 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
         && nekko_context::MemoryScope::of_session(session).global()
     {
         tools.push(remember_tool());
+    }
+    // Read-only, so offered wherever the chat reads memory at all; offered
+    // whether or not notes exist yet, so the tool list (part of the cached
+    // prompt prefix) does not change when the first note is saved.
+    if !parent
+        && !training
+        && !disabled.contains(RECALL_MEMORY)
+        && nekko_context::MemoryScope::of_session(session).project()
+    {
+        tools.push(recall_memory_tool());
     }
     if training {
         tools.push(c.report_experiment.clone());
@@ -119,18 +139,39 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     tools
 }
 
+/// The memory search tool's name.
+pub const RECALL_MEMORY: &str = "recall_memory";
+
+/// The `recall_memory` tool: the model searches the user's memory notes in
+/// its own words, for what the automatic recall on the message missed (#3276).
+fn recall_memory_tool() -> Value {
+    serde_json::json!({
+        "name": RECALL_MEMORY,
+        "description": "Search the user's long-term memory notes. Notes about the topic of a message are usually added to it already (\"# Memory recalled: <title>\"); call this when you need something about the user that is not in your context, for example their setup, people, projects or past decisions. Search with a few distinctive keywords, and try the words a note would use (notes are often written in English, whatever language the user writes in). Returns at most a few notes; nothing found means there is no such note, so do not guess.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": { "type": "string", "description": "Keywords to search for, e.g. \"editor IDE\" or \"deploy staging\"." }
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }
+    })
+}
+
 /// The `remember` tool: the agent saves what it learns about the user as a
 /// global memory note. Offered only where the chat reads global memory, so
 /// incognito and memory-off chats never write it.
 fn remember_tool() -> Value {
     serde_json::json!({
         "name": "remember",
-        "description": "Save something you learned about the user to long-term memory so future chats know it: who they are, their preferences, how they like to work, people and projects they mention. Save durable facts only, never secrets, credentials or things that only matter to this chat. One fact per note with a short title; to correct a note, reuse its exact title (shown as \"# Memory: <title>\" in your context) and it is replaced. The user sees a card each time you save.",
+        "description": "Save something you learned about the user to long-term memory so future chats know it: who they are, their preferences, how they like to work, people and projects they mention. Save durable facts only, never secrets, credentials or things that only matter to this chat. One fact per note with a short title; to correct a note, reuse its exact title (shown as \"# Memory: <title>\" or \"# Memory recalled: <title>\" in your context) and it is replaced. Set always to true only for what applies to every conversation (their name, the language or tone they want, standing preferences): those stay in every chat. Other notes are recalled when a message is about them. The user sees a card each time you save.",
         "parameters": {
             "type": "object",
             "properties": {
                 "title": { "type": "string", "description": "Short name for the fact, e.g. \"Preferred name\"." },
-                "body": { "type": "string", "description": "The fact, in a sentence or two of plain language." }
+                "body": { "type": "string", "description": "The fact, in a sentence or two of plain language." },
+                "always": { "type": "boolean", "description": "Keep this note in every chat (identity, language, standing preferences). Leave out for facts that matter only when their topic comes up." }
             },
             "required": ["title", "body"],
             "additionalProperties": false
@@ -508,6 +549,25 @@ mod tests {
 
     fn names(input: serde_json::Value) -> Vec<String> {
         turn_tools(&input).iter().map(|t| name(t).to_string()).collect()
+    }
+
+    #[test]
+    fn spawn_capability_schema_is_optional_and_scoped_to_orchestrate() {
+        let spawn = |input| turn_tools(&input).into_iter().find(|t| name(t) == "spawn_agent");
+        let plain = spawn(serde_json::json!({})).unwrap();
+        assert!(plain["parameters"]["properties"].get("capability").is_none());
+        for flag in [serde_json::json!(false), serde_json::json!("true")] {
+            assert_eq!(spawn(serde_json::json!({"session":{"orchestrate":flag}})), Some(plain.clone()));
+        }
+        let mut offered = spawn(serde_json::json!({"session":{"orchestrate":true}})).unwrap();
+        let capability = offered["parameters"]["properties"].as_object_mut().unwrap().remove("capability").unwrap();
+        assert_eq!(capability["enum"], serde_json::json!(["small", "medium", "large"]));
+        assert_eq!(offered, plain, "nothing else about the spawn tool changes");
+        assert!(spawn(serde_json::json!({"session":{"orchestrate":true}, "noTools":true})).is_none());
+        assert!(spawn(serde_json::json!({"session":{"orchestrate":true}, "offline":true})).is_none());
+        assert!(
+            spawn(serde_json::json!({"session":{"orchestrate":true}, "orchestration":{"strategy":"solo"}})).is_none()
+        );
     }
 
     #[test]

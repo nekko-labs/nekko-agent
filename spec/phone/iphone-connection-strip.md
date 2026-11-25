@@ -18,7 +18,8 @@ Philip asked (2026-11-12): update the iPhone's message banners to the quiet desi
   - dialing for the first time, or waiting on Tailscale: a hollow `running` ring, nothing else;
   - switched off by the user (#2053), or not started: a hollow faint ring, nothing else;
   - a problem: a `warning` or `danger` dot and **one word**: *offline*, *no answer*, *not found*, *refused*, *key changed*, *stopped*, *quit* or *update*, with a small chevron.
-- **Tailscale off** leads the row, with the crossed-out network glyph, only when Tailscale is off on this iPhone and at least one enabled computer routed over the tailnet is dialing or offline. Those computers then wait quietly (hollow ring) instead of saying a word each. When Tailscale is on but the computer is silent, the word moves to the computer (*no answer*).
+- **Tailscale off** leads the row, with the crossed-out network glyph, only when Tailscale is off on this iPhone and at least one enabled computer that **only** Tailscale reaches is dialing or offline. Those computers then wait quietly (hollow ring) instead of saying a word each. When Tailscale is on but the computer is silent, the word moves to the computer (*no answer*).
+- **A computer the phone can also reach through Nekko Cloud Relay** (or another internet relay; a saved route with a public address, decision 0116) is never blamed on Tailscale: with Tailscale off it says its own word (*offline*, or *no answer* with *Can't reach X right now.* and **Retry**), no **Open Tailscale**. A LAN route doesn't count, since it is no use away from home. On the Connection screen, *Open Tailscale to reconnect* is hidden for such a computer too. `[implemented 2026-11-25: unit tested in ConnectionNotesTests (NekkoKit) and ConnectionNotesTest (Android JVM); not yet seen on a device]`
 - **Tap a word to open it**: the item takes a wash pill and one line opens under the row (height opens, text fades, 200 ms), in `inkSoft`, with a quieter tail in `inkFaint` (how to fix it, and *N prompts wait to send* for the active computer's outbox). Under it, the fixes as text buttons, the first in the accent: **Retry**, **Try again** (after a safety exit), **Pair again**, **Open Tailscale**, **Details** (the Connection screen, active computer only), and **⋯** with the safety exits (SK-8, active computer only). Tap again, or another word, to close or switch. A healthy item does nothing when tapped.
 - **The version difference** (IO-32) is the word *update* on the active computer, opening to which side to update. In **Settings → About** it is one quiet line (*Update Studio* or *Update this app*) that opens to the sentence.
 - **Files and Monitors** show only the items that have something to say, so nothing at all while every computer is fine.
@@ -40,6 +41,7 @@ Philip asked (2026-11-12): update the iPhone's message banners to the quiet desi
 
 - Three computers online: three dots and names, no words, nothing opens.
 - Tailscale off with a tailnet computer dialing: *Tailscale off* first, that computer a hollow ring; opened, *Turn on Tailscale to reach Studio.* with **Open Tailscale** and **Details**.
+- Tailscale off, computer paired over Tailscale with Nekko Cloud Relay as its fallback, offline: no *Tailscale off* item; *offline* on the computer, opening to **Retry** (and **Details** when active).
 - Tailscale on, computer silent: *no answer* on the computer, opening to **Retry**, **Open Tailscale**, **Details** and ⋯.
 - A computer that removed this iPhone: *refused*, opening to **Pair again** only.
 - Unit tests: `ConnectionNotesTests` (NekkoKit).
@@ -60,3 +62,12 @@ Same words, states and priority rules as above, as Material text rather than iOS
 - Differences: *Open Tailscale* opens the Tailscale app, or its Google Play page (package visibility declared in the manifest); *update* says "Update it from Google Play"; an address a phone can never reach (localhost, public `ws://`) shows as *not found* with its own sentence and **Pair again**; *Details* opens Computers; the safety exits are the active computer's ⋮ and what they did is still said under the row. Quit is now remembered like stop (`remoteQuitAt`), giving the *quit* word.
 - Test hooks kept from the old banners: `open-tailscale`, `banner.pair-again`, `banner.menu`, `fleet.reconnect`; items are `strip.<computer id>`.
 - Not done: Settings → About still shows the version difference as before (the iPhone's one quiet line); Files and Monitors do not show problem-only items on Android.
+
+### Route choice and per-computer Tailscale (#3346, Android)
+
+`[implemented 2026-11-26: unit tested (ConnectionNotesTest, RelayClientTest, RouteSupervisorTest, ComputersRepositoryTest) and ConnectionRowTest and RouteChoiceGroupTest run in an Android 12 (API 32) emulator; not yet against a real computer on Nekko Cloud Relay]`
+
+- Each paired computer stores a route choice, `auto | cloud | direct` (the desktop's names; old saves load as auto). `direct` dials only LAN, loopback and Tailscale routes, `cloud` only internet routes (Nekko Cloud Relay); a filter that would leave nothing uses every route. The supervisor and the route checks use the filtered list, and changing the choice reconnects that computer at once.
+- The computer's page has a "Connect through" group (`RouteChoiceGroup`): Tailscale and Nekko Cloud Relay checkboxes, both on is auto, the last one on cannot be turned off, and a kind the pairing link did not carry is off with one quiet line ("Pair again from <computer> with Nekko Cloud Relay on to add it.").
+- There is no page-wide *Tailscale off* item any more. A computer that only Tailscale reaches (by its routes, or because the choice is `direct`) and is blocked by Tailscale being off says *Tailscale off* itself (warning), opens to "Turn on Tailscale to reach <name>." with **Open Tailscale** (`open-tailscale`) and Details when active. Under `cloud`, Tailscale never matters.
+- `denied: route` is read as that route failing: the client moves to the next allowed saved route. With none left the row says *refused*, "<name> only lets this phone in through another route.", "Pair again, or change it on <name>." and **Pair again**.

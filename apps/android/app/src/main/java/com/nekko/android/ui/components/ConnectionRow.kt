@@ -28,7 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -184,16 +183,11 @@ private fun Item(n: ConnectionNote, selected: Boolean, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (n.isTailscale) {
-                Icon(Icons.Outlined.WifiOff, contentDescription = null, tint = p.warning, modifier = Modifier.size(14.dp))
-            } else {
-                StateDot(n.tone)
-                Text(n.name.orEmpty(), style = MaterialTheme.typography.labelLarge, color = if (selected) p.ink else p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+            StateDot(n.tone)
+            Text(n.name.orEmpty(), style = MaterialTheme.typography.labelLarge, color = if (selected) p.ink else p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (word != null) {
                 Text(
                     word, style = MaterialTheme.typography.labelLarge, maxLines = 1,
-                    fontWeight = if (n.isTailscale) FontWeight.Medium else FontWeight.Normal,
                     color = wordColor(n.wordTone),
                 )
             }
@@ -204,7 +198,7 @@ private fun Item(n: ConnectionNote, selected: Boolean, onClick: () -> Unit) {
     }
     if (n.opens) {
         val hint = stringResource(if (selected) R.string.conn_hide_fix else R.string.conn_show_fix)
-        val description = listOfNotNull(n.name ?: stringResource(R.string.conn_tailscale), word).joinToString(", ")
+        val description = listOfNotNull(n.name, word).joinToString(", ")
         Box(
             Modifier
                 .minimumInteractiveComponentSize()

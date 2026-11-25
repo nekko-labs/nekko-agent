@@ -101,7 +101,8 @@ export function takeSettingsTarget() {
 
 /**
  * Open Settings on the page holding `target`: a group id (`customize`) or any
- * `settings-<target>` anchor inside one (`simple`, `computers`), scrolled to it.
+ * `settings-<target>` anchor inside one (`simple`, `computers`), or a section's
+ * own id (`mcp-servers`), scrolled to it.
  */
 export function openSettingsGroup(target: string) {
   settingsTarget = target;

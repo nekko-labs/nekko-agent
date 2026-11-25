@@ -69,8 +69,12 @@ struct PermissionChecklistView: View {
             }
         }
         .task {
-            await permissions.refresh()
+            // Rows appear at once and fill in their status when the system answers. Waiting for
+            // the first refresh left the whole list invisible (and out of VoiceOver and XCTest)
+            // for as long as the notification, camera and speech queries took, 60 s and more on
+            // a loaded simulator (#2454).
             withAnimation(motion) { shown = true }
+            await permissions.refresh()
         }
         .onChange(of: phase) { _, phase in
             if phase == .active { Task { await permissions.refresh() } }
@@ -251,9 +255,10 @@ struct PermissionChecklistView: View {
             } else {
                 request = Task {
                     await permissions.request(item)
-                    await app.permissionChecklistChanged()
                     // Advance only on a real grant; a denial stays open with its Settings fix.
+                    // Before the push registration below, which waits on the notification center.
                     if permissions.status(item).checked { withAnimation(motion) { focus = next(after: item) } }
+                    await app.permissionChecklistChanged()
                 }
             }
         } label: {

@@ -3,10 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@nekko-agent/shared';
 import { STARTER_MODES } from '@nekko-agent/shared';
-import { CODE_MODE_DOCS, ModePanel, ToolApproachPicker, chatModeState, modeButtonLabel, modePanelActions, summaryPartIcon } from './ModePanel.js';
+import { CODE_MODE_DOCS, ModePanel, ToolApproachPicker, chatModeState, modeButtonLabel, modePanelActions, summaryPartIcon, toolApproachLock } from './ModePanel.js';
+import { chatEngine, dropCodeModeOnClaudeAgent } from './codeModeLock.js';
 
 const store = vi.hoisted(() => ({
   providers: undefined as undefined | { id: string; kind: string; name: string }[],
+  providersLoaded: true,
   settings: { defaultChatMode: 'guardrails', gitManagement: { mode: 'worktree' }, effort: 'normal', workspaces: [{ id: 'w1', name: 'agent-nekko', path: '/code/agent-nekko', addedAt: 1 }], mcpServers: [] } as Record<string, any>,
   refreshSettings: vi.fn(async () => {}),
   pushToast: vi.fn(),
@@ -101,7 +103,7 @@ describe('Mode panel markup', () => {
     const claude = renderToStaticMarkup(<ToolApproachPicker approach="list" locked="claude-agent" onPick={() => {}} />);
     expect(claude.match(/disabled=""/g)).toHaveLength(2);
     expect(claude).toContain("Claude Agent chats run Claude Code&#x27;s own tools");
-    expect(claude).toContain('data-hover-tip="Claude Agent uses Claude Code&#x27;s own tools. Pick another model to choose."');
+    expect(claude).toContain('data-hover-tip="Claude Agent uses Claude Code&#x27;s own tools. Pick a model other than Claude Code to choose."');
   });
   it('says on the Tools row when the chat is in code mode', () => {
     session = { ...base, toolApproach: 'code' } as Session;
@@ -114,6 +116,12 @@ describe('Mode panel markup', () => {
     session = { ...base, toolApproach: 'code', providerId: 'cc' } as Session;
     expect(html()).not.toContain('on · code mode');
     store.providers = undefined;
+  });
+  it.each([undefined, false, true, 'true'])("shows Orchestrate independently of Tool style (%s)", (value) => {
+    for (const toolApproach of ['code', 'list'] as const) {
+      session = { ...base, toolApproach, orchestrate: value } as Session;
+      expect(html()).toContain(`role="switch" aria-checked="${value === true}" aria-label="Orchestrate"`);
+    }
   });
   it('leaves model and effort controls to the composer', () => {
     session = { ...base, effort: 'low' } as Session;
@@ -131,7 +139,81 @@ describe('Mode panel markup', () => {
   });
 });
 
+describe('Code mode on a Claude Agent chat', () => {
+  const claude = [{ id: 'cc', kind: 'claude-code', name: 'Claude' }, { id: 'oa', kind: 'openai', name: 'OpenAI' }];
+  const panel = (props: Record<string, unknown> = {}) => renderToStaticMarkup(<ModePanel {...deps()} {...props} />);
+  afterEach(() => { store.providers = undefined; store.providersLoaded = true; });
+
+  it('never shows code mode as on when the chat has no provider of its own and falls back to Claude Code', () => {
+    store.providers = claude;
+    session = { ...base, toolApproach: 'code' } as Session;
+    // The chat window resolves the provider (saved default or first connected) and passes it down.
+    expect(panel()).toContain('on · code mode');
+    expect(panel({ providerId: 'cc' })).not.toContain('on · code mode');
+    expect(panel({ providerId: 'oa' })).toContain('on · code mode');
+  });
+  it('locks the picker on Claude Code and says how to get code mode back', () => {
+    expect(toolApproachLock(false, 'claude-agent')).toBe('claude-agent');
+    expect(toolApproachLock(true, 'claude-agent')).toBe('sandbox');
+    expect(toolApproachLock(false, 'other')).toBeNull();
+    const out = renderToStaticMarkup(<ToolApproachPicker approach="list" locked="claude-agent" onPick={() => {}} />);
+    expect(out).toContain('Pick a model other than Claude Code to use it.');
+    expect(out.match(/disabled=""/g)).toHaveLength(2);
+  });
+  it('holds the picker until the provider list can say what runs the chat', () => {
+    expect(chatEngine([], false, 'cc')).toBe('unknown');
+    expect(toolApproachLock(false, 'unknown')).toBe('unknown');
+    expect(chatEngine([], true, 'gone')).toBe('other');
+    expect(chatEngine([], false, null)).toBe('other');
+    expect(chatEngine(claude as never, true, 'cc')).toBe('claude-agent');
+    store.providers = [];
+    store.providersLoaded = false;
+    session = { ...base, toolApproach: 'code' } as Session;
+    expect(panel({ providerId: 'cc' })).not.toContain('on · code mode');
+    const out = renderToStaticMarkup(<ToolApproachPicker approach="list" locked="unknown" onPick={() => {}} />);
+    expect(out).toContain('data-tool-approach-lock="unknown"');
+    expect(out.match(/disabled=""/g)).toHaveLength(2);
+  });
+  it('puts a chat that is on Claude Code back to the tool list on the chat alone', async () => {
+    const api = { setSessionOptions: vi.fn(async (_id: string, patch: object) => ({ ...base, ...patch }) as Session) };
+    await expect(dropCodeModeOnClaudeAgent(api, { id: 'chat', toolApproach: 'code' })).resolves.toMatchObject({ toolApproach: 'list' });
+    expect(api.setSessionOptions).toHaveBeenCalledExactlyOnceWith('chat', { toolApproach: 'list' }, { chatOnly: true });
+    expect(await dropCodeModeOnClaudeAgent(api, { id: 'chat', toolApproach: 'list' })).toBeNull();
+    expect(await dropCodeModeOnClaudeAgent(api, { id: 'chat' })).toBeNull();
+    expect(api.setSessionOptions).toHaveBeenCalledOnce();
+  });
+  it('leaves toolApproach out when a saved mode is applied to it, and out of the modes it saves', async () => {
+    const d = deps({ claudeAgent: true } as never);
+    await modePanelActions(d).applyMode(starter('local'));
+    expect(window.nekko.setSessionOptions).toHaveBeenLastCalledWith('chat', expect.not.objectContaining({ toolApproach: expect.anything() }));
+    await modePanelActions(deps()).applyMode(starter('local'));
+    expect(window.nekko.setSessionOptions).toHaveBeenLastCalledWith('chat', expect.objectContaining({ toolApproach: 'code' }));
+    session = { ...base, toolApproach: 'list' };
+    store.settings = { ...store.settings, savedModes: [...STARTER_MODES, { id: 'mine', name: 'Mine', icon: 'sparkle', options: { ...starter('local').options, toolApproach: 'code' } }] };
+    await modePanelActions(deps({ session, claudeAgent: true } as never)).updateMode('mine');
+    expect(vi.mocked(window.nekko.updateSettings).mock.lastCall![0].savedModes!.at(-1)!.options.toolApproach).toBe('code');
+    const saved = await modePanelActions(deps({ session, claudeAgent: true } as never)).saveMode('New', false);
+    expect(saved.options.toolApproach).toBeUndefined();
+  });
+  it('still recognises a saved mode that pairs code mode with this chat', () => {
+    session = { ...base, offline: true, toolApproach: 'list' };
+    expect(chatModeState(session, store.settings).active?.id).not.toBe('local');
+    expect(chatModeState(session, store.settings, { claudeAgent: true }).active?.id).toBe('local');
+  });
+});
+
 describe('Mode panel writes', () => {
+  it('writes only the boolean for this chat, never the tool style or app defaults', async () => {
+    session.toolApproach = 'code';
+    const d = deps();
+    const actions = modePanelActions(d);
+    await actions.setOrchestrate(true);
+    await actions.setOrchestrate(false);
+    expect(window.nekko.setSessionOptions).toHaveBeenNthCalledWith(1, 'chat', { orchestrate: true });
+    expect(window.nekko.setSessionOptions).toHaveBeenNthCalledWith(2, 'chat', { orchestrate: false });
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
+    expect(d.onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({ toolApproach: 'code', orchestrate: false }));
+  });
   it('saves approvals as the default only after the chat took them', async () => {
     const d = deps();
     await modePanelActions(d).setApprovals('ask');

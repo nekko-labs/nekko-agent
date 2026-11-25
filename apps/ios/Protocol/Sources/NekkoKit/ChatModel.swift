@@ -190,7 +190,8 @@ public final class ChatModel {
     /// and the child chats when the transcript delegates. Failures keep the last state.
     public func refreshAgentState() async {
         guard let r = try? store.remote() else { return }
-        let hasWatch = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.watchTool } else { return false } }
+        // A clip is a watch the agent never armed itself: its chip shows while a clip tool is in the chat.
+        let hasWatch = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.watchTool || AgentRows.clipTools.contains(name) } else { return false } }
         let hasAgent = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.subagentTool } else { return false } }
         if hasWatch, let raw = try? await r.call(Channels.sessionWatches, [.string(sessionId)]) { watches = AgentWatch.list(raw) }
         if hasAgent, let raw = try? await r.call(Channels.sessionsSummaries) {
@@ -899,6 +900,18 @@ public final class ChatModel {
             return outgoingPhotos.images[index]
         }
         return try await store.remote().call(Channels.sessionPhoto, [.string(sessionId), .string(savedId), .int(Int64(index))]).string
+    }
+
+    /// The pictures an agent made in one tool call (`generate_image`, `edit_image`): the result
+    /// message that holds them and how many. Nil for any other call, or when the computer sent none.
+    public func toolPictures(callId: String, tool: String) -> ToolPictures.Found? {
+        ToolPictures.find(session?.messages ?? [], callId: callId, tool: tool)
+    }
+
+    /// One of those pictures (`session:photo` on the result message), sized for the screen; nil when
+    /// the computer has none to send (a vector picture, or an older computer).
+    public func toolPhoto(_ found: ToolPictures.Found, _ index: Int) async throws -> String? {
+        try await store.remote().call(Channels.sessionPhoto, [.string(sessionId), .string(found.messageId), .int(Int64(index))]).string
     }
 
     // MARK: Projection

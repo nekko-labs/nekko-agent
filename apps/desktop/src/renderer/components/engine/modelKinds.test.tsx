@@ -210,6 +210,21 @@ describe('the two halves of the Models section', () => {
     expect(familyLine(ckpt, 'installed', undefined)).toEqual({ text: 'Last load failed', tone: 'danger', title: 'a tensor is missing' });
   });
 
+  it('shows the engine’s verdict on the row, with no GPU fit beside it', () => {
+    const blocked = { level: 'blocked' as const, reason: 'Needs a modified build of llama.cpp.' };
+    const repo = { sourceRepo: 'prism-ml/Ternary-Bonsai-2-27B-gguf' };
+    const bonsai = (files: LibraryModel[]) => groupModelFamilies(files, [])[0];
+    const ptq1 = local('Ternary-Bonsai-2-27B-PTQ1_0.gguf', { sizeBytes: 5.9 * 1024 ** 3, loadCheck: blocked, ...repo });
+    const q2 = local('Ternary-Bonsai-2-27B-Q2_0.gguf', { sizeBytes: 7.6 * 1024 ** 3, gpuFit: 'full', ...repo });
+    // Only the build the engine refuses: the row says so, in the engine's words.
+    expect(familyLine(bonsai([ptq1]), 'installed', undefined)).toEqual({ text: "Can't run here", tone: 'warning', title: blocked.reason });
+    // Beside one it can run, the row speaks for that one and shows its fit.
+    expect(familyLine(bonsai([ptq1, q2]), 'installed', undefined).text).toMatch(/^27B · 2 variants, .+ · Fits on GPU$/);
+    // A warning is the engine's to settle: the row says it may not run.
+    const warned = local('Ternary-Bonsai-2-27B-PTQ1_0.gguf', { loadCheck: { level: 'warning', reason: 'It may not load.' }, ...repo });
+    expect(familyLine(bonsai([warned]), 'installed', undefined)).toEqual({ text: 'May not run here', tone: 'warning', title: 'It may not load.' });
+  });
+
   it('says the parameters, size and state of a healthy row, and the quant range of a downloadable one', () => {
     const gemma = families.find(f => f.name === 'Gemma-4-E4B')!;
     expect(familyLine(gemma, 'installed', undefined).text).toMatch(/^4B effective · .+ · in memory$/);

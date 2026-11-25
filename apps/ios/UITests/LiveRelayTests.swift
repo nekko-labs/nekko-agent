@@ -20,6 +20,16 @@ final class LiveRelayTests: XCTestCase {
     /// the tree has taken 3 to 12 s there, so a 10 or 15 s wait saw two reads (#1019).
     private let busyWait: TimeInterval = 60
 
+    /// Exercise the real Settings list in isolation, without a relay.
+    func testRevealFinishedRepliesInSettings() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-uiTestReset", "YES", "-uiTestPermissionsSettings"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 10))
+        let finished = app.switches["settings.notify.finished"]
+        XCTAssertTrue(revealNotificationControl(finished, in: app))
+    }
+
     func testPairStreamAndApproveFromThePhone() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
@@ -63,11 +73,11 @@ final class LiveRelayTests: XCTestCase {
         let finish = app.buttons["permissions.continue"]
         XCTAssertTrue(finish.waitForExistence(timeout: 20), "the permission checklist follows pairing")
         attach(app, "\(theme)-1b-notifications-step")
-        let notifications = app.buttons["permissions.action.notifications"]
-        if notifications.waitForExistence(timeout: 3) {
-            notifications.tap()
-            tapSystemAlertIfShown()
-        }
+        // The rows fade in only after the first status refresh, which took longer than a few
+        // seconds on a loaded runner. Skipping the row then left notifications undetermined, so
+        // Settings → Send a test notification asked for permission itself and never got a result
+        // inside its 20 seconds (#2454). Wait for the row, grant, and wait for "Allowed".
+        grantNotifications(app)
         finish.tap()
         XCTAssertTrue(waitGone(finish, 10))
 
@@ -1001,6 +1011,30 @@ final class LiveRelayTests: XCTestCase {
         if allow.waitForExistence(timeout: 4) { allow.tap() }
     }
 
+    /// Notification permission is asked right after pairing, from the checklist's Alerts row.
+    /// Ends only when that row reads "Allowed", answering the system prompt whenever it shows.
+    private func grantNotifications(_ app: XCUIApplication) {
+        let row = app.buttons["permissions.row.notifications"]
+        let action = app.buttons["permissions.action.notifications"]
+        let allowed = NSPredicate(format: "value == %@", "Allowed")
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        var tapped = false
+        // The notification center on a freshly booted simulator answered the first request only
+        // after two to three minutes (the prompt is absent until then), so wait for it, not a beat.
+        let deadline = Date().addingTimeInterval(240)
+        while Date() < deadline {
+            if row.exists, allowed.evaluate(with: row) { return }
+            if !tapped, action.exists, action.isHittable {
+                action.tap()
+                tapped = true
+            }
+            let allow = springboard.buttons["Allow"].firstMatch
+            if allow.exists { allow.tap() }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTFail("the checklist never showed notifications as Allowed (offered: \(action.exists), tapped: \(tapped))")
+    }
+
     /// Scrolls a long form until `e` can be tapped: down first, then back up
     /// (a form loads its rows lazily, so an off-screen row may not exist yet).
     private func reveal(_ e: XCUIElement, in app: XCUIApplication) -> Bool {
@@ -1023,8 +1057,11 @@ final class LiveRelayTests: XCTestCase {
             let frame = element.frame
             let navigation = app.navigationBars.firstMatch
             let top = navigation.exists ? navigation.frame.maxY : app.frame.minY
-            let viewport = CGRect(x: app.frame.minX + 8, y: top + 8,
-                                  width: app.frame.width - 16, height: app.frame.maxY - top - 16)
+            // Only the vertical edges matter. Settings is a plain list since #2947, so its
+            // rows (and the row-wide switch in them) are the full width of the screen; a
+            // side margin here made every row "outside" and the reveal fail after 16 drags.
+            let viewport = CGRect(x: app.frame.minX, y: top + 8,
+                                  width: app.frame.width, height: app.frame.maxY - top - 16)
             return !frame.isEmpty && viewport.contains(frame) && element.isHittable
         }
         for upward in [true, false] {
@@ -1143,8 +1180,11 @@ final class LiveRelayTests: XCTestCase {
         if let name { attach(app, name) }
         // It also closes by itself 3.4 s after it plays (without VoiceOver), so a tap
         // can find Let's go already gone (seen in testFollowUpInASubagent). Let it
-        // close; tap only if it is still up after that.
-        if !waitGone(done, 6) {
+        // close; tap only if it is still up after that. On a loaded runner the 3.4 s
+        // timer fired between a 6 s wait giving up and the tap resolving the button
+        // ("No matches found for pairSuccess.done", run 45404241625), so wait longer
+        // for the timer and tap only a button that is still there.
+        if !waitGone(done, 12), done.exists {
             done.tap()
             _ = waitGone(done, 5)
         }

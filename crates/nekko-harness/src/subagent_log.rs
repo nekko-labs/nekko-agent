@@ -88,6 +88,25 @@ pub fn find_transcript(config_dir: &Path, session_id: &str, call_id: &str) -> Op
     None
 }
 
+/// The `Agent` call that started sub-agent `agent_id` in Claude Code session
+/// `session_id`, from its `meta.json`: how a `SendMessage` that woke it finds
+/// its child chat.
+pub fn agent_call(config_dir: &Path, session_id: &str, agent_id: &str) -> Option<String> {
+    if !plain_id(session_id) || !plain_id(agent_id) {
+        return None;
+    }
+    let projects = std::fs::read_dir(config_dir.join("projects")).ok()?;
+    for project in projects.flatten().take(MAX_PROJECTS) {
+        let meta_path = project.path().join(session_id).join("subagents").join(format!("agent-{agent_id}.meta.json"));
+        if !small_file(&meta_path, MAX_META) {
+            continue;
+        }
+        let meta = std::fs::read(&meta_path).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok())?;
+        return meta.get("toolUseId").and_then(Value::as_str).filter(|c| plain_id(c)).map(str::to_string);
+    }
+    None
+}
+
 /// The transcript's lines, malformed ones skipped. Empty for a file that is
 /// missing, a link, or too big.
 pub fn read_transcript(path: &Path) -> Vec<Value> {
@@ -133,6 +152,26 @@ fn about_spawn(line: &Value, spawn_call: &str) -> bool {
     })
 }
 
+/// What the parent sent a sub-agent with `SendMessage`, when the saved line is
+/// that message: Claude Code saves it as a meta user line from the coordinator.
+fn parent_message(line: &Value) -> Option<String> {
+    const PREFIX: &str = "The coordinator sent a message while you were working:";
+    if line.get("type").and_then(Value::as_str) != Some("user")
+        || line.pointer("/origin/kind").and_then(Value::as_str) != Some("coordinator")
+    {
+        return None;
+    }
+    let text = match line.pointer("/message/content") {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Array(blocks)) => {
+            blocks.iter().filter_map(|b| b.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n")
+        }
+        _ => return None,
+    };
+    let text = text.trim_start().strip_prefix(PREFIX).unwrap_or(&text).trim();
+    (!text.is_empty()).then(|| text.to_string())
+}
+
 /// The child chat's transcript after its opening task message, mapped from
 /// the saved lines with the same [`Mapper`] the stream goes through.
 pub fn transcript_messages(lines: &[Value], child_id: &str, spawn_call: &str) -> Vec<Value> {
@@ -149,6 +188,14 @@ pub fn transcript_messages(lines: &[Value], child_id: &str, spawn_call: &str) ->
         }
     };
     for line in lines {
+        if let Some(text) = parent_message(line) {
+            keep(mapper.flush(false, false), None, &mut out);
+            let at = line.get("timestamp").and_then(Value::as_str).and_then(iso_ms).unwrap_or_else(nekko_js::now_ms);
+            out.push(
+                serde_json::json!({ "id": crate::map::new_id(), "role": "user", "content": text, "createdAt": at }),
+            );
+            continue;
+        }
         if !matches!(line.get("type").and_then(Value::as_str), Some("assistant" | "user"))
             || line.get("isMeta") == Some(&Value::Bool(true))
             || about_spawn(line, spawn_call)
@@ -208,6 +255,17 @@ mod tests {
     }
 
     #[test]
+    fn names_the_call_that_started_an_agent() {
+        let config = dir("agent-call");
+        write_agent(&config, "sess-1", "a1", "toolu_a", &[]);
+        assert_eq!(agent_call(&config, "sess-1", "a1").as_deref(), Some("toolu_a"));
+        assert_eq!(agent_call(&config, "sess-1", "a9"), None);
+        assert_eq!(agent_call(&config, "sess-2", "a1"), None);
+        assert_eq!(agent_call(&config, "sess-1", "../a1"), None);
+        let _ = std::fs::remove_dir_all(&config);
+    }
+
+    #[test]
     fn maps_the_saved_lines_like_the_stream_skipping_the_forks_own_call() {
         let at = "2026-11-12T03:55:14.250Z";
         let lines = vec![
@@ -223,16 +281,23 @@ mod tests {
             json!({ "type": "user", "timestamp": at, "message": { "role": "user", "content": [
                 { "type": "tool_result", "tool_use_id": "toolu_pr", "content": "https://github.com/o/r/pull/9" }] } }),
             json!({ "type": "user", "isMeta": true, "message": { "role": "user", "content": "meta" } }),
+            // The parent woke it again with `SendMessage`.
+            json!({ "type": "user", "isMeta": true, "timestamp": at, "origin": { "kind": "coordinator" }, "message": { "role": "user",
+                "content": "The coordinator sent a message while you were working:\nCarry on from the tests." } }),
             json!({ "type": "assistant", "message": { "id": "m2", "role": "assistant", "content": [
                 { "type": "text", "text": "Done." }] } }),
         ];
         let out = transcript_messages(&lines, "s_child", "toolu_spawn");
-        assert_eq!(out.len(), 3, "{out:?}");
+        assert_eq!(out.len(), 4, "{out:?}");
         assert_eq!(out[0]["content"], "Opening it.");
         assert_eq!(out[0]["toolCalls"][0]["id"], "toolu_pr");
         assert_eq!(out[1]["toolResult"]["output"], "https://github.com/o/r/pull/9");
         assert_eq!(out[1]["createdAt"], json!(iso_ms(at).unwrap()));
-        assert_eq!(out[2]["content"], "Done.");
+        assert_eq!(
+            (out[2]["role"].as_str(), out[2]["content"].as_str()),
+            (Some("user"), Some("Carry on from the tests."))
+        );
+        assert_eq!(out[3]["content"], "Done.");
         assert_eq!(tool_call_ids(&out).into_iter().collect::<Vec<_>>(), ["toolu_pr"]);
     }
 

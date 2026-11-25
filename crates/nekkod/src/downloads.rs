@@ -127,8 +127,9 @@ impl ModelDownloads {
         if hw.devices.is_empty() {
             return Ok(());
         }
-        let (_, _, version) = self.library.host_state().await;
-        let floor = self.library.overhead_floor(version.as_ref());
+        let (_, _, install) = self.library.host_state().await;
+        let version = install.as_ref().and_then(|i| i.get("version"));
+        let floor = self.library.overhead_floor(version);
         if let Some(preset) = acquire::gpu_first_preset(&model, Some(&hw), floor) {
             let id = model.get("id").map(nekko_js::display).unwrap_or_default();
             self.library.save_preset(&id, preset).await?;

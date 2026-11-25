@@ -181,7 +181,9 @@ export function SettingsView() {
     const open = () => {
       const target = takeSettingsTarget();
       if (!target) return;
-      if (!showElement(document.getElementById(`settings-${target}`)) && GROUP_IDS.has(target)) setActive(target as SettingsGroupId);
+      // A section's own id works too (`mcp-servers`), for sections without a `settings-` anchor.
+      const el = document.getElementById(`settings-${target}`) ?? document.getElementById(target);
+      if (!showElement(el) && GROUP_IDS.has(target)) setActive(target as SettingsGroupId);
     };
     open();
     window.addEventListener(SETTINGS_TARGET_EVENT, open);

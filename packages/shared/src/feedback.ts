@@ -26,13 +26,34 @@ const KIND_LABELS: Record<FeedbackKind, string> = { good: 'Good', improve: 'Need
  */
 export interface FeedbackContact { name?: string; email?: string }
 
-/** Contact details are opt-in note content, never a signup or inferred from settings. */
+/**
+ * Contact details are opt-in note content, never a signup. The desktop sheet fills them in
+ * from Settings > About you and sends them only while "Include my name and email" is on.
+ */
 export function feedbackContactProblem(contact: FeedbackContact): string | null {
   const name = contact.name?.trim() ?? '';
   const email = contact.email?.trim() ?? '';
   if ([...name].length > 200 || /[\r\n]/.test(name)) return 'Keep your name to one line, up to 200 characters.';
   if (email && (email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return 'Enter a valid email address or leave it blank.';
   return null;
+}
+
+/** The contact details a person already gave (setup or Settings > About you), as the sheet starts with them. */
+export function savedFeedbackContact(settings: { userName?: string; userEmail?: string } | null | undefined): Required<FeedbackContact> {
+  return { name: settings?.userName?.trim() ?? '', email: settings?.userEmail?.trim() ?? '' };
+}
+
+/** What the switch above Send offers to include, or null when there is nothing to include. */
+export function includeContactLabel(contact: FeedbackContact): string | null {
+  const name = !!contact.name?.trim();
+  const email = !!contact.email?.trim();
+  if (!name && !email) return null;
+  return `Include my ${name && email ? 'name and email' : name ? 'name' : 'email'}`;
+}
+
+/** The contact details the note carries: none when the person switched them off. */
+export function sentFeedbackContact(contact: FeedbackContact, include: boolean): FeedbackContact {
+  return include ? contact : {};
 }
 
 export function feedbackNote(kind: FeedbackKind, summary: string, description: string, contact: FeedbackContact = {}): string {

@@ -75,3 +75,27 @@ describe('Delete and Restart from here', () => {
     expect(renderToStaticMarkup(<MessageBubble message={user} />)).not.toContain('data-message-delete');
   });
 });
+
+describe('pictures of a synced chat that are not here (#3298)', () => {
+  const pic = 'data:image/png;base64,iVBORw0KGgo=';
+  const user = (images: string[]) => ({ id: 'u1', role: 'user' as const, content: 'look', createdAt: 1, images });
+  it('draws a picture on its way and one an older sync left out as placeholders, never a broken image', () => {
+    const html = renderToStaticMarkup(<MessageBubble message={user([pic, `nekko-blob:${'a'.repeat(64)}.png`, '[picture not synced]'])} />);
+    expect(html.match(/<img /g)?.length).toBe(1);
+    expect(html).toContain(`src="${pic}"`);
+    expect(html).toContain('data-picture-missing="coming"');
+    expect(html).toContain('Picture on its way');
+    expect(html).toContain('data-picture-missing="left"');
+    expect(html).toContain('Picture not synced');
+    expect(html).not.toContain('src="nekko-blob:');
+    expect(html).not.toContain('src="[picture not synced]"');
+  });
+  it('a generated picture still on its way keeps its size and offers no Edit', () => {
+    const generated = { modelId: 'm/flux', width: 768, height: 512, steps: 4, cfgScale: 1, seed: 7, ms: 900 };
+    const message = { id: 'a1', role: 'assistant' as const, content: '', createdAt: 1, images: [`nekko-blob:${'b'.repeat(64)}.png`], generated };
+    const html = renderToStaticMarkup(<MessageBubble message={message as never} chronological onEditImage={vi.fn()} />);
+    expect(html).toContain('data-picture-missing="coming"');
+    expect(html).toContain('aspect-ratio:768 / 512');
+    expect(html).not.toContain('data-edit-image');
+  });
+});

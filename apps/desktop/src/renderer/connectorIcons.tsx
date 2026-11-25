@@ -258,3 +258,36 @@ export function TelegramIcon({ size = 20 }: { size?: number }) {
     </svg>
   );
 }
+
+/**
+ * Hypergate's gate mark (a feathered ring, from the Hypergate repo's
+ * `apps/site/public/favicon.svg`, Nekko Labs, MIT) without its app tile, so
+ * it sits on the page like the other connector marks.
+ */
+export function HypergateIcon({ size = 20 }: { size?: number }) {
+  const id = `hg${React.useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  return (
+    <svg width={size} height={size} viewBox="8 8 84 84" role="img" aria-label="hypergate" style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id={`${id}r`} x1="0.08" y1="0.05" x2="0.92" y2="0.95">
+          <stop offset="0" stopColor="#7c6bff" />
+          <stop offset="0.3" stopColor="#6d5efc" />
+          <stop offset="0.6" stopColor="#22d3ee" />
+          <stop offset="0.8" stopColor="#a5f3fc" />
+          <stop offset="1" stopColor="#6d5efc" />
+        </linearGradient>
+        <radialGradient id={`${id}f`}>
+          <stop offset="0.46" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.58" stopColor="#fff" stopOpacity="0.5" />
+          <stop offset="0.7" stopColor="#fff" stopOpacity="1" />
+          <stop offset="0.86" stopColor="#fff" stopOpacity="0.32" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <mask id={`${id}m`} maskContentUnits="userSpaceOnUse">
+          <circle cx="50" cy="50" r="40" fill={`url(#${id}f)`} />
+        </mask>
+      </defs>
+      <circle cx="50" cy="50" r="40" fill={`url(#${id}r)`} mask={`url(#${id}m)`} />
+    </svg>
+  );
+}

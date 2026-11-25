@@ -60,7 +60,7 @@ export function OrganizationView(p: OrgViewProps) {
       help="Your organization's computers, and whether this one is shared with it. Your chats are never shared.">
       {p.gate === 'needs-plan' && (
         <div className="sync-row mt-(--q-inline)" data-testid="org-needs-plan">
-          <p className="text-sm text-ink-soft">Organizations are part of Nekko Cloud Pro and Team.</p>
+          <p className="text-sm text-ink-soft">Organizations are part of Nekko Cloud Pro and Enterprise.</p>
           {p.onSeePlans && <button className="btn btn-ghost shrink-0 py-1! text-xs!" onClick={p.onSeePlans}>See plans</button>}
         </div>
       )}

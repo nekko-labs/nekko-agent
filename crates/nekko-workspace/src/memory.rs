@@ -108,13 +108,17 @@ pub fn save(data_dir: &Path, entry: &Value) -> Result<Vec<Value>, String> {
     let file = file_of(data_dir, &show(entry.get("id")))?;
     let text = serialize(&entry)?;
     crate::write_atomic(&file, text.as_bytes())?;
+    nekko_context::forget_memory(data_dir);
     Ok(list(data_dir, entry.get("scope"), entry.get("workspaceId")))
 }
 
 /// The agent's `remember` tool: a global note under `title`, updating the one
 /// already titled that (ignoring case) so a corrected fact replaces the old one
-/// rather than sitting beside it. Returns the saved note and whether it existed.
-pub fn remember(data_dir: &Path, title: &str, body: &str) -> Result<(Value, bool), String> {
+/// rather than sitting beside it. `always` sets or clears the core tag
+/// (`nekko_context::recall::CORE_TAG`), which keeps the note in every chat's
+/// system prompt; `None` leaves an existing note's tags as they are.
+/// Returns the saved note and whether it existed.
+pub fn remember(data_dir: &Path, title: &str, body: &str, always: Option<bool>) -> Result<(Value, bool), String> {
     let (title, body) = (title.trim(), body.trim());
     if title.is_empty() || body.is_empty() {
         return Err("remember needs a nonblank title and body.".into());
@@ -129,6 +133,20 @@ pub fn remember(data_dir: &Path, title: &str, body: &str) -> Result<(Value, bool
     );
     note["title"] = Value::from(title);
     note["body"] = Value::from(body);
+    if let Some(always) = always {
+        let core = nekko_context::recall::CORE_TAG;
+        let mut tags: Vec<Value> = note["tags"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|t| !t.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case(core)))
+            .cloned()
+            .collect();
+        if always {
+            tags.push(Value::from(core));
+        }
+        note["tags"] = Value::Array(tags);
+    }
     save(data_dir, &note)?;
     note["updatedAt"] = Value::from(now);
     Ok((note, updated))
@@ -137,7 +155,9 @@ pub fn remember(data_dir: &Path, title: &str, body: &str) -> Result<(Value, bool
 /// `deleteMemory(id)`: a note that is not there is not an error.
 pub fn delete(data_dir: &Path, id: Option<&Value>) -> Result<(), String> {
     let file = file_of(data_dir, &show(id))?;
-    match std::fs::remove_file(&file) {
+    let removed = std::fs::remove_file(&file);
+    nekko_context::forget_memory(data_dir);
+    match removed {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
         _ => Ok(()),
     }
@@ -160,15 +180,24 @@ mod tests {
     #[test]
     fn remember_adds_then_updates_by_title() {
         let dir = std::env::temp_dir().join(format!("nekko-remember-{}", now_ms()));
-        let (first, updated) = remember(&dir, "Preferred name", "Philip").unwrap();
+        let (first, updated) = remember(&dir, "Preferred name", "Philip", None).unwrap();
         assert!(!updated);
-        let (second, updated) = remember(&dir, " preferred NAME ", "Phil").unwrap();
+        let (second, updated) = remember(&dir, " preferred NAME ", "Phil", Some(true)).unwrap();
         assert!(updated);
         assert_eq!(second["id"], first["id"]);
+        // Read straight after the write: the cached listing is not stale.
         let notes = list(&dir, Some(&json!("global")), None);
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0]["body"], "Phil");
-        assert!(remember(&dir, "x", "  ").is_err());
+        assert_eq!(notes[0]["tags"], json!(["always"]), "kept in every chat's system prompt");
+        // Unsaid keeps the tag; false clears it.
+        remember(&dir, "Preferred name", "Phil", None).unwrap();
+        assert_eq!(list(&dir, Some(&json!("global")), None)[0]["tags"], json!(["always"]));
+        remember(&dir, "Preferred name", "Phil", Some(false)).unwrap();
+        assert_eq!(list(&dir, Some(&json!("global")), None)[0]["tags"], json!([]));
+        delete(&dir, Some(&first["id"])).unwrap();
+        assert!(list(&dir, Some(&json!("global")), None).is_empty(), "a delete is seen at once");
+        assert!(remember(&dir, "x", "  ", None).is_err());
         let _ = std::fs::remove_dir_all(dir);
     }
 

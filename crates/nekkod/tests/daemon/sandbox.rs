@@ -177,6 +177,7 @@ async fn a_sandbox_chat_turn_runs_in_the_daemon_and_its_container() {
         let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
         assert!(system.contains("folder-0"), "{system}");
         assert!(!system.contains(&*rig.workspace.to_string_lossy()), "no host path: {system}");
+        assert!(!system.contains("~/.nekko"), "no host shared directory grant: {system}");
         assert!(!system.contains("Always run the tests."), "no host guidelines: {system}");
         assert!(system.contains("isolated container on copied folders"), "{system}");
 

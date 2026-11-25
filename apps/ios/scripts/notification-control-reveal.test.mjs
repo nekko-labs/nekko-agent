@@ -50,3 +50,19 @@ test('switch state and five-second transition assertions cannot be removed', () 
     'XCTAssertTrue(waitValue(finished, "0", 5)',
   ]) assert.throws(() => driverContract(source.replace(required, '// removed')));
 });
+
+test('the journey grants notifications from the checklist and waits for Allowed (#2454)', () => {
+  assert.match(source, /\n {8}grantNotifications\(app\)\n/);
+  const start = source.indexOf('private func grantNotifications(');
+  const end = source.indexOf('/// Scrolls a long form', start);
+  assert.ok(start >= 0 && end > start);
+  const grant = source.slice(start, end);
+  for (const required of [
+    'permissions.row.notifications',
+    'permissions.action.notifications',
+    'NSPredicate(format: "value == %@", "Allowed")',
+    'XCTFail("the checklist never showed notifications as Allowed',
+  ]) assert.ok(grant.includes(required), required);
+  // The 3-second skip is what left notifications undetermined on a slow runner.
+  assert.doesNotMatch(source, /permissions\.action\.notifications"\]\n\s+if notifications\.waitForExistence\(timeout: 3\)/);
+});

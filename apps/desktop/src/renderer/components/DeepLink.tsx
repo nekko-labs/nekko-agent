@@ -3,7 +3,7 @@ import { useStore } from '../store.js';
 import { notificationSessionId, parseWorkflowRunLink } from '../notifications.js';
 import { hypergateConnectPort } from '../deepLinks.js';
 import { Modal } from './primitives/index.js';
-import { openFeedback } from './FeedbackSheet.js';
+import { feedbackLinkSource, openFeedback } from './FeedbackSheet.js';
 
 /**
  * `nekko-agent://` links from other apps.
@@ -36,8 +36,9 @@ export function DeepLinkListener() {
         window.dispatchEvent(new Event('nekko:about'));
         return;
       }
-      if (url === 'nekko-agent://feedback') {
-        openFeedback();
+      const feedbackFrom = feedbackLinkSource(url);
+      if (feedbackFrom) {
+        openFeedback(feedbackFrom);
         return;
       }
       if (url === 'nekko-agent://settings') {
