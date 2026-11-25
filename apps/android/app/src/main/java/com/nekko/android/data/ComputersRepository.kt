@@ -136,12 +136,20 @@ class ComputersRepository(
     private val helloTimeoutMs: Long = 8_000,
     /** Keep a link open to every paired computer, not only the active one. */
     private val stayConnected: Boolean = false,
+    /** The background queue saved chats are written on (#3413); null writes on the caller's thread (tests). */
+    private val io: com.nekko.protocol.BackgroundIO? = null,
 ) {
     /** The active computer's composers, kept until their prompt is sent (offline mode, the iPhone's drafts). */
     val drafts = DraftStore(offlineFiles, scope, draftDebounceMs)
 
     /** The last chats opened, to read while the computer is out of reach (OF-5); kept only while the setting is on. */
-    val transcripts = SavedTranscripts(now = now)
+    val transcripts = SavedTranscripts(io = io, now = now)
+
+    /** Hand the saves still waiting to the background queue now: the app is going to the background and may end. */
+    fun flushSaves() {
+        transcripts.flushNow()
+        chatListCache?.flush()
+    }
 
     /** *Keep recent chats to read offline*: on keeps them from now; off deletes every computer's copies. */
     fun setKeepTranscripts(on: Boolean) {
@@ -154,6 +162,8 @@ class ComputersRepository(
         _state.value.computers.forEach { c ->
             transcripts.use(f, c.id)
             transcripts.keepOnly(emptySet())
+            // The deletions run on the background queue: wait, so none is left behind when the setting is off.
+            transcripts.flush()
         }
         transcripts.use(null, _state.value.activeId)
     }
@@ -591,12 +601,7 @@ class ComputersRepository(
                     if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
                     outbox.onEvent(e)
-                    _state.update { s ->
-                        val attention = s.attention.next(e)
-                        val activity = ActivityTracker.next(s.activity, e).toMutableMap()
-                        attention.pending.keys.forEach { activity[it] = Activity.NEEDS_YOU }
-                        s.copy(activity = activity, attention = attention)
-                    }
+                    _state.update { s -> withAgentEvent(s, e) }
                     if (e is AgentEvent.ToolResultReady || e is AgentEvent.QuestionResolved || e is AgentEvent.Done || e is AgentEvent.Error) scheduleAttention()
                     _events.emit(e)
                     // Keep the list fresh when a turn ends anywhere (another device, a task).

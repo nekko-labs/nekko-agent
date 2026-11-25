@@ -254,7 +254,7 @@ class ChatViewModel(
         controller.showSavedCopy()
         // Load when the computer is reachable, and again after every reconnect.
         viewModelScope.launch {
-            repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload() }
+            repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload(refreshSkills = true) }
         }
         viewModelScope.launch {
             // Streamed words reach the transcript once per frame, not once per token (DeltaCoalescer).
@@ -351,12 +351,16 @@ class ChatViewModel(
                 .distinctUntilChanged()
                 .collect { (watch, agent, _) -> if (watch || agent) refreshAgentState() }
         }
-        // While a watch is armed, its chip is re-read every 15 s (the desktop's cadence).
-        viewModelScope.launch {
-            while (true) {
-                delay(15_000)
-                if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
-            }
+    }
+
+    /**
+     * While a watch is armed, its chip is re-read every 15 s (the desktop's cadence). Run it under
+     * `repeatOnLifecycle(STARTED)` so it stops while the chat is not on screen.
+     */
+    suspend fun pollWatches(everyMs: Long = 15_000): Nothing {
+        while (true) {
+            delay(everyMs)
+            if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
         }
     }
 

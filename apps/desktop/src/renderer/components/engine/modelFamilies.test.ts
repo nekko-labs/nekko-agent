@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogModel } from '@nekko-agent/shared';
-import { groupModelFamilies, gpuGuidance, modelFamilyName, smallestVariant, type LibraryModel } from './modelFamilies.js';
+import { groupModelFamilies, gpuGuidance, modelFamilyName, smallestVariant, sortLibraryModels, sortModelFamilies, type LibraryModel } from './modelFamilies.js';
 
 const local = (name: string, extra: Partial<LibraryModel> = {}): LibraryModel => ({ id: name, name, path: name, sizeBytes: 100, addedAt: 0, loaded: false, ...extra });
 const catalog = (name: string, extra: Partial<CatalogModel> = {}): CatalogModel => ({ id: `publisher/${name}`, name, owner: 'publisher', tags: [], quants: [], ...extra });
@@ -31,6 +31,40 @@ describe('model families', () => {
   });
   it('normalizes filename suffixes without stripping parameter counts', () => {
     expect(modelFamilyName('owner/Qwen3-8B-Q4_K_M.gguf')).toBe('Qwen3-8B');
+  });
+});
+
+describe('installed model sorting', () => {
+  it('sorts variants by newest added timestamp, then name, by default', () => {
+    const models = [
+      local('old', { name: 'Zeta', addedAt: 10 }),
+      local('new', { name: 'Beta', addedAt: 20 }),
+      local('same', { name: 'Alpha', addedAt: 20 }),
+    ];
+    expect(sortLibraryModels(models).map(m => m.id)).toEqual(['same', 'new', 'old']);
+  });
+
+  it('sorts variants by name or size, breaks ties by name and id, and keeps the source order intact', () => {
+    const models = [
+      local('c', { name: 'Beta', sizeBytes: 20, addedAt: 1 }),
+      local('b', { name: 'Alpha', sizeBytes: 20, addedAt: 1 }),
+      local('a', { name: 'Alpha', sizeBytes: 20, addedAt: 1 }),
+      local('d', { name: 'Aardvark', sizeBytes: 5, addedAt: 2 }),
+    ];
+    expect(sortLibraryModels(models, 'name').map(m => m.id)).toEqual(['d', 'a', 'b', 'c']);
+    expect(sortLibraryModels(models, 'size').map(m => m.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(sortLibraryModels(models, 'recent').map(m => m.id)).toEqual(['d', 'a', 'b', 'c']);
+    expect(models.map(m => m.id)).toEqual(['c', 'b', 'a', 'd']);
+  });
+
+  it('sorts families by their newest variant or total installed size', () => {
+    const families = [
+      { name: 'Alpha', local: [local('a', { addedAt: 10, sizeBytes: 50 })], catalog: [] },
+      { name: 'Beta', local: [local('b', { addedAt: 20, sizeBytes: 10 }), local('b2', { addedAt: 1, sizeBytes: 90 })], catalog: [] },
+    ];
+    expect(sortModelFamilies(families).map(f => f.name)).toEqual(['Beta', 'Alpha']);
+    expect(sortModelFamilies(families, 'name').map(f => f.name)).toEqual(['Alpha', 'Beta']);
+    expect(sortModelFamilies(families, 'size').map(f => f.name)).toEqual(['Beta', 'Alpha']);
   });
 });
 

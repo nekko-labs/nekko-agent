@@ -24,6 +24,9 @@ vi.mock('react', async (original) => {
   return { ...React, useState: (v: unknown) => [typeof v === 'function' ? (v as () => unknown)() : v, () => {}], useEffect: () => {} };
 });
 
+// Polls never run here (effects do not); the hook reads the pane and window, which need a renderer.
+vi.mock('../visibleInterval.js', () => ({ useVisibleInterval: () => {} }));
+
 describe('Settings > Connections', () => {
   it('shows the master switch and every connection with a log button', () => {
     const html = renderToStaticMarkup(<ConnectionsSettings settings={{} as AppSettings} update={() => {}} />);
