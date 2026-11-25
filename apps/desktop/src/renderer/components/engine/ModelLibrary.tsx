@@ -1,20 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
-import type { EngineMemory, GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
+import type { EngineMemory, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
 import { MODEL_FOLDER_PROVIDERS, cannotLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { notifyModelsChanged } from '../../modelCatalog.js';
-import { WarningIcon } from '../../icons.js';
+import { CheckIcon, ChevronIcon, WarningIcon } from '../../icons.js';
 import { StatusDot } from '../primitives/index.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
 import { ImageGeneration } from './ImageGeneration.js';
 import { loadLocalModel } from './localModelShortcuts.js';
-import { gpuGuidance } from './modelFamilies.js';
+import { gpuGuidance, sortLibraryModels, type LibraryModel, type ModelSort } from './modelFamilies.js';
 import { ModelRowActions, type ModelRowControl } from './ModelRowActions.js';
 import { RunnableAlternativeOffer } from './RunnableAlternativeOffer.js';
 import { loadableFiles } from './runnableAlternative.js';
-import { localTypeLabel, paramsLabel } from './modelFacts.js';
+import { localTypeLabel, modelProblem, paramsLabel } from './modelFacts.js';
 import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
 /**
@@ -69,10 +69,11 @@ export function ModelLibrary({
   autoloadIds,
   running,
   resident,
+  sortBy,
   memory,
 }: {
   providerId: string;
-  models: Array<LocalModel & { loaded: boolean; gpuFit?: GpuFit }>;
+  models: LibraryModel[];
   /** The GPU's size, so a model the busy GPU cannot hold now is not called too big. */
   memory?: EngineMemory;
   /** The engine's resident list, for where each loaded model actually sits. */
@@ -87,8 +88,11 @@ export function ModelLibrary({
   autoloadIds?: Set<string>;
   /** Whether the engine is serving: autoload is a promise only while it is. */
   running?: boolean;
+  /** The installed-library order selected by the Models page. */
+  sortBy?: ModelSort;
 }) {
   const pushToast = useStore((s) => s.pushToast);
+  const settingsId = useId();
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
@@ -162,17 +166,19 @@ export function ModelLibrary({
     return (Object.keys(FILTER_LABELS) as Filter[]).filter((f) => f === 'all' || present.has(f));
   }, [models]);
 
+  const orderedModels = useMemo(() => sortBy ? sortLibraryModels(models, sortBy) : models, [models, sortBy]);
+
   const searched = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return models;
-    return models.filter((m) =>
+    if (!q) return orderedModels;
+    return orderedModels.filter((m) =>
       [m.name, m.id, m.quantization, m.parameterSize, m.sourceRepo, m.folderProvider]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(q),
     );
-  }, [models, query]);
+  }, [orderedModels, query]);
 
   const visible = useMemo(
     () => (filter === 'all' ? searched : searched.filter((m) => bucketOf(m.modality) === filter)),
@@ -182,9 +188,10 @@ export function ModelLibrary({
   /**
    * The list groups by where each model lives: our own downloads first, then
    * the other apps' folders alphabetically. Headers only print when there is
-   * more than one group to name.
+   * more than one group to name. An installed sort orders across folders.
    */
-  const groups = useMemo(() => {
+  const groups = useMemo((): [string, LibraryModel[]][] => {
+    if (sortBy) return [['', visible]];
     const byLoc = new Map<string, typeof visible>();
     for (const m of visible) {
       const loc = locationOf(m);
@@ -195,7 +202,7 @@ export function ModelLibrary({
     return [...byLoc.entries()].sort(([a], [b]) =>
       a === b ? 0 : a === 'Nekko Agent' ? -1 : b === 'Nekko Agent' ? 1 : a.localeCompare(b),
     );
-  }, [visible]);
+  }, [visible, sortBy]);
 
   /** The files already here, so a row's offer never suggests one the family has. */
   const haveFiles = useMemo(() => loadableFiles(models), [models]);
@@ -328,8 +335,27 @@ export function ModelLibrary({
     const unsupported = m.modality === 'image' ? undefined : cannotLoadReason(m);
     const missingProjector = m.modality === 'vision' && !m.hasProjector;
     const live = residentById.get(m.id);
-    // A model that cannot fill the GPU wears the warning on its row: it will
-    // run, but not at the speed the card implies.
+    const problem = modelProblem(m);
+    const fit = gpuGuidance(m.sizeBytes, memory, m);
+    const expanded = !unsupported && open === m.id;
+    const panelId = `${settingsId}-${m.id}`;
+    const details = (
+      <span className="block min-w-0 flex-1">
+        <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
+        {actions.isDefault(m) && <span className="text-2xs text-accent">Default</span>}
+        <span className="block text-xs text-ink-soft" data-model-facts>{[localTypeLabel(m), paramsLabel(m.name, m.parameterSize), m.sizeBytes > 0 && formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</span>
+        <span className="block text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
+          {[
+            fit,
+            m.quantization,
+            m.maxContext && `${formatTokens(m.maxContext)} max context`,
+            m.format === 'mlx' && 'MLX',
+            autoloadIds?.has(m.id) && 'loads on start',
+            m.managed === false && `from ${locationOf(m)}`,
+          ].filter(Boolean).join(' · ')}
+        </span>
+      </span>
+    );
     return (
       <div key={m.id} data-library-row={m.id} className="scroll-mt-4">
         <div
@@ -337,24 +363,25 @@ export function ModelLibrary({
           style={{ opacity: unsupported ? 0.85 : 1, background: m.loaded ? 'var(--accent-soft)' : undefined }}
           data-quiet-row
         >
-          <div className="min-w-0 flex-[1_1_12rem]" title={m.path}>
-            <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
-            {actions.isDefault(m) && <span className="text-2xs text-accent">Default</span>}
-            <p className="text-xs text-ink-soft" data-model-facts>{[localTypeLabel(m), paramsLabel(m.name, m.parameterSize), m.sizeBytes > 0 && formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</p>
-            <p className="text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
-              {[
-                gpuGuidance(m.sizeBytes, memory, m),
-                m.quantization,
-                m.maxContext && `${formatTokens(m.maxContext)} max context`,
-                m.format === 'mlx' && 'MLX',
-                autoloadIds?.has(m.id) && 'loads on start',
-                m.gpuFit === 'cpu' && !unsupported && 'CPU only',
-                m.managed === false && `from ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'another folder'}`,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-          </div>
+          {unsupported ? (
+            <div className="min-w-0 flex-[1_1_12rem]" title={m.path}>{details}</div>
+          ) : (
+            <button
+              type="button"
+              className="flex min-h-8 min-w-0 flex-[1_1_12rem] items-center gap-2 rounded text-left"
+              title={m.path}
+              aria-label={`${m.modality === 'image' ? 'Image settings' : 'Settings'} for ${m.name}`}
+              aria-expanded={expanded}
+              aria-controls={expanded ? panelId : undefined}
+              data-model-row-toggle
+              onClick={() => setOpen(expanded ? null : m.id)}
+            >
+              {details}
+              <span aria-hidden="true" className="shrink-0 text-ink-faint">
+                <ChevronIcon className={`h-4 w-4 transition-transform duration-(--dur-fast) motion-reduce:transition-none ${expanded ? 'rotate-90' : ''}`} />
+              </span>
+            </button>
+          )}
 
           <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1">
             {m.loaded ? (
@@ -367,15 +394,9 @@ export function ModelLibrary({
                 <StatusDot tone="warning" size={6} />
                 No projector
               </span>
-            ) : !unsupported && (m.gpuFit === 'partial' || m.gpuFit === 'wont') ? (
-              <span
-                className="mr-1 inline-flex items-center gap-1.5 text-2xs text-warning-text"
-                title={m.gpuFit === 'partial'
-                  ? 'Beside what holds the GPU right now, and under its saved settings, part of it would run on the CPU rather than fully in VRAM. Unload other models, or open Settings to give it less context.'
-                  : 'The planner says it will not fit on this machine, even partly offloaded to the CPU.'}
-              >
-                <StatusDot tone="warning" size={6} />
-                {m.gpuFit === 'partial' ? 'Part on CPU' : 'Won’t fit'}
+            ) : !problem && (m.gpuFit === 'full' || m.gpuFit === 'cpu' || m.gpuFit === 'partial' || m.gpuFit === 'wont') ? (
+              <span className={`mr-1 shrink-0 ${m.gpuFit === 'full' || m.gpuFit === 'cpu' ? 'text-success' : 'text-warning-text'}`} aria-hidden="true" title={fit} data-model-fit={m.gpuFit}>
+                {m.gpuFit === 'full' || m.gpuFit === 'cpu' ? <CheckIcon className="h-3.5 w-3.5" /> : <WarningIcon className="h-3.5 w-3.5" />}
               </span>
             ) : null}
             {!unsupported && !m.loaded && (
@@ -392,15 +413,6 @@ export function ModelLibrary({
                 onClick={() => void toggleAutoload(m, !autoloadIds?.has(m.id))}
               >
                 On start
-              </button>
-            )}
-            {!unsupported && (
-              <button
-                className={`btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11! text-2xs ${open === m.id ? 'text-accent' : ''}`}
-                aria-expanded={open === m.id}
-                onClick={() => setOpen(open === m.id ? null : m.id)}
-              >
-                {m.modality === 'image' ? 'Image settings' : 'Settings'}
               </button>
             )}
             {unsupported ? null : m.loaded ? (
@@ -421,62 +433,68 @@ export function ModelLibrary({
           </div>
         </div>
 
-                {unsupported && (
-                  <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text">
-                    <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
-                    {unsupported}
-                  </p>
-                )}
-                {unsupported && <RunnableAlternativeOffer model={m} have={haveFiles} onChanged={onChanged} />}
-                {!unsupported && m.loadCheck?.level === 'warning' && (
-                  <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text" data-model-load-warning>
-                    <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
-                    {m.loadCheck.reason}
-                  </p>
-                )}
-                {missingProjector && !unsupported && (
-                  <p className="mt-(--q-tight) flex flex-wrap items-center gap-2 px-2 text-2xs text-warning-text">
-                    <WarningIcon className="h-3 w-3 shrink-0" />
-                    Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.
-                    <button
-                      className="underline underline-offset-2 hover:text-ink"
-                      disabled={busy === m.id}
-                      onClick={() => void fetchCompanions(m)}
-                    >
-                      Fetch it now
-                    </button>
-                  </p>
-                )}
-                {m.lastLoadError && !m.loaded && (
-                  <p className="mt-(--q-tight) flex flex-wrap items-start gap-2 px-2 text-2xs text-danger-text">
-                    <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
-                    <span>Last load failed: {m.lastLoadError}</span>
-                    {missingProjector && (
-                      <button
-                        className="underline underline-offset-2 hover:text-ink"
-                        disabled={busy === m.id}
-                        onClick={() => void fetchCompanions(m)}
-                      >
-                        Fetch companion files
-                      </button>
-                    )}
-                  </p>
-                )}
+        {unsupported && (
+          <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text">
+            <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
+            {unsupported}
+          </p>
+        )}
+        {unsupported && <RunnableAlternativeOffer model={m} have={haveFiles} onChanged={onChanged} />}
+        {!unsupported && m.loadCheck?.level === 'warning' && (
+          <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text" data-model-load-warning>
+            <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
+            {m.loadCheck.reason}
+          </p>
+        )}
+        {missingProjector && !unsupported && (
+          <p className="mt-(--q-tight) flex flex-wrap items-center gap-2 px-2 text-2xs text-warning-text">
+            <WarningIcon className="h-3 w-3 shrink-0" />
+            Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.
+            <button
+              className="underline underline-offset-2 hover:text-ink"
+              disabled={busy === m.id}
+              onClick={() => void fetchCompanions(m)}
+            >
+              Fetch it now
+            </button>
+          </p>
+        )}
+        {m.lastLoadError && !m.loaded && (
+          <p className="mt-(--q-tight) flex flex-wrap items-start gap-2 px-2 text-2xs text-danger-text">
+            <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
+            <span>Last load failed: {m.lastLoadError}</span>
+            {missingProjector && (
+              <button
+                className="underline underline-offset-2 hover:text-ink"
+                disabled={busy === m.id}
+                onClick={() => void fetchCompanions(m)}
+              >
+                Fetch companion files
+              </button>
+            )}
+          </p>
+        )}
 
-                {open === m.id && m.modality === 'image' && <ImageGeneration model={m} onChanged={onChanged} />}
-                {open === m.id && m.modality !== 'image' && (
-                  <EngineLoadDrawer
-                    providerId={providerId}
-                    model={m}
-                    loadedParams={residentById.get(m.id)?.params}
-                    autoloaded={autoloadIds?.has(m.id) ?? false}
-                    onToggleAutoload={(on) => void toggleAutoload(m, on)}
-                    onFetchCompanions={() => void fetchCompanions(m)}
-                    onDone={onChanged}
-                    onClose={() => setOpen(null)}
-                  />
-                )}
-              </div>
+        {expanded && (
+          <div id={panelId}>
+            {m.modality === 'image' ? <ImageGeneration model={m} onChanged={onChanged} /> : (
+              <EngineLoadDrawer
+                providerId={providerId}
+                model={m}
+                loadedParams={live?.params}
+                autoloaded={autoloadIds?.has(m.id) ?? false}
+                onToggleAutoload={(on) => void toggleAutoload(m, on)}
+                onFetchCompanions={() => void fetchCompanions(m)}
+                onDone={onChanged}
+                onClose={() => {
+                  setOpen(null);
+                  rootRef.current?.querySelector<HTMLButtonElement>(`[data-library-row="${CSS.escape(m.id)}"] [data-model-row-toggle]`)?.focus();
+                }}
+              />
+            )}
+          </div>
+        )}
+      </div>
     );
   }
 }

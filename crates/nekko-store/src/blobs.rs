@@ -78,6 +78,11 @@ fn store(dir: &Path, url: &str) -> Option<String> {
     Some(format!("{REF}{name}"))
 }
 
+/// [`store`] for a caller outside this module (a live event's picture).
+pub(crate) fn store_inline(dir: &Path, url: &str) -> Option<String> {
+    store(dir, url)
+}
+
 /// The data URL a reference stands for, or `None` when it is not one or its file is gone.
 fn load(dir: &Path, reference: &str) -> Option<String> {
     let name = reference.strip_prefix(REF)?;

@@ -91,54 +91,75 @@ fun ChatMessage.savedJson(): JsonObject = buildJsonObject {
  * computer answers for an open chat; nothing is kept while [files] is null
  * (*Keep recent chats to read offline*, on by default). The iPhone's
  * `SavedTranscripts` (NekkoKit/SavedTranscripts.swift).
+ *
+ * With an [io] queue, saving never costs the caller more than filing the chat away (#3413): a chat
+ * whose messages, last message and update time are unchanged since the last save only moves to the
+ * front, and any other is queued; the newest copy per chat is encoded, hashed and written on the
+ * queue about a quarter of a second later, so a burst of re-reads is one write. Removals and the
+ * index follow on the same queue, in order. [chatIds] and [totalBytes] follow when the write lands;
+ * [flush] waits for it. Without an [io] queue everything happens on the caller's thread.
  */
 class SavedTranscripts(
     private val maxChats: Int = DEFAULT_MAX_CHATS,
     private val maxBytes: Int = DEFAULT_MAX_BYTES,
     maxChatBytes: Int = DEFAULT_MAX_CHAT_BYTES,
+    private val io: BackgroundIO? = null,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val maxChatBytes = minOf(maxChatBytes, maxBytes)
 
-    internal data class Entry(val id: String, val file: String, val openedAt: Long, val bytes: Int, val hash: String)
+    /** [sig] says what the chat looked like when this copy was written; not kept in the file, so the first save after a start always writes. */
+    internal data class Entry(val id: String, val file: String, val openedAt: Long, val bytes: Int, val hash: String, val sig: String? = null)
 
-    var files: OfflineFiles? = null
+    /** A save waiting for the queue, with where it goes (the computer can change before it runs). */
+    private class Job(val files: OfflineFiles, val computerId: String, val session: Session)
+
+    @Volatile var files: OfflineFiles? = null
         private set
-    var computerId: String? = null
+    @Volatile var computerId: String? = null
         private set
-    /** Most recently opened first. */
-    private var entries: List<Entry> = emptyList()
+    /** Most recently opened first. Written only under [lock]; read without it. */
+    @Volatile private var entries: List<Entry> = emptyList()
+
+    /** Held for each change to [entries] and the files they name, so a queued job and a caller never interleave. */
+    private val lock = Any()
+    private val writer = CoalescedWriter<Job>(io) { _, job -> saveNow(job.files, job.computerId, job.session) }
 
     /** The chats saved for the active computer, most recently opened first. */
-    val chatIds: List<String> @Synchronized get() = entries.map { it.id }
+    val chatIds: List<String> get() = entries.map { it.id }
 
     /** Bytes on disk for the active computer. */
-    val totalBytes: Int @Synchronized get() = entries.sumOf { it.bytes }
+    val totalBytes: Int get() = entries.sumOf { it.bytes }
 
     /** Keep chats in [files] (null: keep none), for [computerId]. */
-    @Synchronized
     fun use(files: OfflineFiles?, computerId: String?) {
-        this.files = files
-        load(computerId)
+        writer.cancelAll()
+        synchronized(lock) {
+            this.files = files
+            load(computerId)
+        }
     }
 
     /** Show [computerId]'s saved chats. */
-    @Synchronized
     fun load(computerId: String?) {
-        this.computerId = computerId
-        entries = emptyList()
-        val f = files ?: return
-        val v = computerId?.let { f.load(it, INDEX) }.obj() ?: return
-        if (v.long("v") != INDEX_VERSION) return
-        entries = v["chats"].arr()?.mapNotNull { e ->
-            val o = e.obj() ?: return@mapNotNull null
-            Entry(o.str("id") ?: return@mapNotNull null, o.str("file") ?: return@mapNotNull null, o.long("openedAt") ?: 0, o.long("bytes")?.toInt() ?: 0, o.str("hash") ?: "")
-        }?.sortedByDescending { it.openedAt } ?: emptyList()
+        writer.cancelAll()
+        synchronized(lock) {
+            this.computerId = computerId
+            entries = emptyList()
+            val f = files ?: return
+            val v = computerId?.let { f.load(it, INDEX) }.obj() ?: return
+            if (v.long("v") != INDEX_VERSION) return
+            entries = v["chats"].arr()?.mapNotNull { e ->
+                val o = e.obj() ?: return@mapNotNull null
+                Entry(o.str("id") ?: return@mapNotNull null, o.str("file") ?: return@mapNotNull null, o.long("openedAt") ?: 0, o.long("bytes")?.toInt() ?: 0, o.str("hash") ?: "")
+            }?.sortedByDescending { it.openedAt } ?: emptyList()
+        }
     }
 
-    /** The saved copy of [chatId], if there is one. */
-    @Synchronized
+    /** The saved copy of [chatId], if there is one (the newest one still waiting to be written first). */
     fun saved(chatId: String): SavedTranscript? {
+        // Read back the way a file would be, so a copy still waiting to be written shows the same.
+        writer.pending(chatId)?.let { return SavedTranscript.from(SavedTranscript(now(), it.session).json()) }
         val f = files ?: return null
         val id = computerId ?: return null
         val e = entries.firstOrNull { it.id == chatId } ?: return null
@@ -146,65 +167,118 @@ class SavedTranscripts(
     }
 
     /** The saved copy was opened: it is the most recent now. */
-    @Synchronized
     fun touch(chatId: String) {
+        val f = files ?: return
+        val id = computerId ?: return
         if (entries.none { it.id == chatId }) return
-        entries = entries.map { if (it.id == chatId) it.copy(openedAt = now()) else it }.sortedByDescending { it.openedAt }
-        writeIndex()
+        ordered { touchNow(f, id, chatId) }
     }
 
     /** Keep [session] as the chat's saved copy (the computer just sent it). */
-    @Synchronized
     fun save(session: Session) {
         val f = files ?: return
         val id = computerId ?: return
-        val at = now()
-        val encoded = encode(SavedTranscript(at, session), maxChatBytes)
-        if (encoded == null) {
-            // One message bigger than a whole chat may be: better none than a misleading part.
-            remove(session.id)
+        val sig = signature(session)
+        val known = entries.firstOrNull { it.id == session.id }
+        if (known?.sig == sig && writer.pending(session.id) == null) {
+            // The same chat as last time: only the order changes.
+            ordered { touchNow(f, id, session.id) }
             return
         }
-        val (text, hash) = encoded
-        val file = fileName(session.id)
-        val same = entries.firstOrNull { it.id == session.id }?.hash == hash
-        entries = if (same) {
-            // The same chat as last time: only the order changes.
-            entries.map { if (it.id == session.id) it.copy(openedAt = at) else it }
-        } else {
-            f.save(id, file, WireJson.parseToJsonElement(text))
-            entries.filterNot { it.id == session.id } + Entry(session.id, file, at, text.toByteArray().size, hash)
-        }.sortedByDescending { it.openedAt }
-        evict()
-        writeIndex()
+        writer.submit(session.id, Job(f, id, session))
     }
 
     /** The chat is gone (deleted here or on the computer). */
-    @Synchronized
     fun remove(chatId: String) {
+        writer.cancel(chatId)
         val f = files ?: return
         val id = computerId ?: return
-        val e = entries.firstOrNull { it.id == chatId } ?: return
-        f.removeFile(id, e.file)
-        entries = entries - e
-        writeIndex()
+        ordered { removeNow(f, id, chatId) }
     }
 
     /** Only chats the computer still has stay (its full list just arrived). */
-    @Synchronized
     fun keepOnly(ids: Set<String>) {
         val f = files ?: return
         val id = computerId ?: return
+        // A chat still waiting to be written is one the computer no longer has: it must not come back.
+        entries.filter { it.id !in ids }.forEach { writer.cancel(it.id) }
+        ordered { keepOnlyNow(f, id, ids) }
+    }
+
+    /** Hand every save still waiting to the queue now (the app is going to the background). */
+    fun flushNow() = writer.flushNow()
+
+    /** Hand every save still waiting to the queue and wait for the queue to finish (for tests). */
+    fun flush() {
+        writer.flushNow()
+        io?.waitUntilIdle()
+    }
+
+    private fun ordered(work: () -> Unit) {
+        if (io == null) synchronized(lock) { work() } else io.run { synchronized(lock) { work() } }
+    }
+
+    /** A cheap stand-in for "this chat as last saved": its size, last message, update time, settings and amount of text. */
+    private fun signature(s: Session): String {
+        val last = s.messages.lastOrNull()
+        var chars = 0L
+        for (m in s.messages) chars += m.content.length + (m.reasoning?.length ?: 0) + (m.toolResult?.output?.length ?: 0)
+        return listOf(s.messages.size, last?.id, last?.content?.hashCode(), last?.toolResult?.output?.hashCode(), s.updatedAt, s.omittedMessages, chars,
+            s.title, s.providerId, s.modelId, s.workspaceId, s.mode, s.effort, s.chatType, s.imageParams).joinToString("|")
+    }
+
+    private fun current(f: OfflineFiles, id: String) = files === f && computerId == id
+
+    private fun saveNow(f: OfflineFiles, id: String, session: Session) {
+        val at = now()
+        val encoded = encode(SavedTranscript(at, session), maxChatBytes)
+        synchronized(lock) {
+            // The computer or the setting changed while this waited: it is not this save's any more.
+            if (!current(f, id)) return
+            if (encoded == null) {
+                // One message bigger than a whole chat may be: better none than a misleading part.
+                removeNow(f, id, session.id)
+                return
+            }
+            val (text, hash) = encoded
+            val file = fileName(session.id)
+            val same = entries.firstOrNull { it.id == session.id }?.hash == hash
+            val sig = signature(session)
+            entries = if (same) {
+                entries.map { if (it.id == session.id) it.copy(openedAt = at, sig = sig) else it }
+            } else {
+                f.save(id, file, WireJson.parseToJsonElement(text))
+                entries.filterNot { it.id == session.id } + Entry(session.id, file, at, text.toByteArray().size, hash, sig)
+            }.sortedByDescending { it.openedAt }
+            evict(f, id)
+            writeIndex(f, id)
+        }
+    }
+
+    private fun touchNow(f: OfflineFiles, id: String, chatId: String) {
+        if (!current(f, id) || entries.none { it.id == chatId }) return
+        entries = entries.map { if (it.id == chatId) it.copy(openedAt = now()) else it }.sortedByDescending { it.openedAt }
+        writeIndex(f, id)
+    }
+
+    private fun removeNow(f: OfflineFiles, id: String, chatId: String) {
+        if (!current(f, id)) return
+        val e = entries.firstOrNull { it.id == chatId } ?: return
+        f.removeFile(id, e.file)
+        entries = entries - e
+        writeIndex(f, id)
+    }
+
+    private fun keepOnlyNow(f: OfflineFiles, id: String, ids: Set<String>) {
+        if (!current(f, id)) return
         val gone = entries.filter { it.id !in ids }
         if (gone.isEmpty()) return
         gone.forEach { f.removeFile(id, it.file) }
         entries = entries - gone.toSet()
-        writeIndex()
+        writeIndex(f, id)
     }
 
-    private fun evict() {
-        val f = files ?: return
-        val id = computerId ?: return
+    private fun evict(f: OfflineFiles, id: String) {
         val kept = ArrayList<Entry>()
         var bytes = 0
         for (e in entries) {
@@ -218,9 +292,7 @@ class SavedTranscripts(
         entries = kept
     }
 
-    private fun writeIndex() {
-        val f = files ?: return
-        val id = computerId ?: return
+    private fun writeIndex(f: OfflineFiles, id: String) {
         f.save(id, INDEX, buildJsonObject {
             put("v", INDEX_VERSION)
             put("chats", JsonArray(entries.map { e ->

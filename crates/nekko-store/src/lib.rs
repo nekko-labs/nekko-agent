@@ -235,6 +235,26 @@ impl SessionStore {
         std::fs::read(blobs::dir(&self.dir).join(name)).ok()
     }
 
+    /// Move the pictures of a live `tool_result` event (`result.images`, data
+    /// URLs of 4 KB or more) beside the chats and leave `nekko-blob:<name>`
+    /// references in the event, so the frame the hub keeps and sends every
+    /// socket is a few hundred bytes, not megabytes. The chat read back through
+    /// the store has the pictures as data URLs as ever. Returns how many moved.
+    pub fn shed_event_images(&self, images: &mut [Value]) -> usize {
+        let dir = blobs::dir(&self.dir);
+        let mut moved = 0;
+        for image in images {
+            if let Some(url) = image.as_str()
+                && url.starts_with("data:")
+                && let Some(reference) = blobs::store_inline(&dir, url)
+            {
+                *image = Value::String(reference);
+                moved += 1;
+            }
+        }
+        moved
+    }
+
     /// Keep a picture beside the chats, as a chat's `nekko-blob:<name>` will look for it. Refused
     /// unless the bytes hash to the name, so nothing else can be written there under it.
     pub fn put_blob(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
@@ -744,6 +764,29 @@ mod tests {
         assert_eq!(SessionStore::new(&dir).summaries()[0]["archivedAt"], 123);
         s.set_options(id, &json!({ "archivedAt": null })).unwrap();
         assert!(s.summaries()[0]["archivedAt"].is_null());
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_live_events_pictures_move_beside_the_chats_and_come_back_in_the_saved_chat() {
+        use base64::Engine;
+        let (s, dir) = store();
+        let png =
+            format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(vec![7u8; 8192]));
+        let small = "data:image/png;base64,AAAA".to_string();
+        let mut images = vec![json!(png), json!(small), json!("not a data url")];
+        assert_eq!(s.shed_event_images(&mut images), 1);
+        let reference = images[0].as_str().unwrap().to_string();
+        assert!(reference.starts_with("nekko-blob:") && reference.len() < 100, "{reference}");
+        assert_eq!(images[1], json!(small));
+        assert_eq!(images[2], json!("not a data url"));
+        assert!(s.has_blob(reference.strip_prefix("nekko-blob:").unwrap()));
+        // The checkpoint that saves the same picture finds its file and the chat reads back whole.
+        let mut chat = s.create(None).unwrap();
+        chat["messages"] =
+            json!([{ "id": "r", "role": "tool", "toolResult": { "toolCallId": "t", "output": "", "images": [png] } }]);
+        s.save_whole(&mut chat).unwrap();
+        assert_eq!(s.get(chat["id"].as_str().unwrap()).unwrap()["messages"][0]["toolResult"]["images"][0], json!(png));
         std::fs::remove_dir_all(dir).ok();
     }
 
