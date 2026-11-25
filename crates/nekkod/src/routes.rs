@@ -1278,6 +1278,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "sessions:historyUsage",
     "sessions:purgeArchived",
     "session:get",
+    "session:blob",
     "session:page",
     "session:photo",
     "session:images",
@@ -1387,7 +1388,18 @@ async fn session_op(
                 Ok(json!({ "bytes": bytes, "count": count }))
             }
             "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
+            // `session:get(id, { pictures: 'refs' })`: the window's opt-in to keep
+            // `nekko-blob:` references where pictures are (decision 0072, `session:blob`).
+            // Every other caller, the phones, CLI and MCP included, gets data URLs as ever.
+            "session:get" if arg(&args, 1).get("pictures").and_then(Value::as_str) == Some("refs") => {
+                Ok(store.get_refs(id).unwrap_or(Value::Null))
+            }
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
+            // `session:blob(name)`: one picture a `pictures: 'refs'` chat named (the bare name or the
+            // `nekko-blob:` reference), as a data URL, or null when it is not on this computer.
+            "session:blob" => {
+                Ok(str_arg(&args, 0).and_then(|name| store.blob_data_url(name)).map_or(Value::Null, Value::String))
+            }
             "session:page" => Ok(nekko_remote::phone::message_page(
                 &store.get(id).unwrap_or(Value::Null),
                 arg(&args, 1).as_str(),

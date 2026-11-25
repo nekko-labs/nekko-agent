@@ -39,6 +39,20 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## session:get can return chat pictures as references (#PR1, 2026-11-26)
+Area: engine daemon
+Result: improvement (wire bytes and read time for a window that opts in; nothing uses the option yet)
+Conditions: release `nekkod` from this branch on an Apple M1 Max, behind the Local Web UI over loopback HTTP, scratch data dir from `scripts/perf/pictures.mjs --runs 7` (a 400-message agent chat with 50 tool screenshots and 6 attached pictures, 1280x720 PNGs of about 280 KB each, and a 400-message text chat). One warm-up call, then the median of 7.
+
+| Metric | Before (default, pictures inline) | After (`{ pictures: 'refs' }`) |
+|---|---|---|
+| Agent chat `session:get` body | 21148000 B | 182212 B |
+| Agent chat `session:get` time | 69.1 ms | 3.7 ms |
+| Text chat `session:get` body | 174727 B | 174727 B |
+| Text chat `session:get` time | 4.6 ms | 4.4 ms |
+
+Why: the daemon no longer reads every blob file and base64-encodes it when the caller asks for references ([decision 0121](decisions/0121-chat-pictures-load-on-demand.md)). The window's own numbers (heap, first paint) follow in the renderer PR. Source: this PR.
+
 ## Android: send confirmation backs off instead of re-reading the chat twice a second (#3411, 2026-11-26)
 Area: renderer (Android app, relay traffic)
 Result: improvement (call count in a JVM unit test; no phone, relay or engine measurement)
