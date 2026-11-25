@@ -1,16 +1,30 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   FEEDBACK_CONTRIBUTING_URL, FEEDBACK_ISSUES_URL, FEEDBACK_MAX_CHARS, FEEDBACK_SUMMARY_MAX_CHARS,
-  agentPrompt, appInfoLine, feedbackContactProblem, feedbackNote, feedbackNoteLength, type FeedbackAppInfo, type FeedbackKind,
+  agentPrompt, appInfoLine, feedbackContactProblem, feedbackNote, feedbackNoteLength, includeContactLabel, savedFeedbackContact, sentFeedbackContact,
+  type FeedbackAppInfo, type FeedbackKind,
 } from '@nekko-agent/shared';
 import { CheckIcon, CloseIcon, WrenchIcon } from '../icons.js';
 import { FeedbackScreenshots, useFeedbackScreenshots } from './FeedbackScreenshots.js';
 import { StarryNekko } from './StarryNekko.js';
 import { GitHubStarSupport } from './GitHubStarSupport.js';
 import { Modal, Toggle } from './primitives/index.js';
+import { useStore } from '../store.js';
+import { capture } from '../telemetry.js';
+
+/** The ways into the sheet, as the opt-in `feedback_opened` report names them. */
+export const FEEDBACK_SOURCES = ['rail', 'palette', 'about', 'menu', 'tray', 'link'] as const;
+export type FeedbackSource = typeof FEEDBACK_SOURCES[number];
 
 /** Opens the sheet from anywhere: the rail button, the command palette, Help → Send feedback…. */
-export const openFeedback = () => window.dispatchEvent(new Event('nekko:feedback'));
+export const openFeedback = (source: FeedbackSource) => window.dispatchEvent(new CustomEvent('nekko:feedback', { detail: source }));
+
+/** `nekko-agent://feedback`, with `?from=menu` or `?from=tray` when the app's own menu or tray sent it; null for any other link. */
+export function feedbackLinkSource(url: string): FeedbackSource | null {
+  const m = /^nekko-agent:\/\/feedback(?:\?from=([a-z]+))?$/.exec(url);
+  if (!m) return null;
+  return m[1] === 'menu' || m[1] === 'tray' ? m[1] : 'link';
+}
 
 const FEEDBACK_EMAIL = 'feedback@nekkoagent.com';
 
@@ -38,7 +52,11 @@ const PROMPTS: Record<FeedbackKind, { summary: string; description: string; sent
 export function FeedbackSheet() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    const show = () => setOpen(true);
+    const show = (e: Event) => {
+      const source = (e as CustomEvent<unknown>).detail;
+      capture('feedback_opened', { source: FEEDBACK_SOURCES.includes(source as FeedbackSource) ? source as FeedbackSource : 'link' });
+      setOpen(true);
+    };
     window.addEventListener('nekko:feedback', show);
     return () => window.removeEventListener('nekko:feedback', show);
   }, []);
@@ -151,8 +169,12 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
   const [kind, setKind] = useState<FeedbackKind | null>(null);
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  // Filled in from what the person gave in setup or Settings > About you, and
+  // sent only while "Include my name and email" stays on.
+  const [saved] = useState(() => savedFeedbackContact(useStore.getState().settings));
+  const [name, setName] = useState(saved.name);
+  const [email, setEmail] = useState(saved.email);
+  const [includeContact, setIncludeContact] = useState(true);
   const [includeInfo, setIncludeInfo] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [sending, setSending] = useState(false);
@@ -179,7 +201,8 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
   useEffect(() => { if (sent) closeButton.current?.focus(); }, [sent]);
   useEffect(() => { if (discarding) keepEditing.current?.focus(); }, [discarding]);
 
-  const contact = { name, email };
+  const includeLabel = includeContactLabel({ name, email });
+  const contact = sentFeedbackContact({ name, email }, includeContact);
   const contactProblem = feedbackContactProblem(contact);
   const length = kind ? feedbackNoteLength(kind, summary, description, contact) : 0;
   const over = length - FEEDBACK_MAX_CHARS;
@@ -216,7 +239,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     if (discarding) {
       setDiscarding(false);
       requestAnimationFrame(() => sendButton.current?.focus());
-    } else if (!sent && (summary.trim() || description.trim() || name.trim() || email.trim() || screenshots.shots.length)) {
+    } else if (!sent && (summary.trim() || description.trim() || name.trim() !== saved.name || email.trim() !== saved.email || screenshots.shots.length)) {
       setDiscarding(true);
     } else {
       onClose();
@@ -356,7 +379,10 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
                         <input ref={emailField} id="feedback-contact-email" type="email" className="input mt-1 w-full" value={email} maxLength={320} autoComplete="email" onChange={e => setEmail(e.target.value)} aria-invalid={attempted && !!contactProblem} aria-describedby="feedback-contact-privacy feedback-contact-error" />
                       </label>
                     </div>
-                    <p id="feedback-contact-privacy" className="mt-2 text-2xs text-ink-faint">We don’t spam. These details are sent with this feedback only, so we can follow up. No mailing-list signup.</p>
+                    <p id="feedback-contact-privacy" className="mt-2 text-2xs text-ink-faint">
+                      We don’t spam. These details are sent with this feedback only, so we can follow up. No mailing-list signup.
+                      {(saved.name || saved.email) && ' Filled in from Settings > About you.'}
+                    </p>
                     {attempted && contactProblem && <p id="feedback-contact-error" className="mt-1 text-xs text-danger" role="alert">{contactProblem}</p>}
                   </fieldset>
 
@@ -391,8 +417,14 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
                     <button type="button" className="btn btn-ghost shrink-0 px-2! py-1! text-xs" onClick={onClose}>Discard</button>
                   </div>
                 ) : (
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {!attempted && over <= 0 && blocked && <span className="mr-auto text-xs text-ink-faint">{summaryProblem ?? descriptionProblem ?? contactProblem}</span>}
+                  <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+                    {includeLabel && (
+                      <label className="mr-auto flex items-center gap-2 text-xs text-ink-soft" data-testid="feedback-include-contact">
+                        <Toggle value={includeContact} onChange={setIncludeContact} label="Include my name and email" />
+                        <span>{includeLabel}</span>
+                      </label>
+                    )}
+                    {!attempted && over <= 0 && blocked && <span className={`text-xs text-ink-faint ${includeLabel ? '' : 'mr-auto'}`}>{summaryProblem ?? descriptionProblem ?? contactProblem}</span>}
                     <button
                       ref={sendButton}
                       type="submit"
