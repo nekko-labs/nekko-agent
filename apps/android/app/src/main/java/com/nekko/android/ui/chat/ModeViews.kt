@@ -386,6 +386,8 @@ fun ModelEffortSheet(
     computers: ComputersState,
     onSet: suspend (providerId: String?, modelId: String?, effort: Effort?) -> Unit,
     onLoadModels: suspend () -> Unit,
+    /** A provider's limits on the computer, under its name in the picker (#2950). */
+    onLoadLimits: (suspend (String) -> com.nekko.protocol.ProviderLimits?)? = null,
     onRunOption: suspend (key: String, value: JsonElement) -> Unit,
     onLoadTools: suspend () -> List<ToolInfo>,
     onSetTool: suspend (name: String, on: Boolean) -> Unit,
@@ -447,6 +449,7 @@ fun ModelEffortSheet(
                         selected = chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } },
                         onPick = { run(null, it) },
                         onRetry = { scope.launch { runCatching { onLoadModels() } } },
+                        loadLimits = onLoadLimits,
                     )
                 }
             }
