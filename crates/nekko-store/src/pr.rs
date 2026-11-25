@@ -193,6 +193,43 @@ pub fn roll_up_child_pr_urls(summaries: &mut [Value]) {
     }
 }
 
+/// The PRs the chats below chat `target` created, for one chat's summary:
+/// what [`roll_up_child_pr_urls`] would add to it, in list order (newest chat
+/// first), without repeats. `own` are summaries with only their own PRs.
+pub fn child_pr_urls(target: &str, own: &[&Value]) -> Vec<String> {
+    let parent: HashMap<&str, &str> =
+        own.iter().filter_map(|s| Some((str_of(s, "id")?, str_of(s, "parentSessionId")?))).collect();
+    let mut found: Vec<(f64, &Value)> = Vec::new();
+    for &s in own {
+        let (Some(id), Some(_)) =
+            (str_of(s, "id"), s.get("prUrls").and_then(Value::as_array).filter(|a| !a.is_empty()))
+        else {
+            continue;
+        };
+        let (mut seen, mut cur) = (HashSet::from([id]), parent.get(id).copied());
+        while let Some(p) = cur {
+            if !seen.insert(p) || seen.len() > MAX_CHILD_DEPTH + 1 {
+                break;
+            }
+            if p == target {
+                found.push((s.get("updatedAt").and_then(Value::as_f64).unwrap_or(f64::NAN), s));
+                break;
+            }
+            cur = parent.get(p).copied();
+        }
+    }
+    found.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    let mut out: Vec<String> = Vec::new();
+    for (_, s) in found {
+        for u in s["prUrls"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+            if !out.iter().any(|x| x == u) {
+                out.push(u.to_string());
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

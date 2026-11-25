@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
+import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { issueToken } from "./auth.js";
 import type { Db } from "./db.js";
-import { BusyError, budgetForMachine, IDLE_RESERVE_BYTES, MemoryGate, memoryReport, MIN_BUDGET_BYTES, PAGE_FACTOR } from "./memory-gate.js";
+import { AbortedError, BusyError, budgetForMachine, IDLE_RESERVE_BYTES, MemoryGate, memoryReport, MIN_BUDGET_BYTES, PAGE_FACTOR, SKIP_AHEAD_BYTES } from "./memory-gate.js";
 import { migrate } from "./migrate.js";
 import { buildServer } from "./server.js";
 import { pgliteDb } from "./test-db.js";
@@ -14,23 +15,55 @@ const tick = () => new Promise((r) => setImmediate(r));
 
 describe("MemoryGate", () => {
   it("admits while there is room and queues the rest in order", async () => {
-    const gate = new MemoryGate({ budgetBytes: 10 });
-    const a = await gate.acquire(6);
+    const gate = new MemoryGate({ budgetBytes: 10 * MB });
+    const a = await gate.acquire(6 * MB);
     const order: string[] = [];
-    const b = gate.acquire(6).then((r) => (order.push("b"), r));
-    // Small enough to fit now, but it waits behind b: nobody jumps the queue.
-    const c = gate.acquire(1).then((r) => (order.push("c"), r));
+    const b = gate.acquire(6 * MB).then((r) => (order.push("b"), r));
+    // Big enough to be no small request: it waits behind b even though it would fit.
+    const c = gate.acquire(3 * MB).then((r) => (order.push("c"), r));
     await tick();
     expect(order).toEqual([]);
-    expect(gate.stats).toEqual({ inFlightBytes: 6, running: 1, queued: 2 });
+    expect(gate.stats).toEqual({ inFlightBytes: 6 * MB, running: 1, queued: 2 });
     a();
     const rb = await b;
+    expect(SKIP_AHEAD_BYTES).toBeLessThan(3 * MB);
     const rc = await c;
     expect(order).toEqual(["b", "c"]);
-    expect(gate.stats.inFlightBytes).toBe(7);
+    expect(gate.stats.inFlightBytes).toBe(9 * MB);
     rb();
     rc();
     expect(gate.stats).toEqual({ inFlightBytes: 0, running: 0, queued: 0 });
+  });
+
+  it("lets a small request that fits pass a queued big one, until the big one has waited half the limit", async () => {
+    const gate = new MemoryGate({ budgetBytes: 10 * MB, maxWaitMs: 400 });
+    const a = await gate.acquire(6 * MB);
+    const big = gate.acquire(8 * MB);
+    big.catch(() => {});
+    await tick();
+    // 5 KB fits in the 4 MB left: it does not wait for the 16 MB-class request ahead of it.
+    const small = await gate.acquire(5 * 1024);
+    expect(gate.stats.queued).toBe(1);
+    await new Promise((r) => setTimeout(r, 220));
+    // The head has waited more than half of 400 ms: strict order again.
+    let late = false;
+    const later = gate.acquire(5 * 1024).then((r) => ((late = true), r));
+    await tick();
+    expect(late).toBe(false);
+    small();
+    a();
+    (await big)();
+    (await later)();
+    expect(gate.stats).toEqual({ inFlightBytes: 0, running: 0, queued: 0 });
+  });
+
+  it("rejects with a 499 when the client is already gone", async () => {
+    const gate = new MemoryGate({ budgetBytes: 10 });
+    const controller = new AbortController();
+    controller.abort();
+    const err = await gate.acquire(5, controller.signal).catch((e) => e);
+    expect(err).toBeInstanceOf(AbortedError);
+    expect(err.statusCode).toBe(499);
   });
 
   it("runs a request bigger than the whole budget alone", async () => {
@@ -99,8 +132,8 @@ describe("the API queues big pages for memory", () => {
   const vectors = JSON.parse(readFileSync(new URL("../../../crates/nekko-sync/tests/golden/sync-crypto.json", import.meta.url), "utf8"));
   const b64 = (n: number) => randomBytes(n).toString("base64url");
 
-  async function syncedUser(gate: MemoryGate) {
-    const a = buildServer({ db, allowedOrigins: [], memoryGate: gate });
+  async function syncedUser(gate: MemoryGate, serverDb: Db = db) {
+    const a = buildServer({ db: serverDb, allowedOrigins: [], memoryGate: gate });
     const { rows } = await db.query<{ id: string }>("insert into users (email, plan) values ($1, 'pro') returning id", [`${b64(4)}@example.com`]);
     const token = await issueToken(db, rows[0].id);
     const call = (method: "GET" | "POST" | "PUT", url: string, payload?: object) =>
@@ -110,7 +143,7 @@ describe("the API queues big pages for memory", () => {
     await call("PUT", "/v1/sync/keyrings/1", { recoveryWrap: vectors.recovery.blob, proof, wraps: [{ deviceId: dev.json().deviceId, wrap: vectors.wrap.blob }] });
     const pushed = await call("POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: b64(32), revision: 1, keyId: 1, blob: b64(4096) }] });
     expect(pushed.json().results[0].status).toBe("ok");
-    return call;
+    return Object.assign(call, { app: a, token });
   }
 
   it("answers 503 busy with Retry-After when the page can't get room in time, then serves it once there is room", async () => {
@@ -150,5 +183,81 @@ describe("the API queues big pages for memory", () => {
     expect(big.statusCode).toBe(503);
     expect(big.json()).toEqual({ error: "busy" });
     hold();
+  });
+
+  it("does not trust a declared Content-Length past the route's limit: Fastify answers 413 and nothing is queued", async () => {
+    const gate = new MemoryGate({ budgetBytes: 1, maxWaitMs: 30 });
+    const call = await syncedUser(gate);
+    const hold = await gate.acquire(1);
+    const huge = { "content-length": String(900 * MB), "content-type": "application/json" };
+    // Anonymous, to a route with the default 8 KB limit.
+    const anon = await call.app.inject({ method: "POST", url: "/v1/signups", headers: huge, payload: "{}" });
+    expect(anon.statusCode).toBe(413);
+    // Signed in, to the push route (24 MB limit).
+    const push = await call.app.inject({ method: "POST", url: "/v1/sync/push", headers: { ...huge, authorization: `Bearer ${call.token}` }, payload: "{}" });
+    expect(push.statusCode).toBe(413);
+    expect(gate.stats.queued).toBe(0);
+    hold();
+    expect(gate.stats).toEqual({ inFlightBytes: 0, running: 0, queued: 0 });
+  });
+
+  it("takes the push's share of the budget only after the caller is known", async () => {
+    const gate = new MemoryGate({ budgetBytes: 1, maxWaitMs: 30 });
+    const call = await syncedUser(gate);
+    const hold = await gate.acquire(1);
+    const body = JSON.stringify({ objects: [{ collection: "chat", objectId: b64(32), revision: 1, keyId: 1, blob: b64(256 * 1024) }] });
+    const headers = { "content-type": "application/json" };
+    // No token: 401 at once, not 503 busy after waiting for room.
+    const anon = await call.app.inject({ method: "POST", url: "/v1/sync/push", headers, payload: body });
+    expect(anon.statusCode).toBe(401);
+    const bad = await call.app.inject({ method: "POST", url: "/v1/sync/push", headers: { ...headers, authorization: "Bearer nk_" + "x".repeat(43) }, payload: body });
+    expect(bad.statusCode).toBe(401);
+    expect(gate.stats.queued).toBe(0);
+    hold();
+  });
+
+  it("takes a share upload's room only after the caller is known too", async () => {
+    const gate = new MemoryGate({ budgetBytes: 1, maxWaitMs: 30 });
+    const call = await syncedUser(gate);
+    const hold = await gate.acquire(1);
+    const payload = JSON.stringify({ blob: b64(256 * 1024) });
+    const headers = { "content-type": "application/json" };
+    expect((await call.app.inject({ method: "POST", url: "/v1/shares", headers, payload })).statusCode).toBe(401);
+    expect((await call.app.inject({ method: "PUT", url: `/v1/shares/${b64(16)}`, headers, payload })).statusCode).toBe(404);
+    expect(gate.stats.queued).toBe(0);
+    hold();
+  });
+
+  it("keeps a pull's room while its handler still runs after the client left, then gives it back", async () => {
+    const gate = new MemoryGate({ budgetBytes: 4096 * PAGE_FACTOR * 4 });
+    let open!: () => void;
+    const slowRows = new Promise<void>((r) => (open = r));
+    let reached!: () => void;
+    const atRows = new Promise<void>((r) => (reached = r));
+    const slow: Db = {
+      ...db,
+      query: async (text: string, params?: unknown[]) => {
+        if (text.includes("seq <= $3")) {
+          reached();
+          await slowRows;
+        }
+        return db.query(text, params);
+      },
+    } as Db;
+    const call = await syncedUser(gate, slow);
+    await call.app.listen({ port: 0, host: "127.0.0.1" });
+    const { port } = call.app.server.address() as { port: number };
+    const req = http.get({ port, host: "127.0.0.1", path: "/v1/sync/pull", headers: { authorization: `Bearer ${call.token}` } });
+    req.on("error", () => {});
+    await atRows;
+    expect(gate.stats.inFlightBytes).toBeGreaterThan(0);
+    req.destroy();
+    await new Promise((r) => setTimeout(r, 50));
+    // The client is gone but the handler still holds its page in memory: the room stays taken.
+    expect(gate.stats.inFlightBytes).toBeGreaterThan(0);
+    open();
+    for (let i = 0; i < 100 && gate.stats.inFlightBytes > 0; i++) await new Promise((r) => setTimeout(r, 20));
+    expect(gate.stats).toEqual({ inFlightBytes: 0, running: 0, queued: 0 });
+    await call.app.close();
   });
 });
