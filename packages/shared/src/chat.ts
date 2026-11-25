@@ -16,7 +16,12 @@ export interface ToolResult {
   toolCallId: string;
   /** Text or JSON-serializable output shown back to the model. */
   output: string;
-  /** Approved screenshot PNG data URLs delivered to the selected model. */
+  /**
+   * Approved screenshot PNG data URLs delivered to the selected model. In a
+   * live `tool_result` event, pictures of 4 KB or more are `nekko-blob:<name>`
+   * references instead (the frame stays small); the saved chat (`session:get`)
+   * has them as data URLs.
+   */
   images?: string[];
   isError?: boolean;
   /** Claude Code denied the call itself (a Claude Agent chat), with its reason. */

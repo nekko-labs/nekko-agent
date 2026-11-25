@@ -31,9 +31,16 @@ pub const PREFIX: &str = "agent_";
 
 pub type ReadSettings = Arc<dyn Fn() -> Value + Send + Sync>;
 
+/// How long an exited agent terminal keeps its output in memory. Its saved
+/// log (`sessions/<id>.commands.log`) holds the same output and is what a
+/// snapshot reads first, so past this only the terminal's entry is kept.
+const EXITED_BUFFER_KEEP: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
 struct Term {
     info: Map<String, Value>,
     buffer: String,
+    /// When the chat's turn ended; `None` while a command runs.
+    exited_at: Option<std::time::Instant>,
 }
 
 enum Op {
@@ -278,11 +285,12 @@ impl AgentLogs {
                 info.insert("agentSessionId".into(), json!(session_id));
                 info.insert("createdAt".into(), json!(nekko_js::now_ms_f64()));
                 info.insert("running".into(), json!(running));
-                Term { info, buffer: String::new() }
+                Term { info, buffer: String::new(), exited_at: None }
             });
             if running {
                 term.info.insert("running".into(), json!(true));
                 term.info.shift_remove("exitCode");
+                term.exited_at = None;
             }
             term.buffer = keep_tail(std::mem::take(&mut term.buffer) + data);
         }
@@ -301,6 +309,7 @@ impl AgentLogs {
                 Some(t) if js::truthy(t.info.get("running")) => {
                     t.info.insert("running".into(), json!(false));
                     t.info.insert("exitCode".into(), json!(0));
+                    t.exited_at = Some(std::time::Instant::now());
                     true
                 }
                 _ => false,
@@ -309,10 +318,30 @@ impl AgentLogs {
         if ended {
             self.hub.publish("terminal:event", json!({ "type": "exit", "terminalId": id, "code": 0 }), false);
         }
+        self.evict_exited(std::time::Instant::now());
+    }
+
+    /// Free the in-memory output of every terminal that exited at least
+    /// [`EXITED_BUFFER_KEEP`] before `now`: a chat that ran a command once
+    /// would otherwise hold up to [`MAX_BUFFER`] units for as long as the
+    /// daemon runs. The terminal stays listed, and a snapshot reads its saved
+    /// log as always (the memory copy only stands in when there is no log).
+    /// Returns how many were freed.
+    fn evict_exited(&self, now: std::time::Instant) -> usize {
+        let mut freed = 0;
+        for t in lock(&self.terms).values_mut() {
+            let old = t.exited_at.is_some_and(|at| now.saturating_duration_since(at) >= EXITED_BUFFER_KEEP);
+            if old && !t.buffer.is_empty() {
+                t.buffer = String::new();
+                freed += 1;
+            }
+        }
+        freed
     }
 
     /// `listAgentTerminals`.
     pub fn list(&self) -> Vec<Value> {
+        self.evict_exited(std::time::Instant::now());
         let mut infos: Vec<Map<String, Value>> = lock(&self.terms).values().map(|t| t.info.clone()).collect();
         // Manually ordered first (in order), then by age, as `sortTerminals` sorts.
         infos.sort_by(|a, b| {
@@ -488,6 +517,35 @@ mod tests {
             }
             println!("{name}: reply {bytes} bytes, median {:.3} ms", median(times));
         }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn an_exited_terminals_memory_is_freed_after_ten_minutes_and_its_log_still_answers() {
+        let dir = temp("evict");
+        let l = logs(&dir);
+        l.append("s_evict", None, "$ cargo build\ndone\n");
+        let id = format!("{PREFIX}s_evict");
+        let held = |l: &AgentLogs| lock(&l.terms).get(&id).unwrap().buffer.len();
+        let now = std::time::Instant::now();
+        let after = |mins: u64, secs: u64| now + std::time::Duration::from_secs(mins * 60 + secs);
+        assert!(held(&l) > 0);
+        // Running: never freed.
+        assert_eq!(l.evict_exited(after(60, 0)), 0);
+        l.finish("s_evict");
+        // Just exited: kept. Past ten minutes: freed, and the terminal stays listed.
+        assert_eq!(l.evict_exited(after(9, 0)), 0);
+        assert!(held(&l) > 0);
+        assert_eq!(l.evict_exited(after(10, 5)), 1);
+        assert_eq!(held(&l), 0);
+        assert_eq!(l.list().len(), 1);
+        // The snapshot reads the saved log, so the final output is still there.
+        let snap = l.snapshot(&id).await.unwrap();
+        assert!(snap["buffer"].as_str().unwrap().contains("done"), "{snap}");
+        // A new command makes it live again.
+        l.append("s_evict", None, "next\n");
+        assert!(held(&l) > 0);
+        assert_eq!(l.evict_exited(after(60, 0)), 0);
         let _ = std::fs::remove_dir_all(dir);
     }
 

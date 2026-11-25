@@ -254,7 +254,7 @@ class ChatViewModel(
         controller.showSavedCopy()
         // Load when the computer is reachable, and again after every reconnect.
         viewModelScope.launch {
-            repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload() }
+            repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload(refreshSkills = true) }
         }
         viewModelScope.launch {
             // Streamed words reach the transcript once per frame, not once per token (DeltaCoalescer).
