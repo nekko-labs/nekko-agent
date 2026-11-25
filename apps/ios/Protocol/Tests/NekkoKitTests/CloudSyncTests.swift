@@ -319,11 +319,15 @@ final class CloudSyncTests: XCTestCase {
         try await p.restore(recoveryKey: mac.recovery.text)
         let me = try XCTUnwrap(p.devices.first { $0.thisDevice }).id
         let phonePub = SyncCrypto.base64url(key.publicKeyX963)
-
+        // A sync right after another reuses its refresh; this test changes the server between syncs, so time passes.
+        let clock = Clock()
+        p.now = { clock.date }
+        func pass() { clock.advance(60) }
         // Someone else announces epoch 2 with a keyring wrapped "from the Mac" with their own key: refused.
         let forged = SyncCrypto.Keyring.generate()
         fake.keyrings[2] = ("", [me: try SyncCrypto.wrapKeyring(forged, account: fake.account, keyId: 2, recipientId: me, recipientPublic: key.publicKeyX963,
                                                                senderId: mac.id, sender: SyncCrypto.SoftwareKey())])
+        pass()
         do { try await p.sync(); XCTFail("took a keyring from an untrusted key") } catch {}
         fake.keyrings[2] = nil
 
@@ -336,11 +340,13 @@ final class CloudSyncTests: XCTestCase {
                                                             senderId: mac.id, sender: mac.key)])
         try writeRecord(fake, mac, devices: [(mac.id, mac.publicKey), (me, phonePub)])
         try sealChat(fake, mac, id: "s_1", title: "Plan the Kyoto trip", text: "After the rotation", updated: 40, rev: 2)
+        pass()
         try await p.sync()
         XCTAssertEqual(text(p, "s_1"), "After the rotation")
 
         // A revoked device with the old keyring writes under epoch 1: ignored.
         try sealChat(fake, mac, id: "s_1", title: "Plan the Kyoto trip", text: "Forged under epoch 1", updated: 99, rev: 3, keyring: old, epoch: 1)
+        pass()
         try await p.sync()
         XCTAssertEqual(text(p, "s_1"), "After the rotation")
     }
@@ -351,11 +357,16 @@ final class CloudSyncTests: XCTestCase {
         let p = phone(fake)
         try await p.verifyCode(email: "ada@example.com", code: "123456")
         try await p.restore(recoveryKey: mac.recovery.text)
+        // Each sync here follows a change on the server, so let time pass between them (a sync reuses a refresh under 3 s old).
+        let clock = Clock()
+        p.now = { clock.date }
         // A newer revision of s_1 lands; then the server replays the old one (rollback).
         try sealChat(fake, mac, id: "s_1", title: "Plan the Kyoto trip", text: "Changed plans", updated: 30, rev: 2)
+        clock.advance(60)
         try await p.sync()
         XCTAssertEqual(text(p, "s_1"), "Changed plans")
         try sealChat(fake, mac, id: "s_1", title: "Plan the Kyoto trip", text: "Book the ryokan", updated: 10, rev: 1)
+        clock.advance(60)
         try await p.sync()
         XCTAssertEqual(text(p, "s_1"), "Changed plans", "a replayed old revision is ignored")
         // A chat filed under another chat's id (the server swapping records) is refused.
@@ -367,10 +378,12 @@ final class CloudSyncTests: XCTestCase {
                                                                       plaintext: Data(#"{"v":1,"chat":{"id":"s_3","title":"T","updatedAt":1,"messages":[]}}"#.utf8)))
         raw[40] ^= 1
         fake.add("chat", o, 1, 1, SyncCrypto.base64url(raw))
+        clock.advance(60)
         try await p.sync()
         XCTAssertEqual(Set(p.chats.map(\.id)), ["s_1", "s_2"])
         // An account record naming another recovery key is refused.
         try writeRecord(fake, mac, devices: [], recoveryPublic: SyncCrypto.recoveryAgreementKey(SyncCrypto.RecoveryKey.generate()).publicKeyX963)
+        clock.advance(60)
         try await p.sync()
         XCTAssertTrue(p.devices.first { $0.thisDevice }?.trusted == true, "the swapped record was ignored")
     }
@@ -506,5 +519,89 @@ final class CloudSyncTests: XCTestCase {
             XCTAssertEqual(e.message, "server text")
         }
         XCTAssertEqual(http.meCalls, 1)
+    }
+
+    // MARK: One sync at a time, and no repeated refresh
+
+    /// Counts calls by path, optionally holding `/v1/sync/pull` for a moment so two syncs can overlap.
+    final class Counting: CloudHTTP, @unchecked Sendable {
+        let fake: FakeCloud
+        let hold: Duration
+        private let lock = NSLock()
+        private var counts: [String: Int] = [:]
+        init(_ fake: FakeCloud, hold: Duration = .zero) { self.fake = fake; self.hold = hold }
+        func count(_ path: String) -> Int { lock.lock(); defer { lock.unlock() }; return counts[path] ?? 0 }
+        func reset() { lock.lock(); counts = [:]; lock.unlock() }
+        private func bump(_ path: String) { lock.lock(); counts[path, default: 0] += 1; lock.unlock() }
+        func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
+            bump(url.path)
+            if url.path == "/v1/sync/pull", hold > .zero { try await Task.sleep(for: hold) }
+            return try await fake.send(method, url, headers: headers, body: body)
+        }
+    }
+
+    final class Clock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var t = Date(timeIntervalSince1970: 1_800_000_000)
+        var date: Date { lock.lock(); defer { lock.unlock() }; return t }
+        func advance(_ s: TimeInterval) { lock.lock(); t += s; lock.unlock() }
+    }
+
+    func syncedPhone(hold: Duration = .zero) async throws -> (CloudSync, Counting, Clock) {
+        let fake = FakeCloud()
+        let mac = try computer(fake)
+        let counting = Counting(fake, hold: hold)
+        let clock = Clock()
+        let key = SyncCrypto.SoftwareKey()
+        let p = CloudSync(api: URL(string: "https://api.example")!, http: counting, secrets: MemorySecrets(), files: nil, deviceLabel: "iPhone",
+                          retryWaits: [.milliseconds(1), .milliseconds(1)], key: { key })
+        p.now = { clock.date }
+        try await p.verifyCode(email: "ada@example.com", code: "123456")
+        try await p.restore(recoveryKey: mac.recovery.text)
+        clock.advance(60)
+        counting.reset()
+        return (p, counting, clock)
+    }
+
+    func testOverlappingSyncsShareOneRun() async throws {
+        let (p, http, _) = try await syncedPhone(hold: .milliseconds(50))
+        async let a: Void = p.sync()
+        async let b: Void = p.sync()
+        async let c: Void = p.sync()
+        _ = try await (a, b, c)
+        XCTAssertEqual(http.count("/v1/sync/pull"), 1, "one pull, not three from the same cursor")
+        XCTAssertEqual(http.count("/v1/auth/me"), 1)
+        XCTAssertFalse(p.syncing)
+        // Once it has finished, the next call runs on its own.
+        try await p.sync()
+        XCTAssertEqual(http.count("/v1/sync/pull"), 2)
+    }
+
+    func testASecondSyncRightAfterSkipsTheAccountAndStateRefreshButStillPulls() async throws {
+        let (p, http, clock) = try await syncedPhone()
+        try await p.sync()
+        XCTAssertEqual([http.count("/v1/auth/me"), http.count("/v1/sync/state"), http.count("/v1/sync/pull")], [1, 1, 1])
+        clock.advance(2)
+        try await p.sync()
+        XCTAssertEqual([http.count("/v1/auth/me"), http.count("/v1/sync/state"), http.count("/v1/sync/pull")], [1, 1, 2], "fresh enough")
+        clock.advance(2)
+        try await p.sync()
+        XCTAssertEqual([http.count("/v1/auth/me"), http.count("/v1/sync/state"), http.count("/v1/sync/pull")], [2, 2, 3], "4 s since the last refresh")
+    }
+
+    func testAnExplicitRefreshAlwaysAsks() async throws {
+        let (p, http, _) = try await syncedPhone()
+        try await p.sync()
+        try await p.refresh()
+        XCTAssertEqual(http.count("/v1/auth/me"), 2)
+    }
+
+    func testAFailedSyncDoesNotLeaveTheNextOneWaiting() async throws {
+        let (p, http, clock) = try await syncedPhone()
+        await p.signOut()
+        do { try await p.sync(); XCTFail("signed out") } catch {}
+        clock.advance(10)
+        do { try await p.sync(); XCTFail("still signed out") } catch {}
+        XCTAssertEqual(http.count("/v1/sync/pull"), 0)
     }
 }

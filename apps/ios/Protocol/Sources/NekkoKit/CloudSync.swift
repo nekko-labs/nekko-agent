@@ -94,6 +94,17 @@ public final class CloudSync {
     private let key: () throws -> SyncAgreementKey
     private var state: State
     private var supabase: (url: String, anon: String)?
+    /// The clock, replaced by tests.
+    var now: @Sendable () -> Date = Date.init
+    /// The one sync running now: a second call (view task, pull to refresh, Check now) shares it.
+    private var syncTask: Task<Void, Error>?
+    /// When the refresh at the start of a sync last finished, and for which token.
+    private var refreshed: (at: Date, token: String)?
+    /// A refresh this recent is not repeated by `sync()`.
+    static let freshFor: TimeInterval = 3
+    /// The fleet list loaded this recently (for this session) is not fetched again.
+    private var machinesLoadedAt: Date?
+    static let machinesFreshFor: TimeInterval = 5
 
     /// What survives a relaunch, none of it secret.
     struct State: Codable, Equatable {
@@ -343,12 +354,32 @@ public final class CloudSync {
 
     // MARK: Sync (read)
 
+    /// Pull what is new. Callers that arrive while a sync runs share it instead of starting another
+    /// that would pull from the same cursor and race it.
     public func sync() async throws {
+        if let running = syncTask { return try await running.value }
+        let task = Task { [self] in
+            defer { syncTask = nil }
+            try await runSync()
+        }
+        syncTask = task
+        try await task.value
+    }
+
+    private func runSync() async throws {
         let t = try token()
         syncing = true
         defer { syncing = false }
         do {
-            try await refresh()
+            // The account and sync state a sync just read are not read again a moment later.
+            // Only one an earlier sync did counts: after approving a device, restoring, and so on, the next sync asks.
+            if let r = refreshed, r.token == t, now().timeIntervalSince(r.at) < Self.freshFor, account != nil {
+                // fresh enough
+            } else {
+                refreshed = nil
+                try await refresh()
+                refreshed = (now(), t)
+            }
             if state.keyId != nil && remoteKeyId == nil {
                 // Everything synced was deleted (on a computer, or by the server).
                 forgetKeys()
@@ -796,6 +827,7 @@ public final class CloudSync {
         fleetGeneration = UUID()
         fleetLoading = false
         fleetSession = nil
+        machinesLoadedAt = nil
         machines = []
         machinesRelay = nil
         machineLinks = [:]
@@ -833,7 +865,7 @@ public final class CloudSync {
     /// The computer id a machine was paired as on this iPhone.
     public func computerId(for machine: Machine) -> String? { fleetConnected ? machineLinks[machine.id] : nil }
 
-    public func loadMachines() async throws {
+    public func loadMachines(force: Bool = false) async throws {
         // Also enforce this below the UI, so an accidental task cannot contact the fleet.
         guard fleetEnabled else { return }
         guard signedIn, let accountId = account?.id, !accountId.isEmpty else {
@@ -842,6 +874,8 @@ public final class CloudSync {
         }
         guard !fleetLoading else { return }
         let t = try token()
+        // Two screens asking in a row share one fetch.
+        if !force, fleetConnected, let at = machinesLoadedAt, now().timeIntervalSince(at) < Self.machinesFreshFor { return }
         let generation = fleetGeneration
         fleetLoading = true
         defer { if generation == fleetGeneration { fleetLoading = false } }
@@ -862,6 +896,7 @@ public final class CloudSync {
             machinesRelay = v.str("relayUrl")
             loadLinks()
             fleetSession = (accountId, t)
+            machinesLoadedAt = now()
         } catch {
             if generation == fleetGeneration, account?.id == accountId, secrets.get("cloud.token") == t { resetFleet() }
             throw error
