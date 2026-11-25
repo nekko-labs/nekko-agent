@@ -230,7 +230,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     if (current !== null && !(await keyed(db, caller, current))) {
       const pending = id === caller.deviceId
         && !(await db.query("select 1 from sync_key_wraps where user_id = $1 and key_id = $2 and device_id = $3", [caller.userId, current, id])).rows.length;
-      if (!pending) return answer(403, { error: "needs-synced-device" });
+      if (!pending) return reply.code(403).send({ error: "needs-synced-device" });
     }
     return db.transaction(async (tx) => {
       const { rows } = await tx.query<{ id: string }>(
@@ -258,12 +258,12 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     const proof = bytes(body.proof, PROOF_BYTES);
     const wraps = Array.isArray(body.wraps) ? body.wraps : null;
     if (!isPositiveInt(keyId, 1_000_000) || !recovery || !proof || !wraps || wraps.length > 100) {
-      return answer(400, { error: "expected recoveryWrap, proof and wraps for a positive keyId" });
+      return reply.code(400).send({ error: "expected recoveryWrap, proof and wraps for a positive keyId" });
     }
     const parsed: { deviceId: string; wrap: Buffer }[] = [];
     for (const w of wraps as Record<string, unknown>[]) {
       const wrap = bytes(w?.wrap, WRAP_BYTES);
-      if (typeof w?.deviceId !== "string" || !UUID.test(w.deviceId) || !wrap) return answer(400, { error: "bad wrap" });
+      if (typeof w?.deviceId !== "string" || !UUID.test(w.deviceId) || !wrap) return reply.code(400).send({ error: "bad wrap" });
       parsed.push({ deviceId: w.deviceId, wrap });
     }
     return db.transaction(async (tx) => {
