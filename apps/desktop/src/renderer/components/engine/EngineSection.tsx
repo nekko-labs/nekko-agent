@@ -1,5 +1,5 @@
 import { useDownloadAction } from './useDownloadAction.js';
-import { DownloadProgress } from './DownloadProgress.js';
+import { EngineUpdateStatus } from './EngineUpdateStatus.js';
 import { engineNotice, engineUpdateText, modelsNeedingNewerEngine } from './engineNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DownloadJob, EngineStatus, LocalModel } from '@nekko-agent/shared';
@@ -131,7 +131,8 @@ export function EngineSection({
   const needNewer = modelsNeedingNewerEngine(models);
   const notice = engineNotice(install, needNewer);
   // A model's weights, shards and helper files are one download, so the count is per model, not per file.
-  const active = groupDownloads(jobs).filter((g) => isActive(g.state));
+  const modelJobs = jobs.filter((job) => job.kind === 'model');
+  const active = groupDownloads(modelJobs).filter((g) => isActive(g.state));
   const borrowed = models.filter((m) => m.managed === false).length;
 
   // One click puts a broken engine right: the same build, downloaded again into
@@ -144,7 +145,6 @@ export function EngineSection({
     const res = await runtimeDownload.run(() => window.nekko.engineInstall(buildId));
     if (!res) return;
     pushToast(res.ok ? 'info' : 'error', res.ok ? started : res.message);
-    if (res.ok) setTab('downloads');
     await refresh();
   };
 
@@ -296,7 +296,7 @@ export function EngineSection({
                 <button
                   className="btn btn-primary py-1 text-xs"
                   onClick={() => void reinstall(install.problem?.repairBuildId, 'Repairing the engine. Models will use your graphics card once it finishes.')}
-                  disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
+                  disabled={repairing}
                 >
                   {repairing ? 'Downloading…' : 'Repair engine'}
                 </button>
@@ -309,7 +309,7 @@ export function EngineSection({
                 <button
                   className="btn py-1 text-xs"
                   onClick={() => void reinstall(install.upgrade?.buildId, 'Downloading the CUDA engine. Nekko switches to it once it finishes.')}
-                  disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
+                  disabled={repairing}
                 >
                   {repairing ? 'Downloading…' : 'Switch to CUDA'}
                 </button>
@@ -322,14 +322,14 @@ export function EngineSection({
                 <button
                   className="btn py-1 text-xs"
                   onClick={() => void reinstall(install.outdated?.buildId, 'Updating the engine. The server stops while it swaps in, so switch it back on once it finishes.')}
-                  disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
+                  disabled={repairing}
                 >
                   {repairing ? 'Downloading…' : 'Update'}
                 </button>
               </div>
             )}
 
-            {repairing && <DownloadProgress group={runtimeDownload.group} />}
+            {install.binPath && <EngineUpdateStatus download={runtimeDownload} onChanged={refresh} />}
 
             {status.settings.bind === 'lan' && running && (
               <p className="mt-2 text-xs" style={{ color: 'var(--warning)' }}>
@@ -386,7 +386,7 @@ export function EngineSection({
               mlx={Boolean(status.mlxInstall?.available.length)}
             />
           )}
-          {shown === 'downloads' && <DownloadsPanel jobs={jobs} onChanged={refresh} />}
+          {shown === 'downloads' && <DownloadsPanel jobs={modelJobs} onChanged={refresh} />}
           {shown === 'folders' && <ModelFolders onChanged={refresh} />}
           </ErrorBoundary>
         </div>
