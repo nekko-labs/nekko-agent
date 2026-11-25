@@ -1154,7 +1154,7 @@ pub fn gpu_fit_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64>) ->
             |v| nekko_js::to_number(Some(v)),
         ),
         parallel_slots: field("parallelSlots").map_or(1.0, |v| nekko_js::to_number(Some(v))),
-        kv_cache_dtype: field("kvCacheDtype").map_or_else(|| "f16".to_string(), nekko_js::display),
+        kv_cache_dtype: crate::launch::effective_kv(preset.unwrap_or(&Value::Null)),
         gpu_layer_fraction: fraction,
     };
     let plan =

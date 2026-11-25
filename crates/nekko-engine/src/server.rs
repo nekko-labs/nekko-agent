@@ -111,7 +111,7 @@ fn needed_bytes(model: &Value, params: &Value, share: f64) -> Option<f64> {
             |v| nekko_js::to_number(Some(v)),
         ),
         parallel_slots: field("parallelSlots").map_or(1.0, |v| nekko_js::to_number(Some(v))),
-        kv_cache_dtype: field("kvCacheDtype").map_or_else(|| "f16".to_string(), nekko_js::display),
+        kv_cache_dtype: crate::launch::effective_kv(params),
         gpu_layer_fraction: 1.0,
     };
     let hw = Hardware { devices: Vec::new(), unified: false, ram_total: f64::NAN, ram_free: f64::NAN };
@@ -1031,6 +1031,36 @@ impl ModelServer {
             self.push(&log[log.len().saturating_sub(4)..]);
             let exit = outcome.get("message").and_then(Value::as_str);
             let explained = explain_load_error(&log);
+            // A quantized cache that will not start (a llama.cpp build that
+            // breaks it, a backend without the kernel) must not leave the
+            // model unloadable: one more try with the f16 cache (#3325). Not
+            // for a failure we can name that the cache does not cause (memory,
+            // a missing file or runtime): f16 would fail the same way.
+            if !image && !mlx && crate::launch::effective_kv(&params) != "f16" && !is_missing_dll_exit(exit) {
+                let cache_failure = log.iter().any(|l| {
+                    let l = l.to_lowercase();
+                    ["cache_k", "cache_v", "kv cache", "cache type", "flash_attn", "flash attention", "set_rows"]
+                        .iter()
+                        .any(|w| l.contains(w))
+                });
+                // Out of memory, even naming the cache: f16 only needs more.
+                let memory = explained.starts_with("Not enough memory");
+                if !memory && (explained.is_empty() || cache_failure) {
+                    let kv = crate::launch::effective_kv(&params);
+                    self.say(format!("{id} did not start with a {kv} KV cache; trying again with f16."));
+                    let mut retry = params.as_object().cloned().unwrap_or_default();
+                    retry.insert("kvCacheDtype".into(), json!("f16"));
+                    let res = Box::pin(self.do_load(id, Value::Object(retry))).await;
+                    if res.get("ok") == Some(&Value::Bool(true)) {
+                        let message = format!(
+                            "{} It runs with a full-precision (f16) KV cache: the {kv} cache did not start on this machine.",
+                            res.get("message").and_then(Value::as_str).unwrap_or_default()
+                        );
+                        return json!({ "ok": true, "message": message.trim_start(), "kvFallback": "f16" });
+                    }
+                    return res;
+                }
+            }
             let message = if is_missing_dll_exit(exit) {
                 missing_dll_message("The model server")
             } else if explained.is_empty() {

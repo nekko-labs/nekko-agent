@@ -237,11 +237,16 @@ fn fit_model(preset: Value) -> Value {
 
 #[test]
 fn rates_gpu_fit_on_an_idle_card() {
-    // 11.9 GB card, 8.7 GB free: the 64k default context spills now and on an idle card.
+    // 11.9 GB card, 8.7 GB free: the 64k default context with an f16 cache
+    // spills now and on an idle card.
     let hw = fit_hw(11.9, 8.7, false);
-    let model = fit_model(json!({}));
+    let model = fit_model(json!({ "kvCacheDtype": "f16" }));
     assert_eq!(library::gpu_fit_for(&model, &hw, None), "partial");
     assert_eq!(library::gpu_fit_idle_for(&model, &hw, None), Some("partial"));
+    // The engine's default q8_0 cache (#3325) is half the size: it still
+    // spills beside the other apps, but fits whole once they let go.
+    assert_eq!(library::gpu_fit_for(&fit_model(json!({})), &hw, None), "partial");
+    assert_eq!(library::gpu_fit_idle_for(&fit_model(json!({})), &hw, None), Some("full"));
     // A 16k context spills beside the other apps but fits once they let go.
     let small = fit_model(json!({"contextTokens": 16384}));
     let hw = fit_hw(11.9, 5.0, false);

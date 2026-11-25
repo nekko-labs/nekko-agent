@@ -58,7 +58,11 @@
         "--host",
         "127.0.0.1",
         "--port",
-        "{port}"
+        "{port}",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0"
       ]
     },
     {
@@ -191,6 +195,10 @@
         "127.0.0.1",
         "--port",
         "{port}",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0",
         "--no-mmap",
         "--mlock",
         "--cache-reuse",
@@ -221,6 +229,10 @@
         "127.0.0.1",
         "--port",
         "{port}",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0",
         "--load-mode",
         "mmap+mlock",
         "--cache-reuse",
@@ -253,6 +265,10 @@
         "127.0.0.1",
         "--port",
         "{port}",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0",
         "--cache-reuse",
         "0",
         "--cache-ram",
@@ -291,6 +307,10 @@
         "--chat-template-file",
         "<root>/t.jinja",
         "--jinja",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0",
         "--cache-reuse",
         "256",
         "--no-cache-idle-slots",
@@ -327,6 +347,10 @@
         "127.0.0.1",
         "--port",
         "{port}",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0",
         "--cache-reuse",
         "256",
         "--spec-default"
@@ -358,6 +382,10 @@
         "{port}",
         "--ctx-size",
         "2048",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0",
         "--embedding"
       ]
     },
@@ -384,6 +412,10 @@
         "127.0.0.1",
         "--port",
         "{port}",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0",
         "--embedding"
       ]
     },
@@ -411,7 +443,11 @@
         "--port",
         "{port}",
         "--n-gpu-layers",
-        "999"
+        "999",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0"
       ]
     },
     {
@@ -438,7 +474,11 @@
         "--port",
         "{port}",
         "--n-gpu-layers",
-        "999"
+        "999",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0"
       ]
     },
     {
@@ -465,7 +505,11 @@
         "--port",
         "{port}",
         "--n-gpu-layers",
-        "31"
+        "31",
+        "--cache-type-k",
+        "q8_0",
+        "--cache-type-v",
+        "q8_0"
       ]
     }
   ],
@@ -1600,6 +1644,10 @@
                 "--jinja",
                 "--ctx-size",
                 "16384",
+                "--cache-type-k",
+                "q8_0",
+                "--cache-type-v",
+                "q8_0",
                 "--cache-reuse",
                 "256",
                 "--no-cache-idle-slots",
@@ -1633,6 +1681,10 @@
                 "32768",
                 "--n-gpu-layers",
                 "10",
+                "--cache-type-k",
+                "q8_0",
+                "--cache-type-v",
+                "q8_0",
                 "--cache-reuse",
                 "256",
                 "--no-cache-idle-slots",
@@ -1668,6 +1720,10 @@
                 "{port}",
                 "--ctx-size",
                 "65536",
+                "--cache-type-k",
+                "q8_0",
+                "--cache-type-v",
+                "q8_0",
                 "--embedding"
               ],
               "kind": "chat",
@@ -1697,6 +1753,10 @@
                 "--jinja",
                 "--ctx-size",
                 "8192",
+                "--cache-type-k",
+                "q8_0",
+                "--cache-type-v",
+                "q8_0",
                 "--cache-reuse",
                 "256",
                 "--no-cache-idle-slots",
@@ -1987,7 +2047,11 @@
                 "<root>/engine/templates/qwen.chat_template.jinja",
                 "--jinja",
                 "--ctx-size",
-                "32768"
+                "32768",
+                "--cache-type-k",
+                "q8_0",
+                "--cache-type-v",
+                "q8_0"
               ],
               "kind": "chat",
               "healthPath": "/health",
@@ -2010,6 +2074,10 @@
                 "{port}",
                 "--ctx-size",
                 "65536",
+                "--cache-type-k",
+                "q8_0",
+                "--cache-type-v",
+                "q8_0",
                 "--embedding"
               ],
               "kind": "chat",
@@ -2035,7 +2103,11 @@
                 "<root>/engine/templates/qwen.chat_template.jinja",
                 "--jinja",
                 "--ctx-size",
-                "32768"
+                "32768",
+                "--cache-type-k",
+                "q8_0",
+                "--cache-type-v",
+                "q8_0"
               ],
               "kind": "chat",
               "healthPath": "/health",
@@ -2065,7 +2137,11 @@
                 "<root>/models/vision/gemma/gemma.chat_template.jinja",
                 "--jinja",
                 "--ctx-size",
-                "32768"
+                "32768",
+                "--cache-type-k",
+                "q8_0",
+                "--cache-type-v",
+                "q8_0"
               ],
               "kind": "chat",
               "healthPath": "/health",
@@ -2360,6 +2436,10 @@
                 "--jinja",
                 "--ctx-size",
                 "16384",
+                "--cache-type-k",
+                "q8_0",
+                "--cache-type-v",
+                "q8_0",
                 "--cache-reuse",
                 "256",
                 "--spec-default"
