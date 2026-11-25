@@ -117,15 +117,16 @@ A confirmed star appears selected with happy Nekko on both surfaces. Newly confi
 
 Verification status: 4,212 shared/desktop tests pass, plus the full web/desktop production build and all-workspace TypeScript check. A hidden, nonfocusable, network-blocked Electron journey passed 13 assertions covering explicit writes, shared state/no replay, optional email validation/focus, failed-send draft retention, contact payload, browser fallback and reduced motion. Desktop/narrow before/after pixels and a first-star GIF are captured and published in PR #2349, but inspection tools failed (browser screenshot timeout, native UnknownVizError), so visual approval remains blocked. Rust mock-server tests await CI; local cargo is unavailable. Live GitHub writes are intentionally not exercised on the developer’s account.
 
-## Contact filled in from About you, behind a switch (#3322)
+## Contact filled in from Profile or Nekko Cloud, behind a switch (#3322, #3357)
 
 `[implemented 2026-11-25 for desktop and the Local Web UI; unit-tested and driven in a hidden renderer with a synthetic bridge; not yet run in a packaged app]`
 
 Philip asked (2026-11-25) that someone who already gave their name and email not type them again, and that the sheet ask, already checked, before sending them. This replaces "never prefilled from account/settings" above.
 
-- **Filled in:** Name and Email start from `settings.userName` and `settings.userEmail`, what the person gave in setup or Settings > About you (trimmed). Never from a Nekko Cloud account or a connector. The privacy line adds "Filled in from Settings > About you." when either was. Both stay editable and clearable for this note; editing them here does not change About you.
+- **Filled in:** Name and Email start from `settings.userName` and `settings.userEmail`, what the person gave in setup or Settings > About you (trimmed). When no email is saved, use the signed-in Nekko Cloud account email. An untouched email follows sign-in, account changes, and sign-out even if the sheet is open, and the privacy line identifies the source. Never use a connector address. Both stay editable and clearable for this note; editing them here does not change About you.
+- **Settings > Profile:** About you shows the same fallback in **Email for updates**. The Cloud address is shown, not saved or submitted to the update list. An explicitly saved address takes priority; removing it restores the signed-in fallback.
 - **The switch:** **Include my name and email** (worded **Include my name** or **Include my email** when only one is filled in) sits beside Send, on by default, whenever a name or email is in the form. Off, the note carries neither: they are left out of `message`, the character count drops them, and an invalid email no longer blocks Send. The switch resets to on each time the sheet opens.
-- **Not a draft:** values that only came from About you don't make closing ask "Discard this feedback?"; an edit to them does.
+- **Not a draft:** prefilled values don't make closing ask "Discard this feedback?"; an edit to them does.
 - **Analytics:** opening the sheet queues `feedback_opened` with its way in, only while usage reports are on ([opt-in usage reports](opt-in-usage-and-crash-reports.md)). Nothing about the note or the contact details is reported.
 - **Phones:** the iPhone, iPad and Android sheets still have no contact fields; [#3323](https://github.com/nekko-labs/nekko-agent/issues/3323).
 - **Unverified:** a packaged app; the wire and Nekko Cloud are unchanged.
