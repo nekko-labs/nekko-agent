@@ -31,6 +31,20 @@ vi.mock('react', async original => {
   };
 });
 vi.mock('../store.js', () => ({ useStore: Object.assign((selector: (state: typeof store.state) => unknown) => selector(store.state), { getState: () => store.state, setState: store.setState }) }));
+// The status poll as the component's own effect would run it, on this file's hand-rolled hooks.
+vi.mock('../visibleInterval.js', async () => {
+  const { useEffect } = await import('react');
+  return {
+    useVisibleInterval: (fn: (live: () => boolean) => void, ms: number, options: { immediate?: boolean } = {}) => {
+      useEffect(() => {
+        let alive = true;
+        if (options.immediate) fn(() => alive);
+        const timer = setInterval(() => fn(() => alive), ms);
+        return () => { alive = false; clearInterval(timer); };
+      }, []);
+    },
+  };
+});
 vi.mock('../voiceCapture.js', () => ({ startVoiceCapture: vi.fn() }));
 vi.mock('../voiceEngines.js', () => ({ engineRows: () => [{ id: 'whisper', active: true, installed: true, name: 'Nekko Voice', detail: 'Ready' }] }));
 

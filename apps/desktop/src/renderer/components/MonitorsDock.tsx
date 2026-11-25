@@ -1,3 +1,4 @@
+import { useVisibleInterval } from '../visibleInterval.js';
 import { monitorPickup } from './monitorPickup.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SubscriptionLimits, SystemStats, UsageSlice, UsageSummary } from '@nekko-agent/shared';
@@ -707,24 +708,21 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
   // Bumped after a change on a watched computer, to read it again at once.
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    let live = true;
     if (!initial && tick === 0) setRead(false);
-    const refresh = async () => {
-      // A connected computer answers with its phone view: `installed` instead of the path, and no names.
-      const [s, m] = computer
-        ? [await window.nekko.computerEngineStatus(computer).catch(() => null) as EngineStatus | null, []]
-        : await Promise.all([
-          window.nekko.engineStatus().catch(() => null),
-          window.nekko.engineModels().catch(() => []),
-        ]);
-      if (!live) return;
-      setStatus(s); setModels(Array.isArray(m) ? m : []); setRead(true);
-    };
-    void refresh();
-    const t = setInterval(refresh, LOCAL_MODELS_POLL_MS);
-    return () => { live = false; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computer, tick]);
+  // Paused while the dock is hidden or the window is minimised; reads at once when it comes back.
+  useVisibleInterval(async (live) => {
+    // A connected computer answers with its phone view: `installed` instead of the path, and no names.
+    const [s, m] = computer
+      ? [await window.nekko.computerEngineStatus(computer).catch(() => null) as EngineStatus | null, []]
+      : await Promise.all([
+        window.nekko.engineStatus().catch(() => null),
+        window.nekko.engineModels().catch(() => []),
+      ]);
+    if (!live()) return;
+    setStatus(s); setModels(Array.isArray(m) ? m : []); setRead(true);
+  }, LOCAL_MODELS_POLL_MS, { immediate: true, deps: [computer, tick] });
   useEffect(() => setTick(0), [computer]);
   const store = useStore.getState;
   const names = new Map(models.map((m) => [m.id, m.name]));
