@@ -39,6 +39,17 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## iPhone prompt photo thumbnails decode once, off the main thread (#3383, 2026-11-26)
+Area: renderer
+Result: improvement (main-thread cost per photo per row evaluation); not profiled in the running app
+Conditions: Apple M1 Max, macOS 27.2.1, Xcode 27.2, `swift test` (debug build, macOS host, not an iPhone or the simulator). `XCTClockMetric`, 5 iterations of 20 operations on a synthetic 1200x900 PNG photo (a stand-in for the computer's small copy; real JPEG decode will differ). Test source: `PhotoThumbnailsTests.testMeasureDecodeOnEveryEvaluation` and `testMeasureCacheLookup`.
+
+| Metric | Before (decode in `body`, every evaluation) | After (cache lookup) |
+|---|---|---|
+| 20 operations, average of 5 | 0.101 s (values 0.080941, 0.093835, 0.109693, 0.086324, 0.134203 s) | 0.000072 s (values 0.000080, 0.000073, 0.000072, 0.000070, 0.000071 s) |
+
+Why: `PhotoStrip` base64-decoded and ImageIO-thumbnailed each photo on the main thread every time its row re-evaluated; the decode now runs once on a background task and the result is held in a bounded `NSCache` (200 images or 24 MB). The first decode of each photo still costs the same, but off the main thread. Not measured: hitches while scrolling a photo chat on a device (Instruments Hitches). Source: #3383.
+
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
 Result: improvement expected; after number pending (measured once merged, see below)
