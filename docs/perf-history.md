@@ -39,6 +39,17 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Android: saved chats are encoded and written off the main thread (#3413, 2026-11-26)
+Area: renderer (Android app, main thread)
+Result: improvement (JVM unit-level timing of the caller's thread; no phone)
+Conditions: Apple M1 Max, macOS 27.2, JDK 17, JVM unit test `SavedTranscriptsBench` in `:protocol` on real files in a temp folder (a temp file, then a rename, as `OfflineFileStore` writes). A 300-message chat. Time the calling thread spends in `SavedTranscripts.save`, median / p90 of 60 saves after a warm-up of 60; "changed" is one more message each time (after a turn), "same" is a new `Session` with identical content (after a reconnect re-read). Before is `main` (all work on the caller's thread), run twice; after is run three times. The Mac was shared with other agents (load average 37 to 99). "Queued" is the caller's time only: the encode and write happen about 250 ms later on the queue and are not on this thread.
+
+| Metric (caller ms per save, median / p90) | Before (`main`) | After, no queue (same thread) | After, queued |
+|---|---|---|---|
+| Changed chat | 3.077 / 3.457, 3.129 / 3.910 | 2.896 / 3.163, 3.092 / 3.508, 2.756 / 3.304 | 0.007 / 0.014, 0.006 / 0.016, 0.007 / 0.013 |
+| Same chat again | 1.480 / 1.671, 1.454 / 1.732 | 0.200 / 0.263, 0.199 / 0.278, 0.212 / 0.300 | 0.006 / 0.009, 0.003 / 0.004, 0.006 / 0.017 |
+
+Why: `ChatController.reload` called `SavedTranscripts.save` inline on Main after every read, which serialised the chat up to twice, hashed it byte by byte and rewrote the index; the chat list did the same after each summaries read. Now the copy is filed away and written on one background queue, newest per chat, after a short pause; an unchanged chat only moves to the front (a cheap signature, no encoding). This is a JVM on an M1 Max, not a phone: the real main-thread saving is larger on a mid-range device and the file system is slower. The chat list write was not timed separately. Source: #3413.
 ## Perf harness: report-only probes and their first baselines (#3382, 2026-11-26)
 Area: perf harness
 Result: measurement addition (baselines, not a performance change); nothing gates
