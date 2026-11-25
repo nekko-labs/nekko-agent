@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, SYNC_PLANS } from "./auth.js";
 import type { Db } from "./db.js";
-import { bytes, currentKeyId, keyed } from "./sync.js";
+import { LEASE_MS, Presence } from "./presence.js";
+import { b64url, bytes, currentKeyId, keyed } from "./sync.js";
 
 /** Discovery only. Clients must authenticate the descriptor and the peer; a
  * row (even an online one) never grants access to a computer. Off by default. */
@@ -16,21 +17,28 @@ interface ComputerRow {
   revision: string;
   descriptor: Buffer;
   seen_at: Date;
-  expires_at: Date;
-  online: boolean;
 }
 
-const wire = (r: ComputerRow) => ({
-  deviceId: r.device_id,
-  keyId: r.key_id,
-  revision: Number(r.revision),
-  descriptor: Buffer.from(r.descriptor).toString("base64url"),
-  seenAt: r.seen_at,
-  expiresAt: r.expires_at,
-  online: r.online,
-});
-
 export function registerFleet(app: FastifyInstance, db: Db): void {
+  const presence = app.presence;
+  // Online comes from the lease kept in memory (presence.ts), or the relay when it is configured
+  // (relay-presence.ts); seen_at is the stored last-seen.
+  type Online = (userId: string, deviceId: string) => boolean;
+  const wire = (r: ComputerRow, userId: string, atRelay: Online) => {
+    const live = presence.state(Presence.key(null, r.device_id), r.seen_at);
+    const viaRelay = !live.online && atRelay(userId, r.device_id);
+    const now = presence.clock();
+    return {
+      deviceId: r.device_id,
+      keyId: r.key_id,
+      revision: Number(r.revision),
+      descriptor: b64url(r.descriptor),
+      seenAt: viaRelay ? new Date(now) : live.seenAt,
+      expiresAt: viaRelay ? new Date(now + LEASE_MS) : live.expiresAt,
+      online: live.online || viaRelay,
+    };
+  };
+
   async function guard(tx: Db, req: FastifyRequest, reply: FastifyReply, write: boolean): Promise<Caller | null> {
     reply.header("cache-control", "no-store");
     const caller = await authenticate(tx, req);
@@ -68,9 +76,7 @@ export function registerFleet(app: FastifyInstance, db: Db): void {
     const epoch = await unlocked(tx, caller, reply);
     if (epoch === null) return;
     const { rows } = await tx.query<ComputerRow>(
-      `select f.device_id, f.key_id, f.revision, f.descriptor, f.seen_at,
-              f.seen_at + make_interval(secs => ${FLEET_LEASE_SECONDS}) as expires_at,
-              f.seen_at > now() - make_interval(secs => ${FLEET_LEASE_SECONDS}) as online
+      `select f.device_id, f.key_id, f.revision, f.descriptor, f.seen_at
          from fleet_computers f
          join sync_devices d on d.id = f.device_id and d.user_id = f.user_id
          join api_tokens t on t.id = f.token_id and t.user_id = f.user_id and t.device_id = f.device_id
@@ -81,7 +87,9 @@ export function registerFleet(app: FastifyInstance, db: Db): void {
         order by f.device_id limit ${MAX_FLEET_COMPUTERS}`,
       [caller.userId, epoch],
     );
-    return { keyId: epoch, computers: rows.map(wire) };
+    // One question to the relay per read, for this account's computers; a relay that does not answer counts as nothing.
+    const atRelay = rows.length && app.relayPresence ? await app.relayPresence.lookup([caller.userId]) : () => false;
+    return { keyId: epoch, computers: rows.map((r) => wire(r, caller.userId, atRelay)) };
   }));
 
   // Identity comes only from the authenticated token: no body/path device id.
@@ -113,21 +121,56 @@ export function registerFleet(app: FastifyInstance, db: Db): void {
          revision = excluded.revision, descriptor = excluded.descriptor, seen_at = now(), withdrawn = false`,
       [caller.userId, caller.deviceId, caller.tokenId, epoch, body.revision, descriptor],
     );
+    // Publishing wrote seen_at and ran every check: it counts as the first beat.
+    if (caller.deviceId) presence.beat(Presence.key(null, caller.deviceId), null, { userId: caller.userId, deviceId: caller.deviceId, tokenId: caller.tokenId, keyId: epoch }, { validated: true, wrote: true });
     return reply.code(rows.length ? 200 : 201).send({ deviceId: caller.deviceId, keyId: epoch, revision: body.revision, leaseSeconds: FLEET_LEASE_SECONDS });
   }));
 
-  app.post("/v1/fleet/self/heartbeat", async (req, reply) => withCaller(req, reply, true, async (tx, caller) => {
-    await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
-    const epoch = await unlocked(tx, caller, reply);
-    if (epoch === null) return;
-    const { rows } = await tx.query(
-      `update fleet_computers set seen_at = now()
-        where user_id = $1 and device_id = $2 and token_id = $3 and key_id = $4 and not withdrawn
-        returning device_id`, [caller.userId, caller.deviceId, caller.tokenId, epoch],
-    );
-    if (!rows.length) return reply.code(409).send({ error: "publish-required" });
-    return { leaseSeconds: FLEET_LEASE_SECONDS };
-  }));
+  // Same lease-in-memory beat as the org fleet's (orgs.ts, presence.ts).
+  app.post("/v1/fleet/self/heartbeat", async (req, reply) => {
+    reply.header("cache-control", "no-store");
+    const caller = await authenticate(db, req);
+    if (!caller) return reply.code(401).send({ error: "unauthenticated" });
+    const rowKey = caller.deviceId ? Presence.key(null, caller.deviceId) : null;
+    const known = rowKey ? presence.trusted(rowKey, caller) : null;
+    if (known && rowKey && SYNC_PLANS.has(caller.plan)) {
+      const wrote = presence.writeDue(rowKey);
+      if (wrote) {
+        const { rows } = await db.query(
+          `update fleet_computers set seen_at = now()
+            where user_id = $1 and device_id = $2 and token_id = $3 and key_id = $4 and not withdrawn
+            returning device_id`, [caller.userId, caller.deviceId, caller.tokenId, known.keyId],
+        );
+        if (!rows.length) {
+          presence.forget(rowKey);
+          return reply.code(409).send({ error: "publish-required" });
+        }
+      }
+      presence.beat(rowKey, null, known, { validated: false, wrote });
+      return { leaseSeconds: FLEET_LEASE_SECONDS };
+    }
+    const verified = { keyId: null as number | null };
+    const due = { write: true };
+    const out = await withCaller(req, reply, true, async (tx, caller) => {
+      await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
+      const epoch = await unlocked(tx, caller, reply);
+      if (epoch === null) return;
+      // Revalidating does not have to write: seen_at is refreshed only when it is due.
+      due.write = !rowKey || presence.writeDue(rowKey);
+      const { rows } = await tx.query(
+        `${due.write ? "update fleet_computers set seen_at = now()" : "select device_id from fleet_computers"}
+          where user_id = $1 and device_id = $2 and token_id = $3 and key_id = $4 and not withdrawn
+          ${due.write ? "returning device_id" : ""}`, [caller.userId, caller.deviceId, caller.tokenId, epoch],
+      );
+      if (!rows.length) return reply.code(409).send({ error: "publish-required" });
+      verified.keyId = epoch;
+      return { leaseSeconds: FLEET_LEASE_SECONDS };
+    });
+    if (verified.keyId !== null && rowKey && caller.deviceId) {
+      presence.beat(rowKey, null, { userId: caller.userId, deviceId: caller.deviceId, tokenId: caller.tokenId, keyId: verified.keyId }, { validated: true, wrote: due.write });
+    }
+    return out;
+  });
 
   // Removing one's own advertisement never requires a paid plan or unlocked
   // keys. Retain the revision guard so a stale publish cannot resurrect it.
@@ -135,6 +178,7 @@ export function registerFleet(app: FastifyInstance, db: Db): void {
     if (!caller.deviceId) return reply.code(403).send({ error: "needs-device" });
     await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
     await tx.query("update fleet_computers set withdrawn = true, revision = least(revision + 1, 9007199254740991) where user_id = $1 and device_id = $2 and not withdrawn", [caller.userId, caller.deviceId]);
+    presence.forget(Presence.key(null, caller.deviceId));
     return reply.code(204).send();
   }));
 }

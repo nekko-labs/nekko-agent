@@ -41,6 +41,26 @@ use zeroize::Zeroize;
 /// How often a sharing computer renews its lease (the API's lease is 90 seconds).
 pub const HEARTBEAT: Duration = Duration::from_secs(30);
 
+/// The beat of a computer that is connected to the Relay account channel, when the API's lease allows it.
+pub const SLOW_HEARTBEAT: Duration = Duration::from_secs(10 * 60);
+
+/// The lease the API must grant before the slow beat is used: the beat plus two minutes of margin
+/// (a late beat, a retry, a clock that ran slow), so a computer never shows offline between beats.
+pub const SLOW_HEARTBEAT_LEASE: Duration = Duration::from_secs(12 * 60);
+
+/// Whether the slow beat may be used at all. OFF until the API's fleet lease outlasts the slow beat
+/// for computers on the channel (the API's lease is 90 seconds today, and a 10 minute beat against
+/// it would show every sharing computer offline). Turn it on only with that API change deployed;
+/// even then the beat stays at 30 s unless the API says (`leaseSeconds`) it grants the longer lease.
+pub const SLOW_HEARTBEAT_ENABLED: bool = false;
+
+/// How long a sharing computer waits between beats: 10 minutes while the Relay account channel is
+/// up and the API said it grants a lease of at least 12 minutes; otherwise 30 seconds.
+pub fn heartbeat_wait(enabled: bool, channel_up: bool, lease_seconds: Option<u64>) -> Duration {
+    let long_enough = lease_seconds.is_some_and(|s| Duration::from_secs(s) >= SLOW_HEARTBEAT_LEASE);
+    if enabled && channel_up && long_enough { SLOW_HEARTBEAT } else { HEARTBEAT }
+}
+
 const LOCKED: &str = "Unlock your account on this computer to use organizations.";
 const NO_KEY: &str = "Computers need the org key, ask an admin.";
 const NOT_SIGNED_IN: &str = "Sign in to Nekko Cloud first.";
@@ -745,6 +765,19 @@ impl Cloud {
 
     /// Publish this computer to an org now (or just renew the lease when
     /// nothing changed). `force` publishes even if nothing changed.
+    /// Remember the lease the API says it granted (`leaseSeconds`), for the beat's pace.
+    fn note_lease(&self, answer: &Value) {
+        if let Some(secs) = answer["leaseSeconds"].as_u64() {
+            self.lease_seconds.store(secs, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    /// The pause before the next beat.
+    pub(crate) fn next_heartbeat(&self) -> Duration {
+        let lease = Some(self.lease_seconds.load(std::sync::atomic::Ordering::SeqCst)).filter(|s| *s > 0);
+        heartbeat_wait(SLOW_HEARTBEAT_ENABLED, self.relay.connected(), lease)
+    }
+
     pub(crate) async fn share_org(&self, token: &str, org_id: &str, force: bool) -> Result<(), String> {
         let _one = self.share.lock().await;
         if !lock(&self.state).sharing.contains(org_id) {
@@ -776,7 +809,10 @@ impl Cloud {
                     .send(token, reqwest::Method::POST, &format!("/v1/orgs/{org_id}/fleet/self/heartbeat"), None)
                     .await;
                 match beat {
-                    Ok(_) => return Ok(()),
+                    Ok(v) => {
+                        self.note_lease(&v);
+                        return Ok(());
+                    }
                     // Not published (withdrawn, another sign-in, or the org key moved): publish.
                     Err(err) if err.status == 409 => {}
                     Err(err) if err.status == 404 => return Err(self.left(org_id)),
@@ -794,7 +830,8 @@ impl Cloud {
             let put =
                 self.api.send(token, reqwest::Method::PUT, &format!("/v1/orgs/{org_id}/fleet/self"), Some(body)).await;
             match put {
-                Ok(_) => {
+                Ok(v) => {
+                    self.note_lease(&v);
                     let digest = digest.clone();
                     self.edit(|s| {
                         s.fleet.insert(org_id.to_string(), Share { revision, key_id, digest });
@@ -1157,6 +1194,25 @@ mod tests {
         f.device_id = "8e1f0a9c-2b3d-4e5f-8a6b-9c0d1e2f3a4b".into();
         let r = row(&ring, 1, 1, ME, &f);
         assert!(open_row(&ring, ORG, 1, &r, 0, ME, None).is_none());
+    }
+
+    #[test]
+    fn the_beat_slows_only_with_the_channel_up_and_a_lease_that_outlasts_it() {
+        let lease = |s| Some(s);
+        let (fast, slow) = (HEARTBEAT, SLOW_HEARTBEAT);
+        assert_eq!(heartbeat_wait(true, true, lease(900)), slow);
+        assert_eq!(heartbeat_wait(true, true, lease(720)), slow, "10 minutes plus 2 of margin");
+        assert_eq!(heartbeat_wait(true, true, lease(719)), fast, "under the margin");
+        assert_eq!(heartbeat_wait(true, true, lease(90)), fast, "the lease the API grants today");
+        assert_eq!(heartbeat_wait(true, true, None), fast, "lease not known yet");
+        assert_eq!(heartbeat_wait(true, false, lease(900)), fast, "no channel");
+        assert_eq!(heartbeat_wait(false, true, lease(900)), fast, "switched off");
+    }
+
+    #[test]
+    fn the_slow_beat_is_off_in_this_build() {
+        // Turn the switch on only once the API's lease outlasts the beat.
+        assert_eq!(heartbeat_wait(SLOW_HEARTBEAT_ENABLED, true, Some(3600)), HEARTBEAT);
     }
 
     #[test]
