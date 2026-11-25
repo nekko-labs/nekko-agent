@@ -16,6 +16,8 @@ public enum RelayState: String, Sendable, Equatable {
 
 public enum DenyReason: String, Sendable, Equatable {
     case unknownDevice = "unknown-device", revoked, badCode = "bad-code", invalid, kicked, badKey = "bad-key"
+    /// The computer lets this device in only through another kind of route (Tailscale or Nekko Cloud Relay, #3243).
+    case route
     /// What a computer tells an app from before protocol 6, under the room key,
     /// which this app no longer reads.
     case updateRequired = "update-required"
@@ -238,6 +240,8 @@ public final class RelayClient: @unchecked Sendable {
     private var nextWaiter = 0
     private var _status = RelayStatus(.idle)
     private var routes: RouteSupervisor
+    /// Routes the computer refused with `denied: route` since the last welcome.
+    private var routesRefused: Set<String> = []
     /// One probe loop at a time; bumped to stop the running one.
     private var probeGeneration = 0
     private var probing = false
@@ -775,6 +779,7 @@ public final class RelayClient: @unchecked Sendable {
         case "welcome":
             locked {
                 welcomed = true
+                routesRefused = []
                 handshakeGeneration += 1
                 retry = 0
                 seq = 0 // the first request after each welcome is seq 1
@@ -806,6 +811,34 @@ public final class RelayClient: @unchecked Sendable {
     }
 
     private func deny(_ reason: DenyReason) {
+        // The computer won't take this device on this route: that is a failed route, not the end.
+        // With another saved route to try, move to it; else the denial stands.
+        if reason == .route {
+            let next: (changed: Bool, ready: Bool) = locked {
+                if stopped { return (false, false) }
+                routesRefused.insert(routes.url)
+                // Every saved route has now said no: nothing is left to try.
+                if routes.routes.allSatisfy(routesRefused.contains) { return (false, false) }
+                return routes.failed(now: now())
+            }
+            if next.changed {
+                if next.ready {
+                    moveRoute(detail: "Refused on this route")
+                } else {
+                    let old: WsConnection? = locked {
+                        cancelRetryLocked()
+                        welcomed = false
+                        let c = conn
+                        conn = nil
+                        return c
+                    }
+                    old?.close(code: 1000, reason: "route refused")
+                    failPending("connection lost")
+                    scheduleRetry("Refused on this route")
+                }
+                return
+            }
+        }
         let c: WsConnection? = locked {
             welcomed = false
             stopped = true

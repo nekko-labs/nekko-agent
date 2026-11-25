@@ -166,6 +166,7 @@ struct ComputerDetailView: View {
                     LabeledContent("Nekko Agent", value: [v, s?.edition].compactMap { $0 }.joined(separator: " · "))
                 }
             } header: { SectionTitle("Connection") }
+            ConnectThroughSection(computer: c)
             ComputerServiceSection(computerId: c.id)
             // Settings → This computer (SK-8): Security, sign out, stop remote access, quit.
             ThisComputerSection(computerId: c.id)
@@ -714,5 +715,52 @@ struct CloudMachineSections: View {
             do { try await work() } catch { self.error = error.localizedDescription }
             busy = false
         }
+    }
+}
+
+
+/// Which of the pairing link's routes this iPhone may use for one computer: Tailscale and/or Nekko Cloud Relay.
+/// Both on is automatic; at least one stays on; a kind the link never carried can only be added by pairing again.
+private struct ConnectThroughSection: View {
+    let computer: Computer
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if computer.hasDirectRoute || computer.hasCloudRoute {
+            let kinds = computer.routes
+            let tailscale = kinds.contains { RelayRoute.of($0) != .internet }
+            let cloud = kinds.contains { RelayRoute.of($0) == .internet }
+            Section {
+                row("Tailscale", id: "tailscale", on: tailscale, carried: computer.hasDirectRoute, lastOn: tailscale && !cloud) {
+                    store.setRouteChoice(computer.id, RouteChoice(tailscale: !tailscale, cloud: cloud))
+                }
+                row("Nekko Cloud Relay", id: "cloud", on: cloud, carried: computer.hasCloudRoute, lastOn: cloud && !tailscale) {
+                    store.setRouteChoice(computer.id, RouteChoice(tailscale: tailscale, cloud: !cloud))
+                }
+            } header: { SectionTitle("Connect through") } footer: {
+                if !computer.hasCloudRoute {
+                    Text("Pair again from \(computer.name) with Nekko Cloud Relay on to add it.").foregroundStyle(palette.inkSoft)
+                } else if !computer.hasDirectRoute {
+                    Text("Pair again from \(computer.name) with Tailscale on to add it.").foregroundStyle(palette.inkSoft)
+                }
+            }
+        }
+    }
+
+    private func row(_ title: String, id: String, on: Bool, carried: Bool, lastOn: Bool, toggle: @escaping () -> Void) -> some View {
+        Button(action: toggle) {
+            HStack {
+                Text(title)
+                Spacer()
+                if on { Image(systemName: "checkmark").foregroundStyle(palette.accent).accessibilityHidden(true) }
+            }
+        }
+        .foregroundStyle(carried ? palette.ink : palette.inkFaint)
+        .disabled(!carried || lastOn)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityValue(on ? Text("On") : Text("Off"))
+        .accessibilityHint(lastOn ? "At least one stays on." : carried ? "" : "Pair again to add it.")
+        .accessibilityIdentifier("computer.connect-through.\(id)")
     }
 }

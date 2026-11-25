@@ -236,8 +236,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > works straight away. A slim row under the title shows every paired computer with a dot and its
 > name (green online, a ring while connecting, amber offline, red refused). A problem adds one word,
 > such as *offline* or *refused*; tap it to read one line and the fix (**Retry**, **Pair again**,
-> **Open Tailscale**). When Tailscale is off on the iPhone and that is what keeps a computer away,
-> **Tailscale off** leads the row. Computers and the computer's page offer **Reconnect** too.
+> **Open Tailscale**). A computer that only Tailscale reaches says *Tailscale off* itself when
+> Tailscale is off on the iPhone; nothing about Tailscale leads the row. On a computer's page,
+> **Connect through** lets you pick Tailscale, Nekko Cloud Relay or both for that computer (at
+> least one stays on, and a kind the pairing code did not carry says to pair again to add it).
+> Computers and the computer's page offer **Reconnect** too.
 > Each row shows where its chat runs: the computer's icon in its colour (as on the desktop) and
 > its name. **View → Group by → Computer** puts a heading over each computer's chats, and
 > **View → Show** turns the computer's name and icon off.
