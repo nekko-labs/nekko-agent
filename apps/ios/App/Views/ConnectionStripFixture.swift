@@ -9,9 +9,9 @@ struct ConnectionStripFixture: View {
 
     private static func c(_ id: String, _ state: RelayState, route: RelayRoute = .lan, detail: String? = nil,
                           denied: DenyReason? = nil, active: Bool = false, waiting: Int = 0,
-                          check: ProtocolCheck = .same) -> ConnectionFacts {
+                          check: ProtocolCheck = .same, offTailnet: Bool = false) -> ConnectionFacts {
         ConnectionFacts(id: id, name: id, route: route, relayHost: "\(id.lowercased()).tail.ts.net", state: state, detail: detail,
-                        denied: denied, active: active, protocolCheck: check, waiting: waiting)
+                        denied: denied, active: active, protocolCheck: check, waiting: waiting, offTailnet: offTailnet)
     }
 
     var body: some View {
@@ -19,10 +19,11 @@ struct ConnectionStripFixture: View {
             List {
                 scenario("All connected", [Self.c("Studio", .online, active: true), Self.c("Gomi", .online), Self.c("Laptop", .online)])
                 scenario("Tailscale off", [Self.c("Studio", .connecting, route: .tailscale, active: true, waiting: 2),
-                                           Self.c("Gomi", .online), Self.c("Laptop", .offline)], tailscale: false)
+                                           Self.c("Gomi", .online), Self.c("Laptop", .offline, offTailnet: true)], tailscale: false)
                 scenario("Tailscale off, opened", [Self.c("Studio", .connecting, route: .tailscale, active: true, waiting: 2),
-                                                   Self.c("Gomi", .online), Self.c("Laptop", .offline)],
-                         tailscale: false, open: ConnectionNote.tailscaleId)
+                                                   Self.c("Gomi", .online), Self.c("Laptop", .offline, offTailnet: true)],
+                         tailscale: false, open: "Studio")
+                scenario("Route refused", [Self.c("Studio", .denied, denied: .route, active: true), Self.c("Gomi", .online)], open: "Studio")
                 scenario("Tailscale on, no answer", [Self.c("Studio", .connecting, route: .tailscale, detail: "timed out", active: true),
                                                      Self.c("Gomi", .online)], open: "Studio")
                 scenario("Refused", [Self.c("Studio", .online, active: true), Self.c("Gomi", .denied, denied: .revoked),
