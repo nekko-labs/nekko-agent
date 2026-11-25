@@ -50,6 +50,39 @@ Conditions: `swift test` on an Apple M1 Max, macOS 27.2.1, with a counting fake 
 | `sessions:summaries` calls for a burst of 8 sub-agent results | not measured | 1 in flight, then 1 more (`testABurstOfSubAgentResultsIsCoalesced`) |
 
 Why: `ChatModel` refreshed the agent state (watches, child chats) on every tool result; it now refreshes only for a watch, clip or sub-agent result, and one refresh runs at a time with a trailing re-read. Not measured: bytes or milliseconds per read on a real account. Source: #3384.
+## Streaming a long reply re-parses only the block being written (2026-11-26)
+Area: renderer
+Result: improvement
+Conditions: Apple M1 Max, macOS 27.2, Node v26.8.1, vitest 5.0.5 with jsdom, React `act` renders (no layout or paint), `ChatMarkdown` with `topics` on. A synthetic 15,197-character reply (headings, a bold/code/link paragraph with a `#123` chip, a two-item list and a code fence, repeated) fed as 379 cumulative 40-character deltas, old and new `Markdown.tsx` in the same process, run alternately 5 times. The machine was shared with other agents, so absolute numbers vary between rounds (before ran 3.88 to 18.93 ms); the ratio is the finding. An earlier 3-round run of the same script gave before 3.88-4.50 and after 0.72-2.46 ms/delta (one after round was a 2.46 outlier).
+
+| Metric (5 rounds) | Before | After |
+|---|---|---|
+| Mean per delta | 10.29, 9.93, 10.49, 9.79, 18.93 ms | 2.00, 2.37, 1.92, 2.14, 1.24 ms |
+| Second-half mean per delta | 14.15, 14.88, 14.95, 14.21, 25.72 ms | 2.38, 3.32, 2.80, 3.52, 1.85 ms |
+| p95 per delta | 32.93, 34.35, 38.98, 36.95, 87.59 ms | 9.52, 11.03, 8.86, 10.41, 4.65 ms |
+
+Why: `ChatMarkdown` rebuilt its render context from `text` on every delta, so no finished `TextSegment` ever held its `React.memo`; the context now depends only on stable inputs and the verification evidence is kept by value. A unit test counts renders of a finished block across deltas (3 before, 1 after). Not measured: real-browser frame time and the Electron harness; the new long-reply probes in `scripts/perf` had not landed.
+## Chat listings keep the file list and stop writing running chats (2026-11-26)
+Area: engine daemon
+Result: improvement (warm listing, one chat's summary, a listing while a chat runs)
+Conditions: Apple M1 Max (10 cores), macOS 27.2, release `nekko-store` test build; the machine was busy with other builds (load average 128 to 144 while measuring), so absolute numbers are noisy and only the before/after ratio within one run is meaningful. Synthetic chats (two messages, one 100 KB text reply each) in a temp data dir, never the real one; `crates/nekko-store/tests/summaries_timing.rs` (ignored by default), "before" is the same test on main 1749c1ecc with `summaries()` plus a find where the new test calls `summary(id)`. Warm = median of 15 calls in one process after the first. "Running" = a chat held with a new transcript before every call, as a turn's checkpoint does.
+
+| Metric | Before | After |
+|---|---|---|
+| 500 chats, cold `summaries()` | 887.5 ms | 498.1 ms |
+| 500 chats, warm `summaries()`, nothing running | 3.49 ms | 1.66 ms |
+| 500 chats, warm `summaries()`, one running chat | 4.28 ms | 1.89 ms |
+| 500 chats, one chat's summary (`pr:sessionList` lookup) | 5.077 ms per call (`summaries()` plus find, 100 calls) | 0.132 ms per call (`summary(id)`, 100 calls) |
+| 2,000 chats, cold `summaries()` | 3442.2 ms | 956.2 ms |
+| 2,000 chats, warm `summaries()`, nothing running | 45.49 ms | 7.74 ms |
+| 2,000 chats, warm `summaries()`, one running chat | 39.64 ms | 8.42 ms |
+| 2,000 chats, one chat's summary | 50.908 ms per call | 0.553 ms per call |
+
+An earlier run of the same test with 1 MB replies, under heavier load, gave the same direction (2,000 chats, running chat: 83.37 ms before, 18.20 ms after; one chat's summary 91.300 ms before, 1.622 ms after).
+
+Why: `summaries()` no longer calls `flush_all()` (a running chat's summary is made from its memory, with the user's on-disk fields, and cached per hold), keeps the chat file list in memory (only chats this store wrote are read again, plus a full look every 30 s for outside changes) instead of one `stat` per chat per call, and `summary(id)` checks one file and rolls up the sub-agents' PRs from the kept list. Source: this PR.
+
+Unmeasured: the real daemon under several running agents (event rate, disk writes saved by the 2 s save debounce now holding), a real chat folder with 1,000+ chats of mixed sizes, Windows.
 
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
@@ -1579,6 +1612,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- Nekko Cloud timers, redial and nudges (2026-11-26, #3364): traffic-shape change, nothing measured. By the code: the 60 s sync loop and 30 s heartbeat keep their base intervals (average rate unchanged) but start spread over a quarter interval and vary +/-20% per wait; Relay redial goes from a fixed 5 s (session ended) or 60 s (failed) to 5 s doubling to 5 min with jitter; a redial inside the ticket's renew window makes 0 `/v1/relay/ticket` calls instead of 1; a burst of N nudges makes 1 pull pass instead of up to N, 0-3 s later. Not measured: real fleet request concurrency or Relay reconnect rate.
 - iOS protocol tests in Docker are bounded (2026-11-10, #2495): `apps/ios/scripts/linux-test.sh` ran `swift test` in `swift:6.1-noble` with no limits. On a 32-core Windows PC with no `.wslconfig`, a `swift:6.1-noble` test container showed 21.66 GiB / 23.04 GiB in `docker stats` while the machine had 1.5 GB of 76.7 GB commit left, and `vmmemWSL` held 19.63 GB private (`Get-Process`); the user's low-memory card had seen it at about 23.6 GB. Now the container runs with `--memory 6g --memory-swap 6g --cpus 4` and `swift test --jobs 4` by default (`SWIFT_MEMORY`, `SWIFT_CPUS`), since SwiftPM sizes its jobs from the host's cores, not the CPU cap. Not measured: the capped run's peak memory and its wall time against the uncapped one, or whether 6 GB is enough for a cold build (an out-of-memory kill shows as exit 137). A cold and a warm `linux-test.sh` on both revisions, with `docker stats` sampled every second, would settle it.
 - nekkod memory and background load (2026-11-09): nekkod aborted out of memory (`std::alloc::rust_oom`, symbolized from the fault offset against `nekkod.pdb`) 71 minutes after starting at about 220 MB, with 5-10 GPT chats running. Changes: each turn checkpoint deep-copied the whole transcript onto an unbounded channel (tens of MB per copy in a long chat, one per quick tool call); one pending copy per turn is now kept and the newest saved. Every chunk of command output parsed the whole chat file to check for a sandbox chat; that is read once per chat from its fields. `read_file` read any file whole, even for a line range; above 16 MB a range is streamed and a whole read takes only the head, and `edit_file` refuses above 64 MB. The hourly merged-worktree sweep and Settings' chat worktree list parsed every chat with its transcript (547 MB across 1,035 chats here); they read the fields only. `workspace:gitStatus` (every 15 s per card) read the whole chat; it reads the fields only. The connectivity probe hit two endpoints every 5 s while agents ran (14,118 logged requests to each in 39 h); it now tries the second only when the first fails, and waits 20 s between passes once online. Renderer: git status and the resource meter skip polls while the window is hidden, git status never queues a read behind one in flight, and the session cache counts tool screenshots toward its budget. Not measured: nekkod's peak private bytes over a multi-chat session, and the request count per hour, before and after. A two-hour run of five GPT chats on each revision with private bytes sampled every 30 s, and the `connections.log` line count over that run, would settle it.
 - Agent watch file pruning (2026-11-09): `agent-watches.json` was never pruned; one install held 686 watches, 685 of them finished, and the daemon re-read and parsed the whole file on every 15 s scheduler tick, every `sessions:summaries` listing and every `session:watches` poll, while each due watch's chat-exists check parsed the chat's full transcript (`SessionStore::get`). Now finished watches are pruned (7 days after they ended, at most 20 per chat, plus one carrier per chat and PR for the host's own PR watches) at engine start and when a watch finishes; the file is kept in memory and re-read only when its modified time or length changes; and the exists check and the resume check read only the chat's metadata (`SessionStore::meta`). Not measured: tick and listing CPU time, the file's size after the first prune, and engine memory, before and after. Timing `Watches::tick` and `sessions:summaries` against a copy of that 686-watch file on both revisions would settle it.
