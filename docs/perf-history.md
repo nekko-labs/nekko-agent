@@ -51,6 +51,27 @@ Conditions: Apple M1 Max, macOS 27.2, Node v26.8.1, vitest 5.0.5 with jsdom, Rea
 | p95 per delta | 32.93, 34.35, 38.98, 36.95, 87.59 ms | 9.52, 11.03, 8.86, 10.41, 4.65 ms |
 
 Why: `ChatMarkdown` rebuilt its render context from `text` on every delta, so no finished `TextSegment` ever held its `React.memo`; the context now depends only on stable inputs and the verification evidence is kept by value. A unit test counts renders of a finished block across deltas (3 before, 1 after). Not measured: real-browser frame time and the Electron harness; the new long-reply probes in `scripts/perf` had not landed.
+## Chat listings keep the file list and stop writing running chats (2026-11-26)
+Area: engine daemon
+Result: improvement (warm listing, one chat's summary, a listing while a chat runs)
+Conditions: Apple M1 Max (10 cores), macOS 27.2, release `nekko-store` test build; the machine was busy with other builds (load average 128 to 144 while measuring), so absolute numbers are noisy and only the before/after ratio within one run is meaningful. Synthetic chats (two messages, one 100 KB text reply each) in a temp data dir, never the real one; `crates/nekko-store/tests/summaries_timing.rs` (ignored by default), "before" is the same test on main 1749c1ecc with `summaries()` plus a find where the new test calls `summary(id)`. Warm = median of 15 calls in one process after the first. "Running" = a chat held with a new transcript before every call, as a turn's checkpoint does.
+
+| Metric | Before | After |
+|---|---|---|
+| 500 chats, cold `summaries()` | 887.5 ms | 498.1 ms |
+| 500 chats, warm `summaries()`, nothing running | 3.49 ms | 1.66 ms |
+| 500 chats, warm `summaries()`, one running chat | 4.28 ms | 1.89 ms |
+| 500 chats, one chat's summary (`pr:sessionList` lookup) | 5.077 ms per call (`summaries()` plus find, 100 calls) | 0.132 ms per call (`summary(id)`, 100 calls) |
+| 2,000 chats, cold `summaries()` | 3442.2 ms | 956.2 ms |
+| 2,000 chats, warm `summaries()`, nothing running | 45.49 ms | 7.74 ms |
+| 2,000 chats, warm `summaries()`, one running chat | 39.64 ms | 8.42 ms |
+| 2,000 chats, one chat's summary | 50.908 ms per call | 0.553 ms per call |
+
+An earlier run of the same test with 1 MB replies, under heavier load, gave the same direction (2,000 chats, running chat: 83.37 ms before, 18.20 ms after; one chat's summary 91.300 ms before, 1.622 ms after).
+
+Why: `summaries()` no longer calls `flush_all()` (a running chat's summary is made from its memory, with the user's on-disk fields, and cached per hold), keeps the chat file list in memory (only chats this store wrote are read again, plus a full look every 30 s for outside changes) instead of one `stat` per chat per call, and `summary(id)` checks one file and rolls up the sub-agents' PRs from the kept list. Source: this PR.
+
+Unmeasured: the real daemon under several running agents (event rate, disk writes saved by the 2 s save debounce now holding), a real chat folder with 1,000+ chats of mixed sizes, Windows.
 
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory

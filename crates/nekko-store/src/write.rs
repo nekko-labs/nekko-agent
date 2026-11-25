@@ -213,6 +213,29 @@ fn queue_items_equal(a: &Value, b: &Value) -> bool {
     js::stringify(&queue_payload(a)) == js::stringify(&queue_payload(b))
 }
 
+/// [`merge_disk`] for a summary: what a deferred save would take from the
+/// chat on disk, put into the summary made from the chat in memory.
+pub(crate) fn keep_user_fields(summary: &mut Value, disk: &Value) {
+    let (Some(target), Some(disk)) = (summary.as_object_mut(), disk.as_object()) else { return };
+    for key in USER_FIELDS {
+        match disk.get(*key) {
+            Some(v) => {
+                target.insert((*key).into(), v.clone());
+            }
+            None => {
+                target.shift_remove(*key);
+            }
+        }
+    }
+    if disk.get("titleAuto") == Some(&Value::Bool(false)) {
+        target.insert("title".into(), disk.get("title").cloned().unwrap_or(Value::Null));
+        target.insert("titleAuto".into(), json!(false));
+    }
+    if let Some(outcome) = disk.get("spawnOutcome") {
+        target.insert("spawnOutcome".into(), outcome.clone());
+    }
+}
+
 /// What `saveTurnSession` takes from the chat on disk into the one a turn
 /// holds (see [`SessionStore::save_turn`]).
 fn merge_disk(target: &mut Map<String, Value>, disk: &Meta, queued: Option<(usize, &Value)>) -> Result<(), String> {
@@ -406,7 +429,9 @@ impl SessionStore {
 
     fn write_text(&self, id: &str, text: &str) -> Result<(), String> {
         std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
-        write_atomic(&self.path(id), text).map_err(|e| format!("could not save the chat: {e}"))
+        let written = write_atomic(&self.path(id), text).map_err(|e| format!("could not save the chat: {e}"));
+        self.touched(id);
+        written
     }
 
     /// Read, change, save; `None` when there is no such chat. Writes to one
@@ -691,7 +716,9 @@ impl SessionStore {
             std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
             let fields = s.as_object().ok_or("a session that is not an object")?;
             let text = chat_text(&self.dir, fields, None)?;
-            write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"))
+            let written = write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"));
+            self.touched(id);
+            written
         })
     }
 
@@ -702,10 +729,12 @@ impl SessionStore {
         }
         self.with_chat(id, || {
             self.remove_review(id)?;
-            match std::fs::remove_file(self.path(id)) {
+            let removed = match std::fs::remove_file(self.path(id)) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
                 _ => Ok(()),
-            }
+            };
+            self.touched(id);
+            removed
         })
     }
 
@@ -757,7 +786,7 @@ impl SessionStore {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
                 _ => {}
             }
-            self.cache.lock().unwrap_or_else(|e| e.into_inner()).remove(&file);
+            self.touched(id);
 
             count += 1;
         }
@@ -853,7 +882,7 @@ impl SessionStore {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
                 _ => {}
             }
-            self.cache.lock().unwrap_or_else(|e| e.into_inner()).remove(&file);
+            self.touched(id);
             count += 1;
         }
         Ok(count)
