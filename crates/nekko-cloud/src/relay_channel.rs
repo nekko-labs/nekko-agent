@@ -48,7 +48,9 @@ pub fn parse(text: &str) -> Frame {
                 .and_then(Value::as_array)
                 .map(|a| {
                     a.iter()
-                        .filter_map(|d| Some((d.get("dev")?.as_str()?.to_string(), d.get("kind")?.as_str()?.to_string())))
+                        .filter_map(|d| {
+                            Some((d.get("dev")?.as_str()?.to_string(), d.get("kind")?.as_str()?.to_string()))
+                        })
                         .collect()
                 })
                 .unwrap_or_default(),
@@ -213,15 +215,29 @@ mod tests {
     #[test]
     fn reads_the_relay_frames_and_nothing_else() {
         assert_eq!(
-            parse(r#"{"type":"ready","dev":"mac","expiresAt":"x","devices":[{"dev":"mac","kind":"computer"},{"dev":"phone","kind":"phone"}]}"#),
-            Frame::Ready { dev: "mac".into(), devices: vec![("mac".into(), "computer".into()), ("phone".into(), "phone".into())] }
+            parse(
+                r#"{"type":"ready","dev":"mac","expiresAt":"x","devices":[{"dev":"mac","kind":"computer"},{"dev":"phone","kind":"phone"}]}"#
+            ),
+            Frame::Ready {
+                dev: "mac".into(),
+                devices: vec![("mac".into(), "computer".into()), ("phone".into(), "phone".into())]
+            }
         );
         assert_eq!(
             parse(r#"{"type":"presence","dev":"phone","kind":"phone","online":false}"#),
             Frame::Presence { dev: "phone".into(), kind: "phone".into(), online: false }
         );
-        assert_eq!(parse(r#"{"type":"nudge","topic":"sync","rev":3,"from":"pc"}"#), Frame::Nudge { topic: "sync".into(), from: "pc".into() });
-        for junk in ["", "[]", r#"{"type":"presence","dev":"x"}"#, r#"{"type":"signal","from":"x","data":"y"}"#, r#"{"type":"access-ok"}"#] {
+        assert_eq!(
+            parse(r#"{"type":"nudge","topic":"sync","rev":3,"from":"pc"}"#),
+            Frame::Nudge { topic: "sync".into(), from: "pc".into() }
+        );
+        for junk in [
+            "",
+            "[]",
+            r#"{"type":"presence","dev":"x"}"#,
+            r#"{"type":"signal","from":"x","data":"y"}"#,
+            r#"{"type":"access-ok"}"#,
+        ] {
             assert_eq!(parse(junk), Frame::Other, "{junk}");
         }
     }

@@ -450,26 +450,46 @@ final class CloudSyncTests: XCTestCase {
         let fake: FakeCloud
         var script: [(Int, String)]
         var meCalls = 0
+        /// The path the script answers (default the account call).
+        var path = "/v1/auth/me"
+        /// Sent back with every scripted answer.
+        var answerHeaders: [String: String] = [:]
         init(_ fake: FakeCloud, _ script: [(Int, String)]) { self.fake = fake; self.script = script }
         func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
-            if url.path == "/v1/auth/me" {
+            let (status, data, _) = try await exchange(method, url, headers: headers, body: body)
+            return (status, data)
+        }
+        func exchange(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data, [String: String]) {
+            if url.path == path {
                 meCalls += 1
                 if !script.isEmpty {
                     let (status, code) = script.removeFirst()
-                    return (status, Data(#"{"error":"\#(code)","message":"server text"}"#.utf8))
+                    return (status, Data(#"{"error":"\#(code)","message":"server text"}"#.utf8), answerHeaders)
                 }
             }
-            return try await fake.send(method, url, headers: headers, body: body)
+            let (status, data) = try await fake.send(method, url, headers: headers, body: body)
+            return (status, data, [:])
         }
     }
 
-    func stalledPhone(_ script: [(Int, String)]) async throws -> (CloudSync, Stalling) {
+    /// Records each wait instead of sleeping.
+    final class Slept: @unchecked Sendable {
+        private let lock = NSLock()
+        private var all: [Duration] = []
+        var waits: [Duration] { lock.lock(); defer { lock.unlock() }; return all }
+        func add(_ d: Duration) { lock.lock(); all.append(d); lock.unlock() }
+    }
+
+    func stalledPhone(_ script: [(Int, String)], path: String = "/v1/auth/me", headers: [String: String] = [:],
+                      retry: CloudRetry = .instant) async throws -> (CloudSync, Stalling) {
         let fake = FakeCloud()
         let http = Stalling(fake, [])
         let secrets = MemorySecrets()
         let p = CloudSync(api: URL(string: "https://api.example")!, http: http, secrets: secrets, files: nil, deviceLabel: "iPhone",
-                          retryWaits: [.milliseconds(1), .milliseconds(1)], key: { SyncCrypto.SoftwareKey() })
+                          retry: retry, key: { SyncCrypto.SoftwareKey() })
         try await p.verifyCode(email: "ada@example.com", code: "123456")
+        http.path = path
+        http.answerHeaders = headers
         http.script = script
         http.meCalls = 0
         return (p, http)
@@ -489,6 +509,57 @@ final class CloudSyncTests: XCTestCase {
             XCTAssertEqual(e.message, "Nekko Cloud is busy right now. Try again in a moment.")
         }
         XCTAssertEqual(http.meCalls, 3, "one try and two retries")
+    }
+
+    func testBusyRetriesWaitTheLongerScheduleAndHonourRetryAfter() async throws {
+        let slept = Slept()
+        var retry = CloudRetry()
+        retry.unit = { 0 }
+        retry.sleep = { slept.add($0) }
+        let (p, http) = try await stalledPhone([(503, "busy"), (503, "busy"), (503, "busy")], headers: ["retry-after": "7"], retry: retry)
+        do { try await p.refresh(); XCTFail("three stalls fail") } catch is CloudError {}
+        XCTAssertEqual(http.meCalls, 3, "one try and two retries")
+        XCTAssertEqual(slept.waits, [.seconds(7), .seconds(10)], "Retry-After 7 beats the 5 s floor, the second floor of 10 s beats it")
+    }
+
+    func testBusyWithoutRetryAfterWaitsTheFloorsAndAddsUpToHalfAsJitter() async throws {
+        let slept = Slept()
+        var retry = CloudRetry()
+        retry.unit = { 0.5 }
+        retry.sleep = { slept.add($0) }
+        let (p, _) = try await stalledPhone([(503, "busy"), (503, "busy"), (200, "")], retry: retry)
+        _ = try? await p.refresh()
+        XCTAssertEqual(slept.waits, [.seconds(6.25), .seconds(12.5)])
+    }
+
+    func testAFailedConnectKeepsTheShortRetry() async throws {
+        let c = CloudRetry()
+        XCTAssertEqual(c.wait(for: .connect, path: "/v1/auth/me", connectTries: 0, busyTries: 0, retryAfter: nil).map { $0 >= .milliseconds(500) && $0 <= .milliseconds(750) }, true)
+        XCTAssertEqual(c.wait(for: .connect, path: "/v1/auth/me", connectTries: 1, busyTries: 0, retryAfter: nil).map { $0 >= .seconds(2) && $0 <= .seconds(3) }, true)
+        XCTAssertNil(c.wait(for: .connect, path: "/v1/auth/me", connectTries: 2, busyTries: 0, retryAfter: nil))
+    }
+
+    func testA504OnSyncPushAndPullIsNotRetried() {
+        let c = CloudRetry()
+        for path in ["/v1/sync/push", "/v1/sync/pull"] {
+            XCTAssertNil(c.wait(for: .gatewayTimeout, path: path, connectTries: 0, busyTries: 0, retryAfter: nil), path)
+        }
+        XCTAssertNotNil(c.wait(for: .gatewayTimeout, path: "/v1/sync/state", connectTries: 0, busyTries: 0, retryAfter: nil))
+        XCTAssertNotNil(c.wait(for: .busy, path: "/v1/sync/push", connectTries: 0, busyTries: 0, retryAfter: nil), "a 503 was refused before any work")
+    }
+
+    func testARetryAfterIsCappedAndAnHttpDateIsIgnored() {
+        var c = CloudRetry()
+        c.unit = { 0 }
+        XCTAssertEqual(c.wait(for: .busy, path: "/x", connectTries: 0, busyTries: 0, retryAfter: .seconds(3600)), .seconds(60))
+        XCTAssertNil(CloudRetry.retryAfter(["retry-after": "Wed, 21 Oct 2026 07:28:00 GMT"]))
+        XCTAssertEqual(CloudRetry.retryAfter(["Retry-After": " 12 "]), .seconds(12))
+    }
+
+    func testA504OnTheStateCallIsRetriedLikeAnyOther() async throws {
+        let (p, http) = try await stalledPhone([(504, "")], path: "/v1/sync/state")
+        try await p.refresh()
+        XCTAssertEqual(http.meCalls, 2)
     }
 
     func testA500InternalIsNotRetriedAndHidesTheServersText() async throws {
