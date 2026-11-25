@@ -39,6 +39,16 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Android chat re-reads stop re-reading the runnable skills (#3415, 2026-11-26)
+Area: renderer (Android app, relay traffic)
+Result: improvement (reads per re-read)
+Conditions: JVM unit test `ChatControllerTest` on an Apple M1 Max with a counting fake connection: open a chat, then four re-reads. Counts are `skills:runnable` calls, not time. "Before" runs the same five reads with `refreshSkills = true`, which is what every reload did before this change.
+
+| Metric | Before | After |
+|---|---|---|
+| `skills:runnable` calls for one open plus four re-reads | 5 | 1 |
+
+Why: `ChatController.reload` read the skills list with every re-read (each turn end, answered card, setting change, reconnect); it now reads it on the first read, on a reconnect and after a failed read. This is the part of the chat-open fan-out that needs no engine change (the iPhone did the same, #3388). The paged open (`session:page`, tail first) is not implemented: phones cannot call it (#3439), so the 300-message read is unchanged and unmeasured. Source: #3415.
 ## Android: saved chats are encoded and written off the main thread (#3413, 2026-11-26)
 Area: renderer (Android app, main thread)
 Result: improvement (JVM unit-level timing of the caller's thread; no phone)
@@ -1857,5 +1867,6 @@ Conditions: Linux AMD EPYC9V74 (4 threads), Chrome156.0.8078.4, Node22.23.4, one
 Separate profiled base/head cold p95:39.6/36.3ms, not gate-equivalent. Sampled `setCurrentTime` self-time fell175.837→0ms (113.407ms mount,62.430ms deletion across33 base switches). In-click style-recalculation total fell156.822→0ms; click duration median18.459→12.457ms. Whole-profile style/layout/paint still present; do not sum overlapping trace totals or infer a per-frame gain from cumulative CPU samples.
 
 Why: pause fresh SVGs without redundant zero-time seeks; cancel timers/listeners without seeking discarded SVGs; replace motion SVG by icon identity. Playback/reset and synchronous first-frame requirements unchanged. Both recovered head p95s meet33ms but first pair is slower; prior log-only head33.7ms misses. #1998 stays open; no budget reduction or increase in this PR. Main's separate48ms gate is not acceptance of this repair. Terminal skipped; Linux streaming/memory not requested. Source: [run42251252142](https://github.com/nekko-labs/nekko-agent/actions/runs/42251252142), artifact13521343207 ZIP SHA256 `0910a63aad23d1dfd6945c6cb37e224cb733147a64851de8e0bbfeb7f45add46`, [detailed provenance/limitations](../reports/cold-chat-paint-investigation.md). Diagnostic branch must never merge.
+- Android chat open (2026-11-26, #3415): the 300-message `session:get` per open and re-read, and the `chat:pending` and `context:preview` reads that still follow each re-read, are unchanged and unmeasured. They wait on the engine contract in #3439. Bytes per open and decode time on Main for a 300-message chat, before and after the paged open, would settle it.
 - Android idle costs (2026-11-26, #3412): the computer page's 30 s poll and a chat's 15 s watch tick now stop while the screen is not started; the Keystore key is opened once per process instead of once per secure-store read; an agent event that changes no activity returns the same computers state; relay redials add 0 to 50% jitter. Not measured: calls made in the background and battery over a 30 minute idle with the app backgrounded (Energy Profiler or `adb shell dumpsys batterystats` plus Perfetto, before and after), the milliseconds a Keystore `getEntry` costs per read on a mid-range phone (a `Trace.beginSection` around `AndroidSecureStore.get` on cold start), and the allocation rate per streamed token in the repository. JVM unit tests cover the behaviour only.
 - Android streaming (2026-11-26, #3410): not measured on a phone or emulator: dropped frames and P90/P99 frame time while streaming into a 300-message chat, the recomposition count of the visible rows, the effect of the per-frame word join on frames, and battery over a long run. A Macrobenchmark `FrameTimingMetric` run streaming `android/scripts/fake-model.mjs` output into a 300-message chat, before and after on the same emulator or device, would settle it.

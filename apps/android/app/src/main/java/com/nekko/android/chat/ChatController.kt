@@ -168,6 +168,9 @@ class ChatController(
 ) {
     private val _state = MutableStateFlow(ChatState())
 
+    /** The runnable skills were read once; a failed or older-computer read leaves this false, so the next re-read tries again. */
+    @Volatile private var skillsRead = false
+
     /** The running turn was started by [send] here, so its `done` counts ([onPromptReplied]). */
     @Volatile private var prompted = false
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -177,7 +180,12 @@ class ChatController(
     private var imageSend: ImageSend? = null
     private var imageRevision = 0L
 
-    suspend fun reload() {
+    /**
+     * Re-read the chat. The computer's runnable skills are read only on the first read, when the
+     * connection came back ([refreshSkills]) and when no earlier read of them succeeded: a turn
+     * ending, an answered card or a setting change cannot change them (the iPhone's `ChatModel`).
+     */
+    suspend fun reload(refreshSkills: Boolean = false) {
         val revision = imageRevision
         try {
             val (raw, pending) = coroutineScope {
@@ -193,7 +201,7 @@ class ChatController(
                 }
                 s.await() to p.await()
             }
-            scope.launch { loadSkills() }
+            if (refreshSkills || !skillsRead) scope.launch { loadSkills() }
             scope.launch { loadContext() }
             val session = Session.from(raw)
             if (session == null) {
@@ -262,6 +270,7 @@ class ChatController(
         try {
             val list = SkillSummary.list(caller.call(Channels.SKILLS_RUNNABLE))
             _state.update { it.copy(skills = list) }
+            skillsRead = true
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
