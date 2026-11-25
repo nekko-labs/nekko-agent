@@ -628,6 +628,33 @@ const loadedFontFaces: FontFace[] = [];
 export const textScaleOf = (v: number | undefined): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(150, Math.max(80, Math.round(v))) : 100;
 
+/**
+ * The new session list, reusing the previous objects where nothing changed.
+ * A summary is the same chat when `id` and `updatedAt` match (the daemon bumps
+ * `updatedAt` on every write), so it keeps its identity and subscribers that
+ * select one chat, or a filtered few, do not re-render when another chat
+ * finishes. When every entry is reused, in order, the previous array is
+ * returned as is.
+ */
+export function reuseSessions(prev: SessionSummary[], next: SessionSummary[]): SessionSummary[] {
+  if (!prev.length) return next;
+  const before = new Map(prev.map((x) => [x.id, x]));
+  let same = prev.length === next.length;
+  const merged = next.map((n, i) => {
+    const old = before.get(n.id);
+    const reused = old && old.updatedAt === n.updatedAt && shallowSame(old, n) ? old : n;
+    if (reused !== prev[i]) same = false;
+    return reused;
+  });
+  return same ? prev : merged;
+}
+
+function shallowSame(a: SessionSummary, b: SessionSummary): boolean {
+  const ak = Object.keys(a) as (keyof SessionSummary)[];
+  if (ak.length !== Object.keys(b).length) return false;
+  return ak.every((k) => a[k] === b[k] || JSON.stringify(a[k]) === JSON.stringify(b[k]));
+}
+
 export const useStore = create<UiState>((set, get) => ({
   archiveTipSessionId: null,
   ciRunnersFocus: false,
@@ -812,8 +839,8 @@ export const useStore = create<UiState>((set, get) => ({
     const ids = new Set(listed.map((x) => x.id));
     const kept = get().sessions.filter((x) => !ids.has(x.id) && (createdAtSeq.get(x.id) ?? -1) >= asked);
     for (const [id, seq] of createdAtSeq) if (ids.has(id) || seq < asked) createdAtSeq.delete(id);
-    const sessions = kept.length ? [...kept, ...listed] : listed;
-    set({ sessions });
+    const sessions = reuseSessions(get().sessions, kept.length ? [...kept, ...listed] : listed);
+    if (sessions !== get().sessions) set({ sessions });
     // A restored layout can point at chats that were archived or deleted since
     // (another client, the retention purge). Drop those windows now that the
     // truth is known; terminals are pruned in refreshTerminals.
