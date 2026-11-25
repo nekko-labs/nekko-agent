@@ -1118,6 +1118,7 @@ pub fn model_facts_for(m: &Value) -> ModelFacts {
         ("maxContext", "maxContext"),
         ("kvLayout", "kvLayout"),
         ("weightLayout", "weightLayout"),
+        ("format", "format"),
     ] {
         put(&mut facts, to, m.get(from).cloned());
     }
