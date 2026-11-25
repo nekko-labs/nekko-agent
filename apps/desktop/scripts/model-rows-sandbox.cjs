@@ -39,7 +39,7 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     await wait("!!document.querySelector('[data-model-family=gemma4e4b]')");
     assert(await run("getComputedStyle(document.querySelector('.models-workspace')).overflowY === 'auto'"), 'Renderer stylesheet must be active');
-    if (baseline) await run("document.querySelector('details[aria-label=\"System models\"]').open=true");
+    await run("document.querySelector('details[aria-label=\"System models\"], details[data-models-section=system]').open=true");
     await run("document.querySelector('[data-model-family=gemma4e4b]').click()");
     await wait("document.body.innerText.includes('Apple speech')");
     for (const [name, w, h, theme] of [['desktop-light', 1280, 1050, 'light'], ['desktop-dark', 1280, 1050, 'dark'], ['narrow-dark', 390, 1050, 'dark']]) await capture(name, w, h, theme);
@@ -81,7 +81,9 @@ app.whenReady().then(async () => {
       await run(`document.querySelector('[data-model-family="qwen359b"]').click()`);
       await check('Multi-variant families offer exact-file actions on the variant rows', `!!document.querySelector('[data-library-row=qwen-f16] [aria-label="Delete Qwen3.5-9B-F16"]') && !document.querySelector('[aria-label="Delete Qwen3.5-9B"]')`);
       await run('fixture.mount(true)');
-      await check('System models stays visible without any local download', `!!document.querySelector('[data-models-section=system]') && document.body.innerText.includes('Apple speech') && !document.querySelector('[data-models-section=library]')`);
+      await wait("!!document.querySelector('details[data-models-section=system]')");
+      await run("document.querySelector('details[data-models-section=system]').open=true");
+      await check('System models stays reachable without any local download', `!!document.querySelector('[data-models-section=system]') && document.body.innerText.includes('Apple speech') && !document.querySelector('[data-models-section=library]')`);
     }
   } catch (e) { report.errors.push(String(e.stack || e)); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));

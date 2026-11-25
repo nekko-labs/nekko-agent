@@ -260,7 +260,8 @@ function FamilyModels({ family, identities, several }: { family: AccountFamily; 
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
         {menu.m.offeredBy.map((p) => <ContextAction key={p.id} onClick={() => { setDefault(p, menu.m); setMenu(null); }}>{menu.m.offeredBy.length > 1 ? `Set as default on ${nameOf(p)}` : 'Set as default'}</ContextAction>)}
       </ContextMenu>}
-      <div className="max-h-96 overflow-y-auto overscroll-contain">
+      {/* No overscroll containment: at the list's end the wheel scrolls the page on. */}
+      <div className="max-h-96 overflow-y-auto">
         {shown.map((m) => {
           const first = m.offeredBy[0];
           const price = formatModelPriceLabel({ modelId: m.id, auth: first.auth, isLocal: false, pricing: modelPricing(m.sample) });
