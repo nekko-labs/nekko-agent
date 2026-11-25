@@ -17,7 +17,7 @@ describe('image and hardware regression boundaries', () => {
     expect(turn).toMatch(/setup && !setup\.ready/);
   });
 
-  it('polls hardware every 2 seconds while a monitor watches it, and stops when none does', async () => {
+  it('polls hardware every 3 seconds while a monitor watches it, and stops when none does', async () => {
     vi.useFakeTimers();
     const getGpuStats = vi.fn(async () => null);
     const getSystemStats = vi.fn(async () => null);
@@ -37,9 +37,9 @@ describe('image and hardware regression boundaries', () => {
     useResourceSample();
     const cleanups = [...effects.map((fn) => fn()), ...subscriptions];
     getGpuStats.mockClear();
-    vi.advanceTimersByTime(2000);
+    vi.advanceTimersByTime(3000);
     expect(getGpuStats).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(6000);
+    vi.advanceTimersByTime(9000);
     expect(getGpuStats).toHaveBeenCalledTimes(4);
     expect(getSystemStats).not.toHaveBeenCalled();
     for (const cleanup of cleanups) if (typeof cleanup === 'function') cleanup();

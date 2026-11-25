@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useSharedTick } from '../visibleInterval.js';
 import { refreshAgentWatches, useAgentWatches, watchClock, watchName, watchProgress } from '../agentWatches.js';
 import { WatchIcon } from './agent-console/WatchRow.js';
 
@@ -8,11 +9,7 @@ export function ActiveWatchChips({ sessionId, owner }: { sessionId: string; owne
   const [now, setNow] = useState(Date.now);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!watches.length) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [watches.length]);
+  useSharedTick(() => setNow(Date.now()), 1000, watches.length > 0);
   if (!watches.length && !error) return null;
   return <div className="flex flex-wrap gap-2 border-b border-line px-3 py-2 text-xs" data-active-watch-chips>
     {watches.map(w => {
