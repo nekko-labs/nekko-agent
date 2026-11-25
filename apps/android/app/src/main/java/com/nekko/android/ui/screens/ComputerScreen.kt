@@ -292,6 +292,10 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                 summary?.version?.let { v -> Fact("Nekko Agent", listOfNotNull(v, summary.edition).joinToString(" · ")) }
             }
             Text(stringResource(R.string.computer_connect_footer), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            // Which kinds of route this phone dials to reach it (#3346); changing it reconnects at once.
+            com.nekko.android.ui.settings.RouteChoiceGroup(c.name, listOf(c.relayUrl) + c.alts, c.routeChoice) { next ->
+                scope.launch { repo.setRouteChoice(c.id, next) }
+            }
             // Nekko Agent's service: status, updates, restart (#2059). Live only while this computer is the active one.
             ServiceSection(repo, c.id, c.name)
             Spacer(Modifier.size(32.dp))

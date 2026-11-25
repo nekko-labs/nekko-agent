@@ -67,3 +67,12 @@ Same words, states and priority rules as above, as Material text rather than iOS
 - Differences: *Open Tailscale* opens the Tailscale app, or its Google Play page (package visibility declared in the manifest); *update* says "Update it from Google Play"; an address a phone can never reach (localhost, public `ws://`) shows as *not found* with its own sentence and **Pair again**; *Details* opens Computers; the safety exits are the active computer's ⋮ and what they did is still said under the row. Quit is now remembered like stop (`remoteQuitAt`), giving the *quit* word.
 - Test hooks kept from the old banners: `open-tailscale`, `banner.pair-again`, `banner.menu`, `fleet.reconnect`; items are `strip.<computer id>`.
 - Not done: Settings → About still shows the version difference as before (the iPhone's one quiet line); Files and Monitors do not show problem-only items on Android.
+
+### Route choice and per-computer Tailscale (#3346, Android)
+
+`[implemented 2026-11-26: unit tested (ConnectionNotesTest, RelayClientTest, RouteSupervisorTest, ComputersRepositoryTest) and ConnectionRowTest and RouteChoiceGroupTest run in an Android 12 (API 32) emulator; not yet against a real computer on Nekko Cloud Relay]`
+
+- Each paired computer stores a route choice, `auto | cloud | direct` (the desktop's names; old saves load as auto). `direct` dials only LAN, loopback and Tailscale routes, `cloud` only internet routes (Nekko Cloud Relay); a filter that would leave nothing uses every route. The supervisor and the route checks use the filtered list, and changing the choice reconnects that computer at once.
+- The computer's page has a "Connect through" group (`RouteChoiceGroup`): Tailscale and Nekko Cloud Relay checkboxes, both on is auto, the last one on cannot be turned off, and a kind the pairing link did not carry is off with one quiet line ("Pair again from <computer> with Nekko Cloud Relay on to add it.").
+- There is no page-wide *Tailscale off* item any more. A computer that only Tailscale reaches (by its routes, or because the choice is `direct`) and is blocked by Tailscale being off says *Tailscale off* itself (warning), opens to "Turn on Tailscale to reach <name>." with **Open Tailscale** (`open-tailscale`) and Details when active. Under `cloud`, Tailscale never matters.
+- `denied: route` is read as that route failing: the client moves to the next allowed saved route. With none left the row says *refused*, "<name> only lets this phone in through another route.", "Pair again, or change it on <name>." and **Pair again**.
