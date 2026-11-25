@@ -83,6 +83,20 @@ export interface EngineInstall {
    * opt-in step up, never taken without the user asking.
    */
   upgrade?: { buildId: string; message: string };
+  /**
+   * The managed llama.cpp build is older than the release this version of the
+   * app pins. `buildId` is the build already installed, so installing it again
+   * keeps the backend and brings the version up to `pinned`. Never set for an
+   * engine the user pointed at or one found on PATH, or when the installed
+   * version is missing or not a `b<number>` tag.
+   *
+   * `notify` is true only when the engine is at least 1,000 builds (about a
+   * month) behind the pin. The pin moves several times a day, so being a little
+   * behind is normal: the Model server card says so only when `notify` is set or
+   * a model in the library needs a newer engine. The Update button on such a
+   * model's row uses `buildId` whatever `notify` says.
+   */
+  outdated?: { buildId: string; installed: string; pinned: string; message: string; notify: boolean };
   /** Builds offered for this machine, best first. */
   available: EngineBuild[];
   /** The build we would install if asked, from the hardware probe. */
