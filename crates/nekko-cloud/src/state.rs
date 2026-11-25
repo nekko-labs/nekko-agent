@@ -178,6 +178,13 @@ pub struct State {
     pub account_record: Option<String>,
     /// The pull cursor.
     pub cursor: u64,
+    /// This build can read deflated records (decision 0121) and has looked at the state it started
+    /// from. A state file from before this reads as false.
+    pub z_ready: bool,
+    /// This computer was already syncing before it could read deflated records: once the account
+    /// record is read, it pulls again from the start if the account has used them, so the records
+    /// an older build passed over are read.
+    pub z_catchup: bool,
     /// Highest revision seen per object id: an older one is a rollback and is
     /// ignored, and this never goes down (whatever the server says).
     pub revisions: BTreeMap<String, u64>,

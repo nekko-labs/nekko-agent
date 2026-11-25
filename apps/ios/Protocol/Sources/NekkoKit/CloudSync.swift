@@ -108,6 +108,12 @@ public final class CloudSync {
         var cursor: Int64 = 0
         var revisions: [String: Int64] = [:]
         var waiting = false
+        /// This build can read deflated records (decision 0121) and has looked at the state it started from.
+        /// Optional so a state saved before this decodes.
+        var zReady: Bool?
+        /// An iPhone that was already syncing before it could read them pulls once from the start if the
+        /// account has compressed records, so the ones an older build skipped are read.
+        var zCatchup: Bool?
     }
 
     /// - Parameter key: this iPhone's agreement key, made on first use (a Secure Enclave key on a device).
@@ -307,7 +313,8 @@ public final class CloudSync {
         state.waiting = false
         waitingForApproval = false
         save()
-        let me = TrustedDevice(id: deviceId, publicKey: SyncCrypto.base64url(device.publicKeyX963), label: deviceLabel)
+        let me = TrustedDevice(id: deviceId, publicKey: SyncCrypto.base64url(device.publicKeyX963), label: deviceLabel,
+                               caps: [SyncCrypto.capDeflate])
         try await updateAccount(token: t) { $0.add(me) }
         try await sync()
     }
@@ -365,17 +372,50 @@ public final class CloudSync {
             let mine = state.keyId ?? 0
             if remote < mine { throw CloudError(message: "Nekko Cloud reports an older sync key than this iPhone holds. Nothing was synced.") }
             if remote > mine { guard try await adopt(token: t, target: remote) else { return } }
+            if state.zReady != true {
+                state.zReady = true
+                state.zCatchup = state.cursor > 0
+                save()
+            }
             for _ in 0..<3 {
                 if try await pull(token: t) { break }
                 try await refresh()
                 guard try await adopt(token: t, target: remoteKeyId ?? 0) else { return }
             }
+            if try await compressionStep(token: t) { _ = try await pull(token: t) }
             error = nil
             lastSyncAt = Date()
         } catch {
             self.error = (error as? CloudError)?.message ?? error.localizedDescription
             throw error
         }
+    }
+
+    /// After a pull has read the account record: pull again from the start once if this iPhone predates
+    /// deflated records and the account has used them (true then), and tell the other devices this
+    /// iPhone can read them. Telling them is a one-time write that never fails a sync.
+    private func compressionStep(token t: String) async throws -> Bool {
+        guard let k = state.keyId, let record = Self.accountRecord(state.accountRecord), record.epoch == k else { return false }
+        var again = false
+        if state.zCatchup == true {
+            // The saved copy may come from a build that dropped the mark: ask for the newest.
+            var used = record.compressed
+            if !used, let accountId = account?.id, let kr = keyring(k),
+               let (fresh, _, _) = try? await fetchAccount(token: t, keyring: kr, accountId: accountId, epoch: k) {
+                used = fresh.compressed
+            }
+            state.zCatchup = false
+            if used { state.cursor = 0; again = true }
+            save()
+        }
+        if let me = state.deviceId, let mine = record.devices.first(where: { $0.id == me }), !mine.caps.contains(SyncCrypto.capDeflate) {
+            try? await updateAccount(token: t) { r in
+                if let i = r.devices.firstIndex(where: { $0.id == me }), !r.devices[i].caps.contains(SyncCrypto.capDeflate) {
+                    r.devices[i].caps.append(SyncCrypto.capDeflate)
+                }
+            }
+        }
+        return again
     }
 
     /// The keyring a computer wrapped to this iPhone with its join code, once approved.
@@ -497,6 +537,8 @@ public final class CloudSync {
         var id: String
         var publicKey: String
         var label: String
+        /// What this device can do beyond the base format (`SyncCrypto.capDeflate`); unknown names are kept.
+        var caps: [String] = []
     }
 
     /// The sealed account record of one key epoch: the recovery key's public half and the trusted devices.
@@ -504,6 +546,8 @@ public final class CloudSync {
         var epoch: UInt32
         var recoveryPublic: String
         var devices: [TrustedDevice]
+        /// A device has sealed a deflated record for this account (decision 0121).
+        var compressed = false
 
         func trusts(_ id: String) -> Bool { devices.contains { $0.id == id } }
         func lists(id: String, publicKey: String) -> Bool { devices.contains { $0.id == id && $0.publicKey == publicKey } }
@@ -525,15 +569,22 @@ public final class CloudSync {
               let rp = v.str("recoveryPublic") else { return nil }
         let devices = (v["devices"]?.array ?? []).compactMap { d -> TrustedDevice? in
             guard let id = d.str("id"), let pk = d.str("publicKey") else { return nil }
-            return TrustedDevice(id: id, publicKey: pk, label: d.str("label") ?? "")
+            return TrustedDevice(id: id, publicKey: pk, label: d.str("label") ?? "",
+                                 caps: (d["caps"]?.array ?? []).compactMap { if case .string(let c) = $0 { return c } else { return nil } })
         }
-        return AccountRecord(epoch: e, recoveryPublic: rp, devices: devices)
+        return AccountRecord(epoch: e, recoveryPublic: rp, devices: devices, compressed: v["compressed"]?.bool == true)
     }
 
     static func accountRecordJSON(_ r: AccountRecord) -> String {
-        let devices: [JSONValue] = r.devices.map { .object(["id": .string($0.id), "publicKey": .string($0.publicKey), "label": .string($0.label)]) }
-        return JSONValue.object(["v": .int(2), "epoch": .int(Int64(r.epoch)), "recoveryPublic": .string(r.recoveryPublic),
-                                 "devices": .array(devices)]).serialized()
+        let devices: [JSONValue] = r.devices.map { d in
+            var o: [String: JSONValue] = ["id": .string(d.id), "publicKey": .string(d.publicKey), "label": .string(d.label)]
+            if !d.caps.isEmpty { o["caps"] = .array(d.caps.map { .string($0) }) }
+            return .object(o)
+        }
+        var o: [String: JSONValue] = ["v": .int(2), "epoch": .int(Int64(r.epoch)), "recoveryPublic": .string(r.recoveryPublic),
+                                      "devices": .array(devices)]
+        if r.compressed { o["compressed"] = .bool(true) }
+        return JSONValue.object(o).serialized()
     }
 
     /// Open an epoch's account record and check it: the right object, the

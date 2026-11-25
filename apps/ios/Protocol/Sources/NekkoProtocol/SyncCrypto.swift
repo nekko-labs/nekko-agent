@@ -21,7 +21,11 @@ public protocol SyncAgreementKey {
 ///   in plaintext only on the user's devices;
 /// - **records** sealed with AES-256-GCM under a key and nonce derived from a
 ///   fresh 32-byte salt, the account, epoch, collection, object id and
-///   revision bound as associated data, and the plaintext Padmé-padded;
+///   revision bound as associated data, and the plaintext Padmé-padded. A
+///   version 2 blob holds the raw deflate of the plaintext, with
+///   `deflateAAD` added to the associated data (decision 0121,
+///   `docs/decisions/0121-compress-chat-records-before-sealing.md`); the
+///   iPhone opens both versions;
 /// - the keyring **wrapped** to each device's P-256 key (ECIES; on the iPhone
 ///   the private key is a Secure Enclave key), authenticated by the sending
 ///   device's key, and to the public half of a P-256 key derived from a 256-bit
@@ -36,6 +40,16 @@ public enum SyncCrypto {
     public static let publicKeyLength = 65
     public static let minPadded = 256
     static let blobVersion: UInt8 = 1
+    /// A blob whose plaintext was deflated before it was framed and sealed.
+    static let blobVersionDeflate: UInt8 = 2
+    /// Added to a version 2 blob's associated data, so its version byte cannot be flipped.
+    static let deflateAAD = "\ncodec\ndeflate"
+    /// The most plaintext a record opens to, deflated or not (a decompression bomb guard).
+    public static let maxPlaintext = 16_000_000
+    /// Plaintext below this is sealed as it is.
+    static let minCompress = 1024
+    /// An account record device capability: this device opens version 2 (deflated) records.
+    public static let capDeflate = "z1"
     static let saltBytes = 32
     static let tagBytes = 16
 
@@ -126,16 +140,46 @@ public enum SyncCrypto {
         return base64url(Data([blobVersion]) + salt + box.ciphertext + box.tag)
     }
 
+    /// Seal like `sealRecord`, but deflate the plaintext first (a version 2 blob) when that makes the
+    /// padded record smaller. Only for a record every device of the account can read: an older build
+    /// does not open a version 2 blob. Without the Compression framework this seals version 1.
+    public static func sealRecordCompressed(keyring: Keyring, account: String, keyId: UInt32, collection: String, objectId: String,
+                                            revision: UInt64, plaintext: Data, salt: Data? = nil) throws -> String {
+        guard plaintext.count >= minCompress, plaintext.count <= maxPlaintext, let small = Deflate.compress(plaintext),
+              padme(max(small.count + 4, minPadded)) < padme(max(plaintext.count + 4, minPadded)) else {
+            return try sealRecord(keyring: keyring, account: account, keyId: keyId, collection: collection, objectId: objectId,
+                                  revision: revision, plaintext: plaintext, salt: salt)
+        }
+        guard validCollection(collection), validObjectId(objectId), revision > 0 else { throw Failure.invalid }
+        return try sealBlob(keyring: keyring, aad: recordAAD(account: account, keyId: keyId, collection: collection, objectId: objectId,
+                                                              revision: revision) + deflateAAD,
+                            body: small, salt: salt, version: blobVersionDeflate)
+    }
+
+    /// The seal itself, with a body already deflated (the bomb test seals its own).
+    static func sealBlob(keyring: Keyring, aad: String, body: Data, salt: Data?, version: UInt8) throws -> String {
+        let salt = salt ?? E2E.randomBytes(saltBytes)
+        guard salt.count == saltBytes else { throw Failure.invalid }
+        let (key, nonce) = keyAndNonce(ikm: keyring.enc, salt: salt, info: Data("\(self.version) record".utf8))
+        let box = try AES.GCM.seal(frame(body), using: key, nonce: nonce, authenticating: Data(aad.utf8))
+        return base64url(Data([version]) + salt + box.ciphertext + box.tag)
+    }
+
     /// Open a record; throws unless every field matches what it was sealed with.
     public static func openRecord(keyring: Keyring, account: String, keyId: UInt32, collection: String, objectId: String,
                                   revision: UInt64, blob: String) throws -> Data {
         guard validCollection(collection), validObjectId(objectId), revision > 0 else { throw Failure.invalid }
         let raw = try fromBase64url(blob)
-        guard raw.count >= 1 + saltBytes + tagBytes, raw.first == blobVersion else { throw Failure.malformed }
+        guard raw.count >= 1 + saltBytes + tagBytes, let first = raw.first, first == blobVersion || first == blobVersionDeflate else {
+            throw Failure.malformed
+        }
+        let deflated = first == blobVersionDeflate
         let salt = raw.subdata(in: 1..<(1 + saltBytes))
-        let aad = Data(recordAAD(account: account, keyId: keyId, collection: collection, objectId: objectId, revision: revision).utf8)
+        let aad = Data((recordAAD(account: account, keyId: keyId, collection: collection, objectId: objectId, revision: revision)
+                        + (deflated ? deflateAAD : "")).utf8)
         let (key, nonce) = keyAndNonce(ikm: keyring.enc, salt: salt, info: Data("\(version) record".utf8))
-        return try unframe(open(raw.suffix(from: 1 + saltBytes), key: key, nonce: nonce, aad: aad))
+        let body = try unframe(open(raw.suffix(from: 1 + saltBytes), key: key, nonce: nonce, aad: aad))
+        return deflated ? try Deflate.inflate(body, limit: maxPlaintext) : body
     }
 
     // MARK: Padding
