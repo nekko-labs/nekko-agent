@@ -424,6 +424,44 @@ when dispatched by hand (Actions > Deploy cloud > Run workflow, pick `api` or
 3. Create the Fly apps and set their secrets first (above); the workflow only
    runs `flyctl deploy`.
 
+## Memory
+
+The API runs on one small machine (`fly.toml`: `shared-cpu-1x`, 256 MB, about
+210 MB usable), so two things keep it inside that (issue #3342):
+
+**The heap cap follows the machine.** The Dockerfile starts the API with
+`start.sh`, never `node` directly. At every start it reads `MemTotal` from
+`/proc/meminfo` and caps V8's whole heap at `NODE_HEAP_PERCENT` of it (default
+50): the old space gets that share less the young generation, whose semi-space
+is pinned at 8 MB. Node's own default ignores the machine (259 MB on the
+210 MB machine), so V8 never collected hard enough and the kernel killed or
+stalled the process. Scaling the machine (`fly scale memory 512`) moves the cap
+with no change here. To change the share, set an env var (an `[env]` line in
+`fly.toml` or `fly secrets set NODE_HEAP_PERCENT=60`).
+
+| Machine | `start.sh` flags | V8 heap limit (Node 22) |
+|---|---|---|
+| 256 MB (209 MB usable) | `--max-old-space-size=80 --max-semi-space-size=8` | 104 MB |
+| 512 MB (462 MB usable) | `--max-old-space-size=207 --max-semi-space-size=8` | 231 MB |
+| 1 GB (957 MB usable) | `--max-old-space-size=454 --max-semi-space-size=8` | 478 MB |
+
+**Big requests queue for memory** (`src/memory-gate.ts`). A request whose body
+is over 64 KB, and every sync pull page or single blob it sends back, first
+takes an estimate of its peak memory from a budget: the machine's memory less
+112 MB for the idle process (about 98 MB on the 256 MB machine), so it too
+follows `fly scale memory`. The estimates are measured: a push body peaks at
+about 3 times its size, a page of stored blobs at about 7 times. When the
+budget is spent, requests wait in order (an upload's body stays in the socket
+until its turn); one bigger than the whole budget runs alone. A request that
+waits over 20 s, or finds 64 already waiting, gets 503 `busy` with
+`Retry-After: 5`, which the desktop and iPhone apps retry on their own.
+
+Every start logs both numbers, for example
+`memory: machine 210 MB, heap limit 104 MB (50%), request budget 98 MB`. If
+the heap limit is over 75% of the machine (the cap was lost, say a Dockerfile
+that runs `node` directly), it also logs a warning and sends the error alert.
+After a deploy or a `fly scale`, check that line in `fly logs`.
+
 ## Cost
 
 Fly has no spending cap or billing alert; usage past the credits is billed to

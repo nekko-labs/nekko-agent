@@ -46,6 +46,10 @@ primary_region = "iad"   # next to Neon's aws-us-east-1
     timeout = "5s"
     grace_period = "10s"
 
+# Memory: start.sh caps V8's heap at NODE_HEAP_PERCENT (default 50) of this
+# machine and src/memory-gate.ts queues big requests against the rest; both read
+# the machine's memory at start, so `fly scale memory` needs no other change.
+# README "Memory" (issue #3342).
 [[vm]]
   size = "shared-cpu-1x"
   memory = "256mb"
