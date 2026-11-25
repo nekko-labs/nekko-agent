@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { LocalRelayStatus } from '@nekko-agent/shared';
-import { CloudGoneBanner, connectionName, LocalRelayView, MANAGED_RELAY_URL, PairingChoiceView, relayToEnable } from './RemoteAccess.js';
+import { CloudGoneBanner, connectionName, LocalRelayView, MANAGED_RELAY_URL, relayToEnable } from './RemoteAccess.js';
 
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => undefined, { getState: () => ({}) }) }));
 
@@ -16,38 +16,6 @@ const tailnet: LocalRelayStatus = {
   tailnetName: 'gomi.tailfd6474.ts.net',
   url: 'ws://gomi.tailfd6474.ts.net:4400',
 };
-
-describe('PairingChoiceView', () => {
-  const html = (local: LocalRelayStatus | null, cloudLive = true) =>
-    renderToStaticMarkup(<PairingChoiceView local={local} relayUrl="" onRelayUrl={vi.fn()} onTailscale={vi.fn()} onCloud={vi.fn()} onOwnRelay={vi.fn()} cloudLive={cloudLive} />);
-
-  it('marks Nekko Cloud coming soon and leads with Tailscale while the managed relay is down', () => {
-    const out = html(tailnet, false);
-    expect(out).toContain('Coming soon');
-    expect(out).toMatch(/<button[^>]*disabled[^>]*>Use Nekko Cloud/);
-    expect(out).toMatch(/<button class="btn btn-primary[^"]*"[^>]*>Use Tailscale/);
-    expect(out).not.toMatch(/<button[^>]*disabled=""[^>]*>Use Tailscale/);
-  });
-
-  it('offers Tailscale and Nekko Cloud, never naming the relay host', () => {
-    const out = html(tailnet);
-    expect(out).toContain('Use Tailscale');
-    expect(out).toContain('Use Nekko Cloud');
-    expect(out).toContain('gomi.tailfd6474.ts.net');
-    expect(out).not.toContain('fly.dev');
-  });
-
-  it('links to Tailscale and disables it when it is not connected here', () => {
-    const out = html({ available: true, running: false, enabled: false, port: 4400 });
-    expect(out).toContain('https://tailscale.com/download');
-    expect(out).toMatch(/<button[^>]*disabled[^>]*>Use Tailscale/);
-  });
-
-  it('shows only Nekko Cloud where this computer cannot run a relay', () => {
-    expect(html({ ...tailnet, available: false })).not.toContain('Use Tailscale');
-    expect(html(null)).toContain('Use Nekko Cloud');
-  });
-});
 
 describe('connectionName', () => {
   it('calls the managed relay Nekko Cloud, this computer Tailscale, and anything else by its URL', () => {

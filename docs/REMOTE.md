@@ -85,11 +85,12 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 ## Pairing a phone
 
 1. On your computer: **Settings → Phone pairing** (second in the left-hand list), then in **Remote access**
-   pick how your phone connects: **Use Tailscale** (free, needs the Tailscale app on both) or
-   **Use Nekko Cloud** (works anywhere, nothing to install; shown as *Coming soon* and off until the
-   managed relay is running again). A self-hosted relay goes under **Use your own relay**. Then
-   **Pair a device**. To switch later, click **Change** next to *Connected through*; paired phones
-   keep the old address, so pair them again afterwards. The QR appears right under the button.
+   tick how phones connect under **Phones connect through**: **Tailscale** (free, needs the Tailscale
+   app on both), **Nekko Cloud Relay** (Pro: works anywhere, nothing to install; *Coming soon* until it
+   is running), or both. Then **Turn on remote access** and **Pair a device**. The ticks stay on the
+   page, so you can add or drop a way later without turning anything off; a phone keeps working as long
+   as one of the ways it was paired with is still ticked. A self-hosted relay goes under **Use your own
+   relay**. The QR appears right under **Pair a device**.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
    app, the pairing link also opens the web app in a browser over the relay, but it is limited to
@@ -889,9 +890,10 @@ The app calls this **Nekko Cloud** and never shows the URL. Self-hosting stays f
 
 **Nekko Cloud Relay is part of Nekko Cloud Pro and Team** (in progress, behind a switch until launch; [the spec](../spec/platform/nekko-cloud-relay.md)):
 
-- Sign in to Nekko Cloud on the computer. On Pro or Team, **Use Nekko Cloud** connects through it; on Free the card offers **Upgrade to Pro**.
-- Already on Tailscale? Turn on **Also through Nekko Cloud Relay** and the computer is reachable both ways at once: phones with Tailscale go direct, phones without it (or away from it) come in through the relay.
-- With both on, **Pair a device** asks how the next device connects (*Either way*, *Nekko Cloud Relay*, *Tailscale*), and each paired device has *Either way*, *Only Nekko Cloud Relay* or *Only Tailscale*. The computer enforces it: a phone set to *Only Tailscale* is turned away if it tries the relay.
+- Sign in to Nekko Cloud on the computer. On Pro or Team, tick **Nekko Cloud Relay** under *Phones connect through*; on Free the row offers **Upgrade to Pro**.
+- Tick both **Tailscale** and **Nekko Cloud Relay** and the computer is reachable both ways at once: phones with Tailscale go direct, phones without it (or away from it) come in through the relay. Untick Tailscale to use the relay alone.
+- With both ticked, **Pair a device** shows which ways the next device may use, and each paired device has its own **Connects through** ticks (Tailscale, Nekko Cloud Relay, at least one). The computer enforces them: a phone allowed only Tailscale is turned away if it tries the relay.
+- On the phone, each computer's page has **Connect through** with the same two ticks, limited to the ways its pairing code carried. A phone paired before Nekko Cloud Relay was ticked needs a fresh code to gain it.
 - Everything stays end-to-end encrypted. The relay checks a short-lived ticket your computer gets from Nekko Cloud, so it knows your plan, not who you are.
 - Signed-in computers on Pro also tell each other through the relay when they come online and when they've synced something, so another computer pulls new chats at once instead of within the minute.
 
@@ -904,11 +906,11 @@ Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts
 tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
 network you already own.
 
-**In the desktop app:** Settings → Remote access → **Use Tailscale**. The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
+**In the desktop app:** Settings → Remote access → tick **Tailscale** under *Phones connect through*. The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
 bundled relay bound to that address only, and turns remote access on through it. Phones dial the MagicDNS name
 (for example `ws://gomi.tailfd6474.ts.net:4400`) when the Tailscale CLI reports one, else the
 `100.x.y.z` address. Then **Pair a device** and scan the QR from the phone with Tailscale switched
-on. Without Tailscale on this computer the option links to Tailscale and stays off.
+on. Without Tailscale on this computer the row links to Tailscale and can't be ticked.
 
 - **It stays on:** once started it comes back with the app.
 - **It waits for Tailscale:** with Tailscale off it binds nowhere and waits, and starts when
