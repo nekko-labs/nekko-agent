@@ -725,6 +725,8 @@ async fn git_route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "git:stage" | "git:unstage" | "git:commit" | "git:push" | "git:switch" | "git:mergeAbort" | "pr:create"
     ) {
         ctx.workspace.git.invalidate(&dir);
+        // Cards showing this folder's git state read it again now instead of at their next poll.
+        ctx.hub.publish("git:changed", json!({ "path": dir }), false);
     }
     out
 }

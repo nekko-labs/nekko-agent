@@ -2,6 +2,29 @@ import { cloudError, type CloudStatus, type FleetComputerView, type FleetList, t
 
 /** How often the Computers list is refreshed while the Organization section is on screen. */
 export const FLEET_POLL_MS = 15_000;
+/**
+ * The slower refresh while this computer is on the Relay account channel (presence and a `fleet`
+ * nudge refresh the list sooner). Used only with `FLEET_FAST_PATH`.
+ */
+export const FLEET_POLL_CONNECTED_MS = 60_000;
+/**
+ * OFF until the Nekko Cloud API's fleet lease outlasts the engine's slow 10 minute heartbeat
+ * (`crates/nekko-cloud/src/orgs.rs`, `SLOW_HEARTBEAT_ENABLED`). Turn both on together, with that API
+ * change deployed: a slower poll beside the 30 s beat would only make the Computers list staler.
+ */
+export const FLEET_FAST_PATH = false;
+
+/** How often to read the Computers list: a minute while the account channel is up and the fast path is on, else 15 s. */
+export function fleetPollMs(relayConnected: boolean, fastPath: boolean = FLEET_FAST_PATH): number {
+  return fastPath && relayConnected ? FLEET_POLL_CONNECTED_MS : FLEET_POLL_MS;
+}
+
+/** Who is online on the account channel, as one string, so a change in it can refresh the list. */
+export function relayPresenceKey(status: CloudStatus | null): string {
+  const relay = status?.relay;
+  if (!relay?.connected) return '';
+  return relay.online.map((d) => d.dev).sort().join(',') || '-';
+}
 /** Local models shown on a computer before the rest fold behind "+N more". */
 export const MODELS_SHOWN = 3;
 

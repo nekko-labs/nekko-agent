@@ -574,6 +574,11 @@ const api: NekkoApi = {
     bus.on(IpcEvents.changesUpdated, listener);
     return () => bus.removeListener(IpcEvents.changesUpdated, listener);
   },
+  onGitChanged: (cb) => {
+    const listener = (_: unknown, e: { path: string }) => cb(e);
+    bus.on(IpcEvents.gitChanged, listener);
+    return () => bus.removeListener(IpcEvents.gitChanged, listener);
+  },
   onComputersUpdated: (cb) => {
     const listener = () => cb();
     bus.on(IpcEvents.computersUpdated, listener);
