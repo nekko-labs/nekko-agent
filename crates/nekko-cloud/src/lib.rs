@@ -190,15 +190,12 @@ pub struct Cloud {
     share: tokio::sync::Mutex<()>,
     /// The Nekko Cloud Relay account channel: presence and sync nudges (decision 0116).
     relay: relay_channel::Channel,
-<<<<<<< HEAD
     /// When `refresh` last finished; held while `cloud:refresh` runs so concurrent callers share it.
     refreshed: tokio::sync::Mutex<coalesce::Refreshed>,
-=======
     /// Relay tickets kept until they are due for renewal (`renewAfterSeconds`).
     tickets: pace::Tickets,
     /// A pass started by a Relay nudge is waiting out its jitter; more nudges join it.
     nudge_pending: pace::Pending,
->>>>>>> origin/main
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -232,12 +229,9 @@ impl Cloud {
             host: Mutex::new(None),
             share: tokio::sync::Mutex::new(()),
             relay: relay_channel::Channel::default(),
-<<<<<<< HEAD
             refreshed: tokio::sync::Mutex::new(coalesce::Refreshed::default()),
-=======
             tickets: pace::Tickets::default(),
             nudge_pending: pace::Pending::default(),
->>>>>>> origin/main
         })
     }
 
