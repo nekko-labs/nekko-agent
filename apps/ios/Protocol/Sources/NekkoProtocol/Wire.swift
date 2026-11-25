@@ -178,7 +178,7 @@ public let autoModelId = "__auto__"
 /// One durable `agent_watch` of a chat as the computer reports it
 /// (`PHONE_WATCH_VIEW`): joined to the arming call by `id`.
 public struct AgentWatch: Equatable, Sendable, Identifiable {
-    public enum Kind: String, Sendable { case timer, pr }
+    public enum Kind: String, Sendable { case timer, pr, clip }
     public enum Status: String, Sendable { case active, done, cancelled, error }
     public let id: String
     public let kind: Kind
@@ -190,8 +190,15 @@ public struct AgentWatch: Equatable, Sendable, Identifiable {
     public let pending: Bool
     public let failures: Int
     public let lastError: String?
+    /// A clip's stage as the media job reports it (`waiting`, `loading`, `generating`, `step:3/20`).
+    public let clipStage: String?
 
-    public init(id: String, kind: Kind, url: String? = nil, status: Status, deadlineAt: Int64, pending: Bool = false, failures: Int = 0, lastError: String? = nil) {
+    /// Whether the chat wakes at `deadlineAt`. A clip's deadline is only a safety net: it wakes the
+    /// chat when it ends, so nothing may say "sleeping, will check in" for it.
+    public var isTimedWakeUp: Bool { kind != .clip }
+
+    public init(id: String, kind: Kind, url: String? = nil, status: Status, deadlineAt: Int64, pending: Bool = false, failures: Int = 0, lastError: String? = nil, clipStage: String? = nil) {
+        self.clipStage = clipStage
         self.id = id
         self.kind = kind
         self.url = url
@@ -207,7 +214,7 @@ public struct AgentWatch: Equatable, Sendable, Identifiable {
             guard let id = w.str("id"), let kind = w.str("kind").flatMap(Kind.init(rawValue:)),
                   let status = w.str("status").flatMap(Status.init(rawValue:)), let deadline = w.long("deadlineAt") else { return nil }
             return AgentWatch(id: id, kind: kind, url: w.str("url"), status: status, deadlineAt: deadline, pending: w.flag("pending"),
-                              failures: Int(w.long("failures") ?? 0), lastError: w.str("lastError"))
+                              failures: Int(w.long("failures") ?? 0), lastError: w.str("lastError"), clipStage: w.str("clipStage"))
         }
     }
 }
@@ -967,6 +974,8 @@ public struct AskRequest: Equatable, Sendable {
     public let callId: String
     public let questions: [AskQuestion]
     public let askedAt: Int64
+    /// Set when the question is a paid cloud clip's choice (#3038): what it costs and where it goes.
+    public var clip: ClipOffer? = nil
 
     public static func from(_ v: JSONValue?) -> AskRequest? {
         guard let v, let callId = v.str("callId") else { return nil }
@@ -978,7 +987,7 @@ public struct AskRequest: Equatable, Sendable {
             return AskQuestion(id: id, header: q.str("header") ?? "", question: q.str("question") ?? "", options: opts,
                                multiSelect: q.flag("multiSelect"))
         }
-        return AskRequest(callId: callId, questions: qs, askedAt: v.long("askedAt") ?? 0)
+        return AskRequest(callId: callId, questions: qs, askedAt: v.long("askedAt") ?? 0, clip: ClipOffer.from(v["clip"]))
     }
 }
 
