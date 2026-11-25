@@ -43,9 +43,53 @@ export async function isStaff(db: Db, f: Features, userId: string | null): Promi
   return !!rows[0]?.email_verified && f.staff.has(rows[0].email);
 }
 
-/** What the caller (or an anonymous visitor, `null`) sees. */
+async function staffStatus(db: Db, f: Features, userId: string): Promise<{ value: boolean; settled: boolean }> {
+  if (!f.staff.size) return { value: false, settled: true };
+  const { rows } = await db.query<{ email: string; email_verified: boolean }>("select lower(email) as email, email_verified from users where id = $1", [userId]);
+  const onList = !!rows[0] && f.staff.has(rows[0].email);
+  return { value: onList && rows[0].email_verified, settled: !onList || rows[0].email_verified };
+}
+
+/** How long the switches and a caller's staff status are reused. A switch flipped through the staff route shows at once on this machine; direct database edits show within this time. */
+export const FEATURES_CACHE_MS = 15_000;
+const MAX_CACHED_USERS = 2_000;
+
+interface FeatureCache {
+  states?: { at: number; value: Record<Feature, FeatureState> };
+  staff: Map<string, { at: number; value: boolean }>;
+}
+const caches = new WeakMap<Features, FeatureCache>();
+const cacheFor = (f: Features): FeatureCache => {
+  let c = caches.get(f);
+  if (!c) caches.set(f, (c = { staff: new Map() }));
+  return c;
+};
+
+/** Forget what featuresFor remembered (after the staff route changes a switch). */
+export function invalidateFeatures(f: Features): void {
+  caches.delete(f);
+}
+
+/**
+ * What the caller (or an anonymous visitor, `null`) sees. Share writes and `/v1/features` ask this
+ * on every call, so the two reads it needs (the switches, the caller's staff status) are kept for
+ * FEATURES_CACHE_MS. One API machine today: scaling out would need the staff route to reach the others.
+ */
 export async function featuresFor(db: Db, f: Features, userId: string | null): Promise<{ staff: boolean; features: Record<Feature, boolean> }> {
-  const [states, staff] = await Promise.all([featureStates(db), isStaff(db, f, userId)]);
+  const cache = cacheFor(f);
+  const now = Date.now();
+  const cachedStaff = userId ? cache.staff.get(userId) : undefined;
+  const [states, staff] = await Promise.all([
+    cache.states && now - cache.states.at < FEATURES_CACHE_MS ? cache.states.value : featureStates(db).then((value) => (cache.states = { at: now, value }).value),
+    !userId ? false : cachedStaff && now - cachedStaff.at < FEATURES_CACHE_MS ? cachedStaff.value : staffStatus(db, f, userId).then(({ value, settled }) => {
+      // An address on the team list that sign-in has not proven yet may turn true any moment: not kept.
+      if (settled) {
+        if (cache.staff.size >= MAX_CACHED_USERS) cache.staff.clear();
+        cache.staff.set(userId, { at: now, value });
+      }
+      return value;
+    }),
+  ]);
   const features = Object.fromEntries(FEATURES.map((k) => [k,
     f.available.has(k) && (states[k] === "on" || (states[k] === "team" && staff))])) as Record<Feature, boolean>;
   return { staff, features };
@@ -82,6 +126,7 @@ export function registerFeatures(app: FastifyInstance, db: Db, f: Features): voi
        on conflict (key) do update set state = excluded.state, updated_by = excluded.updated_by, updated_at = now()`,
       [key, state, caller.userId],
     );
+    invalidateFeatures(f);
     req.log.info({ feature: key, state }, "feature switched");
     return { features: await featureStates(db), available: [...f.available] };
   });

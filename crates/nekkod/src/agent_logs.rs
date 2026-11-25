@@ -333,10 +333,17 @@ impl AgentLogs {
     /// The agent half of `terminalSnapshot`: the saved log (after every write
     /// before it), or what this process holds, or `null`.
     pub async fn snapshot(&self, id: &str) -> Result<Value, String> {
+        self.snapshot_tail(id, None).await
+    }
+
+    /// [`snapshot`](Self::snapshot) reading only the last `max` bytes of the saved
+    /// log (at most [`MAX_BUFFER`]), for a caller that shows a few lines: a
+    /// window's card polls this every few seconds.
+    pub async fn snapshot_tail(&self, id: &str, max: Option<usize>) -> Result<Value, String> {
         let sid = id.strip_prefix(PREFIX).unwrap_or(id).to_string();
         let path = self.path(&sid)?;
         let (tx, rx) = mpsc::channel();
-        self.send(Op::Read(path, MAX_BUFFER, tx));
+        self.send(Op::Read(path, max.map_or(MAX_BUFFER, |m| m.clamp(1, MAX_BUFFER)), tx));
         let persisted =
             tokio::task::spawn_blocking(move || rx.recv().unwrap_or(Ok(None))).await.map_err(|e| e.to_string())??;
         if let Some(t) = lock(&self.terms).get(id) {
@@ -438,6 +445,50 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[tokio::test]
+    async fn a_tail_snapshot_reads_only_the_end_of_the_saved_log() {
+        let dir = temp("tail-snapshot");
+        let l = logs(&dir);
+        let text: String = (0..2000).map(|i| format!("line {i:04}\n")).collect();
+        l.append("s_tail", None, &text);
+        let whole = l.snapshot("agent_s_tail").await.unwrap();
+        assert_eq!(whole["buffer"].as_str().unwrap().len(), text.len());
+        let tail = l.snapshot_tail("agent_s_tail", Some(100)).await.unwrap();
+        let tail = tail["buffer"].as_str().unwrap();
+        assert!(tail.len() <= 100 && tail.ends_with("line 1999\n"), "{tail:?}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Timing of what a window's terminal card asks for: run by hand with
+    /// `cargo test -p nekkod --bin nekkod agent_logs::tests::time_ -- --ignored --nocapture`.
+    #[tokio::test]
+    #[ignore]
+    async fn time_a_card_s_snapshot_against_a_tail() {
+        let dir = temp("time-tail");
+        let l = logs(&dir);
+        let line = "compiling crate-name v0.10.1004 (/some/long/path/to/the/crate) finished in 1.23s\n";
+        let text: String = line.repeat(4_000_000 / line.len());
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        l.append("s_time", None, &text);
+        l.snapshot("agent_s_time").await.unwrap();
+        let median = |mut v: Vec<f64>| {
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            v[v.len() / 2]
+        };
+        for (name, max) in [("whole snapshot", None), ("tail 8 KB", Some(8 * 1024))] {
+            let mut times = Vec::new();
+            let mut bytes = 0;
+            for _ in 0..15 {
+                let t = std::time::Instant::now();
+                let snap = l.snapshot_tail("agent_s_time", max).await.unwrap();
+                bytes = snap.to_string().len();
+                times.push(t.elapsed().as_secs_f64() * 1e3);
+            }
+            println!("{name}: reply {bytes} bytes, median {:.3} ms", median(times));
+        }
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[tokio::test]

@@ -456,11 +456,40 @@ until its turn); one bigger than the whole budget runs alone. A request that
 waits over 20 s, or finds 64 already waiting, gets 503 `busy` with
 `Retry-After: 5`, which the desktop and iPhone apps retry on their own.
 
+The line is first in, first out, except that a request of at most 2 MB that
+fits in the room left goes ahead of a waiting big one (until that one has
+waited half the limit), so a small page never sits behind a 16 MB one. The
+declared `Content-Length` is only the client's word: a request that declares
+more than its route's body limit is not queued at all (Fastify answers 413
+without reading it), and the weight never exceeds the limit. Sync pushes and
+share uploads take their room after the caller is authenticated and past the
+rate limit, so an anonymous request never holds any. A client that hangs up
+does not give its room back while the handler is still building the answer
+(the work and its memory are still there); the handler stops at its next check
+and the room is released then. A request whose client left while it queued is
+answered 499 (never logged as an error).
+
+**Database connections** (`src/db.ts`): the pool has an `error` listener (Neon
+drops idle connections; an unhandled pool error would end the process), TCP
+keep-alive, a client-side `query_timeout`, and every transaction starts with
+`set local statement_timeout = 30000` (Neon's pooler refuses startup options,
+so it cannot be set per connection). A connection whose rollback failed is
+destroyed, not reused. The service listens as soon as migrations are applied;
+the purge and retry jobs run afterwards in the background.
+
 Every start logs both numbers, for example
 `memory: machine 210 MB, heap limit 104 MB (50%), request budget 98 MB`. If
 the heap limit is over 75% of the machine (the cap was lost, say a Dockerfile
 that runs `node` directly), it also logs a warning and sends the error alert.
 After a deploy or a `fly scale`, check that line in `fly logs`.
+
+**Load probe** (`npm run probe:load`, `src/dev/load-probe.ts`): the real server on
+in-memory Postgres, with concurrent pushes through a small budget, a big pull
+that the client abandons and retries, and a request declaring a huge
+`Content-Length`; it exits 1 when one fails. `node --expose-gc
+dist/dev/load-probe.js --measure` prints peak RSS for one pull page and push
+latency at 50 and 200 objects (PGlite has no network round trip, so latencies
+understate Neon's).
 
 ## Cost
 
