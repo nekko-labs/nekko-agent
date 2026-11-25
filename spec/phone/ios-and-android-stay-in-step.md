@@ -53,6 +53,18 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Paid cloud clip picker with a live total ([spec](../agents/media-tools-for-chat-agents.md), desktop since #2973 step 6) | Plain stepped questions, then a separate approval with the total | Built 2026-11-20 (`ClipPickerCard`, logic in `ClipPicker.kt`; JVM-tested, no emulator evidence yet) | [#3038](https://github.com/nekko-labs/nekko-agent/issues/3038) |
 | Take back an always-allowed MCP tool or a known recipient (desktop since #2960, decisions 0054 and 0063) | Built 2026-11-17: Model panel → **Allowed without asking** (`ChatGrantsList`), each removal signed with Face ID or the passcode (`knownRecipients` joins `PHONE_GUARDED_OPTION_KEYS`); NekkoKit-tested, app target CI-built | Built 2026-11-18: Model sheet → **Allowed without asking** (`GrantsSheet`), each removal signed with the screen lock through `setRunOption`; controller JVM-tested | None: both phones have it. |
 
+## New chat: model on device, the connect checklist, limits and picker detail (#2950)
+
+| Feature | iPhone | Android | Gap / follow-up |
+| --- | --- | --- | --- |
+| Model ⟶ device on one line; the provider, then effort's word give way, then both names shorten | Built 2026-11-17 (#2952) | Built 2026-11-25: the device half opens Run on (Automatic, the computers, This phone); the Run on card is gone | Android's This phone opens the phone's own chats screen, as before: phone chats don't start from New chat |
+| No "no tools" note; the open phone chat says model ⟶ This phone once | Built (#2952) | Built 2026-11-25 | None |
+| Connect checklist over the first message, then the closeable note, with Undo | Built (#2952) | Built 2026-11-25 (`ConnectChecklist` ported with the same cases) | None |
+| The limit line in New chat and above an open chat's message box; phone keys from the last answer's rate-limit headers | Built (#2953) | Built 2026-11-25 (`LimitLine`, `PhoneRateLimits.providerLimits`, same cases) | None |
+| Model picker: size or context per model, dated snapshots folded, limits under each provider | Built (#2954) | Built 2026-11-25 (`ModelMeta`, `ModelSnapshots`, same cases) | None |
+
+Both: JVM or Linux unit tests only; neither app's screens have been looked at on a device or emulator yet.
+
 ## Pending response messages (#2476, #2497)
 
 Both phones keep in-chat answers and one-time Allow/Deny as pending response messages: the iPhone since #2499 (2026-11-13), Android since [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) (2026-11-16, JVM-tested and emulator-verified, not on a physical phone).
@@ -85,7 +97,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
 | CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | Replies read aloud and answered by voice in Android Auto (notifications); no Work list, Results, approvals or Stop | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
-| New chat: model ⟶ device on one line, the connect checklist and note, the limit line, picker size and context (iPhone #2921-#2925, 2026-11-17) | Still two rows and the "no tools" note | [#2950](https://github.com/nekko-labs/nekko-agent/issues/2950) |
 | Real brand marks on sign-in and provider headings (iPhone #2930, 2026-11-17) | Android has no Nekko Cloud sign-in yet; provider marks exist on chat rows only | [#2938](https://github.com/nekko-labs/nekko-agent/issues/2938) |
 | Models on This Phone: provider buttons, Anthropic choice with a disabled Claude subscription and a sad Nekko (iPhone #2931, 2026-11-17) | Not started | [#2939](https://github.com/nekko-labs/nekko-agent/issues/2939) |
 | Settings: Nekko Cloud profile on top, Computers second, avatar rows with a plus (iPhone #2929, 2026-11-17) | Not started | [#2940](https://github.com/nekko-labs/nekko-agent/issues/2940) |

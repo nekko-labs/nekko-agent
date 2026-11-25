@@ -79,6 +79,34 @@ class PhoneChatsTest {
         val empty = PhoneChats(memory, http, backgroundScope); empty.load()
         assertTrue(empty.state.value.chats.isEmpty())
     }
+    // #2950: the limit line reads the key's budget from the last answer's headers, kept in memory only.
+    private class Limited : PhoneHTTP {
+        var headers = mapOf("x-ratelimit-limit-tokens" to "30000", "x-ratelimit-remaining-tokens" to "26400", "x-ratelimit-reset-tokens" to "20s")
+        override suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)?): String = send(request, line) {}
+        override suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)?, headers: (Map<String, String>) -> Unit): String {
+            if (line == null) return """{"data":[{"id":"chat-model","name":"Chat model"}]}"""
+            headers(this.headers)
+            line("data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}"); line("")
+            line("data: [DONE]"); line("")
+            return ""
+        }
+    }
+
+    @Test fun answersKeepTheKeysBudgetInMemoryUntilANewKey() = runTest {
+        val memory = Memory(); val phone = PhoneChats(memory, Limited(), backgroundScope)
+        phone.load()
+        val p = phone.add("openai", "My API", null, "device-secret")
+        assertNull(phone.state.value.rateLimits[p])
+        phone.models(p)
+        val id = phone.newChat(p, "chat-model")
+        phone.send(id, "Hi"); runCurrent()
+        val limits = phone.state.value.rateLimits[p]
+        assertEquals(30_000L, limits?.tokensLimit)
+        assertEquals(26_400L, limits?.tokensRemaining)
+        assertFalse("never saved", memory.values.values.any { it.contains("26400") })
+        phone.setKey(p, "new-secret")
+        assertNull(phone.state.value.rateLimits[p])
+    }
     @Test fun stopDisableAndRestoreInterruptedReply() = runTest {
         val memory = Memory(); val http = HTTP(); val phone = PhoneChats(memory, http, backgroundScope)
         phone.load(); val p = phone.add("openai", "API", null, "old-key"); phone.models(p)

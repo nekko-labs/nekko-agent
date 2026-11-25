@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_new_chat.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="newchat_runs_on">Corre em %1$s</string>
+    <string name="newchat_checklist_title">Com isto o Nekko pode fazer mais</string>
+    <string name="newchat_checklist_count">%1$d de %2$d</string>
+    <string name="newchat_checklist_close">Fechar a lista</string>
+    <string name="newchat_checklist_hidden">Lista ocultada.</string>
+    <string name="newchat_undo">Anular</string>
+    <string name="newchat_close">Fechar</string>
+    <string name="newchat_connect">Conectar</string>
+    <string name="newchat_done_named">Concluído, %1$s</string>
+    <string name="newchat_note">O Nekko ainda não pode usar os seus ficheiros nem ferramentas.</string>
+    <string name="newchat_item_computer">Emparelhar um computador</string>
+    <string name="newchat_item_computer_detail">Para o Nekko usar ferramentas e os seus ficheiros</string>
+    <string name="newchat_item_folder">Adicionar uma pasta</string>
+    <string name="newchat_item_folder_detail">Um projeto onde o Nekko trabalha</string>
+    <string name="newchat_item_folder_waiting">Depois de emparelhar um computador</string>
+    <string name="newchat_item_git">Conecte um provedor Git</string>
+    <string name="newchat_item_git_detail">GitHub, GitLab ou Bitbucket</string>
+    <string name="newchat_item_tasks">Ligar uma ferramenta de tarefas</string>
+    <string name="newchat_item_tasks_detail">Linear, Jira, Floop e mais</string>
+    <string name="newchat_this_phone_detail">Os próprios modelos</string>
+    <string name="limit_reached">Limite de %1$s atingido</string>
+    <string name="limit_used">%1$d%% do limite de %2$s</string>
+    <string name="limit_resets">%1$s · repõe às %2$s</string>
+    <string name="limit_switch_model">Mudar de modelo</string>
+    <string name="model_dated_one">1 versão datada</string>
+    <string name="model_dated_many">%1$d versões datadas</string>
+    <string name="model_dated_hide">Ocultar versões datadas</string>
+</resources>

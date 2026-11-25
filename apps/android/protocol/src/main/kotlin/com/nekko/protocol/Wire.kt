@@ -786,12 +786,32 @@ data class Appearance(
     }
 }
 
-data class ModelInfo(val id: String, val providerId: String, val name: String, val loaded: Boolean) {
+data class ModelInfo(
+    val id: String,
+    val providerId: String,
+    val name: String,
+    val loaded: Boolean,
+    /** Size on disk, when the provider says (local model servers, #2950). */
+    val sizeBytes: Long? = null,
+    /** The context window in tokens, when the provider says. */
+    val contextLength: Long? = null,
+    /** Family, quantization and the like, as text (`details` on the wire). */
+    val details: Map<String, String> = emptyMap(),
+) {
+    /** "8B", from the details a model server or the Nekko engine gives. */
+    val parameters: String? get() = details["parameterSize"] ?: details["params"]
+
     companion object {
         fun list(e: JsonElement?): List<ModelInfo> = e.arr()?.mapNotNull { m ->
             val o = m.obj() ?: return@mapNotNull null
             val id = o.str("id") ?: return@mapNotNull null
-            ModelInfo(id, o.str("providerId") ?: "", o.str("name")?.ifBlank { null } ?: id, o.bool("loaded"))
+            val details = o["details"].obj().orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.let { k to it } }.toMap()
+            ModelInfo(
+                id, o.str("providerId") ?: "", o.str("name")?.ifBlank { null } ?: id, o.bool("loaded"),
+                sizeBytes = o.long("sizeBytes")?.takeIf { it > 0 },
+                contextLength = o.long("contextLength")?.takeIf { it > 0 },
+                details = details,
+            )
         } ?: emptyList()
     }
 }
