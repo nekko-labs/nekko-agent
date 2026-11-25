@@ -12,6 +12,7 @@ import { purgeLibraryHistory } from "./shares.js";
 import { Stripe } from "./billing.js";
 import { parseSigningKey } from "./relay.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
+import { RelayPresence } from "./relay-presence.js";
 import { budgetForMachine, MemoryGate, memoryReport } from "./memory-gate.js";
 import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
 
@@ -129,7 +130,9 @@ if (memory.warning) {
   console.warn(memory.warning);
   alert(memory.warning);
 }
-const app = buildServer({ db, memoryGate, relay, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS), fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
+const relayPresence = RelayPresence.fromEnv();
+if (relayPresence) console.log("fleet presence from the relay: on");
+const app = buildServer({ db, memoryGate, relayPresence, relay, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS), fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
 void (async () => {
   for (const job of startupJobs) await job();

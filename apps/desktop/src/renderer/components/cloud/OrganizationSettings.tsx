@@ -5,7 +5,7 @@ import { SettingRow, SettingsSection } from '../SettingsSection.js';
 import { StatusDot } from '../primitives/index.js';
 import { Toggle } from '../primitives/Toggle.js';
 import {
-  FLEET_POLL_MS, canManage, canOpen, loadFleet, loadOrgs, lastSeen, openOnComputer, orgErrorText, orgGate, orgListErrorText, osLabel, reachNote,
+  FLEET_FAST_PATH, canManage, canOpen, loadFleet, loadOrgs, lastSeen, openOnComputer, orgErrorText, fleetPollMs, orgGate, orgListErrorText, osLabel, reachNote, relayPresenceKey,
   roleLabel, roleSentence, setSharing, sortComputers, splitModels, validEmail, type OrgGate, type OrgSnapshot,
 } from './orgModel.js';
 import { addCreatedSession, useStore } from '../../store.js';
@@ -381,6 +381,8 @@ export function OrganizationSettings() {
 
   const orgId = snap?.detail?.id ?? null;
   const hasKey = snap?.detail?.hasKey ?? false;
+  const relayUp = status?.relay?.connected === true;
+  const presence = relayPresenceKey(status);
   useEffect(() => {
     if (gate !== 'ready' || !orgId || !hasKey || !visible) return;
     const tick = async () => {
@@ -388,9 +390,20 @@ export function OrganizationSettings() {
       const r = await loadFleet(window.nekko, { id: orgId, hasKey });
       setSnap((s) => (s?.detail?.id === orgId ? { ...s, fleet: r.fleet ?? s.fleet, fleetError: r.error } : s));
     };
-    const id = setInterval(() => void tick(), FLEET_POLL_MS);
+    const id = setInterval(() => void tick(), fleetPollMs(relayUp));
     return () => clearInterval(id);
-  }, [gate, orgId, hasKey, visible]);
+  }, [gate, orgId, hasKey, visible, relayUp]);
+
+  // With the fast path, someone coming or going on the account channel reads the Computers list now.
+  const lastPresence = useRef(presence);
+  useEffect(() => {
+    const changed = lastPresence.current !== presence;
+    lastPresence.current = presence;
+    if (FLEET_FAST_PATH && changed && gate === 'ready' && orgId && hasKey && visible) {
+      void loadFleet(window.nekko, { id: orgId, hasKey }).then((r) =>
+        setSnap((s) => (s?.detail?.id === orgId ? { ...s, fleet: r.fleet ?? s.fleet, fleetError: r.error } : s)));
+    }
+  }, [presence, gate, orgId, hasKey, visible]);
 
   const act = useCallback(async (label: string, work: () => Promise<unknown>) => {
     setError('');
