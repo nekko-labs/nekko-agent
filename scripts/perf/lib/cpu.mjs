@@ -25,13 +25,19 @@ export function parseProcStat(line, ticks = 100) {
 }
 
 function psTable() {
-  return execFileSync('ps', ['-A', '-o', 'pid=,ppid=,time='], { encoding: 'utf8' })
-    .split('\n').map((l) => l.trim().split(/\s+/)).filter((c) => c.length >= 3)
-    .map(([pid, ppid, time]) => ({ pid: Number(pid), ppid: Number(ppid), time }));
+  return execFileSync('ps', ['-A', '-o', 'pid=,ppid=,time=,command='], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    .split('\n').map((l) => /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(l)).filter(Boolean)
+    .map(([, pid, ppid, time, command]) => ({ pid: Number(pid), ppid: Number(ppid), time, command }));
 }
 
-/** CPU seconds of `pid` and all its descendants, or null when unavailable. */
-export function cpuSecondsOfTree(pid) {
+/** What a Chromium process is, from its command line: renderer, gpu-process, utility, ... or browser (no --type). */
+export function chromiumKind(command) {
+  const m = /--type=([\w-]+)/.exec(command);
+  return m ? m[1] : 'browser';
+}
+
+/** CPU seconds of each process in the tree of `pid` (itself and every descendant), or null when unavailable. */
+export function cpuOfProcesses(pid) {
   if (!pid || process.platform === 'win32') return null;
   try {
     const rows = psTable();
@@ -40,16 +46,35 @@ export function cpuSecondsOfTree(pid) {
       grew = false;
       for (const r of rows) if (!tree.has(r.pid) && tree.has(r.ppid)) { tree.add(r.pid); grew = true; }
     }
-    let total = 0;
+    const out = [];
     for (const r of rows) {
       if (!tree.has(r.pid)) continue;
       const secs = process.platform === 'linux'
         ? parseProcStat(readFileSync(`/proc/${r.pid}/stat`, 'utf8'))
         : parsePsTime(r.time);
-      if (secs != null) total += secs;
+      if (secs != null) out.push({ pid: r.pid, command: r.command, secs });
     }
-    return total;
+    return out;
   } catch {
     return null;
   }
+}
+
+/** CPU seconds of `pid` and all its descendants, or null when unavailable. */
+export function cpuSecondsOfTree(pid) {
+  const all = cpuOfProcesses(pid);
+  return all ? all.reduce((n, p) => n + p.secs, 0) : null;
+}
+
+/** A Chromium tree's CPU seconds by kind of process, and in total, or null when unavailable. */
+export function chromiumCpu(pid) {
+  const all = cpuOfProcesses(pid);
+  if (!all) return null;
+  const by = { total: 0, renderer: 0, gpu: 0, browser: 0, other: 0 };
+  for (const p of all) {
+    const k = chromiumKind(p.command);
+    by.total += p.secs;
+    by[k === 'renderer' ? 'renderer' : k === 'gpu-process' ? 'gpu' : k === 'browser' ? 'browser' : 'other'] += p.secs;
+  }
+  return by;
 }

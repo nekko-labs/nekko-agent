@@ -63,7 +63,7 @@ import { FRAME_PUMP, INSTALL, frameWake, locate } from './lib/probes.mjs';
 import { summarize } from './lib/stats.mjs';
 import { frameWorkFromTrace } from './lib/trace.mjs';
 import { BUDGETS, MEMORY_BUDGETS, REPORT_ONLY_PROBES } from './budgets.mjs';
-import { cpuSecondsOfTree } from './lib/cpu.mjs';
+import { chromiumCpu, cpuSecondsOfTree } from './lib/cpu.mjs';
 import { markLoaded, rendererBuildSizes } from './lib/chunks.mjs';
 import { startProfile, startTimeline, stopProfile } from './lib/profile.mjs';
 import { selectWallView } from '../../apps/desktop/scripts/wall-view-navigation.cjs';
@@ -826,8 +826,10 @@ async function measureConcurrent({ appUrl, mock, api, ids }) {
       for (let w = 0; w < 9 && !over(); w++) await sleep(100);
     }
   };
-  const t = await traceFrames(app, { maxMs: QUICK ? 5000 : 8000, during });
-  const aStillStreaming = mock.state.streamsFinished === finished;
+  const maxMs = QUICK ? 5000 : 8000;
+  const t = await traceFrames(app, { maxMs, during, done: () => mock.state.streamsFinished > finished });
+  // The trace ends early if A's reply ends first, which would measure an idle page.
+  const aStillStreaming = t.seconds * 1000 >= maxMs - 250;
   await api('chat:abort', ids[0]);
   await app.close();
   return { browser: app.browser.version, seconds: t.seconds, bCompletions: completions, aStillStreaming, frames: t.frames, work: t.work, busyFraction: t.busyFraction, source: t.source };
@@ -912,8 +914,10 @@ async function measureStartup({ appUrl }) {
  * reply) and the window is hidden: a second tab is opened in front of it, and
  * the page must report visibilityState "hidden" or the result says so. CPU is
  * read as process CPU time before and after a window, as a share of one core:
- * the page's main thread (DevTools Performance.TaskDuration), all renderer, GPU
- * and browser processes (SystemInfo.getProcessInfo), and the Local Web UI
+ * the page's main thread (DevTools Performance.TaskDuration), the Chromium
+ * process tree in total and its GPU and browser processes (ps or /proc; the
+ * renderer's own ps figure did not track the page's main thread on macOS, so
+ * the renderer is the main-thread figure), and the Local Web UI
  * server with its children (nekkod), which stands in for the desktop's main
  * process. Measured twice: hidden with no agent, then hidden with one running.
  */
@@ -930,9 +934,8 @@ async function measureIdle({ appUrl, mock, api, ids }) {
     const seconds = QUICK ? 6 : 10;
     const read = async () => {
       const m = (await app.cdp.send('Performance.getMetrics')).metrics;
-      const procs = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
-      const sum = (type) => procs.filter((p) => p.type === type).reduce((n, p) => n + p.cpuTime, 0);
-      return { at: performance.now() / 1000, main: m.find((x) => x.name === 'TaskDuration')?.value ?? 0, renderer: sum('renderer'), gpu: sum('GPU'), browser: sum('browser'), server: cpuSecondsOfTree(SERVER_PID) };
+      const c = chromiumCpu(app.browser.proc.pid);
+      return { at: performance.now() / 1000, main: m.find((x) => x.name === 'TaskDuration')?.value ?? 0, renderer: c?.renderer ?? null, gpu: c?.gpu ?? null, browser: c?.browser ?? null, chrome: c?.total ?? null, server: cpuSecondsOfTree(SERVER_PID) };
     };
     const window_ = async () => {
       const a = await read();
@@ -940,7 +943,7 @@ async function measureIdle({ appUrl, mock, api, ids }) {
       const b = await read();
       const dt = b.at - a.at;
       const pct = (k) => (a[k] == null || b[k] == null ? null : ((b[k] - a[k]) / dt) * 100);
-      return { seconds: dt, rendererMainPct: pct('main'), rendererProcessesPct: pct('renderer'), gpuPct: pct('gpu'), browserPct: pct('browser'), serverPct: pct('server') };
+      return { seconds: dt, rendererMainPct: pct('main'), rendererProcessesPct: pct('renderer'), gpuPct: pct('gpu'), browserPct: pct('browser'), chromePct: pct('chrome'), serverPct: pct('server') };
     };
     await sleep(2000);
     const noAgent = await window_();

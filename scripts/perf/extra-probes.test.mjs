@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { BUDGETS, REPORT_ONLY_PROBES } from './budgets.mjs';
 import { markLoaded, rendererBuildSizes } from './lib/chunks.mjs';
-import { parseProcStat, parsePsTime } from './lib/cpu.mjs';
+import { chromiumKind, parseProcStat, parsePsTime } from './lib/cpu.mjs';
 import { streamTokens } from './lib/content.mjs';
 import { LONG_REPLY_CHARS } from './lib/mock-provider.mjs';
 
@@ -53,4 +53,10 @@ test('renderer build sizes total the JavaScript and mark what loaded at startup'
   const marked = markLoaded(sizes.chunks, ['http://127.0.0.1:4392/assets/index-a.js']);
   assert.deepEqual(marked.map((c) => c.loadedAtStartup), [false, true]);
   assert.equal(rendererBuildSizes(join(dir, 'missing')), null);
+});
+
+test('Chromium processes are classified from their command line', () => {
+  assert.equal(chromiumKind('/x/Chrome --type=renderer --lang=en'), 'renderer');
+  assert.equal(chromiumKind('/x/Chrome --type=gpu-process'), 'gpu-process');
+  assert.equal(chromiumKind('/x/Chrome --headless=new --remote-debugging-port=9397'), 'browser');
 });
