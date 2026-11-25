@@ -65,10 +65,19 @@ fn later_holds_replace_earlier_ones_and_every_reader_flushes() {
     assert!(meta.messages_array);
     assert_eq!(on_disk(&store, &id)["messages"].as_array().unwrap().len(), 2);
 
+    // A listing does not write it: the summary comes from the chat in memory.
     store.defer_turn_save(&session, Some(messages(4)));
     let listed = store.summaries();
     assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0]["messageCount"], 4);
+    assert!(store.has_deferred(&id));
+    assert_eq!(on_disk(&store, &id)["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(store.summary(&id).unwrap()["messageCount"], 4);
+    store.flush(&id).unwrap();
     assert_eq!(on_disk(&store, &id)["messages"].as_array().unwrap().len(), 4);
+    assert_eq!(store.summaries()[0]["messageCount"], 4);
+
+    store.defer_turn_save(&session, Some(messages(4)));
 
     store.defer_turn_save(&session, Some(messages(5)));
     assert_eq!(store.list_meta().len(), 1);
@@ -103,4 +112,31 @@ fn a_discarded_hold_is_never_written() {
     assert_eq!(on_disk(&store, &id)["messages"].as_array().map_or(0, Vec::len), 0);
     store.flush(&id).unwrap();
     assert_eq!(on_disk(&store, &id)["messages"].as_array().map_or(0, Vec::len), 0);
+}
+
+#[test]
+fn a_held_chats_summary_is_its_memory_with_the_users_fields_from_disk() {
+    let (_tmp, store) = store();
+    let chat = store.create(None).unwrap();
+    let id = chat["id"].as_str().unwrap().to_string();
+    let other = store.create(None).unwrap()["id"].as_str().unwrap().to_string();
+    let session = Arc::new(Mutex::new(chat));
+    let before = store.summaries().iter().find(|v| v["id"] == id.as_str()).unwrap()["updatedAt"].as_f64().unwrap();
+
+    store.defer_turn_save(&session, Some(messages(3)));
+    // The user pins it and names it on disk (a write flushes the held save first), then the turn
+    // holds a newer one: the summary shows the user's fields and the turn's transcript.
+    store.set_options(&id, &json!({ "pinned": true, "title": "mine" })).unwrap();
+    session.lock().unwrap()["pinned"] = json!(false);
+    store.defer_turn_save(&session, Some(messages(6)));
+    let s = store.summaries().into_iter().find(|v| v["id"] == id.as_str()).unwrap();
+    assert_eq!(s["messageCount"], 6);
+    assert_eq!(s["pinned"], true);
+    assert_eq!(s["title"], "mine");
+    assert!(s["updatedAt"].as_f64().unwrap() >= before);
+    assert!(store.has_deferred(&id) && on_disk(&store, &id)["messages"].as_array().unwrap().len() == 3);
+    // Both chats list, the held one newest.
+    let ids: Vec<String> = store.summaries().iter().map(|v| v["id"].as_str().unwrap().to_string()).collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&other));
 }

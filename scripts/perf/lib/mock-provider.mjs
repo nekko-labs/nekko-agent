@@ -8,6 +8,10 @@ import { createServer } from 'node:http';
 import { streamTokens } from './content.mjs';
 
 export const STREAM_TRIGGER = 'PERF-STREAM';
+/** A prompt containing this gets the shorter reply of LONG_REPLY_CHARS characters, for the long-reply probe. */
+export const LONG_TRIGGER = 'PERF-LONG';
+/** About 16 KB of mixed markdown (headings, lists, fenced code), inside the 10-20 KB the long-reply probe is for. */
+export const LONG_REPLY_CHARS = 16_000;
 
 function lastUserText(body) {
   const msgs = Array.isArray(body.messages) ? body.messages : [];
@@ -21,6 +25,7 @@ function lastUserText(body) {
 
 export async function startMockProvider({ port, tokensPerSecond, replyTokens }) {
   const tokens = streamTokens(replyTokens);
+  const longTokens = streamTokens(LONG_REPLY_CHARS / 4, 7);
   const state = { streamsStarted: 0, streamsFinished: 0 };
 
   const server = createServer((req, res) => {
@@ -39,7 +44,9 @@ export async function startMockProvider({ port, tokensPerSecond, replyTokens }) 
         let body = {};
         try { body = JSON.parse(raw); } catch { /* treat as empty */ }
         const prompt = lastUserText(body);
-        const long = prompt.includes(STREAM_TRIGGER);
+        const longReply = prompt.includes(LONG_TRIGGER);
+        const long = longReply || prompt.includes(STREAM_TRIGGER);
+        const reply = longReply ? longTokens : tokens;
         const short = prompt.includes('follow-up')
           ? '{"options":["Run the tests","Explain the diff"],"next":"Run the tests."}'
           : 'OK.';
@@ -77,11 +84,11 @@ export async function startMockProvider({ port, tokensPerSecond, replyTokens }) 
         res.on('close', () => { closed = true; });
         const timer = setInterval(() => {
           if (closed) { clearInterval(timer); return; }
-          const due = Math.min(tokens.length, Math.floor(((performance.now() - started) / 1000) * tokensPerSecond));
+          const due = Math.min(reply.length, Math.floor(((performance.now() - started) / 1000) * tokensPerSecond));
           let out = '';
-          while (sent < due) out += chunk({ content: tokens[sent++] });
+          while (sent < due) out += chunk({ content: reply[sent++] });
           if (out) res.write(out);
-          if (sent >= tokens.length) {
+          if (sent >= reply.length) {
             clearInterval(timer);
             finish(sent);
             state.streamsFinished++;
