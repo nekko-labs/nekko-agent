@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { DownloadJob } from '@nekko-agent/shared';
 import { createDownloadActions, matchesDownload, type DownloadTarget } from './downloadActionState.js';
+import { EngineUpdateStatus } from './EngineUpdateStatus.js';
 import { DownloadProgress } from './DownloadProgress.js';
 import { groupDownloads } from './downloadGroups.js';
 
@@ -93,5 +94,17 @@ describe('inline progress', () => {
   it('says verifying until installation completes', () => {
     const group = groupDownloads([job({ state: 'verifying' })])[0];
     expect(renderToStaticMarkup(<DownloadProgress group={group} />)).toContain('Verifying…');
+  });
+});
+
+// Completion and failure must outlive the optimistic progress group.
+describe('runtime update status', () => {
+  it.each([['done', 'Installed'], ['failed', 'Update failed'], ['cancelled', 'Cancelled']] as const)('keeps a %s outcome by the runtime', (state, text) => {
+    const runtime = job({ id: 'engine:llama:metal', kind: 'engine', label: 'llama.cpp', state, message: 'Checksum mismatch' });
+    const html = renderToStaticMarkup(<EngineUpdateStatus download={{ active: false, runtimeJobs: [runtime] }} onChanged={() => {}} />);
+    expect(html).toContain(text);
+    expect(html).toContain('Dismiss llama.cpp');
+    expect(html.includes('Checksum mismatch')).toBe(state === 'failed');
+    expect(html).not.toContain('progressbar');
   });
 });

@@ -174,7 +174,7 @@ class RelayClientTest {
             deviceId = id, deviceName = "Pixel", pairCode = pair,
             // Generous: the first test on a cold JVM also pays for crypto setup, and no test here
             // waits for these to expire, so they only bound how long a real failure takes.
-            handshakeTimeoutMs = handshakeTimeoutMs, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+            handshakeTimeoutMs = handshakeTimeoutMs, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, retryJitter = 0.0, offlinePollMs = 40,
             challengeWaitMs = challengeWaitMs,
         ),
         transport, scope,
@@ -260,7 +260,7 @@ class RelayClientTest {
                 hostKey = fxObj("hostKey")["publicKey"]!!.jsonPrimitive.content,
                 deviceId = d["deviceId"]!!.jsonPrimitive.content, deviceName = d["name"]!!.jsonPrimitive.content,
                 platform = d["platform"]!!.jsonPrimitive.content,
-                handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+                handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, retryJitter = 0.0, offlinePollMs = 40,
                 challengeWaitMs = challengeWaitMs,
                 helloSigner = signer,
                 fleetHello = fleet,
@@ -995,7 +995,7 @@ class RelayClientTest {
         val c = RelayClient(
             RelayConfig(
                 relayUrl = "wss://relay.test/", room = room, key = "k", keyBytes = key, hostKey = hostKey, deviceId = "dev-1", deviceName = "Pixel",
-                handshakeTimeoutMs = 2_000, requestTimeoutMs = 2_000, retryBaseMs = 60_000, retryMaxMs = 60_000,
+                handshakeTimeoutMs = 2_000, requestTimeoutMs = 2_000, retryBaseMs = 60_000, retryMaxMs = 60_000, retryJitter = 0.0,
             ),
             relay, scope,
         )
@@ -1051,7 +1051,7 @@ class RelayClientTest {
     private fun twoRoutes(relay: FakeRelay, prober: RouteProber? = null, dwellMs: Long = 50, allowed: (String) -> Boolean = { true }) = RelayClient(
         RelayConfig(
             relayUrl = tailnetRoute, room = room, key = "k", keyBytes = key, hostKey = hostKey, deviceId = "dev-1", deviceName = "Pixel",
-            handshakeTimeoutMs = 2_000, requestTimeoutMs = 5_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+            handshakeTimeoutMs = 2_000, requestTimeoutMs = 5_000, retryBaseMs = 20, retryMaxMs = 80, retryJitter = 0.0, offlinePollMs = 40,
             alts = listOf(lanRoute),
             routeRules = RouteRules(openTimeoutMs = 100, probeIntervalMs = 20, failureCooldownMs = 100, minDwellMs = dwellMs, successesToReturn = 3),
             routeAllowed = allowed,
@@ -1205,5 +1205,25 @@ class RelayClientTest {
         assertTrue(relay.urls.all { it.startsWith("$tailnetRoute/relay?") })
         assertTrue("nothing better to probe", prober.probes.isEmpty())
         c.close()
+    }
+
+    @Test
+    fun `reconnect backoff adds up to half again, at random, on top of 1 2 4 to the cap`() {
+        fun config(jitter: Double, source: Double) = RelayConfig(
+            relayUrl = "wss://relay.test", room = "r", key = "k", keyBytes = ByteArray(32), hostKey = "h",
+            deviceId = "d", deviceName = "n", jitterSource = { source }, retryJitter = jitter,
+        )
+        // No jitter drawn (0.0): the exact old schedule, capped at 30 s.
+        assertEquals(listOf(1_000L, 2_000L, 4_000L, 8_000L, 16_000L, 30_000L, 30_000L), (0..6).map { config(0.5, 0.0).retryDelayMs(it) })
+        // The largest draw (just under 1.0) adds just under half, never more.
+        assertEquals(listOf(1_499L, 2_999L, 5_999L), (0..2).map { config(0.5, 0.9999).retryDelayMs(it) })
+        assertEquals(44_998L, config(0.5, 0.9999).retryDelayMs(10))
+        // Switched off, the delay is exact whatever is drawn.
+        assertEquals(2_000L, config(0.0, 0.9999).retryDelayMs(1))
+        // Real draws land in [base, 1.5 base) and are not all the same.
+        val live = RelayConfig(relayUrl = "wss://relay.test", room = "r", key = "k", keyBytes = ByteArray(32), hostKey = "h", deviceId = "d", deviceName = "n")
+        val draws = (1..200).map { live.retryDelayMs(3) }
+        assertTrue(draws.all { it in 8_000L until 12_000L })
+        assertTrue(draws.toSet().size > 1)
     }
 }
