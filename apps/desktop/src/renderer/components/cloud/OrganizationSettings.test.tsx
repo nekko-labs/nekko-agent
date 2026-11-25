@@ -5,7 +5,7 @@ import type { CloudStatus, FleetComputerView, FleetList, OrgDetail, OrgSummary }
 import { OrganizationView, type OrgViewProps } from './OrganizationSettings.js';
 import { Toggle } from '../primitives/Toggle.js';
 import {
-  canManage, canOpen, lastSeen, loadFleet, loadOrgs, openOnComputer, orgErrorText, orgGate, orgListErrorText, reachNote, setSharing, sortComputers, splitModels,
+  FLEET_FAST_PATH, FLEET_POLL_CONNECTED_MS, FLEET_POLL_MS, canManage, canOpen, fleetPollMs, lastSeen, loadFleet, loadOrgs, openOnComputer, orgErrorText, orgGate, orgListErrorText, reachNote, relayPresenceKey, setSharing, sortComputers, splitModels,
   type FleetOpenApi, type OrgApi,
 } from './orgModel.js';
 
@@ -368,5 +368,31 @@ describe('Opening a chat on a listed computer (decision 0102)', () => {
 
   it('says on the share switch that your own computers can open chats here', () => {
     expect(html(props())).toContain('your own other computers can open chats on it');
+  });
+});
+
+describe('the Computers list refresh pace', () => {
+  it('stays at 15 seconds in this build: the slower poll is off until the API lease outlasts the engine beat', () => {
+    expect(FLEET_FAST_PATH).toBe(false);
+    expect(fleetPollMs(true)).toBe(FLEET_POLL_MS);
+    expect(fleetPollMs(false)).toBe(FLEET_POLL_MS);
+  });
+
+  it('is a minute while the account channel is up, with the fast path on', () => {
+    expect(fleetPollMs(true, true)).toBe(FLEET_POLL_CONNECTED_MS);
+    expect(FLEET_POLL_CONNECTED_MS).toBe(60_000);
+    expect(fleetPollMs(false, true)).toBe(FLEET_POLL_MS);
+  });
+
+  it('keys presence so a computer coming or going changes it, and no channel is empty', () => {
+    const status = (relay: CloudStatus['relay']) => ({ relay } as CloudStatus);
+    expect(relayPresenceKey(null)).toBe('');
+    expect(relayPresenceKey(status(null))).toBe('');
+    expect(relayPresenceKey(status({ connected: false, online: [] }))).toBe('');
+    const alone = relayPresenceKey(status({ connected: true, online: [] }));
+    const withPhone = relayPresenceKey(status({ connected: true, online: [{ dev: 'p1', kind: 'phone' }] }));
+    const withBoth = relayPresenceKey(status({ connected: true, online: [{ dev: 'p2', kind: 'phone' }, { dev: 'p1', kind: 'computer' }] }));
+    expect(new Set(['', alone, withPhone, withBoth]).size).toBe(4);
+    expect(withBoth).toBe('p1,p2');
   });
 });
