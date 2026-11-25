@@ -9,7 +9,7 @@ import androidx.test.uiautomator.Until
 /** The app under test: the release build's id (`applicationId` in `:app`). */
 const val TARGET_PACKAGE = "com.nekko.native.android"
 
-/** Opens the benchmark-only 300-message chat screen (`LongChatBenchmarkActivity`), in [mode]: `scroll`, `stream` or `stream-legacy`. */
+/** Opens the benchmark-only 300-message chat screen (`LongChatBenchmarkActivity`), in [mode]. */
 fun MacrobenchmarkScope.startLongChat(mode: String) {
     startActivityAndWait(
         Intent().setClassName(TARGET_PACKAGE, "com.nekko.android.LongChatBenchmarkActivity").putExtra("mode", mode),
@@ -28,9 +28,4 @@ fun MacrobenchmarkScope.scrollLongChat(rounds: Int = 3) {
         list.fling(Direction.DOWN)
         device.waitForIdle()
     }
-}
-
-/** Waits for the benchmark chat's stream to end (it shows "done"). */
-fun MacrobenchmarkScope.awaitStreamDone() {
-    device.wait(Until.hasObject(By.res("done")), 60_000)
 }

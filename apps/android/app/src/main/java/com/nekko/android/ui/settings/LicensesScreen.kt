@@ -55,7 +55,7 @@ val OpenSourceLicenses: List<LicenseGroup> = listOf(
     LicenseGroup(
         "Apache License 2.0",
         listOf(
-            "AndroidX: Activity, Annotation, Core, Lifecycle, Navigation, SavedState, Startup and their dependencies",
+            "AndroidX: Activity, Annotation, Core, Lifecycle, Navigation, SavedState, Startup, ProfileInstaller and their dependencies",
             "Jetpack Compose: Runtime, UI, Foundation, Animation, Material 3, Material Icons",
             "Kotlin standard library, kotlinx.coroutines, kotlinx.serialization (JetBrains)",
             "JetBrains annotations, JSpecify, javax.inject",

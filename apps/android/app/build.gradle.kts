@@ -64,12 +64,13 @@ android {
 }
 
 // Benchmark-only code (the long-chat screen :baselineprofile drives): its Kotlin lives in src/benchmark/java and is
-// added to the two variants the Baseline Profile plugin makes, never to debug or release; each of those has the
-// manifest entry for it (src/<variant>/AndroidManifest.xml).
+// and its manifest entry in src/benchmark/AndroidManifest.xml, both added to the two variants the Baseline Profile
+// plugin makes, never to debug or release.
 androidComponents {
     onVariants { variant ->
         if (variant.buildType == "benchmarkRelease" || variant.buildType == "nonMinifiedRelease") {
             variant.sources.java?.addStaticSourceDirectory("src/benchmark/java")
+            variant.sources.manifests?.addStaticManifestFile("src/benchmark/AndroidManifest.xml")
         }
     }
 }

@@ -270,3 +270,12 @@ No commits, branches, workflow dispatches or PRs were created by this task.
 The native **This phone** destination works without a paired computer. Add an HTTPS cloud-provider API, keep its key sealed on this device, select a model and start a standalone streamed text chat. Setup/test, key replacement, disable/remove, stop/retry and local history/forget are supported. No tools, photos or sync; Claude/ChatGPT subscriptions and local model servers still need a computer.
 
 See [Android direct-cloud specification](../../spec/phone/android-direct-cloud-chats.md) and the [verification handoff](docs/phone-cloud-2414-handoff.md) for the implementation boundary, SDK paths, exact checks and evidence limitations. No new dependencies were added.
+
+## Performance: baseline profile and benchmarks
+
+`:baselineprofile` (a `com.android.test` module, AndroidX Baseline Profile and Macrobenchmark, Apache 2.0, build and test time only) generates the app's Baseline Profile and measures cold start and a 300-message chat. Both need a device or emulator (API 28+) and are not part of CI.
+
+- Generate: `./gradlew :app:generateBaselineProfile` (add `-PbenchmarkOnEmulator` on an emulator). It writes `app/src/release/generated/baselineProfiles/`; commit the result. Regenerate after large UI changes.
+- Measure: `./gradlew :baselineprofile:connectedBenchmarkReleaseAndroidTest` (cold start and scrolling a long chat, each with and without the profile). An emulator is not a phone: its numbers are not device numbers.
+- The long-chat screen the tests drive (`LongChatBenchmarkActivity`) exists only in the `benchmarkRelease` and `nonMinifiedRelease` variants, never in debug or release.
+

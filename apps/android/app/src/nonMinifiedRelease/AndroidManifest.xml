@@ -1,6 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
-        <!-- Driven by :baselineprofile (Macrobenchmark and the profile generator). Not in the release APK. -->
-        <activity android:name=".LongChatBenchmarkActivity" android:exported="true" />
-    </application>
-</manifest>

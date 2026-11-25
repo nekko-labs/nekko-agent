@@ -14,6 +14,8 @@ apps/desktop/build/*.provisionprofile
 coverage/
 *.tsbuildinfo
 release/
+# The Android app's release source set holds its committed Baseline Profile.
+!apps/android/app/src/release/
 cli-dist/
 npm-nekkod/
 # The CommonJS CLI bundled into the desktop app (apps/cli/scripts/bundle-app.mjs)
