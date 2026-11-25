@@ -307,6 +307,15 @@ export interface CatalogQuant {
   /** Short note for the picker, e.g. "best balance of size and quality". */
   note?: string;
   /**
+   * The release this build belongs to, when the repo publishes several of one
+   * model (`v2.1`); absent on the release its file names leave unmarked and on
+   * every build of a repo with one release. `label` carries it too
+   * (`v2.1 Q8_0`), so no two builds of a repo share a label.
+   */
+  variant?: string;
+  /** The quantization alone (`Q8_0`), set when `variant` is. */
+  quant?: string;
+  /**
    * `mlx`: the whole repo is one model folder (an MLX checkpoint), and
    * `file` plus `extraFiles` are every file it needs. Absent means GGUF.
    */

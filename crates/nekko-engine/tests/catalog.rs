@@ -80,3 +80,57 @@ async fn a_model_is_cached() {
     assert_eq!(catalog.model("unsloth/Qwen3-4B-GGUF").await, first);
     assert_eq!(script.requests.lock().unwrap().len(), n, "the second read is the cache's");
 }
+
+/// A repo that publishes several releases of one model, each in the same
+/// quantizations (`nokeepai/Inkling-2-Mini-Unbound-GGUF`): every build gets its
+/// own label, so asking for one never fetches another, and LoRA adapters are
+/// not offered as models.
+#[tokio::test]
+async fn releases_in_one_repo_stay_apart() {
+    let id = "nokeepai/Inkling-2-Mini-Unbound-GGUF";
+    let file = |path: &str, size: u64| json!({ "type": "file", "path": path, "size": size });
+    let tree = json!([
+        file("Inkling-2-Mini-Unbound-BF16.gguf", 52_226_509_504),
+        file("Inkling-2-Mini-Unbound-LoRA-r16.gguf", 6_884_416),
+        file("Inkling-2-Mini-Unbound-Q4_K_M.gguf", 17_563_029_024),
+        file("Inkling-2-Mini-Unbound-Q8_0.gguf", 27_820_099_264),
+        file("Inkling-2-Mini-Unbound-v2-LoRA-r64.gguf", 140_001_536),
+        file("Inkling-2-Mini-Unbound-v2-Q4_K_M.gguf", 17_782_517_280),
+        file("Inkling-2-Mini-Unbound-v2-Q8_0.gguf", 27_820_099_264),
+        file("Inkling-2-Mini-Unbound-v2.1-Q4_K_M.gguf", 17_782_517_280),
+        file("Inkling-2-Mini-Unbound-v2.1-Q8_0.gguf", 27_820_099_264),
+        file("mmproj-Inkling-2-Mini-BF16.gguf", 641_805_984),
+    ]);
+    let mut hf = Map::new();
+    hf.insert(
+        format!("https://huggingface.co/api/models/{id}/tree/main?recursive=true"),
+        json!({ "status": 200, "body": tree.to_string() }),
+    );
+    let script = Arc::new(Script { hf, requests: Mutex::default() });
+    let catalog = Catalog::new(script, Box::new(|| None), Box::new(|| false));
+    let quants = catalog.quants_for(id, None, false).await;
+    let row = |q: &Value| {
+        format!(
+            "{} | {} | {} | {}",
+            q["label"].as_str().unwrap(),
+            q["variant"].as_str().unwrap_or("-"),
+            q["quant"].as_str().unwrap_or("-"),
+            q["file"].as_str().unwrap()
+        )
+    };
+    let rows: Vec<String> = quants.iter().map(row).collect();
+    assert_eq!(
+        rows,
+        [
+            "v2.1 Q4_K_M | v2.1 | Q4_K_M | Inkling-2-Mini-Unbound-v2.1-Q4_K_M.gguf",
+            "v2.1 Q8_0 | v2.1 | Q8_0 | Inkling-2-Mini-Unbound-v2.1-Q8_0.gguf",
+            "v2 Q4_K_M | v2 | Q4_K_M | Inkling-2-Mini-Unbound-v2-Q4_K_M.gguf",
+            "v2 Q8_0 | v2 | Q8_0 | Inkling-2-Mini-Unbound-v2-Q8_0.gguf",
+            "Q4_K_M | - | - | Inkling-2-Mini-Unbound-Q4_K_M.gguf",
+            "Q8_0 | - | - | Inkling-2-Mini-Unbound-Q8_0.gguf",
+            "BF16 | - | - | Inkling-2-Mini-Unbound-BF16.gguf",
+        ]
+    );
+    assert_eq!(quants[1]["note"], "Effectively full quality. Large.", "the note follows the quantization");
+    assert!(quants.iter().all(|q| q["extraFiles"][0] == "mmproj-Inkling-2-Mini-BF16.gguf"));
+}
