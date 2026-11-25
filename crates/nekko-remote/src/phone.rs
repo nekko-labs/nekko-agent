@@ -1781,6 +1781,15 @@ pub fn gate_secured(
 #[cfg(test)]
 mod tests {
 
+    #[test]
+    fn model_instructions_are_not_phone_settings() {
+        let profiles = json!({"modelInstructions": {"provider::model": "private guidance"}});
+        for channel in ["settings:get", "settings:update"] {
+            assert_eq!(redact(channel, json!({"theme": "dark", "promptProfiles": profiles})), json!({"theme": "dark"}));
+        }
+        assert!(screen("settings:update", &[json!({"promptProfiles": profiles})]).is_err());
+    }
+
     /// Provider setup from a phone (decision 0016): the sealed save is screened
     /// by shape, the switch takes an id and a bool, and the answers never carry a key.
     #[test]
@@ -2572,6 +2581,11 @@ mod tests {
             assert!(set(json!({ "workMode": "design", "autoModel": true, "toolApproach": "code" })).is_ok());
             assert!(set(json!({ "workMode": "nope" })).unwrap_err().contains("value-invalid"));
             assert!(set(json!({ "autoModel": "yes" })).unwrap_err().contains("value-invalid"));
+            assert!(set(json!({ "orchestrate": true })).is_ok());
+            assert!(set(json!({ "orchestrate": false })).is_ok());
+            for not_a_switch in [json!("true"), json!(1), Value::Null] {
+                assert!(set(json!({ "orchestrate": not_a_switch })).unwrap_err().contains("value-invalid"));
+            }
             assert!(set(json!({ "unattended": true })).unwrap_err().contains("option-denied"));
             for guarded in [
                 json!({ "executionMode": "worktree" }),
@@ -2606,7 +2620,7 @@ mod tests {
             ] {
                 assert!(set(bad.clone()).unwrap_err().contains("value-invalid"), "{bad}");
             }
-            assert_eq!(calls.lock().unwrap().iter().filter(|(c, _)| c == "session:setOptions").count(), 1);
+            assert_eq!(calls.lock().unwrap().iter().filter(|(c, _)| c == "session:setOptions").count(), 3);
         }
 
         #[test]

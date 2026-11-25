@@ -28,11 +28,11 @@ class ConnectionNotesTest {
     private fun facts(
         id: String = "studio", state: RelayState = RelayState.ONLINE, route: RelayRoute = RelayRoute.INTERNET,
         active: Boolean = false, detail: String? = null, denied: DenyReason? = null, disabled: Boolean = false,
-        protocolCheck: ProtocolCheck = ProtocolCheck.SAME, exit: ExitKind? = null, waiting: Int = 0,
+        protocolCheck: ProtocolCheck = ProtocolCheck.SAME, exit: ExitKind? = null, waiting: Int = 0, offTailnet: Boolean = false,
     ) = ConnectionFacts(
         id = id, name = id.replaceFirstChar { it.uppercase() }, route = route, relayHost = "relay.example.dev", state = state,
         detail = detail, denied = denied, active = active, disabled = disabled, protocolCheck = protocolCheck,
-        exit = exit, exitAt = if (exit != null) 1L else null, waiting = waiting,
+        exit = exit, exitAt = if (exit != null) 1L else null, waiting = waiting, offTailnet = offTailnet,
     )
 
     private fun make(vararg c: ConnectionFacts, tailscale: Boolean = true) = ConnectionNotes.make(c.toList(), tailscale) { "9:41" }
@@ -55,6 +55,36 @@ class ConnectionNotesTest {
         assertEquals(Tone.WAITING, dialing.tone); assertNull(dialing.word)
         assertEquals(Tone.OFF, off.tone); assertNull(off.word)
         assertEquals(Tone.OFF, idle.tone); assertNull(idle.word)
+    }
+
+    @Test fun `a computer also on Nekko Cloud Relay is never blamed on Tailscale`() {
+        // Paired with Tailscale first and Nekko Cloud Relay as the fallback (decision 0116).
+        val offline = make(facts("macbook", RelayState.OFFLINE, route = RelayRoute.TAILSCALE, active = true, offTailnet = true), tailscale = false)
+        assertEquals(listOf("macbook"), offline.map { it.id })
+        assertEquals(R.string.conn_word_offline, word(offline.single()))
+        assertFalse(Action.OPEN_TAILSCALE in offline.single().actions)
+
+        val silent = make(facts("macbook", RelayState.CONNECTING, route = RelayRoute.TAILSCALE, detail = "timeout", offTailnet = true), tailscale = false).single()
+        assertEquals(R.string.conn_no_answer_line, res(silent.line))
+        assertEquals(listOf(Action.RETRY), silent.actions)
+    }
+
+    @Test fun `only the tailnet-only computer waits on Tailscale`() {
+        val notes = make(
+            facts("gomi", RelayState.CONNECTING, route = RelayRoute.TAILSCALE),
+            facts("macbook", RelayState.OFFLINE, route = RelayRoute.TAILSCALE, offTailnet = true),
+            tailscale = false,
+        )
+        assertEquals(listOf(ConnectionNote.TAILSCALE_ID, "gomi", "macbook"), notes.map { it.id })
+        assertEquals(Names(listOf("Gomi")), (notes[0].line as Msg.Res).args.single())
+        assertEquals(R.string.conn_word_offline, word(notes[2]))
+    }
+
+    @Test fun `a Nekko Cloud Relay route reaches a computer off the tailnet, a LAN address does not`() {
+        val tailnet = "ws://mac.tail1234.ts.net:4400"
+        assertTrue(ConnectionNotes.reachableOffTailnet(listOf(tailnet, "wss://nekko-agent-relay.fly.dev")))
+        assertFalse(ConnectionNotes.reachableOffTailnet(listOf(tailnet)))
+        assertFalse(ConnectionNotes.reachableOffTailnet(listOf(tailnet, "ws://192.168.1.20:4400")))
     }
 
     @Test fun `offline is one word, one line and Retry`() {

@@ -319,10 +319,15 @@ async fn ended(ctx: &Ctx, session_id: &str, message: &str) -> Result<Admit, Stri
 /// A `spawn_agent` child's turn (`admitTurn` then `buildDaemonTurn`, in the
 /// parent's `spawn` callback): admitted like any chat's, never with the
 /// browser. `None` when it cannot start; its chat was told why.
-pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String> {
+pub async fn admit_child(
+    ctx: &Ctx,
+    opts: Value,
+    provider: &Value,
+    parent_effort: Option<&str>,
+) -> Result<Option<Value>, String> {
     let adm = ctx.admission.clone();
     let pending = adm.begin(s(&opts, "sessionId"))?;
-    match admit(ctx, &adm, opts, None, false, &pending.cancel).await? {
+    match admit(ctx, &adm, opts, None, false, &pending.cancel, Some((provider, parent_effort))).await? {
         Admit::Spec(mut spec) => {
             spec["allowBrowserControl"] = json!(false);
             Ok(Some(spec))
@@ -397,7 +402,7 @@ async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<
     } else {
         None
     };
-    let result = admit(ctx, adm, opts.clone(), queued, false, &pending.cancel).await?;
+    let result = admit(ctx, adm, opts.clone(), queued, false, &pending.cancel, None).await?;
     if pending.cancel.is_cancelled() && !matches!(&result, Admit::Ended) {
         stopped(ctx, &session_id).await?;
         return Ok(Value::Null);
@@ -473,7 +478,7 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
 pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> Option<Value> {
     let opts = payload.get("opts").cloned().unwrap_or(Value::Null);
     let cancel = adm.cancellation(s(&opts, "sessionId")).unwrap_or_default();
-    match admit(ctx, adm, opts, payload.get("queued").cloned(), true, &cancel).await {
+    match admit(ctx, adm, opts, payload.get("queued").cloned(), true, &cancel, None).await {
         Ok(Admit::Spec(spec)) => Some(json!({ "spec": spec })),
         Ok(Admit::Ended) | Err(_) => Some(json!({ "ended": true })),
     }
@@ -487,6 +492,7 @@ async fn admit(
     queued: Option<Value>,
     chained: bool,
     cancel: &Cancel,
+    child_route: Option<(&Value, Option<&str>)>,
 ) -> Result<Admit, String> {
     let session_id = s(&opts, "sessionId").to_string();
     let store = ctx.sessions.clone();
@@ -507,6 +513,9 @@ async fn admit(
     let Some(provider) = provider.filter(|p| nekko_js::truthy(p.get("enabled"))) else {
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
+    if child_route.is_some_and(|(checked, _)| checked != &provider) {
+        return ended(ctx, &session_id, "Delegation provider changed after its route was checked.").await;
+    }
     // Using an LM Studio model is the one time a closed LM Studio is opened;
     // the Models page only asks (#2961).
     ctx.runtimes.open_for_turn(&provider).await;
@@ -619,6 +628,14 @@ async fn admit(
     let effort_setting: Option<nekko_agent::EffortLevel> =
         effort.as_ref().and_then(|e| serde_json::from_value(e.clone()).ok());
     let stats_effort = nekko_agent::claude::effective_effort_with_metadata(effort_setting, model_id, metadata.as_ref());
+    let stats_effort = if let Some((_, Some(cap))) = child_route {
+        match crate::subagent_model::cap_effort(stats_effort, cap, model_id, metadata.as_ref()) {
+            Some(effort) => effort,
+            None => return ended(ctx, &session_id, "The worker model has no comparable effort at or below the parent's. Choose a different saved worker route or effort.").await,
+        }
+    } else {
+        stats_effort
+    };
     let kind = s(&provider, "kind");
 
     let mut facts = Map::new();
@@ -763,7 +780,7 @@ async fn admit(
 async fn drive_chain(ctx: &Ctx, spec: Value) -> Result<(), String> {
     let (_, mut ended) = ctx.turns.launch(ctx.hub.clone(), spec)?;
     loop {
-        let Ok((summary, _)) = ended.await else { return Ok(()) };
+        let Ok((summary, _, _)) = ended.await else { return Ok(()) };
         let Some(next) = summary.get("next").and_then(Value::as_str) else { return Ok(()) };
         match ctx.turns.take_chained(next) {
             Some(n) => ended = n,

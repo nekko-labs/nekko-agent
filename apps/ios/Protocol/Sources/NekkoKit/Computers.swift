@@ -99,6 +99,9 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
     /// Every address, best first (the order the client tries them).
     public var routes: [String] { RouteSupervisor.order([relayUrl] + alts) }
     public var route: RelayRoute { RelayRoute.of(relayUrl) }
+    /// One of its routes needs no tailnet: Nekko Cloud Relay or another internet relay (decision 0116).
+    /// A LAN address doesn't count: it is no use away from home, where Tailscale would be the fix.
+    public var reachableOffTailnet: Bool { routes.contains { RelayRoute.of($0) == .internet } }
     public var relayHost: String { Pairing.relayHost(relayUrl) }
 }
 

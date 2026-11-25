@@ -70,22 +70,32 @@ public struct ConnectionFacts: Equatable, Sendable {
     public var exitAt: Int64?
     /// Prompts written here that go when the computer is back.
     public var waiting: Int
+    /// The phone also has a route to this computer that doesn't need Tailscale
+    /// (Nekko Cloud Relay or another internet relay, decision 0116), so Tailscale
+    /// being off is not what keeps it away.
+    public var offTailnet: Bool
 
     public init(id: String, name: String, route: RelayRoute = .internet, relayHost: String = "", state: RelayState,
                 detail: String? = nil, denied: DenyReason? = nil, active: Bool = false, disabled: Bool = false,
-                protocolCheck: ProtocolCheck = .same, exit: SafetyExit.Kind? = nil, exitAt: Int64? = nil, waiting: Int = 0) {
+                protocolCheck: ProtocolCheck = .same, exit: SafetyExit.Kind? = nil, exitAt: Int64? = nil, waiting: Int = 0,
+                offTailnet: Bool = false) {
         self.id = id; self.name = name; self.route = route; self.relayHost = relayHost; self.state = state
         self.detail = detail; self.denied = denied; self.active = active; self.disabled = disabled
         self.protocolCheck = protocolCheck; self.exit = exit; self.exitAt = exitAt; self.waiting = waiting
+        self.offTailnet = offTailnet
     }
+
+    /// Only Tailscale reaches this computer: when Tailscale is off, it is the thing to fix.
+    public var tailnetOnly: Bool { route == .tailscale && !offTailnet }
 }
 
 public enum ConnectionNotes {
     /// The strip's items: Tailscale first when it is what keeps computers away, then every computer in order.
+    /// A computer the phone can also reach through Nekko Cloud Relay is never blamed on Tailscale.
     /// `time` formats a safety exit's moment (the app passes the locale's short time).
     public static func make(_ computers: [ConnectionFacts], tailscaleOn: Bool,
                             time: (Int64) -> String = { _ in "" }) -> [ConnectionNote] {
-        let blocked = computers.filter { !$0.disabled && TailscaleApp.shouldOffer(route: $0.route, tailscaleOn: tailscaleOn, state: $0.state) }
+        let blocked = computers.filter { !$0.disabled && !$0.offTailnet && TailscaleApp.shouldOffer(route: $0.route, tailscaleOn: tailscaleOn, state: $0.state) }
         var out: [ConnectionNote] = []
         if !blocked.isEmpty {
             let names = joined(blocked.map(\.name))
@@ -168,7 +178,7 @@ public enum ConnectionNotes {
             }
             // Still dialing for the first time: nothing to say until it fails.
             guard c.detail != nil else { return quiet(c, .waiting) }
-            if c.route == .tailscale {
+            if c.tailnetOnly {
                 return problem(.warning, "no answer", "\(name) doesn’t answer on your tailnet.",
                                "Is it awake and signed in to the same tailnet?", [.retry, .openTailscale])
             }
@@ -201,7 +211,8 @@ extension ComputersStore {
                                    denied: active ? denied : peer?.denied,
                                    active: active, disabled: c.connectionDisabled == true,
                                    protocolCheck: active ? protocolCheck : .same,
-                                   exit: exit?.kind, exitAt: exit?.at, waiting: active ? outbox.count : 0)
+                                   exit: exit?.kind, exitAt: exit?.at, waiting: active ? outbox.count : 0,
+                                   offTailnet: c.reachableOffTailnet)
         }
     }
 }

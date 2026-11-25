@@ -765,7 +765,12 @@ impl ChatParser {
                 output_ms: self.decode.elapsed(),
             });
         }
-        if js::truthy(choice.and_then(|c| c.get("finish_reason"))) {
+        let finish = choice.and_then(|c| c.get("finish_reason"));
+        if finish.and_then(Value::as_str) == Some("length") {
+            // A capped response may end mid-argument. Do not dispatch its calls.
+            self.calls.clear();
+            out.push(ProviderChunk::OutputLimit);
+        } else if js::truthy(finish) {
             for (_, acc) in self.calls.drain(..) {
                 out.push(ProviderChunk::ToolCall {
                     call: ToolCall { id: acc.id, name: acc.name, input: js::safe_parse(&acc.args) },
@@ -799,6 +804,35 @@ impl ChatParser {
         if let Some(args) = tc.pointer("/function/arguments").filter(|v| js::truthy(Some(v))) {
             cur.args.push_str(&js::display(args));
         }
+    }
+}
+
+#[cfg(test)]
+mod finish_reason_tests {
+    use super::*;
+
+    #[test]
+    fn only_exact_length_marks_an_output_limit_and_discards_unfinished_calls() {
+        for reason in [
+            json!("length"),
+            json!("stop"),
+            json!("tool_calls"),
+            json!("content_filter"),
+            json!("max_tokens"),
+            json!("Length"),
+            Value::Null,
+        ] {
+            let mut parser = ChatParser::new(DecodeClock::new(Io::default().clock));
+            let chunks = parser
+                .event(&json!({"choices":[{"delta":{"content":"saved text"},"finish_reason": reason}]}).to_string());
+            assert_eq!(chunks[0], ProviderChunk::Text { delta: "saved text".into() });
+            assert_eq!(chunks.contains(&ProviderChunk::OutputLimit), reason == "length", "{reason}");
+        }
+        let mut parser = ChatParser::new(DecodeClock::new(Io::default().clock));
+        let fragment = json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c_1","function":{"name":"read_file","arguments":"{"}}]}}]});
+        assert!(parser.event(&fragment.to_string()).is_empty());
+        assert_eq!(parser.event(r#"{"choices":[{"finish_reason":"length"}]}"#), vec![ProviderChunk::OutputLimit]);
+        assert!(parser.event(r#"{"choices":[{"finish_reason":"tool_calls"}]}"#).is_empty());
     }
 }
 

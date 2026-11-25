@@ -749,6 +749,7 @@ export const PHONE_SESSION_OPTION_KEYS = [
   'mode',
   'modelId',
   'offline',
+  'orchestrate',
   'order',
   'pinned',
   'privacy',
@@ -796,7 +797,7 @@ export const PHONE_MODEL_SETTING_CHANNELS = ['engine:saveModelPreset', 'engine:s
 export const PHONE_PRESET_PATH_KEYS = ['clip_g', 'clip_l', 'llm', 't5xxl', 'taesd', 'vae'] as const;
 
 /** Chat options that are on or off. */
-export const PHONE_OPTION_SWITCHES = ['autoModel', 'autoProviderSwitch', 'cloudOnly', 'gitIsolation', 'incognito', 'offline'] as const;
+export const PHONE_OPTION_SWITCHES = ['autoModel', 'autoProviderSwitch', 'cloudOnly', 'gitIsolation', 'incognito', 'offline', 'orchestrate'] as const;
 
 /** The effort levels a phone may set on a chat (`EffortLevel`, settings.ts). */
 export const PHONE_EFFORT_LEVELS = ['low', 'medium', 'normal', 'high', 'xhigh', 'max'] as const;

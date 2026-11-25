@@ -1,7 +1,9 @@
 package com.nekko.protocol
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -80,6 +82,15 @@ class BeyondTest {
         assertEquals("the allowed values stay", """{"allow":["me@example.com"],"mode":"redact"}""", privacy.wire("redact", current).toString())
         assertEquals("""{"allow":["me@example.com"]}""", privacy.wire("default", current).toString())
         assertEquals("\"project\"", RunOption.all.first { it.key == "memory" }.wire("project", null).toString())
+    }
+
+    @Test fun `Orchestrate reads only a boolean true separately from tool style`() {
+        val option = RunOption.all.single { it.key == "orchestrate" }
+        val values = RunOption.values(json("""{"orchestrate":true,"toolApproach":"code"}""").jsonObject)
+        assertTrue(option.isApproach)
+        assertTrue(option.isOn(values["orchestrate"]))
+        assertEquals("code", RunOption.all.single { it.key == "toolApproach" }.shown(values["toolApproach"]))
+        for (value in listOf(null, json("false"), json("\"true\""), json("1"))) assertFalse(option.isOn(value))
     }
 
     @Test fun `tools read as names and what they do, and one with no name is dropped`() {

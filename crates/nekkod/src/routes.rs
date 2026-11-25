@@ -550,6 +550,10 @@ impl Table {
             &["turn:spawnPrepare"],
             handler!(|ctx, channel, args| Ok(crate::spawn::prepare(ctx, arg(&args, 0)).await)),
         );
+        t.add(
+            &["turn:delegationTargets"],
+            handler!(|ctx, channel, args| Ok(json!(crate::spawn::discover(ctx, arg(&args, 0)).await?))),
+        );
         // Internal: one PR's live state, for an agent watch's snapshot (watches.rs).
         t.add(
             &["watch:prInfo"],

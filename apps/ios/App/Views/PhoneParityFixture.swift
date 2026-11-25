@@ -87,6 +87,11 @@ struct RunSettingsFixture: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Approach") {
+                    ForEach(RunOption.all.filter(\.isApproach)) { option in
+                        RunOptionRow(option: option, value: options[option.key]) { options[option.key] = $0 }
+                    }
+                }
                 Section("Run settings") {
                     ForEach(RunOption.all.filter { ["memory", "guidance", "privacy"].contains($0.key) }) { option in
                         RunOptionRow(option: option, value: options[option.key]) { options[option.key] = $0 }

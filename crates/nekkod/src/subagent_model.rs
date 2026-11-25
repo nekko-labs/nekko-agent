@@ -21,7 +21,7 @@
 //! Claude Code chats run their own sub-agents; [`claude_code_env`] gives them
 //! the same choice through `CLAUDE_CODE_SUBAGENT_MODEL`.
 
-use nekko_messaging::auto::{is_chat_model, tier_with_overrides};
+use nekko_messaging::auto::{capability, capability_rank, is_chat_model, tier_with_overrides};
 use serde_json::{Value, json};
 
 pub use nekko_turn::plan::subagent_preference as preference;
@@ -90,6 +90,55 @@ pub fn lighter_model(parent_id: &str, models: &[Value]) -> Option<String> {
     best.map(|(_, id)| id.to_string())
 }
 
+/// Cap the resolved worker effort, not the saved slider value: a different
+/// catalog can otherwise resolve the very same setting to a higher default.
+/// Normal omits the effort on the wire; it does not promise a compute budget.
+pub fn cap_effort(
+    worker: nekko_agent::EffortLevel,
+    parent: &str,
+    model_id: &str,
+    metadata: Option<&nekko_agent::ModelEffort>,
+) -> Option<nekko_agent::EffortLevel> {
+    use nekko_agent::{EffortLevel, claude::effective_effort_with_metadata};
+    let rank = |level: &str| match level {
+        "low" => Some(0),
+        "normal" | "medium" => Some(1),
+        "high" => Some(2),
+        "xhigh" => Some(3),
+        "max" => Some(4),
+        _ => None,
+    };
+    if worker.as_str() == parent || worker == EffortLevel::Normal {
+        return Some(worker);
+    }
+    let cap = rank(parent)?;
+    if rank(worker.as_str()).is_some_and(|worker| worker <= cap) {
+        return Some(worker);
+    }
+    [EffortLevel::Max, EffortLevel::Xhigh, EffortLevel::High, EffortLevel::Medium, EffortLevel::Low]
+        .into_iter()
+        .filter(|candidate| rank(candidate.as_str()).is_some_and(|rank| rank <= cap))
+        .find(|candidate| {
+            metadata.is_none_or(|m| m.levels.iter().any(|option| option.effort == candidate.as_str()))
+                && effective_effort_with_metadata(Some(candidate.clone()), model_id, metadata) == *candidate
+        })
+}
+
+/// The assignment may narrow the saved target, never raise it or the parent's tier.
+/// Unlike legacy routing, an unclassified parent cannot act as a tier ceiling.
+pub fn assignment_ceiling(requested: i32, parent_id: &str, parent_provider: &str, settings: &Value) -> Option<i32> {
+    let parent = json!({"id": parent_id, "providerId": parent_provider});
+    let parent = capability(&parent, settings.pointer("/fusion/modelTiers"))?;
+    let parent = capability_rank(&parent)?;
+    let saved = settings.pointer("/orchestration/subagentTier").and_then(Value::as_str);
+    let ceiling = match saved {
+        Some("smaller") => parent - 1,
+        Some(tier) => capability_rank(tier).unwrap_or(parent),
+        None => parent,
+    };
+    Some(requested.min(ceiling).min(parent))
+}
+
 /// Capability-targeted automatic selection, sharing suggestions with the UI.
 /// Exact tier first, then nearest smaller; loaded status breaks ties only.
 /// Unknown models do not participate in tier routing. Explicit picks bypass it.
@@ -100,16 +149,17 @@ pub fn tiered_model(
     settings: &Value,
     loaded_only: bool,
     local: bool,
+    assignment_ceiling: Option<i32>,
 ) -> Option<String> {
-    use nekko_messaging::auto::{capability, capability_rank, tier_with_overrides};
     let overrides = settings.pointer("/fusion/modelTiers");
     let target = settings.pointer("/orchestration/subagentTier").and_then(Value::as_str);
-    if !local && target.is_none_or(|t| t == "smaller") && overrides.is_none() {
+    if assignment_ceiling.is_none() && !local && target.is_none_or(|t| t == "smaller") && overrides.is_none() {
         return lighter_model(parent_id, models);
     }
     let parent = json!({"id": parent_id, "providerId": parent_provider});
     let parent_tier = tier_with_overrides(&parent, overrides);
-    let wanted = target.and_then(capability_rank).map(|t| t.min(parent_tier)).unwrap_or(parent_tier - 1);
+    let wanted = assignment_ceiling
+        .unwrap_or_else(|| target.and_then(capability_rank).map(|t| t.min(parent_tier)).unwrap_or(parent_tier - 1));
     let mut best: Option<((i32, bool, usize), String)> = None;
     for model in models {
         let Some(id) = id_of(model) else { continue };
@@ -173,6 +223,20 @@ pub fn claude_code_env(orchestration: Option<&Value>, providers: &[Value], model
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn worker_effort_is_capped_after_a_catalog_default() {
+        use nekko_agent::EffortLevel::{High, Low, Medium};
+        let catalog: nekko_agent::ModelEffort = serde_json::from_value(json!({
+            "levels":[{"effort":"low"},{"effort":"high"}], "default":"high"
+        }))
+        .unwrap();
+        assert_eq!(cap_effort(High, "medium", "gpt-5", Some(&catalog)), Some(Low));
+        assert_eq!(cap_effort(High, "medium", "gpt-5", None), Some(Medium));
+        assert_eq!(cap_effort(High, "unranked", "gpt-5", Some(&catalog)), None);
+        let high_only = nekko_agent::ModelEffort { levels: catalog.levels[1..].to_vec(), ..catalog };
+        assert_eq!(cap_effort(High, "low", "gpt-5", Some(&high_only)), None);
+    }
+
     use super::*;
 
     fn models(ids: &[&str]) -> Vec<Value> {
@@ -221,13 +285,27 @@ mod tests {
             json!({"id":"llama-70b", "providerId":"local"}),
         ];
         let settings = json!({"orchestration":{"subagentTier":"medium"}});
-        assert_eq!(tiered_model("gpt-5", "cloud", &models, &settings, false, true).as_deref(), Some("qwen-32b"));
-        assert_eq!(tiered_model("gpt-5", "cloud", &models, &settings, true, true).as_deref(), Some("qwen-8b"));
+        assert_eq!(tiered_model("gpt-5", "cloud", &models, &settings, false, true, None).as_deref(), Some("qwen-32b"));
+        assert_eq!(tiered_model("gpt-5", "cloud", &models, &settings, true, true, None).as_deref(), Some("qwen-8b"));
         let stronger = json!({"orchestration":{"subagentTier":"frontier"}});
         assert_eq!(
-            tiered_model("claude-sonnet", "cloud", &models, &stronger, false, true).as_deref(),
+            tiered_model("claude-sonnet", "cloud", &models, &stronger, false, true, None).as_deref(),
             Some("qwen-32b")
         );
+    }
+
+    #[test]
+    fn assignment_can_narrow_but_not_raise_saved_or_parent_tiers() {
+        let settings = json!({"orchestration":{"subagentTier":"medium"}});
+        assert_eq!(assignment_ceiling(4, "gpt-5", "cloud", &settings), Some(3));
+        assert_eq!(assignment_ceiling(2, "gpt-5", "cloud", &settings), Some(2));
+        assert_eq!(assignment_ceiling(4, "gpt-5-mini", "cloud", &settings), Some(2));
+        assert_eq!(assignment_ceiling(4, "custom", "cloud", &settings), None);
+        let settings =
+            json!({"orchestration":{"subagentTier":"smaller"}, "fusion":{"modelTiers":{"cloud::custom":"medium"}}});
+        assert_eq!(assignment_ceiling(4, "custom", "cloud", &settings), Some(2));
+        assert_eq!(assignment_ceiling(4, "custom", "other", &settings), None);
+        assert_eq!(assignment_ceiling(4, "gpt-5-mini", "cloud", &settings), Some(1));
     }
 
     #[test]
@@ -235,8 +313,8 @@ mod tests {
         let models =
             vec![json!({"id":"custom", "providerId":"local"}), json!({"id":"embedding-small", "providerId":"local"})];
         let settings = json!({"orchestration":{"subagentTier":"medium"}, "fusion":{"modelTiers":{"local::custom":"medium", "local::embedding-small":"medium"}}});
-        assert_eq!(tiered_model("gpt-5", "cloud", &models, &settings, false, true).as_deref(), Some("custom"));
-        assert_eq!(tiered_model("gpt-5", "cloud", &models, &json!({}), false, true), None);
+        assert_eq!(tiered_model("gpt-5", "cloud", &models, &settings, false, true, None).as_deref(), Some("custom"));
+        assert_eq!(tiered_model("gpt-5", "cloud", &models, &json!({}), false, true, None), None);
         assert_eq!(
             claude_code_env(Some(&json!({"subagentTier":"small"})), &[], Some("opus")).as_deref(),
             Some("haiku")
