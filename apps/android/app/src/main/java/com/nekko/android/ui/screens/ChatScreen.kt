@@ -351,29 +351,18 @@ private fun ChatScreenContent(
     }
 
     // Stable keys: a provider that reuses a call id across turns gets a suffix.
-    val keyed = remember(chat.blocks) {
-        val seen = HashMap<String, Int>()
-        chat.blocks.map { b ->
-            val kind = when (b) {
-                is Block.User -> "user"
-                is Block.Assistant -> "assistant"
-                is Block.Tool -> "tool"
-            }
-            val base = "$kind:${b.id}"
-            val n = seen.getOrDefault(base, 0)
-            seen[base] = n + 1
-            (if (n > 0) "$base#$n" else base) to b
-        }
-    }
+    // Only the last block changes while a reply streams, so what is derived from the earlier ones is kept (TranscriptCache.kt).
+    val transcript = remember(vm.sessionId) { TranscriptCache() }
+    val keyed = remember(chat.blocks) { transcript.keyed(chat.blocks, chat.layout) }
     // A note above the messages when the computer sent only the newest ones.
     val headerCount = if (chat.omittedMessages > 0) 1 else 0
     val footerCount = 1
     // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
     // Simple folds each turn's reasoning and tool steps into one line that opens in place (the approval card still asks).
     var openTurns by remember(vm.sessionId) { mutableStateOf(setOf<String>()) }
-    val rows = remember(keyed, showSteps, chat.running, openTurns, chat.footers) { transcriptRows(keyed, showSteps, chat.running, openTurns, chat.footers) }
+    val rows = remember(keyed, showSteps, chat.running, openTurns, chat.footers) { transcript.rows(transcriptRows(keyed, showSteps, chat.running, openTurns, chat.footers)) }
     // How each reply reads in its turn: a note, something left for you, or the reply (spec/chat/thinking-and-replies.md).
-    val voices = remember(keyed, chat.running) { keyed.map { it.first }.zip(ReplyTopics.voices(chat.blocks, chat.running)).toMap() }
+    val voices = remember(keyed, chat.running) { keyed.map { it.first }.zip(ReplyTopics.voices(chat.blocks, chat.running, transcript::midTurnVoice)).toMap() }
     val lastIndex = headerCount + rows.size + footerCount - 1
 
     // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
@@ -1159,7 +1148,7 @@ internal fun transcriptRows(
 }
 
 /** A list key for a transcript row: the block's own key, its first block's for a purpose group, or its turn's for folded steps. */
-private fun rowKey(row: TranscriptRow): String = when (row) {
+internal fun rowKey(row: TranscriptRow): String = when (row) {
     is TranscriptRow.Footer -> "footer:" + row.details.id
     is TranscriptRow.Steps -> "steps:" + row.steps.turn
     is TranscriptRow.Run -> when (val run = row.run) {
