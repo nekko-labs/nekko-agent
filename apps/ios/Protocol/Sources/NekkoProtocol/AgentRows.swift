@@ -23,6 +23,17 @@ public enum AgentRows {
         public var prompt: String
         /// The id this call armed or cancelled, once its result is in.
         public var id: String?
+
+        /// Public, so the app can describe a watch it did not parse from a call
+        /// (the clip chip); Swift's memberwise initializer would be internal.
+        public init(action: Action, kind: AgentWatch.Kind?, url: String?, seconds: Double?, prompt: String, id: String?) {
+            self.action = action
+            self.kind = kind
+            self.url = url
+            self.seconds = seconds
+            self.prompt = prompt
+            self.id = id
+        }
     }
 
     public static func parseWatch(_ input: [String: JSONValue], output: String?, failed: Bool = false) -> WatchCall {
