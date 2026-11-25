@@ -3,7 +3,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, type Plan, SYNC_PLANS } from "./auth.js";
 import type { Db } from "./db.js";
 import { featuresFor, type Features } from "./features.js";
-import { HISTORY_DAYS, SYNC_QUOTA, bytes, isPositiveInt, shareBytes } from "./sync.js";
+import { bodyWeight, ensureClient, holdMemory, pageWeight } from "./memory-gate.js";
+import { type Answer, HISTORY_DAYS, SYNC_QUOTA, answer, b64url, bytes, isPositiveInt, sendAnswer, shareBytes } from "./sync.js";
 
 /**
  * Shared Library files (issue #2749), with versions and 30-day recovery
@@ -61,14 +62,21 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
     return true;
   }
 
-  async function load(id: string): Promise<ShareRow | null> {
+  /**
+   * A share's row without its blob (up to 10 MB), with the blob's size. Everything that is not
+   * serving the bytes needs only this: the owner and edit checks, delete, restore, version lists.
+   */
+  type ShareHead = Omit<ShareRow, "blob"> & { size: number };
+  async function load(id: string): Promise<ShareHead | null> {
     if (!SHARE_ID.test(id)) return null;
-    const { rows } = await db.query<ShareRow>("select * from library_shares where id = $1", [id]);
+    const { rows } = await db.query<ShareHead>(
+      "select id, user_id, revision, edit_hash, created_at, updated_at, deleted_at, octet_length(blob) as size from library_shares where id = $1", [id]);
     return rows[0] ?? null;
   }
+  const loadHead = load;
 
   /** The owner, or anyone holding the share's edit token. Null after replying. */
-  async function editor(req: FastifyRequest, reply: FastifyReply, share: ShareRow): Promise<{ ownerPlan: Plan } | null> {
+  async function editor(req: FastifyRequest, reply: FastifyReply, share: ShareHead): Promise<{ ownerPlan: Plan } | null> {
     const token = req.headers[EDIT_HEADER];
     if (typeof token === "string" && EDIT_TOKEN.test(token) && share.edit_hash && timingSafeEqual(sha256(token), Buffer.from(share.edit_hash))) {
       const { rows } = await db.query<{ plan: Plan }>("select plan from users where id = $1", [share.user_id]);
@@ -80,23 +88,38 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
     return null;
   }
 
-  /** Replace the share's bytes with a new revision, keeping the old one as a version. */
-  async function replace(reply: FastifyReply, share: ShareRow, plan: Plan, blob: Buffer, expected: number) {
-    return db.transaction(async (tx) => {
+  /**
+   * Replace the share's bytes with a new revision, keeping the old one as a version. The new bytes
+   * are `blob`, or (restoring a version) copied inside the database from that version, so they never
+   * pass through this process. Answers after the transaction has committed.
+   */
+  async function replace(reply: FastifyReply, share: ShareHead, plan: Plan, source: { blob: Buffer } | { fromVersion: number }, expected: number) {
+    const result = await db.transaction(async (tx): Promise<Answer> => {
       await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`share:${share.id}`]);
       const { rows } = await tx.query<{ revision: number }>("select revision from library_shares where id = $1 and deleted_at is null", [share.id]);
-      if (!rows[0]) return reply.code(410).send({ error: "no-longer-shared" });
-      if (rows[0].revision !== expected) return reply.code(409).send({ error: "conflict", revision: rows[0].revision });
+      if (!rows[0]) return answer(410, { error: "no-longer-shared" });
+      if (rows[0].revision !== expected) return answer(409, { error: "conflict", revision: rows[0].revision });
+      if ("fromVersion" in source) {
+        const have = await tx.query("select 1 from library_share_versions where share_id = $1 and revision = $2", [share.id, source.fromVersion]);
+        if (!have.rows.length) return answer(404, { error: "not-found" });
+      }
       await tx.query(
         `insert into library_share_versions (share_id, revision, blob) select id, revision, blob from library_shares where id = $1
          on conflict do nothing`, [share.id]);
-      await tx.query("update library_shares set blob = $2, revision = revision + 1, updated_at = now() where id = $1", [share.id, blob]);
+      if ("fromVersion" in source) {
+        await tx.query(
+          `update library_shares set blob = (select blob from library_share_versions where share_id = $1 and revision = $2),
+                  revision = revision + 1, updated_at = now() where id = $1`, [share.id, source.fromVersion]);
+      } else {
+        await tx.query("update library_shares set blob = $2, revision = revision + 1, updated_at = now() where id = $1", [share.id, source.blob]);
+      }
       if (await overQuota(tx, share.user_id, plan)) throw Object.assign(new Error("quota"), { statusCode: 413 });
-      return { id: share.id, revision: expected + 1 };
+      return answer(200, { id: share.id, revision: expected + 1 });
     }).catch((e: { statusCode?: number }) => {
-      if (e.statusCode === 413) return reply.code(413).send({ error: "quota", limit: SYNC_QUOTA[plan] });
+      if (e.statusCode === 413) return answer(413, { error: "quota", limit: SYNC_QUOTA[plan] });
       throw e;
     });
+    return sendAnswer(reply, result);
   }
 
   async function overQuota(tx: Db, userId: string, plan: Plan): Promise<boolean> {
@@ -106,24 +129,45 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
 
   const body = (req: FastifyRequest) => (req.body ?? {}) as Record<string, unknown>;
   const sealed = (v: unknown) => bytes(v, MIN_SHARE_BYTES, MAX_SHARE_BYTES);
-  const limit = { bodyLimit: Math.ceil(MAX_SHARE_BYTES * 4 / 3) + 4096 };
-
-  app.post("/v1/shares", limit, async (req, reply) => {
+  const bodyLimit = Math.ceil(MAX_SHARE_BYTES * 4 / 3) + 4096;
+  // Who the preParsing hooks below already checked, so the handlers do not check again.
+  const vouched = new WeakMap<FastifyRequest, Caller | { ownerPlan: Plan }>();
+  // A share's body waits for memory only once the caller is known (the rate limit already ran).
+  const createGate = async (req: FastifyRequest, reply: FastifyReply) => {
     const caller = await owner(req, reply);
+    if (!caller) return reply;
+    vouched.set(req, caller);
+    const weight = bodyWeight(req);
+    if (weight) await holdMemory(app, req, weight);
+  };
+  const replaceGate = async (req: FastifyRequest, reply: FastifyReply) => {
+    const share = await loadHead((req.params as { id: string }).id);
+    if (!share) return reply.code(404).send({ error: "not-found" });
+    const who = await editor(req, reply, share);
+    if (!who) return reply;
+    vouched.set(req, who);
+    const weight = bodyWeight(req);
+    if (weight) await holdMemory(app, req, weight);
+  };
+  const limit = { bodyLimit, config: { gateAfterAuth: true } };
+
+  app.post("/v1/shares", { ...limit, preParsing: createGate }, async (req, reply) => {
+    const caller = (vouched.get(req) as Caller | undefined) ?? await owner(req, reply);
     if (!caller || !(await mayWrite(reply, caller.userId, caller.plan))) return;
     const blob = sealed(body(req).blob);
     const raw = body(req).editHash;
     const editHash = raw === undefined ? null : bytes(raw, 32);
     if (!blob || (raw !== undefined && !editHash)) return reply.code(400).send({ error: "bad share" });
     const id = randomBytes(16).toString("base64url");
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx): Promise<Answer> => {
       await tx.query("insert into library_shares (id, user_id, blob, edit_hash) values ($1, $2, $3, $4)", [id, caller.userId, blob, editHash]);
       if (await overQuota(tx, caller.userId, caller.plan)) throw Object.assign(new Error("quota"), { statusCode: 413 });
-      return reply.code(201).send({ id, revision: 1 });
+      return answer(201, { id, revision: 1 });
     }).catch((e: { statusCode?: number }) => {
-      if (e.statusCode === 413) return reply.code(413).send({ error: "quota", limit: SYNC_QUOTA[caller.plan] });
+      if (e.statusCode === 413) return answer(413, { error: "quota", limit: SYNC_QUOTA[caller.plan] });
       throw e;
     });
+    return sendAnswer(reply, result);
   });
 
   app.get("/v1/shares", async (req, reply) => {
@@ -142,18 +186,23 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
     const share = await load((req.params as { id: string }).id);
     if (!share) return reply.code(404).send({ error: "not-found" });
     if (share.deleted_at) return reply.code(410).send({ error: "no-longer-shared" });
-    return { id: share.id, revision: share.revision, blob: Buffer.from(share.blob).toString("base64url") };
+    // Up to 10 MB, to anyone: it waits for memory like a sync page does, and the blob is read only once it has room.
+    await holdMemory(app, req, pageWeight(share.size));
+    const { rows } = await db.query<{ blob: Buffer; revision: number }>("select blob, revision from library_shares where id = $1 and deleted_at is null", [share.id]);
+    ensureClient(req);
+    if (!rows[0]) return reply.code(410).send({ error: "no-longer-shared" });
+    return { id: share.id, revision: rows[0].revision, blob: b64url(rows[0].blob) };
   });
 
-  app.put("/v1/shares/:id", limit, async (req, reply) => {
+  app.put("/v1/shares/:id", { ...limit, preParsing: replaceGate }, async (req, reply) => {
     const share = await load((req.params as { id: string }).id);
     if (!share) return reply.code(404).send({ error: "not-found" });
-    const who = await editor(req, reply, share);
+    const who = (vouched.get(req) as { ownerPlan: Plan } | undefined) ?? await editor(req, reply, share);
     if (!who || !(await mayWrite(reply, share.user_id, who.ownerPlan))) return;
     const blob = sealed(body(req).blob);
     const expected = body(req).revision;
     if (!blob || !isPositiveInt(expected, 1_000_000_000)) return reply.code(400).send({ error: "bad share" });
-    return replace(reply, share, who.ownerPlan, blob, expected);
+    return replace(reply, share, who.ownerPlan, { blob }, expected);
   });
 
   // Stop sharing: the link stops at once; the owner can restore it for HISTORY_DAYS. `?forever=1` deletes it now.
@@ -183,7 +232,7 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
     const { rows } = await db.query<{ revision: number; size: number; superseded_at: Date }>(
       "select revision, octet_length(blob) as size, superseded_at from library_share_versions where share_id = $1 order by revision desc", [share.id]);
     return {
-      current: { revision: share.revision, size: share.blob.length, updatedAt: iso(share.updated_at) },
+      current: { revision: share.revision, size: share.size, updatedAt: iso(share.updated_at) },
       versions: rows.map((r) => ({ revision: r.revision, size: r.size, supersededAt: iso(r.superseded_at) })),
       keptDays: HISTORY_DAYS,
     };
@@ -196,7 +245,7 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
     if (!(await editor(req, reply, share))) return;
     const { rows } = await db.query<{ blob: Buffer }>("select blob from library_share_versions where share_id = $1 and revision = $2", [share.id, Number(revision) || 0]);
     if (!rows[0]) return reply.code(404).send({ error: "not-found" });
-    return { id: share.id, revision: Number(revision), blob: Buffer.from(rows[0].blob).toString("base64url") };
+    return { id: share.id, revision: Number(revision), blob: b64url(rows[0].blob) };
   });
 
   // Go back to a version: it becomes the newest revision, and what was current is kept as a version.
@@ -207,9 +256,7 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
     const share = await load(id);
     if (!share || share.user_id !== caller.userId) return reply.code(404).send({ error: "not-found" });
     if (!(await mayWrite(reply, caller.userId, caller.plan))) return;
-    const { rows } = await db.query<{ blob: Buffer }>("select blob from library_share_versions where share_id = $1 and revision = $2", [share.id, Number(revision) || 0]);
-    if (!rows[0]) return reply.code(404).send({ error: "not-found" });
-    return replace(reply, share, caller.plan, Buffer.from(rows[0].blob), share.revision);
+    return replace(reply, share, caller.plan, { fromVersion: Number(revision) || 0 }, share.revision);
   });
 }
 

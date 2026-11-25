@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "start": "node dist/index.js",
-    "dev:local": "tsc -p tsconfig.json && node dist/dev/local.js"
+    "dev:local": "tsc -p tsconfig.json && node dist/dev/local.js",
+    "probe:load": "tsc -p tsconfig.json && node --expose-gc dist/dev/load-probe.js"
   },
   "engines": {
     "node": ">=22.12.0"
